@@ -15,5 +15,7 @@ cd analysis_playground
 
 source setup.sh dev
 
+voms-proxy-init
+
 law run SelectEvents --version v1 --branch 0
 ```

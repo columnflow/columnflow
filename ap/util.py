@@ -109,21 +109,21 @@ def wget(src, dst, force=False):
     else:
         dst_dir = os.path.dirname(dst)
         if not os.path.exists(dst_dir):
-            raise IOError("target directory '{}' does not exist".format(dst_dir))
+            raise IOError(f"target directory '{dst_dir}' does not exist")
 
     # remove existing dst or complain
     if os.path.exists(dst):
         if force:
             os.remove(dst)
         else:
-            raise IOError("target '{}' already exists".format(dst))
+            raise IOError(f"target '{dst}' already exists")
 
     # actual download
     cmd = ["wget", src, "-O", dst]
     code, _, error = law.util.interruptable_popen(law.util.quote_cmd(cmd), shell=True,
         executable="/bin/bash", stderr=subprocess.PIPE)
     if code != 0:
-        raise Exception("wget failed: {}".format(error))
+        raise Exception(f"wget failed: {error}")
 
     return dst
 
@@ -203,34 +203,3 @@ def ensure_proxy(fn, opts, task, *args, **kwargs):
         return
 
     return before_call, call, after_call
-
-
-def determine_xrd_redirector(lfn, redirectors=None, timeout=30, check_tfile=None):
-    """
-    Determines the optimal XRootD redirectors for a file given by its *lfn* using a list of possible
-    *redirectors* which defaults to *law.cms.Site.redirectors*. Each redirector is contacted in
-    order with a certain *timeout* after which the next one is contacted. *check_tfile* can be an
-    optional function that receives the opened TFile object and returns *False* in case the file is
-    not accessible after all.
-
-    The best redirector is returned.
-    """
-    if not redirectors:
-        redirectors = ["eu", "us", "global"]
-    redirectors = [law.cms.Site.redirectors.get(c, c) for c in redirectors]
-
-    pfn = lambda rdr: "root://{}/{}".format(rdr, lfn)
-
-    def check(pfn, check_tfile):
-        with law.root.GuardedTFile.Open(pfn) as tfile:
-            if callable(check_tfile) and check_tfile(tfile) is False:
-                raise Exception("custom tfile check failed")
-
-    for timeout in law.util.make_list(timeout):
-        for rdr in redirectors:
-            print("check redirector {} (timeout {}s)".format(rdr, timeout))
-            finished, _, err = call_proc(check, (pfn(rdr), check_tfile), timeout=timeout)
-            if finished and err is None:
-                return rdr
-
-    raise Exception("could not determine redirector to load {}".format(lfn))

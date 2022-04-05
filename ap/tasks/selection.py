@@ -25,7 +25,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         return {"lfns": GetDatasetLFNs.req(self)}
 
     def output(self):
-        return self.wlcg_target("data_{}.npz".format(self.branch))
+        return self.wlcg_target(f"data_{self.branch}.npz")
 
     @law.decorator.safe_output
     @ensure_proxy
@@ -33,16 +33,17 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         import numpy as np
 
         # get the lfn of the file referenced by this branch
-        lfn = str(self.input()["lfns"].random_target().load(formatter="json")[self.branch])  # TODO: branch data?
-        self.publish_message("found LFN {}".format(lfn))
+        lfn = str(self.input()["lfns"].random_target().load(formatter="json")[self.branch_data[0]])
+        self.publish_message(f"found LFN {lfn}")
 
         # describe the input file by a target and open it right away
         input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
 
-        # open with uproot / coffea / etc and process
-        data = input_file.load(formatter="uproot")
-        events = data["Events"]
-        self.publish_message("found {} events".format(events.num_entries))
+        # open with uproot
+        with self.publish_step("loading content with uproot ..."):
+            data = input_file.load(formatter="uproot")
+            events = data["Events"]
+            self.publish_message(f"found {events.num_entries} events")
 
         # dummy task: get all jet 1 pt values
         jet1_pt = []

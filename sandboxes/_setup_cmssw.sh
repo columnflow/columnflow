@@ -28,15 +28,8 @@
 # Note on remote jobs:
 # When the AP_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
 # no mode is supported and an error is printed when it is set to a non-empty value. In any case, no
-# installation will happen but the desired CMSSW setup is re-used depending on the type of job
-# environment.
-# In general, two types of job environments are handled: environments with full access to the file
-# system used for job submission (e.g. HTCondor with "getenv"), and newly created environments with
-# no connection to the submitting machine (WLCG jobs, HTCondor without "getenv").
-# In the former case (AP_REMOTE_NEWENV!=1), the CMSSW environment must be present and accessible in
-# order to be sourced.
-# In the latter case (AP_REMOTE_NEWENV=1),a precompiled CMSSW bundle is fetched from a local or
-# remote location and unpacked.
+# installation will happen but the desired CMSSW setup is reused from a pre-compiled CMSSW bundle
+# that is fetched from a local or remote location and unpacked.
 
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
@@ -117,21 +110,25 @@ action() {
                 eval "$( scramv1 runtime -sh )" || return "$?"
                 scram b || return "$?"
 
-                # also setup CMSSW-compatible gfal2 bindings
-                bash "$( law location )/contrib/cms/scripts/setup_gfal_plugins.sh" "$install_path/lib/gfal2" || return "$?"
-                # remove the still incompatible http plugin
-                rm -f "$install_path/lib/gfal2/"libgfal_plugin_http.*
+                # create symlinks to gfal plugins and remove the http plugin which is
+                # not compatible with cmssw
+                (
+                    mkdir -p "$install_path/lib/gfal2"
+                    cd "$install_path/lib/gfal2"
+                    ln -s $GFAL_PLUGIN_DIR/*.so .
+                    rm -r libgfal_plugin_http.so
+                )
 
                 # write the flag into a file
                 echo "version $AP_CMSSW_FLAG" > "$flag_file"
             ) || return "$?"
 
-        elif [ "$AP_REMOTE_NEWENV" = "1" ]; then
+        else
             # determine the bundle to unpack
             local bundle="$AP_SOFTWARE/cmssw_sandboxes/$AP_CMSSW_ENV_NAME.tgz"
             if [ ! -f "$bundle" ]; then
                 >&2 echo "prefetched bundle expected at $bundle not does not exist"
-                return "7"
+                return "8"
             fi
 
             # create a new cmssw checkout, unpack the bundle on top and rebuild python symlinks
@@ -152,10 +149,6 @@ action() {
 
             # write the flag into a file
             echo "version $AP_CMSSW_FLAG" > "$flag_file"
-
-        else
-            >&2 echo "CMSSW environment for remote job with existing environment expected at '$install_path', but not existing"
-            return "6"
         fi
     fi
 

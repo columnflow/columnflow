@@ -73,7 +73,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             from ap.config.analysis_st import analysis_st
             self.analysis_inst = analysis_st
         else:
-            raise ValueError("unknown analysis {}".format(self.analysis))
+            raise ValueError(f"unknown analysis {self.analysis}")
 
     def store_parts(self):
         """
@@ -288,7 +288,7 @@ class CommandTask(AnalysisTask):
     def _print_command(self, args):
         max_depth = int(args[0])
 
-        print("print task commands with max_depth {}".format(max_depth))
+        print(f"print task commands with max_depth {max_depth}")
 
         for dep, _, depth in self.walk_deps(max_depth=max_depth, order="pre"):
             offset = depth * ("|" + law.task.interactive.ind)
@@ -355,7 +355,7 @@ class CommandTask(AnalysisTask):
 
         # raise an exception when the call failed and optional is not True
         if p.returncode != 0 and not optional:
-            raise Exception("command failed with exit code {}: {}".format(p.returncode, cmd))
+            raise Exception(f"command failed with exit code {p.returncode}: {cmd}")
 
         return p
 

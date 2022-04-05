@@ -168,7 +168,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     def single_output(self):
         repo_base = os.path.basename(self.get_repo_path())
-        return self.wlcg_target("{}.{}.tgz".format(repo_base, self.checksum))
+        return self.wlcg_target(f"{repo_base}.{self.checksum}.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -220,7 +220,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         return self._checksum
 
     def single_output(self):
-        return self.wlcg_target("software.{}.tgz".format(self.checksum))
+        return self.wlcg_target(f"software.{self.checksum}.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -287,8 +287,8 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
 
     def single_output(self):
-        path = "{}.{}.tgz".format(os.path.basename(self.get_cmssw_path()), self.checksum)
-        return self.wlcg_target(path)
+        cmssw_path = os.path.basename(self.get_cmssw_path())
+        return self.wlcg_target(f"{cmssw_path}.{self.checksum}.tgz")
 
     def output(self):
         return law.tasks.TransferLocalFile.output(self)

@@ -20,7 +20,6 @@ bootstrap_htcondor_standalone() {
     export AP_LOCAL_SCHEDULER="{{ap_local_scheduler}}"
     export AP_ON_HTCONDOR="1"
     export AP_REMOTE_JOB="1"
-    export AP_REMOTE_NEWENV="1"
     export X509_USER_PROXY="$PWD/{{ap_proxy_file}}{{file_postfix}}"
 
     # source the lcg software for access to wlcg executables
