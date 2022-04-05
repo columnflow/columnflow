@@ -228,8 +228,8 @@ interactive_setup() {
     # start querying for variables
     query AP_DESY_USER "DESY username" "$( whoami )"
     export_and_save AP_DESY_USER_FIRSTCHAR "\${AP_DESY_USER:0:1}"
-    query AP_WLCG_USER "WLCG username" "$( whoami )"
-    export_and_save AP_WLCG_USER_FIRSTCHAR "\${AP_WLCG_USER:0:1}"
+    query AP_CERN_USER "CERN username" "$( whoami )"
+    export_and_save AP_CERN_USER_FIRSTCHAR "\${AP_CERN_USER:0:1}"
     query AP_DATA "Local data directory" "\$AP_BASE/data" "./data"
     query AP_STORE_NAME "Relative path used in store paths (see next queries)" "ap_store"
     query AP_STORE_LOCAL "Default local output store" "\$AP_DATA/\$AP_STORE_NAME"
