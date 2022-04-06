@@ -49,7 +49,7 @@ setup() {
 
     # helper to create or check a voms proxy
     ap_voms_proxy() {
-        local mode="${1}"
+        local mode="${1:-init}"
         local voms="${AP_VOMS:-cms}"
         if [ "$mode" = "check" ]; then
             voms-proxy-info
@@ -65,12 +65,12 @@ setup() {
     #
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "$AP_LCG_DIR" ] && export AP_LCG_DIR="/cvmfs/grid.cern.ch/centos7-ui-200122"
-    if [ ! -d "$AP_LCG_DIR" ]; then
-        2>&1 echo "LCG directory $AP_LCG_DIR not existing"
+    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh"
+    if [ ! -f "$AP_LCG_SETUP" ]; then
+        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing"
         return "1"
     fi
-    source "$AP_LCG_DIR/etc/profile.d/setup-c7-ui-python3-example.sh" ""
+    source "$AP_LCG_SETUP" ""
 
     # update paths and flags
     local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"

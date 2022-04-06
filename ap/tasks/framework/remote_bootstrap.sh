@@ -10,7 +10,8 @@
 # tailored for remote jobs.
 bootstrap_htcondor_standalone() {
     # set env variables
-    export AP_USER="{{ap_user}}"
+    export AP_DESY_USER="{{ap_desy_user}}"
+    export AP_CERN_USER="{{ap_cern_user}}"
     export AP_BASE="$LAW_JOB_HOME/repo"
     export AP_DATA="$LAW_JOB_HOME/ap_data"
     export AP_SOFTWARE="$AP_DATA/software"
@@ -18,15 +19,18 @@ bootstrap_htcondor_standalone() {
     export AP_STORE_LOCAL="$AP_DATA/store"
     export AP_WLCG_USE_CACHE="false"
     export AP_LOCAL_SCHEDULER="{{ap_local_scheduler}}"
+    export AP_LCG_SETUP="{{ap_lcg_setup}}"
     export AP_ON_HTCONDOR="1"
     export AP_REMOTE_JOB="1"
-    export X509_USER_PROXY="$PWD/{{ap_proxy_file}}{{file_postfix}}"
+    export X509_USER_PROXY="$PWD/{{proxy_file}}"
 
-    # source the lcg software for access to wlcg executables
-    source "{{ap_lcg_dir}}/etc/profile.d/setup-c7-ui-example.sh" "" || return "$?"
+    # source the lcg software when the setup file is defined
+    if [ ! -z "$AP_LCG_SETUP" ]; then
+        source "$AP_LCG_SETUP" "" || return "$?"
+    fi
 
     # source the law wlcg tools, mainly for law_wlcg_get_file
-    source "law_wlcg_tools{{file_postfix}}.sh" ""
+    source "{{wlcg_tools}}" ""
 
     # load the software bundle
     (
@@ -54,8 +58,8 @@ bootstrap_htcondor_standalone() {
         law_wlcg_get_file "${cmssw_sandbox_uris[i]}" "${cmssw_sandbox_patterns[i]}" "$AP_SOFTWARE/cmssw_sandboxes/${cmssw_sandbox_names[i]}.tgz" || return "$?"
     done
 
-    # source the repo setup
-    source "$AP_BASE/setup.sh" "default" || return "$?"
+    # source the default repo setup
+    source "$AP_BASE/setup.sh" "" || return "$?"
 
     return "0"
 }

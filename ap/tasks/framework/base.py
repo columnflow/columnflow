@@ -87,7 +87,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         parts["analysis"] = self.analysis_inst.name
 
         # in this base class, just add the task class name
-        parts["task_class"] = self.__class__.__name__
+        parts["task_class"] = self.task_family
 
         return parts
 

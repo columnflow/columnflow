@@ -79,11 +79,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         proxy_file = law.wlcg.get_voms_proxy_file()
         if not law.wlcg.check_voms_proxy_validity(proxy_file=proxy_file):
             raise Exception("voms proxy not valid, submission aborted")
-        config.input_files.append(proxy_file)
-        config.render_variables["ap_proxy_file"] = os.path.basename(proxy_file)
+        config.input_files["proxy_file"] = proxy_file
 
         # include the wlcg specific tools script in the input sandbox
-        config.input_files.append(law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"))
+        config.input_files["wlcg_tools"] = law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh")
 
         # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
         if self.htcondor_flavor == "cern":
@@ -135,9 +134,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         config.render_variables["ap_bootstrap_name"] = "htcondor_standalone"
         config.render_variables["ap_htcondor_flavor"] = self.htcondor_flavor
-        config.render_variables["ap_lcg_dir"] = os.environ["AP_LCG_DIR"]
+        config.render_variables["ap_lcg_setup"] = os.environ["AP_LCG_SETUP"]
         config.render_variables["ap_base"] = os.environ["AP_BASE"]
-        config.render_variables["ap_user"] = os.environ["AP_USER"]
+        config.render_variables["ap_desy_user"] = os.environ["AP_DESY_USER"]
+        config.render_variables["ap_cern_user"] = os.environ["AP_CERN_USER"]
         config.render_variables["ap_store_name"] = os.environ["AP_STORE_NAME"]
         config.render_variables["ap_local_scheduler"] = os.environ["AP_LOCAL_SCHEDULER"]
 
