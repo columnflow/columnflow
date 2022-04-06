@@ -240,11 +240,11 @@ interactive_setup() {
     query AP_JOB_BASE "Local directory for storing job files" "\$AP_DATA/jobs"
     query AP_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
     if [ "$AP_LOCAL_SCHEDULER" != "True" ]; then
-        query AP_SCHEDULER_HOST "Address of a central scheduler for law tasks" "USER:PASS@HOST.TLD"
-        query AP_SCHEDULER_PORT "Port of a central scheduler for law tasks" "80"
+        query AP_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
+        query AP_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
     else
-        export_and_save AP_SCHEDULER_HOST "USER:PASS@HOST.TLD"
-        export_and_save AP_SCHEDULER_PORT "80"
+        export_and_save AP_SCHEDULER_HOST "naf-cms15.desy.de"
+        export_and_save AP_SCHEDULER_PORT "8082"
     fi
     query AP_VOMS "Virtual-organization" "cms:/cms/dcms"
 
