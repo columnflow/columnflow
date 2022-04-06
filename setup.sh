@@ -120,8 +120,7 @@ setup() {
         for m in law order; do
             local mpath="$AP_BASE/modules/$m"
             # initialize the submodule when the directory is empty
-            local mfiles=( "$mpath"/* )
-            if [ "${#mfiles}" = "0" ]; then
+            if [ "$( ls -1q "$mpath" | wc -l )" = "0" ]; then
                 git submodule update --init --recursive "$mpath"
             else
                 # update when not on a working branch and there are no changes

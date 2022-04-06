@@ -239,7 +239,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
             return tarinfo
 
         # create the archive with a custom filter
-        bundle.dump(software_path, filter=_filter)
+        bundle.dump(software_path, filter=_filter, formatter="tar")
 
         # log the size
         self.publish_message("bundled software archive, size is {:.2f} {}".format(
