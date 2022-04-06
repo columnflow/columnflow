@@ -43,7 +43,7 @@ setup() {
 
     # pip install helper
     ap_pip_install() {
-        PYTHONUSERBASE="$AP_SOFTWARE" pip3 install --user --no-cache-dir "$@"
+        PYTHONNOUSERSITE="1" PYTHONUSERBASE="$AP_SOFTWARE" pip3 install --user --no-cache-dir "$@"
     }
     $shell_is_bash && export -f ap_pip_install
 
@@ -75,11 +75,10 @@ setup() {
     # update paths and flags
     local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
     export PATH="$AP_BASE/bin:$AP_BASE/ap/scripts:$AP_BASE/modules/law/bin:$AP_SOFTWARE/bin:$PATH"
-    export PYTHONPATH="$AP_BASE/modules/law:$AP_BASE/modules/order:$AP_BASE/modules/plotlib:$PYTHONPATH"
+    export PYTHONPATH="$AP_BASE/modules/law:$AP_BASE/modules/order:$PYTHONPATH"
     export PYTHONPATH="$AP_SOFTWARE/lib/python${pyv}/site-packages:$AP_SOFTWARE/lib64/python${pyv}/site-packages:$PYTHONPATH"
     export PYTHONPATH="$AP_BASE:$PYTHONPATH"
     export PYTHONWARNINGS="ignore"
-    export PYTHONNOUSERSITE="1"
     export GLOBUS_THREAD_MODEL="none"
     ulimit -s unlimited
 
