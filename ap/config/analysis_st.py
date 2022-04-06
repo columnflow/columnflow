@@ -34,11 +34,11 @@ analysis_st.set_aux("cmssw_sandboxes", [
 #
 
 # create a config by passing the campaign, so id and name will be identical
-config_st_2018 = cfg = analysis_st.add_config(campaign_2018)
+config_2018 = analysis_st.add_config(campaign_2018)
 
 # add processes we are interested in
-cfg.add_process(procs.process_st)
-cfg.add_process(procs.process_tt)
+config_2018.add_process(procs.process_st)
+config_2018.add_process(procs.process_tt)
 
 # add datasets we need to study
 dataset_names = [
@@ -51,13 +51,13 @@ dataset_names = [
     "tt_fh",
 ]
 for dataset_name in dataset_names:
-    cfg.add_dataset(campaign_2018.get_dataset(dataset_name))
+    config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
 
 # file merging values
 # key -> dataset -> files per branch (-1 or not present = all)
-cfg.set_aux("file_merging", {
+config_2018.set_aux("file_merging", {
 })
 
 # versions per task and potentially other keys
-cfg.set_aux("versions", {
+config_2018.set_aux("versions", {
 })

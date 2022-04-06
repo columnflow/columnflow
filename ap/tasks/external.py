@@ -28,13 +28,13 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
-        h = law.util.create_hash(sorted(self.dataset_info_inst.keys))
+        h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.wlcg_target(f"lfns_{h}.json")
 
     @ensure_proxy
     def run(self):
         lfns = []
-        for key in self.dataset_info_inst.keys:
+        for key in sorted(self.dataset_info_inst.keys):
             self.logger.info("get lfns for key {}".format(key))
             cmd = f"dasgoclient --query='file dataset={key}' --limit=0"
             code, out, _ = law.util.interruptable_popen(cmd, shell=True, stdout=subprocess.PIPE,
@@ -49,6 +49,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
         self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
 
-        tmp = law.LocalFileTarget(is_tmp="json")
-        tmp.dump(lfns)
+        tmp = law.LocalFileTarget(is_tmp=True)
+        tmp.dump(lfns, formatter="json")
         self.transfer(tmp)
