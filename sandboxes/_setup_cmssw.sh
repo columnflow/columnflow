@@ -83,6 +83,7 @@ action() {
     # start the setup
     #
 
+    [ -z "$GFAL_PLUGIN_DIR_ORIG" ] && export GFAL_PLUGIN_DIR_ORIG="$GFAL_PLUGIN_DIR"
     local install_base="$AP_CMSSW_BASE/$AP_CMSSW_ENV_NAME"
     local install_path="$install_base/$AP_CMSSW_VERSION"
     local flag_file="$install_path/ap_flag"
@@ -115,7 +116,7 @@ action() {
                 (
                     mkdir -p "$install_path/lib/gfal2"
                     cd "$install_path/lib/gfal2"
-                    ln -s $GFAL_PLUGIN_DIR/*.so .
+                    ln -s $GFAL_PLUGIN_DIR_ORIG/*.so .
                     rm -r libgfal_plugin_http.so
                 )
 
