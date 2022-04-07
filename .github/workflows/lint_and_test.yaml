@@ -1,0 +1,49 @@
+name: Lint and test
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies ☕️
+        run: |
+          pip install -U pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Lint 🔍
+        run: flake8 ap
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.6"
+    name: test (python ${{ matrix.python-version }})
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Setup Python ${{ matrix.python-version }} 🐍
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies ☕️
+        run: |
+          pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Test 🎢
+        run: python3 -m unittest tests
