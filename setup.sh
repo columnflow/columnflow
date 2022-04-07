@@ -22,6 +22,7 @@ setup() {
 
     export AP_BASE="$this_dir"
     interactive_setup "$setup_name" || return "$?"
+    export AP_SETUP_NAME="$setup_name"
     export AP_STORE_REPO="$AP_BASE/data/store"
     export AP_ORIG_PATH="$PATH"
     export AP_ORIG_PYTHONPATH="$PYTHONPATH"
@@ -74,31 +75,39 @@ setup() {
 
     # update paths and flags
     local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
+    local venv_path="${AP_SOFTWARE}/venvs/ap_${AP_SETUP_NAME}"
+
     export PATH="$AP_BASE/bin:$AP_BASE/ap/scripts:$AP_BASE/modules/law/bin:$AP_SOFTWARE/bin:$PATH"
     export PYTHONPATH="$AP_BASE/modules/law:$AP_BASE/modules/order:$PYTHONPATH"
-    export PYTHONPATH="$AP_SOFTWARE/lib/python${pyv}/site-packages:$AP_SOFTWARE/lib64/python${pyv}/site-packages:$PYTHONPATH"
+    # export PYTHONPATH="$AP_SOFTWARE/lib/python${pyv}/site-packages:$AP_SOFTWARE/lib64/python${pyv}/site-packages:$PYTHONPATH"
+
     export PYTHONPATH="$AP_BASE:$PYTHONPATH"
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
     ulimit -s unlimited
 
     # local python stack
-    local sw_version="1"
-    local flag_file_sw="$AP_SOFTWARE/.sw_good"
+    local sw_version="$( cat "${AP_BASE}/requirements.txt" | grep -Po "# version \K\d+.*" )"
+    local flag_file_sw="${venv_path}/.sw_good"
     [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
     if [ ! -f "$flag_file_sw" ]; then
-        echo "installing software stack at $AP_SOFTWARE"
-        mkdir -p "$AP_SOFTWARE"
-        rm -rf "$AP_SOFTWARE"/{lib,bin}
+        echo "installing software stack at ${venv_path}"
+        rm -rf ${venv_path}
+        # setup a python virtual environment 
+        python3 -m venv ${venv_path}
 
-        # python software stack
-        ap_pip_install -U "pip" || return "$?"
-        ap_pip_install -U "six" || return "$?"
-        ap_pip_install "luigi" || return "$?"
-        ap_pip_install "scinum" || return "$?"
+        # activate the virtual environment
+        source ${venv_path}/bin/activate
+
+        # install software stack as defined in requirements.txt
+        # first 
+        python3 -m pip install -r $AP_BASE/requirements.txt
 
         date "+%s" > "$flag_file_sw"
         echo "version $sw_version" >> "$flag_file_sw"
+    else
+        echo "loading python software stack from ${venv_path}"
+        source ${venv_path}/bin/activate
     fi
     export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
 
