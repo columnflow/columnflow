@@ -99,6 +99,11 @@ setup() {
     local flag_file_sw="${AP_SOFTWARE}/.sw_good"
     [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
     if [ ! -f "$flag_file_sw" ]; then
+        if [ "$AP_REMOTE_JOB" = "1" ]; then
+            2>&1 echo "software stack cannot be setup from scratch on remote job nodes"
+            return "1"
+        fi
+
         echo "installing software stack at ${AP_SOFTWARE}"
         rm -rf "${AP_VENV_PATH}"
 
