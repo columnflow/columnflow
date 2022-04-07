@@ -24,7 +24,7 @@ bootstrap_htcondor_standalone() {
     export AP_REMOTE_JOB="1"
     export X509_USER_PROXY="$PWD/{{proxy_file}}"
 
-    # source the lcg software when the setup file is defined
+    # source the lcg software when defined
     if [ ! -z "$AP_LCG_SETUP" ]; then
         source "$AP_LCG_SETUP" "" || return "$?"
     fi

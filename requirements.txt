@@ -1,4 +1,0 @@
-# version 1
-luigi==3.0.3
-scinum==1.4.0
-six==1.16.0

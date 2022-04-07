@@ -156,7 +156,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     )
     version = None
 
-    exclude_files = ["docs", "data", ".law", ".setups", ".data"]
+    exclude_files = ["docs", "test", "data", ".law", ".setups", ".data"]
 
     task_namespace = None
 
@@ -234,7 +234,11 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         bundle = law.LocalFileTarget(software_path + ".tgz", is_tmp=True)
 
         def _filter(tarinfo):
+            # skip hidden dev files
             if re.search(r"(\.pyc|\/\.git|\.tgz|__pycache__)$", tarinfo.name):
+                return None
+            # skip certain things manually
+            if re.search(r"^\./venvs/ap_dev(|/.+)$", tarinfo.name):
                 return None
             return tarinfo
 

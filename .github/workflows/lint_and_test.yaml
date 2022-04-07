@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies ☕️
         run: |
           pip install -U pip
-          pip install -r requirements.txt
+          pip install -r requirements_prod.txt
           pip install flake8
 
       - name: Lint 🔍
@@ -43,7 +43,7 @@ jobs:
   #     - name: Install dependencies ☕️
   #       run: |
   #         pip install -U pip
-  #         pip install -r requirements.txt
+  #         pip install -r requirements_prod.txt
 
   #     - name: Test 🎢
   #       run: python3 -m unittest tests

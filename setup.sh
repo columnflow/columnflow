@@ -24,6 +24,7 @@ setup() {
     interactive_setup "$setup_name" || return "$?"
     export AP_SETUP_NAME="$setup_name"
     export AP_STORE_REPO="$AP_BASE/data/store"
+    export AP_VENV_PATH="${AP_SOFTWARE}/venvs"
     export AP_ORIG_PATH="$PATH"
     export AP_ORIG_PYTHONPATH="$PYTHONPATH"
     export AP_ORIG_PYTHON3PATH="$PYTHON3PATH"
@@ -41,6 +42,21 @@ setup() {
     #
     # helper functions
     #
+
+    ap_create_venv() {
+        local name="$1"
+        if [ -z "$name" ]; then
+            2>&1 echo "venv name must not be empty"
+            return "1"
+        fi
+
+        # create the venv the usual way
+        python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
+
+        # replace absolute paths in the activation file to make it relocateable
+        sed -i -r "s/VIRTUAL_ENV=.+/VIRTUAL_ENV=\"\${AP_VENV_PATH}\/${name}\"/" "${AP_VENV_PATH}/${name}/bin/activate"
+    }
+    $shell_is_bash && export -f ap_create_venv
 
     # helper to create or check a voms proxy
     ap_voms_proxy() {
@@ -76,28 +92,35 @@ setup() {
     export GLOBUS_THREAD_MODEL="none"
     ulimit -s unlimited
 
-    # local python stack
-    export AP_VENV_PATH="${AP_SOFTWARE}/venvs/ap_${AP_SETUP_NAME}"
-    local sw_version="$( cat "${AP_BASE}/requirements.txt" | grep -Po "# version \K\d+.*" )"
-    local flag_file_sw="${AP_VENV_PATH}/.sw_good"
+    # local python stack in two virtual envs:
+    # - "ap_prod": contains the minimal stack to run tasks and is sent alongside jobs
+    # - "ap_dev" : "prod" + additional python tools for local development (e.g. ipython)
+    local sw_version="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
+    local flag_file_sw="${AP_SOFTWARE}/.sw_good"
     [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
     if [ ! -f "$flag_file_sw" ]; then
-        echo "installing software stack at ${AP_VENV_PATH}"
+        echo "installing software stack at ${AP_SOFTWARE}"
         rm -rf "${AP_VENV_PATH}"
 
-        # setup a python virtual environment
-        python3 -m venv "${AP_VENV_PATH}"
+        # setup the prod venv
+        ap_create_venv ap_prod || return "$?"
+        source "${AP_VENV_PATH}/ap_prod/bin/activate" ""
+        python3 -m pip install -U pip
+        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
+        deactivate
 
-        # activate the virtual environment
-        source "${AP_VENV_PATH}/bin/activate" ""
-
-        # install software stack as defined in requirements.txt first
-        python3 -m pip install -r "$AP_BASE/requirements.txt"
+        # setup the local dev env and stay inside it
+        ap_create_venv ap_dev || return "$?"
+        source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
+        python3 -m pip install -U pip
+        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
+        python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
 
         date "+%s" > "$flag_file_sw"
         echo "version $sw_version" >> "$flag_file_sw"
     else
-        source "${AP_VENV_PATH}/bin/activate" ""
+        local default_env="$( [ "$AP_REMOTE_JOB" = "1" ] && echo ap_prod || echo ap_dev )"
+        source "${AP_VENV_PATH}/${default_env}/bin/activate" "" || return "$?"
     fi
     export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
 
