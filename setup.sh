@@ -120,6 +120,9 @@ setup() {
         python3 -m pip install -U pip
         python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
         python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
+        if [ -f "$AP_BASE/requirements_user.txt" ]; then
+            python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
+        fi
 
         date "+%s" > "$flag_file_sw"
         echo "version $sw_version" >> "$flag_file_sw"

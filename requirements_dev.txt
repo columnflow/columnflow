@@ -1,1 +1,4 @@
+# packages are installed in addition to those in requirements_prod.text
+
 ipython==7.16.3
+flake8==4.0.1
