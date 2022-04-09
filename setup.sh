@@ -29,6 +29,7 @@ setup() {
     export AP_ORIG_PYTHONPATH="$PYTHONPATH"
     export AP_ORIG_PYTHON3PATH="$PYTHON3PATH"
     export AP_ORIG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
+    export AP_CI_JOB="$( [ "$GITHUB_ACTIONS" = "true" ] && echo 1 || echo 0 )"
 
     # lang defaults
     [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
@@ -53,15 +54,34 @@ setup() {
         # create the venv the usual way
         python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
 
+        # remove csh and fish support
+        rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
+
         # replace absolute paths in the activation file to make it relocateable for bash and zsh
         sed -i -r \
             's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
             "${AP_VENV_PATH}/${name}/bin/activate"
 
-        # remove csh and fish support
-        rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
+        ap_make_venv_relocateable "$name"
     }
     $shell_is_bash && export -f ap_create_venv
+
+    ap_make_venv_relocateable() {
+        local name="$1"
+        if [ -z "$name" ]; then
+            2>&1 echo "venv name must not be empty"
+            return "1"
+        fi
+
+        # use /usr/bin/env in shebang's of bin scripts
+        for f in $( find "${AP_VENV_PATH}/${name}/bin" -type f ); do
+            # must be readable and executable
+            if [ -r "${f}" ] && [ -x "${f}" ]; then
+                sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
+            fi
+        done
+    }
+    $shell_is_bash && export -f ap_make_venv_relocateable
 
     # helper to create or check a voms proxy
     ap_voms_proxy() {
@@ -82,11 +102,14 @@ setup() {
 
     # use the latest centos7 ui from the grid setup on cvmfs
     [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh"
-    if [ ! -f "$AP_LCG_SETUP" ]; then
+    if [ -f "$AP_LCG_SETUP" ]; then
+        source "$AP_LCG_SETUP" ""
+    elif [ "$AP_CI_JOB" = "1" ]; then
+        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing in CI env, skipping"
+    else
         2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing"
         return "1"
     fi
-    source "$AP_LCG_SETUP" ""
 
     # update paths and flags
     local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
@@ -117,22 +140,25 @@ setup() {
         source "${AP_VENV_PATH}/ap_prod/bin/activate" ""
         python3 -m pip install -U pip
         python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-        deactivate
+        ap_make_venv_relocateable ap_prod
 
-        # setup the local dev env and stay inside it
-        ap_create_venv ap_dev || return "$?"
-        source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
-        python3 -m pip install -U pip
-        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-        python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
-        if [ -f "$AP_BASE/requirements_user.txt" ]; then
-            python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
+        # setup the local dev env when not running the ci
+        if [ "$AP_CI_JOB" != "1" ]; then
+            ap_create_venv ap_dev || return "$?"
+            source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
+            python3 -m pip install -U pip
+            python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
+            python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
+            if [ -f "$AP_BASE/requirements_user.txt" ]; then
+                python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
+            fi
+            ap_make_venv_relocateable ap_dev
         fi
 
         date "+%s" > "$flag_file_sw"
         echo "version $sw_version" >> "$flag_file_sw"
     else
-        if [ "$AP_REMOTE_JOB" = "1" ]; then
+        if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
             source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
             export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_prod"
         else
