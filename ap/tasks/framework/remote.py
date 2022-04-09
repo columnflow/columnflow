@@ -238,7 +238,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
             if re.search(r"(\.pyc|\/\.git|\.tgz|__pycache__)$", tarinfo.name):
                 return None
             # skip certain things manually
-            if re.search(r"^\./venvs/ap_dev(|/.+)$", tarinfo.name):
+            if re.search(r"^\./venvs/ap_dev(|/.*)$", tarinfo.name):
                 return None
             return tarinfo
 

@@ -53,8 +53,13 @@ setup() {
         # create the venv the usual way
         python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
 
-        # replace absolute paths in the activation file to make it relocateable
-        sed -i -r "s/VIRTUAL_ENV=.+/VIRTUAL_ENV=\"\${AP_VENV_PATH}\/${name}\"/" "${AP_VENV_PATH}/${name}/bin/activate"
+        # replace absolute paths in the activation file to make it relocateable for bash and zsh
+        sed -i -r \
+            's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+            "${AP_VENV_PATH}/${name}/bin/activate"
+
+        # remove csh and fish support
+        rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
     }
     $shell_is_bash && export -f ap_create_venv
 
@@ -127,8 +132,13 @@ setup() {
         date "+%s" > "$flag_file_sw"
         echo "version $sw_version" >> "$flag_file_sw"
     else
-        local default_env="$( [ "$AP_REMOTE_JOB" = "1" ] && echo ap_prod || echo ap_dev )"
-        source "${AP_VENV_PATH}/${default_env}/bin/activate" "" || return "$?"
+        if [ "$AP_REMOTE_JOB" = "1" ]; then
+            source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
+            export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_prod"
+        else
+            source "${AP_VENV_PATH}/ap_dev/bin/activate" "" || return "$?"
+            export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_dev,venv::\$AP_VENV_PATH/ap_prod"
+        fi
     fi
     export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
 
