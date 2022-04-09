@@ -1,6 +1,7 @@
 [submodule "modules/law"]
     path = modules/law
-    url = git@github.com:riga/law.git
+    url = ../../riga/law.git
+
 [submodule "modules/order"]
-	path = modules/order
-	url = git@github.com:riga/order.git
+    path = modules/order
+    url = ../../riga/order.git
