@@ -19,6 +19,7 @@
 *.out
 .env_*.sh
 .env_*.sh.tmp
+requirements_user.txt
 __pycache__
 dist
 build

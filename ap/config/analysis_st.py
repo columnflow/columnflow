@@ -4,7 +4,7 @@
 Configuration of the single top analysis.
 """
 
-import order as od
+from order import Analysis
 
 import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
@@ -14,7 +14,7 @@ from ap.config.campaign_2018 import campaign_2018
 # the main analysis object
 #
 
-analysis_st = od.Analysis(
+analysis_st = Analysis(
     name="analysis_st",
     id=1,
 )
