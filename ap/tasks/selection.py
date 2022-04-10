@@ -4,6 +4,8 @@
 Tasks related to obtaining, preprocessing and selecting events.
 """
 
+import math
+
 import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
@@ -13,6 +15,8 @@ from ap.util import ensure_proxy
 class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    shifts = {"jec_up", "jec_down"}
 
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
@@ -46,14 +50,23 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             self.publish_message(f"found {events.num_entries} events")
 
         # dummy task: get all jet 1 pt values
-        jet1_pt = []
-        with self.publish_step("load jet pts ..."):
-            for batch in events.iterate(["nJet", "Jet_pt"], step_size=1000):
-                print("batch")
-                mask = batch["nJet"] >= 1
-                jet1_pt.append(batch["Jet_pt"][mask][:, 0])
+        step_size = 1000
+        steps = int(math.ceil(events.num_entries / step_size))
+        events_iter = events.iterate(["nJet", "Jet_pt"], step_size=step_size)
+        jet1_pts = []
+        for batch in self.iter_progress(events_iter, steps, msg="running selection ..."):
+            print("batch")
+            mask = batch["nJet"] >= 1
+            jet_pt = batch["Jet_pt"][mask][:, 0]
 
-        jet1_pt = np.concatenate(jet1_pt, axis=0)
+            # emulate jec
+            jec_factor = {"jec_up": 1.05, "jec_down": 0.95}.get(self.effective_shift, 1.0)
+            jet_pt = jet_pt * jec_factor
+
+            # store the jet pt
+            jet1_pts.append(jet_pt)
+
+        jet1_pt = np.concatenate(jet1_pts, axis=0)
         self.output().dump(data=jet1_pt, formatter="numpy")
 
 

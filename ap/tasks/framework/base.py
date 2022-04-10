@@ -5,7 +5,6 @@ Generic tools and base tasks that are defined along typical objects in an analys
 """
 
 import os
-from collections import OrderedDict
 
 import luigi
 import law
@@ -32,6 +31,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     # defaults for targets
     default_store = "$AP_STORE_LOCAL"
     default_wlcg_fs = "wlcg_fs"
+
+    @classmethod
+    def get_analysis_inst(cls, analysis):
+        if analysis == "analysis_st":
+            from ap.config.analysis_st import analysis_st
+            return analysis_st
+        else:
+            raise ValueError(f"unknown analysis {analysis}")
 
     @classmethod
     def modify_param_values(cls, params):
@@ -69,34 +76,21 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         super(AnalysisTask, self).__init__(*args, **kwargs)
 
         # store the analysis instance
-        if self.analysis == "analysis_st":
-            from ap.config.analysis_st import analysis_st
-            self.analysis_inst = analysis_st
-        else:
-            raise ValueError(f"unknown analysis {self.analysis}")
+        self.analysis_inst = self.get_analysis_inst(self.analysis)
 
     def store_parts(self):
         """
-        Returns an ordered dictionary whose values are used to create a store path. For instance,
-        the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The keys can be
-        used by subclassing tasks to overwrite values.
+        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
+        For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
+        keys can be used by subclassing tasks to overwrite values.
         """
-        parts = OrderedDict()
+        parts = law.util.InsertableDict()
 
         # add the analysis name
         parts["analysis"] = self.analysis_inst.name
 
         # in this base class, just add the task class name
         parts["task_class"] = self.task_family
-
-        return parts
-
-    def store_parts_ext(self):
-        """
-        Similar to :py:meth:`store_parts` but these external parts are appended to the end of paths
-        created with (e.g.) :py:meth:`local_path`.
-        """
-        parts = OrderedDict()
 
         # add the version when set
         if self.version is not None:
@@ -106,18 +100,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     def local_path(self, *path, **kwargs):
         """ local_path(*path, store=None)
-        Joins several path fragments for use on local targets in the following order:
-
-            - *store* (defaulting to :py:attr:`default_store`)
-            - Values of :py:meth:`store_parts` (in that order)
-            - Values of :py:meth:`store_parts_ext` (in that order)
-            - *path* fragments passed to this method
+        Joins path fragments from *store* (defaulting to :py:attr:`default_store`), *store_parts()*
+        and *path* and returns the joined path.
         """
         # determine the main store directory
         store = kwargs.get("store") or self.default_store
 
         # concatenate all parts that make up the path and join them
-        parts = tuple(self.store_parts().values()) + tuple(self.store_parts_ext().values()) + path
+        parts = tuple(self.store_parts().values()) + path
         path = os.path.join(store, *(str(p) for p in parts))
 
         return path
@@ -138,17 +128,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     def wlcg_path(self, *path):
         """
-        Joins several path fragments for use in remote targets in the following order:
-
-            - Values of :py:meth:`store_parts` (in that order)
-            - Values of :py:meth:`store_parts_ext` (in that order)
-            - *path* fragments passed to this method
+        Joins path fragments from *store_parts()* and *path* and returns the joined path.
 
         The full URI to the target is not considered as it is usually defined in ``[wlcg_fs]``
         sections in the law config and hence subject to :py:func:`wlcg_target`.
         """
         # concatenate all parts that make up the path and join them
-        parts = tuple(self.store_parts().values()) + tuple(self.store_parts_ext().values()) + path
+        parts = tuple(self.store_parts().values()) + path
         path = os.path.join(*(str(p) for p in parts))
 
         return path
@@ -193,12 +179,103 @@ class ConfigTask(AnalysisTask):
         parts = super(ConfigTask, self).store_parts()
 
         # add the config name
-        parts["config"] = self.config_inst.name
+        parts.insert_after("task_class", "config", self.config_inst.name)
 
         return parts
 
 
-class DatasetTask(ConfigTask):
+class ShiftTask(ConfigTask):
+
+    shift = luigi.Parameter(
+        default="nominal",
+        significant=False,
+        description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
+        "default: nominal",
+    )
+    effective_shift = luigi.Parameter(default=law.NO_STR)
+
+    # shifts implemented by this task or one of its requirements
+    shifts = set()
+
+    # skip passing effective_shift to cli completion, req params and sandboxing
+    exclude_params_index = {"effective_shift"}
+    exclude_params_req = {"effective_shift"}
+    exclude_params_sandbox = {"effective_shift"}
+
+    allow_empty_shift = False
+
+    @classmethod
+    def modify_param_values(cls, params):
+        """
+        When "config" and "shift" are set, this method evlauates them to set the effecitve shift.
+        For that, it takes the shifts stored in the config instance and compares it with those
+        defined by this class.
+        """
+        # the modify_param_values super method must not necessarily be set
+        super_func = super(ShiftTask, cls).modify_param_values
+        if callable(super_func):
+            params = super_func(params)
+
+        # get params
+        requested_config = params.get("config")
+        requested_shift = params.get("shift")
+        requested_effective_shift = params.get("effective_shift")
+
+        # initialize the effective shift when not set
+        no_values = (None, law.NO_STR)
+        if requested_effective_shift in no_values:
+            params["effective_shift"] = "nominal"
+
+        # do nothing when the effective shift is already set and no config is defined
+        if requested_effective_shift not in no_values or requested_config in no_values:
+            return params
+
+        # shift must be set
+        if requested_shift in no_values:
+            if cls.allow_empty_shift:
+                return params
+            raise Exception(f"no shift found in params: {params}")
+
+        # get the config instance
+        config_inst = cls.get_analysis_inst(cls.analysis).get_config(requested_config)
+
+        # complain when the requested shift is not known
+        if requested_shift not in config_inst.shifts:
+            raise ValueError(f"unknown shift: {requested_shift}")
+
+        # determine the allowed shifts for this class
+        allowed_shifts = cls.determine_allowed_shifts(config_inst, params)
+
+        # when allowed, add it to the task parameters
+        if requested_shift in allowed_shifts:
+            params["effective_shift"] = requested_shift
+
+        return params
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        # for the basic shift task, only the shifts implemented by this task class are allowed
+        return set(cls.shifts)
+
+    def __init__(self, *args, **kwargs):
+        super(ShiftTask, self).__init__(*args, **kwargs)
+
+        # store a reference to the effective shift instance
+        self.shift_inst = None
+        if self.effective_shift and self.effective_shift != law.NO_STR:
+            self.shift_inst = self.config_inst.get_shift(self.effective_shift)
+
+    def store_parts(self):
+        parts = super(ShiftTask, self).store_parts()
+
+        # add the shift name
+        if self.shift_inst:
+            parts.insert_after("config", "shift", self.shift_inst.name)
+
+        return parts
+
+
+class DatasetTask(ShiftTask):
 
     dataset = luigi.Parameter(
         default="st_tchannel_t",
@@ -207,21 +284,35 @@ class DatasetTask(ConfigTask):
 
     file_merging = None
 
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        # dataset can have shifts, so extend the set of allowed shifts
+        allowed_shifts = super(DatasetTask, cls).determine_allowed_shifts(config_inst, params)
+
+        # dataset must be set
+        if "dataset" in params:
+            requested_dataset = params.get("dataset")
+            if requested_dataset not in (None, law.NO_STR):
+                dataset_inst = config_inst.get_dataset(requested_dataset)
+                allowed_shifts |= set(dataset_inst.info.keys())
+
+        return allowed_shifts
+
     def __init__(self, *args, **kwargs):
         super(DatasetTask, self).__init__(*args, **kwargs)
 
         # store references to the dataset instance
         self.dataset_inst = self.config_inst.get_dataset(self.dataset)
 
-        # for the moment, store the nominal dataset info
-        # this will change once there is the intermediate ShiftTask that models uncertainties
-        self.dataset_info_inst = self.dataset_inst.get_info("nominal")
+        # store dataset info for the effective shift
+        key = self.effective_shift if self.effective_shift in self.dataset_inst.info else "nominal"
+        self.dataset_info_inst = self.dataset_inst.get_info(key)
 
     def store_parts(self):
         parts = super(DatasetTask, self).store_parts()
 
         # insert the dataset
-        parts["dataset"] = self.dataset_inst.name
+        parts.insert_after("config", "dataset", self.dataset_inst.name)
 
         return parts
 

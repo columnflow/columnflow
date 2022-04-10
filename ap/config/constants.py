@@ -5,8 +5,7 @@ Scinentific constants.
 """
 
 from scinum import Number, Correlation, REL
-
-from ap.util import DotDict
+from law.util import DotDict
 
 
 # misc
