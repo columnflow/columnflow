@@ -345,10 +345,20 @@ class DatasetTask(ShiftTask):
         return n_merge
 
     def create_branch_map(self):
+        """
+        Define the branch map for when this task is used as a workflow. By default, use the merging
+        information provided by :py:attr:`file_merging_factor` to return a dictionary which maps
+        branches to one or more input file indices. E.g. `1 -> [3, 4, 5]` would mean that branch 1
+        is simultaneously handling input file indices 3, 4 and 5.
+        """
         n_merge = self.file_merging_factor
         n_files = self.dataset_info_inst.n_files
 
-        return dict(enumerate(law.util.iter_chunks(n_files, n_merge)))
+        # use iter_chunks which splits a list of length n_files into chunks of maximum size n_merge
+        chunks = law.util.iter_chunks(n_files, n_merge)
+
+        # use enumerate for simply indexing
+        return dict(enumerate(chunks))
 
 
 class CommandTask(AnalysisTask):

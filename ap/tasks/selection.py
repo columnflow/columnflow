@@ -40,7 +40,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         lfn = str(self.input()["lfns"].random_target().load(formatter="json")[self.branch_data[0]])
         self.publish_message(f"found LFN {lfn}")
 
-        # describe the input file by a target and open it right away
+        # describe the input file by a target and always choose the INFN redirector for now
         input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
 
         # open with uproot
