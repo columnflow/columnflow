@@ -336,8 +336,13 @@ class DatasetTask(ShiftTask):
             # non-positive numbers mean "merge all in one"
             n_merge = self.file_merging if self.file_merging > 0 else n_files
         elif self.file_merging in merging_info:
-            # the file_merging attributes refers to a dict in the merging_info
-            n_merge = merging_info[self.file_merging].get(self.dataset_inst.name, n_files)
+            # file_merging refers to an entry in merging_info which can be nested as
+            # dataset -> shift -> version
+            n_merge = merging_info[self.file_merging]
+            for key in [self.dataset_inst.name, self.shift_inst.name, self.version]:
+                n_merge = n_merge.get(key, n_files)
+                if not isinstance(n_merge, dict):
+                    break
         else:
             # no merging at all
             n_merge = 1
