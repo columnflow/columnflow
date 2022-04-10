@@ -54,9 +54,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         other class. The parameters are used when calling ``Task.req(self)``.
         """
         # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
-        _prefer_cli = law.util.make_list(kwargs.get("_prefer_cli", []))
-        if "version" not in _prefer_cli:
-            _prefer_cli.append("version")
+        _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
+        _prefer_cli.add("version")
         kwargs["_prefer_cli"] = _prefer_cli
 
         # default to the version of the requested task class in the version map accessible through
@@ -316,12 +315,6 @@ class DatasetTask(ShiftTask):
 
         return parts
 
-    def modify_polling_status_line(self, status_line):
-        """
-        Hook to modify the line printed by remote workflows when polling for jobs.
-        """
-        return "{}, {}".format(status_line, self.dataset_inst.name)
-
     @property
     def file_merging_factor(self):
         """
@@ -364,6 +357,15 @@ class DatasetTask(ShiftTask):
 
         # use enumerate for simply indexing
         return dict(enumerate(chunks))
+
+    def htcondor_destination_info(self, info):
+        """
+        Hook to modify the additional info printed along logs of the htcondor workflow.
+        """
+        info.append(self.dataset_inst.name)
+        if self.shift_inst and self.shift_inst.name != "nominal":
+            info.append(self.shift_inst.name)
+        return info
 
 
 class CommandTask(AnalysisTask):
