@@ -59,19 +59,10 @@ def import_ROOT():
     return _ROOT
 
 
-class DotDict(dict):
-    """
-    Dictionary providing item access via attributes.
-    """
-
-    def __getattr__(self, attr):
-        return self[attr]
-
-    def copy(self):
-        return self.__class__(super(DotDict, self).copy())
-
-
 def create_random_name():
+    """
+    Returns a random string based on UUID v4.
+    """
     return str(uuid.uuid4())
 
 

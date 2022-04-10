@@ -53,6 +53,16 @@ dataset_names = [
 for dataset_name in dataset_names:
     config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
 
+# register shifts
+config_2018.add_shift(name="nominal", id=0)
+config_2018.add_shift(name="tune_up", id=1, type="shape")
+config_2018.add_shift(name="tune_down", id=2, type="shape")
+config_2018.add_shift(name="hdamp_up", id=3, type="shape")
+config_2018.add_shift(name="hdamp_down", id=4, type="shape")
+config_2018.add_shift(name="jec_up", id=5, type="shape")
+config_2018.add_shift(name="jec_down", id=6, type="shape")
+
+
 # file merging values
 # key -> dataset -> files per branch (-1 or not present = all)
 config_2018.set_aux("file_merging", {
