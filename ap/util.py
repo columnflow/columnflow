@@ -13,6 +13,8 @@ import queue
 import threading
 import subprocess
 import multiprocessing
+from typing import Tuple, Callable, Any, Optional
+from types import ModuleType
 
 import law
 
@@ -22,7 +24,7 @@ _plt = None
 _ROOT = None
 
 
-def import_plt():
+def import_plt() -> ModuleType:
     """
     Lazily imports and configures matplotlib pyplot.
     """
@@ -42,7 +44,7 @@ def import_plt():
     return _plt
 
 
-def import_ROOT():
+def import_ROOT() -> ModuleType:
     """
     Lazily imports and configures ROOT.
     """
@@ -66,7 +68,7 @@ def create_random_name():
     return str(uuid.uuid4())
 
 
-def expand_path(*path):
+def expand_path(*path: str) -> str:
     """
     Takes *path* fragments, joins them and recursively expands all contained environment variables.
     """
@@ -77,7 +79,7 @@ def expand_path(*path):
     return path
 
 
-def real_path(*path):
+def real_path(*path: str) -> str:
     """
     Takes *path* fragments and returns the joined,  real and absolute location with all variables
     expanded.
@@ -85,7 +87,7 @@ def real_path(*path):
     return os.path.realpath(expand_path(*path))
 
 
-def wget(src, dst, force=False):
+def wget(src: str, dst: str, force: bool = False) -> str:
     """
     Downloads a file from a remote *src* to a local destination *dst*, creating intermediate
     directories when needed. When *dst* refers to an existing file, an exception is raised unless
@@ -119,7 +121,8 @@ def wget(src, dst, force=False):
     return dst
 
 
-def call_thread(func, args=(), kwargs=None, timeout=None):
+def call_thread(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
+        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a thread and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
@@ -145,7 +148,8 @@ def call_thread(func, args=(), kwargs=None, timeout=None):
         return (True,) + q.get()
 
 
-def call_proc(func, args=(), kwargs=None, timeout=None):
+def call_proc(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
+        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a process and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
@@ -173,7 +177,7 @@ def call_proc(func, args=(), kwargs=None, timeout=None):
 
 
 @law.decorator.factory(accept_generator=True)
-def ensure_proxy(fn, opts, task, *args, **kwargs):
+def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
     """
     Law task decorator that checks whether either a voms or arc proxy is existing before calling
     the decorated method.
