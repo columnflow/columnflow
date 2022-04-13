@@ -209,12 +209,23 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     @property
     def checksum(self):
         if not self._checksum:
+            # get a list of all software flag files
+            flag_files = os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split()
+            for venv_name in os.listdir(os.environ["AP_VENV_PATH"]):
+                # skip the ap_dev venv
+                if venv_name == "ap_dev":
+                    continue
+                venv_flag = os.path.join(os.environ["AP_VENV_PATH"], venv_name, "ap_flag")
+                flag_files.append(venv_flag)
+            flag_files = sorted(set(map(os.path.realpath, flag_files)))
+
             # read content of all software flag files and create a hash
             contents = []
-            for flag_file in os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split():
-                if os.path.exists(flag_file):
+            for flag_file in flag_files:
+                if os.path.isfile(flag_file):
                     with open(flag_file, "r") as f:
                         contents.append((flag_file, f.read().strip()))
+
             self._checksum = law.util.create_hash(contents)
 
         return self._checksum
