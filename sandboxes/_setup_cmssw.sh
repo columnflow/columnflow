@@ -42,13 +42,12 @@ action() {
     #
 
     local mode="${1:-}"
-    if [ "$AP_REMOTE_JOB" = "1" ]; then
-        if [ ! -z "$mode" ]; then
-            >&2 echo "the CMSSW source mode must be empty in remote jobs, but got '$mode'"
-            return "1"
-        fi
-    elif [ ! -z "$mode" ] && [ "$mode" != "clear" ] && [ "$mode" != "reinstall" ] && [ "$mode" != "install_only" ]; then
+    if [ ! -z "$mode" ] && [ "$mode" != "clear" ] && [ "$mode" != "reinstall" ] && [ "$mode" != "install_only" ]; then
         >&2 echo "unknown CMSSW source mode '$mode'"
+        return "1"
+    fi
+    if [ "$AP_REMOTE_JOB" = "1" ] && [ ! -z "$mode" ]; then
+        >&2 echo "the CMSSW source mode must be empty in remote jobs, but got '$mode'"
         return "2"
     fi
 
