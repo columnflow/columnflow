@@ -61,7 +61,7 @@ def import_ROOT() -> ModuleType:
     return _ROOT
 
 
-def create_random_name():
+def create_random_name() -> str:
     """
     Returns a random string based on UUID v4.
     """

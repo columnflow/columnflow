@@ -336,6 +336,7 @@ class DatasetTask(ShiftTask):
                 n_merge = n_merge.get(key, n_files)
                 if not isinstance(n_merge, dict):
                     break
+            n_merge = n_merge or n_files
         else:
             # no merging at all
             n_merge = 1
