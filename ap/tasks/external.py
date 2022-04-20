@@ -29,7 +29,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     def single_output(self):
         # required by law.tasks.TransferLocalFile
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
-        return self.wlcg_target(f"lfns_{h}.json")
+        return self.local_target(f"lfns_{h}.json")
 
     @ensure_proxy
     def run(self):
