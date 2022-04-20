@@ -14,7 +14,7 @@ from ap.util import ensure_proxy
 
 class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
 
     shifts = {"jec_up", "jec_down"}
 
@@ -29,7 +29,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         return {"lfns": GetDatasetLFNs.req(self)}
 
     def output(self):
-        return self.wlcg_target(f"data_{self.branch}.npz")
+        return self.local_target(f"data_{self.branch}.npz")
 
     @law.decorator.safe_output
     @ensure_proxy
@@ -71,7 +71,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 jet_pt = jet_pt * jec_factor
 
                 # store the jet pt
-                output_arrays.append(jet_pt)
+                output_arrays.append(jet_pt.to_numpy())
 
         data = np.concatenate(output_arrays, axis=0)
         self.output().dump(data=data, formatter="numpy")
