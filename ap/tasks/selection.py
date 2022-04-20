@@ -71,7 +71,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 jet_pt = jet_pt * jec_factor
 
                 # store the jet pt
-                output_arrays.append(jet_pt)
+                output_arrays.append(jet_pt.to_numpy())
 
         data = np.concatenate(output_arrays, axis=0)
         self.output().dump(data=data, formatter="numpy")
