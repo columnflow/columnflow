@@ -5,7 +5,7 @@
 import ap.tasks.framework
 import ap.tasks.external
 import ap.tasks.selection
-import ap.tasks.objectDefinition
-import ap.tasks.defineSelections
+import ap.tasks.defineObjects
+import ap.tasks.defineSelection
 import ap.tasks.applySelection
-import ap.tasks.plotting
+import ap.tasks.fillHistograms

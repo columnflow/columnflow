@@ -17,13 +17,13 @@ class ApplySelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     def workflow_requires(self):
         reqs = super(ApplySelection, self).workflow_requires()
-        reqs["data"] = ObjectDefinition.req(self)
+        reqs["data"] = DefineObjects.req(self)
         reqs["selection"] = DefineSelection.req(self)
         return reqs
 
     def requires(self):
         return {
-            "data": ObjectDefinition.req(self),
+            "data": DefineObjects.req(self),
             "selection": DefineSelection.req(self)
         }
         
@@ -47,5 +47,5 @@ class ApplySelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
 
 # trailing imports
-from ap.tasks.objectDefinition import ObjectDefinition
-from ap.tasks.defineSelections import DefineSelection
+from ap.tasks.defineObjects import DefineObjects
+from ap.tasks.defineSelection import DefineSelection
