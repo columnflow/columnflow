@@ -11,6 +11,8 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
+import ap.config.analysis_st as an
+
 class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
@@ -35,12 +37,21 @@ class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         events = self.input().load(formatter="pickle")
         print(type(events))
+
+        print(type(an.selections))
+
         # how do I initialize a new awkward array?
         selection = events
-        selection["trigger_sel"] = (events.HLT_IsoMu27) | (events.HLT_Ele27_WPTight_Gsf)
-        selection["lep_sel"] = (events.nMuon + events.nElectron == 1)
-        selection["jet_sel"] = (events.nJet >= 1)
-        selection["bjet_sel"] = (events.nDeepjet >= 1)
+        for sel in an.selections:
+            print(sel)
+            selection[sel] = an.selections[sel](events)
+            
+        print(selection["trigger_sel"])
+
+        #selection["trigger_sel"] = (events.HLT_IsoMu27) | (events.HLT_Ele27_WPTight_Gsf)
+        #selection["lep_sel"] = (events.nMuon + events.nElectron == 1)
+        #selection["jet_sel"] = (events.nJet >= 1)
+        #selection["bjet_sel"] = (events.nDeepjet >= 1)
         print(type(selection))
         self.output().dump(selection, formatter="pickle")
 

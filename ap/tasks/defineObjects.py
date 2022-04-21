@@ -11,6 +11,7 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
+import ap.config.analysis_st as an
 
 class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
@@ -68,23 +69,21 @@ class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
 
                 ## Object definition
-                mask_e = (batch.Electron_pt > 30) & (batch.Electron_eta < 2.4) & (batch.Electron_cutBased == 4) # tight ID
-                mask_mu = (batch.Muon_pt > 30) & (batch.Muon_eta < 2.4) & (batch.Muon_tightId)
-                mask_j = (batch.Jet_pt > 30) & (batch.Jet_eta < 2.4)
+                #mask_e = (batch.Electron_pt > 30) & (batch.Electron_eta < 2.4) & (batch.Electron_cutBased == 4) # tight ID
+                #mask_mu = (batch.Muon_pt > 30) & (batch.Muon_eta < 2.4) & (batch.Muon_tightId)
+                #mask_j = (batch.Jet_pt > 30) & (batch.Jet_eta < 2.4)
+
+                mask_e = an.objects["Electron"](batch)
+                mask_mu = an.objects["Muon"](batch)
+                mask_j = an.objects["Jet"](batch)
 
                 ## Object cleaning
-                # should be automatized at some point, like:
-                # batch["Electron_*"] = batch["Electron_*"][mask_e]
-
                 def filter_object(obj, mask, data):
                     import awkward as ak
-                    for x in ak.fields(data):
-                        if obj+"_" in x:
-                            print(x)
-                            print(data[x])
-                            data[x] = data[x][mask]
-                            print(data[x])
-                    data["n"+obj] = ak.num(data[obj+"_pt"], axis=1) # assuming each object has a *_pt field
+                    fields_obj = [x for x in ak.fields(data) if obj+"_" in x]
+                    for x in fields_obj:
+                        data[x] = data[x][mask]
+                    data["n"+obj] = ak.num(data[fields_obj[0]], axis=1) # assuming each field of individual object has the same length (and that there's at least one field)
                         
                 filter_object("Electron", mask_e, batch)
                 filter_object("Muon", mask_mu, batch)
@@ -109,9 +108,8 @@ class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 ## BJets
                 mask_b = (batch["Jet_btagDeepFlavB"] > 0.3) # random value
                 batch["nDeepjet"] = ak.num(batch.Jet_pt[mask_b])
-                print(batch.nDeepjet)
+                # "batch.nDeepjet = ..." does not produce a new field in "batch"
                 # we could also build other branches for the Deepjet category, but I suppose that's not really necessary right now
-                print(ak.fields(batch))
 
                 output_arrays.append(batch) # list of awkward.highlevel.Arrays
 

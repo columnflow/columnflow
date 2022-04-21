@@ -62,6 +62,85 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 
+# define channels
+ch_e = config_2018.add_channel("e", 1) # number?
+ch_mu = config_2018.add_channel("mu", 2)
+
+# 1b or 2b category (ch_e)
+cat_b = ch_e.add_category("eq1b",
+                          label = "1 b-tag",
+                          selection = "nDeepjet == 1"
+)
+
+cat_bb = ch_e.add_category("ge2b",
+                          label = "$\geq$ 2 b-tags",
+                          selection = "nDeepjet >= 2"
+)
+
+
+# define objects
+objects = {
+    "Electron": lambda d: (d.Electron_pt>30) & (d.Electron_eta<2.4) & (d.Electron_cutBased==4), 
+    "Muon": lambda d: (d.Muon_pt>30) & (d.Muon_eta<2.4) & (d.Muon_tightId),
+    "Jet": lambda d: (d.Jet_pt>30) & (d.Jet_eta<2.4),
+}
+
+# just an idea
+extraObjects = {
+    "ForwardJet": lambda d: (d.Jet_pt>30) & (d.Jet_eta>5.0), # should be defined before Jet Fields are cleaned
+    "BJet": lambda d: (d.Jet_btagDeepFlavB > 0.3), # should be defined after Jet Fields are cleaned
+    "Lightjet": lambda d: (d.Jet_btagDeepFlavB <= 0.3),
+}
+
+# define selections
+selections = {
+    "trigger_sel": lambda d: (d.HLT_IsoMu27) | (d.HLT_Ele27_WPTight_Gsf),
+    "lep_sel": lambda d: (d.nMuon + d.nElectron == 1),
+    "jet_sel": lambda d: (d.nJet >= 2),
+    "bjet_sel": lambda d: (d.nDeepjet >= 1),
+}
+
+# define variables of interest in config? Implement a task that loads them into the array?
+eventVars = {
+    "HT": lambda d: ak.sum(d.Jet_pt, axis=1),
+    "nDeepjet": lambda d: ak.num(d.Jet_btagDeepFlavB > 0.3),
+}
+
+
+
+# define variables
+
+# do I need to save HT in my awkward array to use it?
+#config_2018.add_variable("HT",
+#                         expression = "ak.sum(events.Jet_pt, axis=1",
+#                         binning = (40, 0., 800.),
+#                         unit = "GeV"
+#                         x_title = "HT"
+#)
+
+config_2018.add_variable("N_jets",
+                         expression = "nJet", # events.nJet ??
+                         binning = (11, -0.5, 10.5),
+                         unit = "",
+                         x_title = "Number of jets",
+
+)
+
+config_2018.add_variable("jet1_pt",
+                         expression = "Jet_pt[:,0]",
+                         binning = (40, 0., 500.),
+                         unit = "GeV",
+                         x_title = "Leading jet $p_{T}$",
+)
+config_2018.add_variable("jet1_eta",
+                         expression = "Jet_eta[:,0]",
+                         binning = (40, 0., 500.),
+                         unit = "GeV",
+                         x_title = "Leading jet $/eta$",
+)
+
+
+
 
 # file merging values
 # key -> dataset -> files per branch (-1 or not present = all)
