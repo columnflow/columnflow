@@ -26,8 +26,8 @@ class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         return DefineObjects.req(self)
         
     def output(self):
-        return self.local_target(f"data_{self.branch}.pickle")
-        #return self.wlcg_target(f"data_{self.branch}.pickle")
+        return self.local_target(f"selection_{self.branch}.pickle")
+        #return self.wlcg_target(f"selection_{self.branch}.pickle")
 
     @law.decorator.safe_output
     @ensure_proxy
@@ -37,21 +37,16 @@ class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         events = self.input().load(formatter="pickle")
         print(type(events))
-
         print(type(an.selections))
 
-        # how do I initialize a new awkward array?
-        selection = events
+        
+        selection = {} # dict of numpy array
         for sel in an.selections:
             print(sel)
+            print(type(sel))
             selection[sel] = an.selections[sel](events)
-            
-        print(selection["trigger_sel"])
 
-        #selection["trigger_sel"] = (events.HLT_IsoMu27) | (events.HLT_Ele27_WPTight_Gsf)
-        #selection["lep_sel"] = (events.nMuon + events.nElectron == 1)
-        #selection["jet_sel"] = (events.nJet >= 1)
-        #selection["bjet_sel"] = (events.nDeepjet >= 1)
+        selection = ak.zip(selection) # convert dict to awkward array
         print(type(selection))
         self.output().dump(selection, formatter="pickle")
 
