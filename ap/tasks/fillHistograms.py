@@ -11,11 +11,16 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
-import ap.config.analysis_st as an
+import ap.config.analysis_st as an # remove
+import ap.config.processes as procs
+# campaign_2018 is included in analysis_st
+# processes is included in campaign as procs
 
 class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    # include parameter variables
 
     #def workflow_requires(self):
     #    reqs = super(FillHistograms, self).workflow_requires()
@@ -49,8 +54,8 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         print(an.config_2018.get_channel("e"))
 
         
-        # declare output: list of histograms?
-        output = []
+        # declare output: list of histograms? change to dict!
+        output = {}
 
         # how to mask without changing the size of 'events':
         #events.mask[selection.trigger_sel]
@@ -65,6 +70,12 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             print(var.get_mpl_hist_data())
         for var in an.config_2018.variables:
             print(var.get_full_title())
+        
+        # reading out xsec works, but how do I get which kind of process I'm currently looking at? 
+        print(procs.process_st.get_xsec(13))
+
+
+        print(an.analysis_st.get_processes(an.config_2018))
 
         lepton_pt = np.where(events["nMuon"]==1, events["Muon_pt"], events["Electron_pt"]) # this works only if there's either only electrons or only muons
         lepton_eta = np.where(events["nMuon"]==1, events["Muon_eta"], events["Electron_eta"]) # this works only if there's either only electrons or only muons
@@ -85,18 +96,6 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             .Reg(40, 0, 200, name="pt_j2", label="$p_{T, j2}$")
             .Weight()
         )
-        '''
-        h_Jet1_eta = (
-            hist.Hist.new
-            .Reg(40, 0, 200, name="eta_j1", label="$\eta_{j1}$")
-            .Weight()
-        )
-        h_Jet2_eta = (
-            hist.Hist.new
-            .Reg(40, 0, 200, name="eta_j2", label="$\eta_{j2}$")
-            .Weight()
-        )
-        '''
         h_nLep = (
             hist.Hist.new
             .Reg(8, -.5, 7.5, name="nLep", label="$N_{lep}$")
@@ -118,71 +117,51 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             .Weight()
         )
 
+        # weight should be read out from config with order
+        # sampleweight = Lumi / Lumi_sim = Lumi * xsec / Number_MC
+        # weight = sampleweight * eventweight ,(eventweight=genWeight? Generator_weight? LHEWeight_originalXWGTUP?)
+        weight = 1
+
 
         # manually fill histograms
         h_nJet.fill(
             nJet=events["nJet"],
-            weight=1
+            weight=weight
         )
         h_Jet1_pt.fill(
             pt_j1=events["Jet_pt"][:,0], # nJet>0 is given by selection
-            weight=1
+            weight=weight
         )
         h_Jet2_pt.fill(
             pt_j2=events["Jet_pt"][(events.nJet>1)][:,1], # nJet>1 required to fill this histogram
-            weight=1
+            weight=weight
         )
 
         h_nLep.fill(
             nLep=events["nElectron"]+events["nMuon"],
-            weight=1
+            weight=weight
         )
         h_Lep_pt.fill(
             pt_lep=lepton_pt[:,0],
-            weight=1
+            weight=weight
         )
         h_Lep_eta.fill(
             eta_lep=lepton_eta[:,0],
-            weight=1
+            weight=weight
         )
         h_HT.fill(
             HT=HT,
-            weight=1
+            weight=weight
         )
 
-        output.append(h_nJet)
-        output.append(h_Jet1_pt)
-        output.append(h_Jet2_pt)
-        output.append(h_nLep)
-        output.append(h_Lep_pt)
-        output.append(h_Lep_eta)
-        output.append(h_HT)
+        output["nJet"] = h_nJet
+        output["Jet1_pt"] = h_Jet1_pt
+        output["Jet2_pt"] = h_Jet2_pt
+        output["nLep"] = h_nLep
+        output["Lep_pt"] = h_Lep_pt
+        output["Lep_eta"] = h_Lep_eta
+        output["HT"] = h_HT
 
-        '''
-        h_eventVars = (
-            hist.Hist.new
-            #.StrCat(["st", "tt", "data"], name="sample", label="Sample")
-            .Reg(8, -0.5, 7.5, name ="N_jet", label="$N_{jet}$")
-            .Reg(40, 0, 200, name="pt_j1", label="$p_{T, j1}$")
-            #.Reg(40, 0, 200, name="pt_j2", label="$p_{T, j2}$")
-            #.Reg(40, 0, 200, name="pt_j3", label="$p_{T, j3}$")
-            .Reg(40, 0, 800, name="HT", label="HT")
-            .Reg(5, -0.5, 4.5, name ="N_lep", label="$N_{lep}$")
-            .Reg(40, 0, 200, name="pt_lep", label="$p_{T, lep}$")
-            .Weight()
-        )
-        h_eventVars.fill(
-            #sample="st", # sample type should be read out here using Order
-            N_jet=events["nJet"],
-            N_lep=events["nElectron"]+events["nMuon"],
-            pt_j1=events["Jet_pt"][:,0],
-            #pt_j2=ak.mask(events, ak.num(events.Jet_pt, axis=1) > 1).Jet_pt[:,1], # allow_missing parameter needs to be set true: but how?
-            #pt_j3=ak.mask(events, ak.num(events.Jet_pt, axis=1) > 2).Jet_pt[:,2],
-            HT=HT,
-            pt_lep=lepton_pt[:,0],
-            weight=1 # dummy, should be read out here using Order
-        )
-        '''
 
         self.output().dump(output, formatter="pickle")
 

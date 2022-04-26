@@ -74,20 +74,17 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         fix,ax = plt.subplots()
 
         histograms = []
-        #histograms = {}
 
         colors = []
 
 
         for p in self.processes:
             process = self.get_analysis_inst(self.analysis).get_processes(self.config_inst).get(p)
-            histogram = self.input()["histograms"][p].load(formatter="pickle")[0]
+            histogram = self.input()["histograms"][p].load(formatter="pickle")[self.branch_data['variable']]
             colors.append(process.color)
             print(type(histogram))
             #histograms[p] = histogram
             histograms.append(histogram)
-            
-            print()
 
 
         h_final = hist.Stack(*histograms)
@@ -105,8 +102,6 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         
         ax.set_ylabel("Counts")
         ax.legend(title="Processes")
-        
-        #plt.savefig('plot.pdf')
 
         plt.savefig(self.output().path)
 
