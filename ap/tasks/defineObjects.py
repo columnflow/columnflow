@@ -88,23 +88,7 @@ class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 filter_object("Electron", mask_e, batch)
                 filter_object("Muon", mask_mu, batch)
                 filter_object("Jet", mask_j, batch)
-                '''
-                ## Electrons
-                batch.Electron_pt = batch.Electron_pt[mask_e]
-                batch.Electron_eta = batch.Electron_eta[mask_e]
-                batch.Electron_cutBased = batch.Electron_cutBased[mask_e]
-                batch.nElectron = ak.num(batch.Electron_pt, axis=1)
-                ## Muons
-                batch.Muon_pt = batch.Muon_pt[mask_mu]
-                batch.Muon_eta = batch.Muon_eta[mask_mu]
-                batch.Muon_tightId = batch.Muon_tightId[mask_mu]
-                batch.nMuon = ak.num(batch.Muon_pt, axis=1)
-                ## Jets
-                batch.Jet_pt = batch.Jet_pt[mask_j]
-                batch.Jet_eta = batch.Jet_eta[mask_j]
-                batch.Jet_btagDeepFlavB = batch.Jet_btagDeepFlavB[mask_j]
-                batch.nJet = ak.num(batch.Jet_pt, axis=1)
-                '''
+
                 ## BJets
                 mask_b = (batch["Jet_btagDeepFlavB"] > 0.3) # random value
                 batch["nDeepjet"] = ak.num(batch.Jet_pt[mask_b])

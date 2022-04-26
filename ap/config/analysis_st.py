@@ -112,7 +112,7 @@ eventVars = {
 
 # do I need to save HT in my awkward array to use it?
 #config_2018.add_variable("HT",
-#                         expression = "ak.sum(events.Jet_pt, axis=1",
+#                         expression = "ak.sum(events.Jet_pt, axis=1)",
 #                         binning = (40, 0., 800.),
 #                         unit = "GeV"
 #                         x_title = "HT"
