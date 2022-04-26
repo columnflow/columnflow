@@ -7,15 +7,24 @@ Task to plot the first histograms
 import math
 
 import law
+import luigi
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
-import ap.config.analysis_st as an
-
-class Plotting(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    #process = luigi.ChoiceParameter(choices=self.get_analysis_inst(self.analysis).get_processes(an.config_2018).names())
+    processes = law.CSVParameter(description="List of processes to plot")
+    variables = law.CSVParameter(description="List of variables to plot")
+    
+
+    def create_branch_map(self):
+        return {i: {"variable": var} for i, var in enumerate(self.variables)}
+
+
 
     #def workflow_requires(self):
     #    reqs = super(FillHistograms, self).workflow_requires()
@@ -25,11 +34,14 @@ class Plotting(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     def requires(self):
         return {
-            "histograms": FillHistograms.req(self),
+            "histograms": {
+                "st": FillHistograms.req(self, branch=0, dataset="st_tchannel_t"),
+                "tt": FillHistograms.req(self, branch=0, dataset="tt_sl"),
+            }
         }
         
     def output(self):
-        return self.local_target(f"plots_{self.branch}.pdf")
+        return self.local_target(f"plots_{self.branch_data['variable']}.pdf")
         #return self.wlcg_target(f"data_{self.branch}.pickle")
 
     @law.decorator.safe_output
@@ -42,9 +54,10 @@ class Plotting(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         import mplhep
         plt.style.use(mplhep.style.CMS)
 
-        histograms = self.input()["histograms"].load(formatter="pickle")
-        
-        plots = []
+        #processes = [self.get_analysis_inst(self.analysis).get_processes(self.config_inst).get(p) for p in self.processes]
+
+       # histograms = {p: self.input()["histograms"][p].load(formatter="pickle") for p in self.processes}
+
         '''
         for hist in histograms:
             fix,ax = plt.subplots()
@@ -59,18 +72,43 @@ class Plotting(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         '''
             
         fix,ax = plt.subplots()
-        histograms[0].plot1d(
+
+        histograms = []
+        #histograms = {}
+
+        colors = []
+
+
+        for p in self.processes:
+            process = self.get_analysis_inst(self.analysis).get_processes(self.config_inst).get(p)
+            histogram = self.input()["histograms"][p].load(formatter="pickle")[0]
+            colors.append(process.color)
+            print(type(histogram))
+            #histograms[p] = histogram
+            histograms.append(histogram)
+            
+            print()
+
+
+        h_final = hist.Stack(*histograms)
+        #h_final = hist.Stack.from_dict(histograms)
+
+        h_final.plot(
             ax=ax,
             stack=True,
             histtype="fill",
-            alpha=0.5,
+            #alpha=0.5,
             edgecolor=(0, 0, 0, 0.3),
-            )
-        ax.legend(title="Counts")
+            label=self.processes,
+            color=colors,
+        )
+        
+        ax.set_ylabel("Counts")
+        ax.legend(title="Processes")
         
         #plt.savefig('plot.pdf')
 
-        self.output().dump(plt.savefig('plot.pdf'))
+        plt.savefig(self.output().path)
 
 # trailing imports
 from ap.tasks.fillHistograms import FillHistograms
