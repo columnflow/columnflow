@@ -13,14 +13,12 @@ from ap.util import ensure_proxy
 
 import ap.config.analysis_st as an # remove
 import ap.config.processes as procs
-# campaign_2018 is included in analysis_st
-# processes is included in campaign as procs
 
 class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #variables = law.CSVParameter(description="List of variables to define hists for")
 
-    # include parameter variables
 
     #def workflow_requires(self):
     #    reqs = super(FillHistograms, self).workflow_requires()
@@ -49,36 +47,31 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         selection = self.input()["selection"].load(formatter="pickle")
         print(type(events))
         print(type(selection))
-
-        print("test: readout e-channel from config")
-        print(an.config_2018.get_channel("e"))
-
         
-        # declare output: list of histograms? change to dict!
+        # declare output: dict of histograms
         output = {}
 
-        # how to mask without changing the size of 'events':
-        #events.mask[selection.trigger_sel]
-        
+        mask = selection["trigger_sel"] # how to properly initialize mask?
+        print(type(mask))
         # for now, just apply all selections
-        events = events[(selection.trigger_sel) & (selection.lep_sel) & (selection.jet_sel) & (selection.bjet_sel)]
+        for sel in ak.fields(selection):
+            print(sel)
+            mask = (mask) & (selection[sel])
+        
+        #events = events[(selection.trigger_sel) & (selection.lep_sel) & (selection.jet_sel) & (selection.bjet_sel)]
+        events = events[mask]
+
 
         # variables of interest: needs to be defined in a previous task?
         HT = ak.sum(events.Jet_pt, axis=1)
 
-        for var in an.config_2018.variables:
-            print(var.get_mpl_hist_data())
-        for var in an.config_2018.variables:
-            print(var.get_full_title())
-        
-        # reading out xsec works, but how do I get which kind of process I'm currently looking at? 
-        print(procs.process_st.get_xsec(13))
-
-
-        print(an.analysis_st.get_processes(an.config_2018))
-
         lepton_pt = np.where(events["nMuon"]==1, events["Muon_pt"], events["Electron_pt"]) # this works only if there's either only electrons or only muons
         lepton_eta = np.where(events["nMuon"]==1, events["Muon_eta"], events["Electron_eta"]) # this works only if there's either only electrons or only muons
+
+        for var in self.config_inst.variables:
+            print(var.get_full_title())
+            print(var.get_mpl_hist_data())
+
 
         # define histograms
         h_nJet = (
@@ -136,7 +129,6 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             pt_j2=events["Jet_pt"][(events.nJet>1)][:,1], # nJet>1 required to fill this histogram
             weight=weight
         )
-
         h_nLep.fill(
             nLep=events["nElectron"]+events["nMuon"],
             weight=weight

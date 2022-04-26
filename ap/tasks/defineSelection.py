@@ -48,7 +48,7 @@ class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         selection = ak.zip(selection) # convert dict to awkward array
         print(type(selection))
-        self.output().dump(selection, formatter="pickle")
+        self.output().dump(selection, formatter="pickle") # numpy formatter should also work
 
 
 
