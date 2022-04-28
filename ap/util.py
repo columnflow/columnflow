@@ -8,15 +8,37 @@ __all__ = []
 
 
 import os
+import math
+import time
 import uuid
 import queue
 import threading
 import subprocess
 import multiprocessing
-from typing import Tuple, Callable, Any, Optional
+import multiprocessing.pool
+from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
 import law
+
+try:
+    import coffea.nanoevents
+    import coffea.nanoevents.methods.base
+    NanoEventsArray = coffea.nanoevents.methods.base.NanoEventsArray
+    HAS_COFFEA = True
+except ImportError:
+    HAS_COFFEA = False
+    NanoEventsArray = None
+
+try:
+    import uproot
+    TTree = uproot.TTree
+    ReadOnlyDirectory = uproot.ReadOnlyDirectory
+    HAS_UPROOT = True
+except ImportError:
+    HAS_UPROOT = False
+    TTree = None
+    ReadOnlyDirectory = None
 
 
 # modules and objects from lazy imports
@@ -198,3 +220,123 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
         return
 
     return before_call, call, after_call
+
+
+class PreloadedChunk(dict):
+    """
+    Class that is compatible to coffea's interface for preloaded array sources. See
+    https://coffeateam.github.io/coffea/api/coffea.nanoevents.NanoEventsFactory.html#coffea.nanoevents.NanoEventsFactory.from_preloaded
+    for more info.
+
+    A chunk can be created from an uproot *tree* that is preloaded between *entry_start* and
+    *entry_stop* via *tree.arrays()*, receiving all additional *kwargs*.
+    """
+
+    def __init__(
+            self,
+            tree: TTree,
+            entry_start: Optional[int] = None,
+            entry_stop: Optional[int] = None,
+            **kwargs):
+        # normalize edges
+        n = tree.num_entries
+        entry_start = 0 if not entry_start else max(entry_start, 0)
+        entry_stop = n if not entry_stop else min(max(entry_stop, entry_start), n)
+
+        # preload arrays
+        chunk = tree.arrays(entry_start=entry_start, entry_stop=entry_stop, how=dict, **kwargs)
+
+        # init the dict
+        super(PreloadedChunk, self).__init__(chunk)
+
+        # save attributes
+        self._tree = tree
+        self._entry_start = entry_start
+        self._entry_stop = entry_stop
+
+    @property
+    def metadata(self) -> dict:
+        return {
+            "num_rows": self._entry_stop - self._entry_start,
+            "uuid": self._tree.file.uuid,
+            "object_path": self._tree.object_path,
+        }
+
+
+def process_nano_events(
+        uproot_input: Union[ReadOnlyDirectory, TTree],
+        pool_size: int = 4,
+        chunk_size: int = 40000,
+        **kwargs) -> None:
+    """
+    Generator to loop through chunks of an *uproot_input* (either an opened file or a tree instance)
+    in a multi-threaded fashion using a pool of size *pool_size*. As soon as a chunk of size
+    *chunk_size* is read from disk, the generator yields a 4-tuple of (chunk index, NanoEventsArray,
+    start entry, stop entry). The array is already fully pre-loaded into memory. All additional
+    *kwargs* are forwarded to :py:class:`PreloadedChunk` which is used for the preloading.
+
+    Example:
+
+    .. code-block:: python
+
+        uproot_file = uproot.open("ZMuMu.root")
+        expressions = ["run", "luminosityBlock", "event", "nJet", "Jet_pt"]
+        for i, events, *_ in process_nano_events(uproot_file, expressions=expressions):
+            print(i, events.Jet.pt)
+    """
+    assert HAS_UPROOT
+    assert HAS_COFFEA
+
+    # get the events tree
+    tree = uproot_input if isinstance(uproot_input, TTree) else uproot_input["Events"]
+    n_entries = tree.num_entries
+    n_chunks = int(math.ceil(n_entries / chunk_size))
+
+    def read(chunk_idx):
+        # determine the start of stop of this chunk
+        entry_start = chunk_idx * chunk_size
+        entry_stop = min((chunk_idx + 1) * chunk_size, n_entries)
+
+        # preload array chunk
+        chunk = PreloadedChunk(tree, entry_start, entry_stop, **kwargs)
+
+        # wrap by nano factory
+        events = coffea.nanoevents.NanoEventsFactory.from_preloaded(chunk,
+            schemaclass=coffea.nanoevents.NanoAODSchema).events()
+
+        return (chunk_idx, events, entry_start, entry_stop)
+
+    # setup the pool
+    with multiprocessing.pool.ThreadPool(pool_size) as pool:
+        # fill it one by one up to pool_size as we should not use map or apply_async on all chunks
+        # right away as this would fill up the entire memory in case processing is slower than IO
+        chunks = list(range(n_chunks))
+        results = []
+
+        while chunks or results:
+            # first, fill up results
+            while len(results) < pool_size and chunks:
+                results.append(pool.apply_async(read, (chunks.pop(0),)))
+
+            # then, query results with a fast polling and try to clear them
+            remove_indices = []
+            for i, result in enumerate(list(results)):
+                if not result.ready():
+                    continue
+
+                # the result is ready, try to yield its payload
+                try:
+                    yield result.get()
+                except:
+                    pool.close()
+                    pool.terminate()
+                    raise
+
+                # mark the result as "to be removed"
+                remove_indices.append(i)
+
+            # remove results, or sleep when none was ready
+            if remove_indices:
+                results = [result for i, result in enumerate(results) if i not in remove_indices]
+            else:
+                time.sleep(0.05)

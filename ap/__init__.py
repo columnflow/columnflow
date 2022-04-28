@@ -7,6 +7,6 @@ Main entry point for top-level settings and fixes before anything else is import
 import law
 
 law.contrib.load(
-    "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "tasks",
-    "wlcg",
+    "arc", "awkward", "cms", "coffea", "git", "htcondor", "numpy", "pyarrow", "telegram", "root",
+    "tasks", "wlcg",
 )
