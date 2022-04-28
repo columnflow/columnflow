@@ -63,18 +63,40 @@ config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 
 # define channels
-ch_e = config_2018.add_channel("e", 1) # number?
-ch_mu = config_2018.add_channel("mu", 2)
+st_channel = config_2018.add_channel("st", 1)
 
 # 1b or 2b category (ch_e)
-cat_b = ch_e.add_category("eq1b",
-                          label = "1 b-tag",
-                          selection = "nDeepjet == 1"
+
+cat_e = config_2018.add_category("1e",
+                                 label="1 electron",
+                                 selection = "lambda d: d.nElectron==1"
+                                 #selection="nElectron==1"
+)
+cat_mu = config_2018.add_category("1mu",
+                                  label="1 muon",
+                                  selection= "lambda d: d.nMuon==1"
+                                  #selection="nMuon==1"
 )
 
-cat_bb = ch_e.add_category("ge2b",
-                          label = "$\geq$ 2 b-tags",
-                          selection = "nDeepjet >= 2"
+cat_e_b = cat_e.add_category("1e_eq1b",
+                             label = "1e, 1 b-tag",
+                             selection = "lambda d: (d.nElectron==1) & (d.nDeepjet==1)",
+                             #selection = "(nElectron==1) & (nDeepjet==1)"
+)
+cat_e_bb = cat_e.add_category("1e_ge2b",
+                              label = "1e, $\geq$ 2 b-tags",
+                              selection = "lambda d: (d.nElectron==1) & (d.nDeepjet>=2)",
+                              #selection = "(nElectron==1) & (nDeepjet>=2)"
+)
+cat_mu_b = cat_mu.add_category("1mu_eq1b",
+                               label = "1mu, 1 b-tag",
+                               selection = "lambda d: (d.nMuon==1) & (d.nDeepjet==1)",
+                          #selection = "(nElectron==1) & (nDeepjet==1)"
+)
+cat_mu_bb = cat_mu.add_category("1mu_ge2b",
+                                label = "1mu, $\geq$ 2 b-tags",
+                                selection = "lambda d: (d.nMuon==1) & (d.nDeepjet>=2)",
+                                #selection = "(nElectron==1) & (nDeepjet>=2)"
 )
 
 

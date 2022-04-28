@@ -16,7 +16,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    processes = law.CSVParameter(description="List of processes to plot")
+    #processes = law.CSVParameter(description="List of processes to plot")
     variables = law.CSVParameter(description="List of variables to plot")
     
 
@@ -26,12 +26,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
 
     def requires(self):
-        return {
-            "histograms": {
-                "st": FillHistograms.req(self, branch=0, dataset="st_tchannel_t"),
-                "tt": FillHistograms.req(self, branch=0, dataset="tt_sl"),
-            }
-        }
+        return MergeHistograms.req(self)
         
     def output(self):
         return self.local_target(f"plots_{self.branch_data['variable']}.pdf")
@@ -48,31 +43,25 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         histograms = []
         colors = []
 
+        histogram = self.input().load(formatter="pickle")[self.branch_data['variable']]
+        print(type(histogram))
 
-        for p in self.processes:
-            process = self.get_analysis_inst(self.analysis).get_processes(self.config_inst).get(p)
-            histogram = self.input()["histograms"][p].load(formatter="pickle")[self.branch_data['variable']]
-            colors.append(process.color)
-            print(type(histogram))
-            histograms.append(histogram)
-
-
-        h_stack = hist.Stack(*histograms)
 
         fix,ax = plt.subplots()
-        h_stack.plot(
+        histogram.plot(
             ax=ax,
             stack=True,
+            overlay="category",
             histtype="fill",
             edgecolor=(0, 0, 0, 0.3),
-            label=self.processes,
-            color=colors,
+            #label=self.processes,
+            #color=colors,
         )
         
         ax.set_ylabel("Counts")
-        ax.legend(title="Processes")
+        ax.legend(title="Category")
 
         plt.savefig(self.output().path)
 
 # trailing imports
-from ap.tasks.fillHistograms import FillHistograms
+from ap.tasks.mergeHistograms import MergeHistograms
