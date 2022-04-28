@@ -9,4 +9,5 @@ import ap.tasks.defineObjects
 import ap.tasks.defineSelection
 import ap.tasks.applySelection
 import ap.tasks.fillHistograms
+import ap.tasks.mergeHistograms
 import ap.tasks.plotting
