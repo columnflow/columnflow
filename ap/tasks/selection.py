@@ -38,7 +38,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
-        output_chunks = []
+        output_chunks = {}
 
         # loop over all input file indices requested by this branch
         for file_index in self.branch_data:
@@ -55,40 +55,37 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
             # open with uproot
             with self.publish_step("load and open ..."):
-                tree = input_file.load(formatter="uproot")["Events"]
+                uproot_file = input_file.load(formatter="uproot")
+                tree = uproot_file["Events"]
                 self.publish_message(f"found {tree.num_entries} events")
 
             # prepare processing
             chunk_size = 40000
             n_chunks = int(math.ceil(tree.num_entries / chunk_size))
             branches = ["run", "luminosityBlock", "event", "nJet", "Jet_*"]
-            branches = [k for k in tree.keys() if law.util.multi_match(k, branches)]
 
             # iterate over the file
-            gen = process_nano_events(tree, chunk_size=chunk_size, expressions=branches)
-            for i, events, *_ in self.iter_progress(gen, n_chunks, msg="iterate ..."):
+            gen = process_nano_events(uproot_file, chunk_size=chunk_size, pool_insert=True,
+                filter_name=branches)
+            for pos, events, pool_insert in self.iter_progress(gen, n_chunks, msg="iterate ..."):
                 # do sth meaningful here ...
-                print(i, events.Jet.pt)
+                print(pos.index, events.Jet.pt)
 
-                # TODO 1: it looks like the NanoEventsArray copied the preloaded input chunk,
-                #         so a) is this true?, b) is this normal?, and c) would this also be the
-                #         case if we used "from_root" instead of "from_preloaded"?
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
+                output_chunks[(file_index, pos.index)] = chunk
+                pool_insert(chunk.dump, (events,), {"formatter": "awkward"})
 
-                # TODO 2: how to extract a zipped awkward array again from the NanoEventsArray
-                #         without copying?
-
-                # TODO 3: how to save to parquet (which will again be I/O bound) using threads such
-                #         that the next event processing iteration can start without the need to
-                #         wait until the file is written
-
-                # save the batch as parquet
-                # chunk = tmp_dir.child(f"file_{file_index}_{i}.parquet", type="f")
-                # ak.to_parquet(batch, chunk.path)
-                # output_chunks.append(chunk)
+                # Q 1: How to add new columns?
+                # Q 2: How to change existing columns, either fully or partially?
+                # Q 3: Instead of saving the array with coffea events behavior, can we recreate an
+                #      array with nano-like structure instead? One can always wrap it into coffea on
+                #      demand later on, but it would be good not to force this decision here.
 
         # merge the files
-        # with self.output().localize("w") as output:
-        #     law.pyarrow.merge_parquet_task(self, output_chunks, output, local=True)
+        with self.output().localize("w") as output:
+            sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
 
 class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
