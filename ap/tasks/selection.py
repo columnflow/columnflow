@@ -67,7 +67,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             n_chunks = int(math.ceil(utree.num_entries / chunk_size))
 
             # list the names (or name patterns) of colums to load
-            columns = ["run", "luminosityBlock", "event", "nJet", "Jet_pt", "Jet_phi"]
+            columns = ["run", "luminosityBlock", "event", "nJet", "Jet_pt", "Jet_phi", "Jet_mass"]
 
             # iterate over chunks
             gen = process_nano_events(ufile, chunk_size=chunk_size, pool_insert=True,
@@ -75,15 +75,18 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             for events, pos, pool_insert in self.iter_progress(gen, n_chunks, msg="iterate ..."):
                 # here, we would start correcting objects, adding new columns, etc
                 # examples in the following:
-                #   a) correct Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
+                #   a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
                 #   b) add a new column Jet.px based on pt and phi
                 print(f"handling chunk {pos.index}")
 
                 # a)
                 a_mask = ak.flatten(events.Jet.pt < 30)
-                n_pt = np.asarray(ak.flatten(events.Jet.pt))
-                n_pt[a_mask] *= 1.1
-                n_pt[~a_mask] *= 0.9
+                n_jet_pt = np.asarray(ak.flatten(events.Jet.pt))
+                n_jet_mass = np.asarray(ak.flatten(events.Jet.mass))
+                n_jet_pt[a_mask] *= 1.1
+                n_jet_pt[~a_mask] *= 0.9
+                n_jet_mass[a_mask] *= 1.1
+                n_jet_mass[~a_mask] *= 0.9
 
                 # b)
                 events["Jet", "px"] = events.Jet.pt * np.cos(events.Jet.phi)
