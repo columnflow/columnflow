@@ -11,6 +11,8 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
+import ap.config.functions as fcts
+
 
 class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
@@ -48,7 +50,6 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         leaf_categories = config.get_leaf_categories()
         print(type(leaf_categories))
         processes = config.processes #analysis.get_processes(config)
-        variables = config.variables #analysis.get_variables(config)
 
 
         events = self.input()["data"].load(formatter="pickle")
@@ -56,10 +57,6 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         print(type(events))
         print(type(selection))
         
-        #events[cat1.selection]
-
-        # declare output: dict of histograms
-        output = {}
 
         mask = selection["trigger_sel"] # how to properly initialize mask?
         print(type(mask))
@@ -71,139 +68,44 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         #events = events[(selection.trigger_sel) & (selection.lep_sel) & (selection.jet_sel) & (selection.bjet_sel)]
         events = events[mask]
 
-
-        # variables of interest: needs to be defined in a previous task?
-        HT = ak.sum(events.Jet_pt, axis=1)
-
-        lepton_pt = np.where(events["nMuon"]==1, events["Muon_pt"], events["Electron_pt"]) # this works only if there's either only electrons or only muons
-        lepton_eta = np.where(events["nMuon"]==1, events["Muon_eta"], events["Electron_eta"]) # this works only if there's either only electrons or only muons
-
-        for var in self.config_inst.variables:
-            print(var.get_full_title())
-            print(var.get_mpl_hist_data())
-
-        
         # determine which event belongs in which category
-        # this should probably be included in an earlier task... (part of defineSelection?)
-
-        # I'm looping over all categories twice... a bit inefficient?
-        cat_dict = {}
+        # this could be included in an earlier task... (part of defineSelection? Returning a mask for each selection? Or an array of strings (requires the categories to be orthogonal))
+        cat_titles = []
+        cat_array = "no_cat"
         for cat in leaf_categories:
             sel = cat.selection
-            print(sel)
-            mask = eval(sel)(events)
-            cat_array = np.where(mask)
-            cat_dict[cat.name] = mask
+            cat_titles.append(sel)
+            #mask = eval(sel)(events)
+            mask = getattr(fcts, sel)(events)
+            cat_array = np.where(mask, sel, cat_array)
 
-        # translate dict of booleans into array of strings (assuming that each event is part of max. 1 category, should be checked somewhere)
-        cat_array = "no_cat"
-        for k in cat_dict.keys():
-            cat_array = np.where(cat_dict[k], k, cat_array)
-        print(cat_array)
-        print(cat_dict)
-        print([k for k in cat_dict.keys()])
-        print("-----")
-        print(type(events["nJet"]))
-        print(type(cat_array))
-              
-        # define histograms
-        h_nJet = (
-            hist.Hist.new
-            #.StrCategory(["st","tt","data"], name="process")
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(8, -.5, 7.5, name="nJet", label="$N_{jet}$")
-            .Weight()
-        )
-        h_Jet1_pt = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(40, 0, 200, name="pt_j1", label="$p_{T, j1}$")
-            .Weight()
-        )
-        h_Jet2_pt = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(40, 0, 200, name="pt_j2", label="$p_{T, j2}$")
-            .Weight()
-        )
-        h_nLep = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(8, -.5, 7.5, name="nLep", label="$N_{lep}$")
-            .Weight()
-        )
-        h_Lep_pt = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(40, 0, 200, name="pt_lep", label="$p_{T, lep}$")
-            .Weight()
-        )
-        h_Lep_eta = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(40, 0, 200, name="eta_lep", label="$\eta_{lep}$")
-            .Weight()
-        )
-        h_HT = (
-            hist.Hist.new
-            .StrCategory([k for k in cat_dict.keys()], name="category")
-            .Reg(40,0,800, name="HT", label="HT")
-            .Weight()
-        )
+        
 
-        print("-----")
+        # declare output: dict of histograms
+        output = {}
+
         # weight should be read out from config with order
         # sampleweight = Lumi / Lumi_sim = Lumi * xsec / Number_MC
         # weight = sampleweight * eventweight ,(eventweight=genWeight? Generator_weight? LHEWeight_originalXWGTUP?)
-        weight = 1
+        weight = 1 # dummy
 
+        for var in config.variables:
+            print(var.name)
+            h_var = (
+                hist.Hist.new
+                .StrCategory(cat_titles, name="category")
+                .Reg(*var.binning, name=var.name, label=var.get_full_x_title())
+                .Weight()
+            )
+            #print("fill histograms:")
+            fill_kwargs = {
+                "category": cat_array,
+                var.name: getattr(fcts, var.expression)(events),
+                "weight": weight,
+            }
+            h_var.fill(**fill_kwargs)
+            output[var.name] = h_var
 
-        # manually fill histograms
-        h_nJet.fill(
-            category=cat_array,
-            nJet=events["nJet"],
-            weight=weight
-        )
-        h_Jet1_pt.fill(
-            category=cat_array,
-            pt_j1=events["Jet_pt"][:,0], # nJet>0 is given by selection
-            weight=weight
-        )
-        h_Jet2_pt.fill(
-            category=cat_array,
-            pt_j2=events["Jet_pt"][(events.nJet>1)][:,1], # nJet>1 required to fill this histogram
-            weight=weight
-        )
-        h_nLep.fill(
-            category=cat_array,
-            nLep=events["nElectron"]+events["nMuon"],
-            weight=weight
-        )
-        h_Lep_pt.fill(
-            category=cat_array,
-            pt_lep=lepton_pt[:,0],
-            weight=weight
-        )
-        h_Lep_eta.fill(
-            category=cat_array,
-            eta_lep=lepton_eta[:,0],
-            weight=weight
-        )
-        h_HT.fill(
-            category=cat_array,
-            HT=HT,
-            weight=weight
-        )
-
-        output["nJet"] = h_nJet
-        output["Jet1_pt"] = h_Jet1_pt
-        output["Jet2_pt"] = h_Jet2_pt
-        output["nLep"] = h_nLep
-        output["Lep_pt"] = h_Lep_pt
-        output["Lep_eta"] = h_Lep_eta
-        output["HT"] = h_HT
-
-        print("-----")
 
         self.output().dump(output, formatter="pickle")
 

@@ -69,33 +69,39 @@ st_channel = config_2018.add_channel("st", 1)
 
 cat_e = config_2018.add_category("1e",
                                  label="1 electron",
-                                 selection = "lambda d: d.nElectron==1"
+                                 selection = "sel_1e"
+                                 #selection = "lambda d: d.nElectron==1"
                                  #selection="nElectron==1"
 )
 cat_mu = config_2018.add_category("1mu",
                                   label="1 muon",
-                                  selection= "lambda d: d.nMuon==1"
+                                  selection = "sel_1mu"
+                                  #selection= "lambda d: d.nMuon==1"
                                   #selection="nMuon==1"
 )
 
 cat_e_b = cat_e.add_category("1e_eq1b",
                              label = "1e, 1 b-tag",
-                             selection = "lambda d: (d.nElectron==1) & (d.nDeepjet==1)",
+                             selection = "sel_1e_eq1b",
+                             #selection = "lambda d: (d.nElectron==1) & (d.nDeepjet==1)",
                              #selection = "(nElectron==1) & (nDeepjet==1)"
 )
 cat_e_bb = cat_e.add_category("1e_ge2b",
                               label = "1e, $\geq$ 2 b-tags",
-                              selection = "lambda d: (d.nElectron==1) & (d.nDeepjet>=2)",
+                              selection = "sel_1e_ge2b",
+                              #selection = "lambda d: (d.nElectron==1) & (d.nDeepjet>=2)",
                               #selection = "(nElectron==1) & (nDeepjet>=2)"
 )
 cat_mu_b = cat_mu.add_category("1mu_eq1b",
                                label = "1mu, 1 b-tag",
-                               selection = "lambda d: (d.nMuon==1) & (d.nDeepjet==1)",
+                               selection = "sel_1mu_eq1b",
+                               #selection = "lambda d: (d.nMuon==1) & (d.nDeepjet==1)",
                           #selection = "(nElectron==1) & (nDeepjet==1)"
 )
 cat_mu_bb = cat_mu.add_category("1mu_ge2b",
                                 label = "1mu, $\geq$ 2 b-tags",
-                                selection = "lambda d: (d.nMuon==1) & (d.nDeepjet>=2)",
+                                selection = "sel_1mu_ge2b",
+                                #selection = "lambda d: (d.nMuon==1) & (d.nDeepjet>=2)",
                                 #selection = "(nElectron==1) & (nDeepjet>=2)"
 )
 
@@ -122,43 +128,112 @@ selections = {
     "bjet_sel": lambda d: (d.nDeepjet >= 1),
 }
 
-# define variables of interest in config? Implement a task that loads them into the array?
-eventVars = {
-    "HT": lambda d: ak.sum(d.Jet_pt, axis=1),
-    "nDeepjet": lambda d: ak.num(d.Jet_btagDeepFlavB > 0.3),
-}
-
-
 
 # define variables
-
-# do I need to save HT in my awkward array to use it?
-#config_2018.add_variable("HT",
-#                         expression = "ak.sum(events.Jet_pt, axis=1)",
-#                         binning = (40, 0., 800.),
-#                         unit = "GeV"
-#                         x_title = "HT"
-#)
-
-config_2018.add_variable("N_jets",
-                         expression = "nJet", # events.nJet ??
-                         binning = (11, -0.5, 10.5),
-                         unit = "",
-                         x_title = "Number of jets",
-
+config_2018.add_variable("HT",
+                         expression = "var_HT",
+                         binning = (40, 0., 800.),
+                         unit = "GeV",
+                         x_title = "HT"
+)
+config_2018.add_variable("nElectron",
+                         expression = "var_nElectron",
+                         binning = (6, -0.5, 5.5),
+                         x_title = "Number of electrons",
+)
+config_2018.add_variable("nMuon",
+                         expression = "var_nMuon",
+                         binning = (6, -0.5, 5.5),
+                         x_title = "Number of muons",
+)
+config_2018.add_variable("nLepton",
+                         expression = "var_nLepton",
+                         binning = (6, -0.5, 5.5),
+                         x_title = "Number of leptons",
+)
+config_2018.add_variable("Electron1_pt",
+                         expression = "var_Electron1_pt",
+                         binning = (40, 0., 400.),
+                         unit = "GeV",
+                         x_title = "Leading electron $p_{T}$",
+)
+config_2018.add_variable("Muon1_pt",
+                         expression = "var_Muon1_pt",
+                         binning = (40, 0., 400.),
+                         unit = "GeV",
+                         x_title = "Leading muon $p_{T}$",
+)
+config_2018.add_variable("Lepton1_pt",
+                         expression = "var_Lepton1_pt",
+                         binning = (40, 0., 400.),
+                         unit = "GeV",
+                         x_title = "Leading lepton $p_{T}$",
+)
+config_2018.add_variable("Electron1_eta",
+                         expression = "var_Electron1_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Leading electron $\eta$",
+)
+config_2018.add_variable("Muon1_eta",
+                         expression = "var_Muon1_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Leading muon $\eta$",
+)
+config_2018.add_variable("Lepton1_eta",
+                         expression = "var_Lepton1_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Leading lepton $\eta$",
 )
 
-config_2018.add_variable("jet1_pt",
-                         expression = "Jet_pt[:,0]",
-                         binning = (40, 0., 500.),
+config_2018.add_variable("nJet",
+                         expression = "var_nJet",
+                         binning = (11, -0.5, 10.5),
+                         x_title = "Number of jets",
+)
+config_2018.add_variable("nDeepjet",
+                         expression = "var_nDeepjet",
+                         binning = (8, -0.5, 7.5),
+                         x_title = "Number of deepjets",
+)
+config_2018.add_variable("Jet1_pt",
+                         expression = "var_Jet1_pt",
+                         binning = (40, 0., 400.),
                          unit = "GeV",
                          x_title = "Leading jet $p_{T}$",
 )
-config_2018.add_variable("jet1_eta",
-                         expression = "Jet_eta[:,0]",
-                         binning = (40, 0., 500.),
+config_2018.add_variable("Jet2_pt",
+                         expression = "var_Jet2_pt",
+                         binning = (40, 0., 400.),
                          unit = "GeV",
-                         x_title = "Leading jet $/eta$",
+                         x_title = "Jet 2 $p_{T}$",
+)
+
+config_2018.add_variable("Jet3_pt",
+                         expression = "var_Jet3_pt",
+                         binning = (40, 0., 400.),
+                         unit = "GeV",
+                         x_title = "Jet 3 $p_{T}$",
+)
+config_2018.add_variable("Jet1_eta",
+                         expression = "var_Jet1_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Leading jet $\eta$",
+)
+config_2018.add_variable("Jet2_eta",
+                         expression = "var_Jet2_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Jet 2 $\eta$",
+)
+config_2018.add_variable("Jet3_eta",
+                         expression = "var_Jet3_eta",
+                         binning = (40, -2.5, 2.5),
+                         unit = "GeV",
+                         x_title = "Jet 3 $\eta$",
 )
 
 

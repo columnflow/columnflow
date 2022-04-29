@@ -53,7 +53,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             stack=True,
             overlay="category",
             histtype="fill",
-            edgecolor=(0, 0, 0, 0.3),
+            #edgecolor=(0, 0, 0, 0.3),
             #label=self.processes,
             #color=colors,
         )
