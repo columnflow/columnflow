@@ -232,6 +232,7 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
 def process_nano_events(
     uproot_file: ReadOnlyDirectory,
     chunk_size: int = 40000,
+    lazy: bool = False,
     pool_size: int = 4,
     pool_insert: bool = False,
     **kwargs,
@@ -240,9 +241,10 @@ def process_nano_events(
     Generator that loops through an *uproot_file* and yields chunks of events of size *chunk_size*
     in a multi-threaded fashion using a pool of size *pool_size*.
 
-    As soon as a chunk is read, a 2-tuple (chunk position, NanoEventsArray) is yielded, with the
-    latter being already fully pre-loaded into memory. A chunk position is a named tuple with fields
-    *index*, *entry_start* and *entry_stop*.
+    As soon as a chunk is read, a 2-tuple (NanoEventsArray, chunk position) is yielded, with the
+    former being already fully pre-loaded into memory if *lazy* is *False*. Otherwise, columns are
+    loaded on demand, but most likely in the main event processing thread which can cause IO waits.
+    A chunk position is a named tuple with fields *index*, *entry_start* and *entry_stop*.
 
     When *pool_insert* is *True*, the yielded tuple will have a third item, which is a function
     (accepting a callable as well as arguments and keyword arguments) that allows to insert new
@@ -258,11 +260,11 @@ def process_nano_events(
 
         # loop through certain branches
         branches = ["run", "luminosityBlock", "event", "nJet", "Jet_pt"]
-        for pos, events in process_nano_events(uproot_file, filter_name=branches):
+        for events, pos in process_nano_events(uproot_file, filter_name=branches):
             print(pos.index, events.Jet.pt)
 
         # insert new tasks to the same pool used internally for multi-threading
-        for pos, events, pool_insert in process_nano_events(uproot_file, pool_insert=True):
+        for events, pos, pool_insert in process_nano_events(uproot_file, pool_insert=True):
             print(pos.index, events.Jet.pt)
 
             pool_insert((lambda events: ak.to_parquet(events, "/some/path")), (events,))
@@ -301,7 +303,10 @@ def process_nano_events(
     ChunkPosition = namedtuple("ChunkPosition", ["index", "entry_start", "entry_stop"])
 
     # container describing the return value of read operations below
-    ReadResult = namedtuple("ReadResult", ["chunk_pos", "events"])
+    ReadResult = namedtuple("ReadResult", ["events", "chunk_pos"])
+
+    # determine the nano factory to use
+    factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
 
     # the read operation that is executed per thread, parameterized by the chunk index
     def read(chunk_idx):
@@ -310,7 +315,7 @@ def process_nano_events(
         entry_stop = min((chunk_idx + 1) * chunk_size, n_entries)
 
         # read the events chunk into memory
-        events = PreloadedNanoEventsFactory.from_root(
+        events = factory.from_root(
             uproot_file,
             entry_start=entry_start,
             entry_stop=entry_stop,
@@ -318,7 +323,7 @@ def process_nano_events(
             iteritems_options=kwargs,
         ).events()
 
-        return ReadResult(ChunkPosition(chunk_idx, entry_start, entry_stop), events)
+        return ReadResult(events, ChunkPosition(chunk_idx, entry_start, entry_stop))
 
     # setup the pool with the strategy to manually keep it filled up to pool_size and do not use
     # insert all chunks right away as this could swamp the memory if processing is slower than IO
@@ -362,9 +367,9 @@ def process_nano_events(
             if isinstance(result_obj, ReadResult):
                 try:
                     if pool_insert:
-                        yield (result_obj.chunk_pos, result_obj.events, _pool_insert)
+                        yield (result_obj.events, result_obj.chunk_pos, _pool_insert)
                     else:
-                        yield (result_obj.chunk_pos, result_obj.events)
+                        yield (result_obj.events, result_obj.chunk_pos)
                 except:
                     pool.close()
                     pool.terminate()

@@ -32,6 +32,9 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
+        import numpy as np
+        import awkward as ak
+
         # get all lfns
         lfns = self.input()["lfns"].random_target().load(formatter="json")
 
@@ -40,7 +43,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         tmp_dir.touch()
         output_chunks = {}
 
-        # loop over all input file indices requested by this branch
+        # loop over all input file indices requested by this branch (most likely just one)
         for file_index in self.branch_data:
             self.publish_message(f"handling file {file_index}")
 
@@ -55,29 +58,43 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
             # open with uproot
             with self.publish_step("load and open ..."):
-                uproot_file = input_file.load(formatter="uproot")
-                tree = uproot_file["Events"]
-                self.publish_message(f"found {tree.num_entries} events")
+                ufile = input_file.load(formatter="uproot")
+                utree = ufile["Events"]
+                self.publish_message(f"found {utree.num_entries} events")
 
             # prepare processing
             chunk_size = 40000
-            n_chunks = int(math.ceil(tree.num_entries / chunk_size))
-            branches = ["run", "luminosityBlock", "event", "nJet", "Jet_*"]
+            n_chunks = int(math.ceil(utree.num_entries / chunk_size))
 
-            # iterate over the file
-            gen = process_nano_events(uproot_file, chunk_size=chunk_size, pool_insert=True,
-                filter_name=branches)
-            for pos, events, pool_insert in self.iter_progress(gen, n_chunks, msg="iterate ..."):
-                # do sth meaningful here ...
-                print(pos.index, events.Jet.pt)
+            # list the names (or name patterns) of colums to load
+            columns = ["run", "luminosityBlock", "event", "nJet", "Jet_pt", "Jet_phi"]
+
+            # iterate over chunks
+            gen = process_nano_events(ufile, chunk_size=chunk_size, pool_insert=True,
+                filter_name=columns)
+            for events, pos, pool_insert in self.iter_progress(gen, n_chunks, msg="iterate ..."):
+                # here, we would start correcting objects, adding new columns, etc
+                # examples in the following:
+                #   a) correct Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
+                #   b) add a new column Jet.px based on pt and phi
+                print(f"handling chunk {pos.index}")
+
+                # a)
+                a_mask = ak.flatten(events.Jet.pt < 30)
+                n_pt = np.asarray(ak.flatten(events.Jet.pt))
+                n_pt[a_mask] *= 1.1
+                n_pt[~a_mask] *= 0.9
+
+                # b)
+                events["Jet", "px"] = events.Jet.pt * np.cos(events.Jet.phi)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
-                output_chunks[(file_index, pos.index)] = chunk
                 pool_insert(chunk.dump, (events,), {"formatter": "awkward"})
+                output_chunks[(file_index, pos.index)] = chunk
 
-                # Q 1: How to add new columns?
-                # Q 2: How to change existing columns, either fully or partially?
+                # Q 1: How to add new columns? SOLVED
+                # Q 2: How to change existing columns, either fully or partially? SOLVED
                 # Q 3: Instead of saving the array with coffea events behavior, can we recreate an
                 #      array with nano-like structure instead? One can always wrap it into coffea on
                 #      demand later on, but it would be good not to force this decision here.
