@@ -172,19 +172,16 @@ config_2018.add_variable("Lepton1_pt",
 config_2018.add_variable("Electron1_eta",
                          expression = "var_Electron1_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Leading electron $\eta$",
 )
 config_2018.add_variable("Muon1_eta",
                          expression = "var_Muon1_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Leading muon $\eta$",
 )
 config_2018.add_variable("Lepton1_eta",
                          expression = "var_Lepton1_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Leading lepton $\eta$",
 )
 
@@ -210,7 +207,6 @@ config_2018.add_variable("Jet2_pt",
                          unit = "GeV",
                          x_title = "Jet 2 $p_{T}$",
 )
-
 config_2018.add_variable("Jet3_pt",
                          expression = "var_Jet3_pt",
                          binning = (40, 0., 400.),
@@ -220,19 +216,16 @@ config_2018.add_variable("Jet3_pt",
 config_2018.add_variable("Jet1_eta",
                          expression = "var_Jet1_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Leading jet $\eta$",
 )
 config_2018.add_variable("Jet2_eta",
                          expression = "var_Jet2_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Jet 2 $\eta$",
 )
 config_2018.add_variable("Jet3_eta",
                          expression = "var_Jet3_eta",
                          binning = (40, -2.5, 2.5),
-                         unit = "GeV",
                          x_title = "Jet 3 $\eta$",
 )
 
