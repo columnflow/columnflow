@@ -35,7 +35,7 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
         #}
 
     def merge_output(self):
-        return self.local_target(f"histograms_merged.pickle")
+        return self.local_target(f"histograms_{self.dataset}.pickle")
         #return self.local_target(f"histograms_{self.branch_data['process']}")
 
 

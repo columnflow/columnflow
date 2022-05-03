@@ -17,6 +17,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     #processes = law.CSVParameter(description="List of processes to plot")
+    datasets = law.CSVParameter(description="List of datasets to plot")
     variables = law.CSVParameter(description="List of variables to plot")
     
 
@@ -25,9 +26,12 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
 
 
+    #def requires(self):
+    #    return MergeHistograms.req(self)
+
     def requires(self):
-        return MergeHistograms.req(self)
-        
+        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+
     def output(self):
         return self.local_target(f"plots_{self.branch_data['variable']}.pdf")
 
