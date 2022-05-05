@@ -6,6 +6,7 @@ Task to produce the first histograms
 
 import math
 
+import luigi
 import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
@@ -18,12 +19,19 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     #variables = law.CSVParameter(
-        #default = self.config_inst.variables.names, # can I read out config here?
+    #    default = None, # self.config_inst.variables.names, # can I read out config here?
     #    description="List of variables to define hists for"
     #)
-
-
-
+    '''
+    selections = law.CSVParameter(
+        default = law.NO_STR,
+        description = "List of selections to consider for plotting"
+    )
+    do_cutflow = luigi.BoolParameter(
+        default = False,
+        description = "Boolean whether to produce plots after each individual selection or only after applying all selections"
+    )
+    '''
     def requires(self):
         return {
             "data": DefineObjects.req(self),
@@ -44,7 +52,6 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         config = self.config_inst
         analysis = self.get_analysis_inst(self.analysis)
         #categories = config.categories
-        print(type(leaf_categories))
         #processes = config.processes
 
 
@@ -93,31 +100,39 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # declare output: dict of histograms
         output = {}
 
-        # weight should be read out from config with order
-        # weight = sampleweight * eventweight ,(eventweight=genWeight? Generator_weight? LHEWeight_originalXWGTUP?)
-        # lumi where?
-        sampleweight = 59740 * process.get_xsec(config.campaign.ecm).get() / dataset.n_events # get_xsec() gives not a number but number+-uncert
-        eventweight = 1 # dummy
+        sampleweight = config.get_aux("luminosity") * process.get_xsec(config.campaign.ecm).get() / dataset.n_events # get_xsec() gives not a number but number+-uncert
+        eventweight = events["LHEWeight_originalXWGTUP"] / process.get_xsec(config.campaign.ecm).get()
+        print("sampleweight = %f" %sampleweight)
+        print("eventweight = ", eventweight)
         weight = sampleweight * eventweight
-        print("weight = %f" % weight)
-        for var in config.variables:
-            print(var.name)
+        print("weight = ", weight)
+        
+        #print(ak.all(ak.isclose(events["LHEWeight_originalXWGTUP"],events["Generator_weight"])))
+        #print(ak.all(ak.isclose(events["LHEWeight_originalXWGTUP"],events["genWeight"])))
+
+        
+        #if(self.variables==None):
+        #    self.variables = config.variables.names()
+        variables = config.variables.names()
+        for var_name in variables:
+            print(var_name)
+            var = config.variables.get(var_name)
             h_var = (
                 hist.Hist.new
                 .StrCategory(dataset_names, name="dataset")
                 .StrCategory(cat_titles, name="category")
-                .Reg(*var.binning, name=var.name, label=var.get_full_x_title())
+                .Reg(*var.binning, name=var_name, label=var.get_full_x_title())
                 .Weight()
             )
             #print("fill histograms:")
             fill_kwargs = {
                 "category": cat_array,
                 "dataset": self.dataset, 
-                var.name: getattr(fcts, var.expression)(events),
+                var_name: getattr(fcts, var.expression)(events),
                 "weight": weight,
             }
             h_var.fill(**fill_kwargs)
-            output[var.name] = h_var
+            output[var_name] = h_var
 
 
         self.output().dump(output, formatter="pickle")

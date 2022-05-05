@@ -63,7 +63,7 @@ class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             # readout all fields of interest, define electrons, muons, jets
             step_size = 100000 # 1000 -> 31 seconds; 1000000 -> 4.3 seconds; 100000 -> 5.2 seconds
             steps = int(math.ceil(events.num_entries / step_size))
-            events = events.iterate(["nMuon", "nElectron", "Muon_pt", "Muon_eta", "Muon_tightId", "Electron_pt", "Electron_eta", "Electron_cutBased", "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB", "HLT_IsoMu27", "HLT_Ele27_WPTight_Gsf"], step_size=step_size)
+            events = events.iterate(["nMuon", "nElectron", "Muon_pt", "Muon_eta", "Muon_tightId", "Electron_pt", "Electron_eta", "Electron_cutBased", "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB", "HLT_IsoMu27", "HLT_Ele27_WPTight_Gsf", "LHEWeight_originalXWGTUP", "LHEScaleWeight", "LHEPdfWeight", "genWeight", "Generator_weight"], step_size=step_size)
             for batch in self.iter_progress(events, steps, msg=f"file {file_index}: select ..."):
                 print("batch")
 
