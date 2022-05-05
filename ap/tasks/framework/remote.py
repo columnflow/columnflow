@@ -212,8 +212,8 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
             # get a list of all software flag files
             flag_files = os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split()
             for venv_name in os.listdir(os.environ["AP_VENV_PATH"]):
-                # skip the ap_dev venv
-                if venv_name == "ap_dev":
+                # skip all dev envs
+                if venv_name.endswith("_dev"):
                     continue
                 venv_flag = os.path.join(os.environ["AP_VENV_PATH"], venv_name, "ap_flag")
                 flag_files.append(venv_flag)

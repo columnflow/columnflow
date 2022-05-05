@@ -25,7 +25,7 @@ analysis_st.set_aux("versions", {
 
 # cmssw sandboxes that should be bundled for remote jobs in case they are needed
 analysis_st.set_aux("cmssw_sandboxes", [
-    "cmssw_default.sh",
+    # "cmssw_default.sh",
 ])
 
 
