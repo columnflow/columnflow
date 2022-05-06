@@ -8,5 +8,5 @@ import law
 
 law.contrib.load(
     "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "tasks",
-    "wlcg",
+    "wlcg","matplotlib",
 )
