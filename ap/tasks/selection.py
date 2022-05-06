@@ -206,15 +206,16 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # - require at least 4 jets with pt>30
                     # - require exactly one muon with pt>25
                     # example stats:
+                    # - number of events before and after selection
                     # - sum of mc weights before and after selection
 
                     jet_mask = events.Jet.pt > 30
+                    jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)[jet_mask]
                     jet_sel = ak.sum(jet_mask, axis=1) >= 4
-                    # TODO: convert jet_mask into an index list per event, denoting selected jets
-                    #       ordered by pt
 
                     # muon selection
                     muon_mask = events.Muon.pt > 25
+                    muon_indices = ak.argsort(events.Muon.pt, axis=-1, ascending=False)[muon_mask]
                     muon_sel = ak.sum(muon_mask, axis=1) == 1
 
                     # combined event selection
@@ -234,8 +235,8 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                             "muon": muon_sel,
                         }),
                         "object": ak.zip({
-                            "jet": jet_mask,
-                            "muon": muon_mask,
+                            "jet": jet_indices,
+                            "muon": muon_indices,
                         }, depth_limit=1),
                     })
 
@@ -270,7 +271,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
 class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection_dev.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
 
     shifts = CalibrateObjects.shifts | SelectEvents.shifts
 
@@ -329,7 +330,6 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 [ufile, inputs["diff"].path, inputs["mask"]["mask"].path],
                 source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
                 read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
-                pool_size=1,
             ) as reader:
                 msg = f"iterate through {reader.n_entries} events ..."
                 for (events, diff, mask), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
@@ -343,11 +343,12 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     #       see add_nano_aliases for more info
                     events = add_nano_aliases(events, aliases)
 
-                    # TODO:
-                    # - filter events
-                    # - filter objects
-                    # - sort objects when object mask was an index list (rather than a bool list)
-                    # - remove unused columns
+                    # apply the event mask
+                    events = events[mask.event]
+
+                    # apply jet and muon masks
+                    events.Jet = events.Jet[mask.object.jet[mask.event]]
+                    events.Muon = events.Muon[mask.object.muon[mask.event]]
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
