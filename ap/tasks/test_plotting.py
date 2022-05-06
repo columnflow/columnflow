@@ -28,6 +28,12 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         default = (),# law.NO_STR,
         description="List of variables to plot"
     )
+    '''
+    categories = law.CSVParameter(
+        default = (),
+        description="String of categories to create plots for"
+    )
+    '''
     # for now, only consider the leaf categories
     category = luigi.Parameter( # to categories (CSV)
         default = law.NO_STR,
@@ -44,8 +50,6 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     '''
     def create_branch_map(self):
         print('Hello from create_branch_map')
-        print(self.variables)
-        print(len(self.variables))
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         return {i: {"variable": var} for i, var in enumerate(self.variables)}
@@ -53,24 +57,14 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     def requires(self):
         print('Hello from requires')
         c = self.config_inst
-        # check if given leaf category exists
-        if not ((self.category==law.NO_STR) | (self.category in c.get_leaf_categories())):
-            raise ValueError("This leaf category does not exist.")
-
         # determine which datasets to require
-        print(self.processes)
-        '''
-        if self.processes:
-            procs = [c.get_process(p) for p in self.processes]
-        else: # take all processes
-            procs = c.analysis.get_processes(c)
-        #datasets = []
-        '''
+        if not self.processes:
+            self.processes = c.analysis.get_processes(c).names()
         self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
         return {d: FillHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
    
     def output(self):
-        return self.local_target(f"plot_{self.branch_data['variable']}.pdf")
+        return self.local_target(f"plot_{self.category}_{self.branch_data['variable']}.pdf")
 
     @law.decorator.safe_output
     @ensure_proxy
@@ -82,25 +76,31 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
         c = self.config_inst
 
-        #h_out = None
-        print("datasets: %s" % self.datasets)
-
         histograms = []
         colors = []
         
         print("Adding histograms together ....")
         for p in self.processes:
-            # define one histogram per process and add all histograms corresponding to this process
+            print("-------- process: ", p)
             h_proc = None
-            print("process: ", p)
             for d in gfcts.getDatasetNamesFromProcess(c, p):
-                print("dataset: ", d)
+                print("----- dataset: ", d)
                 h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-                if(self.category==law.NO_STR):
-                    h_in = h_in[::sum,:] # summing over categories
+
+                cats = []
+                #if not self.category: # empty list: take all leaf_categories
+                if self.category==law.NO_STR:
+                    cats = [cat.name for cat in c.get_leaf_categories()]
+                elif c.get_category(self.category).is_leaf_category:
+                    cats.append(self.category)
                 else:
-                    h_in = h_in[self.category,:] # take the given category
-                
+                    cats = [cat.name for cat in c.get_category(self.category).get_leaf_categories()]
+                    
+                print("categories:" , cats)
+                    
+                h_in = h_in[{"category": cats}]
+                h_in = h_in[{"category": sum}]
+
                 if(h_proc==None):
                     h_proc = h_in
                 else:
@@ -126,7 +126,6 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         ax.legend(title="Processes")
 
         self.output().dump(plt, formatter="mpl")
-        #plt.savefig(self.output().path)
 
 # trailing imports
 from ap.tasks.fillHistograms import FillHistograms
