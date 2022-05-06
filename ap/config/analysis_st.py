@@ -36,6 +36,8 @@ analysis_st.set_aux("cmssw_sandboxes", [
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
 
+config_2018.set_aux("luminosity", 59740)
+
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
 config_2018.add_process(procs.process_tt)
@@ -63,10 +65,9 @@ config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 
 # define channels
-st_channel = config_2018.add_channel("st", 1)
+#st_channel = config_2018.add_channel("st", 1)
 
-# 1b or 2b category (ch_e)
-
+# define categories
 cat_e = config_2018.add_category("1e",
                                  label="1 electron",
                                  selection = "sel_1e"
@@ -199,12 +200,14 @@ config_2018.add_variable("Jet1_pt",
                          expression = "var_Jet1_pt",
                          binning = (40, 0., 400.),
                          unit = "GeV",
+                         log_y = True,
                          x_title = "Leading jet $p_{T}$",
 )
 config_2018.add_variable("Jet2_pt",
                          expression = "var_Jet2_pt",
                          binning = (40, 0., 400.),
                          unit = "GeV",
+                         log_y = True,
                          x_title = "Jet 2 $p_{T}$",
 )
 config_2018.add_variable("Jet3_pt",
@@ -216,6 +219,7 @@ config_2018.add_variable("Jet3_pt",
 config_2018.add_variable("Jet1_eta",
                          expression = "var_Jet1_eta",
                          binning = (40, -2.5, 2.5),
+                         log_y = True,
                          x_title = "Leading jet $\eta$",
 )
 config_2018.add_variable("Jet2_eta",
@@ -228,7 +232,13 @@ config_2018.add_variable("Jet3_eta",
                          binning = (40, -2.5, 2.5),
                          x_title = "Jet 3 $\eta$",
 )
-
+""" # does not work, would need an args parameter to call mask = getattr(functions, selection)(*args)(data)
+config_2018.add_variable("Jet4_eta",
+                         expression = "var_JetN_eta(4)",
+                         binning = (40, -2.5, 2.5),
+                         x_title = "Jet 4 $\eta$",
+)
+"""
 
 
 

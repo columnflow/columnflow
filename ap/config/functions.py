@@ -19,13 +19,11 @@ def combineAndSort(a1, a2):
     array = ak.sort(array, ascending=False)
     return array
 
-
-
 # selection for the main categories
 def sel_1e(data):
-    return (data.nElectron==1)
+    return (data.nElectron==1) & (data.nMuon==0)
 def sel_1mu(data):
-    return (data.nMuon==1)
+    return (data.nMuon==1) & (data.nElectron==0)
 
 # selection for the sub-categories
 def sel_1e_eq1b(data):
@@ -51,7 +49,7 @@ def var_HT(data):
 def var_nElectron(data):
     return data.nElectron
 def var_nMuon(data):
-    return data.nElectron
+    return data.nMuon
 def var_nLepton(data):
     return data.nElectron+data.nMuon
 
@@ -86,3 +84,6 @@ def var_Jet2_eta(data):
     return extract(data.Jet_eta, 1)
 def var_Jet3_eta(data):
     return extract(data.Jet_eta, 2)
+# no use case for this yet
+def var_JetN_eta(N):
+    return lambda d: extract(d.Jet_eta, N-1)
