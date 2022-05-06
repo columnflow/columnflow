@@ -9,6 +9,8 @@ import math
 import law
 import luigi
 
+from ap.tasks.functions import functions_general as gfcts
+
 from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
@@ -16,35 +18,55 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    #processes = law.CSVParameter(description="List of processes to plot")
-    # TODO: switch from datasets to processes (because you typically want all tt processes, not just specific ones)
-    datasets = law.CSVParameter(
-        default = law.NO_STR,
-        #default = "st_tchannel_t,st_tchannel_tbar,st_twchannel_t,st_twchannel_tbar,tt_sl,tt_dl,tt_fh",
-        #default = "st_tchannel_t",
-        description="List of datasets to plot"
+    processes = law.CSVParameter(
+        default = (),
+        description="List of processes to plot"
     )
+
     variables = law.CSVParameter(
         #default = "nJet,HT",
-        default = law.NO_STR,
+        default = (),# law.NO_STR,
         description="List of variables to plot"
     )
- 
+    # for now, only consider the leaf categories
+    category = luigi.Parameter( # to categories (CSV)
+        default = law.NO_STR,
+        description="String of leaf category to create plots for (takes all categories combined if no parameter is given)"
+    )
+    '''
+    def store_parts(self):
+        parts = super(ConfigTask, self).store_parts()
 
+        # add the config name
+        parts.insert_after("task_class", "config", self.config_inst.name)
+
+        return parts
+    '''
     def create_branch_map(self):
         print('Hello from create_branch_map')
         print(self.variables)
         print(len(self.variables))
-        if(self.variables[0]==law.NO_STR):
+        if not self.variables:
             self.variables = self.config_inst.variables.names()
         return {i: {"variable": var} for i, var in enumerate(self.variables)}
     
     def requires(self):
         print('Hello from requires')
-        print(self.datasets)
-        if(self.datasets==law.NO_STR):
-            self.datasets = self.get_analysis_inst(self.analysis).get_datasets(self.config_inst).names()
-        print(self.datasets)
+        c = self.config_inst
+        # check if given leaf category exists
+        if not ((self.category==law.NO_STR) | (self.category in c.get_leaf_categories())):
+            raise ValueError("This leaf category does not exist.")
+
+        # determine which datasets to require
+        print(self.processes)
+        '''
+        if self.processes:
+            procs = [c.get_process(p) for p in self.processes]
+        else: # take all processes
+            procs = c.analysis.get_processes(c)
+        #datasets = []
+        '''
+        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
         return {d: FillHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
    
     def output(self):
@@ -58,36 +80,53 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         import mplhep
         plt.style.use(mplhep.style.CMS)
 
-        analysis = self.get_analysis_inst(self.analysis)
+        c = self.config_inst
 
-        h_out = None
+        #h_out = None
         print("datasets: %s" % self.datasets)
 
-        for d in self.datasets:
-            h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-            h_in = h_in[:,::sum,:] # for now: summing over categories
-            if(h_out == None):
-                h_out = h_in
-            h_out+= h_in
-
+        histograms = []
+        colors = []
         
+        print("Adding histograms together ....")
+        for p in self.processes:
+            # define one histogram per process and add all histograms corresponding to this process
+            h_proc = None
+            print("process: ", p)
+            for d in gfcts.getDatasetNamesFromProcess(c, p):
+                print("dataset: ", d)
+                h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
+                if(self.category==law.NO_STR):
+                    h_in = h_in[::sum,:] # summing over categories
+                else:
+                    h_in = h_in[self.category,:] # take the given category
+                
+                if(h_proc==None):
+                    h_proc = h_in
+                else:
+                    h_proc += h_in
+
+            histograms.append(h_proc)
+            colors.append(c.get_process(p).color)
+
+        h_final = hist.Stack(*histograms)
         fix,ax = plt.subplots()
 
-        colors = [p.color for p in self.get_analysis_inst(self.analysis).get_processes(self.config_inst)]
-
-        h_out.plot(
+        h_final.plot(
             ax=ax,
             stack=True,
             histtype="fill",
+            label=self.processes,
             color = colors,
         )
         
-        lumi = mplhep.cms.label(ax=ax, lumi=59740, label="WiP")
+        lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="WiP")
 
         ax.set_ylabel("Counts")
         ax.legend(title="Processes")
 
-        plt.savefig(self.output().path)
+        self.output().dump(plt, formatter="mpl")
+        #plt.savefig(self.output().path)
 
 # trailing imports
 from ap.tasks.fillHistograms import FillHistograms
