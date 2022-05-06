@@ -8,9 +8,9 @@ Some functions that seemed useful in general
 def getDatasetNamesFromProcesses(config, processes):
     if processes:
         procs = [config.get_process(p) for p in processes]
-    else: # if processes is empty: use
+    else:
         print("From getDatasetNamesFromProcesses: given list of processes is empty. Take all processes instead.")
-        procs = c.analysis.get_processes(p)
+        procs = config.analysis.get_processes(p)
     datasets = []
     for p in procs:
         datasets += getDatasetNamesFromProcess(config, p.name)
