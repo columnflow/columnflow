@@ -139,6 +139,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         config.render_variables["ap_desy_user"] = os.environ["AP_DESY_USER"]
         config.render_variables["ap_cern_user"] = os.environ["AP_CERN_USER"]
         config.render_variables["ap_store_name"] = os.environ["AP_STORE_NAME"]
+        config.render_variables["ap_store_local"] = os.environ["AP_STORE_LOCAL"]
         config.render_variables["ap_local_scheduler"] = os.environ["AP_LOCAL_SCHEDULER"]
 
         return config

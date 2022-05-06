@@ -4,12 +4,44 @@
 Tasks related to obtaining, preprocessing and selecting events.
 """
 
-import math
+from collections import defaultdict
 
 import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
-from ap.util import ensure_proxy, process_nano_events
+from ap.tasks.external import GetDatasetLFNs
+from ap.util import ensure_proxy
+
+
+def nano_inputs(
+    branch_task: DatasetTask,
+    lfn_collection: law.FileCollection,
+    remote_fs: str = "wlcg_fs_desy_store",
+) -> None:
+    """
+    Generator function that reduces the boiler plate code for looping over files referred to by the
+    branch data of a law *branch_task*, given the collection of LFN files *lfn_collection* (the
+    output of :py:class:`GetDatasetLFNs`). Iterating yields a 3-tuple (file index, lfn, input file)
+    where the latter is a :py:class:`law.wlcg.WLCGFileTarget` with its fs set to *remote_fs*.
+    """
+    assert branch_task.is_branch()
+
+    # get all lfns
+    lfns = lfn_collection.random_target().load(formatter="json")
+
+    # loop
+    for file_index in branch_task.branch_data:
+        branch_task.publish_message(f"handling file {file_index}")
+
+        # get the lfn of the file referenced by this file index
+        lfn = str(lfns[file_index])
+
+        # get the input file
+        input_file = law.wlcg.WLCGFileTarget(lfn, fs=remote_fs)
+        input_size = law.util.human_bytes(input_file.stat().st_size, fmt=True)
+        branch_task.publish_message(f"lfn {lfn}, size is {input_size}")
+
+        yield (file_index, lfn, input_file)
 
 
 class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
@@ -17,95 +49,80 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
 
     def workflow_requires(self):
-        # workflow super classes might already define requirements, so extend them
         reqs = super(CalibrateObjects, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         return reqs
 
     def requires(self):
-        # workflow branches are normal tasks, so define requirements the normal way
-        return {"lfns": GetDatasetLFNs.req(self)}
+        return {
+            "lfns": GetDatasetLFNs.req(self),
+        }
 
     def output(self):
-        return self.local_target(f"data_{self.branch}.parquet")
+        return self.local_target(f"diff_{self.branch}.parquet")
 
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
         import numpy as np
         import awkward as ak
+        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
 
-        # get all lfns
-        lfns = self.input()["lfns"].random_target().load(formatter="json")
+        # prepare inputs and outputs
+        inputs = self.input()
+        output = self.output()
+        output_chunks = {}
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
-        output_chunks = {}
+
+        # define nano columns that need to be loaded
+        load_columns = mandatory_coffea_columns + ["nJet", "Jet_pt", "Jet_mass"]
 
         # loop over all input file indices requested by this branch (most likely just one)
-        for file_index in self.branch_data:
-            self.publish_message(f"handling file {file_index}")
-
-            # get the lfn of the file referenced by this file index
-            lfn = str(lfns[file_index])
-
-            # always use the INFN redirector for now
-            # input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
-            input_file = law.law.LocalFileTarget("/nfs/dust/cms/user/riegerma/analysis_st_cache/WLCGFileSystem_f760560584/c226ad324e_2325C825-4095-D74F-A98A-5B42318F8DC4.root")
-            input_size = law.util.human_bytes(input_file.stat().st_size, fmt=True)
-            self.publish_message(f"lfn {lfn}, size is {input_size}")
-
+        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
             # open with uproot
             with self.publish_step("load and open ..."):
                 ufile = input_file.load(formatter="uproot")
-                utree = ufile["Events"]
-                self.publish_message(f"found {utree.num_entries} events")
-
-            # prepare processing
-            chunk_size = 40000
-            n_chunks = int(math.ceil(utree.num_entries / chunk_size))
-
-            # list the names (or name patterns) of colums to load
-            columns = ["run", "luminosityBlock", "event", "nJet", "Jet_pt", "Jet_phi", "Jet_mass"]
 
             # iterate over chunks
-            gen = process_nano_events(ufile, chunk_size=chunk_size, pool_insert=True,
-                filter_name=columns)
-            for events, pos, pool_insert in self.iter_progress(gen, n_chunks, msg="iterate ..."):
-                # here, we would start correcting objects, adding new columns, etc
-                # examples in the following:
-                #   a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
-                #   b) add a new column Jet.px based on pt and phi
-                print(f"handling chunk {pos.index}")
+            with ChunkedReader(
+                ufile,
+                source_type="coffea_root",
+                read_options={"iteritems_options": {"filter_name": load_columns}},
+            ) as reader:
+                msg = f"iterate through {reader.n_entries} events ..."
+                for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                    # here, we would start correcting objects, adding new columns, etc
+                    # examples in the following:
+                    #   a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
+                    #   b) add 4 new columns representing the effect of JEC variations
 
-                # a)
-                a_mask = ak.flatten(events.Jet.pt < 30)
-                n_jet_pt = np.asarray(ak.flatten(events.Jet.pt))
-                n_jet_mass = np.asarray(ak.flatten(events.Jet.mass))
-                n_jet_pt[a_mask] *= 1.1
-                n_jet_pt[~a_mask] *= 0.9
-                n_jet_mass[a_mask] *= 1.1
-                n_jet_mass[~a_mask] *= 0.9
+                    # a)
+                    a_mask = ak.flatten(events.Jet.pt < 30)
+                    n_jet_pt = np.asarray(ak.flatten(events.Jet.pt))
+                    n_jet_mass = np.asarray(ak.flatten(events.Jet.mass))
+                    n_jet_pt[a_mask] *= 1.1
+                    n_jet_pt[~a_mask] *= 0.9
+                    n_jet_mass[a_mask] *= 1.1
+                    n_jet_mass[~a_mask] *= 0.9
 
-                # b)
-                events["Jet", "px"] = events.Jet.pt * np.cos(events.Jet.phi)
+                    # b)
+                    events["Jet", "pt_jec_up"] = events.Jet.pt * 1.05
+                    events["Jet", "mass_jec_up"] = events.Jet.mass * 1.05
+                    events["Jet", "pt_jec_down"] = events.Jet.pt * 0.95
+                    events["Jet", "mass_jec_down"] = events.Jet.mass * 0.95
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
-                pool_insert(chunk.dump, (events,), {"formatter": "awkward"})
-                output_chunks[(file_index, pos.index)] = chunk
+                    # save as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
+                    output_chunks[(file_index, pos.index)] = chunk
+                    reader.add_task(ak.to_parquet, (events, chunk.path))
 
-                # Q 1: How to add new columns? SOLVED
-                # Q 2: How to change existing columns, either fully or partially? SOLVED
-                # Q 3: Instead of saving the array with coffea events behavior, can we recreate an
-                #      array with nano-like structure instead? One can always wrap it into coffea on
-                #      demand later on, but it would be good not to force this decision here.
-
-        # merge the files
-        with self.output().localize("w") as output:
+        # merge output files
+        with output.localize("w") as outp:
             sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
 
 
 class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
@@ -118,60 +135,225 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # workflow super classes might already define requirements, so extend them
         reqs = super(SelectEvents, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
+        if not self.pilot:
+            reqs["diff"] = CalibrateObjects.req(self)
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
-        return {"lfns": GetDatasetLFNs.req(self)}
+        return {
+            "lfns": GetDatasetLFNs.req(self),
+            "diff": CalibrateObjects.req(self),
+        }
 
     def output(self):
-        return self.local_target(f"data_{self.branch}.npz")
+        return {
+            "mask": self.local_target(f"mask_{self.branch}.parquet"),
+            "stat": self.local_target(f"stat_{self.branch}.json"),
+        }
 
     @law.decorator.safe_output
+    @law.decorator.localize
     @ensure_proxy
     def run(self):
-        import numpy as np
+        import awkward as ak
+        from ap.columnar_util import (
+            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
+        )
 
-        # get all lfns
-        lfns = self.input()["lfns"].random_target().load(formatter="json")
+        # prepare inputs and outputs
+        inputs = self.input()
+        outputs = self.output()
+        output_chunks = {}
+        stats = defaultdict(float)
 
-        # prepare output arrays to be concated
-        output_arrays = []
+        # create a temp dir for saving intermediate files
+        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+        tmp_dir.touch()
 
-        # loop over all input file indices requested by this branch
-        for file_index in self.branch_data:
-            # get the lfn of the file referenced by this file index
-            lfn = str(lfns[file_index])
-            self.publish_message(f"file {file_index}: fround {lfn}")
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
 
-            # always use the INFN redirector for now
-            input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
+        # define nano columns that need to be loaded
+        load_columns = mandatory_coffea_columns + [
+            "nJet", "Jet_pt", "nMuon", "Muon_pt", "LHEWeight_originalXWGTUP",
+        ]
 
-            # open with uproot
-            with self.publish_step("loading content with uproot ..."):
-                data = input_file.load(formatter="uproot")
-                events = data["Events"]
-                self.publish_message(f"file {file_index}: found {events.num_entries} events")
+        # loop over all input file indices requested by this branch (most likely just one)
+        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
+            # open the input file with uproot
+            with self.publish_step("load and open ..."):
+                ufile = input_file.load(formatter="uproot")
 
-            # dummy task: get all jet 1 pt values
-            step_size = 1000
-            steps = int(math.ceil(events.num_entries / step_size))
-            events = events.iterate(["nJet", "Jet_pt"], step_size=step_size)
-            for batch in self.iter_progress(events, steps, msg=f"file {file_index}: select ..."):
-                print("batch")
-                mask = batch["nJet"] >= 1
-                jet_pt = batch["Jet_pt"][mask][:, 0]
+            # iterate over chunks of events and diffs
+            with ChunkedReader(
+                [ufile, inputs["diff"].path],
+                source_type=["coffea_root", "awkward_parquet"],
+                read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
+            ) as reader:
+                msg = f"iterate through {reader.n_entries} events ..."
+                for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                    # here, we would start evaluating object and event selection criteria and
+                    # the book keeping of stats
 
-                # emulate jec
-                jec_factor = {"jec_up": 1.05, "jec_down": 0.95}.get(self.effective_shift, 1.0)
-                jet_pt = jet_pt * jec_factor
+                    # apply the calibrated diff
+                    events = update_ak_array(events, diff)
 
-                # store the jet pt
-                output_arrays.append(jet_pt.to_numpy())
+                    # add aliases
+                    events = add_nano_aliases(events, aliases)
 
-        data = np.concatenate(output_arrays, axis=0)
-        self.output().dump(data=data, formatter="numpy")
+                    # example cuts:
+                    # - require at least 4 jets with pt>30
+                    # - require exactly one muon with pt>25
+                    # example stats:
+                    # - sum of mc weights before and after selection
+
+                    jet_mask = events.Jet.pt > 30
+                    jet_sel = ak.sum(jet_mask, axis=1) >= 4
+                    # TODO: convert jet_mask into an index list per event, denoting selected jets
+                    #       ordered by pt
+
+                    # muon selection
+                    muon_mask = events.Muon.pt > 25
+                    muon_sel = ak.sum(muon_mask, axis=1) == 1
+
+                    # combined event selection
+                    event_sel = jet_sel & muon_sel
+
+                    # view of selected events
+                    events_sel = events[event_sel]
+
+                    # store decisions
+                    # TODO: can one define just the nested dict and automate where and how the
+                    #       ak.zip's are used? this might depend on whether the depth_limit can be
+                    #       derived based on the types
+                    decisions = ak.zip({
+                        "event": event_sel,
+                        "step": ak.zip({
+                            "jet": jet_sel,
+                            "muon": muon_sel,
+                        }),
+                        "object": ak.zip({
+                            "jet": jet_mask,
+                            "muon": muon_mask,
+                        }, depth_limit=1),
+                    })
+
+                    # store stats
+                    stats["n_events"] += len(events)
+                    stats["n_events_selected"] += ak.sum(event_sel, axis=0)
+                    stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
+                    stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
+
+                    # save as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
+                    output_chunks[(file_index, pos.index)] = chunk
+                    reader.add_task(ak.to_parquet, (decisions, chunk.path))
+
+        # merge the mask files
+        sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["mask"], local=True)
+
+        # save stats
+        outputs["stat"].dump(stats, formatter="json")
+
+        # print some stats
+        eff = stats["n_events_selected"] / stats["n_events"]
+        eff_weighted = stats["sum_mc_weight_selected"] / stats["sum_mc_weight"]
+        self.publish_message(f"all events         : {int(stats['n_events'])}")
+        self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
+        self.publish_message(f"efficiency         : {eff:.4f}")
+        self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
+        self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
+        self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
-# trailing imports
-from ap.tasks.external import GetDatasetLFNs
+class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+
+    sandbox = "bash::$AP_BASE/sandboxes/venv_selection_dev.sh"
+
+    shifts = CalibrateObjects.shifts | SelectEvents.shifts
+
+    def workflow_requires(self):
+        reqs = super(ReduceEvents, self).workflow_requires()
+        reqs["lfns"] = GetDatasetLFNs.req(self)
+        if not self.pilot:
+            reqs["diff"] = CalibrateObjects.req(self)
+            reqs["mask"] = SelectEvents.req(self)
+        return reqs
+
+    def requires(self):
+        return {
+            "lfns": GetDatasetLFNs.req(self),
+            "diff": CalibrateObjects.req(self),
+            "mask": SelectEvents.req(self),
+        }
+
+    def output(self):
+        return self.local_target(f"events_{self.branch}.parquet")
+
+    @law.decorator.safe_output
+    @law.decorator.localize
+    @ensure_proxy
+    def run(self):
+        import awkward as ak
+        from ap.columnar_util import (
+            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
+        )
+
+        # prepare inputs and outputs
+        inputs = self.input()
+        output = self.output()
+        output_chunks = {}
+
+        # create a temp dir for saving intermediate files
+        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+        tmp_dir.touch()
+
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
+
+        # define nano columns that need to be loaded
+        load_columns = mandatory_coffea_columns + [
+            "nJet", "Jet_pt", "nMuon", "Muon_pt", "LHEWeight_originalXWGTUP",
+        ]
+
+        # loop over all input file indices requested by this branch (most likely just one)
+        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
+            # open the input file with uproot
+            with self.publish_step("load and open ..."):
+                ufile = input_file.load(formatter="uproot")
+
+            # iterate over chunks of events and diffs
+            with ChunkedReader(
+                [ufile, inputs["diff"].path, inputs["mask"]["mask"].path],
+                source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
+                read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
+                pool_size=1,
+            ) as reader:
+                msg = f"iterate through {reader.n_entries} events ..."
+                for (events, diff, mask), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                    # here, we would simply apply the mask to filter events and objects
+
+                    # apply the calibrated diff
+                    events = update_ak_array(events, diff)
+
+                    # add aliases
+                    # TODO: we actually want to remove source columns but this is not supported yet,
+                    #       see add_nano_aliases for more info
+                    events = add_nano_aliases(events, aliases)
+
+                    # TODO:
+                    # - filter events
+                    # - filter objects
+                    # - sort objects when object mask was an index list (rather than a bool list)
+                    # - remove unused columns
+
+                    # save as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+                    output_chunks[pos.index] = chunk
+                    reader.add_task(ak.to_parquet, (events, chunk.path))
+
+        # merge output files
+        sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)

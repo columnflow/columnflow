@@ -8,44 +8,16 @@ __all__ = []
 
 
 import os
-import math
-import time
 import uuid
 import queue
-import weakref
 import threading
 import subprocess
 import multiprocessing
 import multiprocessing.pool
-from functools import partial
-from collections import namedtuple
 from typing import Tuple, Callable, Any, Optional
 from types import ModuleType
 
 import law
-
-try:
-    import awkward as ak
-    HAS_AWKWARD = True
-except ImportError:
-    HAS_AWKWARD = False
-
-try:
-    import uproot
-    ReadOnlyDirectory = uproot.ReadOnlyDirectory
-    HAS_UPROOT = True
-except ImportError:
-    HAS_UPROOT = False
-    ReadOnlyDirectory = None
-
-try:
-    import coffea.nanoevents
-    import coffea.nanoevents.methods.base
-    NanoEventsArray = coffea.nanoevents.methods.base.NanoEventsArray
-    HAS_COFFEA = True
-except ImportError:
-    HAS_COFFEA = False
-    NanoEventsArray = None
 
 
 # modules and objects from lazy imports
@@ -227,150 +199,3 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
         return
 
     return before_call, call, after_call
-
-
-def process_nano_events(
-    uproot_file: ReadOnlyDirectory,
-    chunk_size: int = 40000,
-    lazy: bool = False,
-    pool_size: int = 4,
-    pool_insert: bool = False,
-    **kwargs,
-) -> None:
-    """
-    Generator that loops through an *uproot_file* and yields chunks of events of size *chunk_size*
-    in a multi-threaded fashion using a pool of size *pool_size*.
-
-    As soon as a chunk is read, a 2-tuple (NanoEventsArray, chunk position) is yielded, with the
-    former being already fully pre-loaded into memory if *lazy* is *False*. Otherwise, columns are
-    loaded on demand, but most likely in the main event processing thread which can cause IO waits.
-    A chunk position is a named tuple with fields *index*, *entry_start* and *entry_stop*.
-
-    When *pool_insert* is *True*, the yielded tuple will have a third item, which is a function
-    (accepting a callable as well as arguments and keyword arguments) that allows to insert new
-    tasks into the pool.
-
-    All additional *kwargs* are forwarded to *NanoEventsFactory.from_root* as *iteritems_options*.
-
-    Example:
-
-    .. code-block:: python
-
-        uproot_file = uproot.open("ZMuMu.root")
-
-        # loop through certain branches
-        branches = ["run", "luminosityBlock", "event", "nJet", "Jet_pt"]
-        for events, pos in process_nano_events(uproot_file, filter_name=branches):
-            print(pos.index, events.Jet.pt)
-
-        # insert new tasks to the same pool used internally for multi-threading
-        for events, pos, pool_insert in process_nano_events(uproot_file, pool_insert=True):
-            print(pos.index, events.Jet.pt)
-
-            pool_insert((lambda events: ak.to_parquet(events, "/some/path")), (events,))
-    """
-    assert HAS_AWKWARD and HAS_UPROOT and HAS_COFFEA
-
-    class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory):
-        """
-        Custom NanoEventsFactory that re-implements the ``events()`` method that immediately loads
-        an event chunk into memory.
-        """
-
-        def events(self):
-            events = self._events()
-            if events is None:
-                behavior = dict(self._schema.behavior)
-                behavior["__events_factory__"] = self
-                key_format = partial(coffea.nanoevents.factory._key_formatter, self._partition_key)
-                events = ak.from_buffers(
-                    self._schema.form,
-                    len(self),
-                    self._mapping,
-                    key_format=key_format,
-                    lazy=False,
-                    behavior=behavior,
-                )
-                self._events = weakref.ref(events)
-            return events
-
-    # get the events tree and some stats
-    tree = uproot_file["Events"]
-    n_entries = tree.num_entries
-    n_chunks = int(math.ceil(n_entries / chunk_size))
-
-    # container describing the chunk position
-    ChunkPosition = namedtuple("ChunkPosition", ["index", "entry_start", "entry_stop"])
-
-    # container describing the return value of read operations below
-    ReadResult = namedtuple("ReadResult", ["events", "chunk_pos"])
-
-    # determine the nano factory to use
-    factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
-
-    # the read operation that is executed per thread, parameterized by the chunk index
-    def read(chunk_idx):
-        # determine the start of stop of this chunk
-        entry_start = chunk_idx * chunk_size
-        entry_stop = min((chunk_idx + 1) * chunk_size, n_entries)
-
-        # read the events chunk into memory
-        events = factory.from_root(
-            uproot_file,
-            entry_start=entry_start,
-            entry_stop=entry_stop,
-            schemaclass=coffea.nanoevents.NanoAODSchema,
-            iteritems_options=kwargs,
-        ).events()
-
-        return ReadResult(events, ChunkPosition(chunk_idx, entry_start, entry_stop))
-
-    # setup the pool with the strategy to manually keep it filled up to pool_size and do not use
-    # insert all chunks right away as this could swamp the memory if processing is slower than IO
-    with multiprocessing.pool.ThreadPool(pool_size) as pool:
-        tasks = [(read, (chunk_idx,)) for chunk_idx in range(n_chunks)]
-        results = []
-        no_result = object()
-
-        # insert function that is yielded when pool_insert is set
-        def _pool_insert(func, args=(), kwargs=None, where=0):
-            tasks.insert(where, (func, args, kwargs or {}))
-
-        while tasks or results:
-            # find the first done result and remove it from the list
-            # this will do nothing in the first iteration
-            result_obj = no_result
-            for i, result in enumerate(list(results)):
-                if not result.ready():
-                    continue
-
-                try:
-                    result_obj = result.get()
-                except:
-                    pool.close()
-                    pool.terminate()
-                    raise
-
-                results.pop(i)
-                break
-
-            # if no result was ready, sleep and try again
-            if results and result_obj == no_result:
-                time.sleep(0.02)
-                continue
-
-            # immediately try to fill up the pool
-            while len(results) < pool_size and tasks:
-                results.append(pool.apply_async(*tasks.pop(0)))
-
-            # if a result was ready and it returned a ReadResult, yield it, otherwise sleep
-            if isinstance(result_obj, ReadResult):
-                try:
-                    if pool_insert:
-                        yield (result_obj.events, result_obj.chunk_pos, _pool_insert)
-                    else:
-                        yield (result_obj.events, result_obj.chunk_pos)
-                except:
-                    pool.close()
-                    pool.terminate()
-                    raise
