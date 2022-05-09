@@ -22,32 +22,26 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         default = (),
         description="List of processes to plot"
     )
-
     variables = law.CSVParameter(
         #default = "nJet,HT",
-        default = (),# law.NO_STR,
+        default = (),
         description="List of variables to plot"
     )
-    
     categories = law.CSVParameter(
         default = ("incl"),
         description="String of categories to create plots for"
     )
-    '''
-    # for now, only consider a single category
-    category = luigi.Parameter( # to categories (CSV)
-        default = law.NO_STR,
-        description="String of category to create plots for (takes all categories combined if no parameter is given)"
-    )
-    '''
+
     def store_parts(self):
+        print("Hello from store_parts")
         parts = super(TestPlotting, self).store_parts()
         # add process names after config name
         procs = ""
+        if not self.processes:
+            self.processes = self.config_inst.analysis.get_processes(self.config_inst).names() # required here to check if output already exists. These two lines can possibly be removed from requires
         for p in self.processes:
             procs += p + "_"
         procs = procs[:-1]
-        print(procs)
         parts.insert_after("config", "processes", procs)
         return parts
     
@@ -77,65 +71,118 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import hist
-        import matplotlib.pyplot as plt
-        import mplhep
-        plt.style.use(mplhep.style.CMS)
-
-        c = self.config_inst
-
-        histograms = []
-        colors = []
-        category = self.branch_data['category']
-
-
-        print("Adding histograms together ....")
-        for p in self.processes:
-            print("-------- process: ", p)
-            h_proc = None
-            for d in gfcts.getDatasetNamesFromProcess(c, p):
-                print("----- dataset: ", d)
-                h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-
-
-                #if not category: # empty list: take all leaf_categories
-                #if category==law.NO_STR:
-                if category=="incl":
-                    leaf_cats = [cat.name for cat in c.get_leaf_categories()]
-                elif c.get_category(category).is_leaf_category:
-                    leaf_cats=[category]
-                else:
-                    leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
-                    
-                print("leaf categories:" , leaf_cats)
-                h_in = h_in[{"category": leaf_cats}]
-                h_in = h_in[{"category": sum}]
-
-                if(h_proc==None):
-                    h_proc = h_in
-                else:
-                    h_proc += h_in
-
-            histograms.append(h_proc)
-            colors.append(c.get_process(p).color)
-
-        h_final = hist.Stack(*histograms)
-        fix,ax = plt.subplots()
-
-        h_final.plot(
-            ax=ax,
-            stack=True,
-            histtype="fill",
-            label=self.processes,
-            color = colors,
-        )
+        with self.publish_step(f"Hello from TestPlotting for variable {self.branch_data['variable']}, category {self.branch_data['category']}"):
+            import numpy as np
+            import hist
+            import matplotlib.pyplot as plt
+            import mplhep
+            plt.style.use(mplhep.style.CMS)
+            
+            c = self.config_inst
+            
+            histograms = []
+            h_total = None
+            colors = []
+            category = self.branch_data['category']
+            
         
-        lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="WiP")
+            with self.publish_step("Adding histograms together ..."):
+                for p in self.processes:
+                    #print("-------- process:", p)
+                    h_proc = None
+                    for d in gfcts.getDatasetNamesFromProcess(c, p):
+                        #print("----- dataset:", d)
+                        h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
 
-        ax.set_ylabel("Counts")
-        ax.legend(title="Processes")
+                        if category=="incl":
+                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                        elif c.get_category(category).is_leaf_category:
+                            leaf_cats=[category]
+                        else:
+                            leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
+                    
+                        h_in = h_in[{"category": leaf_cats}]
+                        h_in = h_in[{"category": sum}]
 
-        self.output().dump(plt, formatter="mpl")
+                        if h_proc==None:
+                            h_proc = h_in.copy()
+                        else:
+                            h_proc += h_in
+
+                    if h_total==None:
+                        h_total = h_proc.copy()
+                    else:
+                        h_total += h_proc
+                    histograms.append(h_proc)
+                    colors.append(c.get_process(p).color)
+                h_final = hist.Stack(*histograms)
+                h_data = h_total.copy()
+                h_data.reset()
+                h_data.fill(np.repeat(h_total.axes[0].centers, np.random.poisson(h_total.view().value)))
+            
+            with self.publish_step("Starting plotting routine ..."):
+                
+                fig, (ax,rax) = plt.subplots(2,1, gridspec_kw=dict(height_ratios=[3,1], hspace=0), sharex=True)
+                components = h_final.plot(
+                ax=ax,
+                stack=True,
+                histtype="fill",
+                label=self.processes,
+                color = colors,
+                )
+                ax.stairs(
+                    edges=h_total.axes[0].edges,
+                    baseline = h_total.view().value - np.sqrt(h_total.view().variance),
+                    values = h_total.view().value + np.sqrt(h_total.view().variance),
+                    hatch = "///",
+                    label = "MC Stat. unc.",
+                    facecolor = "none",
+                    linewidth = 0,
+                    color = "black",
+                )
+                h_data.plot1d(
+                    ax=ax,
+                    histtype="errorbar",
+                    color="k",
+                    label="Pseudodata",
+                )
+
+                ax.set_ylabel(c.variables.get(self.branch_data['variable']).get_full_y_title())
+                ax.legend(title="Processes")
+            
+                from hist.intervals import ratio_uncertainty
+                rax.errorbar(
+                    x=h_data.axes[0].centers,
+                    y=h_data.view().value / h_total.view().value,
+                    yerr = ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
+                    color="k",
+                    linestyle="none",
+                    marker="o",
+                    elinewidth=1,
+                )
+                rax.stairs(
+                    edges=h_total.axes[0].edges,
+                    baseline = 1 - np.sqrt(h_total.view().variance) / h_total.view().value,
+                    values = 1 + np.sqrt(h_total.view().variance) / h_total.view().value,
+                    facecolor="grey",
+                    linewidth = 0,
+                    hatch = "///",
+                    #fill=True,
+                    color = "grey",
+                )
+            
+                rax.axhline(y=1.0, linestyle="dashed", color="gray")
+                rax.set_ylabel("Data / MC", loc="center")
+                rax.set_ylim(0.9,1.1)
+                rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
+                
+                lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
+                
+                #mplhep.plot.yscale_legend(ax=ax) # legend optimizer (takes quite long)
+            
+                
+            self.output().dump(plt, formatter="mpl")
+            self.publish_message(f"TestPlotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")
 
 # trailing imports
 from ap.tasks.fillHistograms import FillHistograms
