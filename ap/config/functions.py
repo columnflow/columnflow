@@ -40,7 +40,9 @@ def sel_1mu_ge2b(data):
 
 
 
-
+def var_sum_of_weights(data):
+    import awkward as ak
+    return ak.zeros_like(data.nJet)
 
 def var_HT(data):
     import awkward as ak
