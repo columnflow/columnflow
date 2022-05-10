@@ -23,7 +23,6 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         description="List of processes to plot"
     )
     variables = law.CSVParameter(
-        #default = "nJet,HT",
         default = (),
         description="List of variables to plot"
     )
@@ -33,7 +32,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     )
 
     def store_parts(self):
-        print("Hello from store_parts")
+        #print("Hello from store_parts")
         parts = super(TestPlotting, self).store_parts()
         # add process names after config name
         procs = ""
@@ -46,7 +45,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         return parts
     
     def create_branch_map(self):
-        print('Hello from create_branch_map')
+        #print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         branch_map = {}
@@ -56,7 +55,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         return branch_map
 
     def requires(self):
-        print('Hello from requires')
+        #print('Hello from requires')
         c = self.config_inst
         # determine which datasets to require
         if not self.processes:
@@ -65,7 +64,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         return {d: FillHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
    
     def output(self):
-        print('Hello from output')
+        #print('Hello from output')
         return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
 
     @law.decorator.safe_output

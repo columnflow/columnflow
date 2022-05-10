@@ -9,6 +9,8 @@ import math
 import law
 import luigi
 
+from ap.tasks.functions import functions_general as gfcts
+
 from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
@@ -16,74 +18,173 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    datasets = law.CSVParameter(
-        default = law.NO_STR,
-        description="List of datasets to plot"
+    processes = law.CSVParameter(
+        default = (),
+        description="List of processes to plot"
     )
     variables = law.CSVParameter(
-        default = law.NO_STR,
+        default = (),
         description="List of variables to plot"
     )
+    categories = law.CSVParameter(
+        default = ("incl"),
+        description="String of categories to create plots for"
+    )
+
+    def store_parts(self):
+        #print("Hello from store_parts")
+        parts = super(Plotting, self).store_parts()
+        # add process names after config name
+        procs = ""
+        if not self.processes:
+            self.processes = self.config_inst.analysis.get_processes(self.config_inst).names() # required here to check if output already exists. These two lines can possibly be removed from requires
+        for p in self.processes:
+            procs += p + "_"
+        procs = procs[:-1]
+        parts.insert_after("config", "processes", procs)
+        return parts
 
     def create_branch_map(self):
-        print('Hello from create_branch_map')
-        print(self.variables)
-        print(len(self.variables))
-        if(self.variables[0]==law.NO_STR):
+        #print('Hello from create_branch_map')
+        if not self.variables:
             self.variables = self.config_inst.variables.names()
-        return {i: {"variable": var} for i, var in enumerate(self.variables)}
-    
+        branch_map = {}
+        for i,var in enumerate(self.variables):
+            for j,cat in enumerate(self.categories):
+                branch_map[i*len(self.categories)+j] = {"variable": var, "category": cat}
+        return branch_map
+
+
     def requires(self):
-        print('Hello from requires')
-        print(self.datasets)
-        if(self.datasets==law.NO_STR):
-            self.datasets = self.get_analysis_inst(self.analysis).get_datasets(self.config_inst).names()
-        print(self.datasets)
-        return {d: FillHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
-   
+        #print('Hello from requires')
+        c = self.config_inst
+        # determine which datasets to require
+        if not self.processes:
+            self.processes = c.analysis.get_processes(c).names()
+        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
+        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+
+
     def output(self):
-        return self.local_target(f"plot_{self.branch_data['variable']}.pdf")
+        #print('Hello from output')
+        return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
 
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import hist
-        import matplotlib.pyplot as plt
-        import mplhep
-        plt.style.use(mplhep.style.CMS)
-
-
-        analysis = self.get_analysis_inst(self.analysis)
-
-        h_out = None
-        print("datasets: %s" % self.datasets)
-
-        for d in self.datasets:
-            h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-            h_in = h_in[:,::sum,:] # for now: summing over categories
-            if(h_out == None):
-                h_out = h_in
-            h_out+= h_in
-
+        with self.publish_step(f"Hello from Plotting for variable {self.branch_data['variable']}, category {self.branch_data['category']}"):
+            import numpy as np
+            import hist
+            import matplotlib.pyplot as plt
+            import mplhep
+            plt.style.use(mplhep.style.CMS)
+            
+            c = self.config_inst
+            
+            histograms = []
+            h_total = None
+            colors = []
+            category = self.branch_data['category']
+            
         
-        fix,ax = plt.subplots()
+            with self.publish_step("Adding histograms together ..."):
+                for p in self.processes:
+                    #print("-------- process:", p)
+                    h_proc = None
+                    for d in gfcts.getDatasetNamesFromProcess(c, p):
+                        #print("----- dataset:", d)
+                        h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
 
-        colors = [p.color for p in self.get_analysis_inst(self.analysis).get_processes(self.config_inst)] # only the colors for the parent processes st and tt
+                        if category=="incl":
+                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                        elif c.get_category(category).is_leaf_category:
+                            leaf_cats=[category]
+                        else:
+                            leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
+                    
+                        h_in = h_in[{"category": leaf_cats}]
+                        h_in = h_in[{"category": sum}]
 
-        h_out.plot(
-            ax=ax,
-            stack=True,
-            histtype="fill",
-            color = colors,
-        )
-        
-        lumi = mplhep.cms.label(ax=ax, lumi=59740, label="WiP")
+                        if h_proc==None:
+                            h_proc = h_in.copy()
+                        else:
+                            h_proc += h_in
 
+                    if h_total==None:
+                        h_total = h_proc.copy()
+                    else:
+                        h_total += h_proc
+                    histograms.append(h_proc)
+                    colors.append(c.get_process(p).color)
+                h_final = hist.Stack(*histograms)
+                h_data = h_total.copy()
+                h_data.reset()
+                h_data.fill(np.repeat(h_total.axes[0].centers, np.random.poisson(h_total.view().value)))
+            
+            with self.publish_step("Starting plotting routine ..."):
+                
+                fig, (ax,rax) = plt.subplots(2,1, gridspec_kw=dict(height_ratios=[3,1], hspace=0), sharex=True)
+                components = h_final.plot(
+                ax=ax,
+                stack=True,
+                histtype="fill",
+                label=self.processes,
+                color = colors,
+                )
+                ax.stairs(
+                    edges=h_total.axes[0].edges,
+                    baseline = h_total.view().value - np.sqrt(h_total.view().variance),
+                    values = h_total.view().value + np.sqrt(h_total.view().variance),
+                    hatch = "///",
+                    label = "MC Stat. unc.",
+                    facecolor = "none",
+                    linewidth = 0,
+                    color = "black",
+                )
+                h_data.plot1d(
+                    ax=ax,
+                    histtype="errorbar",
+                    color="k",
+                    label="Pseudodata",
+                )
 
-        ax.set_ylabel("Counts")
-        ax.legend(title="Category")
+                ax.set_ylabel(c.variables.get(self.branch_data['variable']).get_full_y_title())
+                ax.legend(title="Processes")
+            
+                from hist.intervals import ratio_uncertainty
+                rax.errorbar(
+                    x=h_data.axes[0].centers,
+                    y=h_data.view().value / h_total.view().value,
+                    yerr = ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
+                    color="k",
+                    linestyle="none",
+                    marker="o",
+                    elinewidth=1,
+                )
+                rax.stairs(
+                    edges=h_total.axes[0].edges,
+                    baseline = 1 - np.sqrt(h_total.view().variance) / h_total.view().value,
+                    values = 1 + np.sqrt(h_total.view().variance) / h_total.view().value,
+                    facecolor="grey",
+                    linewidth = 0,
+                    hatch = "///",
+                    #fill=True,
+                    color = "grey",
+                )
+            
+                rax.axhline(y=1.0, linestyle="dashed", color="gray")
+                rax.set_ylabel("Data / MC", loc="center")
+                rax.set_ylim(0.9,1.1)
+                rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
+                
+                lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
+                
+                #mplhep.plot.yscale_legend(ax=ax) # legend optimizer (takes quite long)
+            
+                
+            self.output().dump(plt, formatter="mpl")
+            self.publish_message(f"Plotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")
 
-        plt.savefig(self.output().path)
 
 # trailing imports
 from ap.tasks.mergeHistograms import MergeHistograms
