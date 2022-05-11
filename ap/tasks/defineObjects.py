@@ -18,13 +18,13 @@ class DefineObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     shifts = {"jec_up", "jec_down"}
-
-    #def workflow_requires(self):
-        # workflow super classes might already define requirements, so extend them
-    #    reqs = super(ObjectDefinition, self).workflow_requires()
-    #    reqs["lfns"] = GetDatasetLFNs.req(self)
-    #    return reqs
-
+    '''
+    def workflow_requires(self):
+        #workflow super classes might already define requirements, so extend them
+        reqs = super(DefineObjects, self).workflow_requires()
+        reqs["lfns"] = GetDatasetLFNs.req(self)
+        return reqs
+    '''
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
         return {"lfns": GetDatasetLFNs.req(self)}

@@ -17,7 +17,13 @@ import ap.config.functions as fcts
 class DefineSelection(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-
+    '''
+    def workflow_requires(self):
+        #workflow super classes might already define requirements, so extend them
+        reqs = super(DefineSelection, self).workflow_requires()
+        reqs["data"] = DefineObjects.req(self)
+        return reqs
+    '''
     def requires(self):
         return DefineObjects.req(self)
         

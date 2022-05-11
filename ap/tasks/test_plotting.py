@@ -54,6 +54,13 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 branch_map[i*len(self.categories)+j] = {"variable": var, "category": cat}
         return branch_map
 
+
+    def workflow_requires(self):
+        #workflow super classes might already define requirements, so extend them
+        reqs = super(TestPlotting, self).workflow_requires()
+        reqs["hist"] = FillHistograms.req(self, branches=(0,1))
+        return reqs
+
     def requires(self):
         #print('Hello from requires')
         c = self.config_inst
@@ -61,7 +68,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
-        return {d: FillHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
+        return {d: FillHistograms.req(self, branches=(0,1), dataset=d) for d in self.datasets}
    
     def output(self):
         #print('Hello from output')
@@ -70,7 +77,9 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        with self.publish_step(f"Hello from TestPlotting for variable {self.branch_data['variable']}, category {self.branch_data['category']}"):
+        import time
+        t0 = time.time()
+        with self.publish_step(f"Hello from TestPlotting for variable {self.branch_data['variable']}, category {self.branch_data['category']}") as runtime:
             import numpy as np
             import hist
             import matplotlib.pyplot as plt
@@ -82,6 +91,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             histograms = []
             h_total = None
             colors = []
+            label = []
             category = self.branch_data['category']
             
         
@@ -114,6 +124,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                         h_total += h_proc
                     histograms.append(h_proc)
                     colors.append(c.get_process(p).color)
+                    label.append(c.get_process(p).label)
                 h_final = hist.Stack(*histograms)
                 h_data = h_total.copy()
                 h_data.reset()
@@ -126,8 +137,8 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 ax=ax,
                 stack=True,
                 histtype="fill",
-                label=self.processes,
-                color = colors,
+                label=label,
+                color=colors,
                 )
                 ax.stairs(
                     edges=h_total.axes[0].edges,
@@ -148,6 +159,8 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
                 ax.set_ylabel(c.variables.get(self.branch_data['variable']).get_full_y_title())
                 ax.legend(title="Processes")
+                if c.get_variable(self.branch_data['variable']).log_y:
+                    ax.set_yscale('log')
             
                 from hist.intervals import ratio_uncertainty
                 rax.errorbar(
@@ -181,6 +194,8 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             
                 
             self.output().dump(plt, formatter="mpl")
+            from law.util import human_duration
+            print(human_duration(seconds=time.time()-t0))
             self.publish_message(f"TestPlotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")
 
 # trailing imports

@@ -28,9 +28,15 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     )
     categories = law.CSVParameter(
         default = ("incl"),
-        description="String of categories to create plots for"
+        description="List of categories to create plots for"
     )
-
+    # how to handle the logy defaults given by config?
+    '''
+    logy = luigi.BoolParameter(
+        default = False,
+        description="Whether to plot the y scale logarithmically or not"
+    )
+    '''
     def store_parts(self):
         #print("Hello from store_parts")
         parts = super(Plotting, self).store_parts()
@@ -53,6 +59,22 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             for j,cat in enumerate(self.categories):
                 branch_map[i*len(self.categories)+j] = {"variable": var, "category": cat}
         return branch_map
+
+    
+    def workflow_requires(self):
+        #workflow super classes might already define requirements, so extend them
+        reqs = super(Plotting, self).workflow_requires()
+        #print('Hello from requires')
+        c = self.config_inst
+        # determine which datasets to require
+        if not self.processes:
+            self.processes = c.analysis.get_processes(c).names()
+        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
+        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+
+        #reqs["hist"] = MergeHistograms.req(self)
+        #return reqs
+    
 
 
     def requires(self):
@@ -84,6 +106,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             histograms = []
             h_total = None
             colors = []
+            label = []
             category = self.branch_data['category']
             
         
@@ -98,12 +121,13 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                         if category=="incl":
                             leaf_cats = [cat.name for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
-                            leaf_cats=[category]
+                            leaf_cats = [category]
                         else:
                             leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
                     
                         h_in = h_in[{"category": leaf_cats}]
                         h_in = h_in[{"category": sum}]
+                        print("dataset {}: {}".format(d, h_in[::sum]))
 
                         if h_proc==None:
                             h_proc = h_in.copy()
@@ -116,6 +140,9 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                         h_total += h_proc
                     histograms.append(h_proc)
                     colors.append(c.get_process(p).color)
+                    label.append(c.get_process(p).label)
+                    #print("process {}: {}".format(p, h_proc[::sum]))
+
                 h_final = hist.Stack(*histograms)
                 h_data = h_total.copy()
                 h_data.reset()
@@ -123,23 +150,24 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             
             with self.publish_step("Starting plotting routine ..."):
                 
-                fig, (ax,rax) = plt.subplots(2,1, gridspec_kw=dict(height_ratios=[3,1], hspace=0), sharex=True)
-                components = h_final.plot(
-                ax=ax,
-                stack=True,
-                histtype="fill",
-                label=self.processes,
-                color = colors,
+                fig, (ax,rax)=plt.subplots(2,1, gridspec_kw=dict(height_ratios=[3,1], hspace=0), sharex=True)
+
+                components=h_final.plot(
+                    ax=ax,
+                    stack=True,
+                    histtype="fill",
+                    label=label,
+                    color=colors,
                 )
                 ax.stairs(
                     edges=h_total.axes[0].edges,
-                    baseline = h_total.view().value - np.sqrt(h_total.view().variance),
-                    values = h_total.view().value + np.sqrt(h_total.view().variance),
-                    hatch = "///",
-                    label = "MC Stat. unc.",
-                    facecolor = "none",
-                    linewidth = 0,
-                    color = "black",
+                    baseline=h_total.view().value - np.sqrt(h_total.view().variance),
+                    values=h_total.view().value + np.sqrt(h_total.view().variance),
+                    hatch="///",
+                    label="MC Stat. unc.",
+                    facecolor="none",
+                    linewidth=0,
+                    color="black",
                 )
                 h_data.plot1d(
                     ax=ax,
@@ -148,14 +176,16 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     label="Pseudodata",
                 )
 
-                ax.set_ylabel(c.variables.get(self.branch_data['variable']).get_full_y_title())
+                ax.set_ylabel(c.get_variable(self.branch_data['variable']).get_full_y_title())
                 ax.legend(title="Processes")
-            
+                if c.get_variable(self.branch_data['variable']).log_y:
+                    ax.set_yscale('log')
+
                 from hist.intervals import ratio_uncertainty
                 rax.errorbar(
                     x=h_data.axes[0].centers,
                     y=h_data.view().value / h_total.view().value,
-                    yerr = ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
+                    yerr=ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
                     color="k",
                     linestyle="none",
                     marker="o",
@@ -163,13 +193,13 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 )
                 rax.stairs(
                     edges=h_total.axes[0].edges,
-                    baseline = 1 - np.sqrt(h_total.view().variance) / h_total.view().value,
-                    values = 1 + np.sqrt(h_total.view().variance) / h_total.view().value,
+                    baseline=1 - np.sqrt(h_total.view().variance) / h_total.view().value,
+                    values=1 + np.sqrt(h_total.view().variance) / h_total.view().value,
                     facecolor="grey",
-                    linewidth = 0,
-                    hatch = "///",
+                    linewidth=0,
+                    hatch="///",
                     #fill=True,
-                    color = "grey",
+                    color="grey",
                 )
             
                 rax.axhline(y=1.0, linestyle="dashed", color="gray")
@@ -179,7 +209,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 
                 lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
                 
-                #mplhep.plot.yscale_legend(ax=ax) # legend optimizer (takes quite long)
+                #mplhep.plot.yscale_legend(ax=ax) # legend optimizer (takes quite long and potentially produces too much whitespace)
             
                 
             self.output().dump(plt, formatter="mpl")

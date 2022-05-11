@@ -22,6 +22,15 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     #    default = law.NO_STR,
     #    description="List of variables to define hists for"
     #)
+
+    '''
+    def workflow_requires(self):
+        #workflow super classes might already define requirements, so extend them
+        reqs = super(FillHistograms, self).workflow_requires()
+        reqs["data"] = DefineObjects.req(self)
+        reqs["selection"] = DefineSelection.req(self)
+        return reqs
+    '''
     def requires(self):
         return {
             "data": DefineObjects.req(self),
