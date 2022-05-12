@@ -40,11 +40,11 @@ def get_ak_routes(
 
         print(get_ak_routes(arr))
         # [
-        #    ["event"],
-        #    ["luminosityBlock"],
-        #    ["run"],
-        #    ["Jet", "pt"],
-        #    ["Jet", "mass"],
+        #    ("event",),
+        #    ("luminosityBlock,"),
+        #    ("run",),
+        #    ("Jet", "pt"),
+        #    ("Jet", "mass"),
         #    ...
         # ]
     """
@@ -106,14 +106,43 @@ def find_nano_route(
     return tuple(route)
 
 
+def remove_nano_column(
+    nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
+    nano_column: Union[str, Tuple[str]],
+) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    """
+    Removes a column either in NanoAOD underscore format *nano_column* (e.g. "Jet_pt") or given as a
+    route (e.g. *("Jet", "pt")*) from a coffea NanoEventsArray *nano_array* and returns a new view.
+    """
+    # find the route
+    if isinstance(nano_column, str):
+        route = find_nano_route(nano_array, nano_column)
+    elif isinstance(nano_column, tuple):
+        route = nano_column
+    else:
+        raise ValueError(f"cannot interpret '{nano_column}' as nano column")
+
+    if len(route) == 1:
+        # trivial case: remove a top level column
+        nano_array = nano_array[[f for f in nano_array.fields if f != route[0]]]
+    else:
+        # nested case: get the last containing object and remove the sub column
+        sub_route, remove_field = route[:-1], route[-1]
+        sub_array = nano_array
+        for sub_field in sub_route:
+            sub_array = getattr(sub_array, sub_field)
+        nano_array[sub_route] = sub_array[[f for f in sub_array.fields if f != remove_field]]
+
+    return nano_array
+
+
 def add_nano_alias(
     nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
     src_column: str,
     dst_column: str,
     remove_src: bool = False,
-    _return_src_route: bool = False,
 ) -> coffea.nanoevents.methods.base.NanoEventsArray:
-    """ add_nano_aliases(nano_array, src_column, dst_column, remove_src)
+    """
     Adds an alias to a coffea NanoEventsArray *nano_array*, pointing the array at *src_column* to
     *dst_column*, which both column names being in NanoAOD underscore format (e.g. "Jet_pt").
     Existing columns referred to by *dst_column* might be overwritten. When *remove_src* is *True*,
@@ -129,15 +158,9 @@ def add_nano_alias(
 
     # create a view without the source if requested
     if remove_src:
-        # TODO: nested ak arrays support route lookup (e.g. events[("Jet", "pt")]) and views through
-        #       advanced indices (e.g. events[["Jet", "Muon"]]), but they do not support the
-        #       combination of both to select sub fields (e.g. events[["Muon", ("Jet", "pt")]]),
-        #       so we need to check how this is done, or request / provide the feature
-        raise NotImplementedError("remove_src is not implemented yet")
-        routes = get_ak_routes(nano_array)
-        nano_array = nano_array[[route for route in routes if route != src_route]]
+        nano_array = remove_nano_column(nano_array, src_route)
 
-    return (nano_array, src_route) if _return_src_route else nano_array
+    return nano_array
 
 
 def add_nano_aliases(
@@ -151,24 +174,14 @@ def add_nano_aliases(
     *remove_src* is *True*, a view of the input array is returned with all source columns missing.
     Otherwise, the input array is returned with all columns.
     """
-    # add all aliases, keeping track of source routes
-    src_routes = []
+    # add all aliases
     for dst_column, src_column in aliases.items():
-        src_route, _ = add_nano_aliases(
+        nano_array = add_nano_aliases(
             nano_array,
             src_column,
             dst_column,
-            remove_src=False,
-            _return_src_route=True,
+            remove_src=remove_src,
         )
-        src_routes.append(src_route)
-
-    # create a view without the source if requested
-    if remove_src:
-        # TODO: see add_nano_alias
-        raise NotImplementedError("remove_src is not implemented yet")
-        routes = get_ak_routes(nano_array)
-        nano_array = nano_array[[route for route in routes if route not in src_routes]]
 
     return nano_array
 
@@ -261,10 +274,10 @@ class ChunkedReader(object):
     multi-threaded read operations. Chunks and their positions (denoted by start and stop markers,
     and the index of the chunk itself) are accessed by iterating through the reader.
 
-    The content to load can be configured through *source*, which can be a file path and opened file
-    object, and a *source_type*, which defines how the *source* should be opened and traversed for
-    chunking. See the classmethods *open_...* and *read_...* below for implementation details and
-    the list of currently supported sources.
+    The content to load can be configured through *source*, which can be a file path or an opened
+    file object, and a *source_type*, which defines how the *source* should be opened and traversed
+    for chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation
+    details and :py:meth:`get_source_handlers` for a list of currently supported sources.
 
     Example:
 
@@ -284,14 +297,15 @@ class ChunkedReader(object):
         ) as reader:
             for (chunk, masks), position in reader:
                 # chunk is a NanoAODEventsArray as returned by read_coffea_root
-                # masks is a awkward array as returned by open_awkward_parquet
+                # masks is a awkward array as returned by read_awkward_parquet
                 selected_jet_pts = chunk[masks].Jet.pt
                 print(f"selected jet pts of chunk {chunk.index}: {selected_jet_pts}")
 
-    The maximum size of the chunks and the number of threads to use to load them can be configured
-    through *chunk_size* and *pool_size*. Unless *lazy* is *True*, chunks are fully loaded into
-    memory before getting yielded. In addition, *open_options* and *read_options* are forwarded to
-    internal open and read implementations to further control and optimize IO.
+    The maximum size of the chunks and the number of threads to load them can be configured through
+    *chunk_size* and *pool_size*. Unless *lazy* is *True*, chunks are fully loaded into memory
+    before they are yielded to be used in the main thread. In addition, *open_options* and
+    *read_options* are forwarded to internal open and read implementations to further control and
+    optimize IO.
 
     If *source* refers to a single object, *source_type*, *lazy*, *open_options* and *read_options*
     should be single values as well. Otherwise, if *source* is a sequence of sources, the other
@@ -313,7 +327,7 @@ class ChunkedReader(object):
         source_type: Optional[Union[str, List[str]]] = None,
         chunk_size: int = 50000,
         pool_size: int = 4,
-        lazy: Optional[Union[bool, List[bool]]] = False,
+        lazy: Union[bool, List[bool]] = False,
         open_options: Optional[Union[dict, List[dict]]] = None,
         read_options: Optional[Union[dict, List[dict]]] = None,
         iter_message: str = "handling chunk {pos.index}",
@@ -402,7 +416,8 @@ class ChunkedReader(object):
     ) -> Tuple[ak.Array, int]:
         """
         Opens a parquet file saved at *source*, loads the content as an awkward array and returns a
-        2-tuple *(array, length)*. Passing *open_options* and or *file_cache* has no effect.
+        2-tuple *(array, length)*. *open_options* are forwarded to ``awkward.from_parquet``. Passing
+        *file_cache* has no effect.
         """
         if not isinstance(source, str):
             raise Exception(f"'{source}' cannot be opend awkward_parquet")
@@ -430,9 +445,9 @@ class ChunkedReader(object):
     ) -> Tuple[uproot.TTree, int]:
         """
         Opens an uproot tree from a root file at *source* and returns a 2-tuple *(tree, entries)*.
-        *source* can be the path of the file and an already opened, readable uproot file (assuming
-        the tree is called "Events"), or a 2-tuple whose second item defines the name of the tree to
-        be loaded. When a new file is opened, it receives *open_options* and is put into the
+        *source* can be the path of the file, an already opened, readable uproot file (assuming the
+        tree is called "Events"), or a 2-tuple whose second item defines the name of the tree to be
+        loaded. When a new file is opened, it receives *open_options* and is put into the
         *file_cache* when set.
         """
         tree_name = "Events"
@@ -464,10 +479,10 @@ class ChunkedReader(object):
     ) -> Tuple[uproot.ReadOnlyDirectory, int]:
         """
         Opens an uproot file at *source* for subsequent processing with coffea and returns a 2-tuple
-        *(uproot file, tree entries)*. *source* can be the path of the file and an already opened,
+        *(uproot file, tree entries)*. *source* can be the path of the file, an already opened,
         readable uproot file (assuming the tree is called "Events"), or a 2-tuple whose second item
-        defines the name of the tree to be loaded. When a new file is opened, it receives
-        *open_options* and is put into the *file_cache* when set.
+        defines the name of the tree to be loaded. *open_options* are forwarded to ``uproot.open``
+        if a new file is opened, which is then put into the *file_cache* when set.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -524,7 +539,7 @@ class ChunkedReader(object):
         """
         Given an uproot TTree *source_object*, returns an awkward array chunk referred to by
         *chunk_pos* as a lazy slice if *lazy* is *True*, or as a full copy loaded into memory
-        otherwise. *read_options* are passed to either *uproot.TTree.arrays* or *uproot.lazy*.
+        otherwise. *read_options* are passed to either ``uproot.TTree.arrays`` or ``uproot.lazy``.
         """
         if lazy:
             view = uproot.lazy(source_object, **(read_options or {}))
@@ -550,7 +565,7 @@ class ChunkedReader(object):
         Given a file location or opened uproot file *source_object*, returns an awkward array chunk
         referred to by *chunk_pos*, assuming nanoAOD structure. The array is a lazy slice if *lazy*
         is *True*, and fully loaded into memory otherwise. *read_options* are passed to
-        *coffea.nanoevents.NanoEventsFactory.from_root*.
+        ``coffea.nanoevents.NanoEventsFactory.from_root``.
         """
         # define the factory to use
         factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
@@ -806,7 +821,7 @@ class ChunkedReader(object):
                     while len(results) < self.pool_size and self.tasks:
                         results.append(self.pool.apply_async(*self.tasks.pop(0)))
 
-                    # if a result was ready and it returned a ReadResult, yield it, otherwise sleep
+                    # if a result was ready and it returned a ReadResult, yield it
                     if isinstance(result_obj, self.ReadResult):
                         if self.iter_message:
                             print(self.iter_message.format(pos=result_obj.chunk_pos))

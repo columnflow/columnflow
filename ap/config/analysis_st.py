@@ -77,6 +77,16 @@ config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
 
+# columns to keep after certain steps
+config_2018.set_aux("keep_columns", {
+    "ReduceEvents": {
+        "run", "luminosityBlock", "event",
+        "nJet", "Jet_pt", "Jet_eta",
+        "nMuon", "Muon_pt", "Muon_eta",
+        "LHEWeight_originalXWGTUP",
+    },
+})
+
 
 # file merging values
 # key -> dataset -> files per branch (-1 or not present = all)

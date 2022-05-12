@@ -13,37 +13,6 @@ from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy
 
 
-def nano_inputs(
-    branch_task: DatasetTask,
-    lfn_collection: law.FileCollection,
-    remote_fs: str = "wlcg_fs_desy_store",
-) -> None:
-    """
-    Generator function that reduces the boiler plate code for looping over files referred to by the
-    branch data of a law *branch_task*, given the collection of LFN files *lfn_collection* (the
-    output of :py:class:`GetDatasetLFNs`). Iterating yields a 3-tuple (file index, lfn, input file)
-    where the latter is a :py:class:`law.wlcg.WLCGFileTarget` with its fs set to *remote_fs*.
-    """
-    assert branch_task.is_branch()
-
-    # get all lfns
-    lfns = lfn_collection.random_target().load(formatter="json")
-
-    # loop
-    for file_index in branch_task.branch_data:
-        branch_task.publish_message(f"handling file {file_index}")
-
-        # get the lfn of the file referenced by this file index
-        lfn = str(lfns[file_index])
-
-        # get the input file
-        input_file = law.wlcg.WLCGFileTarget(lfn, fs=remote_fs)
-        input_size = law.util.human_bytes(input_file.stat().st_size, fmt=True)
-        branch_task.publish_message(f"lfn {lfn}, size is {input_size}")
-
-        yield (file_index, lfn, input_file)
-
-
 class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
@@ -69,7 +38,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
 
         # prepare inputs and outputs
-        inputs = self.input()
+        lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
 
@@ -81,7 +50,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         load_columns = mandatory_coffea_columns + ["nJet", "Jet_pt", "Jet_mass"]
 
         # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
+        for (file_index, input_file) in lfn_task.iter_nano_files(self):
             # open with uproot
             with self.publish_step("load and open ..."):
                 ufile = input_file.load(formatter="uproot")
@@ -163,6 +132,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         # prepare inputs and outputs
         inputs = self.input()
+        lfn_task = self.requires()["lfns"]
         outputs = self.output()
         output_chunks = {}
         stats = defaultdict(float)
@@ -180,7 +150,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         ]
 
         # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
+        for (file_index, input_file) in lfn_task.iter_nano_files(self):
             # open the input file with uproot
             with self.publish_step("load and open ..."):
                 ufile = input_file.load(formatter="uproot")
@@ -225,9 +195,6 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events_sel = events[event_sel]
 
                     # store decisions
-                    # TODO: can one define just the nested dict and automate where and how the
-                    #       ak.zip's are used? this might depend on whether the depth_limit can be
-                    #       derived based on the types
                     decisions = ak.zip({
                         "event": event_sel,
                         "step": ak.zip({
@@ -299,11 +266,13 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     def run(self):
         import awkward as ak
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
+            ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
+            add_nano_aliases, remove_nano_column,
         )
 
         # prepare inputs and outputs
         inputs = self.input()
+        lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
 
@@ -314,13 +283,12 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns + [
-            "nJet", "Jet_pt", "nMuon", "Muon_pt", "LHEWeight_originalXWGTUP",
-        ]
+        # define nano columns that should be kept, and that need to be loaded
+        keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
+        load_columns = list(keep_columns | set(mandatory_coffea_columns))
 
         # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, lfn, input_file) in nano_inputs(self, inputs["lfns"]):
+        for (file_index, input_file) in lfn_task.iter_nano_files(self):
             # open the input file with uproot
             with self.publish_step("load and open ..."):
                 ufile = input_file.load(formatter="uproot")
@@ -339,9 +307,7 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events = update_ak_array(events, diff)
 
                     # add aliases
-                    # TODO: we actually want to remove source columns but this is not supported yet,
-                    #       see add_nano_aliases for more info
-                    events = add_nano_aliases(events, aliases)
+                    events = add_nano_aliases(events, aliases, remove_src=True)
 
                     # apply the event mask
                     events = events[mask.event]
@@ -349,6 +315,12 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # apply jet and muon masks
                     events.Jet = events.Jet[mask.object.jet[mask.event]]
                     events.Muon = events.Muon[mask.object.muon[mask.event]]
+
+                    # manually remove colums that should not be kept
+                    for route in get_ak_routes(events):
+                        nano_column = "_".join(route)
+                        if nano_column not in keep_columns:
+                            events = remove_nano_column(events, route)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
