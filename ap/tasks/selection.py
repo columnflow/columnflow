@@ -11,6 +11,7 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy
+from ap.calibration import calibration_functions
 
 
 class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
@@ -33,7 +34,6 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import numpy as np
         import awkward as ak
         from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
 
@@ -46,8 +46,12 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
+        # get the calibration function
+        # TODO: get this from the config or a parameter?
+        calib_fn = calibration_functions["calib_test"]
+
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | {"nJet", "Jet_pt", "Jet_mass"}
+        load_columns = mandatory_coffea_columns | calib_fn.load_columns
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -63,25 +67,8 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             ) as reader:
                 msg = f"iterate through {reader.n_entries} events ..."
                 for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # here, we would start correcting objects, adding new columns, etc
-                    # examples in the following:
-                    #   a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
-                    #   b) add 4 new columns representing the effect of JEC variations
-
-                    # a)
-                    a_mask = ak.flatten(events.Jet.pt < 30)
-                    n_jet_pt = np.asarray(ak.flatten(events.Jet.pt))
-                    n_jet_mass = np.asarray(ak.flatten(events.Jet.mass))
-                    n_jet_pt[a_mask] *= 1.1
-                    n_jet_pt[~a_mask] *= 0.9
-                    n_jet_mass[a_mask] *= 1.1
-                    n_jet_mass[~a_mask] *= 0.9
-
-                    # b)
-                    events["Jet", "pt_jec_up"] = events.Jet.pt * 1.05
-                    events["Jet", "mass_jec_up"] = events.Jet.mass * 1.05
-                    events["Jet", "pt_jec_down"] = events.Jet.pt * 0.95
-                    events["Jet", "mass_jec_down"] = events.Jet.mass * 0.95
+                    # just invoke the calibration function
+                    events = calib_fn(events)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
