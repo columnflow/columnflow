@@ -23,8 +23,8 @@ import coffea.nanoevents.methods.base
 import pyarrow.parquet as pq
 
 
-#: list of columns that are always required when opening a nano file with coffea
-mandatory_coffea_columns = ["run", "luminosityBlock", "event"]
+#: columns that are always required when opening a nano file with coffea
+mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
 
 
 def get_ak_routes(

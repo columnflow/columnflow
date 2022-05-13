@@ -47,7 +47,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         tmp_dir.touch()
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns + ["nJet", "Jet_pt", "Jet_mass"]
+        load_columns = mandatory_coffea_columns | {"nJet", "Jet_pt", "Jet_mass"}
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -145,9 +145,9 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         aliases = self.shift_inst.x("column_aliases", {})
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns + [
+        load_columns = mandatory_coffea_columns | {
             "nJet", "Jet_pt", "nMuon", "Muon_pt", "LHEWeight_originalXWGTUP",
-        ]
+        }
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -293,10 +293,8 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         # define nano columns that should be kept, and that need to be loaded
         keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
-        load_columns = list(keep_columns | set(mandatory_coffea_columns))
-
-        # TODO: keep columns might be patterns, we need to expand them somehow before adding them
-        #       to load columns
+        load_columns = keep_columns | set(mandatory_coffea_columns)
+        remove_routes = None
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -328,10 +326,15 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events.Muon = events.Muon[mask.object.muon[mask.event]]
 
                     # manually remove colums that should not be kept
-                    for route in get_ak_routes(events):
-                        nano_column = "_".join(route)
-                        if not law.util.multi_match(nano_column, keep_columns):
-                            events = remove_nano_column(events, route)
+                    # define routes to remove once
+                    if not remove_routes:
+                        remove_routes = {
+                            route
+                            for route in get_ak_routes(events)
+                            if not law.util.multi_match("_".join(route), keep_columns)
+                        }
+                    for route in remove_routes:
+                        events = remove_nano_column(events, route)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
