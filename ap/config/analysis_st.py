@@ -8,6 +8,7 @@ from order import Analysis
 
 import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
+import ap.config.functions as fcts
 
 
 #
@@ -37,6 +38,23 @@ analysis_st.set_aux("cmssw_sandboxes", [
 config_2018 = analysis_st.add_config(campaign_2018)
 
 config_2018.set_aux("luminosity", 59740)
+'''
+config_2018.set_aux("objects", {
+    "jet": fcts.req_jet(pt=30, eta=2.4),
+    "muon": fcts.req_muon(pt=30, eta=2.4, ID="tight", iso=0.15),
+    "electron": fcts.req_electron(pt=30, eta=2.4, ID="tight"),
+})
+'''
+#config_2018.set_aux("objects", ["req_jet", "req_electron", "req_muon", "req_bjet"])
+config_2018.set_aux("objects", {
+    "Jet": "req_jet",
+    "Electron": "req_electron",
+    "Muon": "req_muon",
+    "Deepjet": "req_deepjet",
+    "ForwardJet": "req_forwardJet",
+})
+
+config_2018.set_aux("selections", ["sel_trigger", "sel_1lepton", "sel_ge3jets", "sel_ge1bjets"])
 
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
@@ -109,14 +127,14 @@ cat_mu_bb = cat_mu.add_category("1mu_ge2b",
 
 # define objects
 objects = {
-    "Electron": lambda d: (d.Electron_pt>30) & (d.Electron_eta<2.4) & (d.Electron_cutBased==4), 
-    "Muon": lambda d: (d.Muon_pt>30) & (d.Muon_eta<2.4) & (d.Muon_tightId),
-    "Jet": lambda d: (d.Jet_pt>30) & (d.Jet_eta<2.4),
+    "Electron": lambda d: (d.Electron_pt>30) & (abs(d.Electron_eta<2.4)) & (d.Electron_cutBased==4), 
+    "Muon": lambda d: (d.Muon_pt>30) & (abs(d.Muon_eta<2.4)) & (d.Muon_tightId),
+    "Jet": lambda d: (d.Jet_pt>30) & (abs(d.Jet_eta<2.4)),
 }
 
 # just an idea
 extraObjects = {
-    "ForwardJet": lambda d: (d.Jet_pt>30) & (d.Jet_eta>5.0), # should be defined before Jet Fields are cleaned
+    "ForwardJet": lambda d: (d.Jet_pt>30) & (abs(d.Jet_eta>5.0)), # should be defined before Jet Fields are cleaned
     "BJet": lambda d: (d.Jet_btagDeepFlavB > 0.3), # should be defined after Jet Fields are cleaned
     "Lightjet": lambda d: (d.Jet_btagDeepFlavB <= 0.3),
 }
@@ -178,17 +196,17 @@ config_2018.add_variable("Lepton1_pt",
 )
 config_2018.add_variable("Electron1_eta",
                          expression = "var_Electron1_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          x_title = "Leading electron $\eta$",
 )
 config_2018.add_variable("Muon1_eta",
                          expression = "var_Muon1_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          x_title = "Leading muon $\eta$",
 )
 config_2018.add_variable("Lepton1_eta",
                          expression = "var_Lepton1_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          x_title = "Leading lepton $\eta$",
 )
 
@@ -224,18 +242,18 @@ config_2018.add_variable("Jet3_pt",
 )
 config_2018.add_variable("Jet1_eta",
                          expression = "var_Jet1_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          log_y = True,
                          x_title = "Leading jet $\eta$",
 )
 config_2018.add_variable("Jet2_eta",
                          expression = "var_Jet2_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          x_title = "Jet 2 $\eta$",
 )
 config_2018.add_variable("Jet3_eta",
                          expression = "var_Jet3_eta",
-                         binning = (40, -2.5, 2.5),
+                         binning = (50, -2.5, 2.5),
                          x_title = "Jet 3 $\eta$",
 )
 """ # does not work, would need an args parameter to call mask = getattr(functions, selection)(*args)(data)
