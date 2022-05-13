@@ -84,6 +84,7 @@ config_2018.set_aux("keep_columns", {
         "nJet", "Jet_pt", "Jet_eta",
         "nMuon", "Muon_pt", "Muon_eta",
         "LHEWeight_originalXWGTUP",
+        "jet_high_multiplicity",
     },
 })
 

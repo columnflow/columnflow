@@ -163,8 +163,9 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             ) as reader:
                 msg = f"iterate through {reader.n_entries} events ..."
                 for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # here, we would start evaluating object and event selection criteria and
-                    # the book keeping of stats
+                    # here, we would start evaluating object and event selection criteria, store
+                    # new columns related to the selection (e.g. categories or regions), and
+                    # book-keeping of stats
 
                     # apply the calibrated diff
                     events = update_ak_array(events, diff)
@@ -175,13 +176,17 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # example cuts:
                     # - require at least 4 jets with pt>30
                     # - require exactly one muon with pt>25
+                    # example columns:
+                    # - high jet multiplicity region (>=6 selected jets)
                     # example stats:
                     # - number of events before and after selection
                     # - sum of mc weights before and after selection
 
+                    # jet selection
                     jet_mask = events.Jet.pt > 30
                     jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)[jet_mask]
                     jet_sel = ak.sum(jet_mask, axis=1) >= 4
+                    jet_high_multiplicity = ak.sum(jet_mask, axis=1) >= 6
 
                     # muon selection
                     muon_mask = events.Muon.pt > 25
@@ -205,6 +210,9 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                             "jet": jet_indices,
                             "muon": muon_indices,
                         }, depth_limit=1),
+                        "columns": ak.zip({
+                            "jet_high_multiplicity": jet_high_multiplicity,
+                        }),
                     })
 
                     # store stats
@@ -287,6 +295,9 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
         load_columns = list(keep_columns | set(mandatory_coffea_columns))
 
+        # TODO: keep columns might be patterns, we need to expand them somehow before adding them
+        #       to load columns
+
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
             # open the input file with uproot
@@ -303,8 +314,8 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 for (events, diff, mask), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                     # here, we would simply apply the mask to filter events and objects
 
-                    # apply the calibrated diff
-                    events = update_ak_array(events, diff)
+                    # add the calibrated diff and new columns from masks
+                    events = update_ak_array(events, diff, mask.columns)
 
                     # add aliases
                     events = add_nano_aliases(events, aliases, remove_src=True)
@@ -319,7 +330,7 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # manually remove colums that should not be kept
                     for route in get_ak_routes(events):
                         nano_column = "_".join(route)
-                        if nano_column not in keep_columns:
+                        if not law.util.multi_match(nano_column, keep_columns):
                             events = remove_nano_column(events, route)
 
                     # save as parquet via a thread in the same pool
