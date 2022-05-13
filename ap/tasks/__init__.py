@@ -4,7 +4,7 @@
 # import all task modules
 import ap.tasks.framework
 import ap.tasks.external
-import ap.tasks.selection
+#import ap.tasks.selection
 import ap.tasks.defineObjects
 import ap.tasks.defineSelection
 import ap.tasks.applySelection
@@ -18,3 +18,7 @@ import ap.tasks.functions.functions_general
 
 # debug tasks
 import ap.tasks.test_plotting
+
+
+# new workflow
+import ap.tasks.selectEvents
