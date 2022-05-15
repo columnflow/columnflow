@@ -1,5 +1,7 @@
 # packages are installed in addition to those in requirements_prod.txt
 
+luigi==3.0.*
+scinum==1.4.*
 six==1.16.*
 sphinx==4.3.*
 sphinx-rtd-theme==1.0.*
