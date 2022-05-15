@@ -1,4 +1,6 @@
 # packages are installed in addition to those in requirements_prod.txt
 
-ipython==7.16.*
-flake8==4.0.*
+six==1.16.*
+sphinx==4.3.*
+sphinx-rtd-theme==1.0.*
+autodocsumm==0.2.*
