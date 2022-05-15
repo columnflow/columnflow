@@ -5,11 +5,17 @@ import sys
 import os
 
 
-thisdir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(thisdir, "_extensions"))
-sys.path.insert(0, os.path.dirname(thisdir))
+# adjust the environment in a minimal way just so that the docs will build
+projdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(projdir, "docs", "_extensions"))
+sys.path.insert(0, os.path.join(projdir, "modules", "law"))
+sys.path.insert(0, os.path.join(projdir, "modules", "order"))
+sys.path.insert(0, projdir)
+os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law_docs.cfg")
+
 
 import ap
+
 
 project = ap.__name__
 author = ap.__author__

@@ -199,5 +199,6 @@ class SelectionResult(object):
 
 
 # import all selection modules
-for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
-    import_module(mod.strip())
+if law.config.has_option("analysis", "selection_modules"):
+    for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
+        import_module(mod.strip())

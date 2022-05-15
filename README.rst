@@ -5,8 +5,8 @@ Analysis playground
    :target: https://github.com/uhh-cms/analysis_playground/actions?query=workflow%3A%22Lint+and+test%22
    :alt: Build status
 
-.. image:: https://readthedocs.org/projects/analysis_playground/badge/?version=latest
-   :target: http://analysis_playground.readthedocs.io/en/latest
+.. image:: https://readthedocs.org/projects/analysis_playground/badge/?version=majoras_mask
+   :target: http://analysis_playground.readthedocs.io/en/majoras_mask
    :alt: Documentation status
 
 .. image:: https://img.shields.io/github/license/uhh-cms/analysis_playground.svg
