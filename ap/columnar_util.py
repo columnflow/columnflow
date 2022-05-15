@@ -16,11 +16,14 @@ from functools import partial
 from collections import namedtuple, OrderedDict
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any
 
-import awkward as ak
-import uproot
-import coffea.nanoevents
-import coffea.nanoevents.methods.base
-import pyarrow.parquet as pq
+from ap.util import import_module
+
+ak = import_module("awkward")
+uproot = import_module("uproot")
+coffea = import_module("coffea")
+import_module("coffea.nanoevents")
+import_module("coffea.nanoevents.methods.base")
+pq = import_module("pyarrow.parquet")
 
 
 #: columns that are always required when opening a nano file with coffea
@@ -176,7 +179,7 @@ def add_nano_aliases(
     """
     # add all aliases
     for dst_column, src_column in aliases.items():
-        nano_array = add_nano_aliases(
+        nano_array = add_nano_alias(
             nano_array,
             src_column,
             dst_column,

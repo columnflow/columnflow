@@ -11,7 +11,6 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy
-from ap.calibration import calibration_functions
 
 
 class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
@@ -35,7 +34,10 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     @ensure_proxy
     def run(self):
         import awkward as ak
-        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
+        from ap.columnar_util import (
+            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_nano_column,
+        )
+        from ap.calibration import Calibrator
 
         # prepare inputs and outputs
         lfn_task = self.requires()["lfns"]
@@ -48,10 +50,14 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         # get the calibration function
         # TODO: get this from the config or a parameter?
-        calib_fn = calibration_functions["calib_test"]
+        calibrate = Calibrator.get("calib_test")
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | calib_fn.load_columns
+        load_columns = mandatory_coffea_columns | calibrate.used_columns
+
+        # define columns that will be saved
+        keep_columns = calibrate.produced_columns
+        remove_routes = None
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -68,7 +74,17 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 msg = f"iterate through {reader.n_entries} events ..."
                 for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                     # just invoke the calibration function
-                    events = calib_fn(events)
+                    events = calibrate(events)
+
+                    # manually remove colums that should not be kept
+                    if not remove_routes:
+                        remove_routes = {
+                            route
+                            for route in get_ak_routes(events)
+                            if not law.util.multi_match("_".join(route), keep_columns)
+                        }
+                    for route in remove_routes:
+                        events = remove_nano_column(events, route)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
@@ -104,7 +120,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     def output(self):
         return {
-            "mask": self.local_target(f"mask_{self.branch}.parquet"),
+            "res": self.local_target(f"results_{self.branch}.parquet"),
             "stat": self.local_target(f"stat_{self.branch}.json"),
         }
 
@@ -116,6 +132,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
         )
+        from ap.selection import Selector
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -131,10 +148,12 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
+        # get the selection function
+        # TODO: get this from the config or a parameter?
+        select = Selector.get("select_test")
+
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | {
-            "nJet", "Jet_pt", "nMuon", "Muon_pt", "LHEWeight_originalXWGTUP",
-        }
+        load_columns = mandatory_coffea_columns | select.used_columns
 
         # loop over all input file indices requested by this branch (most likely just one)
         for (file_index, input_file) in lfn_task.iter_nano_files(self):
@@ -160,62 +179,17 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # add aliases
                     events = add_nano_aliases(events, aliases)
 
-                    # example cuts:
-                    # - require at least 4 jets with pt>30
-                    # - require exactly one muon with pt>25
-                    # example columns:
-                    # - high jet multiplicity region (>=6 selected jets)
-                    # example stats:
-                    # - number of events before and after selection
-                    # - sum of mc weights before and after selection
-
-                    # jet selection
-                    jet_mask = events.Jet.pt > 30
-                    jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)[jet_mask]
-                    jet_sel = ak.sum(jet_mask, axis=1) >= 4
-                    jet_high_multiplicity = ak.sum(jet_mask, axis=1) >= 6
-
-                    # muon selection
-                    muon_mask = events.Muon.pt > 25
-                    muon_indices = ak.argsort(events.Muon.pt, axis=-1, ascending=False)[muon_mask]
-                    muon_sel = ak.sum(muon_mask, axis=1) == 1
-
-                    # combined event selection
-                    event_sel = jet_sel & muon_sel
-
-                    # view of selected events
-                    events_sel = events[event_sel]
-
-                    # store decisions
-                    decisions = ak.zip({
-                        "event": event_sel,
-                        "step": ak.zip({
-                            "jet": jet_sel,
-                            "muon": muon_sel,
-                        }),
-                        "object": ak.zip({
-                            "jet": jet_indices,
-                            "muon": muon_indices,
-                        }, depth_limit=1),
-                        "columns": ak.zip({
-                            "jet_high_multiplicity": jet_high_multiplicity,
-                        }),
-                    })
-
-                    # store stats
-                    stats["n_events"] += len(events)
-                    stats["n_events_selected"] += ak.sum(event_sel, axis=0)
-                    stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
-                    stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
+                    # invoke the selection function
+                    results = select(events, stats)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
                     output_chunks[(file_index, pos.index)] = chunk
-                    reader.add_task(ak.to_parquet, (decisions, chunk.path))
+                    reader.add_task(ak.to_parquet, (results.to_ak(), chunk.path))
 
         # merge the mask files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["mask"], local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["res"], local=True)
 
         # save stats
         outputs["stat"].dump(stats, formatter="json")
@@ -242,14 +216,14 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["diff"] = CalibrateObjects.req(self)
-            reqs["mask"] = SelectEvents.req(self)
+            reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
             "diff": CalibrateObjects.req(self),
-            "mask": SelectEvents.req(self),
+            "sel": SelectEvents.req(self),
         }
 
     def output(self):
@@ -291,29 +265,29 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
             # iterate over chunks of events and diffs
             with ChunkedReader(
-                [ufile, inputs["diff"].path, inputs["mask"]["mask"].path],
+                [ufile, inputs["diff"].path, inputs["sel"]["res"].path],
                 source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
                 read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
             ) as reader:
                 msg = f"iterate through {reader.n_entries} events ..."
-                for (events, diff, mask), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # here, we would simply apply the mask to filter events and objects
+                for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                    # here, we would simply apply the mask from the selection results
+                    # to filter events and objects
 
-                    # add the calibrated diff and new columns from masks
-                    events = update_ak_array(events, diff, mask.columns)
+                    # add the calibrated diff and new columns from selection results
+                    events = update_ak_array(events, diff, sel.columns)
 
                     # add aliases
                     events = add_nano_aliases(events, aliases, remove_src=True)
 
                     # apply the event mask
-                    events = events[mask.event]
+                    events = events[sel.event]
 
                     # apply jet and muon masks
-                    events.Jet = events.Jet[mask.object.jet[mask.event]]
-                    events.Muon = events.Muon[mask.object.muon[mask.event]]
+                    events.Jet = events.Jet[sel.objects.jet[sel.event]]
+                    events.Muon = events.Muon[sel.objects.muon[sel.event]]
 
                     # manually remove colums that should not be kept
-                    # define routes to remove once
                     if not remove_routes:
                         remove_routes = {
                             route
