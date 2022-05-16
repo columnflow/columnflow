@@ -55,10 +55,18 @@ action() {
         >&2 echo "AP_VENV_REQUIREMENTS is not set but required by $this_file"
         return "4"
     fi
-    if [ ! -f "$AP_VENV_REQUIREMENTS" ]; then
-        >&2 echo "AP_VENV_REQUIREMENTS $AP_VENV_REQUIREMENTS does not exist"
-        return "5"
-    fi
+
+    # split $AP_VENV_REQUIREMENTS into an array
+    local i
+    local requirement_files
+    IFS="," read -r -a requirement_files <<< "$AP_VENV_REQUIREMENTS"
+    for i in "${!requirement_files[@]}"; do
+        if [ ! -f "${requirement_files[i]}" ]; then
+            >&2 echo "requirement file $i at ${requirement_files[i]} does not exist"
+            return "5"
+        fi
+    done
+    local first_requirement_file="${requirement_files[0]}"
 
 
     #
@@ -67,11 +75,11 @@ action() {
 
     local install_path="$AP_VENV_PATH/$AP_VENV_NAME"
     local flag_file="$install_path/ap_flag"
-    local venv_version="$( cat "$AP_VENV_REQUIREMENTS" | grep -Po "# version \K\d+.*" )"
+    local venv_version="$( cat "$first_requirement_file" | grep -Po "# version \K\d+.*" )"
 
     # the venv version must be set
     if [ -z "$venv_version" ]; then
-        >&2 echo "AP_VENV_REQUIREMENTS $AP_VENV_REQUIREMENTS does not exist"
+        >&2 echo "first requirement file $first_requirement_file does not contain a version line"
         return "6"
     fi
 
@@ -99,7 +107,10 @@ action() {
         # install requirements
         python3 -m pip install -U pip
         python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-        python3 -m pip install -r "$AP_VENV_REQUIREMENTS" || return "$?"
+        for i in "${!requirement_files[@]}"; do
+            echo -e "\n\x1b[0;49;35minstalling requirement file $i at ${requirement_files[i]}\x1b[0m"
+            python3 -m pip install -r "${requirement_files[i]}" || return "$?"
+        done
         ap_make_venv_relocateable "$AP_VENV_NAME" || return "$?"
 
         # write the version into the flag file

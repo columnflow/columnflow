@@ -139,6 +139,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         config.render_variables["ap_desy_user"] = os.environ["AP_DESY_USER"]
         config.render_variables["ap_cern_user"] = os.environ["AP_CERN_USER"]
         config.render_variables["ap_store_name"] = os.environ["AP_STORE_NAME"]
+        config.render_variables["ap_store_local"] = os.environ["AP_STORE_LOCAL"]
         config.render_variables["ap_local_scheduler"] = os.environ["AP_LOCAL_SCHEDULER"]
         config.render_variables["ap_store_local"] = os.environ["AP_STORE_LOCAL"]
 
@@ -213,8 +214,8 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
             # get a list of all software flag files
             flag_files = os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split()
             for venv_name in os.listdir(os.environ["AP_VENV_PATH"]):
-                # skip the ap_dev venv
-                if venv_name == "ap_dev":
+                # skip all dev envs
+                if venv_name.endswith("_dev"):
                     continue
                 venv_flag = os.path.join(os.environ["AP_VENV_PATH"], venv_name, "ap_flag")
                 flag_files.append(venv_flag)
