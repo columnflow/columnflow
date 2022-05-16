@@ -14,11 +14,11 @@ from collections import defaultdict
 
 import ap.config.functions as fcts
 
+
 class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    shifts = {"jec_up", "jec_down"}
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
@@ -28,6 +28,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         return {
             "mask": self.local_target(f"masks_{self.branch}.pickle"),
             "stats": self.local_target(f"stats_{self.branch}.json"),
+            "data": self.local_target(f"data_{self.branch}.json"), # remove later
         }
     @law.decorator.safe_output
     @ensure_proxy
@@ -41,6 +42,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         # prepare output arrays to be concated
         output_arrays = []
+        data_output = []
         stats = defaultdict(float)
 
         # loop over all input file indices requested by this branch
@@ -61,7 +63,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             # readout all fields of interest, define electrons, muons, jets
             step_size = 100000 # 1000 -> 31 seconds; 1000000 -> 4.3 seconds; 100000 -> 5.2 seconds
             steps = int(math.ceil(events.num_entries / step_size))
-            events = events.iterate(["nMuon", "nElectron", "Muon_pt", "Muon_eta", "Muon_tightId", "Electron_pt", "Electron_eta", "Electron_cutBased", "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB", "HLT_IsoMu27", "HLT_Ele27_WPTight_Gsf", "LHEWeight_originalXWGTUP"], step_size=step_size)
+            events = events.iterate(["Muon_pt", "Muon_eta", "Muon_tightId", "Electron_pt", "Electron_eta", "Electron_cutBased", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB", "HLT_IsoMu27", "HLT_Ele27_WPTight_Gsf", "LHEWeight_originalXWGTUP"], step_size=step_size)
             for batch in self.iter_progress(events, steps, msg=f"file {file_index}: select ..."):
                 print("batch")
 
@@ -91,6 +93,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                 })
                 print(type(output))
                 output_arrays.append(output) # list of awkward.highlevel.Arrays
+                data_output.append(batch) # save data just to simplify implementation for now
 
         print("----------------------")
         print(type(output_arrays))
@@ -99,7 +102,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         print(type(data))
         self.output()["mask"].dump(final_output, formatter="pickle")
         self.output()["stats"].dump(stats, formatter="json")
-
+        self.output()["data"].dump(np.concatenate(data_output, axis=0), formatter="pickle")
 
 
 

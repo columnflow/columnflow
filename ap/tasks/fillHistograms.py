@@ -33,8 +33,8 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     '''
     def requires(self):
         return {
-            "data": DefineObjects.req(self),
-            "selection": DefineSelection.req(self)
+            #"lfns": GetDatasetLFNs.req(self)
+            "selection": SelectEvents.req(self)
         }
         
     def output(self):
@@ -49,12 +49,8 @@ class FillHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             import awkward as ak
             import hist
 
-            # stuff that can be used from order
             config = self.config_inst
-            analysis = self.get_analysis_inst(self.analysis)
-            #categories = config.categories
-            #processes = config.processes
-        
+
             # need process to read out xsec
             process = config.get_process(self.dataset)
             # need dataset to read out number of MC events
