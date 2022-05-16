@@ -27,7 +27,7 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          flake8 ap
+          flake8 ap docs
 
       - name: Cleanup 🧹
         if: always()

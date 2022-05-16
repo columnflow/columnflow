@@ -4,10 +4,10 @@
 Selection methods for testing purposes.
 """
 
-from ap.util import import_module
+from ap.util import maybe_import
 from ap.selection import selector, SelectionResult
 
-ak = import_module("awkward")
+ak = maybe_import("awkward")
 
 
 @selector(uses={"nJet", "Jet_pt"})

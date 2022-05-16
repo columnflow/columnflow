@@ -4,7 +4,12 @@
 Helpers and utilities for working with columnar libraries.
 """
 
-__all__ = []
+__all__ = [
+    "mandatory_coffea_columns",
+    "ArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
+    "get_ak_routes", "find_nano_route", "remove_nano_column", "add_nano_alias", "add_nano_aliases",
+    "update_ak_array", "flatten_nano_events",
+]
 
 
 import math
@@ -14,16 +19,18 @@ import multiprocessing
 import multiprocessing.pool
 from functools import partial
 from collections import namedtuple, OrderedDict
-from typing import Optional, Union, Tuple, List, Dict, Callable, Any
+from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
 
-from ap.util import import_module
+import law
 
-ak = import_module("awkward")
-uproot = import_module("uproot")
-coffea = import_module("coffea")
-import_module("coffea.nanoevents")
-import_module("coffea.nanoevents.methods.base")
-pq = import_module("pyarrow.parquet")
+from ap.util import maybe_import
+
+ak = maybe_import("awkward")
+uproot = maybe_import("uproot")
+coffea = maybe_import("coffea")
+maybe_import("coffea.nanoevents")
+maybe_import("coffea.nanoevents.methods.base")
+pq = maybe_import("pyarrow.parquet")
 
 
 #: columns that are always required when opening a nano file with coffea
@@ -84,7 +91,7 @@ def find_nano_route(
         route = find_nano_route(events, "Jet_pt_jec_up")
         print(route)  # -> ("Jet", "pt_jec_up")
 
-        print(events[route]) -> <Array [[25.123, ...], ...] type=`50000 * var * float32`>
+        print(events[route])  # -> <Array [[25.123, ...], ...] type=`50000 * var * float32`>
     """
     # split into parts
     parts = nano_column.split("_")
@@ -243,7 +250,98 @@ def flatten_nano_events(
     return flat_events
 
 
-class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory):
+class ArrayFunction(object):
+    """
+    Base class for function wrappers that act on arrays and keep track of certain columns. Also,
+    instances are named and put into a class-level cache when created via :py:meth:`new`
+    (recommended).
+
+    For possible implementations, see :py:class:`calibration.Calibrator` or
+    :py:class:`selection.Selector`.
+
+    .. py:attribute:: func
+       type: callable
+
+       The wrapped function.
+
+    .. py:attribute:: name
+       type: str
+
+       The name of the instance in the cache dictionary.
+
+    .. py:attribute:: uses
+       type: set
+
+       The set of column names or other instances to recursively resolve the names of columns.
+
+    .. py::attribute:: used_columns
+       type: set
+       read-only
+
+       The resolved, flat set of used column names.
+    """
+
+    _instances = {}
+
+    @classmethod
+    def new(cls, *args, **kwargs) -> "ArrayFunction":
+        """
+        Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
+        name attribute, and returns it. An exception is raised if an instance with the same name was
+        already reigstered.
+        """
+        inst = cls(*args, **kwargs)
+
+        if inst.name in cls._instances:
+            raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
+
+        cls._instances[inst.name] = inst
+
+        return inst
+
+    @classmethod
+    def get(cls, name: str) -> "ArrayFunction":
+        """
+        Returns a previously registered instance named *name* from the cache.
+        """
+        if name not in cls._instances:
+            raise ValueError(f"no {cls.__name__} named '{name}' registered")
+
+        return cls._instances[name]
+
+    def __init__(
+        self,
+        func: Callable,
+        name: Optional[str] = None,
+        uses: Optional[Union[
+            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
+            Set["ArrayFunction"],
+        ]] = None,
+    ):
+        super(ArrayFunction, self).__init__()
+
+        self.func = func
+        self.name = name or self.func.__name__
+        self.uses = law.util.make_list(uses) if uses else []
+
+    @property
+    def used_columns(self) -> Set[str]:
+        columns = set()
+        for obj in self.uses:
+            if isinstance(obj, ArrayFunction):
+                columns |= obj.used_columns
+            else:
+                columns.add(obj)
+        return columns
+
+    def __call__(self, *args, **kwargs):
+        """
+        Invokes the wrapped :py:attr:`func`, forwarding all *args* and *kwargs*.
+        """
+        return self.func(*args, **kwargs)
+
+
+class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):
     """
     Custom NanoEventsFactory that re-implements the ``events()`` method that immediately loads
     an event chunk into memory.

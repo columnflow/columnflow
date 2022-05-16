@@ -1,5 +1,5 @@
 Analysis playground
-^^^^^^^^^^^^^^^^^^^
+===================
 
 .. image:: https://github.com/uhh-cms/analysis_playground/workflows/Lint%20and%20test/badge.svg
    :target: https://github.com/uhh-cms/analysis_playground/actions?query=workflow%3A%22Lint+and+test%22
@@ -20,7 +20,7 @@ Demonstrator for a Python-based, vectorized analysis with a bunch of public HEP 
 
 
 Quickstart
-==========
+----------
 
 Modules, exported shell functions and environment variables might have a prefix ``AP`` or ``ap`` to express their connection to this project.
 
@@ -39,11 +39,11 @@ The task that you are about to start requires a valid voms proxy.
     law index --verbose
 
     # run your first task
-    law run SelectEvents --version v1 --branch 0
+    law run ReduceEvents --version v1 --dataset st_tchannel_t --branch 0
 
 
 Development
-===========
+-----------
 
 - Source hosted at `GitHub <https://github.com/uhh-cms/analysis_playground>`__
 - Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/analysis_playground/issues>`__

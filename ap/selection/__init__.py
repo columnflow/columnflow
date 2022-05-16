@@ -8,12 +8,13 @@ from typing import Optional, Union, Callable
 
 import law
 
-from ap.util import import_module, DotDict, ColumnConsumer
+from ap.util import maybe_import, DotDict
+from ap.columnar_util import ArrayFunction
 
-ak = import_module("awkward")
+ak = maybe_import("awkward")
 
 
-class Selector(ColumnConsumer):
+class Selector(ArrayFunction):
     """
     Wrapper class for functions performing object and event calibration on (most likely) coffea nano
     event arrays. The main purpose of wrappers is to store information about required columns next
@@ -201,4 +202,4 @@ class SelectionResult(object):
 # import all selection modules
 if law.config.has_option("analysis", "selection_modules"):
     for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
-        import_module(mod.strip())
+        maybe_import(mod.strip())

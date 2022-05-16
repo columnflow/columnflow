@@ -8,10 +8,11 @@ from typing import Optional, Union, Sequence, Set, Callable
 
 import law
 
-from ap.util import import_module, ColumnConsumer
+from ap.util import maybe_import
+from ap.columnar_util import ArrayFunction
 
 
-class Calibrator(ColumnConsumer):
+class Calibrator(ArrayFunction):
     """
     Wrapper class for functions performing object calibration on (most likely) coffea nano event
     arrays. The main purpose of wrappers is to store information about required and produced columns
@@ -122,4 +123,4 @@ def calibrator(
 # import all calibration modules
 if law.config.has_option("analysis", "calibration_modules"):
     for mod in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
-        import_module(mod.strip())
+        maybe_import(mod.strip())

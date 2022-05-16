@@ -4,11 +4,11 @@
 Calibration methods for testing purposes.
 """
 
-from ap.util import import_module
+from ap.util import maybe_import
 from ap.calibration import calibrator
 
-np = import_module("numpy")
-ak = import_module("awkward")
+np = maybe_import("numpy")
+ak = maybe_import("awkward")
 
 
 @calibrator(

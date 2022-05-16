@@ -1,10 +1,14 @@
 # coding: utf-8
 
 """
-Helpers and utilities.
+Collection of general helpers and utilities.
 """
 
-__all__ = []
+__all__ = [
+    "DotDict", "MockModule",
+    "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
+    "wget", "call_thread", "call_proc", "ensure_proxy",
+]
 
 
 import os
@@ -15,15 +19,105 @@ import subprocess
 import importlib
 import multiprocessing
 import multiprocessing.pool
-from typing import Tuple, Callable, Any, Optional, Union, Sequence, Set
+from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
 import law
 
 
-# modules and objects from lazy imports
+class DotDict(dict):
+    """
+    Subclass of *dict* that provides read access for items via attributes by implementing
+    ``__getattr__``. In case a item is accessed via attribute and it does not exist, an
+    *AttriuteError* is raised rather than a *KeyError*. Example:
+
+    .. code-block:: python
+
+       d = DotDict()
+       d["foo"] = 1
+
+       print(d["foo"])
+       # => 1
+
+       print(d.foo)
+       # => 1
+
+       print(d["bar"])
+       # => KeyError
+
+       print(d.bar)
+       # => AttributeError
+    """
+
+    def __getattr__(self, attr):
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError("'{}' object has no attribute '{}'".format(
+                self.__class__.__name__, attr))
+
+    def copy(self):
+        """"""
+        return self.__class__(self)
+
+
+class MockModule(object):
+    """
+    Mockup object that resembles a module with arbitrarily deep structure such that, e.g.,
+
+    .. code-block:: python
+
+        coffea = MockModule("coffea")
+        print(coffea.nanoevents.NanoEventsArray)
+        # -> "<MockupModule 'coffea' at 0x981jald1>"
+
+    will always succeed at declaration, but most likely fail at execution time. In fact, each
+    attribute access will return the mock object again. This might only be useful in places where
+    a module is potentially not existing (e.g. due to sandboxing) but one wants to import it either
+    way a) to perform only one top-level import as opposed to imports in all functions of a package,
+    or b) to provide type hints for documentation purposes.
+
+    .. py:attribute:: _name
+       type: str
+
+       The name of the mock module.
+    """
+
+    def __init__(self, name):
+        super(MockModule, self).__init__()
+
+        self._name = name
+
+    def __getattr__(self, attr):
+        return self
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} '{self._name}' at {hex(id(self))}>"
+
+    def __call__(self, *args, **kwargs):
+        raise Exception(f"{self._name} is a mock module and cannot be called")
+
+    def __nonzero__(self):
+        return False
+
+    def __bool__(self):
+        return False
+
+
+def maybe_import(name: str, package: Optional[str] = None) -> Union[ModuleType, MockModule]:
+    """
+    Calls *importlib.import_module* internally and returns the module if it exists, or otherwise a
+    :py:class:`MockModule` instance with the same name.
+    """
+    try:
+        return importlib.import_module(name, package)
+    except ImportError:
+        if package:
+            name = package + name
+        return MockModule(name)
+
+
 _plt = None
-_ROOT = None
 
 
 def import_plt() -> ModuleType:
@@ -44,6 +138,9 @@ def import_plt() -> ModuleType:
         _plt = plt
 
     return _plt
+
+
+_ROOT = None
 
 
 def import_ROOT() -> ModuleType:
@@ -200,152 +297,3 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
         return
 
     return before_call, call, after_call
-
-
-class MockModule(object):
-    """
-    Mockup object that resembles a module with arbitrarily deep structure such that, e.g.,
-
-    .. code-block:: python
-
-        coffea = MockModule("coffea")
-        print(coffea.nanoevents.NanoEventsArray)
-        # -> "<MockupModule 'coffea' at 0x981jald1>"
-
-    will always succeed at declaration, but most likely fail at execution time. In fact, each
-    attribute access will return the mock object again. This might only be useful in places where
-    a module is potentially not existing (e.g. due to sandboxing) but one wants to import it either
-    way a) to perform only one top-level import as opposed to imports in all functions of a package,
-    or b) to provide type hints for documentation purposes.
-
-    .. py:attribute:: _name
-       type: str
-
-       The name of the mock module.
-    """
-
-    def __init__(self, name):
-        super(MockModule, self).__init__()
-
-        self._name = name
-
-    def __getattr__(self, attr):
-        return self
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} '{self._name}' at {hex(id(self))}>"
-
-    def __call__(self, *args, **kwargs):
-        raise Exception(f"{self._name} is a mock module and cannot be called")
-
-
-def import_module(name: str, package: Optional[str] = None) -> Union[ModuleType, MockModule]:
-    """
-    Calls *importlib.import_module* internally and returns the module if it exists, or otherwise a
-    :py:class:`MockModule` instance with the same name.
-    """
-    try:
-        return importlib.import_module(name, package)
-    except ImportError:
-        if package:
-            name = package + name
-        return MockModule(name)
-
-
-class DotDict(dict):
-    """
-    Subclass of *dict* that provides read access for items via attributes by implementing
-    ``__getattr__``. In case a item is accessed via attribute and it does not exist, an
-    *AttriuteError* is raised rather than a *KeyError*. Example:
-
-    .. code-block:: python
-
-       d = DotDict()
-       d["foo"] = 1
-
-       print(d["foo"])
-       # => 1
-
-       print(d.foo)
-       # => 1
-
-       print(d["bar"])
-       # => KeyError
-
-       print(d.bar)
-       # => AttributeError
-    """
-
-    def __getattr__(self, attr):
-        try:
-            return self[attr]
-        except KeyError:
-            raise AttributeError("'{}' object has no attribute '{}'".format(
-                self.__class__.__name__, attr))
-
-    def copy(self):
-        """"""
-        return self.__class__(self)
-
-
-class ColumnConsumer(object):
-    """
-    Base class for function wrappers that keep track of required columns. See
-    :py:class:`calibration.Calibrator` or :py:class:`selection.Selector` for implementations.
-    """
-
-    _instances = {}
-
-    @classmethod
-    def new(cls, *args, **kwargs) -> "ColumnConsumer":
-        """
-        Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
-        name attribute, and returns it. An exception is raised if an instance with the same name was
-        already reigstered.
-        """
-        inst = cls(*args, **kwargs)
-
-        if inst.name in cls._instances:
-            raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
-
-        cls._instances[inst.name] = inst
-
-        return inst
-
-    @classmethod
-    def get(cls, name: str) -> "ColumnConsumer":
-        """
-        Returns a previously registered instance named *name* from the cache.
-        """
-        if name not in cls._instances:
-            raise ValueError(f"no {cls.__name__} named '{name}' registered")
-
-        return cls._instances[name]
-
-    def __init__(
-        self,
-        func: Callable,
-        name: Optional[str] = None,
-        uses: Optional[Union[
-            str, "ColumnConsumer", Sequence[str], Sequence["ColumnConsumer"], Set[str],
-            Set["ColumnConsumer"],
-        ]] = None,
-    ):
-        super(ColumnConsumer, self).__init__()
-
-        self.func = func
-        self.name = name or self.func.__name__
-        self.uses = law.util.make_list(uses) if uses else []
-
-    @property
-    def used_columns(self) -> Set[str]:
-        columns = set()
-        for obj in self.uses:
-            if isinstance(obj, ColumnConsumer):
-                columns |= obj.used_columns
-            else:
-                columns.add(obj)
-        return columns
-
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)

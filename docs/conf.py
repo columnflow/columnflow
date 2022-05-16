@@ -5,19 +5,17 @@ import sys
 import os
 
 
-# adjust the environment in a minimal way just so that the docs will build
+# adjust the environment in a minimal way just so that the docs build
 projdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(projdir, "docs", "_extensions"))
 sys.path.insert(0, os.path.join(projdir, "modules", "law"))
 sys.path.insert(0, os.path.join(projdir, "modules", "order"))
 sys.path.insert(0, projdir)
-os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law_docs.cfg")
-
+os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
 
 import ap
 
-
-project = ap.__name__
+project = "analysis_playground"
 author = ap.__author__
 copyright = ap.__copyright__
 copyright = copyright[10:] if copyright.startswith("Copyright ") else copyright

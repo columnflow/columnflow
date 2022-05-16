@@ -5,3 +5,4 @@ API Reference
    :maxdepth: 3
 
    util
+   columnar_util
