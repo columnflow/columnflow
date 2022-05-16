@@ -2,11 +2,11 @@ Analysis playground
 ===================
 
 .. image:: https://github.com/uhh-cms/analysis_playground/workflows/Lint%20and%20test/badge.svg
-   :target: https://github.com/uhh-cms/analysis_playground/actions?query=workflow%3A%22Lint+and+test%22
+   :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
-.. image:: https://readthedocs.org/projects/analysis_playground/badge/?version=majoras_mask
-   :target: http://analysis_playground.readthedocs.io/en/majoras_mask
+.. image:: https://readthedocs.org/projects/analysis_playground/badge
+   :target: http://analysis_playground.readthedocs.io
    :alt: Documentation status
 
 .. image:: https://img.shields.io/github/license/uhh-cms/analysis_playground.svg
