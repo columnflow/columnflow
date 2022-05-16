@@ -23,10 +23,10 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
     #variables = law.CSVParameter(description="List of variables to plot")
     
 
-    merge_factor = 2
+    merge_factor = 10
     
     def merge_workflow_requires(self):
-        return FillHistograms.req(self)
+        return FillHistograms.req(self, _exclude=['start_branch','end_branch','branches'])
     
     def merge_requires(self, start_leaf, end_leaf):
         return [FillHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]

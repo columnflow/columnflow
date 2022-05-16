@@ -43,6 +43,10 @@ def req_deepjet(data):
     return ak.argsort(data.Jet_pt, axis=-1, ascending=False)[mask]
 
 # variable functions need to change when not simply cleaning object fields...
+def var_sum_of_weights(data):
+    import awkward as ak
+    return ak.zeros_like(data.LHEWeight_originalXWGTUP) # random field with one entry per event
+
 def var_nJet(data):
     import awkward as ak
     return ak.num(req_jet(data), axis=1)
@@ -55,6 +59,34 @@ def var_nElectron(data):
 def var_nMuon(data):
     import awkward as ak
     return ak.num(req_muon(data), axis=1)
+def var_nLepton(data):
+    import awkward as ak
+    return ak.num(req_muon(data), axis=1)+ak.num(req_electron(data), axis=1)
+
+def var_HT(data):
+    jet_pt_sorted = data.Jet_pt[req_jet(data)]
+    return ak.sum(jet_pt_sorted, axis=1)
+    
+def var_Electron1_pt(data):
+    electron_pt_sorted = data.Electron_pt[req_electron(data)]
+    return extract(electron_pt_sorted, 0)
+def var_Muon1_pt(data):
+    muon_pt_sorted = data.Muon_pt[req_muon(data)]
+    return extract(muon_pt_sorted, 0)
+def var_Lepton1_pt(data):
+    lepton_pt_sorted = combineAndSort(data.Electron_pt[req_electron(data)],data.Muon_pt[req_muon(data)])
+    return extract(lepton_pt_sorted, 0)
+def var_Electron1_eta(data):
+    electron_eta_sorted = data.Electron_eta[req_electron(data)]
+    return extract(electron_eta_sorted, 0)
+def var_Muon1_eta(data):
+    muon_eta_sorted = data.Muon_eta[req_muon(data)]
+    return extract(muon_eta_sorted, 0)
+def var_Lepton1_eta(data):
+    lepton_eta_sorted = combineAndSort(data.Electron_eta[req_electron(data)],data.Muon_eta[req_muon(data)])
+    return extract(lepton_eta_sorted, 0)
+
+
 def var_Jet1_pt(data):
     jet_pt_sorted = data.Jet_pt[req_jet(data)]
     return extract(jet_pt_sorted, 0)
@@ -64,6 +96,16 @@ def var_Jet2_pt(data):
 def var_Jet3_pt(data):
     jet_pt_sorted = data.Jet_pt[req_jet(data)]
     return extract(jet_pt_sorted, 2)
+def var_Jet1_eta(data):
+    jet_eta_sorted = data.Jet_eta[req_jet(data)]
+    return extract(jet_eta_sorted, 0)
+def var_Jet2_eta(data):
+    jet_eta_sorted = data.Jet_eta[req_jet(data)]
+    return extract(jet_eta_sorted, 1)
+def var_Jet3_eta(data):
+    jet_eta_sorted = data.Jet_eta[req_jet(data)]
+    return extract(jet_eta_sorted, 2)
+
 
 
 # selections
@@ -104,76 +146,3 @@ def sel_1mu_eq1b(data):
 def sel_1mu_ge2b(data):
     return (sel_1mu(data)) & (ak.num(req_bjet(data), axis=1)>=2)
 
-
-'''
-# selection for the main categories
-def sel_1e(data):
-    return (data.nElectron==1) & (data.nMuon==0)
-def sel_1mu(data):
-    return (data.nMuon==1) & (data.nElectron==0)
-
-# selection for the sub-categories
-def sel_1e_eq1b(data):
-    return (sel_1e(data)) & (data.nDeepjet==1)
-def sel_1e_ge2b(data):
-    return (sel_1e(data)) & (data.nDeepjet>=2)
-
-def sel_1mu_eq1b(data):
-    return (sel_1mu(data)) & (data.nDeepjet==1)
-def sel_1mu_ge2b(data):
-    return (sel_1mu(data)) & (data.nDeepjet>=2)
-'''
-
-
-
-'''
-def var_sum_of_weights(data):
-    import awkward as ak
-    return ak.zeros_like(data.nJet)
-
-def var_HT(data):
-    import awkward as ak
-    return ak.sum(data.Jet_pt, axis=1)
-
-def var_nElectron(data):
-    return data.nElectron
-def var_nMuon(data):
-    return data.nMuon
-def var_nLepton(data):
-    return data.nElectron+data.nMuon
-
-def var_Electron1_pt(data):
-    return extract(data.Electron_pt, 0)
-def var_Muon1_pt(data):
-    return extract(data.Muon_pt, 0)
-def var_Lepton1_pt(data):
-    return extract(combineAndSort(data.Electron_pt, data.Muon_pt), 0)
-def var_Electron1_eta(data):
-    return extract(data.Electron_eta, 0)
-def var_Muon1_eta(data):
-    return extract(data.Muon_eta, 0)
-def var_Lepton1_eta(data):
-    return extract(combineAndSort(data.Electron_eta, data.Muon_eta), 0)
-
-def var_nJet(data):
-    return data.nJet
-def var_nDeepjet(data):
-    return data.nDeepjet
-
-def var_Jet1_pt(data):
-    return extract(data.Jet_pt, 0)
-def var_Jet2_pt(data):
-    return extract(data.Jet_pt, 1)
-def var_Jet3_pt(data):
-    return extract(data.Jet_pt, 2)
-
-def var_Jet1_eta(data):
-    return extract(data.Jet_eta, 0)
-def var_Jet2_eta(data):
-    return extract(data.Jet_eta, 1)
-def var_Jet3_eta(data):
-    return extract(data.Jet_eta, 2)
-# no use case for this yet
-def var_JetN_eta(N):
-    return lambda d: extract(d.Jet_eta, N-1)
-'''

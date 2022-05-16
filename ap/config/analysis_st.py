@@ -151,8 +151,8 @@ selections = {
 # define variables
 config_2018.add_variable("sum_of_weights",
                          expression = "var_sum_of_weights",
-                         binning = (1,0.,1.),
-                         x_title = "sum of evenweights",
+                         binning = (1,-1.,1.),
+                         x_title = "sum of weights",
 )
 
 config_2018.add_variable("HT",
