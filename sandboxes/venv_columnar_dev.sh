@@ -9,7 +9,7 @@ action() {
 
     # set variables and source the generic venv setup
     export AP_VENV_NAME="$( basename "${this_file%.sh}" )"
-    export AP_VENV_REQUIREMENTS="$this_dir/selection.txt,$this_dir/selection_dev.txt"
+    export AP_VENV_REQUIREMENTS="$this_dir/columnar.txt,$this_dir/dev.txt"
 
     source "$this_dir/_setup_venv.sh" "$@"
 }

@@ -3,8 +3,10 @@
 ap_create_venv() {
     # Creates a new virtual environment inside $AP_VENV_PATH, exchanges all absolute paths in the
     # activation script with relative ones, and makes the environment relocatable.
+    #
     # Arguments:
     #   1. The name of the virtual env inside $AP_VENV_PATH.
+    #
     # Required environment variables:
     #   AP_VENV_PATH: The base path where AP virtual environments are stored.
 

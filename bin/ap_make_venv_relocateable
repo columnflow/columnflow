@@ -3,8 +3,10 @@
 ap_make_venv_relocateable() {
     # Traverses all executables in a virtual environment directory located in $AP_VENV_PATH and
     # replaces absolute shebangs with relative ones using /use/bin/env.
+    #
     # Arguments:
     #   1. The name of the virtual env inside $AP_VENV_PATH.
+    #
     # Required environment variables:
     #   AP_VENV_PATH: The base path where AP virtual environments are stored.
 
