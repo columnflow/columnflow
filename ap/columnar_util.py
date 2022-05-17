@@ -391,6 +391,8 @@ class ChunkedReader(object):
                 jet_pts = chunk.Jet.pt
                 print(f"jet pts of chunk {chunk.index}: {jet_pts}")
 
+    .. code-block:: python
+
         # iterate through multiple files simultaneously
         with ChunkedReader(
             ("data.root", "masks.parquet"),

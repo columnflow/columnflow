@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 
 setup() {
+    # Runs the entire project setup, leading to a collection of environment variables starting with
+    # "AP_", the installation of the software stack via virtual environments, and optionally an
+    # interactive setup where the user can configure certain variables.
+    # Optinally preconfigured environment variables:
+    #   AP_REINSTALL_SOFTWARE : If "1", any existing software stack is removed and freshly
+    #                           installed.
+    #   AP_REMOTE_JOB         : If "1", applies configurations for remote job. Remote jobs will set
+    #                           this value if needed and there is no need to set this by hand.
+    #   AP_LCG_SETUP          : The location of a custom LCG software setup file.
+    #   X509_USER_PROXY       : A custom globus user proxy location.
+    #   LANGUAGE, LANG, LC_ALL: Custom language flags.
+    # Arguments:
+    #   1. The name of the setup. "default" (which is itself the default when no name is set)
+    #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
+    #      a custom setup file. See "interactive_setup" for more info.
+
     #
     # prepare local variables
     #
@@ -11,8 +27,6 @@ setup() {
     local setup_name="${1:-default}"
     local setup_is_default="false"
     [ "$setup_name" = "default" ] && setup_is_default="true"
-    local shell_is_bash="false"
-    [ ! -z "$BASH_VERSION" ] && shell_is_bash="true"
 
 
     #
@@ -38,62 +52,6 @@ setup() {
 
     # proxy
     [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
-
-
-    #
-    # helper functions
-    #
-
-    ap_create_venv() {
-        local name="$1"
-        if [ -z "$name" ]; then
-            2>&1 echo "venv name must not be empty"
-            return "1"
-        fi
-
-        # create the venv the usual way
-        python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
-
-        # remove csh and fish support
-        rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
-
-        # replace absolute paths in the activation file to make it relocateable for bash and zsh
-        sed -i -r \
-            's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
-            "${AP_VENV_PATH}/${name}/bin/activate"
-
-        ap_make_venv_relocateable "$name"
-    }
-    $shell_is_bash && export -f ap_create_venv
-
-    ap_make_venv_relocateable() {
-        local name="$1"
-        if [ -z "$name" ]; then
-            2>&1 echo "venv name must not be empty"
-            return "1"
-        fi
-
-        # use /usr/bin/env in shebang's of bin scripts
-        for f in $( find "${AP_VENV_PATH}/${name}/bin" -type f ); do
-            # must be readable and executable
-            if [ -r "${f}" ] && [ -x "${f}" ]; then
-                sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
-            fi
-        done
-    }
-    $shell_is_bash && export -f ap_make_venv_relocateable
-
-    # helper to create or check a voms proxy
-    ap_voms_proxy() {
-        local mode="${1:-init}"
-        local voms="${AP_VOMS:-cms}"
-        if [ "$mode" = "check" ]; then
-            voms-proxy-info
-        else
-            voms-proxy-init -voms "$AP_VOMS" --valid "196:00" --out "$X509_USER_PROXY"
-        fi
-    }
-    $shell_is_bash && export -f ap_voms_proxy
 
 
     #
@@ -216,6 +174,18 @@ setup() {
 }
 
 interactive_setup() {
+    # Starts the interactive part of the setup by querying for values for certain environment
+    # variables with useful defaults. When a custom, named setup is triggered, the values of all
+    # queried environment variables are stored in a file in $AP_BASE/.setups.
+    # Required environment variables:
+    #   AP_BASE: The base path of the AP project.
+    # Arguments:
+    #   1. The name of the setup. "default" (which is itself the default when no name is set)
+    #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
+    #      a custom setup file.
+    #   2. The location of the setup file when a custom, named setup was triggered. Defaults to
+    #      "$AP_BASE/.setups/$setup_name.sh"
+
     local setup_name="${1:-default}"
     local env_file="${2:-$AP_BASE/.setups/$setup_name.sh}"
     local env_file_tmp="$env_file.tmp"
@@ -320,7 +290,65 @@ interactive_setup() {
     fi
 }
 
+
+ap_create_venv() {
+    # Creates a new virtual environment inside $AP_VENV_PATH, exchanges all absolute paths in the
+    # activation script with relative ones, and makes the environment relocatable.
+    # Required environment variables:
+    #   AP_VENV_PATH: The base path where AP virtual environments are stored.
+    # Arguments:
+    #   1. The name of the virtual env inside $AP_VENV_PATH.
+
+    local name="$1"
+    if [ -z "$name" ]; then
+        2>&1 echo "venv name must not be empty"
+        return "1"
+    fi
+
+    # create the venv the usual way
+    python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
+
+    # remove csh and fish support
+    rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
+
+    # replace absolute paths in the activation file to make it relocateable for bash and zsh
+    sed -i -r \
+        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+        "${AP_VENV_PATH}/${name}/bin/activate"
+
+    ap_make_venv_relocateable "$name"
+}
+[ ! -z "$BASH_VERSION" ] && export -f ap_create_venv
+
+
+ap_make_venv_relocateable() {
+    # Traverses all executables in a virtual environment directory located in $AP_VENV_PATH and
+    # replaces absolute shebangs with relative ones using /use/bin/env.
+    # Required environment variables:
+    #   AP_VENV_PATH: The base path where AP virtual environments are stored.
+    # Arguments:
+    #   1. The name of the virtual env inside $AP_VENV_PATH.
+
+    local name="$1"
+    if [ -z "$name" ]; then
+        2>&1 echo "venv name must not be empty"
+        return "1"
+    fi
+
+    # use /usr/bin/env in shebang's of bin scripts
+    for f in $( find "${AP_VENV_PATH}/${name}/bin" -type f ); do
+        # must be readable and executable
+        if [ -r "${f}" ] && [ -x "${f}" ]; then
+            sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
+        fi
+    done
+}
+[ ! -z "$BASH_VERSION" ] && export -f ap_make_venv_relocateable
+
+
 action() {
+    # Invokes the main action of this script, catches possible error codes and prints a message.
+
     if setup "$@"; then
         echo -e "\x1b[0;49;35manalysis playground successfully setup\x1b[0m"
         return "0"

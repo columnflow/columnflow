@@ -14,3 +14,11 @@ div.wy-side-nav-search div.version {
 form#rtd-search-form > input[type="text"] {
     border: 0 !important;
 }
+
+/* full width of the content div */
+div.wy-nav-content {
+    padding: 1.618em 3.236em;
+    height: 100%;
+    max-width: 100% !important;
+    margin: auto;
+}
