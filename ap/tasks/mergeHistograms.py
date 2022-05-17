@@ -26,10 +26,10 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
     merge_factor = 10
     
     def merge_workflow_requires(self):
-        return FillHistograms.req(self, _exclude=['start_branch','end_branch','branches'])
+        return Histograms.req(self, _exclude=['start_branch','end_branch','branches'])
     
     def merge_requires(self, start_leaf, end_leaf):
-        return [FillHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
+        return [Histograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
         return self.local_target(f"histograms_{self.dataset}.pickle")
@@ -55,4 +55,4 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
 
 
 # trailing imports
-from ap.tasks.fillHistograms import FillHistograms
+from ap.tasks.histograms import Histograms

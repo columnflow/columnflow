@@ -9,7 +9,7 @@ import math
 import law
 import luigi
 
-from ap.tasks.functions import functions_general as gfcts
+from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
@@ -58,8 +58,12 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     def workflow_requires(self):
         #workflow super classes might already define requirements, so extend them
         reqs = super(TestPlotting, self).workflow_requires()
-        reqs["hist"] = FillHistograms.req(self, branches=(0,1))
-        return reqs
+        c = self.config_inst
+        # determine which datasets to require
+        if not self.processes:
+            self.processes = c.analysis.get_processes(c).names()
+        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
+        return {d: Histograms.req(self, branch=0, dataset=d) for d in self.datasets}
 
     def requires(self):
         #print('Hello from requires')
@@ -67,8 +71,8 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         # determine which datasets to require
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
-        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
-        return {d: FillHistograms.req(self, branches=(0,1), dataset=d) for d in self.datasets}
+        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
+        return {d: Histograms.req(self, branch=0, dataset=d) for d in self.datasets}
    
     def output(self):
         #print('Hello from output')
@@ -93,18 +97,20 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             colors = []
             label = []
             category = self.branch_data['category']
-            
+            print(category)
         
             with self.publish_step("Adding histograms together ..."):
                 for p in self.processes:
                     #print("-------- process:", p)
                     h_proc = None
-                    for d in gfcts.getDatasetNamesFromProcess(c, p):
+                    for d in getDatasetNamesFromProcess(c, p):
                         #print("----- dataset:", d)
                         h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-
-                        if category=="incl":
-                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                        # not sure how to handle events without category
+                        if category=="no_cat":
+                            leaf_cats = ["no_cat"]
+                        elif category=="incl":
+                            leaf_cats = [cat.name for cat in c.get_leaf_categories()] + ["no_cat"]
                         elif c.get_category(category).is_leaf_category:
                             leaf_cats=[category]
                         else:
@@ -199,4 +205,4 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             self.publish_message(f"TestPlotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")
 
 # trailing imports
-from ap.tasks.fillHistograms import FillHistograms
+from ap.tasks.histograms import Histograms

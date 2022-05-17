@@ -9,7 +9,7 @@ import math
 import law
 import luigi
 
-from ap.tasks.functions import functions_general as gfcts
+from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
@@ -64,16 +64,13 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     def workflow_requires(self):
         #workflow super classes might already define requirements, so extend them
         reqs = super(Plotting, self).workflow_requires()
-        #print('Hello from requires')
         c = self.config_inst
         # determine which datasets to require
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
-        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
+        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
         return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
 
-        #reqs["hist"] = MergeHistograms.req(self)
-        #return reqs
     
 
 
@@ -83,7 +80,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         # determine which datasets to require
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
-        self.datasets = gfcts.getDatasetNamesFromProcesses(c, self.processes)
+        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
         return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
 
 
@@ -114,7 +111,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 for p in self.processes:
                     #print("-------- process:", p)
                     h_proc = None
-                    for d in gfcts.getDatasetNamesFromProcess(c, p):
+                    for d in getDatasetNamesFromProcess(c, p):
                         #print("----- dataset:", d)
                         h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
 

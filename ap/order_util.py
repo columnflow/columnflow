@@ -6,17 +6,6 @@ Some functions that seemed useful in general
 
 """ inputs list of process names, outputs list of dataset names """
 def getDatasetNamesFromProcesses(config, processes):
-    '''
-    procs = []
-    if processes:
-        procs = [config.get_process(p) for p in processes]
-    else:
-        print("From getDatasetNamesFromProcesses: given list of processes is empty. Take all processes instead.")
-        procs = config.analysis.get_processes(config)
-    datasets = []
-    for p in procs:
-        datasets += getDatasetNamesFromProcess(config, p.name)
-    '''
     if not processes:
         raise ValueError("From getDatasetNamesFromProcesses: given list of processes is empty.")
     datasets=[]
