@@ -229,7 +229,8 @@ interactive_setup() {
         # otherwise, query interactively
         local value="$default"
         if $setup_is_default; then
-            [ ! -z "${!varname}" ] && value="${!varname}"
+            # set the variable when existing
+            eval "value=\${$varname:-\$value}"
         else
             printf "$text (\x1b[1;49;39m$varname\x1b[0m, default \x1b[1;49;39m$default_text\x1b[0m):  "
             read query_response
