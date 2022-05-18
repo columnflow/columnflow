@@ -24,14 +24,14 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         reqs = super(ReduceEvents, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["diff"] = CalibrateObjects.req(self)
+            reqs["calib"] = CalibrateObjects.req(self)
             reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "diff": CalibrateObjects.req(self),
+            "calib": CalibrateObjects.req(self),
             "sel": SelectEvents.req(self),
         }
 
@@ -42,10 +42,9 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.localize
     @ensure_proxy
     def run(self):
-        import awkward as ak
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_nano_aliases, remove_nano_column,
+            add_nano_aliases, remove_nano_column, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -74,7 +73,7 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
             # iterate over chunks of events and diffs
             with ChunkedReader(
-                [ufile, inputs["diff"].path, inputs["sel"]["res"].path],
+                [ufile, inputs["calib"].path, inputs["sel"]["res"].path],
                 source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
                 read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
             ) as reader:
@@ -109,7 +108,7 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
                     output_chunks[pos.index] = chunk
-                    reader.add_task(ak.to_parquet, (events, chunk.path))
+                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
@@ -190,3 +189,37 @@ class GatherReductionStats(DatasetTask):
         self.publish_message(f"max. size: {law.util.human_bytes(max_size_merged, fmt=True)}")
         self.publish_message(f"avg. size: {law.util.human_bytes(avg_size_merged, fmt=True)}")
         self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
+
+
+class MergeReducedEvents(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
+
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+
+    shifts = set(SelectEvents.shifts)
+
+    # recursively merge 8 files into one
+    merge_factor = 8
+
+    # the key of the config that defines the merging in the branch map of DatasetTask
+    file_merging = "after_reduction"
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return ReduceEvents.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+
+    def merge_output(self):
+        # use the branch_map defined in DatasetTask to compute the number of files after merging
+        n_merged = len(DatasetTask.create_branch_map(self))
+        return law.SiblingFileCollection([
+            self.local_target(f"events_{i}.parquet")
+            for i in range(n_merged)
+        ])
+
+    def merge(self, inputs, output):
+        law.pyarrow.merge_parquet_task(self, inputs, output)

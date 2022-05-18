@@ -25,6 +25,12 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    skip_check = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="whether to skip the check of the number of obtained LFNs vs. expected ones; "
+        "default: False",
+    )
     version = None
 
     def single_output(self):
@@ -44,7 +50,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 raise Exception(f"dasgoclient query failed:\n{out}")
             lfns.extend(out.strip().split("\n"))
 
-        if len(lfns) != self.dataset_info_inst.n_files:
+        if not self.skip_check and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError("number of lfns does not match number of files "
                 f"for dataset {self.dataset_inst.name}")
 

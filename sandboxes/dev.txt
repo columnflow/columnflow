@@ -1,4 +1,4 @@
 # no version defined
 # not to be installed separately
 
-ipython==8.3.*
+ipython

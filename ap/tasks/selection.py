@@ -28,14 +28,14 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         }
 
     def output(self):
-        return self.local_target(f"diff_{self.branch}.parquet")
+        return self.local_target(f"calib_{self.branch}.parquet")
 
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import awkward as ak
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_nano_column,
+            sorted_ak_to_parquet,
         )
         from ap.calibration import Calibrator
 
@@ -89,7 +89,7 @@ class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
                     output_chunks[(file_index, pos.index)] = chunk
-                    reader.add_task(ak.to_parquet, (events, chunk.path))
+                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:
@@ -108,29 +108,29 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         reqs = super(SelectEvents, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["diff"] = CalibrateObjects.req(self)
+            reqs["calib"] = CalibrateObjects.req(self)
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "diff": CalibrateObjects.req(self),
+            "calib": CalibrateObjects.req(self),
         }
 
     def output(self):
         return {
             "res": self.local_target(f"results_{self.branch}.parquet"),
-            "stat": self.local_target(f"stat_{self.branch}.json"),
+            "stat": self.local_target(f"stats_{self.branch}.json"),
         }
 
     @law.decorator.safe_output
     @law.decorator.localize
     @ensure_proxy
     def run(self):
-        import awkward as ak
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
+            sorted_ak_to_parquet,
         )
         from ap.selection import Selector
 
@@ -163,7 +163,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
             # iterate over chunks of events and diffs
             with ChunkedReader(
-                [ufile, inputs["diff"].path],
+                [ufile, inputs["calib"].path],
                 source_type=["coffea_root", "awkward_parquet"],
                 read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
             ) as reader:
@@ -185,7 +185,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
                     output_chunks[(file_index, pos.index)] = chunk
-                    reader.add_task(ak.to_parquet, (results.to_ak(), chunk.path))
+                    reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
         # merge the mask files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
