@@ -124,6 +124,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     
                         h_in = h_in[{"category": leaf_cats}]
                         h_in = h_in[{"category": sum}]
+                        h_in = h_in[{"shift": "nominal"}]
                         print("dataset {}: {}".format(d, h_in[::sum]))
 
                         if h_proc==None:

@@ -89,7 +89,7 @@ config_2018.set_aux("keep_columns", {
         "LHEWeight_originalXWGTUP",
         "jet_high_multiplicity",
     },
-    "Histograms": {
+    "CreateHistograms": {
         #"Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
         #"Muon_pt", "Muon_eta", "Muon_tightId",
         #"Electron_pt", "Electron_eta", "Electron_cutBased",

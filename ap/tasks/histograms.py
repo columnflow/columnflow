@@ -12,13 +12,12 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
-# trailing imports
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateObjects, SelectEvents
 
 
 
-class Histograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
 
@@ -26,7 +25,7 @@ class Histograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     shifts = CalibrateObjects.shifts | SelectEvents.shifts
 
     def workflow_requires(self):
-        reqs = super(Histograms, self).workflow_requires()
+        reqs = super(CreateHistograms, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["diff"] = CalibrateObjects.req(self)
@@ -103,38 +102,17 @@ class Histograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     # add aliases
                     events = add_nano_aliases(events, aliases, remove_src=True)
                     # apply the event mask
-                    events = events[sel.event]
+                    events = events[sel.event]                    
+                    print(len(events))
 
-                    # apply object masks
-                    events.Jet = events.Jet[sel.objects.jet[sel.event]]
-                    events.Muon = events.Muon[sel.objects.muon[sel.event]]
-                    events.Electron = events.Electron[sel.objects.electron[sel.event]]
-                    #events.Deepjet = events.Deepjet[sel.objects.deepjet[sel.event]]
-
+                    # apply object masks (NOTE: when applying object masks, categorisation is not working....?)
+                    #events.Deepjet = events.Jet[sel.objects.jet[sel.event]]
+                    #events.Jet = events.Jet[sel.objects.jet[sel.event]]
+                    #events.Muon = events.Muon[sel.objects.muon[sel.event]]
+                    #events.Electron = events.Electron[sel.objects.electron[sel.event]]
 
                     
-                    # determine which event belongs in which category
-                    # this could be included in an earlier task... (part of defineSelection? Returning a mask for each category? Or an array of strings (requires the categories to be orthogonal))
-                    '''
-                    cat_titles = ["no_cat"]
-                    cat_array = "no_cat"
-                    mask_int = 0
-                    for cat in self.config_inst.get_leaf_categories():
-                        cat_sel = cat.selection
-                        cat_titles.append(cat.name)
-                        mask = Selector.get(cat_sel)(events)
-                        #mask = getattr(fcts, cat_sel)(events)
-                        cat_array = np.where(mask, cat.name, cat_array)
-                        mask_int = mask_int + np.where(mask,1,0) # to check orthogonality of categories
-                    if not ak.all(mask_int==1):
-                        if ak.any(mask_int>=2):
-                            raise ValueError('Leaf categories are supposed to be fully orthogonal')
-                        else:
-                            #raise ValueError('Some events are without leaf category')
-                            print('Some events are without leaf category')
-
-                    print("categories:", cat_array)
-                    '''
+                    # determine which event belongs in which leaf category
                     cat_titles = categories(events, self.config_inst).columns.cat_titles
                     cat_array = categories(events, self.config_inst).columns.cat_array
                     
@@ -145,7 +123,6 @@ class Histograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     
                     
                     # define & fill histograms
-                    
                     variables = self.config_inst.variables.names()
                     with self.publish_step("looping over all variables in config ...."):
                         for var_name in variables:
@@ -154,16 +131,16 @@ class Histograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                                 h_var = (
                                     hist.Hist.new
                                     .StrCategory(cat_titles, name="category")
+                                    .StrCategory([], name="shift", growth=True)
                                     .Reg(*var.binning, name=var_name, label=var.get_full_x_title())
                                     .Weight()
                                 )
                                 fill_kwargs = {
                                     "category": cat_array,
-                                    #var_name: getattr(fcts, var.expression)(events),
+                                    "shift": self.shift,
                                     var_name: Selector.get(var.expression)(events),
                                     "weight": weight,
                                 }
-                                #print(Selector.get(var.expression)(events))
                                 h_var.fill(**fill_kwargs)
                                 if first:
                                     histograms[var_name] = h_var

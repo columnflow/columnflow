@@ -14,6 +14,8 @@ from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProce
 from ap.tasks.framework import ConfigTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
+from ap.tasks.histograms import CreateHistograms
+
 class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
@@ -28,7 +30,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     )
     categories = law.CSVParameter(
         default = ("incl"),
-        description="String of categories to create plots for"
+        description="List of categories to create plots for"
     )
 
     def store_parts(self):
@@ -63,7 +65,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: Histograms.req(self, branch=0, dataset=d) for d in self.datasets}
+        return {d: CreateHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
 
     def requires(self):
         #print('Hello from requires')
@@ -72,8 +74,8 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: Histograms.req(self, branch=0, dataset=d) for d in self.datasets}
-   
+        return {d: CreateHistograms.req(self, branch=0, dataset=d) for d in self.datasets}
+
     def output(self):
         #print('Hello from output')
         return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
@@ -81,8 +83,6 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import time
-        t0 = time.time()
         with self.publish_step(f"Hello from TestPlotting for variable {self.branch_data['variable']}, category {self.branch_data['category']}") as runtime:
             import numpy as np
             import hist
@@ -106,11 +106,9 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     for d in getDatasetNamesFromProcess(c, p):
                         #print("----- dataset:", d)
                         h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
-                        # not sure how to handle events without category
-                        if category=="no_cat":
-                            leaf_cats = ["no_cat"]
-                        elif category=="incl":
-                            leaf_cats = [cat.name for cat in c.get_leaf_categories()] + ["no_cat"]
+
+                        if category=="incl":
+                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
                             leaf_cats=[category]
                         else:
@@ -118,6 +116,7 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     
                         h_in = h_in[{"category": leaf_cats}]
                         h_in = h_in[{"category": sum}]
+                        h_in = h_in[{"shift": "nominal"}]
 
                         if h_proc==None:
                             h_proc = h_in.copy()
@@ -185,7 +184,6 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     facecolor="grey",
                     linewidth = 0,
                     hatch = "///",
-                    #fill=True,
                     color = "grey",
                 )
             
@@ -200,9 +198,5 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             
                 
             self.output().dump(plt, formatter="mpl")
-            from law.util import human_duration
-            print(human_duration(seconds=time.time()-t0))
             self.publish_message(f"TestPlotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")
 
-# trailing imports
-from ap.tasks.histograms import Histograms

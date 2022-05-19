@@ -15,21 +15,19 @@ from law.contrib.tasks import ForestMerge
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
+from ap.tasks.histograms import CreateHistograms
+
 class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    #processes = law.CSVParameter(description="List of processes")
-    #variables = law.CSVParameter(description="List of variables to plot")
-    
-
     merge_factor = 10
     
     def merge_workflow_requires(self):
-        return Histograms.req(self, _exclude=['start_branch','end_branch','branches'])
+        return CreateHistograms.req(self, _exclude=['start_branch','end_branch','branches'])
     
     def merge_requires(self, start_leaf, end_leaf):
-        return [Histograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
+        return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
         return self.local_target(f"histograms_{self.dataset}.pickle")
@@ -50,9 +48,3 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
                 merged[k] = h_out
                 
             output.dump(merged, formatter="pickle")
-    
-
-
-
-# trailing imports
-from ap.tasks.histograms import Histograms
