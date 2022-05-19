@@ -32,7 +32,7 @@ def req_muon(events):
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 @selector(uses={"Jet_pt", "Jet_eta"})
 def req_forwardJet(events):
-    mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 5.0)
+    mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 @selector(uses={"Jet_pt", "Jet_eta", "Jet_btagDeepFlavB"})
 def req_deepjet(events):
@@ -124,17 +124,18 @@ def categories(events, config):
     cat_array = "no_cat"
     mask_int = 0
     for cat in config.get_leaf_categories():
+        #print(cat.name)
         cat_sel = cat.selection
         cat_titles.append(cat.name)
         mask = globals()[cat_sel](events)
         cat_array = np.where(mask, cat.name, cat_array)
         mask_int = mask_int + np.where(mask,1,0) # to check orthogonality of categories
-        if not ak.all(mask_int==1):
-            if ak.any(mask_int>=2):
-                raise ValueError('Leaf categories are supposed to be fully orthogonal')
-            else:
-                #raise ValueError('Some events are without leaf category')
-                print('Some events are without leaf category')
+    if not ak.all(mask_int==1):
+        if ak.any(mask_int>=2):
+            raise ValueError('Leaf categories are supposed to be fully orthogonal')
+        else:
+            raise ValueError('Some events are without leaf category')
+            #print('Some events are without leaf category')
     return SelectionResult(
         columns={"cat_titles": cat_titles, "cat_array": cat_array}
     )
@@ -158,6 +159,16 @@ def jet_selection_test(events, stats):
         columns={"jet_high_multiplicity": jet_high_multiplicity},
     )
 
+
+@selector(uses={req_deepjet})
+def deepjet_selection_test(events, stats):
+    deepjet_indices = req_deepjet(events)
+    deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
+
+    return SelectionResult(
+        steps={"deepjet": deepjet_sel},
+        objects={"deepjet": deepjet_indices},
+    )
 
 @selector(uses={req_muon})
 def muon_selection_test(events, stats):
@@ -204,7 +215,7 @@ def lepton_selection_test(events, stats):
 
 
 
-@selector(uses={jet_selection_test, lepton_selection_test, "LHEWeight_originalXWGTUP"})
+@selector(uses={jet_selection_test, lepton_selection_test, deepjet_selection_test, "LHEWeight_originalXWGTUP"})
 def select_test(events, stats):
     # example cuts:
     # - jet_selection_test
@@ -215,14 +226,16 @@ def select_test(events, stats):
 
     jet_results = jet_selection_test(events, stats)
     lepton_results = lepton_selection_test(events, stats)
+    deepjet_results = deepjet_selection_test(events, stats)
 
     # combined event selection after all steps
-    event_sel = jet_results.steps.jet & lepton_results.steps.lepton
+    event_sel = jet_results.steps.jet & lepton_results.steps.lepton & deepjet_results.steps.deepjet
 
     # build and merge selection results
     results = SelectionResult(main={"event": event_sel})
     results += jet_results
     results += lepton_results
+    results += deepjet_results
 
     # increment stats
     events_sel = events[event_sel]
