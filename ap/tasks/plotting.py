@@ -16,7 +16,8 @@ from ap.util import ensure_proxy
 
 class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = (),

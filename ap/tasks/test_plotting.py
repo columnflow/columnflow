@@ -18,7 +18,8 @@ from ap.tasks.histograms import CreateHistograms
 
 class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = (),

@@ -8,7 +8,7 @@ __all__ = [
     "mandatory_coffea_columns",
     "ArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
     "get_ak_routes", "find_nano_route", "remove_nano_column", "add_nano_alias", "add_nano_aliases",
-    "update_ak_array", "flatten_nano_events",
+    "update_ak_array", "sort_nano_fields", "sorted_ak_to_parquet", "flatten_ak_array",
 ]
 
 
@@ -39,6 +39,7 @@ mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
 
 def get_ak_routes(
     ak_array: ak.Array,
+    max_depth: int = 0,
 ) -> List[Tuple[str]]:
     """
     Extracts the list of all routes pointing to columns of a potentially deeply nested akward array
@@ -57,6 +58,10 @@ def get_ak_routes(
         #    ("Jet", "mass"),
         #    ...
         # ]
+
+    When positive, *max_depth* controls the maximum size of returned route tuples. When negative,
+    routes are shortened by the passed amount of elements. In both cases, only unique routes are
+    returned.
     """
     routes = []
 
@@ -64,15 +69,20 @@ def get_ak_routes(
     lookup = [(ak_array, ())]
     while lookup:
         arr, route = lookup.pop(0)
-        if arr.fields:
+        if arr.fields and (max_depth <= 0 or len(route) < max_depth):
             # extend the lookup with nested fields
             lookup.extend([
                 (getattr(arr, field), route + (field,))
                 for field in arr.fields
             ])
         else:
-            # no sub fields found, store the route
-            routes.append(route)
+            # no sub fields found or positive max_depth reached, store the route
+            # but check negative max_depth first
+            if max_depth < 0:
+                route = route[:max_depth]
+            # add when not empty and unique
+            if route and route not in routes:
+                routes.append(route)
 
     return routes
 
@@ -136,12 +146,17 @@ def remove_nano_column(
         # trivial case: remove a top level column
         nano_array = nano_array[[f for f in nano_array.fields if f != route[0]]]
     else:
-        # nested case: get the last containing object and remove the sub column
+        # nested case: given the route ("a", "b", "c"), set nano_array["a", "b"] to a view of "b"
+        # with all fields but "c" using __setitem__ syntax (and in particular not __setattr__!)
         sub_route, remove_field = route[:-1], route[-1]
-        sub_array = nano_array
-        for sub_field in sub_route:
-            sub_array = getattr(sub_array, sub_field)
-        nano_array[sub_route] = sub_array[[f for f in sub_array.fields if f != remove_field]]
+        sub_array = nano_array[sub_route]
+        # determine remaining fields
+        remaining_fields = [f for f in sub_array.fields if f != remove_field]
+        # if no fields are left, remove the entire sub_view
+        if not remaining_fields:
+            return remove_nano_column(nano_array, route[:-1])
+        # set the reduced view
+        nano_array.__setitem__(sub_route, sub_array[remaining_fields])
 
     return nano_array
 
@@ -212,19 +227,67 @@ def update_ak_array(
     return ak_array
 
 
-def flatten_nano_events(
-    events: coffea.nanoevents.methods.base.NanoEventsArray,
+def sort_nano_fields(
+    ak_array: ak.Array,
+    sort_fn: Optional[Callable] = None,
+) -> ak.Array:
+    """
+    Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
+    *sort_fn* is set, it is used internally for sorting field names.`
+    """
+    # sort the top level fields
+    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
+
+    # identify fields with nested structure, then sort and reassign them
+    nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
+    for field in nested_fields:
+        ak_array[field] = sort_nano_fields(ak_array[field], sort_fn=sort_fn)
+
+    return ak_array
+
+
+def sorted_ak_to_parquet(
+    ak_array: ak.Array,
+    *args,
+    **kwargs,
+) -> None:
+    """
+    Sorts the fields in an awkward array *ak_array* resurvively with :py:func:`sort_nano_fields` and
+    saves it as a parquet file using ``awkward.to_parquet`` which receives all additional *args* and
+    *kwargs*.
+
+    .. note::
+
+        Since the order of fields in awkward arrays resulting from reading nano files might be
+        arbitrary (depending on streamer info in the original root files), but formats such as
+        parquet highly depend on the order for building internal table schemes, one should always
+        make use of this function! Otherwise, operations like file merging might fail due to
+        differently ordered schemas.
+    """
+    ak.to_parquet(sort_nano_fields(ak_array), *args, **kwargs)
+
+
+def flatten_ak_array(
+    ak_array: ak.Array,
+    name_fn: Optional[Callable] = None,
     columns: Optional[Union[list, tuple, set, Callable]] = None,
 ) -> OrderedDict:
     """
-    Flattens a coffea nano events array *events*, assumed to have NanoAODSchema, into a dictionary
-    that maps full original column names back to single awkward arrays. The returned dictionary
-    might be used in conjuction with ``ak.Array`` to create a single array again. The columns to
-    save can be defined via *columns* which can be a sequence of column names or a function
-    receiving a column name and returning a bool.
+    Flattens a nested awkward array *ak_array* into a dictionary that maps joined column names to
+    single awkward arrays. The returned dictionary might be used in conjuction with ``ak.Array`` to
+    create a single array again.
+
+    :py:func:`get_ak_routes` is used internally to determine the nested structure of the array. The
+        name of flat columns in the returned dictionary is build via *name_fn*. When not set, nested
+        routes are joined via underscore. The columns to save can be defined via *columns* which can
+        be a sequence of column names or a function receiving a column name and returning a bool.
     """
     # use an ordered mapping to somewhat preserve row adjacency
-    flat_events = OrderedDict()
+    flat_array = OrderedDict()
+
+    # default name_fn
+    if not name_fn:
+        name_fn = lambda route: "_".join(route)
 
     # helper to evaluate whether to keep a column
     keep_column = lambda name: True
@@ -233,21 +296,13 @@ def flatten_nano_events(
     elif callable(columns):
         keep_column = columns
 
-    # use a lookup pattern, looping over a source and its absolute field name
-    lookup = [(events, None)]
-    while lookup:
-        source, abs_field = lookup.pop()
-        if source.fields:
-            # source has sub fields, extend the lookup
-            lookup.extend(
-                (getattr(source, field), f"{abs_field}_{field}" if abs_field else field)
-                for field in source.fields[::-1]
-            )
-        elif keep_column(abs_field):
-            # source has no deeper structure, just add it
-            flat_events[abs_field] = source
+    # go through routes, create new names and store arrays
+    for route in get_ak_routes(ak_array):
+        column_name = name_fn(route)
+        if keep_column(column_name):
+            flat_array[column_name] = ak_array[route]
 
-    return flat_events
+    return flat_array
 
 
 class ArrayFunction(object):
@@ -390,6 +445,8 @@ class ChunkedReader(object):
                 # chunk is a NanoAODEventsArray as returned by read_coffea_root
                 jet_pts = chunk.Jet.pt
                 print(f"jet pts of chunk {chunk.index}: {jet_pts}")
+
+    .. code-block:: python
 
         # iterate through multiple files simultaneously
         with ChunkedReader(

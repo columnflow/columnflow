@@ -19,7 +19,7 @@ from ap.tasks.mergeHistograms import MergeShiftograms
 class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = ("st_tchannel_t"),

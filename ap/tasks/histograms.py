@@ -19,7 +19,7 @@ from ap.tasks.selection import CalibrateObjects, SelectEvents
 
 class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
 
     shifts = CalibrateObjects.shifts | SelectEvents.shifts

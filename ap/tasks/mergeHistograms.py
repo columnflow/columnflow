@@ -21,7 +21,7 @@ from ap.tasks.histograms import CreateHistograms
 class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"  
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     merge_factor = 10
     
@@ -55,7 +55,7 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
 class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"    
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     dataset = luigi.Parameter(
         default = "st_tchannel_t",

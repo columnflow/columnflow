@@ -332,10 +332,26 @@ class DatasetTask(ShiftTask):
             # file_merging refers to an entry in merging_info which can be nested as
             # dataset -> shift -> version
             n_merge = merging_info[self.file_merging]
-            for key in [self.dataset_inst.name, self.shift_inst.name, self.version]:
-                n_merge = n_merge.get(key, n_files)
-                if not isinstance(n_merge, dict):
-                    break
+
+            # mapped to dataset?
+            if isinstance(n_merge, dict):
+                n_merge = n_merge.get(self.dataset_inst.name, n_files)
+
+            # mapped to shift?
+            if self.shift_inst and isinstance(n_merge, dict):
+                n_merge = n_merge.get(self.shift_inst.name, n_merge.get("nominal", n_files))
+
+            # mapped to version?
+            if self.version and isinstance(n_merge, dict):
+                n_merge = n_merge.get(self.version, n_files)
+
+            if not isinstance(n_merge, int):
+                raise TypeError(
+                    "the merging factor in the file_merging config must be an integer, but got "
+                    f"'{n_merge}' for dataset {self.dataset_inst}, shift {self.shift_inst} and "
+                    f"version {self.version}",
+                )
+
             n_merge = n_merge or n_files
         else:
             # no merging at all

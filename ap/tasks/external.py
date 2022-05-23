@@ -25,6 +25,12 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    skip_check = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="whether to skip the check of the number of obtained LFNs vs. expected ones; "
+        "default: False",
+    )
     version = None
 
     def single_output(self):
@@ -44,7 +50,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 raise Exception(f"dasgoclient query failed:\n{out}")
             lfns.extend(out.strip().split("\n"))
 
-        if len(lfns) != self.dataset_info_inst.n_files:
+        if not self.skip_check and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError("number of lfns does not match number of files "
                 f"for dataset {self.dataset_inst.name}")
 
@@ -60,6 +66,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         remote_fs: Union[str, List[str], Tuple[str]] = (
             "wlcg_fs_desy_store",
             "wlcg_fs_infn_redirector",
+            "wlcg_fs_global_redirector",
         ),
     ) -> None:
         """
@@ -94,6 +101,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_file = law.wlcg.WLCGFileTarget(lfn, fs=fs)
                 input_stat = input_file.exists(stat=True)
                 if input_stat:
+                    branch_task.publish_message(f"using fs {fs}")
                     break
             else:
                 raise Exception(f"LFN {lfn} not found at any remote fs {remote_fs}")

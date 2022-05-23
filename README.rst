@@ -1,7 +1,7 @@
 Analysis playground
 ===================
 
-.. image:: https://github.com/uhh-cms/analysis_playground/workflows/Lint%20and%20test/badge.svg
+.. image:: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml/badge.svg)
    :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
