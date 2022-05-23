@@ -112,7 +112,7 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     #cat_array = categories(events, self.config_inst).columns.cat_array
                     
                     # apply object masks (NOTE: when applying object masks before categorisation, the categorisation is not working....?)
-                    #events.Deepjet = events.Jet[sel.objects.deepjet[sel.event]]
+                    events.Deepjet = events.Jet[sel.objects.deepjet[sel.event]]
                     events.Jet = events.Jet[sel.objects.jet[sel.event]]
                     events.Muon = events.Muon[sel.objects.muon[sel.event]]
                     events.Electron = events.Electron[sel.objects.electron[sel.event]]

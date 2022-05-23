@@ -41,10 +41,9 @@ def req_deepjet(events):
 
 
 # variables (after reducing events)
-@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", req_deepjet, req_jet})
+@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Deepjet_pt", req_jet})
 def variables(events):
     columns = {}
-    #jet_pt_sorted = events.Jet.pt[req_jet(events)]
     jet_pt_sorted = events.Jet.pt
     jet_eta_sorted = events.Jet.eta
     columns["HT"] = ak.sum(jet_pt_sorted, axis=1)
@@ -58,8 +57,8 @@ def variables(events):
     columns["nElectron"] = ak.num(events.Electron.pt, axis=1)
     #print(columns["nElectron"])
     columns["nMuon"] = ak.num(events.Muon.pt, axis=1)
-    columns["nDeepjet"] = ak.num(req_deepjet(events), axis=1) # this does not work properly
-    #print(columns["nDeepjet"])
+    columns["nDeepjet"] = ak.num(events.Deepjet.pt, axis=1)
+    print(columns["nDeepjet"])
 
     columns["Electron1_pt"] = extract(events.Electron.pt, 0)
     columns["Muon1_pt"] = extract(events.Muon.pt, 0)
