@@ -180,7 +180,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events = add_nano_aliases(events, aliases)
 
                     # invoke the selection function
-                    results = select(events, stats)
+                    results = select(events, stats, self.config_inst)
 
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")

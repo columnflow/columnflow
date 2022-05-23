@@ -73,7 +73,8 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         # define nano columns that should be kept, and that need to be loaded
         keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
         categories = Selector.get("categories")
-        load_columns = keep_columns | set(mandatory_coffea_columns) | categories.used_columns #| Selector.get("variables").used_columns
+        variables = Selector.get("variables")
+        load_columns = keep_columns | set(mandatory_coffea_columns) | categories.used_columns #| variables.used_columns
         print("load_columns:")
         print(load_columns)
         remove_routes = None
@@ -105,40 +106,43 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events = events[sel.event]                    
                     print(len(events))
 
-                    # apply object masks (NOTE: when applying object masks, categorisation is not working....?)
-                    #events.Deepjet = events.Jet[sel.objects.jet[sel.event]]
-                    #events.Jet = events.Jet[sel.objects.jet[sel.event]]
-                    #events.Muon = events.Muon[sel.objects.muon[sel.event]]
-                    #events.Electron = events.Electron[sel.objects.electron[sel.event]]
-
                     
                     # determine which event belongs in which leaf category
-                    cat_titles = categories(events, self.config_inst).columns.cat_titles
-                    cat_array = categories(events, self.config_inst).columns.cat_array
+                    #cat_titles = categories(events, self.config_inst).columns.cat_titles
+                    #cat_array = categories(events, self.config_inst).columns.cat_array
                     
+                    # apply object masks (NOTE: when applying object masks before categorisation, the categorisation is not working....?)
+                    #events.Deepjet = events.Jet[sel.objects.deepjet[sel.event]]
+                    events.Jet = events.Jet[sel.objects.jet[sel.event]]
+                    events.Muon = events.Muon[sel.objects.muon[sel.event]]
+                    events.Electron = events.Electron[sel.objects.electron[sel.event]]
+
                     # weights
                     sampleweight = self.config_inst.x.luminosity / self.config_inst.get_dataset(self.dataset).n_events
                     weight = sampleweight * events.LHEWeight.originalXWGTUP
                     #print("weight = ", weight)
                     
+                    results = variables(events)
                     
                     # define & fill histograms
-                    variables = self.config_inst.variables.names()
+                    var_names = self.config_inst.variables.names()
                     with self.publish_step("looping over all variables in config ...."):
-                        for var_name in variables:
+                        for var_name in var_names:
                             with self.publish_step("var: %s" % var_name):
                                 var = self.config_inst.variables.get(var_name)
                                 h_var = (
                                     hist.Hist.new
-                                    .StrCategory(cat_titles, name="category")
+                                    #.StrCategory(events.columns.cat_titles, name="category")
+                                    .StrCategory([], name="category", growth=True)
                                     .StrCategory([], name="shift", growth=True)
                                     .Reg(*var.binning, name=var_name, label=var.get_full_x_title())
                                     .Weight()
                                 )
                                 fill_kwargs = {
-                                    "category": cat_array,
+                                    #"category": cat_array,
+                                    "category": events.cat_array,
                                     "shift": self.shift,
-                                    var_name: Selector.get(var.expression)(events),
+                                    var_name: results.columns[var_name],
                                     "weight": weight,
                                 }
                                 h_var.fill(**fill_kwargs)

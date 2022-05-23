@@ -40,7 +40,33 @@ def req_deepjet(events):
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
-# variables
+# variables (after reducing events)
+@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", req_deepjet, req_jet})
+def variables(events):
+    columns = {}
+    #jet_pt_sorted = events.Jet.pt[req_jet(events)]
+    jet_pt_sorted = events.Jet.pt
+    jet_eta_sorted = events.Jet.eta
+    columns["HT"] = ak.sum(jet_pt_sorted, axis=1)
+    for i in range(1,5):
+        columns["Jet"+str(i)+"_pt"] = extract(jet_pt_sorted, i-1)
+        columns["Jet"+str(i)+"_eta"] = extract(jet_eta_sorted, i-1)
+
+    columns["nJet"] = ak.num(jet_pt_sorted, axis=1)
+    print(columns["nJet"])
+    print(ak.num(req_jet(events), axis=1))
+    columns["nElectron"] = ak.num(events.Electron.pt, axis=1)
+    #print(columns["nElectron"])
+    columns["nMuon"] = ak.num(events.Muon.pt, axis=1)
+    columns["nDeepjet"] = ak.num(req_deepjet(events), axis=1) # this does not work properly
+    #print(columns["nDeepjet"])
+
+    columns["Electron1_pt"] = extract(events.Electron.pt, 0)
+    columns["Muon1_pt"] = extract(events.Muon.pt, 0)
+
+    return SelectionResult(columns=columns)
+
+
 @selector(uses={req_jet})
 def var_nJet(events):
     return ak.num(req_jet(events), axis=1)
@@ -111,13 +137,49 @@ def sel_1e_eq1b(events):
 def sel_1e_ge2b(events):
     return (sel_1e(events)) & (var_nDeepjet(events)>=2)
 
-@selector(uses={sel_1e, var_nDeepjet})
+@selector(uses={sel_1mu, var_nDeepjet})
 def sel_1mu_eq1b(events):
     return (sel_1mu(events)) & (var_nDeepjet(events)==1)
-@selector(uses={sel_1e, var_nDeepjet})
+@selector(uses={sel_1mu, var_nDeepjet})
 def sel_1mu_ge2b(events):
     return (sel_1mu(events)) & (var_nDeepjet(events)>=2)
-# combination of all leaf categories just to get required fields
+@selector(uses={sel_1mu_ge2b, var_HT})
+def sel_1mu_ge2b_lowHT(events):
+    return (sel_1mu_ge2b(events)) & (var_HT(events)<=300)
+@selector(uses={sel_1mu_ge2b, var_HT})
+def sel_1mu_ge2b_highHT(events):
+    return (sel_1mu_ge2b(events)) & (var_HT(events)> 300)
+
+
+
+# combination of all categories, taking categories from each level into account, not only leaf categories
+@selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b, sel_1mu_ge2b_highHT, sel_1mu_ge2b_lowHT})
+def categories(events, config):
+    cat_titles = []# ["no_cat"]
+    cat_array = "no_cat"
+    mask_int = 0
+
+    def write_cat_array(events, categories, cat_titles, cat_array):
+        for cat in categories:
+            cat_titles.append(cat.name)
+            mask = globals()[cat.selection](events)
+            cat_array = np.where(mask, cat.name, cat_array)
+            if not cat.is_leaf_category:
+                cat_titles, cat_array = write_cat_array(events, cat.categories, cat_titles, cat_array)
+        return cat_titles, cat_array
+
+    cat_titles, cat_array = write_cat_array(events, config.categories, cat_titles, cat_array)
+    # TODO checks that categories are set up properly
+    print(cat_titles)
+    print(cat_array)
+    return SelectionResult(
+        #columns={"cat_titles": cat_titles, "cat_array": cat_array}
+        columns={"cat_array": cat_array}
+    )
+            
+    
+'''
+# combination of all leaf categories
 @selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b})
 def categories(events, config):
     cat_titles = ["no_cat"]
@@ -139,7 +201,7 @@ def categories(events, config):
     return SelectionResult(
         columns={"cat_titles": cat_titles, "cat_array": cat_array}
     )
-
+'''
 
 @selector(uses={req_jet})
 def jet_selection_test(events, stats):
@@ -216,7 +278,7 @@ def lepton_selection_test(events, stats):
 
 
 @selector(uses={jet_selection_test, lepton_selection_test, deepjet_selection_test, "LHEWeight_originalXWGTUP"})
-def select_test(events, stats):
+def select_test(events, stats, config):
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test
@@ -236,6 +298,11 @@ def select_test(events, stats):
     results += jet_results
     results += lepton_results
     results += deepjet_results
+
+
+    # include categories into results
+    category_results = categories(events, config)
+    results += category_results
 
     # increment stats
     events_sel = events[event_sel]

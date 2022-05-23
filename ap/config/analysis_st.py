@@ -127,6 +127,14 @@ cat_mu_bb = cat_mu.add_category("1mu_ge2b",
                                 label = "1mu, $\geq$ 2 b-tags",
                                 selection = "sel_1mu_ge2b",
 )
+cat_mu_bb_lowHT = cat_mu_bb.add_category("1mu_ge2b_lowHT",
+                                label = "1mu, $\geq$ 2 b-tags, HT<=300 GeV",
+                                selection = "sel_1mu_ge2b_lowHT",
+)
+cat_mu_bb_highHT = cat_mu_bb.add_category("1mu_ge2b_highHT",
+                                label = "1mu, $\geq$ 2 b-tags, HT>300 GeV",
+                                selection = "sel_1mu_ge2b_highHT",
+)
 
 # define variables
 '''
