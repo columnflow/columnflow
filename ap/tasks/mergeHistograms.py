@@ -5,6 +5,7 @@ Task to merge histogram files
 """
 
 import math
+#import hist
 
 import law
 import luigi
@@ -12,14 +13,15 @@ import luigi
 from functools import reduce
 from law.contrib.tasks import ForestMerge
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.framework import ConfigTask, DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
 from ap.tasks.histograms import CreateHistograms
 
 class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"  
+    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
 
     merge_factor = 10
     
@@ -30,7 +32,7 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target(f"histograms_{self.dataset}.pickle")
+        return self.local_target(f"histograms_{self.dataset}_{self.shift}.pickle")
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
@@ -48,3 +50,78 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
                 merged[k] = h_out
                 
             output.dump(merged, formatter="pickle")
+
+
+class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
+
+    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"    
+    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+
+    dataset = luigi.Parameter(
+        default = "st_tchannel_t",
+        description = "dataset"
+    )
+    systematics = law.CSVParameter(
+        default = ("jec"),
+        description = "List of systematic uncertainties to consider"
+    )
+    
+    def workflow_requires(self):
+        syst_map = super(MergeShiftograms, self).workflow_requires()
+        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        for s in self.systematics:
+            print(s)
+            syst_map[s+"_up"] = MergeHistograms.req(self, shift=s+"_up")
+            syst_map[s+"_down"] = MergeHistograms.req(self, shift=s+"_down")
+        print(syst_map)
+        return syst_map
+    
+    def requires(self):
+        syst_map = {}
+        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        for s in self.systematics:
+            syst_map[s+"up"] = MergeHistograms.req(self, shift=s+"_up")
+            syst_map[s+"down"] = MergeHistograms.req(self, shift=s+"_down")
+        return syst_map
+    
+    def create_branch_map(self):
+        return {0: self.dataset}
+
+    
+    def store_parts(self):
+        parts = super(MergeShiftograms, self).store_parts()
+        systs = ""
+        for s in self.systematics:
+            systs += s + "_"
+        systs = systs[:-1]
+        parts.insert_after("dataset", "systematics", systs)
+        return parts
+    
+    # naming scheme for output? how to include all systematics?
+    def output(self):
+        return self.local_target(f"shiftograms_{self.dataset}.pickle")
+
+    def run(self):
+        with self.publish_step("Hello from MergeShiftograms"):
+            import hist
+            merged = {}
+            print(self.input().keys())
+            syst_keys = self.input().keys()
+            print(syst_keys)
+            inputs_list = [self.input()[i].load(formatter="pickle") for i in syst_keys]
+            inputs_dict = {k:[el[k] for el in inputs_list] for k in inputs_list[0].keys()}
+
+            for k in inputs_dict.keys():
+                h_out = inputs_dict[k][0]
+                for i,h_in in enumerate(inputs_dict[k]):
+                    if(i==0):
+                        continue
+                    h_out += h_in
+                merged[k] = h_out
+
+                
+            self.output().dump(merged, formatter="pickle")
+    
+
+
+            

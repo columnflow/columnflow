@@ -181,7 +181,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
                 from hist.intervals import ratio_uncertainty
                 rax.errorbar(
-                    x=h_data.axes[0].centers,
+                    x=h_data.axes[self.branch_data['variable']].centers,
                     y=h_data.view().value / h_total.view().value,
                     yerr=ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
                     color="k",
@@ -190,7 +190,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     elinewidth=1,
                 )
                 rax.stairs(
-                    edges=h_total.axes[0].edges,
+                    edges=h_total.axes[self.branch_data['variable']].edges,
                     baseline=1 - np.sqrt(h_total.view().variance) / h_total.view().value,
                     values=1 + np.sqrt(h_total.view().variance) / h_total.view().value,
                     facecolor="grey",
