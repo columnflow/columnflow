@@ -41,24 +41,18 @@ def req_deepjet(events):
 
 
 # variables (after reducing events)
-@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Deepjet_pt", req_jet})
+@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Deepjet_pt"})
 def variables(events):
     columns = {}
-    jet_pt_sorted = events.Jet.pt
-    jet_eta_sorted = events.Jet.eta
-    columns["HT"] = ak.sum(jet_pt_sorted, axis=1)
+    columns["HT"] = ak.sum(events.Jet.pt, axis=1)
     for i in range(1,5):
-        columns["Jet"+str(i)+"_pt"] = extract(jet_pt_sorted, i-1)
-        columns["Jet"+str(i)+"_eta"] = extract(jet_eta_sorted, i-1)
+        columns["Jet"+str(i)+"_pt"] = extract(events.Jet.pt, i-1)
+        columns["Jet"+str(i)+"_eta"] = extract(events.Jet.eta, i-1)
 
-    columns["nJet"] = ak.num(jet_pt_sorted, axis=1)
-    print(columns["nJet"])
-    print(ak.num(req_jet(events), axis=1))
+    columns["nJet"] = ak.num(events.Jet.pt, axis=1)
     columns["nElectron"] = ak.num(events.Electron.pt, axis=1)
-    #print(columns["nElectron"])
     columns["nMuon"] = ak.num(events.Muon.pt, axis=1)
     columns["nDeepjet"] = ak.num(events.Deepjet.pt, axis=1)
-    print(columns["nDeepjet"])
 
     columns["Electron1_pt"] = extract(events.Electron.pt, 0)
     columns["Muon1_pt"] = extract(events.Muon.pt, 0)
@@ -79,46 +73,10 @@ def var_nElectron(events):
 def var_nMuon(events):
     import awkward as ak
     return ak.num(req_muon(events), axis=1)
-
 @selector(uses={req_jet, "Jet_pt"})
 def var_HT(events):
     jet_pt_sorted = events.Jet.pt[req_jet(events)]
     return ak.sum(jet_pt_sorted, axis=1)
-
-@selector(uses={req_electron, "Electron_pt"})
-def var_Electron1_pt(events):
-    electron_pt_sorted = events.Electron.pt[req_electron(events)]
-    return extract(electron_pt_sorted, 0)
-@selector(uses={req_muon, "Muon_pt"})
-def var_Muon1_pt(events):
-    muon_pt_sorted = events.Muon.pt[req_muon(events)]
-    return extract(muon_pt_sorted, 0)
-
-@selector(uses={req_jet, "Jet_pt"})
-def var_Jet1_pt(events):
-    jet_pt_sorted = events.Jet.pt[req_jet(events)]
-    return extract(jet_pt_sorted, 0)
-@selector(uses={req_jet, "Jet_pt"})
-def var_Jet2_pt(events):
-    jet_pt_sorted = events.Jet.pt[req_jet(events)]
-    return extract(jet_pt_sorted, 1)
-@selector(uses={req_jet, "Jet_pt"})
-def var_Jet3_pt(events):
-    jet_pt_sorted = events.Jet.pt[req_jet(events)]
-    return extract(jet_pt_sorted, 2)
-@selector(uses={req_jet, "Jet_eta"})
-def var_Jet1_eta(events):
-    jet_eta_sorted = events.Jet.eta[req_jet(events)]
-    return extract(jet_eta_sorted, 0)
-@selector(uses={req_jet, "Jet_eta"})
-def var_Jet2_eta(events):
-    jet_eta_sorted = events.Jet.eta[req_jet(events)]
-    return extract(jet_eta_sorted, 1)
-@selector(uses={req_jet, "Jet_eta"})
-def var_Jet3_eta(events):
-    jet_eta_sorted = events.Jet.eta[req_jet(events)]
-    return extract(jet_eta_sorted, 2)
-
 
 # selection for the main categories
 @selector(uses={var_nMuon, var_nElectron})
@@ -169,8 +127,6 @@ def categories(events, config):
 
     cat_titles, cat_array = write_cat_array(events, config.categories, cat_titles, cat_array)
     # TODO checks that categories are set up properly
-    print(cat_titles)
-    print(cat_array)
     return SelectionResult(
         #columns={"cat_titles": cat_titles, "cat_array": cat_array}
         columns={"cat_array": cat_array}

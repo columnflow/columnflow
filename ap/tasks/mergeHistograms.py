@@ -3,7 +3,7 @@
 """
 Task to merge histogram files
 """
-
+ #auristor
 import math
 #import hist
 
@@ -24,8 +24,11 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     merge_factor = 10
+
+    shifts = CreateHistograms.shifts
     
     def merge_workflow_requires(self):
+        #self.shift_inst = self.config_inst.get_shift(self.shift)
         return CreateHistograms.req(self, _exclude=['start_branch','end_branch','branches'])
     
     def merge_requires(self, start_leaf, end_leaf):
@@ -35,7 +38,7 @@ class MergeHistograms(ForestMerge, DatasetTask, law.LocalWorkflow, HTCondorWorkf
         return self.local_target(f"histograms_{self.dataset}_{self.shift}.pickle")
 
     def merge(self, inputs, output):
-        with self.publish_step("Hello from MergeHistograms"):
+        with self.publish_step(f"Hello from MergeHistograms"):
             import hist
             merged = {}
             inputs_list = [i.load(formatter="pickle") for i in inputs]
@@ -65,6 +68,8 @@ class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         default = ("jec"),
         description = "List of systematic uncertainties to consider"
     )
+
+    #shifts = MergeHistograms.shifts
     
     def workflow_requires(self):
         syst_map = super(MergeShiftograms, self).workflow_requires()
@@ -74,6 +79,7 @@ class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             syst_map[s+"_up"] = MergeHistograms.req(self, shift=s+"_up")
             syst_map[s+"_down"] = MergeHistograms.req(self, shift=s+"_down")
         print(syst_map)
+        import IPython; IPython.embed()
         return syst_map
     
     def requires(self):
@@ -102,7 +108,7 @@ class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         return self.local_target(f"shiftograms_{self.dataset}.pickle")
 
     def run(self):
-        with self.publish_step("Hello from MergeShiftograms"):
+        with self.publish_step(f"Hello from MergeShiftograms"):
             import hist
             merged = {}
             print(self.input().keys())
@@ -121,7 +127,7 @@ class MergeShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
                 
             self.output().dump(merged, formatter="pickle")
-    
+
 
 
             
