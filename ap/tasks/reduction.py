@@ -10,7 +10,7 @@ import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import CalibrateObjects, SelectEvents
+from ap.tasks.selection import CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy
 
 
@@ -18,20 +18,20 @@ class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
-    shifts = CalibrateObjects.shifts | SelectEvents.shifts
+    shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
     def workflow_requires(self):
         reqs = super(ReduceEvents, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateObjects.req(self)
+            reqs["calib"] = CalibrateEvents.req(self)
             reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateObjects.req(self),
+            "calib": CalibrateEvents.req(self),
             "sel": SelectEvents.req(self),
         }
 
@@ -202,6 +202,12 @@ class MergeReducedEvents(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
 
     # the key of the config that defines the merging in the branch map of DatasetTask
     file_merging = "after_reduction"
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
+        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
+        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
