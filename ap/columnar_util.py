@@ -373,7 +373,7 @@ class ArrayFunction(object):
             Set["ArrayFunction"],
         ]] = None,
     ):
-        super(ArrayFunction, self).__init__()
+        super().__init__()
 
         self.func = func
         self.name = name or self.func.__name__
@@ -490,7 +490,7 @@ class ChunkedReader(object):
         read_options: Optional[Union[dict, List[dict]]] = None,
         iter_message: str = "handling chunk {pos.index}",
     ):
-        super(ChunkedReader, self).__init__()
+        super().__init__()
 
         # multiple inputs?
         is_multi = lambda obj: isinstance(obj, (list, tuple))

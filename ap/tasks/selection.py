@@ -18,7 +18,7 @@ class CalibrateEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     def workflow_requires(self):
-        reqs = super(CalibrateEvents, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         return reqs
 
@@ -105,7 +105,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
-        reqs = super(SelectEvents, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["calib"] = CalibrateEvents.req(self)

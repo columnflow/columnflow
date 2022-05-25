@@ -65,14 +65,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             if cls.__name__ in version_map:
                 kwargs["version"] = version_map[cls.__name__]
 
-        return super(AnalysisTask, cls).req_params(inst, **kwargs)
+        return super().req_params(inst, **kwargs)
 
     @classmethod
     def get_version_map(cls, task):
         return task.analysis_inst.get_aux("versions", {})
 
     def __init__(self, *args, **kwargs):
-        super(AnalysisTask, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # store the analysis instance
         self.analysis_inst = self.get_analysis_inst(self.analysis)
@@ -169,13 +169,13 @@ class ConfigTask(AnalysisTask):
         return task.config_inst.get_aux("versions", {})
 
     def __init__(self, *args, **kwargs):
-        super(ConfigTask, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
 
     def store_parts(self):
-        parts = super(ConfigTask, self).store_parts()
+        parts = super().store_parts()
 
         # add the config name
         parts.insert_after("task_class", "config", self.config_inst.name)
@@ -211,7 +211,7 @@ class ShiftTask(ConfigTask):
         defined by this class.
         """
         # the modify_param_values super method must not necessarily be set
-        super_func = super(ShiftTask, cls).modify_param_values
+        super_func = super().modify_param_values
         if callable(super_func):
             params = super_func(params)
 
@@ -257,7 +257,7 @@ class ShiftTask(ConfigTask):
         return set(cls.shifts)
 
     def __init__(self, *args, **kwargs):
-        super(ShiftTask, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # store a reference to the effective shift instance
         self.shift_inst = None
@@ -265,7 +265,7 @@ class ShiftTask(ConfigTask):
             self.shift_inst = self.config_inst.get_shift(self.effective_shift)
 
     def store_parts(self):
-        parts = super(ShiftTask, self).store_parts()
+        parts = super().store_parts()
 
         # add the shift name
         if self.shift_inst:
@@ -286,7 +286,7 @@ class DatasetTask(ShiftTask):
     @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
         # dataset can have shifts, so extend the set of allowed shifts
-        allowed_shifts = super(DatasetTask, cls).determine_allowed_shifts(config_inst, params)
+        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
 
         # dataset must be set
         if "dataset" in params:
@@ -298,7 +298,7 @@ class DatasetTask(ShiftTask):
         return allowed_shifts
 
     def __init__(self, *args, **kwargs):
-        super(DatasetTask, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # store references to the dataset instance
         self.dataset_inst = self.config_inst.get_dataset(self.dataset)
@@ -308,7 +308,7 @@ class DatasetTask(ShiftTask):
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
     def store_parts(self):
-        parts = super(DatasetTask, self).store_parts()
+        parts = super().store_parts()
 
         # insert the dataset
         parts.insert_after("config", "dataset", self.dataset_inst.name)

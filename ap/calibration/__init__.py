@@ -91,7 +91,7 @@ class Calibrator(ArrayFunction):
             str, "Calibrator", Sequence[str], Sequence["Calibrator"], Set[str], Set["Calibrator"],
         ]] = None,
     ):
-        super(Calibrator, self).__init__(func, name=name, uses=uses)
+        super().__init__(func, name=name, uses=uses)
 
         self.produces = law.util.make_list(produces) if produces else []
 

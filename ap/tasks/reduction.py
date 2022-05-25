@@ -10,18 +10,18 @@ import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import CalibrateEvents, SelectEvents
+from ap.tasks.selection import SelectedEventsConsumer, CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy
 
 
-class ReduceEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
     def workflow_requires(self):
-        reqs = super(ReduceEvents, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["calib"] = CalibrateEvents.req(self)

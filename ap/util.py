@@ -84,7 +84,7 @@ class MockModule(object):
     """
 
     def __init__(self, name):
-        super(MockModule, self).__init__()
+        super().__init__()
 
         self._name = name
 

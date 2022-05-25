@@ -203,7 +203,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     default_wlcg_fs = "wlcg_fs_software"
 
     def __init__(self, *args, **kwargs):
-        super(BundleSoftware, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self._checksum = None
 
@@ -285,7 +285,7 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
         # cached bash sandbox that wraps the cmssw environment
         self._cmssw_sandbox = None
 
-        super(BundleCMSSW, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def cmssw_sandbox(self):

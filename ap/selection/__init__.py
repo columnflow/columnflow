@@ -151,7 +151,7 @@ class SelectionResult(object):
         objects: Optional[Union[DotDict, dict]] = None,
         columns: Optional[Union[DotDict, dict]] = None,
     ):
-        super(SelectionResult, self).__init__()
+        super().__init__()
 
         # store fields
         self.main = DotDict(main or {})
@@ -193,7 +193,7 @@ class SelectionResult(object):
             self.main,
             {
                 "steps": ak.zip(self.steps),
-                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged first axis
+                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged axis 1
                 "columns": ak.zip(self.columns),
             }
         ))
