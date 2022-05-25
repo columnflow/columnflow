@@ -364,6 +364,30 @@ class ArrayFunction(object):
 
         return cls._instances[name]
 
+    @classmethod
+    def create_subclass(cls, name: str, attributes: Optional[dict] = None) -> "ArrayFunction":
+        """
+        Creates a new class named *name* inheriting from *this* class. *attributes* are used to add
+        custom class-level members to the newly generated class. By default, the new subclass has a
+        separate instance cache dictionary.
+
+        In general, it would be trivial to create a subclass the usual way, but since the base
+        :py:class:`ArrayFunction` and its features might be used *as is* with a different type and
+        instance cache, this method could be useful. Example:
+
+        .. code-block:: python
+
+            Categorizer = ArrayFunction.create_subclass("Categorizer")
+        """
+        if not attributes:
+            attributes = {}
+
+        # enforce a separate instance cache attribute
+        attributes["_instances"] = {}
+
+        # create and return the subclass
+        return type(name, (cls,), attributes)
+
     def __init__(
         self,
         func: Callable,

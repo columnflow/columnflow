@@ -6,6 +6,7 @@ Tasks related to obtaining, preprocessing and selecting events.
 
 from collections import defaultdict
 
+import luigi
 import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
@@ -13,7 +14,33 @@ from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy
 
 
-class CalibrateEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class CalibratedEventsConsumer(DatasetTask):
+
+    calibrator = luigi.Parameter(
+        default="test",
+        description="the name of the calibrator to the applied; default: test",
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "calibrator", f"calib_{self.calibrator}")
+        return parts
+
+
+class SelectedEventsConsumer(CalibratedEventsConsumer):
+
+    selector = luigi.Parameter(
+        default="test",
+        description="the name of the selector to the applied; default: test",
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "selector", f"select_{self.selector}")
+        return parts
+
+
+class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
@@ -49,8 +76,7 @@ class CalibrateEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         tmp_dir.touch()
 
         # get the calibration function
-        # TODO: get this from the config or a parameter?
-        calibrate = Calibrator.get("calib_test")
+        calibrate = Calibrator.get(self.calibrator)
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | calibrate.used_columns
@@ -97,7 +123,7 @@ class CalibrateEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
 
 
-class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
@@ -149,8 +175,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         aliases = self.shift_inst.x("column_aliases", {})
 
         # get the selection function
-        # TODO: get this from the config or a parameter?
-        select = Selector.get("select_test")
+        select = Selector.get(self.selector)
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | select.used_columns
@@ -205,7 +230,7 @@ class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
-class MergeSelectionStats(DatasetTask, law.tasks.ForestMerge):
+class MergeSelectionStats(SelectedEventsConsumer, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 
@@ -214,7 +239,7 @@ class MergeSelectionStats(DatasetTask, law.tasks.ForestMerge):
 
     @classmethod
     def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
+        params = cls._call_super_cls_method(SelectedEventsConsumer.modify_param_values, params)
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 

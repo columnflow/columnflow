@@ -47,7 +47,7 @@ def muon_selection_test(events, stats):
 
 
 @selector(uses={jet_selection_test, muon_selection_test, "LHEWeight_originalXWGTUP"})
-def select_test(events, stats):
+def test(events, stats):
     # example cuts:
     # - jet_selection_test
     # - muon_selection_test

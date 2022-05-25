@@ -115,7 +115,7 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
 
-class GatherReductionStats(DatasetTask):
+class GatherReductionStats(SelectedEventsConsumer):
 
     merged_size = law.BytesParameter(
         default=500.0,
@@ -191,7 +191,7 @@ class GatherReductionStats(DatasetTask):
         self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
 
 
-class MergeReducedEvents(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
@@ -205,7 +205,7 @@ class MergeReducedEvents(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
 
     @classmethod
     def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
+        params = cls._call_super_cls_method(SelectedEventsConsumer.modify_param_values, params)
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 
