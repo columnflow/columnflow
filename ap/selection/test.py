@@ -24,8 +24,8 @@ def jet_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"jet": jet_sel},
-        objects={"jet": jet_indices},
+        steps={"Jet": jet_sel},
+        objects={"Jet": jet_indices},
         columns={"jet_high_multiplicity": jet_high_multiplicity},
     )
 
@@ -41,8 +41,8 @@ def muon_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"muon": muon_sel},
-        objects={"muon": muon_indices},
+        steps={"Muon": muon_sel},
+        objects={"Muon": muon_indices},
     )
 
 
@@ -59,7 +59,7 @@ def test(events, stats):
     muon_results = muon_selection_test(events, stats)
 
     # combined event selection after all steps
-    event_sel = jet_results.steps.jet & muon_results.steps.muon
+    event_sel = jet_results.steps.Jet & muon_results.steps.Muon
 
     # build and merge selection results
     results = SelectionResult(main={"event": event_sel})

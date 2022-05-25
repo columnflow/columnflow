@@ -16,7 +16,7 @@ from ap.util import ensure_proxy
 
 class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar_dev.sh"
 
     shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
@@ -65,50 +65,55 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
         load_columns = keep_columns | set(mandatory_coffea_columns)
         remove_routes = None
 
-        # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, input_file) in lfn_task.iter_nano_files(self):
-            # open the input file with uproot
-            with self.publish_step("load and open ..."):
-                ufile = input_file.load(formatter="uproot")
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-            # iterate over chunks of events and diffs
-            with ChunkedReader(
-                [ufile, inputs["calib"].path, inputs["sel"]["res"].path],
-                source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
-                read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
-            ) as reader:
-                msg = f"iterate through {reader.n_entries} events ..."
-                for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # here, we would simply apply the mask from the selection results
-                    # to filter events and objects
+        # open the input file with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
 
-                    # add the calibrated diff and new columns from selection results
-                    events = update_ak_array(events, diff, sel.columns)
+        # iterate over chunks of events and diffs
+        with ChunkedReader(
+            [nano_file, inputs["calib"].path, inputs["sel"]["res"].path],
+            source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
+            pool_size=1,
+        ) as reader:
+            msg = f"iterate through {reader.n_entries} events ..."
+            for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # here, we would simply apply the mask from the selection results
+                # to filter events and objects
 
-                    # add aliases
-                    events = add_nano_aliases(events, aliases, remove_src=True)
+                # add the calibrated diff and new columns from selection results
+                events = update_ak_array(events, diff, sel.columns)
 
-                    # apply the event mask
-                    events = events[sel.event]
+                # add aliases
+                events = add_nano_aliases(events, aliases, remove_src=True)
 
-                    # apply jet and muon masks
-                    events.Jet = events.Jet[sel.objects.jet[sel.event]]
-                    events.Muon = events.Muon[sel.objects.muon[sel.event]]
+                # apply the event mask
+                events = events[sel.event]
 
-                    # manually remove colums that should not be kept
-                    if not remove_routes:
-                        remove_routes = {
-                            route
-                            for route in get_ak_routes(events)
-                            if not law.util.multi_match("_".join(route), keep_columns)
-                        }
-                    for route in remove_routes:
-                        events = remove_nano_column(events, route)
+                # apply all object masks whose names are present
+                for name in sel.objects.fields:
+                    if name in events.fields:
+                        # apply the event mask to the object mask first
+                        object_mask = sel.objects[name][sel.event]
+                        events[name] = events[name][object_mask]
 
-                    # save as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-                    output_chunks[pos.index] = chunk
-                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+                # manually remove colums that should not be kept
+                if not remove_routes:
+                    remove_routes = {
+                        route
+                        for route in get_ak_routes(events)
+                        if not law.util.multi_match("_".join(route), keep_columns)
+                    }
+                for route in remove_routes:
+                    events = remove_nano_column(events, route)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+                output_chunks[pos.index] = chunk
+                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

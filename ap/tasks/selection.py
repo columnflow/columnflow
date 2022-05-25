@@ -85,37 +85,38 @@ class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkf
         keep_columns = calibrate.produced_columns
         remove_routes = None
 
-        # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, input_file) in lfn_task.iter_nano_files(self):
-            # open with uproot
-            with self.publish_step("load and open ..."):
-                ufile = input_file.load(formatter="uproot")
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-            # iterate over chunks
-            with ChunkedReader(
-                ufile,
-                source_type="coffea_root",
-                read_options={"iteritems_options": {"filter_name": load_columns}},
-            ) as reader:
-                msg = f"iterate through {reader.n_entries} events ..."
-                for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # just invoke the calibration function
-                    events = calibrate(events)
+        # open with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
 
-                    # manually remove colums that should not be kept
-                    if not remove_routes:
-                        remove_routes = {
-                            route
-                            for route in get_ak_routes(events)
-                            if not law.util.multi_match("_".join(route), keep_columns)
-                        }
-                    for route in remove_routes:
-                        events = remove_nano_column(events, route)
+        # iterate over chunks
+        with ChunkedReader(
+            nano_file,
+            source_type="coffea_root",
+            read_options={"iteritems_options": {"filter_name": load_columns}},
+        ) as reader:
+            msg = f"iterate through {reader.n_entries} events ..."
+            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # just invoke the calibration function
+                events = calibrate(events)
 
-                    # save as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
-                    output_chunks[(file_index, pos.index)] = chunk
-                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+                # manually remove colums that should not be kept
+                if not remove_routes:
+                    remove_routes = {
+                        route
+                        for route in get_ak_routes(events)
+                        if not law.util.multi_match("_".join(route), keep_columns)
+                    }
+                for route in remove_routes:
+                    events = remove_nano_column(events, route)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[(lfn_index, pos.index)] = chunk
+                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:
@@ -180,37 +181,38 @@ class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | select.used_columns
 
-        # loop over all input file indices requested by this branch (most likely just one)
-        for (file_index, input_file) in lfn_task.iter_nano_files(self):
-            # open the input file with uproot
-            with self.publish_step("load and open ..."):
-                ufile = input_file.load(formatter="uproot")
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-            # iterate over chunks of events and diffs
-            with ChunkedReader(
-                [ufile, inputs["calib"].path],
-                source_type=["coffea_root", "awkward_parquet"],
-                read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
-            ) as reader:
-                msg = f"iterate through {reader.n_entries} events ..."
-                for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                    # here, we would start evaluating object and event selection criteria, store
-                    # new columns related to the selection (e.g. categories or regions), and
-                    # book-keeping of stats
+        # open the input file with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
 
-                    # apply the calibrated diff
-                    events = update_ak_array(events, diff)
+        # iterate over chunks of events and diffs
+        with ChunkedReader(
+            [nano_file, inputs["calib"].path],
+            source_type=["coffea_root", "awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
+        ) as reader:
+            msg = f"iterate through {reader.n_entries} events ..."
+            for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # here, we would start evaluating object and event selection criteria, store
+                # new columns related to the selection (e.g. categories or regions), and
+                # book-keeping of stats
 
-                    # add aliases
-                    events = add_nano_aliases(events, aliases)
+                # apply the calibrated diff
+                events = update_ak_array(events, diff)
 
-                    # invoke the selection function
-                    results = select(events, stats)
+                # add aliases
+                events = add_nano_aliases(events, aliases)
 
-                    # save as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"file_{file_index}_{pos.index}.parquet", type="f")
-                    output_chunks[(file_index, pos.index)] = chunk
-                    reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+                # invoke the selection function
+                results = select(events, stats)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[(lfn_index, pos.index)] = chunk
+                reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
         # merge the mask files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

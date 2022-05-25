@@ -90,11 +90,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = target.load(formatter="json")
 
         # loop
-        for file_index in branch_task.branch_data:
-            branch_task.publish_message(f"handling file {file_index}")
+        for lfn_index in branch_task.branch_data:
+            branch_task.publish_message(f"handling file {lfn_index}")
 
             # get the lfn of the file referenced by this file index
-            lfn = str(lfns[file_index])
+            lfn = str(lfns[lfn_index])
 
             # get the input file
             for fs in remote_fs:
@@ -110,4 +110,4 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
             branch_task.publish_message(f"lfn {lfn}, size is {input_size}")
 
-            yield (file_index, input_file)
+            yield (lfn_index, input_file)
