@@ -9,7 +9,7 @@ from collections import defaultdict
 import luigi
 import law
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.framework import AnalysisTask, DatasetTask, HTCondorWorkflow, wrapper_factory
 from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy, dev_sandbox
 
@@ -124,6 +124,13 @@ class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkf
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
 
 
+CalibrateEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CalibrateEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
@@ -232,6 +239,13 @@ class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
+SelectEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=SelectEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class MergeSelectionStats(SelectedEventsConsumer, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
@@ -282,3 +296,10 @@ class MergeSelectionStats(SelectedEventsConsumer, law.tasks.ForestMerge):
                     dst[key] = 0.0
                 dst[key] += obj
         return dst
+
+
+MergeSelectionStatsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeSelectionStats,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)

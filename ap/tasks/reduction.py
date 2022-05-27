@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import law
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.framework import AnalysisTask, DatasetTask, HTCondorWorkflow, wrapper_factory
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import SelectedEventsConsumer, CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
@@ -119,6 +119,13 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
 
+ReduceEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=ReduceEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class GatherReductionStats(SelectedEventsConsumer):
 
     merged_size = law.BytesParameter(
@@ -195,6 +202,13 @@ class GatherReductionStats(SelectedEventsConsumer):
         self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
 
 
+GatherReductionStatsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=GatherReductionStats,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
@@ -233,3 +247,10 @@ class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondor
 
     def merge(self, inputs, output):
         law.pyarrow.merge_parquet_task(self, inputs, output)
+
+
+MergeReducedEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeReducedEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)

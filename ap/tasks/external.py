@@ -13,7 +13,7 @@ from typing import Union, Tuple, List
 import luigi
 import law
 
-from ap.tasks.framework import DatasetTask
+from ap.tasks.framework import AnalysisTask, DatasetTask, wrapper_factory
 from ap.util import ensure_proxy
 
 
@@ -111,3 +111,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             branch_task.publish_message(f"lfn {lfn}, size is {input_size}")
 
             yield (lfn_index, input_file)
+
+
+GetDatasetLFNsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=GetDatasetLFNs,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    attributes={"version": None},
+)
