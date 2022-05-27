@@ -11,7 +11,7 @@ import law
 
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.util import ensure_proxy
+from ap.util import ensure_proxy, dev_sandbox
 
 
 class CalibratedEventsConsumer(DatasetTask):
@@ -42,7 +42,7 @@ class SelectedEventsConsumer(CalibratedEventsConsumer):
 
 class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -126,7 +126,7 @@ class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkf
 
 class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = CalibrateEvents.shifts | {"jec_up", "jec_down"}
 

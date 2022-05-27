@@ -11,6 +11,10 @@
 #       The requirements file containing packages that are installed on top of
 #       $AP_BASE/requirements_prod.txt.
 #
+# Upon venv activation, one environment variable is set in addition to those exported by the venv
+# itself:
+#   - AP_DEV: Set to "1" when AP_VENV_NAME ends with "_dev", and "0" otherwise.
+#
 # Arguments:
 # 1. mode: The setup mode. Different values are accepted:
 #   - '' (default): The virtual environment is installed when not existing yet and sourced.
@@ -135,6 +139,9 @@ action() {
         # activate it
         source "$install_path/bin/activate" "" || return "$?"
     fi
+
+    # export variables
+    export AP_DEV="$( [[ "$AP_VENV_NAME" == *_dev ]] && echo "1" || echo "0" )"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$AP_BASE/sandboxes/$AP_VENV_NAME.sh"

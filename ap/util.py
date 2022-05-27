@@ -5,9 +5,10 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
+    "env_is_remote", "env_is_dev",
     "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "wget", "call_thread", "call_proc", "ensure_proxy",
+    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
 ]
 
 
@@ -23,6 +24,13 @@ from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
 import law
+
+
+#: Boolean denoting whether the environment is in a remote job (based on ``AP_REMOTE_JOB``).
+env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
+
+#: Boolean denoting whether the environment is used for development (based on ``AP_DEV``).
+env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("AP_DEV", "0"))
 
 
 class DotDict(dict):
@@ -297,3 +305,27 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
         return
 
     return before_call, call, after_call
+
+
+def dev_sandbox(sandbox: str) -> str:
+    """
+    Takes a sandbox key *sandbox* and injects the subtring "_dev" right before the file extension
+    (if any) in case the current environment has the ``AP_DEV`` flag set and the corresponding
+    sandbox exists. Otherwise *sandbox* is returned unchanged.
+    """
+    # do nothing when not in dev env
+    if not env_is_dev:
+        return sandbox
+
+    # only take into account venv and bash sandboxes
+    _type, path = law.Sandbox.split_key(sandbox)
+    if _type not in ["venv", "bash"]:
+        return sandbox
+
+    # create the dev path and check if it exists
+    dev_path = "{}_dev{}".format(*os.path.splitext(path))
+    if not os.path.exists(real_path(dev_path)):
+        return sandbox
+
+    # all checks passed
+    return law.Sandbox.join_key(_type, dev_path)

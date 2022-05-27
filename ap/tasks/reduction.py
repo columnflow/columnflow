@@ -11,12 +11,12 @@ import law
 from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import SelectedEventsConsumer, CalibrateEvents, SelectEvents
-from ap.util import ensure_proxy
+from ap.util import ensure_proxy, dev_sandbox
 
 
 class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar_dev.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
@@ -197,7 +197,7 @@ class GatherReductionStats(SelectedEventsConsumer):
 
 class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(SelectEvents.shifts)
 
