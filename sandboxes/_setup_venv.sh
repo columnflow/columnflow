@@ -106,7 +106,7 @@ action() {
     # from here onwards, files and directories could be created and in order to prevent race
     # conditions from multiple processes, guard the setup with the pending_flag_file and sleep for a
     # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
-    starting processes getting here at the same time
+    # starting processes getting here at the same time
     if [ ! -f "$flag_file" ]; then
         local sleep_counter="0"
         sleep "$( python3 -c 'import random;print(random.random() * 10)')"
