@@ -173,7 +173,10 @@ class ConfigTask(AnalysisTask):
 
     @classmethod
     def get_version_map(cls, task):
-        return task.config_inst.get_aux("versions", {})
+        if isinstance(task, ConfigTask):
+            return task.config_inst.get_aux("versions", {})
+
+        return super().get_version_map(task)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
