@@ -5,6 +5,9 @@ Generic tools and base tasks that are defined along typical objects in an analys
 """
 
 import os
+import itertools
+import inspect
+from typing import Optional, Sequence
 
 import luigi
 import law
@@ -511,3 +514,325 @@ class CommandTask(AnalysisTask):
 
     def post_run_command(self):
         return
+
+
+def wrapper_factory(
+    base_cls: law.Task,
+    require_cls: AnalysisTask,
+    enable: Sequence[str],
+    cls_name: Optional[str] = None,
+    attributes: Optional[dict] = None,
+) -> law.task.base.Register:
+    """
+    Factory function creating wrapper task classes, inheriting from *base_cls* and
+    ``law.WrapperTask``, that do nothing but require multiple instances of *require_cls*. Unless
+    *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus
+    "Wrapper". Additional *attributes* are added as class-level members when given.
+
+    The instances of *require_cls* to be required in the ``requires()`` method can be controlled by
+    task parameters. These parameters can be enabled through the string sequence *enable*, which
+    currently accepts:
+
+        - ``configs``, ``skip_configs``
+        - ``shifts``, ``skip_shifts``
+        - ``datasets``, ``skip_datasets``
+
+    This allows to easily build wrapper tasks that loop over (combinations of) parameters that are
+    either defined in the analysis or config, which would otherwise lead to mostly redundant code.
+    Example:
+
+    .. code-block:: python
+
+        class MyTask(DatasetTask):
+            ...
+
+        MyTaskWrapper = wrapper_factory(
+            base_cls=ConfigTask,
+            require_cls=MyTask,
+            enable=["datasets", "skip_datasets"],
+        )
+
+        # this allows to run (e.g.)
+        # law run MyTaskWrapper --datasets st_* --skip-datasets *_tbar
+
+    When building the requirements, the full combinatorics of parameters is considered. However,
+    certain conditions apply depending on enabled features. For instance, in order to use the
+    "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
+    list of config instances known to an analysis), *require_cls* must be at least a
+    :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
+    explicitly not.
+    """
+    # check known features
+    known_features = [
+        "configs", "skip_configs",
+        "shifts", "skip_shifts",
+        "datasets", "skip_datasets",
+    ]
+    for feature in enable:
+        if feature not in known_features:
+            raise ValueError(
+                f"unknown enabled feature '{feature}', known features are "
+                f"'{','.join(known_features)}'",
+            )
+
+    # define wrapper feature flags
+    has_configs = "configs" in enable
+    has_skip_configs = has_configs and "skip_configs" in enable
+    has_shifts = "shifts" in enable
+    has_skip_shifts = has_shifts and "skip_shifts" in enable
+    has_datasets = "datasets" in enable
+    has_skip_datasets = has_datasets and "skip_datasets" in enable
+
+    # helper to check if enabled features are compatible with required and base class
+    def check_class_compatibility(name, min_require_cls, max_base_cls):
+        if not issubclass(require_cls, min_require_cls):
+            raise TypeError(
+                f"when the '{name}' feature is enabled, require_cls must inherit from "
+                f"{min_require_cls}, but {require_cls} does not",
+            )
+        if issubclass(base_cls, min_require_cls):
+            raise TypeError(
+                f"when the '{name}' feature is enabled, base_cls must not inherit from "
+                f"{min_require_cls}, but {base_cls} does",
+            )
+        if not issubclass(max_base_cls, base_cls):
+            raise TypeError(
+                f"when the '{name}' feature is enabled, base_cls must be a super class of "
+                f"{max_base_cls}, but {base_cls} is not",
+            )
+
+    # check classes
+    if has_configs:
+        check_class_compatibility("configs", ConfigTask, AnalysisTask)
+    if has_shifts:
+        check_class_compatibility("shifts", ShiftTask, ConfigTask)
+    if has_datasets:
+        check_class_compatibility("datasets", DatasetTask, ShiftTask)
+
+    # generic helper to find objects on unique object indices or mappings
+    def find_objects(names, object_index, object_mapping, accept_patterns=True):
+        object_names = set()
+        patterns = set()
+        lookup = list(names)
+        while lookup:
+            name = lookup.pop(0)
+            if accept_patterns and name == "*":
+                # special case
+                object_names |= set(object_index.names())
+                patterns = None
+                break
+            elif name in object_index:
+                # known object
+                object_names.add(name)
+            elif object_mapping and name in object_mapping:
+                # a key in dataset_mappings aux data
+                lookup.extend(list(object_mapping[name]))
+            elif accept_patterns:
+                # must eventually be a pattern, store it for object traversal
+                patterns.add(name)
+
+        # if patterns are found, loop through existing objects instead and compare
+        if patterns:
+            for name in object_index.names():
+                if law.util.multi_match(name, patterns):
+                    object_names.add(name)
+
+        return object_names
+
+    # create the class
+    class Wrapper(base_cls, law.WrapperTask):
+
+        if has_configs:
+            configs = law.CSVParameter(
+                default=("*",),
+                description="names or name patterns of configs to use; can also be the key of a "
+                "mapping defined in the 'config_mappings' auxiliary data of the analysis; default: "
+                "('*',)",
+            )
+        if has_skip_configs:
+            skip_configs = law.CSVParameter(
+                default=(),
+                description="names or name patterns of configs to skip after evaluating --configs; "
+                "can also be the key of a mapping defined in the 'config_mappings' auxiliary data "
+                "of the analysis; empty default",
+            )
+        if has_datasets:
+            datasets = law.CSVParameter(
+                default=("*",),
+                description="names or name patterns of datasets to use; can also be the key of a "
+                "mapping defined in the 'dataset_mappings' auxiliary data of the corresponding "
+                "config; default: ('*',)",
+            )
+        if has_skip_datasets:
+            skip_datasets = law.CSVParameter(
+                default=(),
+                description="names or name patterns of datasets to skip after evaluating "
+                "--datasets; can also be the key of a mapping defined in the 'dataset_mappings' "
+                "auxiliary data of the corresponding config; empty default",
+            )
+        if has_shifts:
+            shifts = law.CSVParameter(
+                default=("nominal",),
+                description="names or name patterns of shifts to use; can also be the key of a "
+                "mapping defined in the 'shift_mappings' auxiliary data of the corresponding "
+                "config; default: ('nominal',)",
+            )
+        if has_skip_shifts:
+            skip_shifts = law.CSVParameter(
+                default=(),
+                description="names or name patterns of shifts to skip after evaluating --shifts; "
+                "can also be the key of a mapping defined in the 'shift_mappings' auxiliary data "
+                "of the corresponding config; empty default",
+            )
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            # store wrapper flags
+            self.wrapper_require_cls = require_cls
+            self.wrapper_has_configs = has_configs and self.configs
+            self.wrapper_has_skip_configs = has_skip_configs
+            self.wrapper_has_shifts = has_shifts and self.shifts
+            self.wrapper_has_skip_shifts = has_skip_shifts
+            self.wrapper_has_datasets = has_datasets and self.datasets
+            self.wrapper_has_skip_datasets = has_skip_datasets
+
+            # store wrapped fields
+            self.wrapper_fields = [
+                field for field in ["config", "shift", "dataset"]
+                if getattr(self, f"wrapper_has_{field}s")
+            ]
+
+            # build the parameter space
+            self.wrapper_parameters = self._build_wrapper_parameters()
+
+        def _build_wrapper_parameters(self):
+            # collect a list of tuples whose order corresponds to wrapper_fields
+            params = []
+
+            # get the target config instances
+            if self.wrapper_has_configs:
+                configs = find_objects(
+                    self.configs,
+                    self.analysis_inst.configs,
+                    self.analysis_inst.x("config_mappings", {}),
+                )
+                if not configs:
+                    raise ValueError(
+                        f"no configs found in analysis {self.analysis_inst} matching {self.configs}"
+                    )
+                if self.wrapper_has_skip_configs:
+                    configs -= find_objects(
+                        self.skip_configs,
+                        self.analysis_inst.configs,
+                        self.analysis_inst.x("config_mappings", {}),
+                    )
+                    if not configs:
+                        raise ValueError(
+                            f"no configs found in analysis {self.analysis_inst} after skipping "
+                            f"{self.skip_configs}"
+                        )
+                config_insts = list(map(self.analysis_inst.get_config, configs))
+            else:
+                config_insts = [self.config_inst]
+
+            # for the remaining fields, build the full combinatorics per config_inst
+            for config_inst in config_insts:
+                # sequences for building combinatorics
+                prod_sequences = []
+                if self.wrapper_has_configs:
+                    prod_sequences.append([config_inst.name])
+
+                # find all shifts
+                if self.wrapper_has_shifts:
+                    shifts = find_objects(
+                        self.shifts,
+                        config_inst.shifts,
+                        config_inst.x("shift_mappings", {}),
+                    )
+                    if not shifts:
+                        raise ValueError(
+                            f"no shifts found in config {config_inst} matching {self.shifts}"
+                        )
+                    if self.wrapper_has_skip_shifts:
+                        shifts -= find_objects(
+                            self.skip_shifts,
+                            config_inst.shifts,
+                            config_inst.x("shift_mappings", {}),
+                        )
+                    if not shifts:
+                        raise ValueError(
+                            f"no shifts found in config {config_inst} after skipping "
+                            f"{self.skip_shifts}"
+                        )
+                    shifts = sorted(shifts)
+                    # move "nominal" to the front if present
+                    if "nominal" in shifts:
+                        shifts.insert(0, shifts.pop(shifts.index("nominal")))
+                    prod_sequences.append(shifts)
+
+                # find all datasets
+                if self.wrapper_has_datasets:
+                    datasets = find_objects(
+                        self.datasets,
+                        config_inst.datasets,
+                        config_inst.x("dataset_mappings", {}),
+                    )
+                    if not datasets:
+                        raise ValueError(
+                            f"no datasets found in config {self.config_inst} matching "
+                            f"{self.datasets}"
+                        )
+                    if self.wrapper_has_skip_datasets:
+                        datasets -= find_objects(
+                            self.skip_datasets,
+                            config_inst.datasets,
+                            config_inst.x("dataset_mappings", {}),
+                        )
+                        if not datasets:
+                            raise ValueError(
+                                f"no datasets found in config {self.config_inst} after skipping "
+                                f"{self.skip_datasets}"
+                            )
+                    prod_sequences.append(sorted(datasets))
+
+                # add the full combinatorics
+                params.extend(itertools.product(*prod_sequences))
+
+            return params
+
+        def requires(self):
+            # build all requirements based on the parameter space
+            reqs = {}
+
+            for values in self.wrapper_parameters:
+                params = dict(zip(self.wrapper_fields, values))
+
+                # allow custom checks and updates
+                params = self.update_wrapper_params(params)
+                if not params:
+                    continue
+
+                # add the requirement if not present yet
+                req = self.wrapper_require_cls.req(self, **params)
+                if req not in reqs.values():
+                    reqs[values] = req
+
+            return reqs
+
+        def update_wrapper_params(self, params):
+            return params
+
+        # add additional class-level members
+        if attributes:
+            locals().update(attributes)
+
+    # overwrite __module__ to point to the module of the calling stack
+    frame = inspect.stack()[1]
+    module = inspect.getmodule(frame[0])
+    Wrapper.__module__ = module.__name__
+
+    # overwrite __name__
+    Wrapper.__name__ = cls_name or require_cls.__name__ + "Wrapper"
+
+    return Wrapper
