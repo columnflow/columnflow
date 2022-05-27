@@ -228,13 +228,17 @@ def wget(src: str, dst: str, force: bool = False) -> str:
     return dst
 
 
-def call_thread(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
-        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
+def call_thread(
+    func: Callable,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a thread and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
 
-    The return value is a 3-tuple ``(finsihed_in_time, func(), err)``.
+    The return value is a 3-tuple (finsihed_in_time, func(), err).
     """
     def wrapper(q, *args, **kwargs):
         try:
@@ -255,13 +259,17 @@ def call_thread(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
         return (True,) + q.get()
 
 
-def call_proc(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
-        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
+def call_proc(
+    func: Callable,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a process and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
 
-    The return value is a 3-tuple ``(finsihed_in_time, func(), err)``.
+    The return value is a 3-tuple (finsihed_in_time, func(), err).
     """
     def wrapper(q, *args, **kwargs):
         try:
@@ -284,7 +292,13 @@ def call_proc(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
 
 
 @law.decorator.factory(accept_generator=True)
-def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
+def ensure_proxy(
+    fn: Callable,
+    opts: dict,
+    task: law.Task,
+    *args,
+    **kwargs,
+) -> Tuple[Callable, Callable, Callable]:
     """
     Law task decorator that checks whether either a voms or arc proxy is existing before calling
     the decorated method.
@@ -310,8 +324,18 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
 def dev_sandbox(sandbox: str) -> str:
     """
     Takes a sandbox key *sandbox* and injects the subtring "_dev" right before the file extension
-    (if any) in case the current environment has the ``AP_DEV`` flag set and the corresponding
-    sandbox exists. Otherwise *sandbox* is returned unchanged.
+    (if any) in case the current environment is used for development (see :py:attr:`env_is_dev`) and
+    the corresponding sandbox exists. Otherwise *sandbox* is returned unchanged.
+
+    .. code-block:: python
+
+        # if env_is_dev and /path/to/script_dev.sh exists
+        dev_sandbox("bash::/path/to/script.sh")
+        # -> "bash::/path/to/script_dev.sh"
+
+        # otherwise
+        dev_sandbox("bash::/path/to/script.sh")
+        # -> "bash::/path/to/script.sh"
     """
     # do nothing when not in dev env
     if not env_is_dev:

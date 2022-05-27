@@ -125,7 +125,7 @@ class GatherReductionStats(SelectedEventsConsumer):
         default=500.0,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; default: 500MB",
+        description="the maximum file size of merged files; default unit is MB; default: '500MB'",
     )
 
     shifts = set(ReduceEvents.shifts)

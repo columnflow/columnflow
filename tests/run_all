@@ -14,8 +14,9 @@ action() {
     # get arguments
     local mode="${1}"
 
-    # global return code
+    # local and global return codes
     local ret_global="0"
+    local ret
 
     # colored echo helper
     cecho() {
@@ -27,10 +28,9 @@ action() {
     # linting
     cecho 35 "check linting ..."
     bash "$this_dir/run_linting"
-    local ret_linting="$?"
-    if [ "$ret_linting" != "0" ]; then
-        2>&1 cecho 31 "run_linting failed with exit code $ret_linting"
-        [ "$mode" = "force" ] || return "$ret_linting"
+    if [ "$ret" != "0" ]; then
+        2>&1 cecho 31 "run_linting failed with exit code $ret"
+        [ "$mode" = "force" ] || return "$ret"
         ret_global="1"
     else
         cecho 32 "done"

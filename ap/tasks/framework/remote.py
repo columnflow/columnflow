@@ -32,14 +32,14 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         default=law.NO_INT,
         significant=False,
         description="number of CPUs to request; empty value leads to the cluster default setting; "
-        "no default",
+        "empty default",
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=os.getenv("AP_HTCONDOR_FLAVOR", "naf"),
         choices=("naf", "naf",),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        "naf,cern; default: {}".format(os.getenv("AP_HTCONDOR_FLAVOR", "naf")),
+        "naf,cern; default: '{}'".format(os.getenv("AP_HTCONDOR_FLAVOR", "naf")),
     )
 
     exclude_params_branch = {"max_runtime", "htcondor_cpus", "htcondor_flavor"}
@@ -269,7 +269,7 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
 
     sandbox_file = luigi.Parameter(
         description="name of the sandbox file; when not absolute, the path is evaluated relative "
-        "to $AP_BASE/sandboxes; no default",
+        "to $AP_BASE/sandboxes",
     )
     replicas = luigi.IntParameter(
         default=5,

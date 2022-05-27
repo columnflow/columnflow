@@ -18,7 +18,7 @@ class CalibratedEventsConsumer(DatasetTask):
 
     calibrator = luigi.Parameter(
         default="test",
-        description="the name of the calibrator to the applied; default: test",
+        description="the name of the calibrator to the applied; default: 'test'",
     )
 
     def store_parts(self):
@@ -31,7 +31,7 @@ class SelectedEventsConsumer(CalibratedEventsConsumer):
 
     selector = luigi.Parameter(
         default="test",
-        description="the name of the selector to the applied; default: test",
+        description="the name of the selector to the applied; default: 'test'",
     )
 
     def store_parts(self):

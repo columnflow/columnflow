@@ -13,32 +13,9 @@ import six
 
 class BaseTask(law.Task):
 
-    task_namespace = os.getenv("AP_TASK_NAMESPACE")
-
-
-class AnalysisTask(BaseTask, law.SandboxTask):
-
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
-    allow_empty_sandbox = True
-    sandbox = None
-
-    output_collection_cls = law.SiblingFileCollection
-
-    # hard-coded analysis name, could be changed to a parameter
-    analysis = "analysis_st"
-
-    # defaults for targets
-    default_store = "$AP_STORE_LOCAL"
-    default_wlcg_fs = "wlcg_fs"
-
-    @classmethod
-    def get_analysis_inst(cls, analysis):
-        if analysis == "analysis_st":
-            from ap.config.analysis_st import analysis_st
-            return analysis_st
-        else:
-            raise ValueError(f"unknown analysis {analysis}")
+    task_namespace = os.getenv("AP_TASK_NAMESPACE")
 
     @classmethod
     def modify_param_values(cls, params):
@@ -62,10 +39,37 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # the task instance
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
             version_map = cls.get_version_map(inst)
-            if cls.__name__ in version_map:
+            if version_map is not NotImplemented and cls.__name__ in version_map:
                 kwargs["version"] = version_map[cls.__name__]
 
         return super().req_params(inst, **kwargs)
+
+    @classmethod
+    def get_version_map(cls, task):
+        return NotImplemented
+
+
+class AnalysisTask(BaseTask, law.SandboxTask):
+
+    allow_empty_sandbox = True
+    sandbox = None
+
+    output_collection_cls = law.SiblingFileCollection
+
+    # hard-coded analysis name, could be changed to a parameter
+    analysis = "analysis_st"
+
+    # defaults for targets
+    default_store = "$AP_STORE_LOCAL"
+    default_wlcg_fs = "wlcg_fs"
+
+    @classmethod
+    def get_analysis_inst(cls, analysis):
+        if analysis == "analysis_st":
+            from ap.config.analysis_st import analysis_st
+            return analysis_st
+        else:
+            raise ValueError(f"unknown analysis {analysis}")
 
     @classmethod
     def get_version_map(cls, task):
@@ -161,7 +165,7 @@ class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
         default="run2_pp_2018",
-        description="name of the analysis config to use; default: run2_pp_2018",
+        description="name of the analysis config to use; default: 'run2_pp_2018'",
     )
 
     @classmethod
@@ -189,7 +193,7 @@ class ShiftTask(ConfigTask):
         default="nominal",
         significant=False,
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
-        "default: nominal",
+        "default: 'nominal'",
     )
     effective_shift = luigi.Parameter(default=law.NO_STR)
 
@@ -206,7 +210,7 @@ class ShiftTask(ConfigTask):
     @classmethod
     def modify_param_values(cls, params):
         """
-        When "config" and "shift" are set, this method evlauates them to set the effecitve shift.
+        When "config" and "shift" are set, this method evaluates them to set the effecitve shift.
         For that, it takes the shifts stored in the config instance and compares it with those
         defined by this class.
         """
@@ -278,7 +282,7 @@ class DatasetTask(ShiftTask):
 
     dataset = luigi.Parameter(
         default="st_tchannel_t",
-        description="name of the dataset to process; default: st_tchannel_t",
+        description="name of the dataset to process; default: 'st_tchannel_t'",
     )
 
     file_merging = None
@@ -401,7 +405,7 @@ class CommandTask(AnalysisTask):
     custom_args = luigi.Parameter(
         default="",
         description="custom arguments that are forwarded to the underlying command; they might not "
-        "be encoded into output file paths; no default",
+        "be encoded into output file paths; empty default",
     )
 
     exclude_index = True
