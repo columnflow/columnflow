@@ -1,23 +1,69 @@
 #!/usr/bin/env bash
 
-# Script that triggers all check scripts in this directory with default arguments.
+# Script that triggers all run_* scripts in this directory with default arguments. By default, the
+# process is terminated if a script returns with a non-zero exit code.
+#
+# Arguments:
+#   1. The mode. When "force", all scripts are executed independenlty of non-zero exit codes of
+#      previous scripts.
 
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
 
+    # get arguments
+    local mode="${1}"
+
+    # global return code
+    local ret_global="0"
+
+    # colored echo helper
+    cecho() {
+        local col="$1"
+        local msg="$2"
+        echo -e "\x1b[0;49;${col}m${msg}\x1b[0m"
+    }
+
     # linting
-    echo -e "\x1b[0;49;35mcheck_linting\x1b[0m"
-    bash "$this_dir/check_linting" || return "$?"
+    cecho 35 "check linting ..."
+    bash "$this_dir/run_linting"
+    local ret_linting="$?"
+    if [ "$ret_linting" != "0" ]; then
+        2>&1 cecho 31 "run_linting failed with exit code $ret_linting"
+        [ "$mode" = "force" ] || return "$ret_linting"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
+
+    echo
 
     # tests
-    echo -e "\n\x1b[0;49;35mcheck_tests\x1b[0m"
-    bash "$this_dir/check_tests" || return "$?"
+    cecho 35 "check tests ..."
+    bash "$this_dir/run_tests"
+    ret="$?"
+    if [ "$ret" != "0" ]; then
+        2>&1 cecho 31 "run_tests failed with exit code $ret"
+        [ "$mode" = "force" ] || return "$ret"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
+
+    echo
 
     # docs
-    echo -e "\n\x1b[0;49;35mcheck_docs\x1b[0m"
-    bash "$this_dir/check_docs" || return "$?"
+    cecho 35 "check docs ..."
+    bash "$this_dir/run_docs"
+    ret="$?"
+    if [ "$ret" != "0" ]; then
+        2>&1 cecho 31 "run_docs failed with exit code $ret"
+        [ "$mode" = "force" ] || return "$ret"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
 
-    echo -e "\n\x1b[0;49;35mall checks passed\x1b[0m"
+    return "$ret_global"
 }
 action "$@"
