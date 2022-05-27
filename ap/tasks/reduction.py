@@ -44,7 +44,7 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
     def run(self):
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_nano_aliases, remove_nano_column, sorted_ak_to_parquet,
+            add_ak_aliases, remove_ak_column, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -77,7 +77,6 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
             [nano_file, inputs["calib"].path, inputs["sel"]["res"].path],
             source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
-            pool_size=1,
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
@@ -88,7 +87,7 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
                 events = update_ak_array(events, diff, sel.columns)
 
                 # add aliases
-                events = add_nano_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # apply the event mask
                 events = events[sel.event]
@@ -108,7 +107,7 @@ class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
                         if not law.util.multi_match("_".join(route), keep_columns)
                     }
                 for route in remove_routes:
-                    events = remove_nano_column(events, route)
+                    events = remove_ak_column(events, route)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")

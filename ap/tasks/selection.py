@@ -61,7 +61,7 @@ class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkf
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_nano_column,
+            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
             sorted_ak_to_parquet,
         )
         from ap.calibration import Calibrator
@@ -111,7 +111,7 @@ class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkf
                         if not law.util.multi_match("_".join(route), keep_columns)
                     }
                 for route in remove_routes:
-                    events = remove_nano_column(events, route)
+                    events = remove_ak_column(events, route)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
@@ -156,7 +156,7 @@ class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_nano_aliases,
+            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
         )
         from ap.selection import Selector
@@ -204,7 +204,7 @@ class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
                 events = update_ak_array(events, diff)
 
                 # add aliases
-                events = add_nano_aliases(events, aliases)
+                events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
                 results = select(events, stats)
