@@ -27,7 +27,7 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          flake8 ap docs
+          ./tests/run_linting
 
       - name: Cleanup 🧹
         if: always()
@@ -54,7 +54,7 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          python3 -m unittest tests
+          ./tests/run_tests
 
       - name: Cleanup 🧹
         if: always()

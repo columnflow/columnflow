@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# Script that triggers all check scripts in this directory with default arguments.
+
+action() {
+    local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
+
+    # linting
+    echo -e "\x1b[0;49;35mcheck_linting\x1b[0m"
+    bash "$this_dir/check_linting" || return "$?"
+
+    # tests
+    echo -e "\n\x1b[0;49;35mcheck_tests\x1b[0m"
+    bash "$this_dir/check_tests" || return "$?"
+
+    # docs
+    echo -e "\n\x1b[0;49;35mcheck_docs\x1b[0m"
+    bash "$this_dir/check_docs" || return "$?"
+
+    echo -e "\n\x1b[0;49;35mall checks passed\x1b[0m"
+}
+action "$@"
