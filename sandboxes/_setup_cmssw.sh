@@ -86,7 +86,7 @@ action() {
     local install_base="$AP_CMSSW_BASE/$AP_CMSSW_ENV_NAME"
     local install_path="$install_base/$AP_CMSSW_VERSION"
     local flag_file="$install_path/ap_flag"
-    local pending_flag_file="$$AP_CMSSW_BASE/pending_${AP_CMSSW_ENV_NAME}_${AP_CMSSW_VERSION}"
+    local pending_flag_file="$AP_CMSSW_BASE/pending_${AP_CMSSW_ENV_NAME}_${AP_CMSSW_VERSION}"
 
     # ensure AP_CMSSW_BASE exists
     mkdir -p "$AP_CMSSW_BASE"
@@ -132,10 +132,10 @@ action() {
     else
         # in local environments, install from scratch
         if [ ! -d "$install_path" ]; then
-            # from here onwards, files and directories are could be created and in order to prevent
-            # race conditions from multiple processes, guard the setup with the pending_flag_file
-            # and sleep for a random amount of seconds between 0 and 10 to further reduce the chance
-            # of simultaneously starting processes getting here at the same time
+            # from here onwards, files and directories could be created and in order to prevent race
+            # conditions from multiple processes, guard the setup with the pending_flag_file and
+            # sleep for a random amount of seconds between 0 and 10 to further reduce the chance of
+            # simultaneously starting processes getting here at the same time
             local sleep_counter="0"
             sleep "$( python3 -c 'import random;print(random.random() * 10)')"
             while [ -f "$pending_flag_file" ]; do
