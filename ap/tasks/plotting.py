@@ -16,8 +16,8 @@ from ap.util import ensure_proxy
 
 class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = (),
@@ -72,9 +72,6 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
         return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
 
-    
-
-
     def requires(self):
         #print('Hello from requires')
         c = self.config_inst
@@ -117,11 +114,11 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                         h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
 
                         if category=="incl":
-                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                            leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
-                            leaf_cats = [category]
+                            leaf_cats = [c.get_category(category).id] #[category]
                         else:
-                            leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
+                            leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
                     
                         h_in = h_in[{"category": leaf_cats}]
                         h_in = h_in[{"category": sum}]
@@ -159,7 +156,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     color=colors,
                 )
                 ax.stairs(
-                    edges=h_total.axes[0].edges,
+                    edges=h_total.axes[self.branch_data['variable']].edges,
                     baseline=h_total.view().value - np.sqrt(h_total.view().variance),
                     values=h_total.view().value + np.sqrt(h_total.view().variance),
                     hatch="///",
@@ -209,7 +206,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 lumi = mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
                 
                 #mplhep.plot.yscale_legend(ax=ax) # legend optimizer (takes quite long and potentially produces too much whitespace)
-            
+                plt.tight_layout()
                 
             self.output().dump(plt, formatter="mpl")
             self.publish_message(f"Plotting task done for variable {self.branch_data['variable']}, category {self.branch_data['category']}")

@@ -18,6 +18,7 @@ def extract(array, idx):
     return array
 
 # object definitions
+# TODO: ArrayFunction instead of Selector
 @selector(uses={"Jet_pt", "Jet_eta"})
 def req_jet(events): 
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
@@ -109,6 +110,8 @@ def sel_1mu_ge2b_highHT(events):
 
 
 
+
+'''
 # combination of all categories, taking categories from each level into account, not only leaf categories
 @selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b, sel_1mu_ge2b_highHT, sel_1mu_ge2b_lowHT})
 def categories(events, config):
@@ -132,31 +135,30 @@ def categories(events, config):
         columns={"cat_array": cat_array}
     )
             
-    
 '''
+
 # combination of all leaf categories
 @selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b})
 def categories(events, config):
-    cat_titles = ["no_cat"]
-    cat_array = "no_cat"
+    cat_array = -1
     mask_int = 0
     for cat in config.get_leaf_categories():
         #print(cat.name)
         cat_sel = cat.selection
-        cat_titles.append(cat.name)
         mask = globals()[cat_sel](events)
-        cat_array = np.where(mask, cat.name, cat_array)
+        cat_array = np.where(mask, cat.id, cat_array)
         mask_int = mask_int + np.where(mask,1,0) # to check orthogonality of categories
     if not ak.all(mask_int==1):
         if ak.any(mask_int>=2):
-            raise ValueError('Leaf categories are supposed to be fully orthogonal')
+            #raise ValueError('Leaf categories are supposed to be fully orthogonal')
+            print('Leaf categories are not fully orthogonal')
         else:
-            raise ValueError('Some events are without leaf category')
-            #print('Some events are without leaf category')
+            #raise ValueError('Some events are without leaf category')
+            print('Some events are without leaf category')
     return SelectionResult(
-        columns={"cat_titles": cat_titles, "cat_array": cat_array}
+        columns={"cat_array": cat_array}
     )
-'''
+
 
 @selector(uses={req_jet})
 def jet_selection_test(events, stats):

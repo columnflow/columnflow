@@ -18,15 +18,15 @@ from ap.tasks.mergeHistograms import MergeShiftograms
 
 class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = ("st_tchannel_t"),
         description="List of processes to create plots for"
     )
     variables = law.CSVParameter(
-        default = ("nJet"),
+        default = ("HT","nJet","Jet1_pt"),
         description="List of variables to plot"
     )
     categories = law.CSVParameter(
@@ -85,11 +85,11 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
                 #categorization
                 if category=="incl":
-                    leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                    leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                 elif c.get_category(category).is_leaf_category:
-                    leaf_cats = [category]
+                    leaf_cats = [c.get_category(category).id]
                 else:
-                    leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
+                    leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
                     
                 h_in = h_in[{"category": leaf_cats}]
                 h_in = h_in[{"category": sum}]
@@ -118,13 +118,13 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 
                 norm = h_proc[{"shift": "nominal"}].view().value
                 rax.step(
-                    x=h_proc.axes[self.branch_data['variable']].centers,
+                    x=h_proc.axes[self.branch_data['variable']].edges[+1:],
                     y=h_proc[{"shift": self.branch_data['systematic']+"_up"}].view().value / norm,
                     color="red",
                 )
                 print("------")
                 rax.step(
-                    x=h_proc.axes[self.branch_data['variable']].centers,
+                    x=h_proc.axes[self.branch_data['variable']].edges[+1:],
                     y=h_proc[{"shift": self.branch_data['systematic']+"_down"}].view().value / norm,
                     color="blue",
                 )

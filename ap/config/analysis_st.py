@@ -102,36 +102,36 @@ config_2018.set_aux("keep_columns", {
 #st_channel = config_2018.add_channel("st", 1)
 
 # define categories
-cat_e = config_2018.add_category("1e",
+cat_e = config_2018.add_category(name="1e", id=1,
                                  label="1 electron",
                                  selection = "sel_1e"
 )
-cat_mu = config_2018.add_category("1mu",
+cat_mu = config_2018.add_category(name="1mu", id=2,
                                   label="1 muon",
                                   selection = "sel_1mu"
 )
 
-cat_e_b = cat_e.add_category("1e_eq1b",
+cat_e_b = cat_e.add_category(name="1e_eq1b", id=3,
                              label = "1e, 1 b-tag",
                              selection = "sel_1e_eq1b",
 )
-cat_e_bb = cat_e.add_category("1e_ge2b",
+cat_e_bb = cat_e.add_category(name="1e_ge2b", id=4,
                               label = "1e, $\geq$ 2 b-tags",
                               selection = "sel_1e_ge2b",
 )
-cat_mu_b = cat_mu.add_category("1mu_eq1b",
+cat_mu_b = cat_mu.add_category(name="1mu_eq1b", id=5,
                                label = "1mu, 1 b-tag",
                                selection = "sel_1mu_eq1b",
 )
-cat_mu_bb = cat_mu.add_category("1mu_ge2b",
+cat_mu_bb = cat_mu.add_category(name="1mu_ge2b", id=6,
                                 label = "1mu, $\geq$ 2 b-tags",
                                 selection = "sel_1mu_ge2b",
 )
-cat_mu_bb_lowHT = cat_mu_bb.add_category("1mu_ge2b_lowHT",
+cat_mu_bb_lowHT = cat_mu_bb.add_category(name="1mu_ge2b_lowHT", id=7,
                                 label = "1mu, $\geq$ 2 b-tags, HT<=300 GeV",
                                 selection = "sel_1mu_ge2b_lowHT",
 )
-cat_mu_bb_highHT = cat_mu_bb.add_category("1mu_ge2b_highHT",
+cat_mu_bb_highHT = cat_mu_bb.add_category(name="1mu_ge2b_highHT", id=8,
                                 label = "1mu, $\geq$ 2 b-tags, HT>300 GeV",
                                 selection = "sel_1mu_ge2b_highHT",
 )

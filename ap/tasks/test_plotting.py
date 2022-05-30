@@ -18,8 +18,8 @@ from ap.tasks.histograms import CreateHistograms
 
 class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    #sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    #sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default = (),
@@ -109,11 +109,11 @@ class TestPlotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                         h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
 
                         if category=="incl":
-                            leaf_cats = [cat.name for cat in c.get_leaf_categories()]
+                            leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
-                            leaf_cats=[category]
+                            leaf_cats=[c.get_category(category).id]
                         else:
-                            leaf_cats = [cat.name for cat in c.get_category(category).get_leaf_categories()]
+                            leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
                     
                         h_in = h_in[{"category": leaf_cats}]
                         h_in = h_in[{"category": sum}]

@@ -140,7 +140,7 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                                 )
                                 fill_kwargs = {
                                     #"category": cat_array,
-                                    "category": events.cat_array,
+                                    "category": str(events.cat_array),
                                     "shift": self.shift,
                                     var_name: results.columns[var_name],
                                     "weight": weight,

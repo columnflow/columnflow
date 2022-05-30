@@ -33,6 +33,11 @@ class MergeHistograms(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 
+    
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
     def merge_workflow_requires(self):
         #self.shift_inst = self.config_inst.get_shift(self.shift)
         return CreateHistograms.req(self, _exclude=['branches'])
