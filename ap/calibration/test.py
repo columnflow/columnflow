@@ -42,7 +42,7 @@ def jec_test(events):
 
 
 @calibrator(uses={jec_test}, produces={jec_test})
-def calib_test(events):
+def test(events):
     events = jec_test(events)
 
     return events

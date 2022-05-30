@@ -5,9 +5,10 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
+    "env_is_remote", "env_is_dev",
     "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "wget", "call_thread", "call_proc", "ensure_proxy",
+    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
 ]
 
 
@@ -23,6 +24,13 @@ from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
 import law
+
+
+#: Boolean denoting whether the environment is in a remote job (based on ``AP_REMOTE_JOB``).
+env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
+
+#: Boolean denoting whether the environment is used for development (based on ``AP_DEV``).
+env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("AP_DEV", "0"))
 
 
 class DotDict(dict):
@@ -84,7 +92,7 @@ class MockModule(object):
     """
 
     def __init__(self, name):
-        super(MockModule, self).__init__()
+        super().__init__()
 
         self._name = name
 
@@ -220,13 +228,17 @@ def wget(src: str, dst: str, force: bool = False) -> str:
     return dst
 
 
-def call_thread(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
-        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
+def call_thread(
+    func: Callable,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a thread and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
 
-    The return value is a 3-tuple ``(finsihed_in_time, func(), err)``.
+    The return value is a 3-tuple (finsihed_in_time, func(), err).
     """
     def wrapper(q, *args, **kwargs):
         try:
@@ -247,13 +259,17 @@ def call_thread(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
         return (True,) + q.get()
 
 
-def call_proc(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
-        timeout: Optional[float] = None) -> Tuple[bool, Any, Optional[str]]:
+def call_proc(
+    func: Callable,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Tuple[bool, Any, Optional[str]]:
     """
     Execute a function *func* in a process and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
 
-    The return value is a 3-tuple ``(finsihed_in_time, func(), err)``.
+    The return value is a 3-tuple (finsihed_in_time, func(), err).
     """
     def wrapper(q, *args, **kwargs):
         try:
@@ -276,7 +292,13 @@ def call_proc(func: Callable, args: tuple = (), kwargs: Optional[dict] = None,
 
 
 @law.decorator.factory(accept_generator=True)
-def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
+def ensure_proxy(
+    fn: Callable,
+    opts: dict,
+    task: law.Task,
+    *args,
+    **kwargs,
+) -> Tuple[Callable, Callable, Callable]:
     """
     Law task decorator that checks whether either a voms or arc proxy is existing before calling
     the decorated method.
@@ -297,3 +319,37 @@ def ensure_proxy(fn: Callable, opts: dict, task: law.Task, *args, **kwargs):
         return
 
     return before_call, call, after_call
+
+
+def dev_sandbox(sandbox: str) -> str:
+    """
+    Takes a sandbox key *sandbox* and injects the subtring "_dev" right before the file extension
+    (if any) in case the current environment is used for development (see :py:attr:`env_is_dev`) and
+    the corresponding sandbox exists. Otherwise *sandbox* is returned unchanged.
+
+    .. code-block:: python
+
+        # if env_is_dev and /path/to/script_dev.sh exists
+        dev_sandbox("bash::/path/to/script.sh")
+        # -> "bash::/path/to/script_dev.sh"
+
+        # otherwise
+        dev_sandbox("bash::/path/to/script.sh")
+        # -> "bash::/path/to/script.sh"
+    """
+    # do nothing when not in dev env
+    if not env_is_dev:
+        return sandbox
+
+    # only take into account venv and bash sandboxes
+    _type, path = law.Sandbox.split_key(sandbox)
+    if _type not in ["venv", "bash"]:
+        return sandbox
+
+    # create the dev path and check if it exists
+    dev_path = "{}_dev{}".format(*os.path.splitext(path))
+    if not os.path.exists(real_path(dev_path)):
+        return sandbox
+
+    # all checks passed
+    return law.Sandbox.join_key(_type, dev_path)

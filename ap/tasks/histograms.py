@@ -13,7 +13,7 @@ from ap.tasks.framework import DatasetTask, HTCondorWorkflow
 from ap.util import ensure_proxy
 
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import CalibrateObjects, SelectEvents
+from ap.tasks.selection import CalibrateEvents, SelectEvents
 
 
 
@@ -22,20 +22,20 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
     sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
 
-    shifts = CalibrateObjects.shifts | SelectEvents.shifts
+    shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["diff"] = CalibrateObjects.req(self)
+            reqs["diff"] = CalibrateEvents.req(self)
             reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "diff": CalibrateObjects.req(self),
+            "diff": CalibrateEvents.req(self),
             "sel": SelectEvents.req(self),
         }
 
@@ -51,7 +51,7 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
         import hist
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_nano_aliases, remove_nano_column,
+            add_ak_aliases, remove_ak_column,
         )
         from ap.selection import Selector
 
@@ -72,9 +72,8 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
         # define nano columns that should be kept, and that need to be loaded
         keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
-        categories = Selector.get("categories")
         variables = Selector.get("variables")
-        load_columns = keep_columns | set(mandatory_coffea_columns) | categories.used_columns #| variables.used_columns
+        load_columns = keep_columns | set(mandatory_coffea_columns) | variables.used_columns
         print("load_columns:")
         print(load_columns)
         remove_routes = None
@@ -101,21 +100,14 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events = update_ak_array(events, diff, sel.columns)
 
                     # add aliases
-                    events = add_nano_aliases(events, aliases, remove_src=True)
+                    events = add_ak_aliases(events, aliases, remove_src=True)
                     # apply the event mask
-                    events = events[sel.event]                    
-                    print(len(events))
+                    events = events[sel.event]
 
-                    
-                    # determine which event belongs in which leaf category
-                    #cat_titles = categories(events, self.config_inst).columns.cat_titles
-                    #cat_array = categories(events, self.config_inst).columns.cat_array
-                    
-                    # apply object masks (NOTE: when applying object masks before categorisation, the categorisation is not working....?)
-                    events.Deepjet = events.Jet[sel.objects.deepjet[sel.event]]
-                    events.Jet = events.Jet[sel.objects.jet[sel.event]]
-                    events.Muon = events.Muon[sel.objects.muon[sel.event]]
-                    events.Electron = events.Electron[sel.objects.electron[sel.event]]
+                    events.Deepjet = events.Jet[sel.objects.Deepjet[sel.event]]
+                    events.Jet = events.Jet[sel.objects.Jet[sel.event]]
+                    events.Muon = events.Muon[sel.objects.Muon[sel.event]]
+                    events.Electron = events.Electron[sel.objects.Electron[sel.event]]
 
                     # weights
                     sampleweight = self.config_inst.x.luminosity / self.config_inst.get_dataset(self.dataset).n_events

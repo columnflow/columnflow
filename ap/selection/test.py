@@ -173,8 +173,8 @@ def jet_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"jet": jet_sel},
-        objects={"jet": jet_indices},
+        steps={"Jet": jet_sel},
+        objects={"Jet": jet_indices},
         columns={"jet_high_multiplicity": jet_high_multiplicity},
     )
 
@@ -185,8 +185,8 @@ def deepjet_selection_test(events, stats):
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
 
     return SelectionResult(
-        steps={"deepjet": deepjet_sel},
-        objects={"deepjet": deepjet_indices},
+        steps={"Deepjet": deepjet_sel},
+        objects={"Deepjet": deepjet_indices},
     )
 
 @selector(uses={req_muon})
@@ -199,8 +199,8 @@ def muon_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"muon": muon_sel},
-        objects={"muon": muon_indices},
+        steps={"Muon": muon_sel},
+        objects={"Muon": muon_indices},
     )
 
 @selector(uses={req_electron})
@@ -213,8 +213,8 @@ def electron_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"electron": electron_sel},
-        objects={"electron": electron_indices},
+        steps={"Electron": electron_sel},
+        objects={"Electron": electron_indices},
     )
 
 @selector(uses={req_muon, req_electron})
@@ -228,14 +228,14 @@ def lepton_selection_test(events, stats):
 
     # build and return selection results
     return SelectionResult(
-        steps={"lepton": lepton_sel},
-        objects={"muon": muon_indices, "electron": electron_indices},
+        steps={"Lepton": lepton_sel},
+        objects={"Muon": muon_indices, "Electron": electron_indices},
     )
 
 
 
 @selector(uses={jet_selection_test, lepton_selection_test, deepjet_selection_test, "LHEWeight_originalXWGTUP"})
-def select_test(events, stats, config):
+def test(events, stats, config):
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test
@@ -248,7 +248,7 @@ def select_test(events, stats, config):
     deepjet_results = deepjet_selection_test(events, stats)
 
     # combined event selection after all steps
-    event_sel = jet_results.steps.jet & lepton_results.steps.lepton & deepjet_results.steps.deepjet
+    event_sel = jet_results.steps.Jet & lepton_results.steps.Lepton & deepjet_results.steps.Deepjet
 
     # build and merge selection results
     results = SelectionResult(main={"event": event_sel})

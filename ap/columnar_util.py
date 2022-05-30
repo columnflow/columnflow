@@ -7,8 +7,9 @@ Helpers and utilities for working with columnar libraries.
 __all__ = [
     "mandatory_coffea_columns",
     "ArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
-    "get_ak_routes", "find_nano_route", "remove_nano_column", "add_nano_alias", "add_nano_aliases",
-    "update_ak_array", "sort_nano_fields", "sorted_ak_to_parquet", "flatten_ak_array",
+    "get_ak_routes", "has_ak_route", "find_ak_route", "remove_ak_column", "add_ak_alias",
+    "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "sorted_ak_to_parquet",
 ]
 
 
@@ -87,28 +88,46 @@ def get_ak_routes(
     return routes
 
 
-def find_nano_route(
-    nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
-    nano_column: str,
+def has_ak_route(
+    ak_array: ak.Array,
+    route: Tuple[str],
+) -> bool:
+    """
+    Returns whether an awkward array *ak_array* contains a nested field identified by a *route*. A
+    route is a tuple of strings where each string refers to a subfield, e.g. ``("Jet", "pt")``.
+    """
+    try:
+        ak_array[route]
+    except ValueError:
+        return False
+
+    return True
+
+
+def find_ak_route(
+    ak_array: ak.Array,
+    column: str,
 ) -> tuple:
     """
-    For a given name of a column in NanoAOD underscore format *nano_column* (e.g. "Jet_pt"), returns
-    a tuple containing field names that can be used to access the column in a coffea NanoEventsArray
-    *nano_array* (e.g. ``("Jet", "pt")``). Example:
+    For a given name of a column in underscore format *column* (e.g. "Jet_pt"), returns a tuple
+    containing field names that can be used to access the column in an awkward array *ak_array*
+    (e.g. ``("Jet", "pt")``). Example:
 
     .. code-block:: python
 
-        route = find_nano_route(events, "Jet_pt_jec_up")
+        route = find_ak_route(events, "Jet_pt_jec_up")
         print(route)  # -> ("Jet", "pt_jec_up")
 
         print(events[route])  # -> <Array [[25.123, ...], ...] type=`50000 * var * float32`>
+
+    When the column is not found and no existing route can be constructed, a *ValueError* is raised.
     """
     # split into parts
-    parts = nano_column.split("_")
+    parts = column.split("_")
 
     # traverse parts and check if there is a deeper substructure
     route = []
-    obj = nano_array
+    obj = ak_array
     for i, part in enumerate(parts):
         if part in obj.fields:
             # substructure found, try the next part
@@ -123,97 +142,103 @@ def find_nano_route(
                 route.append(rest)
             break
 
-    return tuple(route)
+    # check if the route really exists
+    route = tuple(route)
+    if not has_ak_route(ak_array, route):
+        raise ValueError(f"no route existing for column '{column}'")
+
+    return route
 
 
-def remove_nano_column(
-    nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
-    nano_column: Union[str, Tuple[str]],
-) -> coffea.nanoevents.methods.base.NanoEventsArray:
+def remove_ak_column(
+    ak_array: ak.Array,
+    column: Union[str, Tuple[str]],
+) -> ak.Array:
     """
-    Removes a column either in NanoAOD underscore format *nano_column* (e.g. "Jet_pt") or given as a
-    route (e.g. *("Jet", "pt")*) from a coffea NanoEventsArray *nano_array* and returns a new view.
+    Removes a *column* either in underscore format (e.g. "Jet_pt") or given as a route (e.g.
+    ``("Jet", "pt")``) from an awkward array  *ak_array* and returns a new view.
     """
     # find the route
-    if isinstance(nano_column, str):
-        route = find_nano_route(nano_array, nano_column)
-    elif isinstance(nano_column, tuple):
-        route = nano_column
+    if isinstance(column, str):
+        route = find_ak_route(ak_array, column)
+    elif isinstance(column, tuple):
+        route = column
     else:
-        raise ValueError(f"cannot interpret '{nano_column}' as nano column")
+        raise ValueError(f"cannot interpret '{column}' as array column")
 
     if len(route) == 1:
         # trivial case: remove a top level column
-        nano_array = nano_array[[f for f in nano_array.fields if f != route[0]]]
+        ak_array = ak_array[[f for f in ak_array.fields if f != route[0]]]
     else:
-        # nested case: given the route ("a", "b", "c"), set nano_array["a", "b"] to a view of "b"
+        # nested case: given the route ("a", "b", "c"), set ak_array["a", "b"] to a view of "b"
         # with all fields but "c" using __setitem__ syntax (and in particular not __setattr__!)
         sub_route, remove_field = route[:-1], route[-1]
-        sub_array = nano_array[sub_route]
+        sub_array = ak_array[sub_route]
         # determine remaining fields
         remaining_fields = [f for f in sub_array.fields if f != remove_field]
         # if no fields are left, remove the entire sub_view
         if not remaining_fields:
-            return remove_nano_column(nano_array, route[:-1])
+            return remove_ak_column(ak_array, route[:-1])
         # set the reduced view
-        nano_array.__setitem__(sub_route, sub_array[remaining_fields])
+        ak_array.__setitem__(sub_route, sub_array[remaining_fields])
 
-    return nano_array
+    return ak_array
 
 
-def add_nano_alias(
-    nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
+def add_ak_alias(
+    ak_array: ak.Array,
     src_column: str,
     dst_column: str,
     remove_src: bool = False,
-) -> coffea.nanoevents.methods.base.NanoEventsArray:
+) -> ak.Array:
     """
-    Adds an alias to a coffea NanoEventsArray *nano_array*, pointing the array at *src_column* to
-    *dst_column*, which both column names being in NanoAOD underscore format (e.g. "Jet_pt").
-    Existing columns referred to by *dst_column* might be overwritten. When *remove_src* is *True*,
-    a view of the input array is returned with *src_column* missing. Otherwise, the input array is
-    returned with all columns.
+    Adds an alias to an awkward array *ak_array*, pointing the array at *src_column* to
+    *dst_column*, which both column names being in underscore format (e.g. "Jet_pt") or given as a
+    route (e.g. ``("Jet", "pt")``). Existing columns referred to by *dst_column* might be
+    overwritten. When *remove_src* is *True*, a view of the input array is returned with
+    *src_column* missing. Otherwise, the input array is returned with all columns.
     """
     # find source and destination routes for simple access
-    src_route = find_nano_route(nano_array, src_column)
-    dst_route = find_nano_route(nano_array, dst_column)
+    src_route = find_ak_route(ak_array, src_column)
+    dst_route = find_ak_route(ak_array, dst_column)
 
     # add the alias, potentially overwriting existing columns
-    nano_array[dst_route] = nano_array[src_route]
+    ak_array[dst_route] = ak_array[src_route]
 
     # create a view without the source if requested
     if remove_src:
-        nano_array = remove_nano_column(nano_array, src_route)
+        ak_array = remove_ak_column(ak_array, src_route)
 
-    return nano_array
+    return ak_array
 
 
-def add_nano_aliases(
-    nano_array: coffea.nanoevents.methods.base.NanoEventsArray,
+def add_ak_aliases(
+    ak_array: ak.Array,
     aliases: Dict[str, str],
     remove_src: bool = False,
-) -> coffea.nanoevents.methods.base.NanoEventsArray:
+) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
-    a coffea NanoEventsArray *nano_array*. See :py:func:`add_nano_aliases` for more info. When
-    *remove_src* is *True*, a view of the input array is returned with all source columns missing.
-    Otherwise, the input array is returned with all columns.
+    an awkward array *ak_array*. See :py:func:`add_ak_aliases` for more info. When *remove_src* is
+    *True*, a view of the input array is returned with all source columns missing. Otherwise, the
+    input array is returned with all columns.
     """
     # add all aliases
     for dst_column, src_column in aliases.items():
-        nano_array = add_nano_alias(
-            nano_array,
+        ak_array = add_ak_alias(
+            ak_array,
             src_column,
             dst_column,
             remove_src=remove_src,
         )
 
-    return nano_array
+    return ak_array
 
 
 def update_ak_array(
     ak_array: ak.Array,
     *others: ak.Array,
+    allow_overwrite: Optional[bool] = True,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* in-place with the content of multiple different arrays
@@ -222,49 +247,11 @@ def update_ak_array(
     """
     for other in others:
         for route in get_ak_routes(other):
+            if not allow_overwrite and route in ak_array:
+                raise Exception(f"cannot update akward array with already existing route '{route}'")
             ak_array[route] = other[route]
 
     return ak_array
-
-
-def sort_nano_fields(
-    ak_array: ak.Array,
-    sort_fn: Optional[Callable] = None,
-) -> ak.Array:
-    """
-    Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
-    *sort_fn* is set, it is used internally for sorting field names.`
-    """
-    # sort the top level fields
-    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
-
-    # identify fields with nested structure, then sort and reassign them
-    nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
-    for field in nested_fields:
-        ak_array[field] = sort_nano_fields(ak_array[field], sort_fn=sort_fn)
-
-    return ak_array
-
-
-def sorted_ak_to_parquet(
-    ak_array: ak.Array,
-    *args,
-    **kwargs,
-) -> None:
-    """
-    Sorts the fields in an awkward array *ak_array* resurvively with :py:func:`sort_nano_fields` and
-    saves it as a parquet file using ``awkward.to_parquet`` which receives all additional *args* and
-    *kwargs*.
-
-    .. note::
-
-        Since the order of fields in awkward arrays resulting from reading nano files might be
-        arbitrary (depending on streamer info in the original root files), but formats such as
-        parquet highly depend on the order for building internal table schemes, one should always
-        make use of this function! Otherwise, operations like file merging might fail due to
-        differently ordered schemas.
-    """
-    ak.to_parquet(sort_nano_fields(ak_array), *args, **kwargs)
 
 
 def flatten_ak_array(
@@ -303,6 +290,46 @@ def flatten_ak_array(
             flat_array[column_name] = ak_array[route]
 
     return flat_array
+
+
+def sort_ak_fields(
+    ak_array: ak.Array,
+    sort_fn: Optional[Callable] = None,
+) -> ak.Array:
+    """
+    Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
+    *sort_fn* is set, it is used internally for sorting field names.
+    """
+    # sort the top level fields
+    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
+
+    # identify fields with nested structure, then sort and reassign them
+    nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
+    for field in nested_fields:
+        ak_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+
+    return ak_array
+
+
+def sorted_ak_to_parquet(
+    ak_array: ak.Array,
+    *args,
+    **kwargs,
+) -> None:
+    """
+    Sorts the fields in an awkward array *ak_array* resurvively with :py:func:`sort_nano_fields` and
+    saves it as a parquet file using ``awkward.to_parquet`` which receives all additional *args* and
+    *kwargs*.
+
+    .. note::
+
+        Since the order of fields in awkward arrays resulting from reading nano files might be
+        arbitrary (depending on streamer info in the original root files), but formats such as
+        parquet highly depend on the order for building internal table schemes, one should always
+        make use of this function! Otherwise, operations like file merging might fail due to
+        differently ordered schemas.
+    """
+    ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
 class ArrayFunction(object):
@@ -364,6 +391,30 @@ class ArrayFunction(object):
 
         return cls._instances[name]
 
+    @classmethod
+    def create_subclass(cls, name: str, attributes: Optional[dict] = None) -> "ArrayFunction":
+        """
+        Creates a new class named *name* inheriting from *this* class. *attributes* are used to add
+        custom class-level members to the newly generated class. By default, the new subclass has a
+        separate instance cache dictionary.
+
+        In general, it would be trivial to create a subclass the usual way, but since the base
+        :py:class:`ArrayFunction` and its features might be used *as is* with a different type and
+        instance cache, this method could be useful. Example:
+
+        .. code-block:: python
+
+            Categorizer = ArrayFunction.create_subclass("Categorizer")
+        """
+        if not attributes:
+            attributes = {}
+
+        # enforce a separate instance cache attribute
+        attributes["_instances"] = {}
+
+        # create and return the subclass
+        return type(name, (cls,), attributes)
+
     def __init__(
         self,
         func: Callable,
@@ -373,7 +424,7 @@ class ArrayFunction(object):
             Set["ArrayFunction"],
         ]] = None,
     ):
-        super(ArrayFunction, self).__init__()
+        super().__init__()
 
         self.func = func
         self.name = name or self.func.__name__
@@ -490,7 +541,7 @@ class ChunkedReader(object):
         read_options: Optional[Union[dict, List[dict]]] = None,
         iter_message: str = "handling chunk {pos.index}",
     ):
-        super(ChunkedReader, self).__init__()
+        super().__init__()
 
         # multiple inputs?
         is_multi = lambda obj: isinstance(obj, (list, tuple))

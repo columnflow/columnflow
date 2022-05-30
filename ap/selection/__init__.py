@@ -14,14 +14,13 @@ from ap.columnar_util import ArrayFunction
 ak = maybe_import("awkward")
 
 
-class Selector(ArrayFunction):
-    """
+_selector_doc = """
     Wrapper class for functions performing object and event calibration on (most likely) coffea nano
     event arrays. The main purpose of wrappers is to store information about required columns next
     to the implementation. In addition, they have a unique name which allows for using it in a
     config file.
 
-    The use of the :py:func:`selectpr` decorator function is recommended to create selector
+    The use of the :py:func:`selector` decorator function is recommended to create selector
     instances. Example:
 
     .. code-block:: python
@@ -79,8 +78,8 @@ class Selector(ArrayFunction):
        The resolved, flat set of used column names.
     """
 
-    # create an own instance cache
-    _instances = {}
+
+Selector = ArrayFunction.create_subclass("Selector", {"__doc__": _selector_doc})
 
 
 def selector(
@@ -151,7 +150,7 @@ class SelectionResult(object):
         objects: Optional[Union[DotDict, dict]] = None,
         columns: Optional[Union[DotDict, dict]] = None,
     ):
-        super(SelectionResult, self).__init__()
+        super().__init__()
 
         # store fields
         self.main = DotDict(main or {})
@@ -193,7 +192,7 @@ class SelectionResult(object):
             self.main,
             {
                 "steps": ak.zip(self.steps),
-                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged first axis
+                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged axis 1
                 "columns": ak.zip(self.columns),
             }
         ))

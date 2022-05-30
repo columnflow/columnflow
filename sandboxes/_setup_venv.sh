@@ -11,6 +11,10 @@
 #       The requirements file containing packages that are installed on top of
 #       $AP_BASE/requirements_prod.txt.
 #
+# Upon venv activation, one environment variable is set in addition to those exported by the venv
+# itself:
+#   - AP_DEV: Set to "1" when AP_VENV_NAME ends with "_dev", and "0" otherwise.
+#
 # Arguments:
 # 1. mode: The setup mode. Different values are accepted:
 #   - '' (default): The virtual environment is installed when not existing yet and sourced.
@@ -75,6 +79,7 @@ action() {
 
     local install_path="$AP_VENV_PATH/$AP_VENV_NAME"
     local flag_file="$install_path/ap_flag"
+    local pending_flag_file="$AP_VENV_PATH/pending_${AP_VENV_NAME}"
     local venv_version="$( cat "$first_requirement_file" | grep -Po "# version \K\d+.*" )"
 
     # the venv version must be set
@@ -83,44 +88,72 @@ action() {
         return "6"
     fi
 
+    # ensure the AP_VENV_PATH exists
+    mkdir -p "$AP_VENV_PATH"
+
     # remove the current installation
     if [ "$mode" = "reinstall" ]; then
         echo "removing current installation at $install_path (mode '$mode')"
         rm -rf "$install_path"
     fi
 
+    # complain in remote jobs when the env is not installed
+    if [ "$AP_REMOTE_JOB" = "1" ] && [ ! -f "$flag_file" ]; then
+        >&2 echo "the venv $AP_VENV_NAME is not installed"
+        return "7"
+    fi
+
+    # from here onwards, files and directories could be created and in order to prevent race
+    # conditions from multiple processes, guard the setup with the pending_flag_file and sleep for a
+    # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
+    # starting processes getting here at the same time
+    if [ ! -f "$flag_file" ]; then
+        local sleep_counter="0"
+        sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+        while [ -f "$pending_flag_file" ]; do
+            # wait at most 10 minutes
+            sleep_counter="$(( $sleep_counter + 1 ))"
+            if [ "$sleep_counter" -ge 120 ]; then
+                2>&1 echo "venv $AP_VENV_NAME is setup in different process, but number of sleeps exceeded"
+                return "8"
+            fi
+            echo -e "\x1b[0;49;36mvenv $AP_VENV_NAME already being setup in different process, sleep $sleep_counter / 120\x1b[0m"
+            sleep 5
+        done
+    fi
+
     # install or fetch when not existing
     if [ ! -f "$flag_file" ]; then
-        if [ "$AP_REMOTE_JOB" = "1" ]; then
-            >&2 echo "the venv $AP_VENV_NAME is not installed"
-            return "7"
-        fi
-
+        local ret
+        touch "$pending_flag_file"
         echo "installing venv at $install_path"
 
         rm -rf "$install_path"
-        ap_create_venv "$AP_VENV_NAME" || return "$?"
+        ap_create_venv "$AP_VENV_NAME" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
 
         # activate it
-        source "$install_path/bin/activate" "" || return "$?"
+        source "$install_path/bin/activate" "" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
 
         # install requirements
-        python3 -m pip install -U pip
-        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
+        python3 -m pip install -U pip || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+
         for i in "${!requirement_files[@]}"; do
             echo -e "\n\x1b[0;49;35minstalling requirement file $i at ${requirement_files[i]}\x1b[0m"
-            python3 -m pip install -r "${requirement_files[i]}" || return "$?"
+            python3 -m pip install -r "${requirement_files[i]}" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
         done
-        ap_make_venv_relocateable "$AP_VENV_NAME" || return "$?"
+
+        ap_make_venv_relocateable "$AP_VENV_NAME" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
 
         # write the version into the flag file
         echo "version $venv_version" > "$flag_file"
+        rm -f "$pending_flag_file"
     else
         # get the current version
         local curr_version="$( cat "$flag_file" | grep -Po "version \K\d+.*" )"
         if [ -z "$curr_version" ]; then
             >&2 echo "the flag file $flag_file does not contain a valid version"
-            return "8"
+            return "9"
         fi
 
         # complain when the version is outdated
@@ -135,6 +168,9 @@ action() {
         # activate it
         source "$install_path/bin/activate" "" || return "$?"
     fi
+
+    # export variables
+    export AP_DEV="$( [[ "$AP_VENV_NAME" == *_dev ]] && echo "1" || echo "0" )"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$AP_BASE/sandboxes/$AP_VENV_NAME.sh"

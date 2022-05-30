@@ -5,5 +5,7 @@
 "tasks.framework" module, mainly for provisioning imports.
 """
 
-from ap.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, CommandTask
+from ap.tasks.framework.base import (
+    AnalysisTask, ConfigTask, DatasetTask, CommandTask, wrapper_factory,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow, BundleRepo, BundleSoftware
