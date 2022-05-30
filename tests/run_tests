@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# Script that runs all tests.
-
+# Script that runs all unit tests.
 
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"

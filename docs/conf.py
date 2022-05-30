@@ -50,7 +50,6 @@ elif html_theme == "alabaster":
     html_theme_options.update({
         "github_user": "uhh-cms",
         "github_repo": "analysis_playground",
-        "travis_button": True,
     })
 
 extensions = [

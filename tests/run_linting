@@ -2,7 +2,6 @@
 
 # Script that runs linting checks on selected files.
 
-
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"

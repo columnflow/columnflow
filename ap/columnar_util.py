@@ -529,25 +529,26 @@ class ChunkedReader(object):
     multi-threaded read operations. Chunks and their positions (denoted by start and stop markers,
     and the index of the chunk itself) are accessed by iterating through the reader.
 
-    The content to load can be configured through *source*, which can be a file path or an opened
-    file object, and a *source_type*, which defines how the *source* should be opened and traversed
-    for chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation
-    details and :py:meth:`get_source_handlers` for a list of currently supported sources.
+    The content to load is configurable through *source*, which can be a file path or an opened file
+    object, and a *source_type*, which defines how the *source* should be opened and traversed for
+    chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation details
+    and :py:meth:`get_source_handlers` for a list of currently supported sources.
 
     Example:
 
     .. code-block:: python
 
         # iterate through a single file
-        with ChunkedReader("data.root", source_type="coffea_root") as reader:
-            for chunk, position in reader:
-                # chunk is a NanoAODEventsArray as returned by read_coffea_root
-                jet_pts = chunk.Jet.pt
-                print(f"jet pts of chunk {chunk.index}: {jet_pts}")
+        # (creating the reader and iterating through it in the same line)
+        for chunk, position in ChunkedReader("data.root", source_type="coffea_root"):
+            # chunk is a NanoAODEventsArray as returned by read_coffea_root
+            jet_pts = chunk.Jet.pt
+            print(f"jet pts of chunk {chunk.index}: {jet_pts}")
 
     .. code-block:: python
 
         # iterate through multiple files simultaneously
+        # (also, now creating the reader first and then iterating through it)
         with ChunkedReader(
             ("data.root", "masks.parquet"),
             source_type=("coffea_root", "awkward_parquet"),
@@ -991,39 +992,13 @@ class ChunkedReader(object):
         """
         self.tasks.insert(where, (func, args, kwargs or {}))
 
-    def __del__(self):
+    def _iter_impl(self):
         """
-        Destructor that closes all cached, opened files.
+        Internal iterator implementation. Please refer to :py:meth:`__iter__` and the usual iterator
+        interface.
         """
-        try:
-            self.close()
-        except:
-            pass
-
-    def __enter__(self):
-        """
-        Context entry point that opens all sources.
-        """
-        self.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Context exit point that closes all cached, opened files.
-        """
-        self.close()
-
-    def __iter__(self):
-        """
-        Iterator that yields chunks (and their positions) of all registered sources, fully
-        preserving their order such that the same chunk is read and yielded per source. Internally,
-        a multi-thread pool is used to load file content in a parallel fashion. During iteration,
-        the so-called tasks to be processed by this pool can be extended via :py:meth:`add_task`.
-        In case an exception is raised during the processing of chunks, or while content is loaded,
-        the pool is closed and terminated.
-        """
-        # make sure all sources are opened
-        self.open()
+        if self.closed:
+            raise Exception("cannot iterate trough closed reader")
 
         # create a list of read functions
         read_funcs = [
@@ -1091,3 +1066,38 @@ class ChunkedReader(object):
 
             finally:
                 self.pool = None
+
+    def __del__(self):
+        """
+        Destructor that closes all cached, opened files.
+        """
+        try:
+            self.close()
+        except:
+            pass
+
+    def __enter__(self):
+        """
+        Context entry point that opens all sources.
+        """
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Context exit point that closes all cached, opened files.
+        """
+        self.close()
+
+    def __iter__(self):
+        """
+        Iterator that yields chunks (and their positions) of all registered sources, fully
+        preserving their order such that the same chunk is read and yielded per source. Internally,
+        a multi-thread pool is used to load file content in a parallel fashion. During iteration,
+        the so-called tasks to be processed by this pool can be extended via :py:meth:`add_task`.
+        In case an exception is raised during the processing of chunks, or while content is loaded,
+        the pool is closed and terminated.
+        """
+        # make sure all sources are opened using a context and yield the internal iterator
+        with self:
+            yield from self._iter_impl()
