@@ -194,7 +194,7 @@ class SelectionResult(object):
                 "steps": ak.zip(self.steps),
                 "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged axis 1
                 "columns": ak.zip(self.columns),
-            }
+            },
         ))
 
 

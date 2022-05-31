@@ -722,7 +722,7 @@ def wrapper_factory(
                 )
                 if not configs:
                     raise ValueError(
-                        f"no configs found in analysis {self.analysis_inst} matching {self.configs}"
+                        f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
                     )
                 if self.wrapper_has_skip_configs:
                     configs -= find_objects(
@@ -733,7 +733,7 @@ def wrapper_factory(
                     if not configs:
                         raise ValueError(
                             f"no configs found in analysis {self.analysis_inst} after skipping "
-                            f"{self.skip_configs}"
+                            f"{self.skip_configs}",
                         )
                 config_insts = list(map(self.analysis_inst.get_config, configs))
             else:
@@ -755,7 +755,7 @@ def wrapper_factory(
                     )
                     if not shifts:
                         raise ValueError(
-                            f"no shifts found in config {config_inst} matching {self.shifts}"
+                            f"no shifts found in config {config_inst} matching {self.shifts}",
                         )
                     if self.wrapper_has_skip_shifts:
                         shifts -= find_objects(
@@ -766,7 +766,7 @@ def wrapper_factory(
                     if not shifts:
                         raise ValueError(
                             f"no shifts found in config {config_inst} after skipping "
-                            f"{self.skip_shifts}"
+                            f"{self.skip_shifts}",
                         )
                     shifts = sorted(shifts)
                     # move "nominal" to the front if present
@@ -784,7 +784,7 @@ def wrapper_factory(
                     if not datasets:
                         raise ValueError(
                             f"no datasets found in config {self.config_inst} matching "
-                            f"{self.datasets}"
+                            f"{self.datasets}",
                         )
                     if self.wrapper_has_skip_datasets:
                         datasets -= find_objects(
@@ -795,7 +795,7 @@ def wrapper_factory(
                         if not datasets:
                             raise ValueError(
                                 f"no datasets found in config {self.config_inst} after skipping "
-                                f"{self.skip_datasets}"
+                                f"{self.skip_datasets}",
                             )
                     prod_sequences.append(sorted(datasets))
 
