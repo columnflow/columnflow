@@ -141,7 +141,7 @@ cat_mu_bb_highHT = cat_mu_bb.add_category(
 config_2018.add_variable(
     "HT",
     expression="var_HT",
-    binning=(40, 0., 800.),
+    binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
     unit="GeV",
     x_title="HT"
 )

@@ -113,7 +113,7 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                                     hist.Hist.new
                                     .IntCat(range(0, 10), name="category")  # , growth=True)
                                     .StrCategory([], name="shift", growth=True)
-                                    .Reg(*var.binning, name=var_name, label=var.get_full_x_title())
+                                    .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
                                     .Weight()
                                 )
                                 fill_kwargs = {
