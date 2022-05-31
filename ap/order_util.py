@@ -5,16 +5,20 @@ Some functions that seemed useful in general
 """
 
 """ inputs list of process names, outputs list of dataset names """
+
+
 def getDatasetNamesFromProcesses(config, processes):
     if not processes:
         raise ValueError("From getDatasetNamesFromProcesses: given list of processes is empty.")
-    datasets=[]
+    datasets = []
     for p in processes:
         datasets += getDatasetNamesFromProcess(config, p)
     return datasets
-        
+
 
 """ inputs name of a single process, outputs list of dataset names that exist for this process """
+
+
 def getDatasetNamesFromProcess(config, process):
     datasets = []
     proc = config.get_process(process)
