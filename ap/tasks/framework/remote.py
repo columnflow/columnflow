@@ -36,7 +36,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=os.getenv("AP_HTCONDOR_FLAVOR", "naf"),
-        choices=("naf", "naf",),
+        choices=("naf", "naf"),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
         "naf,cern; default: '{}'".format(os.getenv("AP_HTCONDOR_FLAVOR", "naf")),
