@@ -9,8 +9,3 @@ import ap.tasks.reduction
 import ap.tasks.histograms
 import ap.tasks.mergeHistograms
 import ap.tasks.plotting
-import ap.tasks.plotShiftograms
-
-
-# debug tasks
-import ap.tasks.test_plotting

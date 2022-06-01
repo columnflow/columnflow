@@ -17,7 +17,7 @@ from ap.__version__ import (  # noqa
 # load contrib packages
 law.contrib.load(
     "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "tasks",
-    "wlcg","matplotlib",
+    "wlcg", "matplotlib",
 )
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
