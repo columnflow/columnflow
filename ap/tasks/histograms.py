@@ -102,6 +102,11 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
 
                 results = variables(events)
 
+                # get all viable category ids (only leaf categories)
+                cat_ids = []
+                for cat in self.config_inst.get_leaf_categories():
+                    cat_ids.append(cat.id)
+
                 # define & fill histograms
                 var_names = self.config_inst.variables.names()
                 with self.publish_step("looping over all variables in config ...."):
@@ -110,7 +115,7 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
                             var = self.config_inst.variables.get(var_name)
                             h_var = (
                                 hist.Hist.new
-                                .IntCat(range(0, 10), name="category")  # , growth=True)
+                                .IntCat(cat_ids, name="category")  # , growth=True)
                                 .StrCategory([], name="shift", growth=True)
                                 .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
                                 .Weight()
