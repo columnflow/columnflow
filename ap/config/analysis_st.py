@@ -30,6 +30,9 @@ analysis_st.set_aux("cmssw_sandboxes", [
     # "cmssw_default.sh",
 ])
 
+# config groups for conveniently looping over certain configs
+analysis_st.set_aux("config_groups", {})
+
 
 #
 # 2018 standard config
@@ -54,6 +57,13 @@ dataset_names = [
 ]
 for dataset_name in dataset_names:
     config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
+
+
+# process groups for conveniently looping over certain processs
+analysis_st.set_aux("process_groups", {})
+
+# dataset groups for conveniently looping over certain datasets
+analysis_st.set_aux("dataset_groups", {})
 
 
 # helper to add column aliases for both shifts of a source
