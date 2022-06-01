@@ -613,7 +613,7 @@ def wrapper_factory(
         check_class_compatibility("datasets", DatasetTask, ShiftTask)
 
     # generic helper to find objects on unique object indices or mappings
-    def find_objects(names, object_index, object_mapping, accept_patterns=True):
+    def find_objects(names, object_index, object_group, accept_patterns=True):
         object_names = set()
         patterns = set()
         lookup = list(names)
@@ -627,9 +627,9 @@ def wrapper_factory(
             elif name in object_index:
                 # known object
                 object_names.add(name)
-            elif object_mapping and name in object_mapping:
-                # a key in dataset_mappings aux data
-                lookup.extend(list(object_mapping[name]))
+            elif object_group and name in object_group:
+                # a key in the object group dict
+                lookup.extend(list(object_group[name]))
             elif accept_patterns:
                 # must eventually be a pattern, store it for object traversal
                 patterns.add(name)
@@ -649,42 +649,42 @@ def wrapper_factory(
             configs = law.CSVParameter(
                 default=("*",),
                 description="names or name patterns of configs to use; can also be the key of a "
-                "mapping defined in the 'config_mappings' auxiliary data of the analysis; default: "
+                "mapping defined in the 'config_groups' auxiliary data of the analysis; default: "
                 "('*',)",
             )
         if has_skip_configs:
             skip_configs = law.CSVParameter(
                 default=(),
                 description="names or name patterns of configs to skip after evaluating --configs; "
-                "can also be the key of a mapping defined in the 'config_mappings' auxiliary data "
+                "can also be the key of a mapping defined in the 'config_groups' auxiliary data "
                 "of the analysis; empty default",
             )
         if has_datasets:
             datasets = law.CSVParameter(
                 default=("*",),
                 description="names or name patterns of datasets to use; can also be the key of a "
-                "mapping defined in the 'dataset_mappings' auxiliary data of the corresponding "
+                "mapping defined in the 'dataset_groups' auxiliary data of the corresponding "
                 "config; default: ('*',)",
             )
         if has_skip_datasets:
             skip_datasets = law.CSVParameter(
                 default=(),
                 description="names or name patterns of datasets to skip after evaluating "
-                "--datasets; can also be the key of a mapping defined in the 'dataset_mappings' "
+                "--datasets; can also be the key of a mapping defined in the 'dataset_groups' "
                 "auxiliary data of the corresponding config; empty default",
             )
         if has_shifts:
             shifts = law.CSVParameter(
                 default=("nominal",),
                 description="names or name patterns of shifts to use; can also be the key of a "
-                "mapping defined in the 'shift_mappings' auxiliary data of the corresponding "
+                "mapping defined in the 'shift_groups' auxiliary data of the corresponding "
                 "config; default: ('nominal',)",
             )
         if has_skip_shifts:
             skip_shifts = law.CSVParameter(
                 default=(),
                 description="names or name patterns of shifts to skip after evaluating --shifts; "
-                "can also be the key of a mapping defined in the 'shift_mappings' auxiliary data "
+                "can also be the key of a mapping defined in the 'shift_groups' auxiliary data "
                 "of the corresponding config; empty default",
             )
 
@@ -718,7 +718,7 @@ def wrapper_factory(
                 configs = find_objects(
                     self.configs,
                     self.analysis_inst.configs,
-                    self.analysis_inst.x("config_mappings", {}),
+                    self.analysis_inst.x("config_groups", {}),
                 )
                 if not configs:
                     raise ValueError(
@@ -728,7 +728,7 @@ def wrapper_factory(
                     configs -= find_objects(
                         self.skip_configs,
                         self.analysis_inst.configs,
-                        self.analysis_inst.x("config_mappings", {}),
+                        self.analysis_inst.x("config_groups", {}),
                     )
                     if not configs:
                         raise ValueError(
@@ -751,7 +751,7 @@ def wrapper_factory(
                     shifts = find_objects(
                         self.shifts,
                         config_inst.shifts,
-                        config_inst.x("shift_mappings", {}),
+                        config_inst.x("shift_groups", {}),
                     )
                     if not shifts:
                         raise ValueError(
@@ -761,7 +761,7 @@ def wrapper_factory(
                         shifts -= find_objects(
                             self.skip_shifts,
                             config_inst.shifts,
-                            config_inst.x("shift_mappings", {}),
+                            config_inst.x("shift_groups", {}),
                         )
                     if not shifts:
                         raise ValueError(
@@ -779,7 +779,7 @@ def wrapper_factory(
                     datasets = find_objects(
                         self.datasets,
                         config_inst.datasets,
-                        config_inst.x("dataset_mappings", {}),
+                        config_inst.x("dataset_groups", {}),
                     )
                     if not datasets:
                         raise ValueError(
@@ -790,7 +790,7 @@ def wrapper_factory(
                         datasets -= find_objects(
                             self.skip_datasets,
                             config_inst.datasets,
-                            config_inst.x("dataset_mappings", {}),
+                            config_inst.x("dataset_groups", {}),
                         )
                         if not datasets:
                             raise ValueError(
