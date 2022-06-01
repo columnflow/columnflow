@@ -118,13 +118,13 @@ cat_e = config_2018.add_category(
     name="1e",
     id=1,
     label="1 electron",
-    selection="sel_1e"
+    selection="sel_1e",
 )
 cat_mu = config_2018.add_category(
     name="1mu",
     id=2,
     label="1 muon",
-    selection="sel_1mu"
+    selection="sel_1mu",
 )
 
 cat_e_b = cat_e.add_category(
@@ -170,7 +170,7 @@ config_2018.add_variable(
     expression="var_HT",
     binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
     unit="GeV",
-    x_title="HT"
+    x_title="HT",
 )
 config_2018.add_variable(
     name="nElectron",
@@ -258,12 +258,4 @@ config_2018.set_aux("file_merging", {
 
 # versions per task and potentially other keys
 config_2018.set_aux("versions", {
-})
-
-config_2018.set_aux("dataset_mappings", {
-    "foo": ["st_tchannel_t", "st_tchannel_tbar"]
-})
-
-config_2018.set_aux("process_mappings", {
-    "foo": ["st_tchannel"]
 })

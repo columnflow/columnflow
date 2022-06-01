@@ -27,7 +27,7 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
 
     def requires(self):
         return {
-            "events": ReduceEvents.req(self)
+            "events": ReduceEvents.req(self),
         }
 
     def output(self):
@@ -173,11 +173,11 @@ class MergeShiftHistograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     dataset = luigi.Parameter(
         default="st_tchannel_t",
-        description="dataset"
+        description="dataset",
     )
     shift_sources = law.CSVParameter(
         default=("jec",),
-        description="List of uncertainties to consider"
+        description="List of uncertainties to consider",
     )
 
     def workflow_requires(self):

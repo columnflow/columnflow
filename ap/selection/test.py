@@ -11,11 +11,10 @@ ak = maybe_import("awkward")
 np = maybe_import("numpy")
 
 
-""" inputs jagged array and index and returns padded array from given index """
-
-
 def extract(array, idx):
-    import awkward as ak
+    """
+    inputs jagged array and index and returns padded array from given index
+    """
     array = ak.pad_none(array, idx + 1)
     array = ak.fill_none(array[:, idx], -999)
     return array
@@ -90,7 +89,6 @@ def var_nElectron(events):
 
 @selector(uses={req_muon})
 def var_nMuon(events):
-    import awkward as ak
     return ak.num(req_muon(events), axis=1)
 
 
@@ -171,24 +169,20 @@ def categories(events, config):
 
 # combination of all leaf categories
 @selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b})
-def categories(events, config):
+def categories(events, config_inst):
     cat_array = 0
     mask_int = 0
-    for cat in config.get_leaf_categories():
+    for cat in config_inst.get_leaf_categories():
         cat_sel = cat.selection
         mask = globals()[cat_sel](events)
         cat_array = np.where(mask, cat.id, cat_array)
         mask_int = mask_int + np.where(mask, 1, 0)  # to check orthogonality of categories
     if not ak.all(mask_int == 1):
         if ak.any(mask_int >= 2):
-            # raise ValueError('Leaf categories are supposed to be fully orthogonal')
-            print('Leaf categories are not fully orthogonal')
+            print("Leaf categories are not fully orthogonal")
         else:
-            # raise ValueError('Some events are without leaf category')
-            print('Some events are without leaf category')
-    return SelectionResult(
-        columns={"cat_array": cat_array}
-    )
+            print("Some events are without leaf category")
+    return SelectionResult(columns={"cat_array": cat_array})
 
 
 @selector(uses={req_jet})
@@ -268,7 +262,7 @@ def lepton_selection_test(events, stats):
 
 
 @selector(uses={jet_selection_test, lepton_selection_test, deepjet_selection_test, "LHEWeight_originalXWGTUP"})
-def test(events, stats, config):
+def test(events, stats, config_inst):
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test
@@ -290,7 +284,7 @@ def test(events, stats, config):
     results += deepjet_results
 
     # include categories into results
-    category_results = categories(events, config)
+    category_results = categories(events, config_inst)
     results += category_results
 
     # increment stats

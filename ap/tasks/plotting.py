@@ -21,15 +21,15 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     processes = law.CSVParameter(
         default=(),
-        description="List of processes to plot"
+        description="List of processes to plot",
     )
     variables = law.CSVParameter(
         default=(),
-        description="List of variables to plot"
+        description="List of variables to plot",
     )
     categories = law.CSVParameter(
         default=("incl",),
-        description="List of categories to create plots for"
+        description="List of categories to create plots for",
     )
     # how to handle the logy defaults given by config?
     '''
@@ -38,6 +38,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         description="Whether to plot the y scale logarithmically or not"
     )
     '''
+
     def store_parts(self):
         # print("Hello from store_parts")
         parts = super(Plotting, self).store_parts()
@@ -212,19 +213,19 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     processes = law.CSVParameter(
         default=("st_tchannel_t",),
-        description="List of processes to create plots for"
+        description="List of processes to create plots for",
     )
     variables = law.CSVParameter(
         default=("HT",),
-        description="List of variables to plot"
+        description="List of variables to plot",
     )
     categories = law.CSVParameter(
         default=("incl",),
-        description="List of categories to create plots for"
+        description="List of categories to create plots for",
     )
     shift_sources = law.CSVParameter(
         default=("jec",),
-        description="List of systematic uncertainties to consider"
+        description="List of systematic uncertainties to consider",
     )
 
     def create_branch_map(self):
