@@ -43,7 +43,7 @@ def get_ak_routes(
     max_depth: int = 0,
 ) -> List[Tuple[str]]:
     """
-    Extracts the list of all routes pointing to columns of a potentially deeply nested akward array
+    Extracts the list of all routes pointing to columns of a potentially deeply nested awkward array
     *ak_array* and returns it. Example:
 
     .. code-block:: python
@@ -53,7 +53,7 @@ def get_ak_routes(
         print(get_ak_routes(arr))
         # [
         #    ("event",),
-        #    ("luminosityBlock,"),
+        #    ("luminosityBlock",),
         #    ("run",),
         #    ("Jet", "pt"),
         #    ("Jet", "mass"),
@@ -110,8 +110,8 @@ def find_ak_route(
 ) -> tuple:
     """
     For a given name of a column in underscore format *column* (e.g. "Jet_pt"), returns a tuple
-    containing field names that can be used to access the column in an awkward array *ak_array*
-    (e.g. ``("Jet", "pt")``). Example:
+    containing field names that can be used to access the column in a nested awkward array
+    *ak_array* (e.g. ``("Jet", "pt")``). Example:
 
     .. code-block:: python
 
@@ -238,18 +238,66 @@ def add_ak_aliases(
 def update_ak_array(
     ak_array: ak.Array,
     *others: ak.Array,
-    allow_overwrite: Optional[bool] = True,
+    overwrite_routes: Union[bool, List[Tuple[str]]] = True,
+    add_routes: Union[bool, List[Tuple[str]]] = False,
+    concat_routes: Union[bool, List[Tuple[str]]] = False,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* in-place with the content of multiple different arrays
     *others*. Internally, :py:func:`get_ak_routes` is used to obtain the list of all routes pointing
     to potentially deeply nested arrays. The input array is also returned.
+
+    If two columns (or rather routes) overlap during this update process, four different cases can
+    be configured to occur:
+
+        1. If *concat_routes* is either *True* or a list of route tuples containing the route in
+           question, the columns are concatenated along axis 1. This obviously implies that their
+           shapes are compatible.
+        2. If case 1 does not apply and *add_routes* is either *True* or a list of route tuples
+           containing the route in question, the columns are added using the plus operator,
+           forwarding the actual implementation to awkward.
+        3. If cases 1 and 2 do not apply and *overwrite_routes* is either *True* or a list of route
+           tuples containing the route in question, new columns (right most in *others*) overwrite
+           existing ones.
+        4. If none of the cases above apply, an exception is raised.
     """
+    # helpers to cache calls to has_ak_route for ak_array
+    _has_route_cache = {route: True for route in get_ak_routes(ak_array)}
+
+    def has_ak_route_cached(route):
+        if route not in _has_route_cache:
+            _has_route_cache[route] = has_ak_route(ak_array, route)
+        return _has_route_cache[route]
+
+    # helpers to check if routes can be overwritten, added or concatenated
+    def _match_route(bool_or_list, cache, route):
+        if route not in cache:
+            cache[route] = route in bool_or_list if isinstance(bool_or_list, list) else bool_or_list
+        return cache[route]
+
+    do_overwrite = partial(_match_route, overwrite_routes, {})
+    do_add = partial(_match_route, add_routes, {})
+    do_concat = partial(_match_route, concat_routes, {})
+
+    # go through all other arrays and merge their columns
     for other in others:
         for route in get_ak_routes(other):
-            if not allow_overwrite and route in ak_array:
-                raise Exception(f"cannot update akward array with already existing route '{route}'")
-            ak_array[route] = other[route]
+            if has_ak_route_cached(route):
+                if do_concat(route):
+                    # concat and reassign
+                    ak_array[route] = ak.concatenate((ak_array[route], other[route]), axis=1)
+                elif do_add(route):
+                    # add and reassign
+                    ak_array[route] = ak_array[route] + other[route]
+                elif do_overwrite(route):
+                    # just replace the column
+                    ak_array[route] = other[route]
+                else:
+                    raise Exception(f"cannot update already existing array route '{route}'")
+            else:
+                # the route is new, so add it and manually tell the cache
+                ak_array[route] = other[route]
+                _has_route_cache[route] = True
 
     return ak_array
 
@@ -265,9 +313,9 @@ def flatten_ak_array(
     create a single array again.
 
     :py:func:`get_ak_routes` is used internally to determine the nested structure of the array. The
-        name of flat columns in the returned dictionary is build via *name_fn*. When not set, nested
-        routes are joined via underscore. The columns to save can be defined via *columns* which can
-        be a sequence of column names or a function receiving a column name and returning a bool.
+    name of flat columns in the returned dictionary is build via *name_fn*. When not set, nested
+    routes are joined via underscore. The columns to save can be defined via *columns* which can be
+    a sequence of column names or a function receiving a column name and returning a bool.
     """
     # use an ordered mapping to somewhat preserve row adjacency
     flat_array = OrderedDict()
@@ -481,25 +529,26 @@ class ChunkedReader(object):
     multi-threaded read operations. Chunks and their positions (denoted by start and stop markers,
     and the index of the chunk itself) are accessed by iterating through the reader.
 
-    The content to load can be configured through *source*, which can be a file path or an opened
-    file object, and a *source_type*, which defines how the *source* should be opened and traversed
-    for chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation
-    details and :py:meth:`get_source_handlers` for a list of currently supported sources.
+    The content to load is configurable through *source*, which can be a file path or an opened file
+    object, and a *source_type*, which defines how the *source* should be opened and traversed for
+    chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation details
+    and :py:meth:`get_source_handlers` for a list of currently supported sources.
 
     Example:
 
     .. code-block:: python
 
         # iterate through a single file
-        with ChunkedReader("data.root", source_type="coffea_root") as reader:
-            for chunk, position in reader:
-                # chunk is a NanoAODEventsArray as returned by read_coffea_root
-                jet_pts = chunk.Jet.pt
-                print(f"jet pts of chunk {chunk.index}: {jet_pts}")
+        # (creating the reader and iterating through it in the same line)
+        for chunk, position in ChunkedReader("data.root", source_type="coffea_root"):
+            # chunk is a NanoAODEventsArray as returned by read_coffea_root
+            jet_pts = chunk.Jet.pt
+            print(f"jet pts of chunk {chunk.index}: {jet_pts}")
 
     .. code-block:: python
 
         # iterate through multiple files simultaneously
+        # (also, now creating the reader first and then iterating through it)
         with ChunkedReader(
             ("data.root", "masks.parquet"),
             source_type=("coffea_root", "awkward_parquet"),
@@ -943,39 +992,13 @@ class ChunkedReader(object):
         """
         self.tasks.insert(where, (func, args, kwargs or {}))
 
-    def __del__(self):
+    def _iter_impl(self):
         """
-        Destructor that closes all cached, opened files.
+        Internal iterator implementation. Please refer to :py:meth:`__iter__` and the usual iterator
+        interface.
         """
-        try:
-            self.close()
-        except:
-            pass
-
-    def __enter__(self):
-        """
-        Context entry point that opens all sources.
-        """
-        self.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Context exit point that closes all cached, opened files.
-        """
-        self.close()
-
-    def __iter__(self):
-        """
-        Iterator that yields chunks (and their positions) of all registered sources, fully
-        preserving their order such that the same chunk is read and yielded per source. Internally,
-        a multi-thread pool is used to load file content in a parallel fashion. During iteration,
-        the so-called tasks to be processed by this pool can be extended via :py:meth:`add_task`.
-        In case an exception is raised during the processing of chunks, or while content is loaded,
-        the pool is closed and terminated.
-        """
-        # make sure all sources are opened
-        self.open()
+        if self.closed:
+            raise Exception("cannot iterate trough closed reader")
 
         # create a list of read functions
         read_funcs = [
@@ -1043,3 +1066,38 @@ class ChunkedReader(object):
 
             finally:
                 self.pool = None
+
+    def __del__(self):
+        """
+        Destructor that closes all cached, opened files.
+        """
+        try:
+            self.close()
+        except:
+            pass
+
+    def __enter__(self):
+        """
+        Context entry point that opens all sources.
+        """
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Context exit point that closes all cached, opened files.
+        """
+        self.close()
+
+    def __iter__(self):
+        """
+        Iterator that yields chunks (and their positions) of all registered sources, fully
+        preserving their order such that the same chunk is read and yielded per source. Internally,
+        a multi-thread pool is used to load file content in a parallel fashion. During iteration,
+        the so-called tasks to be processed by this pool can be extended via :py:meth:`add_task`.
+        In case an exception is raised during the processing of chunks, or while content is loaded,
+        the pool is closed and terminated.
+        """
+        # make sure all sources are opened using a context and yield the internal iterator
+        with self:
+            yield from self._iter_impl()

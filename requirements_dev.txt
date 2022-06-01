@@ -2,3 +2,4 @@
 
 ipython==7.16.*
 flake8==4.0.*
+flake8-commas==2.1.*

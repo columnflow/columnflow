@@ -108,7 +108,7 @@ class Calibrator(ArrayFunction):
 
 def calibrator(
     func: Optional[Callable] = None,
-    **kwargs
+    **kwargs,
 ) -> Union[Calibrator, Callable]:
     """
     Decorator for registering new calibrator functions. See :py:class:`Calibrator` for
