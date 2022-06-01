@@ -4,6 +4,8 @@
 Configuration of the single top analysis.
 """
 
+from scinum import Number, REL
+
 import re
 
 from order import Analysis, Shift
@@ -40,6 +42,14 @@ analysis_st.set_aux("config_groups", {})
 
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
+
+# 2018 luminosity with values in inverse pb and uncertainties taken from
+# https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
+config_2018.set_aux("luminosity", Number(59740, {
+    "lumi_13TeV_correlated": (REL, 0.02),
+    "lumi_13TeV_2018": (REL, 0.015),
+    "lumi_13TeV_1718": (REL, 0.002),
+}))
 
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
@@ -91,12 +101,154 @@ add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
 config_2018.set_aux("keep_columns", {
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
-        "nJet", "Jet_pt", "Jet_eta",
+        "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
         "nMuon", "Muon_pt", "Muon_eta",
+        "nElectron", "Electron_pt", "Electron_eta",
         "LHEWeight_originalXWGTUP",
         "jet_high_multiplicity",
+        "cat_array",
+    },
+    "CreateHistograms": {
+        "LHEWeight_originalXWGTUP",
     },
 })
+
+# define categories
+cat_e = config_2018.add_category(
+    name="1e",
+    id=1,
+    label="1 electron",
+    selection="sel_1e",
+)
+cat_mu = config_2018.add_category(
+    name="1mu",
+    id=2,
+    label="1 muon",
+    selection="sel_1mu",
+)
+
+cat_e_b = cat_e.add_category(
+    name="1e_eq1b",
+    id=3,
+    label="1e, 1 b-tag",
+    selection="sel_1e_eq1b",
+)
+cat_e_bb = cat_e.add_category(
+    name="1e_ge2b",
+    id=4,
+    label=r"1e, $\geq$ 2 b-tags",
+    selection="sel_1e_ge2b",
+)
+cat_mu_b = cat_mu.add_category(
+    name="1mu_eq1b",
+    id=5,
+    label="1mu, 1 b-tag",
+    selection="sel_1mu_eq1b",
+)
+cat_mu_bb = cat_mu.add_category(
+    name="1mu_ge2b",
+    id=6,
+    label=r"1mu, $\geq$ 2 b-tags",
+    selection="sel_1mu_ge2b",
+)
+cat_mu_bb_lowHT = cat_mu_bb.add_category(
+    name="1mu_ge2b_lowHT",
+    id=7,
+    label=r"1mu, $\geq$ 2 b-tags, HT<=300 GeV",
+    selection="sel_1mu_ge2b_lowHT",
+)
+cat_mu_bb_highHT = cat_mu_bb.add_category(
+    name="1mu_ge2b_highHT",
+    id=8,
+    label=r"1mu, $\geq$ 2 b-tags, HT>300 GeV",
+    selection="sel_1mu_ge2b_highHT",
+)
+
+# define variables
+config_2018.add_variable(
+    name="HT",
+    expression="var_HT",
+    binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
+    unit="GeV",
+    x_title="HT",
+)
+config_2018.add_variable(
+    name="nElectron",
+    expression="var_nElectron",
+    binning=(6, -0.5, 5.5),
+    x_title="Number of electrons",
+)
+config_2018.add_variable(
+    name="nMuon",
+    expression="var_nMuon",
+    binning=(6, -0.5, 5.5),
+    x_title="Number of muons",
+)
+config_2018.add_variable(
+    name="Electron1_pt",
+    expression="var_Electron1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading electron $p_{T}$",
+)
+config_2018.add_variable(
+    name="Muon1_pt",
+    expression="var_Muon1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading muon $p_{T}$",
+)
+config_2018.add_variable(
+    name="nJet",
+    expression="var_nJet",
+    binning=(11, -0.5, 10.5),
+    x_title="Number of jets",
+)
+config_2018.add_variable(
+    name="nDeepjet",
+    expression="var_nDeepjet",
+    binning=(8, -0.5, 7.5),
+    x_title="Number of deepjets",
+)
+config_2018.add_variable(
+    name="Jet1_pt",
+    expression="var_Jet1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading jet $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet2_pt",
+    expression="var_Jet2_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Jet 2 $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet3_pt",
+    expression="var_Jet3_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Jet 3 $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet1_eta",
+    expression="var_Jet1_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Leading jet $\eta$",
+)
+config_2018.add_variable(
+    name="Jet2_eta",
+    expression="var_Jet2_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Jet 2 $\eta$",
+)
+config_2018.add_variable(
+    name="Jet3_eta",
+    expression="var_Jet3_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Jet 3 $\eta$",
+)
 
 
 # file merging values

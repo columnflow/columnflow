@@ -1,5 +1,4 @@
 # coding: utf-8
-# flake8: noqa
 
 """
 Main entry point for top-level settings and fixes before anything else is imported.
@@ -9,7 +8,7 @@ import law
 
 
 # package infos
-from ap.__version__ import (
+from ap.__version__ import (  # noqa
     __doc__, __author__, __email__, __copyright__, __credits__, __contact__, __license__,
     __status__, __version__,
 )
@@ -17,8 +16,8 @@ from ap.__version__ import (
 
 # load contrib packages
 law.contrib.load(
-    "arc", "awkward", "cms", "coffea", "git", "htcondor", "numpy", "pyarrow", "telegram", "root",
-    "tasks", "wlcg",
+    "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "tasks",
+    "wlcg", "matplotlib",
 )
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
