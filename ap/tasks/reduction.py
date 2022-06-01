@@ -10,11 +10,11 @@ import law
 
 from ap.tasks.framework import AnalysisTask, DatasetTask, HTCondorWorkflow, wrapper_factory
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import SelectedEventsConsumer, CalibrateEvents, SelectEvents
+from ap.tasks.selection import SelectorMixin, CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ReduceEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -126,7 +126,7 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class GatherReductionStats(SelectedEventsConsumer):
+class GatherReductionStats(DatasetTask, SelectorMixin):
 
     merged_size = law.BytesParameter(
         default=500.0,
@@ -209,7 +209,7 @@ GatherReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeReducedEvents(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -223,7 +223,7 @@ class MergeReducedEvents(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondor
 
     @classmethod
     def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(SelectedEventsConsumer.modify_param_values, params)
+        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 
