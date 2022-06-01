@@ -195,7 +195,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 rax.set_ylim(0.9, 1.1)
                 rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
 
-                mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
+                mplhep.cms.label(ax=ax, lumi=c.x.luminosity.get("nominal") / 1000, label="Work in Progress", fontsize=22)
 
                 plt.tight_layout()
 
@@ -319,7 +319,7 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
                 print("------")
 
-                # mplhep.cms.label(ax=ax, lumi=c.x.luminosity / 1000, label="Work in Progress", fontsize=22)
+                # mplhep.cms.label(ax=ax, lumi=c.x.luminosity.get("nominal") / 1000, label="Work in Progress", fontsize=22)
 
             self.output().dump(plt, formatter="mpl")
 

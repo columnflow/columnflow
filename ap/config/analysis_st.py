@@ -4,6 +4,8 @@
 Configuration of the single top analysis.
 """
 
+from scinum import Number, REL
+
 import re
 
 from order import Analysis, Shift
@@ -37,8 +39,18 @@ analysis_st.set_aux("cmssw_sandboxes", [
 
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
+# at the top
+from scinum import Number, REL
 
-config_2018.set_aux("luminosity", 59740)
+...
+
+# 2018 luminosity with values in inverse pb and uncertainties taken from
+# https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
+config_2018.set_aux("luminosity", Number(59740, {
+    "lumi_13TeV_correlated": (REL, 0.02),
+    "lumi_13TeV_2018": (REL, 0.015),
+    "lumi_13TeV_1718": (REL, 0.002),
+}))
 
 # add processes we are interested in
 config_2018.add_process(procs.process_st)

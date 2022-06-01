@@ -98,7 +98,7 @@ class CreateHistograms(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
                     events.Electron = events.Electron[sel.objects.Electron[sel.event]]
 
                     # weights
-                    sampleweight = self.config_inst.x.luminosity / self.config_inst.get_dataset(self.dataset).n_events
+                    sampleweight = self.config_inst.x.luminosity.get("nominal") / self.config_inst.get_dataset(self.dataset).n_events
                     weight = sampleweight * events.LHEWeight.originalXWGTUP
 
                     results = variables(events)
