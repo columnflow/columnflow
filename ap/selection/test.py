@@ -54,7 +54,7 @@ def req_deepjet(events):
 
 
 # variables (after reducing events)
-@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Deepjet_pt"})
+@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB"})
 def variables(events):
     columns = {}
     columns["HT"] = ak.sum(events.Jet.pt, axis=1)
@@ -65,8 +65,8 @@ def variables(events):
     columns["nJet"] = ak.num(events.Jet.pt, axis=1)
     columns["nElectron"] = ak.num(events.Electron.pt, axis=1)
     columns["nMuon"] = ak.num(events.Muon.pt, axis=1)
-    columns["nDeepjet"] = ak.num(events.Deepjet.pt, axis=1)
-
+    # columns["nDeepjet"] = ak.num(events.Deepjet.pt, axis=1)
+    columns["nDeepjet"] = ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1)
     columns["Electron1_pt"] = extract(events.Electron.pt, 0)
     columns["Muon1_pt"] = extract(events.Muon.pt, 0)
 

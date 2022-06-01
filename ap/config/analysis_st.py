@@ -91,11 +91,12 @@ add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
 config_2018.set_aux("keep_columns", {
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
-        "nJet", "Jet_pt", "Jet_eta",
+        "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
         "nMuon", "Muon_pt", "Muon_eta",
         "nElectron", "Electron_pt", "Electron_eta",
         "LHEWeight_originalXWGTUP",
         "jet_high_multiplicity",
+        "cat_array",
     },
     "CreateHistograms": {
         "LHEWeight_originalXWGTUP",
@@ -247,4 +248,12 @@ config_2018.set_aux("file_merging", {
 
 # versions per task and potentially other keys
 config_2018.set_aux("versions", {
+})
+
+config_2018.set_aux("dataset_mappings", {
+    "foo": ["st_tchannel_t", "st_tchannel_tbar"]
+})
+
+config_2018.set_aux("process_mappings", {
+    "foo": ["st_tchannel"]
 })
