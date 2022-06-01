@@ -4,6 +4,8 @@
 Task to plot different types of histograms
 """
 
+from itertools import product
+
 import law
 
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
@@ -26,7 +28,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         description="List of variables to plot"
     )
     categories = law.CSVParameter(
-        default=("incl,"),
+        default=("incl",),
         description="List of categories to create plots for"
     )
     # how to handle the logy defaults given by config?
@@ -55,9 +57,9 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         branch_map = {}
-        for i, var in enumerate(self.variables):
-            for j, cat in enumerate(self.categories):
-                branch_map[i * len(self.categories) + j] = {"variable": var, "category": cat}
+        prod = product(self.variables, self.categories)
+        for i, x in enumerate(prod):
+            branch_map[i] = {"variable": x[0], "category": x[1]}
         return branch_map
 
     def workflow_requires(self):
@@ -195,7 +197,8 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 rax.set_ylim(0.9, 1.1)
                 rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
 
-                mplhep.cms.label(ax=ax, lumi=c.x.luminosity.get("nominal") / 1000, label="Work in Progress", fontsize=22)
+                lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
+                mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
                 plt.tight_layout()
 
@@ -208,19 +211,19 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
-        default=("st_tchannel_t,"),
+        default=("st_tchannel_t",),
         description="List of processes to create plots for"
     )
     variables = law.CSVParameter(
-        default=("HT,"),
+        default=("HT",),
         description="List of variables to plot"
     )
     categories = law.CSVParameter(
-        default=("incl,"),
+        default=("incl",),
         description="List of categories to create plots for"
     )
     systematics = law.CSVParameter(
-        default=("jec,"),
+        default=("jec",),
         description="List of systematic uncertainties to consider"
     )
 
@@ -229,12 +232,9 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         branch_map = {}
-        for i, var in enumerate(self.variables):
-            for j, cat in enumerate(self.categories):
-                for k, proc in enumerate(self.processes):
-                    for s, syst in enumerate(self.systematics):
-                        count = i + len(self.variables) * (j + len(self.categories) * (k + len(self.processes) * s))
-                        branch_map[count] = {"variable": var, "category": cat, "process": proc, "systematic": syst}
+        prod = product(self.variables, self.categories, self.processes, self.systematics)
+        for i, x in enumerate(prod):
+            branch_map[i] = {"variable": x[0], "category": x[1], "process": x[2], "systematic": x[3]}
         return branch_map
 
     def workflow_requires(self):
@@ -318,8 +318,8 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 rax.set_ylim(0.25, 1.75)
                 rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
                 print("------")
-
-                # mplhep.cms.label(ax=ax, lumi=c.x.luminosity.get("nominal") / 1000, label="Work in Progress", fontsize=22)
+                # lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
+                # mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
             self.output().dump(plt, formatter="mpl")
 

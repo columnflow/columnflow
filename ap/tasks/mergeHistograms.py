@@ -33,7 +33,7 @@ class MergeHistograms(DatasetTask, law.tasks.ForestMerge, HTCondorWorkflow):
 
     def merge_workflow_requires(self):
         # return CreateHistograms.req(self, _exclude=['branches'])
-        return CreateHistograms.req(self, _exclude=['branches'], branches=[0, 1])
+        return CreateHistograms.req(self, _exclude=['branches'], branches=[23])
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]

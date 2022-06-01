@@ -25,10 +25,10 @@ def getDatasetNamesFromProcess(config, process):
     if proc.is_leaf_process:
         datasets.append(config.get_dataset(process).name)
     else:
-        for l in proc.get_leaf_processes():
-            print(l.name)
-            if l.name in config.analysis.get_datasets(config).names():
-                datasets.append(config.get_dataset(l.name).name)
+        for leaf in proc.get_leaf_processes():
+            print(leaf.name)
+            if leaf.name in config.analysis.get_datasets(config).names():
+                datasets.append(config.get_dataset(leaf.name).name)
             else:
-                print("Warning: no dataset for process_leaf %s" % l.name)
+                print("Warning: no dataset for process_leaf %s" % leaf.name)
     return datasets
