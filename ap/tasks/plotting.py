@@ -205,7 +205,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
+class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -222,7 +222,7 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         default=("incl",),
         description="List of categories to create plots for"
     )
-    systematics = law.CSVParameter(
+    shift_sources = law.CSVParameter(
         default=("jec",),
         description="List of systematic uncertainties to consider"
     )
@@ -232,28 +232,28 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         branch_map = {}
-        prod = product(self.variables, self.categories, self.processes, self.systematics)
+        prod = product(self.variables, self.categories, self.processes, self.shift_sources)
         for i, x in enumerate(prod):
-            branch_map[i] = {"variable": x[0], "category": x[1], "process": x[2], "systematic": x[3]}
+            branch_map[i] = {"variable": x[0], "category": x[1], "process": x[2], "shift_source": x[3]}
         return branch_map
 
     def workflow_requires(self):
         self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
         req_map = {}
         for d in self.datasets:
-            req_map[d] = MergeShiftograms.req(self)
+            req_map[d] = MergeShiftHistograms.req(self)
         return req_map
 
     def requires(self):
         self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
         req_map = {}
         for d in self.datasets:
-            req_map[d] = MergeShiftograms.req(self, dataset=d)
+            req_map[d] = MergeShiftHistograms.req(self, dataset=d)
         return req_map
 
     def output(self):
         filename = ("systplot_" + self.branch_data['category'] + "_" + self.branch_data['process'] + "_" +
-                    self.branch_data['variable'] + "_" + self.branch_data['systematic'] + ".pdf")
+                    self.branch_data['variable'] + "_" + self.branch_data['shift_source'] + ".pdf")
         return self.local_target(filename)
 
     def run(self):
@@ -305,13 +305,13 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 norm = h_proc[{"shift": "nominal"}].view().value
                 rax.step(
                     x=h_proc.axes[self.branch_data['variable']].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data['systematic'] + "_up"}].view().value / norm,
+                    y=h_proc[{"shift": self.branch_data['shift_source'] + "_up"}].view().value / norm,
                     color="red",
                 )
                 print("------")
                 rax.step(
                     x=h_proc.axes[self.branch_data['variable']].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data['systematic'] + "_down"}].view().value / norm,
+                    y=h_proc[{"shift": self.branch_data['shift_source'] + "_down"}].view().value / norm,
                     color="blue",
                 )
                 rax.axhline(y=1., color="black")
@@ -325,4 +325,4 @@ class PlotShiftograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
 
 
 # trailing imports
-from ap.tasks.mergeHistograms import MergeHistograms, MergeShiftograms
+from ap.tasks.histograms import MergeHistograms, MergeShiftHistograms
