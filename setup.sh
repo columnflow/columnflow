@@ -83,7 +83,8 @@ setup() {
     # local python stack in two virtual envs:
     # - "ap_prod": contains the minimal stack to run tasks and is sent alongside jobs
     # - "ap_dev" : "prod" + additional python tools for local development (e.g. ipython)
-    local sw_version="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
+    local sw_version_prod="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
+    local sw_version_dev="$( cat "${AP_BASE}/requirements_dev.txt" | grep -Po "# version \K\d+.*" )"
     local flag_file_sw="${AP_SOFTWARE}/.sw_good"
     [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
     if [ ! -f "$flag_file_sw" ]; then
@@ -115,8 +116,9 @@ setup() {
             ap_make_venv_relocateable ap_dev
         fi
 
-        date "+%s" > "$flag_file_sw"
-        echo "version $sw_version" >> "$flag_file_sw"
+        date "timestamp +%s" > "$flag_file_sw"
+        echo "version prod $sw_version_prod" >> "$flag_file_sw"
+        echo "version dev $sw_version_dev" >> "$flag_file_sw"
     else
         if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
             source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
@@ -128,13 +130,18 @@ setup() {
     fi
     export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
 
-    # check the version in the sw flag file and show a warning when there was an update
-    if [ "$( cat "$flag_file_sw" | grep -Po "version \K\d+.*" )" != "$sw_version" ]; then
-        2>&1 echo ""
-        2>&1 echo "WARNING: your local software stack is not up to date, please consider updating it in a new shell with"
-        2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
-        2>&1 echo ""
-    fi
+    # check the versions in the sw flag file and show a warning when there was an update
+    local kind
+    local sw_version
+    for kind in prod dev; do
+        eval "sw_version=\${sw_version_${kind}}"
+        if [ "$( cat "$flag_file_sw" | grep -Po "version $kind \K\d+.*" )" != "$sw_version" ]; then
+            2>&1 echo ""
+            2>&1 echo "WARNING: your venv 'ap_${kind}' is not up to date, please consider updating it in a new shell with"
+            2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
+            2>&1 echo ""
+        fi
+    done
 
 
     #

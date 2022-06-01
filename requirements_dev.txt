@@ -1,3 +1,4 @@
+# version 2
 # packages are installed in addition to those in requirements_prod.txt
 
 ipython==7.16.*
