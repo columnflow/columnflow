@@ -116,7 +116,7 @@ setup() {
             ap_make_venv_relocateable ap_dev
         fi
 
-        date "timestamp +%s" > "$flag_file_sw"
+        echo "timestamp $( date "timestamp +%s" )" > "$flag_file_sw"
         echo "version prod $sw_version_prod" >> "$flag_file_sw"
         echo "version dev $sw_version_dev" >> "$flag_file_sw"
     else
