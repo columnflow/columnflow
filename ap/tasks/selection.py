@@ -14,7 +14,7 @@ from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CalibratedEventsConsumer(DatasetTask):
+class CalibratorMixin(AnalysisTask):
 
     calibrator = luigi.Parameter(
         default="test",
@@ -27,7 +27,7 @@ class CalibratedEventsConsumer(DatasetTask):
         return parts
 
 
-class SelectedEventsConsumer(CalibratedEventsConsumer):
+class SelectorMixin(CalibratorMixin):
 
     selector = luigi.Parameter(
         default="test",
@@ -40,7 +40,7 @@ class SelectedEventsConsumer(CalibratedEventsConsumer):
         return parts
 
 
-class CalibrateEvents(CalibratedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
+class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -131,7 +131,7 @@ CalibrateEventsWrapper = wrapper_factory(
 )
 
 
-class SelectEvents(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -246,7 +246,7 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(SelectedEventsConsumer, law.tasks.ForestMerge):
+class MergeSelectionStats(DatasetTask, SelectorMixin, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 
@@ -255,7 +255,7 @@ class MergeSelectionStats(SelectedEventsConsumer, law.tasks.ForestMerge):
 
     @classmethod
     def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(SelectedEventsConsumer.modify_param_values, params)
+        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 

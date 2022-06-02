@@ -8,28 +8,29 @@ from itertools import product
 
 import law
 
+from ap.tasks.framework import ConfigTask, HTCondorWorkflow
+from ap.tasks.selection import SelectorMixin
+from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
+from ap.util import ensure_proxy
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
-from ap.tasks.framework import ConfigTask, HTCondorWorkflow
-from ap.util import ensure_proxy
 
-
-class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
     processes = law.CSVParameter(
         default=(),
-        description="List of processes to plot",
+        description="comma-separated process names to plot; default: ()",
     )
     variables = law.CSVParameter(
         default=(),
-        description="List of variables to plot",
+        description="comma-separated variable names to plot; default: ()",
     )
     categories = law.CSVParameter(
         default=("incl",),
-        description="List of categories to create plots for",
+        description="comma-separated category names to create plots for; default: ('incl',)",
     )
     # how to handle the logy defaults given by config?
     '''
@@ -57,11 +58,11 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         # print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
-        branch_map = {}
-        prod = product(self.variables, self.categories)
-        for i, x in enumerate(prod):
-            branch_map[i] = {"variable": x[0], "category": x[1]}
-        return branch_map
+
+        return [
+            {"variable": var_name, "category": cat_name}
+            for var_name, cat_name in product(self.variables, self.categories)
+        ]
 
     def workflow_requires(self):
         c = self.config_inst
@@ -69,7 +70,10 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+        return {
+            d: MergeHistograms.req(self, dataset=d, tree_index=0, _exclude={"branches"})
+            for d in self.datasets
+        }
 
     def requires(self):
         # print('Hello from requires')
@@ -78,7 +82,10 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+        return {
+            d: MergeHistograms.req(self, dataset=d, branch=-1, tree_index=0)
+            for d in self.datasets
+        }
 
     def output(self):
         # print('Hello from output')
@@ -95,6 +102,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             import mplhep
             plt.style.use(mplhep.style.CMS)
 
+            inputs = self.input()
             c = self.config_inst
 
             histograms = []
@@ -109,7 +117,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     h_proc = None
                     for d in getDatasetNamesFromProcess(c, p):
                         # print("----- dataset:", d)
-                        h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
+                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data['variable']]
 
                         if category == "incl":
                             leaf_cats = [cat.id for cat in c.get_leaf_categories()]
@@ -168,14 +176,14 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     label="Pseudodata",
                 )
 
-                ax.set_ylabel(c.get_variable(self.branch_data['variable']).get_full_y_title())
+                ax.set_ylabel(c.get_variable(self.branch_data["variable"]).get_full_y_title())
                 ax.legend(title="Processes")
-                if c.get_variable(self.branch_data['variable']).log_y:
-                    ax.set_yscale('log')
+                if c.get_variable(self.branch_data["variable"]).log_y:
+                    ax.set_yscale("log")
 
                 from hist.intervals import ratio_uncertainty
                 rax.errorbar(
-                    x=h_data.axes[self.branch_data['variable']].centers,
+                    x=h_data.axes[self.branch_data["variable"]].centers,
                     y=h_data.view().value / h_total.view().value,
                     yerr=ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
                     color="k",
@@ -184,7 +192,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     elinewidth=1,
                 )
                 rax.stairs(
-                    edges=h_total.axes[self.branch_data['variable']].edges,
+                    edges=h_total.axes[self.branch_data["variable"]].edges,
                     baseline=1 - np.sqrt(h_total.view().variance) / h_total.view().value,
                     values=1 + np.sqrt(h_total.view().variance) / h_total.view().value,
                     facecolor="grey",
@@ -196,7 +204,7 @@ class Plotting(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 rax.axhline(y=1.0, linestyle="dashed", color="gray")
                 rax.set_ylabel("Data / MC", loc="center")
                 rax.set_ylim(0.9, 1.1)
-                rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
+                rax.set_xlabel(c.variables.get(self.branch_data["variable"]).get_full_x_title())
 
                 lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
                 mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
@@ -229,7 +237,6 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
     )
 
     def create_branch_map(self):
-        # print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
         branch_map = {}
@@ -242,19 +249,19 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
         self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
         req_map = {}
         for d in self.datasets:
-            req_map[d] = MergeShiftHistograms.req(self)
+            req_map[d] = MergeShiftedHistograms.req(self)
         return req_map
 
     def requires(self):
         self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
         req_map = {}
         for d in self.datasets:
-            req_map[d] = MergeShiftHistograms.req(self, dataset=d)
+            req_map[d] = MergeShiftedHistograms.req(self, dataset=d)
         return req_map
 
     def output(self):
-        filename = ("systplot_" + self.branch_data['category'] + "_" + self.branch_data['process'] + "_" +
-                    self.branch_data['variable'] + "_" + self.branch_data['shift_source'] + ".pdf")
+        filename = ("systplot_" + self.branch_data["category"] + "_" + self.branch_data["process"] + "_" +
+                    self.branch_data["variable"] + "_" + self.branch_data["shift_source"] + ".pdf")
         return self.local_target(filename)
 
     def run(self):
@@ -264,11 +271,11 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             plt.style.use(mplhep.style.CMS)
 
             c = self.config_inst
-            category = self.branch_data['category']
+            category = self.branch_data["category"]
 
             h_proc = None
-            for d in getDatasetNamesFromProcess(c, self.branch_data['process']):
-                h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
+            for d in getDatasetNamesFromProcess(c, self.branch_data["process"]):
+                h_in = self.input()[d].load(formatter="pickle")[self.branch_data["variable"]]
                 # categorization
                 # for now, only leaf categories are considered
                 if category == "incl":
@@ -300,30 +307,26 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     color=["black", "red", "blue"],
                 )
                 print("------")
-                ax.legend(title=self.branch_data['process'])
-                ax.set_ylabel(c.get_variable(self.branch_data['variable']).get_full_y_title())
+                ax.legend(title=self.branch_data["process"])
+                ax.set_ylabel(c.get_variable(self.branch_data["variable"]).get_full_y_title())
 
                 norm = h_proc[{"shift": "nominal"}].view().value
                 rax.step(
-                    x=h_proc.axes[self.branch_data['variable']].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data['shift_source'] + "_up"}].view().value / norm,
+                    x=h_proc.axes[self.branch_data["variable"]].edges[+1:],
+                    y=h_proc[{"shift": self.branch_data["shift_source"] + "_up"}].view().value / norm,
                     color="red",
                 )
                 print("------")
                 rax.step(
-                    x=h_proc.axes[self.branch_data['variable']].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data['shift_source'] + "_down"}].view().value / norm,
+                    x=h_proc.axes[self.branch_data["variable"]].edges[+1:],
+                    y=h_proc[{"shift": self.branch_data["shift_source"] + "_down"}].view().value / norm,
                     color="blue",
                 )
                 rax.axhline(y=1., color="black")
                 rax.set_ylim(0.25, 1.75)
-                rax.set_xlabel(c.variables.get(self.branch_data['variable']).get_full_x_title())
+                rax.set_xlabel(c.variables.get(self.branch_data["variable"]).get_full_x_title())
                 print("------")
                 # lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
                 # mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
             self.output().dump(plt, formatter="mpl")
-
-
-# trailing imports
-from ap.tasks.histograms import MergeHistograms, MergeShiftHistograms

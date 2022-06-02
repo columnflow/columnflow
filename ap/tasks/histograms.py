@@ -1,20 +1,18 @@
 # coding: utf-8
 
 """
-Task to produce and merge histograms
+Task to produce and merge histograms.
 """
 
 import law
-import luigi
 
-from ap.tasks.framework import ConfigTask, HTCondorWorkflow
+from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.selection import SelectorMixin
+from ap.tasks.reduction import ReduceEvents
 from ap.util import ensure_proxy, dev_sandbox
 
-from ap.tasks.selection import SelectedEventsConsumer
-from ap.tasks.reduction import ReduceEvents
 
-
-class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -38,9 +36,7 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
     @ensure_proxy
     def run(self):
         import hist
-        from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns,
-        )
+        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
         from ap.selection import Selector
 
         # prepare inputs and outputs
@@ -53,27 +49,18 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # get shift dependent aliases
-        # aliases = self.shift_inst.x("column_aliases", {})
-
         # define nano columns that need to be loaded
         variables = Selector.get("variables")
         load_columns = set(mandatory_coffea_columns) | variables.used_columns
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [inputs["events"].path],
-            source_type=["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}],
+            inputs["events"].path,
+            source_type="awkward_parquet",
+            read_options={"iteritems_options": {"filter_name": load_columns}},
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                print(events)
-                print(len(events))
-                print(events[0].fields)
-
-                events = events[0]
-
                 # weights
                 lumi = self.config_inst.x.luminosity.get("nominal")
                 sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
@@ -119,18 +106,18 @@ class CreateHistograms(SelectedEventsConsumer, law.LocalWorkflow, HTCondorWorkfl
         self.output().dump(histograms, formatter="pickle")
 
 
-class MergeHistograms(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
 
-    # sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
-
-    merge_factor = 10
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = CreateHistograms.shifts
 
+    # in each step, merge 10 into 1
+    merge_factor = 10
+
     @classmethod
     def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(SelectedEventsConsumer.modify_param_values, params)
+        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
         params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
         return params
 
@@ -139,95 +126,104 @@ class MergeHistograms(SelectedEventsConsumer, law.tasks.ForestMerge, HTCondorWor
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        # return CreateHistograms.req(self, _exclude=['branches'])
-        return CreateHistograms.req(self, _exclude=['branches'], branches=[23])
+        # TODO(riga): hard-coded branches for the hackathon, to be removed afterwards
+        return CreateHistograms.req(self, _exclude=["branches"], branches=[(0, 2)])
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target(f"histograms_{self.dataset}.pickle")
+        return self.local_target("histograms.pickle")
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
-            merged = {}
-            inputs_list = [i.load(formatter="pickle") for i in inputs]
-            inputs_dict = {k: [el[k] for el in inputs_list] for k in inputs_list[0].keys()}
+            inputs_list = [inp.load(formatter="pickle") for inp in inputs]
+            inputs_dict = {
+                var_name: [hists[var_name] for hists in inputs_list]
+                for var_name in inputs_list[0]
+            }
 
-            for k in inputs_dict.keys():
-                h_out = inputs_dict[k][0]
-                for i, h_in in enumerate(inputs_dict[k]):
-                    if(i == 0):
-                        continue
-                    h_out += h_in
-                merged[k] = h_out
+            # do the merging
+            merged = {
+                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+                for var_name in inputs_dict
+            }
 
             output.dump(merged, formatter="pickle")
 
 
-# Should be ConfigTask and SelectedEventsConsumer
-class MergeShiftHistograms(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
+class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
-    # sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    dataset = luigi.Parameter(
-        default="st_tchannel_t",
-        description="dataset",
-    )
     shift_sources = law.CSVParameter(
         default=("jec",),
-        description="List of uncertainties to consider",
+        description="comma-separated source of shifts without direction to consider; default: "
+        "('jec',)",
     )
 
+    # disable the shift parameter
+    shift = None
+    allow_empty_shift = True
+
     def workflow_requires(self):
-        syst_map = super(MergeShiftHistograms, self).workflow_requires()
-        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        reqs = super(MergeShiftedHistograms, self).workflow_requires()
+
+        # add nominal and both directions per shift source
+        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0)
+        reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
-            print(s)
-            syst_map[s + "_up"] = MergeHistograms.req(self, shift=s + "_up")
-            syst_map[s + "_down"] = MergeHistograms.req(self, shift=s + "_down")
-        print(syst_map)
-        return syst_map
+            reqs[f"{s}_up"] = req(f"{s}_up")
+            reqs[f"{s}_down"] = req(f"{s}_down")
+
+        return reqs
 
     def requires(self):
-        syst_map = {}
-        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        reqs = {}
+
+        # add nominal and both directions per shift source
+        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0, _exclude={"branch"})
+        reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
-            syst_map[s + "up"] = MergeHistograms.req(self, shift=s + "_up")
-            syst_map[s + "down"] = MergeHistograms.req(self, shift=s + "_down")
-        return syst_map
+            reqs[f"{s}_up"] = req(f"{s}_up")
+            reqs[f"{s}_down"] = req(f"{s}_down")
+
+        return reqs
 
     def create_branch_map(self):
-        return {0: self.dataset}
+        # create a dummy branch map so that this task could as a job
+        return {0: None}
 
     def store_parts(self):
-        parts = super(MergeShiftHistograms, self).store_parts()
-        systs = ""
-        for s in self.shift_sources:
-            systs += s + "_"
-        systs = systs[:-1]
-        parts.insert_after("dataset", "shift_sources", systs)
+        parts = super(MergeShiftedHistograms, self).store_parts()
+
+        # add sorted shifts sources, add hash after the first five
+        sources = sorted(self.shift_sources)
+        sources_str = "_".join(sources[:5])
+        if len(sources) > 5:
+            sources_str += f"_{law.util.create_hash(sources[5:])}"
+        parts.insert_after("dataset", "shift_sources", sources_str)
+
         return parts
 
     def output(self):
-        return self.local_target(f"shiftograms_{self.dataset}.pickle")
+        return self.local_target("shifted_histograms.pickle")
 
     def run(self):
-        with self.publish_step("Hello from MergeShiftHistograms"):
-            merged = {}
-            print(self.input().keys())
-            syst_keys = self.input().keys()
-            print(syst_keys)
-            inputs_list = [self.input()[i].load(formatter="pickle") for i in syst_keys]
-            inputs_dict = {k: [el[k] for el in inputs_list] for k in inputs_list[0].keys()}
+        with self.publish_step("Hello from MergeShiftedHistograms"):
+            inputs_list = [
+                inp["collection"][0].load(formatter="pickle")
+                for inp in self.input().values()
+            ]
+            inputs_dict = {
+                var_name: [hists[var_name] for hists in inputs_list]
+                for var_name in inputs_list[0]
+            }
 
-            for k in inputs_dict.keys():
-                h_out = inputs_dict[k][0]
-                for i, h_in in enumerate(inputs_dict[k]):
-                    if(i == 0):
-                        continue
-                    h_out += h_in
-                merged[k] = h_out
+            # do the merging
+            merged = {
+                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+                for var_name in inputs_dict
+            }
 
             self.output().dump(merged, formatter="pickle")

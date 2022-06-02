@@ -1,7 +1,10 @@
 # coding: utf-8
 
 """
-Some functions that seemed useful in general
+Some functions that seemed useful in general.
+
+Note: This file might be removed soon once we resolve
+      https://github.com/uhh-cms/analysis_playground/issues/22.
 """
 
 """ inputs list of process names, outputs list of dataset names """

@@ -33,6 +33,7 @@ analysis_st.set_aux("cmssw_sandboxes", [
 ])
 
 # config groups for conveniently looping over certain configs
+# (used in wrapper_factory)
 analysis_st.set_aux("config_groups", {})
 
 
@@ -70,9 +71,11 @@ for dataset_name in dataset_names:
 
 
 # process groups for conveniently looping over certain processs
+# (used in wrapper_factory)
 analysis_st.set_aux("process_groups", {})
 
 # dataset groups for conveniently looping over certain datasets
+# (used in wrapper_factory)
 analysis_st.set_aux("dataset_groups", {})
 
 
