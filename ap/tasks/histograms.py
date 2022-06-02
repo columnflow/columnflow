@@ -164,6 +164,10 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
         "('jec',)",
     )
 
+    # disable the shift parameter
+    shift = None
+    allow_empty_shift = True
+
     def workflow_requires(self):
         syst_map = super(MergeShiftedHistograms, self).workflow_requires()
         syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
