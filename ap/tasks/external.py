@@ -7,14 +7,16 @@ Tasks dealing with external data.
 __all__ = []
 
 
+import os
+import shutil
 import subprocess
 from typing import Union, Tuple, List
 
 import luigi
 import law
 
-from ap.tasks.framework import AnalysisTask, DatasetTask, wrapper_factory
-from ap.util import ensure_proxy
+from ap.tasks.framework import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from ap.util import ensure_proxy, wget
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
@@ -38,6 +40,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.local_target(f"lfns_{h}.json")
 
+    @law.decorator.safe_output
     @ensure_proxy
     def run(self):
         lfns = []
@@ -119,3 +122,120 @@ GetDatasetLFNsWrapper = wrapper_factory(
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
     attributes={"version": None},
 )
+
+
+class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
+
+    replicas = luigi.IntParameter(
+        default=5,
+        description="number of replicas to generate; default: 5",
+    )
+    version = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached hash
+        self._files_hash = None
+
+        # cached dictionary with the same structure as external files, mapping to unique basenames
+        self._file_names = None
+
+        # cached dict for lazy access to files in fetched bundle
+        self._files_dir = None
+        self._files = None
+
+    @classmethod
+    def create_unique_basename(cls, path):
+        h = law.util.create_hash(path)
+        basename = os.path.basename(path[0] if isinstance(path, tuple) else path)
+        return f"{h}_{basename}"
+
+    @property
+    def files_hash(self):
+        if self._files_hash is None:
+            # take the external files and flatten them into a deterministic order, then hash
+            def deterministic_flatten(d):
+                return [
+                    (key, (deterministic_flatten(d[key]) if isinstance(d[key], dict) else d[key]))
+                    for key in sorted(d)
+                ]
+            flat_files = deterministic_flatten(self.config_inst.x.external_files)
+            self._files_hash = law.util.create_hash(flat_files)
+
+        return self._files_hash
+
+    @property
+    def file_names(self):
+        if self._file_names is None:
+            self._file_names = law.util.map_struct(
+                self.create_unique_basename,
+                self.config_inst.x.external_files,
+            )
+
+        return self._file_names
+
+    @property
+    def files(self):
+        if self._files is None:
+            # get the output
+            output = self.output()
+            if not output.exists():
+                raise Exception(
+                    f"accessing external files from the bundle requires the output of {self} to "
+                    "exist, but it appears to be missing",
+                )
+            if isinstance(output, law.FileCollection):
+                output = output.random_target()
+            self._files_dir = law.LocalDirectoryTarget(is_tmp=True)
+            output.load(self._files_dir, formatter="tar")
+
+            # resolve basenames in the bundle directory and map to file targets
+            def resolve_basename(unique_basename):
+                return self._files_dir.child(unique_basename, type="f")
+
+            self._files = law.util.map_struct(resolve_basename, self.file_names)
+
+        return self._files
+
+    def single_output(self):
+        # required by law.tasks.TransferLocalFile
+        return self.local_target(f"externals_{self.files_hash}.tgz")
+
+    @law.decorator.safe_output
+    def run(self):
+        # create a tmp dir to work in
+        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+        tmp_dir.touch()
+
+        # progress callback
+        n_files = len(law.util.flatten(self.config_inst.x.external_files))
+        progress = self.create_progress_callback(n_files)
+
+        # helper function to fetch generic files
+        def fetch_file(src, counter=[0]):
+            dst = os.path.join(tmp_dir.path, self.create_unique_basename(src))
+            if src.startswith(("http://", "https://")):
+                # download via wget
+                wget(src, dst)
+            else:
+                # must be a local file
+                shutil.copy2(src, dst)
+            # log
+            self.publish_message(f"fetched {src}")
+            progress(counter[0])
+            counter[0] += 1
+
+        # fetch all files
+        law.util.map_struct(fetch_file, self.config_inst.x.external_files)
+
+        # create the bundle
+        tmp = law.LocalFileTarget(is_tmp="tgz")
+        tmp.dump(tmp_dir, formatter="tar")
+
+        # log the file size
+        bundle_size = law.util.human_bytes(tmp.stat().st_size, fmt=True)
+        self.publish_message(f"bundle size is {bundle_size}")
+
+        # transfer the result
+        self.transfer(tmp)

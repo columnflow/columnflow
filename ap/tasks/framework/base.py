@@ -41,6 +41,7 @@ class BaseTask(law.Task):
         # default to the version of the requested task class in the version map accessible through
         # the task instance
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+            # TODO: maybe have this entire mechanism implemented by subclasses
             version_map = cls.get_version_map(inst)
             if version_map is not NotImplemented and cls.__name__ in version_map:
                 kwargs["version"] = version_map[cls.__name__]
@@ -71,8 +72,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if analysis == "analysis_st":
             from ap.config.analysis_st import analysis_st
             return analysis_st
-        else:
-            raise ValueError(f"unknown analysis {analysis}")
+
+        raise ValueError(f"unknown analysis {analysis}")
 
     @classmethod
     def get_version_map(cls, task):
