@@ -169,37 +169,47 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
     allow_empty_shift = True
 
     def workflow_requires(self):
-        syst_map = super(MergeShiftedHistograms, self).workflow_requires()
-        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        reqs = super(MergeShiftedHistograms, self).workflow_requires()
+
+        # add nominal and both directions per shift source
+        req = lambda shift: MergeHistograms.req(self, shift=shift)
+        reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
-            print(s)
-            syst_map[s + "_up"] = MergeHistograms.req(self, shift=s + "_up")
-            syst_map[s + "_down"] = MergeHistograms.req(self, shift=s + "_down")
-        print(syst_map)
-        return syst_map
+            reqs[f"{s}_up"] = req(f"{s}_up")
+            reqs[f"{s}_down"] = req(f"{s}_down")
+
+        return reqs
 
     def requires(self):
-        syst_map = {}
-        syst_map["nominal"] = MergeHistograms.req(self, shift="nominal")
+        reqs = {}
+
+        # add nominal and both directions per shift source
+        req = lambda shift: MergeHistograms.req(self, shift=shift, _exclude={"branch"})
+        reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
-            syst_map[s + "up"] = MergeHistograms.req(self, shift=s + "_up")
-            syst_map[s + "down"] = MergeHistograms.req(self, shift=s + "_down")
-        return syst_map
+            reqs[f"{s}_up"] = req(f"{s}_up")
+            reqs[f"{s}_down"] = req(f"{s}_down")
+
+        return reqs
 
     def create_branch_map(self):
-        return {0: self.dataset}
+        # create a dummy branch map so that this task could as a job
+        return {0: None}
 
     def store_parts(self):
         parts = super(MergeShiftedHistograms, self).store_parts()
-        systs = ""
-        for s in self.shift_sources:
-            systs += s + "_"
-        systs = systs[:-1]
-        parts.insert_after("dataset", "shift_sources", systs)
+
+        # add sorted shifts sources, add hash after the first five
+        sources = sorted(self.shift_sources)
+        sources_str = "_".join(sources[:5])
+        if len(sources) > 5:
+            sources_str += f"_{law.util.create_hash(sources[5:])}"
+        parts.insert_after("dataset", "shift_sources", sources_str)
+
         return parts
 
     def output(self):
-        return self.local_target(f"shiftograms_{self.dataset}.pickle")
+        return self.local_target(f"shifted_histograms.pickle")
 
     def run(self):
         with self.publish_step("Hello from MergeShiftedHistograms"):
