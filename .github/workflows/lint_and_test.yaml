@@ -3,6 +3,7 @@ name: Lint and test
 on:
   workflow_dispatch:
   push:
+  pull_request:
 
 jobs:
   lint:
@@ -27,7 +28,7 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          flake8 ap
+          ./tests/run_linting
 
       - name: Cleanup 🧹
         if: always()
@@ -54,7 +55,7 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          python3 -m unittest tests
+          ./tests/run_tests
 
       - name: Cleanup 🧹
         if: always()

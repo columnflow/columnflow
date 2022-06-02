@@ -1,0 +1,24 @@
+/* sphinx_rtd_theme styles */
+
+/* background color of navbar */
+div.wy-side-nav-search {
+    background-color: #343131 !important;
+}
+
+/* text color of version text in navbar */
+div.wy-side-nav-search div.version {
+    color: #b3b3b3 !important;
+}
+
+/* hide border around search input */
+form#rtd-search-form > input[type="text"] {
+    border: 0 !important;
+}
+
+/* full width of the content div */
+div.wy-nav-content {
+    padding: 1.618em 3.236em;
+    height: 100%;
+    max-width: 100% !important;
+    margin: auto;
+}

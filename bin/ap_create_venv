@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+ap_create_venv() {
+    # Creates a new virtual environment inside $AP_VENV_PATH, exchanges all absolute paths in the
+    # activation script with relative ones, and makes the environment relocatable.
+    #
+    # Arguments:
+    #   1. The name of the virtual env inside $AP_VENV_PATH.
+    #
+    # Required environment variables:
+    #   AP_VENV_PATH: The base path where AP virtual environments are stored.
+
+    # check arguments
+    local name="$1"
+    if [ -z "$name" ]; then
+        2>&1 echo "argument 0 (venv name) must not be empty"
+        return "1"
+    fi
+
+    # check environment variables
+    if [ -z "$AP_VENV_PATH" ]; then
+        2>&1 echo "environment variable AP_VENV_PATH must not be empty"
+        return "2"
+    fi
+
+    # create the venv the usual way
+    python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
+
+    # remove csh and fish support
+    rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
+
+    # replace absolute paths in the activation file to make it relocateable for bash and zsh
+    sed -i -r \
+        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+        "${AP_VENV_PATH}/${name}/bin/activate"
+
+    ap_make_venv_relocateable "$name"
+}
+
+ap_create_venv "$@"

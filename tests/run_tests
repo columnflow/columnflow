@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# Script that runs all unit tests.
+
+action() {
+    local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
+    local ap_dir="$( dirname "$this_dir" )"
+    local test_base="$( basename "$this_dir" )"
+
+    echo "$test_base"
+    (
+        cd "$ap_dir" && \
+        python -m unittest "$test_base"
+    )
+}
+action "$@"

@@ -4,157 +4,302 @@
 Tasks related to obtaining, preprocessing and selecting events.
 """
 
-import math
+from collections import defaultdict
 
+import luigi
 import law
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
-from ap.util import ensure_proxy
+from ap.tasks.framework import AnalysisTask, DatasetTask, HTCondorWorkflow, wrapper_factory
+from ap.tasks.external import GetDatasetLFNs
+from ap.util import ensure_proxy, dev_sandbox
 
 
-class CalibrateObjects(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
+class CalibratorMixin(AnalysisTask):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+    calibrator = luigi.Parameter(
+        default="test",
+        description="the name of the calibrator to the applied; default: 'test'",
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "calibrator", f"calib_{self.calibrator}")
+        return parts
+
+
+class SelectorMixin(CalibratorMixin):
+
+    selector = luigi.Parameter(
+        default="test",
+        description="the name of the selector to the applied; default: 'test'",
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "selector", f"select_{self.selector}")
+        return parts
+
+
+class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
+
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     def workflow_requires(self):
-        # workflow super classes might already define requirements, so extend them
-        reqs = super(CalibrateObjects, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         return reqs
 
     def requires(self):
-        # workflow branches are normal tasks, so define requirements the normal way
-        return {"lfns": GetDatasetLFNs.req(self)}
+        return {
+            "lfns": GetDatasetLFNs.req(self),
+        }
 
     def output(self):
-        return self.local_target(f"data_{self.branch}.parquet")
+        return self.local_target(f"calib_{self.branch}.parquet")
 
     @law.decorator.safe_output
     @ensure_proxy
     def run(self):
-        import numpy as np
-        import uproot
-        import awkward as ak
+        from ap.columnar_util import (
+            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
+            sorted_ak_to_parquet,
+        )
+        from ap.calibration import Calibrator
 
-        # get all lfns
-        lfns = self.input()["lfns"].random_target().load(formatter="json")
+        # prepare inputs and outputs
+        lfn_task = self.requires()["lfns"]
+        output = self.output()
+        output_chunks = {}
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
-        output_chunks = []
 
-        # loop over all input file indices requested by this branch
-        for file_index in self.branch_data:
-            # get the lfn of the file referenced by this file index
-            lfn = str(lfns[file_index])
+        # get the calibration function
+        calibrate = Calibrator.get(self.calibrator)
 
-            # always use the INFN redirector for now
-            input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
-            input_size = law.util.human_bytes(input_file.stat().st_size, fmt=True)
-            self.publish_message(f"file {file_index}: fround {lfn}, size is {input_size}")
+        # define nano columns that need to be loaded
+        load_columns = mandatory_coffea_columns | calibrate.used_columns
 
-            # open with uproot
-            with self.publish_step(f"file {file_index}: load and open with uproot ..."):
-                data = input_file.load(formatter="uproot")
-                events = data["Events"]
-                self.publish_message(f"file {file_index}: found {events.num_entries} events")
+        # define columns that will be saved
+        keep_columns = calibrate.produced_columns
+        remove_routes = None
 
-            with self.publish_step(f"iterating over file {file_index} ..."):
-                # optimization targets: threads and step size
-                pool = uproot.ThreadPoolExecutor(4)
-                step_size = "50MB"
-                for i, batch in enumerate(events.iterate(step_size=step_size,
-                        interpretation_executor=pool, decompression_executor=pool)):
-                    # change objects per batch here ...
-                    pass
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-                    # dummy implementation:
-                    # scale 4-vec of jets with pt > 30 by 1.1 (phi and eta are invariant)
-                    # note for future: ak made some unintuitive design decisions about mutability
-                    # (see https://github.com/scikit-hep/awkward-1.0/discussions/609), which are
-                    # contradicting numpy / tf standards, with many consequences, one of them being
-                    # that in-place assignment is not supported, and we have to go via plain numpy
-                    # to do manipulations on flattened objects, so inconvenient syntactic mess ahead
-                    jes_mask = batch.Jet_pt > 30
-                    np.asarray(ak.flatten(batch.Jet_pt))[np.asarray(ak.flatten(jes_mask))] *= 1.1
-                    np.asarray(ak.flatten(batch.Jet_mass))[np.asarray(ak.flatten(jes_mask))] *= 1.1
+        # open with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
 
-                    # save the batch as parquet
-                    chunk = tmp_dir.child(f"file_{file_index}_{i}.parquet", type="f")
-                    ak.to_parquet(batch, chunk.path)
-                    output_chunks.append(chunk)
+        # iterate over chunks
+        with ChunkedReader(
+            nano_file,
+            source_type="coffea_root",
+            read_options={"iteritems_options": {"filter_name": load_columns}},
+        ) as reader:
+            msg = f"iterate through {reader.n_entries} events ..."
+            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # just invoke the calibration function
+                events = calibrate(events)
 
-        # merge the files
-        with self.output().localize("w") as output:
-            law.pyarrow.merge_parquet_task(self, output_chunks, output, local=True)
+                # manually remove colums that should not be kept
+                if not remove_routes:
+                    remove_routes = {
+                        route
+                        for route in get_ak_routes(events)
+                        if not law.util.multi_match("_".join(route), keep_columns)
+                    }
+                for route in remove_routes:
+                    events = remove_ak_column(events, route)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[(lfn_index, pos.index)] = chunk
+                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+
+        # merge output files
+        with output.localize("w") as outp:
+            sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
 
 
+CalibrateEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CalibrateEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
-class SelectEvents(DatasetTask, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = "bash::$AP_BASE/sandboxes/venv_selection.sh"
+class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
-    shifts = {"jec_up", "jec_down"}
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+
+    shifts = CalibrateEvents.shifts | {"jec_up", "jec_down"}
 
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
-        reqs = super(SelectEvents, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
+        if not self.pilot:
+            reqs["calib"] = CalibrateEvents.req(self)
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
-        return {"lfns": GetDatasetLFNs.req(self)}
+        return {
+            "lfns": GetDatasetLFNs.req(self),
+            "calib": CalibrateEvents.req(self),
+        }
 
     def output(self):
-        return self.local_target(f"data_{self.branch}.npz")
+        return {
+            "res": self.local_target(f"results_{self.branch}.parquet"),
+            "stat": self.local_target(f"stats_{self.branch}.json"),
+        }
 
     @law.decorator.safe_output
+    @law.decorator.localize
     @ensure_proxy
     def run(self):
-        import numpy as np
+        from ap.columnar_util import (
+            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet,
+        )
+        from ap.selection import Selector
 
-        # get all lfns
-        lfns = self.input()["lfns"].random_target().load(formatter="json")
+        # prepare inputs and outputs
+        inputs = self.input()
+        lfn_task = self.requires()["lfns"]
+        outputs = self.output()
+        output_chunks = {}
+        stats = defaultdict(float)
 
-        # prepare output arrays to be concated
-        output_arrays = []
+        # create a temp dir for saving intermediate files
+        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+        tmp_dir.touch()
 
-        # loop over all input file indices requested by this branch
-        for file_index in self.branch_data:
-            # get the lfn of the file referenced by this file index
-            lfn = str(lfns[file_index])
-            self.publish_message(f"file {file_index}: fround {lfn}")
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
 
-            # always use the INFN redirector for now
-            input_file = law.wlcg.WLCGFileTarget(lfn, fs="wlcg_fs_infn")
+        # get the selection function
+        select = Selector.get(self.selector)
 
-            # open with uproot
-            with self.publish_step("loading content with uproot ..."):
-                data = input_file.load(formatter="uproot")
-                events = data["Events"]
-                self.publish_message(f"file {file_index}: found {events.num_entries} events")
+        # define nano columns that need to be loaded
+        load_columns = mandatory_coffea_columns | select.used_columns
 
-            # dummy task: get all jet 1 pt values
-            step_size = 1000
-            steps = int(math.ceil(events.num_entries / step_size))
-            events = events.iterate(["nJet", "Jet_pt"], step_size=step_size)
-            for batch in self.iter_progress(events, steps, msg=f"file {file_index}: select ..."):
-                print("batch")
-                mask = batch["nJet"] >= 1
-                jet_pt = batch["Jet_pt"][mask][:, 0]
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-                # emulate jec
-                jec_factor = {"jec_up": 1.05, "jec_down": 0.95}.get(self.effective_shift, 1.0)
-                jet_pt = jet_pt * jec_factor
+        # open the input file with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
 
-                # store the jet pt
-                output_arrays.append(jet_pt.to_numpy())
+        # iterate over chunks of events and diffs
+        with ChunkedReader(
+            [nano_file, inputs["calib"].path],
+            source_type=["coffea_root", "awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
+        ) as reader:
+            msg = f"iterate through {reader.n_entries} events ..."
+            for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # here, we would start evaluating object and event selection criteria, store
+                # new columns related to the selection (e.g. categories or regions), and
+                # book-keeping of stats
 
-        data = np.concatenate(output_arrays, axis=0)
-        self.output().dump(data=data, formatter="numpy")
+                # apply the calibrated diff
+                events = update_ak_array(events, diff)
+
+                # add aliases
+                events = add_ak_aliases(events, aliases)
+
+                # invoke the selection function
+                results = select(events, stats, self.config_inst)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[(lfn_index, pos.index)] = chunk
+                reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+
+        # merge the mask files
+        sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["res"], local=True)
+
+        # save stats
+        outputs["stat"].dump(stats, formatter="json")
+
+        # print some stats
+        eff = stats["n_events_selected"] / stats["n_events"]
+        eff_weighted = stats["sum_mc_weight_selected"] / stats["sum_mc_weight"]
+        self.publish_message(f"all events         : {int(stats['n_events'])}")
+        self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
+        self.publish_message(f"efficiency         : {eff:.4f}")
+        self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
+        self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
+        self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
-# trailing imports
-from ap.tasks.external import GetDatasetLFNs
+SelectEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=SelectEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
+class MergeSelectionStats(DatasetTask, SelectorMixin, law.tasks.ForestMerge):
+
+    shifts = set(SelectEvents.shifts)
+
+    # recursively merge 20 files into one
+    merge_factor = 20
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
+        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
+        return params
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return SelectEvents.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+
+    def merge_output(self):
+        return self.local_target("stats.json")
+
+    def merge(self, inputs, output):
+        # merge input stats
+        merged_stats = defaultdict(float)
+        for inp in inputs:
+            stats = inp["stat"].load(formatter="json")
+            self.merge_counts(merged_stats, stats)
+
+        # write the output
+        output.dump(merged_stats, indent=4, formatter="json")
+
+    @classmethod
+    def merge_counts(cls, dst: dict, src: dict) -> dict:
+        """
+        Adds counts (integers or floats) in a *src* dictionary recursively into a *dst* dictionary.
+        *dst* is updated in-place and also returned.
+        """
+        for key, obj in src.items():
+            if isinstance(obj, dict):
+                cls.merge_counts(dst.setdefault(key, {}), obj)
+            else:
+                if key not in dst:
+                    dst[key] = 0.0
+                dst[key] += obj
+        return dst
+
+
+MergeSelectionStatsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeSelectionStats,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)

@@ -4,7 +4,11 @@
 Configuration of the single top analysis.
 """
 
-from order import Analysis
+from scinum import Number, REL
+
+import re
+
+from order import Analysis, Shift
 
 import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
@@ -25,8 +29,12 @@ analysis_st.set_aux("versions", {
 
 # cmssw sandboxes that should be bundled for remote jobs in case they are needed
 analysis_st.set_aux("cmssw_sandboxes", [
-    "cmssw_default.sh",
+    # "cmssw_default.sh",
 ])
+
+# config groups for conveniently looping over certain configs
+# (used in wrapper_factory)
+analysis_st.set_aux("config_groups", {})
 
 
 #
@@ -35,6 +43,14 @@ analysis_st.set_aux("cmssw_sandboxes", [
 
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
+
+# 2018 luminosity with values in inverse pb and uncertainties taken from
+# https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
+config_2018.set_aux("luminosity", Number(59740, {
+    "lumi_13TeV_correlated": (REL, 0.02),
+    "lumi_13TeV_2018": (REL, 0.015),
+    "lumi_13TeV_1718": (REL, 0.002),
+}))
 
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
@@ -53,6 +69,27 @@ dataset_names = [
 for dataset_name in dataset_names:
     config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
 
+
+# process groups for conveniently looping over certain processs
+# (used in wrapper_factory)
+analysis_st.set_aux("process_groups", {})
+
+# dataset groups for conveniently looping over certain datasets
+# (used in wrapper_factory)
+analysis_st.set_aux("dataset_groups", {})
+
+
+# helper to add column aliases for both shifts of a source
+def add_aliases(shift_source, aliases):
+    for direction in ["up", "down"]:
+        shift = config_2018.get_shift(Shift.join_name(shift_source, direction))
+        # format keys and values
+        inject_shift = lambda s: re.sub(r"\{([^_])", r"{_\1", s).format(**shift.__dict__)
+        _aliases = {inject_shift(key): inject_shift(value) for key, value in aliases.items()}
+        # extend existing or register new column aliases
+        shift.set_aux("column_aliases", shift.get_aux("column_aliases", {})).update(_aliases)
+
+
 # register shifts
 config_2018.add_shift(name="nominal", id=0)
 config_2018.add_shift(name="tune_up", id=1, type="shape")
@@ -61,6 +98,160 @@ config_2018.add_shift(name="hdamp_up", id=3, type="shape")
 config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
+add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+
+# columns to keep after certain steps
+config_2018.set_aux("keep_columns", {
+    "ReduceEvents": {
+        "run", "luminosityBlock", "event",
+        "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
+        "nMuon", "Muon_pt", "Muon_eta",
+        "nElectron", "Electron_pt", "Electron_eta",
+        "LHEWeight_originalXWGTUP",
+        "jet_high_multiplicity",
+        "cat_array",
+    },
+    "CreateHistograms": {
+        "LHEWeight_originalXWGTUP",
+    },
+})
+
+# define categories
+cat_e = config_2018.add_category(
+    name="1e",
+    id=1,
+    label="1 electron",
+    selection="sel_1e",
+)
+cat_mu = config_2018.add_category(
+    name="1mu",
+    id=2,
+    label="1 muon",
+    selection="sel_1mu",
+)
+
+cat_e_b = cat_e.add_category(
+    name="1e_eq1b",
+    id=3,
+    label="1e, 1 b-tag",
+    selection="sel_1e_eq1b",
+)
+cat_e_bb = cat_e.add_category(
+    name="1e_ge2b",
+    id=4,
+    label=r"1e, $\geq$ 2 b-tags",
+    selection="sel_1e_ge2b",
+)
+cat_mu_b = cat_mu.add_category(
+    name="1mu_eq1b",
+    id=5,
+    label="1mu, 1 b-tag",
+    selection="sel_1mu_eq1b",
+)
+cat_mu_bb = cat_mu.add_category(
+    name="1mu_ge2b",
+    id=6,
+    label=r"1mu, $\geq$ 2 b-tags",
+    selection="sel_1mu_ge2b",
+)
+cat_mu_bb_lowHT = cat_mu_bb.add_category(
+    name="1mu_ge2b_lowHT",
+    id=7,
+    label=r"1mu, $\geq$ 2 b-tags, HT<=300 GeV",
+    selection="sel_1mu_ge2b_lowHT",
+)
+cat_mu_bb_highHT = cat_mu_bb.add_category(
+    name="1mu_ge2b_highHT",
+    id=8,
+    label=r"1mu, $\geq$ 2 b-tags, HT>300 GeV",
+    selection="sel_1mu_ge2b_highHT",
+)
+
+# define variables
+config_2018.add_variable(
+    name="HT",
+    expression="var_HT",
+    binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
+    unit="GeV",
+    x_title="HT",
+)
+config_2018.add_variable(
+    name="nElectron",
+    expression="var_nElectron",
+    binning=(6, -0.5, 5.5),
+    x_title="Number of electrons",
+)
+config_2018.add_variable(
+    name="nMuon",
+    expression="var_nMuon",
+    binning=(6, -0.5, 5.5),
+    x_title="Number of muons",
+)
+config_2018.add_variable(
+    name="Electron1_pt",
+    expression="var_Electron1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading electron $p_{T}$",
+)
+config_2018.add_variable(
+    name="Muon1_pt",
+    expression="var_Muon1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading muon $p_{T}$",
+)
+config_2018.add_variable(
+    name="nJet",
+    expression="var_nJet",
+    binning=(11, -0.5, 10.5),
+    x_title="Number of jets",
+)
+config_2018.add_variable(
+    name="nDeepjet",
+    expression="var_nDeepjet",
+    binning=(8, -0.5, 7.5),
+    x_title="Number of deepjets",
+)
+config_2018.add_variable(
+    name="Jet1_pt",
+    expression="var_Jet1_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Leading jet $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet2_pt",
+    expression="var_Jet2_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Jet 2 $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet3_pt",
+    expression="var_Jet3_pt",
+    binning=(40, 0., 400.),
+    unit="GeV",
+    x_title="Jet 3 $p_{T}$",
+)
+config_2018.add_variable(
+    name="Jet1_eta",
+    expression="var_Jet1_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Leading jet $\eta$",
+)
+config_2018.add_variable(
+    name="Jet2_eta",
+    expression="var_Jet2_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Jet 2 $\eta$",
+)
+config_2018.add_variable(
+    name="Jet3_eta",
+    expression="var_Jet3_eta",
+    binning=(50, -2.5, 2.5),
+    x_title=r"Jet 3 $\eta$",
+)
 
 
 # file merging values

@@ -86,6 +86,10 @@ action() {
     local install_base="$AP_CMSSW_BASE/$AP_CMSSW_ENV_NAME"
     local install_path="$install_base/$AP_CMSSW_VERSION"
     local flag_file="$install_path/ap_flag"
+    local pending_flag_file="$AP_CMSSW_BASE/pending_${AP_CMSSW_ENV_NAME}_${AP_CMSSW_VERSION}"
+
+    # ensure AP_CMSSW_BASE exists
+    mkdir -p "$AP_CMSSW_BASE"
 
     # remove the current installation
     if [ "$mode" = "clear" ] || [ "$mode" = "reinstall" ]; then
@@ -96,34 +100,9 @@ action() {
         [ "$mode" = "clear" ] && return "0"
     fi
 
-    # install or fetch when not existing
-    if [ ! -d "$install_path" ]; then
-        if [ "$AP_REMOTE_JOB" != "1" ]; then
-            (
-                echo "installing $AP_CMSSW_VERSION in $install_base"
-                mkdir -p "$install_base" || return "$?"
-                cd "$install_base"
-                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || return "$?"
-                export SCRAM_ARCH="$AP_SCRAM_ARCH"
-                scramv1 project CMSSW "$AP_CMSSW_VERSION" || return "$?"
-                cd "$AP_CMSSW_VERSION/src"
-                eval "$( scramv1 runtime -sh )" || return "$?"
-                scram b || return "$?"
-
-                # create symlinks to gfal plugins and remove the http plugin which is
-                # not compatible with cmssw
-                (
-                    mkdir -p "$install_path/lib/gfal2"
-                    cd "$install_path/lib/gfal2"
-                    ln -s $GFAL_PLUGIN_DIR_ORIG/*.so .
-                    rm -r libgfal_plugin_http.so
-                )
-
-                # write the flag into a file
-                echo "version $AP_CMSSW_FLAG" > "$flag_file"
-            ) || return "$?"
-
-        else
+    if [ "$AP_REMOTE_JOB" == "1" ]; then
+        # in remote jobs, fetch and setup the bundle
+        if [ ! -d "$install_path" ]; then
             # determine the bundle to unpack
             local bundle="$AP_SOFTWARE/cmssw_sandboxes/$AP_CMSSW_ENV_NAME.tgz"
             if [ ! -f "$bundle" ]; then
@@ -150,12 +129,62 @@ action() {
             # write the flag into a file
             echo "version $AP_CMSSW_FLAG" > "$flag_file"
         fi
+    else
+        # in local environments, install from scratch
+        if [ ! -d "$install_path" ]; then
+            # from here onwards, files and directories could be created and in order to prevent race
+            # conditions from multiple processes, guard the setup with the pending_flag_file and
+            # sleep for a random amount of seconds between 0 and 10 to further reduce the chance of
+            # simultaneously starting processes getting here at the same time
+            local sleep_counter="0"
+            sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+            while [ -f "$pending_flag_file" ]; do
+                # wait at most 10 minutes
+                sleep_counter="$(( $sleep_counter + 1 ))"
+                if [ "$sleep_counter" -ge 120 ]; then
+                    2>&1 echo "cmssw $AP_CMSSW_VERSION is setup in different process, but number of sleeps exceeded"
+                    return "8"
+                fi
+                echo -e "\x1b[0;49;36mcmssw $AP_CMSSW_VERSION already being setup in different process, sleep $sleep_counter / 120\x1b[0m"
+                sleep 5
+            done
+        fi
+
+        if [ ! -d "$install_path" ]; then
+            local ret
+            touch "$pending_flag_file"
+            echo "installing $AP_CMSSW_VERSION in $install_base"
+
+            (
+                mkdir -p "$install_base" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+                cd "$install_base"
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+                export SCRAM_ARCH="$AP_SCRAM_ARCH"
+                scramv1 project CMSSW "$AP_CMSSW_VERSION" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+                cd "$AP_CMSSW_VERSION/src"
+                eval "$( scramv1 runtime -sh )" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+                scram b || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+
+                # create symlinks to gfal plugins and remove the http plugin which is
+                # not compatible with cmssw
+                (
+                    mkdir -p "$install_path/lib/gfal2"
+                    cd "$install_path/lib/gfal2"
+                    ln -s $GFAL_PLUGIN_DIR_ORIG/*.so .
+                    rm -r libgfal_plugin_http.so
+                )
+
+                # write the flag into a file
+                echo "version $AP_CMSSW_FLAG" > "$flag_file"
+                rm -f "$pending_flag_file"
+            ) || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+        fi
     fi
 
     # at this point, the src path must exist
     if [ ! -d "$install_path/src" ]; then
         >&2 echo "src directory not found in CMSSW installation at $install_path"
-        return "7"
+        return "9"
     fi
 
     # check the flag and show a warning when there was an update

@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 
 setup() {
+    # Runs the entire project setup, leading to a collection of environment variables starting with
+    # "AP_", the installation of the software stack via virtual environments, and optionally an
+    # interactive setup where the user can configure certain variables.
+    #
+    # Arguments:
+    #   1. The name of the setup. "default" (which is itself the default when no name is set)
+    #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
+    #      a custom setup file. See "interactive_setup" for more info.
+    #
+    # Optinally preconfigured environment variables:
+    #   AP_REINSTALL_SOFTWARE : If "1", any existing software stack is removed and freshly
+    #                           installed.
+    #   AP_REMOTE_JOB         : If "1", applies configurations for remote job. Remote jobs will set
+    #                           this value if needed and there is no need to set this by hand.
+    #   AP_LCG_SETUP          : The location of a custom LCG software setup file.
+    #   X509_USER_PROXY       : A custom globus user proxy location.
+    #   LANGUAGE, LANG, LC_ALL: Custom language flags.
+
     #
     # prepare local variables
     #
@@ -11,8 +29,6 @@ setup() {
     local setup_name="${1:-default}"
     local setup_is_default="false"
     [ "$setup_name" = "default" ] && setup_is_default="true"
-    local shell_is_bash="false"
-    [ ! -z "$BASH_VERSION" ] && shell_is_bash="true"
 
 
     #
@@ -38,62 +54,6 @@ setup() {
 
     # proxy
     [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
-
-
-    #
-    # helper functions
-    #
-
-    ap_create_venv() {
-        local name="$1"
-        if [ -z "$name" ]; then
-            2>&1 echo "venv name must not be empty"
-            return "1"
-        fi
-
-        # create the venv the usual way
-        python3 -m venv --copies "${AP_VENV_PATH}/${name}" || return "$?"
-
-        # remove csh and fish support
-        rm -f "${AP_VENV_PATH}/${name}"/bin/activate{.csh,.fish}
-
-        # replace absolute paths in the activation file to make it relocateable for bash and zsh
-        sed -i -r \
-            's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
-            "${AP_VENV_PATH}/${name}/bin/activate"
-
-        ap_make_venv_relocateable "$name"
-    }
-    $shell_is_bash && export -f ap_create_venv
-
-    ap_make_venv_relocateable() {
-        local name="$1"
-        if [ -z "$name" ]; then
-            2>&1 echo "venv name must not be empty"
-            return "1"
-        fi
-
-        # use /usr/bin/env in shebang's of bin scripts
-        for f in $( find "${AP_VENV_PATH}/${name}/bin" -type f ); do
-            # must be readable and executable
-            if [ -r "${f}" ] && [ -x "${f}" ]; then
-                sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
-            fi
-        done
-    }
-    $shell_is_bash && export -f ap_make_venv_relocateable
-
-    # helper to create or check a voms proxy
-    ap_voms_proxy() {
-        local mode="${1:-init}"
-        local voms="${AP_VOMS:-cms}"
-        if [ "$mode" = "check" ]; then
-            voms-proxy-info
-        else
-            voms-proxy-init -voms "$AP_VOMS" --valid "196:00" --out "$X509_USER_PROXY"
-        fi
-    }
-    $shell_is_bash && export -f ap_voms_proxy
 
 
     #
@@ -123,7 +83,8 @@ setup() {
     # local python stack in two virtual envs:
     # - "ap_prod": contains the minimal stack to run tasks and is sent alongside jobs
     # - "ap_dev" : "prod" + additional python tools for local development (e.g. ipython)
-    local sw_version="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
+    local sw_version_prod="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
+    local sw_version_dev="$( cat "${AP_BASE}/requirements_dev.txt" | grep -Po "# version \K\d+.*" )"
     local flag_file_sw="${AP_SOFTWARE}/.sw_good"
     [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
     if [ ! -f "$flag_file_sw" ]; then
@@ -155,8 +116,9 @@ setup() {
             ap_make_venv_relocateable ap_dev
         fi
 
-        date "+%s" > "$flag_file_sw"
-        echo "version $sw_version" >> "$flag_file_sw"
+        date "timestamp +%s" > "$flag_file_sw"
+        echo "version prod $sw_version_prod" >> "$flag_file_sw"
+        echo "version dev $sw_version_dev" >> "$flag_file_sw"
     else
         if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
             source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
@@ -168,13 +130,18 @@ setup() {
     fi
     export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
 
-    # check the version in the sw flag file and show a warning when there was an update
-    if [ "$( cat "$flag_file_sw" | grep -Po "version \K\d+.*" )" != "$sw_version" ]; then
-        2>&1 echo ""
-        2>&1 echo "WARNING: your local software stack is not up to date, please consider updating it in a new shell with"
-        2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
-        2>&1 echo ""
-    fi
+    # check the versions in the sw flag file and show a warning when there was an update
+    local kind
+    local sw_version
+    for kind in prod dev; do
+        eval "sw_version=\${sw_version_${kind}}"
+        if [ "$( cat "$flag_file_sw" | grep -Po "version $kind \K\d+.*" )" != "$sw_version" ]; then
+            2>&1 echo ""
+            2>&1 echo "WARNING: your venv 'ap_${kind}' is not up to date, please consider updating it in a new shell with"
+            2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
+            2>&1 echo ""
+        fi
+    done
 
 
     #
@@ -216,6 +183,20 @@ setup() {
 }
 
 interactive_setup() {
+    # Starts the interactive part of the setup by querying for values for certain environment
+    # variables with useful defaults. When a custom, named setup is triggered, the values of all
+    # queried environment variables are stored in a file in $AP_BASE/.setups.
+    #
+    # Arguments:
+    #   1. The name of the setup. "default" (which is itself the default when no name is set)
+    #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
+    #      a custom setup file.
+    #   2. The location of the setup file when a custom, named setup was triggered. Defaults to
+    #      "$AP_BASE/.setups/$setup_name.sh"
+    #
+    # Required environment variables:
+    #   AP_BASE: The base path of the AP project.
+
     local setup_name="${1:-default}"
     local env_file="${2:-$AP_BASE/.setups/$setup_name.sh}"
     local env_file_tmp="$env_file.tmp"
@@ -255,7 +236,8 @@ interactive_setup() {
         # otherwise, query interactively
         local value="$default"
         if $setup_is_default; then
-            [ ! -z "${!varname}" ] && value="${!varname}"
+            # set the variable when existing
+            eval "value=\${$varname:-\$value}"
         else
             printf "$text (\x1b[1;49;39m$varname\x1b[0m, default \x1b[1;49;39m$default_text\x1b[0m):  "
             read query_response
@@ -299,6 +281,7 @@ interactive_setup() {
     query AP_STORE_LOCAL "Default local output store" "\$AP_DATA/\$AP_STORE_NAME"
     query AP_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
     export_and_save AP_WLCG_USE_CACHE "$( [ -z "$AP_WLCG_CACHE_ROOT" ] && echo false || echo true )"
+    export_and_save AP_WLCG_CACHE_CLEANUP "${AP_WLCG_CACHE_CLEANUP:-false}"
     query AP_SOFTWARE "Local directory for installing software" "\$AP_DATA/software"
     query AP_CMSSW_BASE "Local directory for installing CMSSW" "\$AP_DATA/cmssw"
     query AP_JOB_BASE "Local directory for storing job files" "\$AP_DATA/jobs"
@@ -307,7 +290,7 @@ interactive_setup() {
         query AP_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
         query AP_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
     else
-        export_and_save AP_SCHEDULER_HOST "naf-cms15.desy.de"
+        export_and_save AP_SCHEDULER_HOST "naf-cms14.desy.de"
         export_and_save AP_SCHEDULER_PORT "8082"
     fi
     query AP_VOMS "Virtual-organization" "cms:/cms/dcms"
@@ -320,6 +303,8 @@ interactive_setup() {
 }
 
 action() {
+    # Invokes the main action of this script, catches possible error codes and prints a message.
+
     if setup "$@"; then
         echo -e "\x1b[0;49;35manalysis playground successfully setup\x1b[0m"
         return "0"
