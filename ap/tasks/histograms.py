@@ -20,7 +20,8 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
-        reqs["events"] = ReduceEvents.req(self)
+        if not self.pilot:
+            reqs["events"] = ReduceEvents.req(self)
         return reqs
 
     def requires(self):
