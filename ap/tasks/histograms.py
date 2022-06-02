@@ -137,13 +137,16 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
-            inputs_list = [i.load(formatter="pickle") for i in inputs]
-            inputs_dict = {k: [el[k] for el in inputs_list] for k in inputs_list[0].keys()}
+            inputs_list = [inp.load(formatter="pickle") for inp in inputs]
+            inputs_dict = {
+                var_name: [hists[var_name] for hists in inputs_list]
+                for var_name in inputs_list[0]
+            }
 
             # do the merging
             merged = {
-                k: sum(inputs_dict[k][1:], inputs_dict[k][0])
-                for k in inputs_dict
+                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+                for var_name in inputs_dict
             }
 
             output.dump(merged, formatter="pickle")
@@ -208,16 +211,19 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
 
     def run(self):
         with self.publish_step("Hello from MergeShiftedHistograms"):
-            print(self.input().keys())
-            syst_keys = self.input().keys()
-            print(syst_keys)
-            inputs_list = [self.input()[i].load(formatter="pickle") for i in syst_keys]
-            inputs_dict = {k: [el[k] for el in inputs_list] for k in inputs_list[0].keys()}
+            inputs_list = [
+                inp["collection"][0].load(formatter="pickle")
+                for inp in self.input().values()
+            ]
+            inputs_dict = {
+                var_name: [hists[var_name] for hists in inputs_list]
+                for var_name in inputs_list[0]
+            }
 
             # do the merging
             merged = {
-                k: sum(inputs_dict[k][1:], inputs_dict[k][0])
-                for k in inputs_dict
+                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+                for var_name in inputs_dict
             }
 
             self.output().dump(merged, formatter="pickle")
