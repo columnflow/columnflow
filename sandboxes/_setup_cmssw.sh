@@ -176,6 +176,7 @@ action() {
 
                 # write the flag into a file
                 echo "version $AP_CMSSW_FLAG" > "$flag_file"
+                rm -f "$pending_flag_file"
             ) || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
         fi
     fi
