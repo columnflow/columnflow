@@ -55,18 +55,12 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [inputs["events"].path],
-            source_type=["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}],
+            inputs["events"].path,
+            source_type="awkward_parquet",
+            read_options={"iteritems_options": {"filter_name": load_columns}},
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                print(events)
-                print(len(events))
-                print(events[0].fields)
-
-                events = events[0]
-
                 # weights
                 lumi = self.config_inst.x.luminosity.get("nominal")
                 sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
@@ -118,6 +112,7 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
 
     shifts = CreateHistograms.shifts
 
+    # in each step, merge 10 into 1
     merge_factor = 10
 
     @classmethod
@@ -131,14 +126,14 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        # return CreateHistograms.req(self, _exclude=["branches"])
-        return CreateHistograms.req(self, _exclude=["branches"], branches=[23])
+        # TODO(riga): hard-coded branches for the hackathon, to be removed afterwards
+        return CreateHistograms.req(self, _exclude=["branches"], branches=[(0, 2)])
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target(f"histograms_{self.dataset}.pickle")
+        return self.local_target("histograms.pickle")
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
@@ -147,7 +142,7 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
 
             # do the merging
             merged = {
-                sum(inputs_dict[k][1:], inputs_dict[k][0])
+                k: sum(inputs_dict[k][1:], inputs_dict[k][0])
                 for k in inputs_dict
             }
 
@@ -172,7 +167,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
 
         # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift)
+        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0)
         reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
             reqs[f"{s}_up"] = req(f"{s}_up")
@@ -184,7 +179,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
         reqs = {}
 
         # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift, _exclude={"branch"})
+        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0, _exclude={"branch"})
         reqs["nominal"] = req("nominal")
         for s in self.shift_sources:
             reqs[f"{s}_up"] = req(f"{s}_up")
@@ -209,7 +204,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
         return parts
 
     def output(self):
-        return self.local_target(f"shifted_histograms.pickle")
+        return self.local_target("shifted_histograms.pickle")
 
     def run(self):
         with self.publish_step("Hello from MergeShiftedHistograms"):
@@ -221,7 +216,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
 
             # do the merging
             merged = {
-                sum(inputs_dict[k][1:], inputs_dict[k][0])
+                k: sum(inputs_dict[k][1:], inputs_dict[k][0])
                 for k in inputs_dict
             }
 

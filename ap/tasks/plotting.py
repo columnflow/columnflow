@@ -58,11 +58,11 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         # print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
-        branch_map = {}
-        prod = product(self.variables, self.categories)
-        for i, x in enumerate(prod):
-            branch_map[i] = {"variable": x[0], "category": x[1]}
-        return branch_map
+
+        return [
+            {"variable": var_name, "category": cat_name}
+            for var_name, cat_name in product(self.variables, self.categories)
+        ]
 
     def workflow_requires(self):
         c = self.config_inst
@@ -70,7 +70,10 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+        return {
+            d: MergeHistograms.req(self, dataset=d, tree_index=0, _exclude={"branches"})
+            for d in self.datasets
+        }
 
     def requires(self):
         # print('Hello from requires')
@@ -79,7 +82,10 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         if not self.processes:
             self.processes = c.analysis.get_processes(c).names()
         self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {d: MergeHistograms.req(self, dataset=d) for d in self.datasets}
+        return {
+            d: MergeHistograms.req(self, dataset=d, branch=-1, tree_index=0)
+            for d in self.datasets
+        }
 
     def output(self):
         # print('Hello from output')
@@ -96,6 +102,7 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
             import mplhep
             plt.style.use(mplhep.style.CMS)
 
+            inputs = self.input()
             c = self.config_inst
 
             histograms = []
@@ -110,7 +117,7 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
                     h_proc = None
                     for d in getDatasetNamesFromProcess(c, p):
                         # print("----- dataset:", d)
-                        h_in = self.input()[d].load(formatter="pickle")[self.branch_data['variable']]
+                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data['variable']]
 
                         if category == "incl":
                             leaf_cats = [cat.id for cat in c.get_leaf_categories()]
