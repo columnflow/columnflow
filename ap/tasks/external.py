@@ -15,7 +15,9 @@ from typing import Union, Tuple, List
 import luigi
 import law
 
-from ap.tasks.framework import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.base import (
+    AnalysisTask, ConfigTask, ShiftTask, DatasetTask, wrapper_factory,
+)
 from ap.util import ensure_proxy, wget
 
 
