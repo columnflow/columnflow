@@ -12,6 +12,7 @@ from order import Analysis, Shift
 
 import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
+from ap.util import DotDict
 
 
 #
@@ -103,11 +104,11 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
-config_2018.add_shift(name="minbiasxs_up", id=7, type="shape")
-config_2018.add_shift(name="minbiasxs_down", id=8, type="shape")
+config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
+config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 
 # external files
-config_2018.set_aux("external_files", {
+config_2018.set_aux("external_files", DotDict.wrap({
     # files from TODO
     "lumi": {
         "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt", "v1"),  # noqa
@@ -120,15 +121,15 @@ config_2018.set_aux("external_files", {
         "mc_profile": ("https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py", "v1"),  # noqa
         "data_profile": {
             "nominal": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-69200ub-99bins.root", "v1"),  # noqa
-            "minbiasxs_up": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-72400ub-99bins.root", "v1"),  # noqa
-            "minbiasxs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
+            "minbias_xs_up": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-72400ub-99bins.root", "v1"),  # noqa
+            "minbias_xs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
         },
     },
-})
+}))
 
 
 # columns to keep after certain steps
-config_2018.set_aux("keep_columns", {
+config_2018.set_aux("keep_columns", DotDict.wrap({
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
         "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
@@ -141,7 +142,7 @@ config_2018.set_aux("keep_columns", {
     "CreateHistograms": {
         "LHEWeight_originalXWGTUP",
     },
-})
+}))
 
 # define categories
 cat_e = config_2018.add_category(

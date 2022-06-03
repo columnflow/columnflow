@@ -68,6 +68,15 @@ class DotDict(dict):
         """"""
         return self.__class__(self)
 
+    @classmethod
+    def wrap(cls, d: dict) -> "DotDict":
+        """
+        Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
+        with :py:class:`DitDict`'s for deep attribute-style access.
+        """
+        wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
+        return wrap(d)
+
 
 class MockModule(object):
     """
