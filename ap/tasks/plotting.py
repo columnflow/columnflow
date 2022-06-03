@@ -8,7 +8,8 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework import ConfigTask, HTCondorWorkflow
+from ap.tasks.framework.base import ConfigTask
+from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.selection import SelectorMixin
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.util import ensure_proxy
