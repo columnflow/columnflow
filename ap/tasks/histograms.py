@@ -83,9 +83,9 @@ class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, la
                 weight = sampleweight * events.LHEWeight.originalXWGTUP
 
                 # get all viable category ids (only leaf categories)
-                # cat_ids = []
-                # for cat in self.config_inst.get_leaf_categories():
-                #    cat_ids.append(cat.id)
+                cat_ids = []
+                for cat in self.config_inst.get_leaf_categories():
+                    cat_ids.append(cat.id)
 
                 # define & fill histograms
                 var_names = self.config_inst.variables.names()
@@ -95,9 +95,7 @@ class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, la
                             var = self.config_inst.variables.get(var_name)
                             h_var = (
                                 hist.Hist.new
-                                # .IntCat(cat_ids, name="category")  # , growth=True)
-                                # quick fix to access categories correct in plot task
-                                .IntCat(range(0, 10), name="category")
+                                .IntCat(cat_ids, name="category")
                                 .StrCategory([], name="shift", growth=True)
                                 .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
                                 .Weight()
