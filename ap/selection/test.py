@@ -39,6 +39,12 @@ def req_muon(events):
     mask = (events.Muon.pt > 25) & (abs(events.Muon.eta) < 2.4) & (events.Muon.tightId)
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
+@selector(uses={"Jet_pt", "nJet", "Jet_eta", "Jet_phi", "Jet_e", 
+                "Muon_pt", "nMuon", "Muon_eta", "Muon_phi", "Muon_e" })
+def req_delta_r_match(events, threshold=0.4):
+    from IPython import embed; embed()
+    return 1
+
 
 @selector(uses={"Jet_pt", "Jet_eta"})
 def req_forwardJet(events):
@@ -214,6 +220,15 @@ def deepjet_selection_test(events, stats):
         objects={"Deepjet": deepjet_indices},
     )
 
+@selector(uses={req_delta_r_match})
+def delta_r_selection_test(events, stats):
+    clean_jets = req_delta_r_match(events)
+    deepjet_sel = ak.num(clean_jets.Jets, axis=1) >= 1
+
+    return SelectionResult(
+        steps={"Deepjet": deepjet_sel},
+        objects={"Deepjet": clean_jets},
+    )
 
 @selector(uses={req_muon})
 def muon_selection_test(events, stats):
@@ -293,5 +308,18 @@ def test(events, stats, config_inst):
     stats["n_events_selected"] += ak.sum(event_sel, axis=0)
     stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
     stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
+
+    return results
+
+@selector(uses={delta_r_selection_test})
+def delta_r_test(events, stats, config_inst):
+    # example cuts:
+    # - jet_selection_test
+    # - lepton_selection_test
+    # example stats:
+    # - number of events before and after selection
+    # - sum of mc weights before and after selection
+
+    results = delta_r_selection_test(events, stats)
 
     return results
