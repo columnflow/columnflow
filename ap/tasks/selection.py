@@ -133,7 +133,8 @@ CalibrateEventsWrapper = wrapper_factory(
 
 class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    # sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    sandbox = "bash::$AP_BASE/sandboxes/venv_columnar_dev.sh"
 
     shifts = CalibrateEvents.shifts | {"jec_up", "jec_down"}
 
