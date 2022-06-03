@@ -61,7 +61,7 @@ setup() {
     #
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh"
+    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
     if [ -f "$AP_LCG_SETUP" ]; then
         source "$AP_LCG_SETUP" ""
     elif [ "$AP_CI_JOB" = "1" ]; then

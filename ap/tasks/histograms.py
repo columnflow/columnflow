@@ -6,7 +6,8 @@ Task to produce and merge histograms.
 
 import law
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
+from ap.tasks.framework.base import DatasetTask
+from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.selection import SelectorMixin
 from ap.tasks.reduction import ReduceEvents
 from ap.util import ensure_proxy, dev_sandbox
