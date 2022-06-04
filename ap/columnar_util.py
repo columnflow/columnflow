@@ -107,6 +107,7 @@ def has_ak_route(
 def find_ak_route(
     ak_array: ak.Array,
     column: str,
+    silent: bool = False,
 ) -> tuple:
     """
     For a given name of a column in underscore format *column* (e.g. "Jet_pt"), returns a tuple
@@ -120,31 +121,46 @@ def find_ak_route(
 
         print(events[route])  # -> <Array [[25.123, ...], ...] type=`50000 * var * float32`>
 
-    When the column is not found and no existing route can be constructed, a *ValueError* is raised.
+    When the column is not found and no existing route can be constructed, a *ValueError* is raised
+    unless *silent* is *True* in which case *None* is returned.
+
+    .. note::
+
+        Since column names could in principle also contain underscores, there is a risk for
+        ambiguity. For instance, the route ``("a", "b_c")`` is different from ``("a", "b", "c")``
+        but their names in underscore format are both ``"a_b_c"``. In general, this is considered an
+        issue of the array format that should be solved beforehand. This function does a depth-first
+        lookup and, given ``"a_b_c"``, would return ``("a", "b", "c")``.
     """
-    # split into parts
-    parts = column.split("_")
+    # helper for recursive depth-first tree search
+    def find(ak_array, route):
+        # iteratively test all possible fields
+        for i in range(len(route)):
+            # build the field to check and define the remaining subroute
+            field = "_".join(route[:i + 1])
+            sub_route = route[i + 1:]
 
-    # traverse parts and check if there is a deeper substructure
-    route = []
-    obj = ak_array
-    for i, part in enumerate(parts):
-        if part in obj.fields:
-            # substructure found, try the next part
-            route.append(part)
-            obj = getattr(obj, part)
-        else:
-            # final object, store or attach to the last route
-            rest = "_".join(parts[i:])
-            if route:
-                route[-1] += f"_{rest}"
-            else:
-                route.append(rest)
-            break
+            # only proceed when the field exists
+            if field not in ak_array.fields:
+                continue
 
-    # check if the route really exists
-    route = tuple(route)
-    if not has_ak_route(ak_array, route):
+            # when there is no subroute left, return the found field
+            if not sub_route:
+                return (field,)
+
+            # recursive subroute check
+            sub_route = find(getattr(ak_array, field), sub_route)
+            if sub_route:
+                return (field,) + sub_route
+
+        # at this point, no field combination exists
+        return None
+
+    # find the route and complain when not found
+    route = find(ak_array, column.split("_"))
+    if not route:
+        if silent:
+            return None
         raise ValueError(f"no route existing for column '{column}'")
 
     return route
