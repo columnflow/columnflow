@@ -6,7 +6,7 @@ Helpers and utilities for working with columnar libraries.
 
 __all__ = [
     "mandatory_coffea_columns",
-    "ArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
+    "ArrayConsumer", "ArrayProducer", "ChunkedReader", "PreloadedNanoEventsFactory",
     "get_ak_routes", "has_ak_route", "find_ak_route", "remove_ak_column", "add_ak_alias",
     "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
@@ -396,14 +396,130 @@ def sorted_ak_to_parquet(
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
-class ArrayFunction(object):
+class ArrayConsumer(object):
     """
-    Base class for function wrappers that act on arrays and keep track of certain columns. Also,
+    Base class for function wrappers that act on arrays and keep track of used columns. Also,
     instances are named and put into a class-level cache when created via :py:meth:`new`
     (recommended).
 
-    For possible implementations, see :py:class:`calibration.Calibrator` or
-    :py:class:`selection.Selector`.
+    For a possible implementations, see :py:class:`selection.Selector`.
+
+    .. py:attribute:: func
+       type: callable
+
+       The wrapped function.
+
+    .. py:attribute:: name
+       type: str
+
+       The name of the instance in the cache dictionary.
+
+    .. py:attribute:: uses
+       type: set
+
+       The set of used column names or other consumer instances to recursively resolve the names of
+       used columns.
+
+    .. py::attribute:: used_columns
+       type: set
+       read-only
+
+       The resolved, flat set of used column names.
+    """
+
+    _instances = {}
+
+    @classmethod
+    def new(cls, *args, **kwargs) -> "ArrayConsumer":
+        """
+        Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
+        name attribute, and returns it. An exception is raised if an instance with the same name was
+        already reigstered.
+        """
+        inst = cls(*args, **kwargs)
+
+        if inst.name in cls._instances:
+            raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
+
+        cls._instances[inst.name] = inst
+
+        return inst
+
+    @classmethod
+    def get(cls, name: str) -> "ArrayConsumer":
+        """
+        Returns a previously registered instance named *name* from the cache.
+        """
+        if name not in cls._instances:
+            raise ValueError(f"no {cls.__name__} named '{name}' registered")
+
+        return cls._instances[name]
+
+    @classmethod
+    def create_subclass(cls, name: str, attributes: Optional[dict] = None) -> "ArrayConsumer":
+        """
+        Creates a new class named *name* inheriting from *this* class. *attributes* are used to add
+        custom class-level members to the newly generated class. By default, the new subclass has a
+        separate instance cache dictionary.
+
+        In general, it would be trivial to create a subclass the usual way, but since the base
+        :py:class:`ArrayConsumer` and its features might be used *as is* with a different type and
+        instance cache, this method could be useful. Example:
+
+        .. code-block:: python
+
+            Selector = ArrayConsumer.create_subclass("Selector")
+        """
+        if not attributes:
+            attributes = {}
+
+        # enforce a separate instance cache attribute
+        attributes["_instances"] = {}
+
+        # create and return the subclass
+        return type(name, (cls,), attributes)
+
+    def __init__(
+        self,
+        func: Callable,
+        name: Optional[str] = None,
+        uses: Optional[Union[
+            str, "ArrayConsumer", Sequence[str], Sequence["ArrayConsumer"], Set[str],
+            Set["ArrayConsumer"],
+        ]] = None,
+    ):
+        super().__init__()
+
+        self.func = func
+        self.name = name or self.func.__name__
+        self.uses = law.util.make_list(uses) if uses else []
+
+    @property
+    def used_columns(self) -> Set[str]:
+        columns = set()
+        for obj in self.uses:
+            if isinstance(obj, ArrayConsumer):
+                columns |= obj.used_columns
+            else:
+                columns.add(obj)
+        return columns
+
+    def __call__(self, *args, **kwargs):
+        """
+        Invokes the wrapped :py:attr:`func`, forwarding all *args* and *kwargs*.
+        """
+        return self.func(*args, **kwargs)
+
+
+class ArrayProducer(ArrayConsumer):
+    """
+    Base class for function wrappers that act on arrays and keep track of used as well as produced
+    columns. Each array producer is also an array consumer (:py:class:`ArrayConsumer`). Also,
+    instances are named and put into a class-level cache when created via :py:meth:`new`
+    (recommended).
+
+    For a possible implementations, see :py:class:`calibration.Calibrator` or
+    :py:class:`production.Producer`.
 
     .. py:attribute:: func
        type: callable
@@ -425,90 +541,49 @@ class ArrayFunction(object):
        read-only
 
        The resolved, flat set of used column names.
+
+    .. py:attribute:: produces
+       type: set
+
+       The set of produced column names or other producer instances to recursively resolve the names
+       of produced columns.
+
+    .. py::attribute:: produced_columns
+       type: set
+       read-only
+
+       The resolved, flat set of produced column names.
     """
 
+    # create an own instance cache
     _instances = {}
-
-    @classmethod
-    def new(cls, *args, **kwargs) -> "ArrayFunction":
-        """
-        Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
-        name attribute, and returns it. An exception is raised if an instance with the same name was
-        already reigstered.
-        """
-        inst = cls(*args, **kwargs)
-
-        if inst.name in cls._instances:
-            raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
-
-        cls._instances[inst.name] = inst
-
-        return inst
-
-    @classmethod
-    def get(cls, name: str) -> "ArrayFunction":
-        """
-        Returns a previously registered instance named *name* from the cache.
-        """
-        if name not in cls._instances:
-            raise ValueError(f"no {cls.__name__} named '{name}' registered")
-
-        return cls._instances[name]
-
-    @classmethod
-    def create_subclass(cls, name: str, attributes: Optional[dict] = None) -> "ArrayFunction":
-        """
-        Creates a new class named *name* inheriting from *this* class. *attributes* are used to add
-        custom class-level members to the newly generated class. By default, the new subclass has a
-        separate instance cache dictionary.
-
-        In general, it would be trivial to create a subclass the usual way, but since the base
-        :py:class:`ArrayFunction` and its features might be used *as is* with a different type and
-        instance cache, this method could be useful. Example:
-
-        .. code-block:: python
-
-            Categorizer = ArrayFunction.create_subclass("Categorizer")
-        """
-        if not attributes:
-            attributes = {}
-
-        # enforce a separate instance cache attribute
-        attributes["_instances"] = {}
-
-        # create and return the subclass
-        return type(name, (cls,), attributes)
 
     def __init__(
         self,
         func: Callable,
         name: Optional[str] = None,
         uses: Optional[Union[
-            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
-            Set["ArrayFunction"],
+            str, "ArrayProducer", Sequence[str], Sequence["ArrayProducer"], Set[str],
+            Set["ArrayProducer"],
+        ]] = None,
+        produces: Optional[Union[
+            str, "ArrayProducer", Sequence[str], Sequence["ArrayProducer"], Set[str],
+            Set["ArrayProducer"],
         ]] = None,
     ):
-        super().__init__()
+        super().__init__(func, name=name, uses=uses)
 
-        self.func = func
-        self.name = name or self.func.__name__
-        self.uses = law.util.make_list(uses) if uses else []
+        self.produces = law.util.make_list(produces) if produces else []
 
     @property
-    def used_columns(self) -> Set[str]:
+    def produced_columns(self) -> Set[str]:
         columns = set()
-        for obj in self.uses:
-            if isinstance(obj, ArrayFunction):
-                columns |= obj.used_columns
+        for obj in self.produces:
+            if isinstance(obj, ArrayProducer):
+                columns |= obj.produced_columns
             else:
                 columns.add(obj)
         return columns
-
-    def __call__(self, *args, **kwargs):
-        """
-        Invokes the wrapped :py:attr:`func`, forwarding all *args* and *kwargs*.
-        """
-        return self.func(*args, **kwargs)
 
 
 class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):

@@ -4,16 +4,15 @@
 Object and event calibration tools.
 """
 
-from typing import Optional, Union, Sequence, Set, Callable
+from typing import Optional, Union, Callable
 
 import law
 
 from ap.util import maybe_import
-from ap.columnar_util import ArrayFunction
+from ap.columnar_util import ArrayProducer
 
 
-class Calibrator(ArrayFunction):
-    """
+_calibrator_doc = """
     Wrapper class for functions performing object calibration on (most likely) coffea nano event
     arrays. The main purpose of wrappers is to store information about required and produced columns
     next to the implementation. In addition, they have a unique name which allows for using it in a
@@ -32,15 +31,12 @@ class Calibrator(ArrayFunction):
     This will register and return an instance named "my_jet_calibration" that *uses* the "nJet" and
     "Jet_pt" columns of the array structure, and produces a new column "Jet_pt_jec_up".
 
-    The name defaults to the name of the function itself and can be altered by passing a custom
-    *name*. It is used internally to store the instance in a cache from which it can be retrieved
-    through the :py:meth:`get` class method.
-
-    Knowledge of the columns to load is especially useful when opening (writing) files and selecting
-    the content to deserialize (serialize). *uses* accepts not only strings but also previously
-    registered instances to denote in inner dependence. Column names should always be given in the
-    flat nano nomenclature (using underscores). The :py:attr:`used_columns` property will resolve
-    this information and return a set of column names. Example:
+    Knowledge of the columns to load (write) is especially useful when opening (saving) files and
+    selecting only the content to deserialize (serialize). Both *uses* and *produces* accept not
+    only strings but also previously registered instances to denote in inner dependence. Column
+    names should always be given in the flat nano nomenclature (using underscores). The
+    :py:attr:`used_columns` and :py:attr:`produced_columns` properties will resolve this information
+    and return a set of column names. Example:
 
     .. code-block:: python
 
@@ -54,56 +50,11 @@ class Calibrator(ArrayFunction):
         print(my_event_calibration.produced_columns)
         # -> {"Jet_pt_jec_up"}
 
-    .. py:attribute:: func
-       type: callable
+    For more info and documentation of attributes, see the :py:class:`ArrayProducer` base class.
+"""
 
-       The wrapped function.
 
-    .. py:attribute:: name
-       type: str
-
-       The name of the calibrator in the instance cache.
-
-    .. py:attribute:: uses
-       type: set
-
-       The set of column names or other calibrator instances to recursively resolve the names of
-       required columns.
-
-    .. py::attribute:: used_columns
-       type: set
-       read-only
-
-       The resolved, flat set of used column names.
-    """
-
-    # create an own instance cache
-    _instances = {}
-
-    def __init__(
-        self,
-        func: Callable,
-        name: Optional[str] = None,
-        uses: Optional[Union[
-            str, "Calibrator", Sequence[str], Sequence["Calibrator"], Set[str], Set["Calibrator"],
-        ]] = None,
-        produces: Optional[Union[
-            str, "Calibrator", Sequence[str], Sequence["Calibrator"], Set[str], Set["Calibrator"],
-        ]] = None,
-    ):
-        super().__init__(func, name=name, uses=uses)
-
-        self.produces = law.util.make_list(produces) if produces else []
-
-    @property
-    def produced_columns(self) -> Set[str]:
-        columns = set()
-        for obj in self.produces:
-            if isinstance(obj, Calibrator):
-                columns |= obj.produced_columns
-            else:
-                columns.add(obj)
-        return columns
+Calibrator = ArrayProducer.create_subclass("Calibrator", {"__doc__": _calibrator_doc})
 
 
 def calibrator(
