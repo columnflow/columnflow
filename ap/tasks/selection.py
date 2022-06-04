@@ -6,39 +6,13 @@ Tasks related to obtaining, preprocessing and selecting events.
 
 from collections import defaultdict
 
-import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.mixins import CalibratorMixin, CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy, dev_sandbox
-
-
-class CalibratorMixin(AnalysisTask):
-
-    calibrator = luigi.Parameter(
-        default="test",
-        description="the name of the calibrator to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "calibrator", f"calib_{self.calibrator}")
-        return parts
-
-
-class SelectorMixin(CalibratorMixin):
-
-    selector = luigi.Parameter(
-        default="test",
-        description="the name of the selector to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "selector", f"select_{self.selector}")
-        return parts
 
 
 class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -132,7 +106,7 @@ CalibrateEventsWrapper = wrapper_factory(
 )
 
 
-class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -143,14 +117,14 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateEvents.req(self)
+            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateEvents.req(self),
+            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
         }
 
     def output(self):
@@ -198,18 +172,18 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [nano_file, inputs["calib"].path],
+            [nano_file] + [inp.path for inp in inputs["calib"]],
             source_type=["coffea_root", "awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would start evaluating object and event selection criteria, store
                 # new columns related to the selection (e.g. categories or regions), and
                 # book-keeping of stats
 
-                # apply the calibrated diff
-                events = update_ak_array(events, diff)
+                # apply the calibrated diffs
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
                 events = add_ak_aliases(events, aliases)
@@ -247,7 +221,7 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, SelectorMixin, law.tasks.ForestMerge):
+class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 
