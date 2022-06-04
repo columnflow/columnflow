@@ -9,7 +9,7 @@ from typing import Optional, Union, Callable
 import law
 
 from ap.util import maybe_import, DotDict
-from ap.columnar_util import ArrayFunction
+from ap.columnar_util import ArrayConsumer
 
 ak = maybe_import("awkward")
 
@@ -35,13 +35,9 @@ _selector_doc = """
     This will register and return an instance named "my_jet_selection" that *uses* the "nJet" and
     "Jet_pt" columns of the array structure.
 
-    The name defaults to the name of the function itself and can be altered by passing a custom
-    *name*. It is used internally to store the instance in a cache from which it can be retrieved
-    through the :py:meth:`get` class method.
-
     Knowledge of the columns to load is especially useful when opening files and selecting the
     content to deserialize. *uses* accepts not only strings but also previously registered instances
-    to denote in inner dependence. Column names should always be given in the flat nano nomenclature
+    to denote an inner dependence. Column names should always be given in the flat nano nomenclature
     (using underscores). The :py:attr:`used_columns` property will resolve this information and
     return a set of column names. Example:
 
@@ -55,31 +51,11 @@ _selector_doc = """
         print(my_event_selection.used_columns)
         # -> {"nJet", "Jet_pt"}
 
-    .. py:attribute:: func
-       type: callable
-
-       The wrapped function.
-
-    .. py:attribute:: name
-       type: str
-
-       The name of the selector in the instance cache.
-
-    .. py:attribute:: uses
-       type: set
-
-       The set of column names or other selector instances to recursively resolve the names of
-       required columns.
-
-    .. py::attribute:: used_columns
-       type: set
-       read-only
-
-       The resolved, flat set of used column names.
+    For more info and documentation of attributes, see the :py:class:`ArrayConsumer` base class.
     """
 
 
-Selector = ArrayFunction.create_subclass("Selector", {"__doc__": _selector_doc})
+Selector = ArrayConsumer.create_subclass("Selector", {"__doc__": _selector_doc})
 
 
 def selector(
