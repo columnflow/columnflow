@@ -166,6 +166,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
 
     # disable the shift parameter
     shift = None
+    effective_shift = None
     allow_empty_shift = True
 
     def workflow_requires(self):
