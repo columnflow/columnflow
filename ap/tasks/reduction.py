@@ -26,14 +26,14 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateEvents.req(self)
+            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
             reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateEvents.req(self),
+            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
             "sel": SelectEvents.req(self),
         }
 
@@ -76,17 +76,17 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [nano_file, inputs["calib"].path, inputs["sel"]["res"].path],
+            [nano_file] + [inp.path for inp in inputs["calib"]] + [inputs["sel"]["res"].path],
             source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *diffs, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would simply apply the mask from the selection results
                 # to filter events and objects
 
-                # add the calibrated diff and new columns from selection results
-                events = update_ak_array(events, diff, sel.columns)
+                # add the calibrated diffs and new columns from selection results
+                events = update_ak_array(events, *(diffs + [sel.columns]))
 
                 # add aliases
                 events = add_ak_aliases(events, aliases, remove_src=True)

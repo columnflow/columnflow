@@ -117,14 +117,14 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateEvents.req(self)
+            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateEvents.req(self),
+            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
         }
 
     def output(self):
@@ -172,18 +172,18 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [nano_file, inputs["calib"].path],
+            [nano_file] + [inp.path for inp in inputs["calib"]],
             source_type=["coffea_root", "awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would start evaluating object and event selection criteria, store
                 # new columns related to the selection (e.g. categories or regions), and
                 # book-keeping of stats
 
-                # apply the calibrated diff
-                events = update_ak_array(events, diff)
+                # apply the calibrated diffs
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
                 events = add_ak_aliases(events, aliases)
