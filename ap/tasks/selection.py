@@ -6,39 +6,13 @@ Tasks related to obtaining, preprocessing and selecting events.
 
 from collections import defaultdict
 
-import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.mixins import CalibratorMixin, CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.util import ensure_proxy, dev_sandbox
-
-
-class CalibratorMixin(AnalysisTask):
-
-    calibrator = luigi.Parameter(
-        default="test",
-        description="the name of the calibrator to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "calibrator", f"calib_{self.calibrator}")
-        return parts
-
-
-class SelectorMixin(CalibratorMixin):
-
-    selector = luigi.Parameter(
-        default="test",
-        description="the name of the selector to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "selector", f"select_{self.selector}")
-        return parts
 
 
 class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -132,7 +106,7 @@ CalibrateEventsWrapper = wrapper_factory(
 )
 
 
-class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -247,7 +221,7 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, SelectorMixin, law.tasks.ForestMerge):
+class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 

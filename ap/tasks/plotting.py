@@ -8,15 +8,15 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework.base import ConfigTask, PlotMixin, view_output_plots
+from ap.tasks.framework.base import ConfigTask
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin, view_output_plots
 from ap.tasks.framework.remote import HTCondorWorkflow
-from ap.tasks.selection import SelectorMixin
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.util import ensure_proxy
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 
-class Plotting(ConfigTask, SelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -216,7 +216,7 @@ class Plotting(ConfigTask, SelectorMixin, PlotMixin, law.LocalWorkflow, HTCondor
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShifts(ConfigTask, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class PlotShifts(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"

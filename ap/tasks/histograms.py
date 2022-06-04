@@ -7,13 +7,13 @@ Task to produce and merge histograms.
 import law
 
 from ap.tasks.framework.base import DatasetTask
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
-from ap.tasks.selection import SelectorMixin
 from ap.tasks.reduction import ReduceEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -108,7 +108,7 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
         self.output().dump(histograms, formatter="pickle")
 
 
-class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -154,7 +154,7 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
             output.dump(merged, formatter="pickle")
 
 
-class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 

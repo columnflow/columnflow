@@ -9,13 +9,14 @@ from collections import OrderedDict
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import SelectorMixin, CalibrateEvents, SelectEvents
+from ap.tasks.selection import CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ReduceEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -127,7 +128,7 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class GatherReductionStats(DatasetTask, SelectorMixin):
+class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
 
     merged_size = law.BytesParameter(
         default=500.0,
@@ -210,7 +211,7 @@ GatherReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
