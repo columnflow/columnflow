@@ -117,12 +117,6 @@ class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMer
     # in each step, merge 10 into 1
     merge_factor = 10
 
-    @classmethod
-    def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
-        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
-        return params
-
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)

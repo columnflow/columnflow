@@ -18,13 +18,6 @@ class BaseTask(law.Task):
 
     task_namespace = os.getenv("AP_TASK_NAMESPACE")
 
-    @classmethod
-    def modify_param_values(cls, params):
-        """
-        Hook to modify command line arguments before instances of this class are created.
-        """
-        return params
-
 
 class AnalysisTask(BaseTask, law.SandboxTask):
 
@@ -94,6 +87,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     @classmethod
     def get_version_params(cls):
         return ()
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        # implemented only for simplified mro control
+        return set()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -281,7 +279,10 @@ class ShiftTask(ConfigTask):
     @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
         # for the basic shift task, only the shifts implemented by this task class are allowed
-        return set(cls.shifts)
+        # still call super for simplified mro control
+        shifts = super().determine_allowed_shifts(config_inst, params)
+        shifts |= set(cls.shifts)
+        return shifts
 
     @classmethod
     def get_version_params(cls):

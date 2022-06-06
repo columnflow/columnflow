@@ -63,7 +63,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         aliases = self.shift_inst.x("column_aliases", {})
 
         # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns[self.__class__.__name__])
+        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
         load_columns = keep_columns | set(mandatory_coffea_columns)
         remove_routes = None
 
@@ -222,12 +222,6 @@ class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.Forest
 
     # the key of the config that defines the merging in the branch map of DatasetTask
     file_merging = "after_reduction"
-
-    @classmethod
-    def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
-        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
-        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
