@@ -52,6 +52,10 @@ config_2018.set_aux("luminosity", Number(59740, {
     "lumi_13TeV_1718": (REL, 0.002),
 }))
 
+# 2018 minimum bias cross section in mb (milli) for creating PU weights, values from
+# https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II
+config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
+
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
 config_2018.add_process(procs.process_tt)
@@ -99,6 +103,29 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+config_2018.add_shift(name="minbiasxs_up", id=7, type="shape")
+config_2018.add_shift(name="minbiasxs_down", id=8, type="shape")
+
+# external files
+config_2018.set_aux("external_files", {
+    # files from TODO
+    "lumi": {
+        "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt", "v1"),  # noqa
+        "normtag": ("/afs/cern.ch/user/l/lumipro/public/Normtags/normtag_PHYSICS.json", "v1"),
+    },
+
+    # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II
+    "pu": {
+        "json": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/pileup_latest.txt", "v1"),  # noqa
+        "mc_profile": ("https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py", "v1"),  # noqa
+        "data_profile": {
+            "nominal": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-69200ub-99bins.root", "v1"),  # noqa
+            "minbiasxs_up": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-72400ub-99bins.root", "v1"),  # noqa
+            "minbiasxs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
+        },
+    },
+})
+
 
 # external files
 config_2018.set_aux("external_files", {

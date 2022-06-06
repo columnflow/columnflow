@@ -25,7 +25,7 @@ class BaseTask(law.Task):
         """
         return params
 
-      
+
 class AnalysisTask(BaseTask, law.SandboxTask):
 
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
