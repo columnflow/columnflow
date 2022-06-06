@@ -137,8 +137,8 @@ class ProducerMixin(ConfigTask):
 
     def store_parts(self):
         parts = super().store_parts()
-        if self.producer != law.NO_STR:
-            parts.insert_before("version", "producer", f"prod__{self.producer}")
+        producer = f"prod__{self.producer}" if self.producer != law.NO_STR else "none"
+        parts.insert_before("version", "producer", producer)
         return parts
 
 
@@ -163,11 +163,12 @@ class ProducersMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
+        producers = "none"
         if self.producers:
-            produce = "__".join(self.producers[:5])
+            producers = "__".join(self.producers[:5])
             if len(self.producers) > 5:
-                produce += f"__{law.util.create_hash(self.producers[5:])}"
-            parts.insert_before("version", "producers", f"prod__{produce}")
+                producers += f"__{law.util.create_hash(self.producers[5:])}"
+        parts.insert_before("version", "producers", f"prod__{producers}")
 
         return parts
 

@@ -176,10 +176,11 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks of events and diffs
+        n_calib = len(inputs["calib"])
         with ChunkedReader(
             [nano_file] + [inp.path for inp in inputs["calib"]],
-            source_type=["coffea_root", "awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
+            source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns}}] + n_calib * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):

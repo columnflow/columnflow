@@ -7,13 +7,14 @@ Task to produce and merge histograms.
 import law
 
 from ap.tasks.framework.base import DatasetTask
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import ReduceEvents
+from ap.tasks.production import ProduceColumns
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CreateHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -23,12 +24,15 @@ class CreateHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow,
         reqs = super(CreateHistograms, self).workflow_requires()
         if not self.pilot:
             reqs["events"] = ReduceEvents.req(self)
+            if self.producers:
+                reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def requires(self):
-        return {
-            "events": ReduceEvents.req(self),
-        }
+        reqs = {"events": ReduceEvents.req(self)}
+        if self.producers:
+            reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        return reqs
 
     def output(self):
         return self.local_target(f"histograms_{self.branch}.pickle")
@@ -38,7 +42,7 @@ class CreateHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow,
     @ensure_proxy
     def run(self):
         import hist
-        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
+        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns, update_ak_array
         from ap.selection import Selector
 
         # prepare inputs and outputs
@@ -53,22 +57,30 @@ class CreateHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow,
 
         # define nano columns that need to be loaded
         variables = Selector.get("variables")
-        load_columns = set(mandatory_coffea_columns) | variables.used_columns
+        load_columns = set(mandatory_coffea_columns) | variables.used_columns  # noqa
 
         # iterate over chunks of events and diffs
+        files = [inputs["events"].path]
+        if self.producers:
+            files.extend([inp.path for inp in inputs["columns"]])
         with ChunkedReader(
-            inputs["events"].path,
-            source_type="awkward_parquet",
-            read_options={"iteritems_options": {"filter_name": load_columns}},
+            files,
+            source_type=len(files) * ["awkward_parquet"],
+            # not working yet since parquet columns are nested
+            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # add additional columns
+                events = update_ak_array(events, *columns)
+
+                # calculate variables
+                results = variables(events)
+
                 # weights
                 lumi = self.config_inst.x.luminosity.get("nominal")
                 sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
                 weight = sampleweight * events.LHEWeight.originalXWGTUP
-
-                results = variables(events)
 
                 # get all viable category ids (only leaf categories)
                 # cat_ids = []
