@@ -21,7 +21,7 @@ def extract(array, idx):
 
 
 # object definitions
-# TODO: ArrayFunction instead of Selector
+# TODO: Producer instead of Selector
 @selector(uses={"Jet_pt", "Jet_eta"})
 def req_jet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)

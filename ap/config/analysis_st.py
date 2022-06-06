@@ -127,6 +127,15 @@ config_2018.set_aux("external_files", {
 })
 
 
+# external files
+config_2018.set_aux("external_files", {
+    "lumi": {
+        "golden": "/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt",  # noqa
+        "normtag": "/afs/cern.ch/user/l/lumipro/public/Normtags/normtag_PHYSICS.json",
+    },
+})
+
+
 # columns to keep after certain steps
 config_2018.set_aux("keep_columns", {
     "ReduceEvents": {
@@ -286,6 +295,7 @@ config_2018.add_variable(
 config_2018.set_aux("file_merging", {
 })
 
-# versions per task and potentially other keys
+# versions per task family and optionally also dataset and shift
+# None can be used as a key to define a default value
 config_2018.set_aux("versions", {
 })
