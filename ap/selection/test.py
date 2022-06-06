@@ -272,7 +272,7 @@ def lepton_selection_test(events, stats):
         "LHEWeight_originalXWGTUP",
     },
 )
-def test(events, stats, config_inst):
+def test(events, stats, config_inst, **kwargs):
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test

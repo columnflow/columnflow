@@ -76,22 +76,27 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # just invoke the calibration function
-                events = calibrate(events)
+                arr = calibrate(
+                    events,
+                    config_inst=self.config_inst,
+                    dataset_inst=self.dataset_inst,
+                    shift_inst=self.shift_inst,
+                )
 
                 # manually remove colums that should not be kept
                 if not remove_routes:
                     remove_routes = {
                         route
-                        for route in get_ak_routes(events)
+                        for route in get_ak_routes(arr)
                         if not law.util.multi_match("_".join(route), keep_columns)
                     }
                 for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                    arr = remove_ak_column(arr, route)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+                reader.add_task(sorted_ak_to_parquet, (arr, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:
@@ -189,7 +194,13 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = select(events, stats, self.config_inst)
+                results = select(
+                    events,
+                    stats,
+                    config_inst=self.config_inst,
+                    dataset_inst=self.dataset_inst,
+                    shift_inst=self.shift_inst,
+                )
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")

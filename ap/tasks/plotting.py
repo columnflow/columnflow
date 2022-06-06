@@ -9,14 +9,13 @@ from itertools import product
 import law
 
 from ap.tasks.framework.base import ConfigTask
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin, view_output_plots
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.util import ensure_proxy
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 
-class Plotting(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -92,9 +91,7 @@ class Plotting(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflo
         # print('Hello from output')
         return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
 
-    @law.decorator.safe_output
-    @ensure_proxy
-    @view_output_plots
+    @PlotMixin.view_output_plots
     def run(self):
         with self.publish_step(
                 f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}"):
@@ -216,7 +213,7 @@ class Plotting(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflo
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShifts(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -266,7 +263,7 @@ class PlotShifts(ConfigTask, CalibratorsSelectorMixin, PlotMixin, law.LocalWorkf
                     self.branch_data["variable"] + "_" + self.branch_data["shift_source"] + ".pdf")
         return self.local_target(filename)
 
-    @view_output_plots
+    @PlotMixin.view_output_plots
     def run(self):
         with self.publish_step("Hello from PlotShiftograms"):
             import matplotlib.pyplot as plt

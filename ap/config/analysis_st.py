@@ -135,15 +135,32 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "nMuon", "Muon_pt", "Muon_eta",
         "nElectron", "Electron_pt", "Electron_eta",
         "LHEWeight_originalXWGTUP",
-        "jet_high_multiplicity",
-        "cat_array",
+        "PV_npvs",
+        "jet_high_multiplicity", "cat_array",
     },
     "CreateHistograms": {
         "LHEWeight_originalXWGTUP",
     },
 }))
 
+# default calibrator, selector and producer
+config_2018.set_aux("default_calibrator", "test")
+config_2018.set_aux("default_selector", "test")
+config_2018.set_aux("default_producer", None)
+
+# file merging values
+# key -> dataset -> files per branch (-1 or not present = all)
+# TODO: maybe add selector name as additional layer
+config_2018.set_aux("file_merging", {
+})
+
+# versions per task family and optionally also dataset and shift
+# None can be used as a key to define a default value
+config_2018.set_aux("versions", {
+})
+
 # define categories
+# TODO: move their definition to dedicated file
 cat_e = config_2018.add_category(
     name="1e",
     id=1,
@@ -195,6 +212,7 @@ cat_mu_bb_highHT = cat_mu_bb.add_category(
 )
 
 # define variables
+# TODO: move their definition to dedicated file
 config_2018.add_variable(
     name="HT",
     expression="var_HT",
@@ -279,14 +297,3 @@ config_2018.add_variable(
     binning=(50, -2.5, 2.5),
     x_title=r"Jet 3 $\eta$",
 )
-
-
-# file merging values
-# key -> dataset -> files per branch (-1 or not present = all)
-config_2018.set_aux("file_merging", {
-})
-
-# versions per task family and optionally also dataset and shift
-# None can be used as a key to define a default value
-config_2018.set_aux("versions", {
-})

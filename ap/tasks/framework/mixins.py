@@ -7,15 +7,27 @@ Lightweight mixins task classes.
 import law
 import luigi
 
-from ap.tasks.framework.base import AnalysisTask
+from ap.tasks.framework.base import AnalysisTask, ConfigTask
 
 
-class CalibratorMixin(AnalysisTask):
+class CalibratorMixin(ConfigTask):
 
     calibrator = luigi.Parameter(
-        default="test",
-        description="the name of the calibrator to the applied; default: 'test'",
+        default=law.NO_STR,
+        description="the name of the calibrator to the applied; default: value of the "
+        "'default_calibrator' config",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config" in params and params.get("calibrator") == law.NO_STR:
+            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+            if config_inst.x("default_calibrator", None):
+                params["calibrator"] = config_inst.x.default_calibrator
+
+        return params
 
     def store_parts(self):
         parts = super().store_parts()
@@ -23,12 +35,24 @@ class CalibratorMixin(AnalysisTask):
         return parts
 
 
-class CalibratorsMixin(AnalysisTask):
+class CalibratorsMixin(ConfigTask):
 
     calibrators = law.CSVParameter(
-        default=("test",),
-        description="comma-separated names of calibrators to be applied; default: 'test'",
+        default=(),
+        description="comma-separated names of calibrators to be applied; default: value of the "
+        "'default_calibrator' config in a 1-tuple",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config" in params and params.get("calibrators") == ():
+            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+            if config_inst.x("default_calibrator", None):
+                params["calibrators"] = (config_inst.x.default_calibrator,)
+
+        return params
 
     def store_parts(self):
         parts = super().store_parts()
@@ -41,16 +65,39 @@ class CalibratorsMixin(AnalysisTask):
         return parts
 
 
-class SelectorMixin(AnalysisTask):
+class SelectorMixin(ConfigTask):
 
     selector = luigi.Parameter(
-        default="test",
-        description="the name of the selector to the applied; default: 'test'",
+        default=law.NO_STR,
+        description="the name of the selector to the applied; default: value of the "
+        "'default_selector' config",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config" in params and params.get("selector") == law.NO_STR:
+            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+            if config_inst.x("default_selector", None):
+                params["selector"] = config_inst.x.default_selector
+
+        return params
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        shifts = super().determine_allowed_shifts(config_inst, params)
+
+        # add selector dependent shifts
+        if "selector" in params:
+            from ap.selection import Selector
+            shifts |= Selector.get(params["selector"]).all_shifts
+
+        return shifts
 
     def store_parts(self):
         parts = super().store_parts()
-        parts.insert_before("version", "selector", f"select__{self.selector}")
+        parts.insert_before("version", "selector", f"sel__{self.selector}")
         return parts
 
 
@@ -58,33 +105,69 @@ class CalibratorsSelectorMixin(SelectorMixin, CalibratorsMixin):
     pass
 
 
-class ProducerMixin(AnalysisTask):
+class ProducerMixin(ConfigTask):
 
     producer = luigi.Parameter(
-        default="test",
-        description="the name of the producer to the applied; default: 'test'",
+        default=law.NO_STR,
+        description="the name of the producer to the applied; default: value of the "
+        "'default_producer' config",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config" in params and params.get("producer") == law.NO_STR:
+            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+            if config_inst.x("default_producer", None):
+                params["producer"] = config_inst.x.default_producer
+
+        return params
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        shifts = super().determine_allowed_shifts(config_inst, params)
+
+        # add producer dependent shifts
+        if "producer" in params:
+            from ap.production import Producer
+            shifts |= Producer.get(params["producer"]).all_shifts
+
+        return shifts
 
     def store_parts(self):
         parts = super().store_parts()
-        parts.insert_before("version", "producer", f"produce__{self.producer}")
+        if self.producer != law.NO_STR:
+            parts.insert_before("version", "producer", f"prod__{self.producer}")
         return parts
 
 
-class ProducersMixin(AnalysisTask):
+class ProducersMixin(ConfigTask):
 
     producers = law.CSVParameter(
-        default=("test",),
-        description="comma-separated names of producers to be applied; default: 'test'",
+        default=(),
+        description="comma-separated names of producers to be applied; empty default",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config" in params and params.get("producers") == ():
+            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+            if config_inst.x("default_producer", None):
+                params["producers"] = (config_inst.x.default_producer,)
+
+        return params
 
     def store_parts(self):
         parts = super().store_parts()
 
-        produce = "__".join(self.producers[:5])
-        if len(self.producers) > 5:
-            produce += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"produce__{produce}")
+        if self.producers:
+            produce = "__".join(self.producers[:5])
+            if len(self.producers) > 5:
+                produce += f"__{law.util.create_hash(self.producers[5:])}"
+            parts.insert_before("version", "producers", f"prod__{produce}")
 
         return parts
 
@@ -135,3 +218,6 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
             law.util.interruptable_popen(view_cmd.format(path), shell=True, executable="/bin/bash")
 
     return before_call, call, after_call
+
+
+PlotMixin.view_output_plots = view_output_plots

@@ -11,6 +11,6 @@ ak = maybe_import("awkward")
 
 
 @producer(uses={"nJet", "Jet_pt"}, produces={"Jet_pt2"})
-def test(events):
+def test(events, **kwargs):
     events["Jet", "pt2"] = events.Jet.pt ** 2.0
     return events
