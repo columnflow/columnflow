@@ -10,14 +10,12 @@ __all__ = []
 import os
 import shutil
 import subprocess
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Sequence
 
 import luigi
 import law
 
-from ap.tasks.framework.base import (
-    AnalysisTask, ConfigTask, ShiftTask, DatasetTask, wrapper_factory,
-)
+from ap.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from ap.util import ensure_proxy, wget
 
 
@@ -244,7 +242,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         self.transfer(tmp)
 
 
-class CreatePileupWeights(ShiftTask):
+class CreatePileupWeights(ConfigTask):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
@@ -256,8 +254,6 @@ class CreatePileupWeights(ShiftTask):
     )
     version = None
 
-    shifts = {"minbias_xs_up", "minbias_xs_down"}
-
     def requires(self):
         return BundleExternalFiles.req(self)
 
@@ -266,39 +262,49 @@ class CreatePileupWeights(ShiftTask):
 
     @law.decorator.safe_output
     def run(self):
-        # prepare the external files
+        # prepare the external files and the output weights
         externals = self.requires()
+        weights = {}
 
         # read the mc profile
         mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)
 
-        # read or create the data profile
-        if self.data_mode == "hist":
-            pu_hist_target = externals.files.pu.data_profile[self.shift_inst.name]
-            data_profile = self.read_data_profile_from_hist(pu_hist_target)
-        else:
-            pu_file_target = externals.files.pu.json
-            minbiasxs = self.config_inst.x.minbiasxs.get(self.shift_inst)
-            data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
+        # loop over nominal and minbias_xs shifts
+        for shift in ["nominal", "minbias_xs_up", "minbias_xs_down"]:
+            # read or create the data profile
+            if self.data_mode == "hist":
+                pu_hist_target = externals.files.pu.data_profile[shift]
+                data_profile = self.read_data_profile_from_hist(pu_hist_target)
+            else:
+                pu_file_target = externals.files.pu.json
+                minbiasxs = self.config_inst.x.minbiasxs.get(shift)
+                data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
 
-        # build the ratios and save them
-        if len(mc_profile) != len(data_profile):
-            raise Exception(
-                f"the number of bins in the MC profile ({len(mc_profile)}) does not match that of the data profile "
-                f"({len(data_profile)})",
-            )
-        ratios = [
-            (d / m) if m > 0 else 0.0
-            for m, d in zip(mc_profile, data_profile)
-        ]
+            # build the ratios and save them
+            if len(mc_profile) != len(data_profile):
+                raise Exception(
+                    f"the number of bins in the MC profile ({len(mc_profile)}) does not match that "
+                    f"of the data profile for the {shift} shift ({len(data_profile)})",
+                )
+
+            # store them
+            weights[shift] = [
+                (d / m) if m > 0 else 0.0
+                for m, d in zip(mc_profile, data_profile)
+            ]
+            self.publish_message(f"computed pu weights for shift {shift}")
 
         # save it
-        self.output().dump(ratios, formatter="json")
+        self.output().dump(weights, formatter="json")
 
-    def read_mc_profile_from_cfg(self, pu_config_target: law.FileSystemTarget) -> List[float]:
+    @classmethod
+    def read_mc_profile_from_cfg(
+        cls,
+        pu_config_target: law.FileSystemTarget,
+    ) -> List[float]:
         """
-        Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and return the pu profile
-        as a list of float probabilities.
+        Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and
+        return the pu profile as a list of float probabilities.
         """
         probs = []
 
@@ -323,32 +329,43 @@ class CreatePileupWeights(ShiftTask):
             if ")" in line:
                 break
 
-        return probs
+        return cls.normalize_values(probs)
 
-    def read_data_profile_from_hist(self, pu_hist_target: law.FileSystemTarget) -> List[float]:
+    @classmethod
+    def read_data_profile_from_hist(
+        cls,
+        pu_hist_target: law.FileSystemTarget,
+    ) -> List[float]:
         """
-        Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*, builds the ratio to
-        mc and returns the weights in a list.
+        Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*,
+        builds the ratio to mc and returns the weights in a list.
         """
         hist_file = pu_hist_target.load(formatter="uproot")
-        return hist_file["pileup"].values().tolist()
+        probs = hist_file["pileup"].values().tolist()
+        return cls.normalize_values(probs)
 
+    @classmethod
     def read_data_profile_from_pileupcalc(
-        self,
+        cls,
         pu_file_target: law.FileSystemTarget,
         minbias_xs: float,
     ) -> List[float]:
         """
-        Takes the pileup profile in data read stored in *pu_file_target*, which should have been produced when
-        processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to mc and returns the weights in a
-        list for 99 bins (recommended number).
+        Takes the pileup profile in data read stored in *pu_file_target*, which should have been
+        produced when processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to
+        mc and returns the weights in a list for 99 bins (recommended number).
         """
         raise NotImplementedError
+
+    @classmethod
+    def normalize_values(cls, values: Sequence[float]) -> List[float]:
+        _sum = sum(values, 0.0)
+        return [value / _sum for value in values]
 
 
 CreatePileupWeightsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CreatePileupWeights,
-    enable=["configs", "skip_configs", "shifts", "skip_shifts"],
+    enable=["configs", "skip_configs"],
     attributes={"version": None},
 )
