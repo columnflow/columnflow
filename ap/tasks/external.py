@@ -86,7 +86,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if not branch_task.is_branch():
             raise TypeError(f"branch_task must be a workflow branch, but got {branch_task}")
         if not self.complete():
-            raise Exception(f"{self:r} is required to be complete")
+            raise Exception(f"{self} is required to be complete")
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
@@ -251,34 +251,33 @@ class CreatePileupWeights(ShiftTask):
     data_mode = luigi.ChoiceParameter(
         default="hist",
         choices=["hist", "pileupcalc"],
-        significant=False,
         description="the mode to obtain the data pu profile; choices: 'hist', 'pileupcalc'; "
         "default: 'hist'",
     )
     version = None
 
-    shifts = {"minbiasxs_up", "minbiasxs_down"}
+    shifts = {"minbias_xs_up", "minbias_xs_down"}
 
     def requires(self):
         return BundleExternalFiles.req(self)
 
     def output(self):
-        return self.local_target("weights.json")
+        return self.local_target(f"weights_from_{self.data_mode}.json")
 
     @law.decorator.safe_output
     def run(self):
         # prepare the external files
-        external_files = self.requires()
+        externals = self.requires()
 
         # read the mc profile
-        mc_profile = self.read_mc_profile_from_cfg(external_files.files["pu"]["mc_profile"])
+        mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)
 
-        # read or create the data profil
+        # read or create the data profile
         if self.data_mode == "hist":
-            hist_target = external_files.files["pu"]["data_profile"][self.shift_inst.name]
-            data_profile = self.read_data_profile_from_hist(hist_target)
+            pu_hist_target = externals.files.pu.data_profile[self.shift_inst.name]
+            data_profile = self.read_data_profile_from_hist(pu_hist_target)
         else:
-            pu_file_target = external_files.files["pu"]["json"]
+            pu_file_target = externals.files.pu.json
             minbiasxs = self.config_inst.x.minbiasxs.get(self.shift_inst)
             data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
 
@@ -296,11 +295,15 @@ class CreatePileupWeights(ShiftTask):
         # save it
         self.output().dump(ratios, formatter="json")
 
-    def read_mc_profile_from_cfg(self, pu_cfg: law.FileSystemTarget) -> List[float]:
+    def read_mc_profile_from_cfg(self, pu_config_target: law.FileSystemTarget) -> List[float]:
+        """
+        Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and return the pu profile
+        as a list of float probabilities.
+        """
         probs = []
 
         # read non-empty lines
-        lines = [line.strip() for line in pu_cfg.load(formatter="text").split("\n") if line.strip()]
+        lines = map(lambda s: s.strip(), pu_config_target.load(formatter="text").split("\n"))
 
         # loop through them and extract probabilities
         found_prob_line = False
@@ -311,6 +314,9 @@ class CreatePileupWeights(ShiftTask):
                     continue
                 found_prob_line = True
                 line = line.split("(", 1)[-1].strip()
+            # skip empty lines
+            if not line:
+                continue
             # extract numbers
             probs.extend(map(float, filter(bool, line.split(")", 1)[0].split(","))))
             # look for the end of the pu profile
@@ -319,19 +325,23 @@ class CreatePileupWeights(ShiftTask):
 
         return probs
 
-    def read_data_profile_from_hist(self, hist_target):
+    def read_data_profile_from_hist(self, pu_hist_target: law.FileSystemTarget) -> List[float]:
         """
-        Takes the pileup profile in data preproducd by the lumi pog and stored in *hist_target*,
-        builds the ratio to MC and returns the weights in a list.
+        Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*, builds the ratio to
+        mc and returns the weights in a list.
         """
-        hist_file = hist_target.load(formatter="uproot")
+        hist_file = pu_hist_target.load(formatter="uproot")
         return hist_file["pileup"].values().tolist()
 
-    def read_data_profile_from_pileupcalc(self, pu_file_target, minbiasxs):
+    def read_data_profile_from_pileupcalc(
+        self,
+        pu_file_target: law.FileSystemTarget,
+        minbias_xs: float,
+    ) -> List[float]:
         """
-        Takes the pileup profile in data read stored in *pu_file_target*, which should have been
-        produced when processing data, and a *minbiasxs* value in mb (milli), builds the ratio to MC
-        and returns the weights in a list for 99 bins (recommended number).
+        Takes the pileup profile in data read stored in *pu_file_target*, which should have been produced when
+        processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to mc and returns the weights in a
+        list for 99 bins (recommended number).
         """
         raise NotImplementedError
 
