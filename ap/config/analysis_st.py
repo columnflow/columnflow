@@ -268,6 +268,7 @@ config_2018.add_variable(
 config_2018.set_aux("file_merging", {
 })
 
-# versions per task and potentially other keys
+# versions per task family and optionally also dataset and shift
+# None can be used as a key to define a default value
 config_2018.set_aux("versions", {
 })

@@ -9,13 +9,14 @@ from collections import OrderedDict
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.tasks.selection import SelectorMixin, CalibrateEvents, SelectEvents
+from ap.tasks.selection import CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ReduceEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -25,14 +26,14 @@ class ReduceEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateEvents.req(self)
+            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
             reqs["sel"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateEvents.req(self),
+            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
             "sel": SelectEvents.req(self),
         }
 
@@ -75,17 +76,17 @@ class ReduceEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            [nano_file, inputs["calib"].path, inputs["sel"]["res"].path],
+            [nano_file] + [inp.path for inp in inputs["calib"]] + [inputs["sel"]["res"].path],
             source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, diff, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *diffs, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would simply apply the mask from the selection results
                 # to filter events and objects
 
-                # add the calibrated diff and new columns from selection results
-                events = update_ak_array(events, diff, sel.columns)
+                # add the calibrated diffs and new columns from selection results
+                events = update_ak_array(events, *(diffs + [sel.columns]))
 
                 # add aliases
                 events = add_ak_aliases(events, aliases, remove_src=True)
@@ -127,7 +128,7 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class GatherReductionStats(DatasetTask, SelectorMixin):
+class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
 
     merged_size = law.BytesParameter(
         default=500.0,
@@ -210,7 +211,7 @@ GatherReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
