@@ -6,7 +6,7 @@ Helpers and utilities for working with columnar libraries.
 
 __all__ = [
     "mandatory_coffea_columns",
-    "ArrayConsumer", "ArrayProducer", "ChunkedReader", "PreloadedNanoEventsFactory",
+    "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
     "get_ak_routes", "has_ak_route", "find_ak_route", "remove_ak_column", "add_ak_alias",
     "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
@@ -15,6 +15,7 @@ __all__ = [
 
 import math
 import time
+import copy as _copy
 import weakref
 import multiprocessing
 import multiprocessing.pool
@@ -277,6 +278,9 @@ def update_ak_array(
            existing ones.
         4. If none of the cases above apply, an exception is raised.
     """
+    if not others:
+        return ak_array
+
     # helpers to cache calls to has_ak_route for ak_array
     _has_route_cache = {route: True for route in get_ak_routes(ak_array)}
 
@@ -370,7 +374,7 @@ def sort_ak_fields(
     # identify fields with nested structure, then sort and reassign them
     nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
     for field in nested_fields:
-        ak_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+        setattr(ak_array, field, sort_ak_fields(ak_array[field], sort_fn=sort_fn))
 
     return ak_array
 
@@ -396,13 +400,39 @@ def sorted_ak_to_parquet(
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
-class ArrayConsumer(object):
+class ArrayFunction(object):
     """
-    Base class for function wrappers that act on arrays and keep track of used columns. Also,
-    instances are named and put into a class-level cache when created via :py:meth:`new`
-    (recommended).
+    Base class for function wrappers that act on arrays and keep track of used as well as produced
+    columns, next to the implementation. In addition, they have a unique name which is used to store
+    them in and retrieve them from an instance cache. This is automatically done when created with
+    :py:meth:`new` (recommended).
 
-    For a possible implementations, see :py:class:`selection.Selector`.
+    .. code-block:: python
+
+        # define the function to wrap
+        def my_func(arr):
+            foo = arr.foo
+            arr["bar"] = foo * 2
+            return arr
+
+        # define the function
+        ArrayFunction.new(my_func, uses={"foo"}, produces={"bar"})
+
+        # retrieve it later on
+        func = ArrayFunction.get(my_func)
+        print(func.used_columns)  # -> {"foo"}
+        print(func.produced_columns)  # -> {"bar"}
+        func(some_array)
+
+    The signatures of the constructor and :py:meth:`new` are identical. *func* refers to the
+    function to be wrapped. Unless a custom *name* is given, the function's name is used as a key to
+    store it in the cache. *uses* and *produces* should be strings denoting a column in underscore
+    format, other :py:class:`ArrayFunction` instances, or a sequence or set of the two.
+
+    Knowledge of the columns to load (save) is especially useful when opening (writing) files and
+    selecting the content to deserialize (serialize). The :py:attr:`used_columns` and
+    :py:attr:`produced_columns` properties each return a set of column names, potentially resolving
+    information from other :py:class:`ArrayFunction` instances.
 
     .. py:attribute:: func
        type: callable
@@ -417,20 +447,32 @@ class ArrayConsumer(object):
     .. py:attribute:: uses
        type: set
 
-       The set of used column names or other consumer instances to recursively resolve the names of
-       used columns.
+       The set of used column names or other instances to recursively resolve the names of used
+       columns.
 
     .. py::attribute:: used_columns
        type: set
        read-only
 
        The resolved, flat set of used column names.
+
+    .. py:attribute:: produces
+       type: set
+
+       The set of produced column names or other instances to recursively resolve the names of
+       produced columns.
+
+    .. py::attribute:: produced_columns
+       type: set
+       read-only
+
+       The resolved, flat set of produced column names.
     """
 
     _instances = {}
 
     @classmethod
-    def new(cls, *args, **kwargs) -> "ArrayConsumer":
+    def new(cls, *args, **kwargs) -> "ArrayFunction":
         """
         Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
         name attribute, and returns it. An exception is raised if an instance with the same name was
@@ -446,60 +488,53 @@ class ArrayConsumer(object):
         return inst
 
     @classmethod
-    def get(cls, name: str) -> "ArrayConsumer":
+    def get(cls, name: str, copy: bool = False) -> "ArrayFunction":
         """
-        Returns a previously registered instance named *name* from the cache.
+        Returns a previously registered instance named *name* from the cache. If *copy* is *True*
+        a copy is returned.
         """
         if name not in cls._instances:
             raise ValueError(f"no {cls.__name__} named '{name}' registered")
 
-        return cls._instances[name]
-
-    @classmethod
-    def create_subclass(cls, name: str, attributes: Optional[dict] = None) -> "ArrayConsumer":
-        """
-        Creates a new class named *name* inheriting from *this* class. *attributes* are used to add
-        custom class-level members to the newly generated class. By default, the new subclass has a
-        separate instance cache dictionary.
-
-        In general, it would be trivial to create a subclass the usual way, but since the base
-        :py:class:`ArrayConsumer` and its features might be used *as is* with a different type and
-        instance cache, this method could be useful. Example:
-
-        .. code-block:: python
-
-            Selector = ArrayConsumer.create_subclass("Selector")
-        """
-        if not attributes:
-            attributes = {}
-
-        # enforce a separate instance cache attribute
-        attributes["_instances"] = {}
-
-        # create and return the subclass
-        return type(name, (cls,), attributes)
+        return _copy.copy(cls._instances[name]) if copy else cls._instances[name]
 
     def __init__(
         self,
         func: Callable,
         name: Optional[str] = None,
         uses: Optional[Union[
-            str, "ArrayConsumer", Sequence[str], Sequence["ArrayConsumer"], Set[str],
-            Set["ArrayConsumer"],
+            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
+            Set["ArrayFunction"],
         ]] = None,
+        produces: Optional[Union[
+            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
+            Set["ArrayFunction"],
+        ]] = None,
+        **kwargs,
     ):
         super().__init__()
 
         self.func = func
         self.name = name or self.func.__name__
-        self.uses = law.util.make_list(uses) if uses else []
+        self.uses = set(law.util.make_list(uses)) if uses else set()
+        self.produces = set(law.util.make_list(produces)) if produces else set()
 
     @property
     def used_columns(self) -> Set[str]:
         columns = set()
         for obj in self.uses:
-            if isinstance(obj, ArrayConsumer):
+            if isinstance(obj, self.__class__):
                 columns |= obj.used_columns
+            else:
+                columns.add(obj)
+        return columns
+
+    @property
+    def produced_columns(self) -> Set[str]:
+        columns = set()
+        for obj in self.produces:
+            if isinstance(obj, self.__class__):
+                columns |= obj.produced_columns
             else:
                 columns.add(obj)
         return columns
@@ -511,79 +546,187 @@ class ArrayConsumer(object):
         return self.func(*args, **kwargs)
 
 
-class ArrayProducer(ArrayConsumer):
+class TaskArrayFunction(ArrayFunction):
     """
-    Base class for function wrappers that act on arrays and keep track of used as well as produced
-    columns. Each array producer is also an array consumer (:py:class:`ArrayConsumer`). Also,
-    instances are named and put into a class-level cache when created via :py:meth:`new`
-    (recommended).
+    Subclass of :py:class:`ArrayFunction` providing an interface to certain task features such as
+    declaring task requirements and dependent or produced shifts, and defining a custom setup
+    function.
 
-    For a possible implementations, see :py:class:`calibration.Calibrator` or
-    :py:class:`production.Producer`.
+    *shifts* can be defined similarly to columns to use and/or produce in the
+    :py:class:`ArrayFunction` base class. It can be a sequence or set of shift names, or other
+    instances that are called by this one. The :py:attr:`all_shifts` property returns a flat set of
+    all shifts, potentially resolving information from other :py:class:`TaskArrayFunction`
+    instances.
 
-    .. py:attribute:: func
+    Custom task requirements are be defined in a programmatic way by wrapping a function through a
+    decorator. A custom setup function, using results of the custom task requirements to (e.g.)
+    initialize some state, can be defined in a similar way. tExample:
+
+    .. code-block:: python
+
+        # define the function to wrap, that requires some weights that are defined
+        def my_func(arr, weights, **kwargs):
+            foo = arr.foo
+            arr["bar"] = foo * weights
+            return arr
+
+        # define the function
+        ArrayFunction.new(my_func, uses={"foo"}, produces={"bar"})
+
+        # define requirements that (e.g.) compute the weights
+        @my_func.requires
+        def requires(task, reqs):
+            # fill the requirements dict
+            reqs["weights_task"] = SomeWeightsTask.req(task)
+
+        # define the setup step that loads event weights from the required task
+        @my_func.setup
+        def setup(task, inputs, producer_kwargs):
+            # load the weights once
+            weights = inputs["weights_task"].load(formatter="json")
+            # add it to the producer_kwargs which will be forwarded to every producer call
+            producer_kwargs["weights"] = weights
+
+    For a possible implementation, see :py:mod:`ap.production.pileup`.
+
+    .. py:attribute:: shifts
+       type: set
+
+       The set of dependent or produced shifts, or other instances to recursively resolve the full
+       list of shifts.
+
+    .. py:attribute:: all_shifts
+       type: set
+       read-only
+
+       The resolved, flat set of dependent or produced shifts.
+
+    .. py:attribute: requires_func
        type: callable
 
-       The wrapped function.
+       The registered function defining requirements, or *None*.
 
-    .. py:attribute:: name
-       type: str
+    .. py:attribute:: setup_func
+       type: callable
 
-       The name of the instance in the cache dictionary.
+       The registered function performing the custom setup step, or *None*.
 
-    .. py:attribute:: uses
-       type: set
+    .. py:attribute:: producer_kwargs
+       type: dict
 
-       The set of column names or other instances to recursively resolve the names of columns.
-
-    .. py::attribute:: used_columns
-       type: set
-       read-only
-
-       The resolved, flat set of used column names.
-
-    .. py:attribute:: produces
-       type: set
-
-       The set of produced column names or other producer instances to recursively resolve the names
-       of produced columns.
-
-    .. py::attribute:: produced_columns
-       type: set
-       read-only
-
-       The resolved, flat set of produced column names.
+       A dictionary of arguments that are set by :py:attr:`setup_func` and forwarded to the
+       invocation of the wrapped functon.
     """
-
-    # create an own instance cache
-    _instances = {}
 
     def __init__(
         self,
-        func: Callable,
-        name: Optional[str] = None,
-        uses: Optional[Union[
-            str, "ArrayProducer", Sequence[str], Sequence["ArrayProducer"], Set[str],
-            Set["ArrayProducer"],
+        *args,
+        shifts: Optional[Union[
+            str, "TaskArrayFunction", Sequence[str], Sequence["TaskArrayFunction"], Set[str],
+            Set["TaskArrayFunction"],
         ]] = None,
-        produces: Optional[Union[
-            str, "ArrayProducer", Sequence[str], Sequence["ArrayProducer"], Set[str],
-            Set["ArrayProducer"],
-        ]] = None,
+        **kwargs,
     ):
-        super().__init__(func, name=name, uses=uses)
+        super().__init__(*args, **kwargs)
 
-        self.produces = law.util.make_list(produces) if produces else []
+        # store attributes
+        self.shifts = set(law.util.make_list(shifts)) if shifts else set()
+        self.requires_func = None
+        self.setup_func = None
+        self.producer_kwargs = None
 
     @property
-    def produced_columns(self) -> Set[str]:
-        columns = set()
-        for obj in self.produces:
-            if isinstance(obj, ArrayProducer):
-                columns |= obj.produced_columns
-            else:
-                columns.add(obj)
-        return columns
+    def all_shifts(self):
+        shifts = self.shifts
+
+        # add those of all other known intances
+        for obj in self.uses | self.produces:
+            if isinstance(obj, self.__class__):
+                shifts |= obj.shifts
+
+        return shifts
+
+    def requires(self, func: Callable) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:attr:`requires_func`
+        which is used to define additional task requirements. The function should accept two
+        arguments,
+
+            - *task*, the :py:class:`law.Task` instance, and
+            - *reqs*, a dictionary into which requirements should be inserted.
+
+        The decorator does not return the wrapped function.
+        """
+        self.requires_func = func
+
+    def run_requires(self, task: law.Task, reqs: Optional[dict] = None):
+        """
+        Recursively creates the requirements of this and all other known instances (via
+        :py:attr:`uses` and :py:attr:`produces`) given the *task* using this instance. *reqs*
+        defaults to an empty dictionary which should be filled to store the requirements.
+        """
+        if reqs is None:
+            reqs = {}
+
+        # run the requirements of all other known instances
+        for obj in self.uses | self.produces:
+            if isinstance(obj, self.__class__):
+                obj.run_requires(task, reqs=reqs)
+
+        # run this instance's requires function
+        if self.requires_func:
+            self.requires_func(task, reqs)
+
+        return reqs
+
+    def setup(self, func: Callable) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:attr:`setup_func`
+        which is used to perform a custom setup of objects. The function should accept three
+        arguments,
+
+           - *task*, the :py:class:`law.Task` instance,
+           - *inputs*, a dictionary with input targets corresponding to the requirements created by
+             :py:meth:`run_requires`, and
+           - *producer_kwargs*, a dictionary into which arguments should be inserted that are later
+             on passed to the wrapped function.
+
+        The decorator does not return the wrapped function.
+        """
+        self.setup_func = func
+
+    def run_setup(self, task, inputs, producer_kwargs=None):
+        """
+        Recursively runs the setup function of this and all other known instances (via
+        :py:attr:`uses` and :py:attr:`produces`) given the *task* and *inputs* corresponding to the
+        requirements created by :py:func:`run_requires`. *producer_kwargs* defaults to an empty
+        dictionary which should be filled to store arguments which are later on passed to the
+        wrapped function.
+        """
+        if producer_kwargs is None:
+            producer_kwargs = {}
+
+        # run the setup of all other known instances
+        for obj in self.uses | self.produces:
+            if isinstance(obj, self.__class__):
+                obj.run_setup(task, inputs, producer_kwargs=producer_kwargs)
+
+        # run this instance's setup function
+        if self.setup_func:
+            self.setup_func(task, inputs, producer_kwargs)
+
+        # store it
+        self.producer_kwargs = producer_kwargs
+
+    def __call__(self, *args, **kwargs):
+        """
+        Calls the wrapped function with all *args* and *kwargs*, update with
+        :py:attr:`producer_kwargs` when set.
+        """
+        if self.producer_kwargs:
+            kwargs.update(self.producer_kwargs)
+
+        return super().__call__(*args, **kwargs)
 
 
 class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):

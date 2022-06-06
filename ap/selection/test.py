@@ -53,7 +53,12 @@ def req_deepjet(events):
 
 
 # variables (after reducing events)
-@selector(uses={"Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB"})
+@selector(
+    uses={
+        "Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta",
+        "Jet_btagDeepFlavB",
+    },
+)
 def variables(events):
     columns = {}
     columns["HT"] = ak.sum(events.Jet.pt, axis=1)
@@ -261,7 +266,12 @@ def lepton_selection_test(events, stats):
     )
 
 
-@selector(uses={jet_selection_test, lepton_selection_test, deepjet_selection_test, "LHEWeight_originalXWGTUP"})
+@selector(
+    uses={
+        jet_selection_test, lepton_selection_test, deepjet_selection_test,
+        "LHEWeight_originalXWGTUP",
+    },
+)
 def test(events, stats, config_inst):
     # example cuts:
     # - jet_selection_test
