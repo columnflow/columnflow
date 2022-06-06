@@ -25,7 +25,7 @@ class BaseTask(law.Task):
         """
         return params
 
-
+      
 class AnalysisTask(BaseTask, law.SandboxTask):
 
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
@@ -47,8 +47,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if analysis == "analysis_st":
             from ap.config.analysis_st import analysis_st
             return analysis_st
-        else:
-            raise ValueError(f"unknown analysis {analysis}")
+
+        raise ValueError(f"unknown analysis {analysis}")
 
     @classmethod
     def req_params(cls, inst, **kwargs):
