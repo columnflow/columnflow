@@ -14,6 +14,7 @@ import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
 from ap.util import DotDict
 
+from ap.util import expand_path
 
 #
 # the main analysis object
@@ -44,6 +45,15 @@ analysis_st.set_aux("config_groups", {})
 
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
+
+# location of JEC txt files
+config_2018.set_aux("jec", {
+    "levels": ("L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"),
+    "version": "Summer19UL18_V5",
+    "jet_type": "AK4PFchs",
+    "txt_file_path": expand_path("$AP_BASE/static/jec/"),  # TODO: use external_files
+    "uncertainty_sources": ("Total",),  # TODO: use to construct custom calibrator
+})
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
@@ -101,9 +111,13 @@ config_2018.add_shift(name="tune_up", id=1, type="shape")
 config_2018.add_shift(name="tune_down", id=2, type="shape")
 config_2018.add_shift(name="hdamp_up", id=3, type="shape")
 config_2018.add_shift(name="hdamp_down", id=4, type="shape")
-config_2018.add_shift(name="jec_up", id=5, type="shape")
-config_2018.add_shift(name="jec_down", id=6, type="shape")
-add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+
+# FIXME: ensure JEC shifts get the same id every time
+for i, jec_source in enumerate(config_2018.get_aux("jec")["uncertainty_sources"]):
+    config_2018.add_shift(name=f"jec_{jec_source}_up", id=500 + 2 * i, type="shape")
+    config_2018.add_shift(name=f"jec_{jec_source}_down", id=501 + 2 * i, type="shape")
+    add_aliases(f"jec_{jec_source}", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 
