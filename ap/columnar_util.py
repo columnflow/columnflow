@@ -7,8 +7,9 @@ Helpers and utilities for working with columnar libraries.
 __all__ = [
     "mandatory_coffea_columns",
     "Route", "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
-    "get_ak_routes", "has_ak_route", "remove_ak_column", "add_ak_alias", "add_ak_aliases",
-    "update_ak_array", "flatten_ak_array", "sort_ak_fields", "sorted_ak_to_parquet",
+    "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
+    "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "sorted_ak_to_parquet",
 ]
 
 
@@ -221,6 +222,18 @@ class Route(object):
         """
         return self._fields.pop(index)
 
+    def reverse(self) -> None:
+        """
+        Reverses the fields of this route in-place.
+        """
+        self._fields[:] = self._fields[::-1]
+
+    def copy(self) -> "Route":
+        """
+        Returns a copy if this instance.
+        """
+        return self.__class__(self)
+
 
 def get_ak_routes(
     ak_array: ak.Array,
@@ -275,9 +288,9 @@ def get_ak_routes(
     return routes
 
 
-def has_ak_route(
+def has_ak_column(
     ak_array: ak.Array,
-    route: Union[Route, Tuple[str], str],
+    route: Union[Route, Sequence[str], str],
 ) -> bool:
     """
     Returns whether an awkward array *ak_array* contains a nested field identified by a *route*. A
@@ -294,9 +307,58 @@ def has_ak_route(
     return True
 
 
+def set_ak_column(
+    ak_array: ak.Array,
+    route: Union[Route, Sequence[str], str],
+    value: ak.Array,
+) -> ak.Array:
+    """
+    Inserts a new column into awkward array *ak_array* and returns it. The column can be defined
+    through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each string refers
+    to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``), and the
+    column *value* itself. Intermediate, non-existing fields are automatically created. Example:
+
+    .. code-block:: python
+
+        arr = ak.zip({"Jet": {"pt": [30], "eta": [2.5]}})
+
+        set_ak_column(arr, "Jet.mass", [40])
+        set_ak_column(arr, "Muon.pt", [25])  # creates subfield "Muon" first
+    """
+    route = Route.check(route)
+
+    # trivial case
+    if len(route) == 1:
+        ak_array.__setitem__(route[0], value)
+        return ak_array
+
+    # identify the existing part of the subroute
+    # example: route is ("a", "b", "c"), "a" exists, the sub field "b" does not, "c" should be set
+    sub_route = route.copy()
+    missing_sub_route = Route()
+    while sub_route:
+        if has_ak_column(ak_array, sub_route):
+            break
+        missing_sub_route += sub_route.pop()
+    missing_sub_route.reverse()
+
+    # add the first missing field to the sub route which will be used by __setitem__
+    if missing_sub_route:
+        sub_route += missing_sub_route.pop(0)
+
+    # use the remaining missing sub route to wrap the value via ak.zip, generating new sub fields
+    while missing_sub_route:
+        value = ak.zip({missing_sub_route.pop(): value})
+
+    # insert the value
+    ak_array.__setitem__(sub_route.fields, value)
+
+    return ak_array
+
+
 def remove_ak_column(
     ak_array: ak.Array,
-    route: Union[Route, Tuple[str], str],
+    route: Union[Route, Sequence[str], str],
     silent: bool = False,
 ) -> ak.Array:
     """
@@ -308,10 +370,10 @@ def remove_ak_column(
     """
     # verify that the route exists
     route = Route.check(route)
-    if not has_ak_route(ak_array, route):
+    if not has_ak_column(ak_array, route):
         if silent:
             return ak_array
-        raise ValueError(f"no column found in aray for route '{route}'")
+        raise ValueError(f"no column found in array for route '{route}'")
 
     if len(route) == 1:
         # trivial case: remove a top level column
@@ -327,7 +389,6 @@ def remove_ak_column(
         if not remaining_fields:
             return remove_ak_column(ak_array, route[:-1])
         # set the reduced view
-        # TODO(riga): use helper to set value?
         ak_array.__setitem__(sub_route.fields, sub_array[remaining_fields])
 
     return ak_array
@@ -335,8 +396,8 @@ def remove_ak_column(
 
 def add_ak_alias(
     ak_array: ak.Array,
-    src_route: Union[Route, Tuple[str], str],
-    dst_route: Union[Route, Tuple[str], str],
+    src_route: Union[Route, Sequence[str], str],
+    dst_route: Union[Route, Sequence[str], str],
     remove_src: bool = False,
 ) -> ak.Array:
     """
@@ -353,12 +414,11 @@ def add_ak_alias(
     dst_route = Route.check(dst_route)
 
     # check that the src exists
-    if not has_ak_route(src_route):
-        raise ValueError(f"no column found in aray for route '{src_route}'")
+    if not has_ak_column(src_route):
+        raise ValueError(f"no column found in array for route '{src_route}'")
 
     # add the alias, potentially overwriting existing columns
-    # TODO(riga): use helper to set values
-    ak_array[dst_route.fields] = ak_array[src_route.fields]
+    ak_array = set_ak_column(ak_array, dst_route, ak_array[src_route.fields])
 
     # create a view without the source if requested
     if remove_src:
@@ -369,7 +429,7 @@ def add_ak_alias(
 
 def add_ak_aliases(
     ak_array: ak.Array,
-    aliases: Dict[Union[Route, Tuple[str], str], Union[Route, Tuple[str], str]],
+    aliases: Dict[Union[Route, Sequence[str], str], Union[Route, Sequence[str], str]],
     remove_src: bool = False,
 ) -> ak.Array:
     """
@@ -391,9 +451,9 @@ def add_ak_aliases(
 def update_ak_array(
     ak_array: ak.Array,
     *others: ak.Array,
-    overwrite_routes: Union[bool, List[Union[Route, Tuple[str], str]]] = True,
-    add_routes: Union[bool, List[Union[Route, Tuple[str], str]]] = False,
-    concat_routes: Union[bool, List[Union[Route, Tuple[str], str]]] = False,
+    overwrite_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = True,
+    add_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
+    concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* in-place with the content of multiple different arrays
@@ -418,13 +478,13 @@ def update_ak_array(
     if not others:
         return ak_array
 
-    # helpers to cache calls to has_ak_route for ak_array
-    _has_route_cache = {Route.check(route): True for route in get_ak_routes(ak_array)}
+    # helpers to cache calls to has_ak_column for ak_array
+    _has_column_cache = {Route.check(route): True for route in get_ak_routes(ak_array)}
 
-    def has_ak_route_cached(route):
-        if route not in _has_route_cache:
-            _has_route_cache[route] = has_ak_route(ak_array, route)
-        return _has_route_cache[route]
+    def has_ak_column_cached(route):
+        if route not in _has_column_cache:
+            _has_column_cache[route] = has_ak_column(ak_array, route)
+        return _has_column_cache[route]
 
     # helpers to check if routes can be overwritten, added or concatenated
     def _match_route(bool_or_list, cache, route):
@@ -440,26 +500,26 @@ def update_ak_array(
     for other in others:
         for route in get_ak_routes(other):
 
-            if has_ak_route_cached(route):
+            if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
-                    # TODO(riga): use helper to set values
-                    ak_array[route.fields] = ak.concatenate((ak_array[route.fields], other[route.fields]), axis=1)
+                    set_ak_column(
+                        ak_array,
+                        route,
+                        ak.concatenate((ak_array[route.fields], other[route.fields]), axis=1),
+                    )
                 elif do_add(route):
                     # add and reassign
-                    # TODO(riga): use helper to set values
-                    ak_array[route.fields] = ak_array[route.fields] + other[route.fields]
+                    set_ak_column(ak_array, route, ak_array[route.fields] + other[route.fields])
                 elif do_overwrite(route):
                     # just replace the column
-                    # TODO(riga): use helper to set values
-                    ak_array[route.fields] = other[route.fields]
+                    set_ak_column(ak_array, route, other[route.fields])
                 else:
                     raise Exception(f"cannot update already existing array column '{route}'")
             else:
                 # the route is new, so add it and manually tell the cache
-                # TODO(riga): use helper to set values
-                ak_array[route.fields] = other[route.fields]
-                _has_route_cache[route] = True
+                set_ak_column(ak_array, route, other[route.fields])
+                _has_column_cache[route] = True
 
     return ak_array
 

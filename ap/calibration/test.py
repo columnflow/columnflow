@@ -6,6 +6,7 @@ Calibration methods for testing purposes.
 
 from ap.util import maybe_import
 from ap.calibration import calibrator
+from ap.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -33,11 +34,10 @@ def jec_test(events, **kwargs):
     n_jet_mass[~a_mask] *= 0.9
 
     # b)
-    # TODO(riga): use helper to set values
-    events["Jet", "pt_jec_up"] = events.Jet.pt * 1.05
-    events["Jet", "mass_jec_up"] = events.Jet.mass * 1.05
-    events["Jet", "pt_jec_down"] = events.Jet.pt * 0.95
-    events["Jet", "mass_jec_down"] = events.Jet.mass * 0.95
+    set_ak_column(events, "Jet.pt_jec_up", events.Jet.pt * 1.05)
+    set_ak_column(events, "Jet.mass_jec_up", events.Jet.mass * 1.05)
+    set_ak_column(events, "Jet.pt_jec_down", events.Jet.pt * 0.95)
+    set_ak_column(events, "Jet.mass_jec_down", events.Jet.mass * 0.95)
 
     return events
 
