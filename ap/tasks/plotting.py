@@ -274,6 +274,7 @@ class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondo
         with self.publish_step("Hello from PlotShiftograms"):
             import matplotlib.pyplot as plt
             import mplhep
+            import hist
             plt.style.use(mplhep.style.CMS)
 
             c = self.config_inst
