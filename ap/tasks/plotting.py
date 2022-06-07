@@ -92,13 +92,15 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
 
     @PlotMixin.view_output_plots
     def run(self):
+        import numpy as np
+        import hist
+        import matplotlib.pyplot as plt
+        import mplhep
+        plt.style.use(mplhep.style.CMS)
+
         with self.publish_step(
-                f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}"):
-            import numpy as np
-            import hist
-            import matplotlib.pyplot as plt
-            import mplhep
-            plt.style.use(mplhep.style.CMS)
+            f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}",
+        ):
 
             inputs = self.input()
             c = self.config_inst
@@ -107,7 +109,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
             h_total = None
             colors = []
             label = []
-            category = self.branch_data['category']
+            category = self.branch_data["category"]
 
             with self.publish_step("Adding histograms together ..."):
                 for p in self.processes:
@@ -115,7 +117,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
                     h_proc = None
                     for d in getDatasetNamesFromProcess(c, p):
                         # print("----- dataset:", d)
-                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data['variable']]
+                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data["variable"]]
                         # Note: this assumes that the category axis only contains leaf_cats
                         if category == "incl":
                             leaf_cats = [cat.id for cat in c.get_leaf_categories()]
@@ -164,7 +166,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
                     color=colors,
                 )
                 ax.stairs(
-                    edges=h_total.axes[self.branch_data['variable']].edges,
+                    edges=h_total.axes[self.branch_data["variable"]].edges,
                     baseline=h_total.view().value - np.sqrt(h_total.view().variance),
                     values=h_total.view().value + np.sqrt(h_total.view().variance),
                     hatch="///",

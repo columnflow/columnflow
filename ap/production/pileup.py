@@ -11,8 +11,8 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={"PV_npvs"},
-    produces={"pu_weight_nominal", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
+    uses={"PV.npvs"},
+    produces={"pu_weight.nominal", "pu_weight.minbias_xs_up", "pu_weight.minbias_xs_down"},
 )
 def pu_weights(events, *, pu_weights=None, **kwargs):
     # compute the indices for looking up weights

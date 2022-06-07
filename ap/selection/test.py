@@ -22,31 +22,31 @@ def extract(array, idx):
 
 # object definitions
 # TODO: Producer instead of Selector
-@selector(uses={"Jet_pt", "Jet_eta"})
+@selector(uses={"Jet.pt", "Jet.eta"})
 def req_jet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Electron_pt", "Electron_eta", "Electron_cutBased"})
+@selector(uses={"Electron.pt", "Electron.eta", "Electron.cutBased"})
 def req_electron(events):
     mask = (events.Electron.pt > 25) & (abs(events.Electron.eta) < 2.4) & (events.Electron.cutBased == 4)
     return ak.argsort(events.Electron.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Muon_pt", "Muon_eta", "Muon_tightId"})
+@selector(uses={"Muon.pt", "Muon.eta", "Muon.tightId"})
 def req_muon(events):
     mask = (events.Muon.pt > 25) & (abs(events.Muon.eta) < 2.4) & (events.Muon.tightId)
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet_pt", "Jet_eta"})
+@selector(uses={"Jet.pt", "Jet.eta"})
 def req_forwardJet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet_pt", "Jet_eta", "Jet_btagDeepFlavB"})
+@selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"})
 def req_deepjet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
@@ -55,8 +55,8 @@ def req_deepjet(events):
 # variables (after reducing events)
 @selector(
     uses={
-        "Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta", "Jet_pt", "Jet_eta",
-        "Jet_btagDeepFlavB",
+        "Electron.pt", "Electron.eta", "Muon.pt", "Muon.eta", "Jet.pt", "Jet.eta",
+        "Jet.btagDeepFlavB",
     },
 )
 def variables(events):
@@ -97,7 +97,7 @@ def var_nMuon(events):
     return ak.num(req_muon(events), axis=1)
 
 
-@selector(uses={req_jet, "Jet_pt"})
+@selector(uses={req_jet, "Jet.pt"})
 def var_HT(events):
     jet_pt_sorted = events.Jet.pt[req_jet(events)]
     return ak.sum(jet_pt_sorted, axis=1)
@@ -269,7 +269,7 @@ def lepton_selection_test(events, stats):
 @selector(
     uses={
         jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight_originalXWGTUP",
+        "LHEWeight.originalXWGTUP",
     },
 )
 def test(events, stats, config_inst, **kwargs):
