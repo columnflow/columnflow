@@ -45,7 +45,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
+            Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
             add_ak_aliases, remove_ak_column, sorted_ak_to_parquet,
         )
 
@@ -65,6 +65,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         # define nano columns that should be kept, and that need to be loaded
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
         load_columns = keep_columns | set(mandatory_coffea_columns)
+        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
         remove_routes = None
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -78,7 +79,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         with ChunkedReader(
             [nano_file] + [inp.path for inp in inputs["calib"]] + [inputs["sel"]["res"].path],
             source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None, None],
+            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}, None, None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *diffs, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
@@ -106,7 +107,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                     remove_routes = {
                         route
                         for route in get_ak_routes(events)
-                        if not law.util.multi_match("_".join(route), keep_columns)
+                        if not law.util.multi_match(route.column, keep_columns)
                     }
                 for route in remove_routes:
                     events = remove_ak_column(events, route)

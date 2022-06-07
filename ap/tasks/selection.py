@@ -36,7 +36,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
+            Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
             sorted_ak_to_parquet,
         )
         from ap.calibration import Calibrator
@@ -55,6 +55,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | calibrate.used_columns
+        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # define columns that will be saved
         keep_columns = calibrate.produced_columns
@@ -71,7 +72,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         with ChunkedReader(
             nano_file,
             source_type="coffea_root",
-            read_options={"iteritems_options": {"filter_name": load_columns}},
+            read_options={"iteritems_options": {"filter_name": load_columns_nano}},
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
@@ -88,7 +89,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
                     remove_routes = {
                         route
                         for route in get_ak_routes(arr)
-                        if not law.util.multi_match("_".join(route), keep_columns)
+                        if not law.util.multi_match(route.column, keep_columns)
                     }
                 for route in remove_routes:
                     arr = remove_ak_column(arr, route)
@@ -143,7 +144,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
         )
         from ap.selection import Selector
@@ -167,6 +168,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | select.used_columns
+        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -180,7 +182,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         with ChunkedReader(
             [nano_file] + [inp.path for inp in inputs["calib"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}] + n_calib * [None],
+            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):

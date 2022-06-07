@@ -131,15 +131,15 @@ config_2018.set_aux("external_files", DotDict.wrap({
 config_2018.set_aux("keep_columns", DotDict.wrap({
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
-        "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
-        "nMuon", "Muon_pt", "Muon_eta",
-        "nElectron", "Electron_pt", "Electron_eta",
-        "LHEWeight_originalXWGTUP",
-        "PV_npvs",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
+        "nMuon", "Muon.pt", "Muon.eta",
+        "nElectron", "Electron.pt", "Electron.eta",
+        "LHEWeight.originalXWGTUP",
+        "PV.npvs",
         "jet_high_multiplicity", "cat_array",
     },
     "CreateHistograms": {
-        "LHEWeight_originalXWGTUP",
+        "LHEWeight.originalXWGTUP",
     },
 }))
 
