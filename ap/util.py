@@ -20,6 +20,7 @@ import subprocess
 import importlib
 import multiprocessing
 import multiprocessing.pool
+from functools import wraps
 from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
@@ -362,3 +363,40 @@ def dev_sandbox(sandbox: str) -> str:
 
     # all checks passed
     return law.Sandbox.join_key(_type, dev_path)
+
+
+def freeze(cont):
+    """Constructs an immutable version of a native Python container.
+
+    Recursively replaces all mutable containers (`dict`, `list`, `set`) encountered within
+    `cont` by an immutable equivalent: Lists are converted to tuples, sets to `frozenset`
+    objects, and dictionaries to tuples of (*key*, *value*) pairs.
+    """
+
+    if isinstance(cont, dict):
+        return tuple((k, freeze(v)) for k, v in cont.items())
+    elif isinstance(cont, list) or isinstance(cont, tuple):
+        return tuple(freeze(v) for v in cont)
+    elif isinstance(cont, set):
+        return frozenset(freeze(v) for v in cont)
+    return cont
+
+
+def memoize(f):
+    """
+    Function decorator that implements memoization. Function results are cached on
+    first call and returned from cache on every subsequent call with the same arguments.
+    NOTE: only positional arguments are supported!
+    """
+    _cache = {}
+
+    @wraps(f)
+    def wrapper(*args):
+        frozen_args = freeze(args)
+        if frozen_args in _cache:
+            return _cache[frozen_args]
+        else:
+            value = _cache[frozen_args] = f(*frozen_args)
+            return value
+
+    return wrapper
