@@ -852,6 +852,14 @@ class TaskArrayFunction(ArrayFunction):
             - *reqs*, a dictionary into which requirements should be inserted.
 
         The decorator does not return the wrapped function.
+
+        .. note::
+
+            When the task invoking the requirement is workflow, be aware that both the actual
+            workflow instance as well as branch tasks might call the wrapped function. When the
+            requirements should differ between them, make sure to use the
+            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
+            distinguish the cases.
         """
         self.requires_func = func
 
