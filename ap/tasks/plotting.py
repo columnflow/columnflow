@@ -8,7 +8,6 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework.base import ConfigTask
 from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
@@ -117,7 +116,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
                     for d in getDatasetNamesFromProcess(c, p):
                         # print("----- dataset:", d)
                         h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data['variable']]
-
+                        # Note: this assumes that the category axis only contains leaf_cats
                         if category == "incl":
                             leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
@@ -125,9 +124,15 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
                         else:
                             leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
 
-                        h_in = h_in[{"category": leaf_cats}]
+                        # to access the correct bins in the IntCat axis, we need
+                        # the position of the bins, not the id itself
+                        leaf_to_pos = [hist.loc(i) for i in leaf_cats]
+
+                        h_in = h_in[{"category": leaf_to_pos}]
                         h_in = h_in[{"category": sum}]
-                        h_in = h_in[{"shift": "nominal"}]
+                        if len(h_in.axes["shift"]) != 1:
+                            raise ValueError("In Plotting: shift axis is supposed to only contain 1 bin")
+                        h_in = h_in[{"shift": sum}]
                         print("dataset {}: {}".format(d, h_in[::sum]))
 
                         if h_proc is None:
@@ -268,6 +273,7 @@ class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondo
         with self.publish_step("Hello from PlotShiftograms"):
             import matplotlib.pyplot as plt
             import mplhep
+            import hist
             plt.style.use(mplhep.style.CMS)
 
             c = self.config_inst
@@ -276,8 +282,8 @@ class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondo
             h_proc = None
             for d in getDatasetNamesFromProcess(c, self.branch_data["process"]):
                 h_in = self.input()[d].load(formatter="pickle")[self.branch_data["variable"]]
-                # categorization
-                # for now, only leaf categories are considered
+
+                # Note: this assumes that the category axis only contains leaf_cats
                 if category == "incl":
                     leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                 elif c.get_category(category).is_leaf_category:
@@ -285,9 +291,10 @@ class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondo
                 else:
                     leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
 
-                # Note: this only works because the category axis is sorted and does not skip an integer
-                # h_in[{"category": [0,5]}] gives the categories that are at the position 0 and 5
-                h_in = h_in[{"category": leaf_cats}]
+                # to access the correct bins in the IntCat axis, we need the position of the bins, not the id itself
+                leaf_to_pos = [hist.loc(i) for i in leaf_cats]
+
+                h_in = h_in[{"category": leaf_to_pos}]
                 h_in = h_in[{"category": sum}]
 
                 if h_proc is None:
