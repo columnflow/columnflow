@@ -127,8 +127,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
 
                         # to access the correct bins in the IntCat axis, we need
                         # the position of the bins, not the id itself
-                        id_to_pos = {cat_id: i for i, cat_id in enumerate(h_in.axes["category"])}
-                        leaf_to_pos = [id_to_pos[k] for k in leaf_cats]
+                        leaf_to_pos = [hist.loc(i) for i in leaf_cats]
 
                         h_in = h_in[{"category": leaf_to_pos}]
                         h_in = h_in[{"category": sum}]
@@ -293,8 +292,7 @@ class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondo
                     leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
 
                 # to access the correct bins in the IntCat axis, we need the position of the bins, not the id itself
-                id_to_pos = {cat_id: i for i, cat_id in enumerate(h_in.axes["category"])}
-                leaf_to_pos = [id_to_pos[k] for k in leaf_cats]
+                leaf_to_pos = [hist.loc(i) for i in leaf_cats]
 
                 h_in = h_in[{"category": leaf_to_pos}]
                 h_in = h_in[{"category": sum}]
