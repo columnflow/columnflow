@@ -170,7 +170,7 @@ class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWor
 
     # disable the shift parameter
     shift = None
-    effective_shift = None
+    # effective_shift = None
     allow_empty_shift = True
 
     def workflow_requires(self):
