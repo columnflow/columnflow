@@ -8,7 +8,6 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework.base import ConfigTask
 from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
