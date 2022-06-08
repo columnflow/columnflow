@@ -40,7 +40,7 @@ class CalibratorMixin(ConfigTask):
                 params["calibrator"],
                 **cls.get_calibrator_kwargs(**params),
             )
-            shifts |= calibrator_func.shifts
+            shifts |= calibrator_func.all_shifts
 
         return shifts
 
@@ -104,7 +104,7 @@ class CalibratorsMixin(ConfigTask):
             calibrator_kwargs = cls.get_calibrator_kwargs(**params)
             for calibrator in params["calibrators"]:
                 calibrator_func = CalibratorMixin.get_calibrator_func(calibrator, **calibrator_kwargs)
-                shifts |= calibrator_func.shifts
+                shifts |= calibrator_func.all_shifts
 
         return shifts
 
@@ -155,7 +155,7 @@ class SelectorMixin(ConfigTask):
                 params["selector"],
                 **cls.get_selector_kwargs(**params),
             )
-            shifts |= selector_func.shifts
+            shifts |= selector_func.all_shifts
 
         return shifts
 
@@ -225,7 +225,7 @@ class ProducerMixin(ConfigTask):
                 params["producer"],
                 **cls.get_producer_kwargs(**params),
             )
-            shifts |= producer_func.shifts
+            shifts |= producer_func.all_shifts
 
         return shifts
 
@@ -283,7 +283,7 @@ class ProducersMixin(ConfigTask):
             producer_kwargs = cls.get_producer_kwargs(**params)
             for producer in params["producers"]:
                 producer_func = ProducerMixin.get_producer_func(producer, **producer_kwargs)
-                shifts |= producer_func.shifts
+                shifts |= producer_func.all_shifts
 
         return shifts
 
