@@ -12,6 +12,7 @@ from order import Analysis, Shift
 
 import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
+from ap.util import DotDict
 
 
 #
@@ -51,6 +52,10 @@ config_2018.set_aux("luminosity", Number(59740, {
     "lumi_13TeV_2018": (REL, 0.015),
     "lumi_13TeV_1718": (REL, 0.002),
 }))
+
+# 2018 minimum bias cross section in mb (milli) for creating PU weights, values from
+# https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II
+config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
 
 # add processes we are interested in
 config_2018.add_process(procs.process_st)
@@ -99,24 +104,63 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
 add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
+config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
+
+# external files
+config_2018.set_aux("external_files", DotDict.wrap({
+    # files from TODO
+    "lumi": {
+        "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt", "v1"),  # noqa
+        "normtag": ("/afs/cern.ch/user/l/lumipro/public/Normtags/normtag_PHYSICS.json", "v1"),
+    },
+
+    # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II
+    "pu": {
+        "json": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/pileup_latest.txt", "v1"),  # noqa
+        "mc_profile": ("https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py", "v1"),  # noqa
+        "data_profile": {
+            "nominal": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-69200ub-99bins.root", "v1"),  # noqa
+            "minbias_xs_up": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-72400ub-99bins.root", "v1"),  # noqa
+            "minbias_xs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
+        },
+    },
+}))
 
 # columns to keep after certain steps
-config_2018.set_aux("keep_columns", {
+config_2018.set_aux("keep_columns", DotDict.wrap({
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
-        "nJet", "Jet_pt", "Jet_eta", "Jet_btagDeepFlavB",
-        "nMuon", "Muon_pt", "Muon_eta",
-        "nElectron", "Electron_pt", "Electron_eta",
-        "LHEWeight_originalXWGTUP",
-        "jet_high_multiplicity",
-        "cat_array",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
+        "nMuon", "Muon.pt", "Muon.eta",
+        "nElectron", "Electron.pt", "Electron.eta",
+        "LHEWeight.originalXWGTUP",
+        "PV.npvs",
+        "jet_high_multiplicity", "cat_array",
     },
     "CreateHistograms": {
-        "LHEWeight_originalXWGTUP",
+        "LHEWeight.originalXWGTUP",
     },
+}))
+
+# default calibrator, selector and producer
+config_2018.set_aux("default_calibrator", "test")
+config_2018.set_aux("default_selector", "test")
+config_2018.set_aux("default_producer", None)
+
+# file merging values
+# key -> dataset -> files per branch (-1 or not present = all)
+# TODO: maybe add selector name as additional layer
+config_2018.set_aux("file_merging", {
+})
+
+# versions per task family and optionally also dataset and shift
+# None can be used as a key to define a default value
+config_2018.set_aux("versions", {
 })
 
 # define categories
+# TODO: move their definition to dedicated file
 cat_e = config_2018.add_category(
     name="1e",
     id=1,
@@ -168,6 +212,7 @@ cat_mu_bb_highHT = cat_mu_bb.add_category(
 )
 
 # define variables
+# TODO: move their definition to dedicated file
 config_2018.add_variable(
     name="HT",
     expression="var_HT",
@@ -252,13 +297,3 @@ config_2018.add_variable(
     binning=(50, -2.5, 2.5),
     x_title=r"Jet 3 $\eta$",
 )
-
-
-# file merging values
-# key -> dataset -> files per branch (-1 or not present = all)
-config_2018.set_aux("file_merging", {
-})
-
-# versions per task and potentially other keys
-config_2018.set_aux("versions", {
-})

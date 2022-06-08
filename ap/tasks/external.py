@@ -7,14 +7,16 @@ Tasks dealing with external data.
 __all__ = []
 
 
+import os
+import shutil
 import subprocess
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Sequence
 
 import luigi
 import law
 
-from ap.tasks.framework import AnalysisTask, DatasetTask, wrapper_factory
-from ap.util import ensure_proxy
+from ap.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from ap.util import ensure_proxy, wget
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
@@ -38,6 +40,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.local_target(f"lfns_{h}.json")
 
+    @law.decorator.safe_output
     @ensure_proxy
     def run(self):
         lfns = []
@@ -81,7 +84,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if not branch_task.is_branch():
             raise TypeError(f"branch_task must be a workflow branch, but got {branch_task}")
         if not self.complete():
-            raise Exception(f"{self:r} is required to be complete")
+            raise Exception(f"{self} is required to be complete")
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
@@ -117,5 +120,252 @@ GetDatasetLFNsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=GetDatasetLFNs,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    attributes={"version": None},
+)
+
+
+class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
+
+    replicas = luigi.IntParameter(
+        default=5,
+        description="number of replicas to generate; default: 5",
+    )
+    version = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached hash
+        self._files_hash = None
+
+        # cached dictionary with the same structure as external files, mapping to unique basenames
+        self._file_names = None
+
+        # cached dict for lazy access to files in fetched bundle
+        self._files_dir = None
+        self._files = None
+
+    @classmethod
+    def create_unique_basename(cls, path):
+        h = law.util.create_hash(path)
+        basename = os.path.basename(path[0] if isinstance(path, tuple) else path)
+        return f"{h}_{basename}"
+
+    @property
+    def files_hash(self):
+        if self._files_hash is None:
+            # take the external files and flatten them into a deterministic order, then hash
+            def deterministic_flatten(d):
+                return [
+                    (key, (deterministic_flatten(d[key]) if isinstance(d[key], dict) else d[key]))
+                    for key in sorted(d)
+                ]
+            flat_files = deterministic_flatten(self.config_inst.x.external_files)
+            self._files_hash = law.util.create_hash(flat_files)
+
+        return self._files_hash
+
+    @property
+    def file_names(self):
+        if self._file_names is None:
+            self._file_names = law.util.map_struct(
+                self.create_unique_basename,
+                self.config_inst.x.external_files,
+            )
+
+        return self._file_names
+
+    @property
+    def files(self):
+        if self._files is None:
+            # get the output
+            output = self.output()
+            if not output.exists():
+                raise Exception(
+                    f"accessing external files from the bundle requires the output of {self} to "
+                    "exist, but it appears to be missing",
+                )
+            if isinstance(output, law.FileCollection):
+                output = output.random_target()
+            self._files_dir = law.LocalDirectoryTarget(is_tmp=True)
+            output.load(self._files_dir, formatter="tar")
+
+            # resolve basenames in the bundle directory and map to file targets
+            def resolve_basename(unique_basename):
+                return self._files_dir.child(unique_basename, type="f")
+
+            self._files = law.util.map_struct(resolve_basename, self.file_names)
+
+        return self._files
+
+    def single_output(self):
+        # required by law.tasks.TransferLocalFile
+        return self.local_target(f"externals_{self.files_hash}.tgz")
+
+    @law.decorator.safe_output
+    def run(self):
+        # create a tmp dir to work in
+        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+        tmp_dir.touch()
+
+        # progress callback
+        n_files = len(law.util.flatten(self.config_inst.x.external_files))
+        progress = self.create_progress_callback(n_files)
+
+        # helper function to fetch generic files
+        def fetch_file(src, counter=[0]):
+            dst = os.path.join(tmp_dir.path, self.create_unique_basename(src))
+            src = src[0] if isinstance(src, tuple) else src
+            if src.startswith(("http://", "https://")):
+                # download via wget
+                wget(src, dst)
+            else:
+                # must be a local file
+                shutil.copy2(src, dst)
+            # log
+            self.publish_message(f"fetched {src}")
+            progress(counter[0])
+            counter[0] += 1
+
+        # fetch all files
+        law.util.map_struct(fetch_file, self.config_inst.x.external_files)
+
+        # create the bundle
+        tmp = law.LocalFileTarget(is_tmp="tgz")
+        tmp.dump(tmp_dir, formatter="tar")
+
+        # log the file size
+        bundle_size = law.util.human_bytes(tmp.stat().st_size, fmt=True)
+        self.publish_message(f"bundle size is {bundle_size}")
+
+        # transfer the result
+        self.transfer(tmp)
+
+
+class CreatePileupWeights(ConfigTask):
+
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    data_mode = luigi.ChoiceParameter(
+        default="hist",
+        choices=["hist", "pileupcalc"],
+        description="the mode to obtain the data pu profile; choices: 'hist', 'pileupcalc'; "
+        "default: 'hist'",
+    )
+    version = None
+
+    def requires(self):
+        return BundleExternalFiles.req(self)
+
+    def output(self):
+        return self.local_target(f"weights_from_{self.data_mode}.json")
+
+    @law.decorator.safe_output
+    def run(self):
+        # prepare the external files and the output weights
+        externals = self.requires()
+        weights = {}
+
+        # read the mc profile
+        mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)
+
+        # loop over nominal and minbias_xs shifts
+        for shift in ["nominal", "minbias_xs_up", "minbias_xs_down"]:
+            # read or create the data profile
+            if self.data_mode == "hist":
+                pu_hist_target = externals.files.pu.data_profile[shift]
+                data_profile = self.read_data_profile_from_hist(pu_hist_target)
+            else:
+                pu_file_target = externals.files.pu.json
+                minbiasxs = self.config_inst.x.minbiasxs.get(shift)
+                data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
+
+            # build the ratios and save them
+            if len(mc_profile) != len(data_profile):
+                raise Exception(
+                    f"the number of bins in the MC profile ({len(mc_profile)}) does not match that "
+                    f"of the data profile for the {shift} shift ({len(data_profile)})",
+                )
+
+            # store them
+            weights[shift] = [
+                (d / m) if m > 0 else 0.0
+                for m, d in zip(mc_profile, data_profile)
+            ]
+            self.publish_message(f"computed pu weights for shift {shift}")
+
+        # save it
+        self.output().dump(weights, formatter="json")
+
+    @classmethod
+    def read_mc_profile_from_cfg(
+        cls,
+        pu_config_target: law.FileSystemTarget,
+    ) -> List[float]:
+        """
+        Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and
+        return the pu profile as a list of float probabilities.
+        """
+        probs = []
+
+        # read non-empty lines
+        lines = map(lambda s: s.strip(), pu_config_target.load(formatter="text").split("\n"))
+
+        # loop through them and extract probabilities
+        found_prob_line = False
+        for line in lines:
+            # look for the start of the pu profile
+            if not found_prob_line:
+                if not line.startswith("mix.input.nbPileupEvents.probValue"):
+                    continue
+                found_prob_line = True
+                line = line.split("(", 1)[-1].strip()
+            # skip empty lines
+            if not line:
+                continue
+            # extract numbers
+            probs.extend(map(float, filter(bool, line.split(")", 1)[0].split(","))))
+            # look for the end of the pu profile
+            if ")" in line:
+                break
+
+        return cls.normalize_values(probs)
+
+    @classmethod
+    def read_data_profile_from_hist(
+        cls,
+        pu_hist_target: law.FileSystemTarget,
+    ) -> List[float]:
+        """
+        Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*,
+        builds the ratio to mc and returns the weights in a list.
+        """
+        hist_file = pu_hist_target.load(formatter="uproot")
+        probs = hist_file["pileup"].values().tolist()
+        return cls.normalize_values(probs)
+
+    @classmethod
+    def read_data_profile_from_pileupcalc(
+        cls,
+        pu_file_target: law.FileSystemTarget,
+        minbias_xs: float,
+    ) -> List[float]:
+        """
+        Takes the pileup profile in data read stored in *pu_file_target*, which should have been
+        produced when processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to
+        mc and returns the weights in a list for 99 bins (recommended number).
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def normalize_values(cls, values: Sequence[float]) -> List[float]:
+        _sum = sum(values, 0.0)
+        return [value / _sum for value in values]
+
+
+CreatePileupWeightsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CreatePileupWeights,
+    enable=["configs", "skip_configs"],
     attributes={"version": None},
 )

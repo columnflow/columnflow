@@ -1,137 +1,22 @@
 # coding: utf-8
 
 """
-Tasks related to obtaining, preprocessing and selecting events.
+Tasks related to selecting events and performing post-selection bookkeeping.
 """
 
 from collections import defaultdict
 
-import luigi
 import law
 
-from ap.tasks.framework import AnalysisTask, DatasetTask, HTCondorWorkflow, wrapper_factory
+from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin
+from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
+from ap.tasks.calibration import CalibrateEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CalibratorMixin(AnalysisTask):
-
-    calibrator = luigi.Parameter(
-        default="test",
-        description="the name of the calibrator to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "calibrator", f"calib_{self.calibrator}")
-        return parts
-
-
-class SelectorMixin(CalibratorMixin):
-
-    selector = luigi.Parameter(
-        default="test",
-        description="the name of the selector to the applied; default: 'test'",
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "selector", f"select_{self.selector}")
-        return parts
-
-
-class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
-
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["lfns"] = GetDatasetLFNs.req(self)
-        return reqs
-
-    def requires(self):
-        return {
-            "lfns": GetDatasetLFNs.req(self),
-        }
-
-    def output(self):
-        return self.local_target(f"calib_{self.branch}.parquet")
-
-    @law.decorator.safe_output
-    @ensure_proxy
-    def run(self):
-        from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
-            sorted_ak_to_parquet,
-        )
-        from ap.calibration import Calibrator
-
-        # prepare inputs and outputs
-        lfn_task = self.requires()["lfns"]
-        output = self.output()
-        output_chunks = {}
-
-        # create a temp dir for saving intermediate files
-        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
-        tmp_dir.touch()
-
-        # get the calibration function
-        calibrate = Calibrator.get(self.calibrator)
-
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | calibrate.used_columns
-
-        # define columns that will be saved
-        keep_columns = calibrate.produced_columns
-        remove_routes = None
-
-        # let the lfn_task prepare the nano file (basically determine a good pfn)
-        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
-
-        # open with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
-
-        # iterate over chunks
-        with ChunkedReader(
-            nano_file,
-            source_type="coffea_root",
-            read_options={"iteritems_options": {"filter_name": load_columns}},
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
-            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # just invoke the calibration function
-                events = calibrate(events)
-
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match("_".join(route), keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
-
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
-                output_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
-
-        # merge output files
-        with output.localize("w") as outp:
-            sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
-
-
-CalibrateEventsWrapper = wrapper_factory(
-    base_cls=AnalysisTask,
-    require_cls=CalibrateEvents,
-    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
-)
-
-
-class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -142,14 +27,14 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = CalibrateEvents.req(self)
+            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
         return reqs
 
     def requires(self):
         # workflow branches are normal tasks, so define requirements the normal way
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": CalibrateEvents.req(self),
+            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
         }
 
     def output(self):
@@ -163,7 +48,7 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
         )
         from ap.selection import Selector
@@ -187,6 +72,7 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | select.used_columns
+        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -196,25 +82,32 @@ class SelectEvents(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkfl
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks of events and diffs
+        n_calib = len(inputs["calib"])
         with ChunkedReader(
-            [nano_file, inputs["calib"].path],
-            source_type=["coffea_root", "awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns}}, None],
+            [nano_file] + [inp.path for inp in inputs["calib"]],
+            source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, diff), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would start evaluating object and event selection criteria, store
                 # new columns related to the selection (e.g. categories or regions), and
                 # book-keeping of stats
 
-                # apply the calibrated diff
-                events = update_ak_array(events, diff)
+                # apply the calibrated diffs
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = select(events, stats, self.config_inst)
+                results = select(
+                    events,
+                    stats,
+                    config_inst=self.config_inst,
+                    dataset_inst=self.dataset_inst,
+                    shift_inst=self.shift_inst,
+                )
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
@@ -246,18 +139,12 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, SelectorMixin, law.tasks.ForestMerge):
+class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 
     # recursively merge 20 files into one
     merge_factor = 20
-
-    @classmethod
-    def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
-        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
-        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
