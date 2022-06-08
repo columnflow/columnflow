@@ -6,17 +6,18 @@ Calibration methods for testing purposes.
 
 from ap.util import maybe_import
 from ap.calibration import calibrator
+from ap.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
 @calibrator(
-    uses={"nJet", "Jet_pt", "Jet_mass"},
+    uses={"nJet", "Jet.pt", "Jet.mass"},
     produces={
-        "Jet_pt", "Jet_mass",
-        "Jet_pt_jec_up", "Jet_mass_jec_up",
-        "Jet_pt_jec_down", "Jet_mass_jec_down",
+        "Jet.pt", "Jet.mass",
+        "Jet.pt_jec_up", "Jet.mass_jec_up",
+        "Jet.pt_jec_down", "Jet.mass_jec_down",
     },
 )
 def jec_test(events, **kwargs):
@@ -33,10 +34,10 @@ def jec_test(events, **kwargs):
     n_jet_mass[~a_mask] *= 0.9
 
     # b)
-    events["Jet", "pt_jec_up"] = events.Jet.pt * 1.05
-    events["Jet", "mass_jec_up"] = events.Jet.mass * 1.05
-    events["Jet", "pt_jec_down"] = events.Jet.pt * 0.95
-    events["Jet", "mass_jec_down"] = events.Jet.mass * 0.95
+    set_ak_column(events, "Jet.pt_jec_up", events.Jet.pt * 1.05)
+    set_ak_column(events, "Jet.mass_jec_up", events.Jet.mass * 1.05)
+    set_ak_column(events, "Jet.pt_jec_down", events.Jet.pt * 0.95)
+    set_ak_column(events, "Jet.mass_jec_down", events.Jet.mass * 0.95)
 
     return events
 

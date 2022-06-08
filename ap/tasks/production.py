@@ -21,8 +21,15 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
+
         if not self.pilot:
             reqs["events"] = ReduceEvents.req(self)
+
+        # add producer dependent requirements
+        from ap.production import Producer
+        producer = Producer.get(self.producer)
+        reqs["producer"] = producer.run_requires(self)
+
         return reqs
 
     def requires(self):
@@ -90,7 +97,7 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
                     remove_routes = {
                         route
                         for route in get_ak_routes(events)
-                        if not law.util.multi_match("_".join(route), keep_columns)
+                        if not law.util.multi_match(route.column, keep_columns)
                     }
                 for route in remove_routes:
                     events = remove_ak_column(events, route)

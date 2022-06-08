@@ -10,7 +10,7 @@ from ap.production import producer
 ak = maybe_import("awkward")
 
 
-@producer(uses={"nJet", "Jet_pt"}, produces={"Jet_pt2"})
+@producer(uses={"nJet", "Jet.pt"}, produces={"Jet.pt2"})
 def test(events, **kwargs):
     events["Jet", "pt2"] = events.Jet.pt ** 2.0
     return events
