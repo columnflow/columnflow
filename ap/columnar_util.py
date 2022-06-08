@@ -414,7 +414,7 @@ def add_ak_alias(
     dst_route = Route.check(dst_route)
 
     # check that the src exists
-    if not has_ak_column(src_route):
+    if not has_ak_column(ak_array, src_route):
         raise ValueError(f"no column found in array for route '{src_route}'")
 
     # add the alias, potentially overwriting existing columns
@@ -734,6 +734,12 @@ class ArrayFunction(object):
             else:
                 columns.add(obj)
         return columns
+
+    def __repr__(self) -> str:
+        """
+        Returns a unique string representation.
+        """
+        return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
 
     def __call__(self, *args, **kwargs):
         """
