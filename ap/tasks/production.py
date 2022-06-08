@@ -26,9 +26,7 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
             reqs["events"] = ReduceEvents.req(self)
 
         # add producer dependent requirements
-        from ap.production import Producer
-        producer = Producer.get(self.producer)
-        reqs["producer"] = producer.run_requires(self)
+        reqs["producer"] = self.producer_func.run_requires(self)
 
         return reqs
 
@@ -36,9 +34,7 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
         reqs = {"events": ReduceEvents.req(self)}
 
         # add producer dependent requirements
-        from ap.production import Producer
-        producer = Producer.get(self.producer)
-        reqs["producer"] = producer.run_requires(self)
+        reqs["producer"] = self.producer_func.run_requires(self)
 
         return reqs
 
@@ -53,44 +49,37 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
             sorted_ak_to_parquet,
         )
-        from ap.production import Producer
 
         # prepare inputs and outputs
         inputs = self.input()
         output = self.output()
         output_chunks = {}
 
+        # run the producer setup
+        self.producer_func.run_setup(self, inputs["producer"])
+
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # get the producer to run and set it up
-        producer = Producer.get(self.producer, copy=True)
-        producer.run_setup(self, inputs["producer"])
-
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | producer.used_columns  # noqa
+        load_columns = mandatory_coffea_columns | self.producer_func.used_columns  # noqa
 
         # define columns that will be saved
-        keep_columns = producer.produced_columns
+        keep_columns = self.producer_func.produced_columns
         remove_routes = None
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
             inputs["events"].path,
             source_type="awkward_parquet",
-            # not working yet since parquet columns are nested
+            # TODO: not working yet since parquet columns are nested
             # open_options={"columns": load_columns},
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # invoke the producer
-                events = producer(
-                    events,
-                    config_inst=self.config_inst,
-                    dataset_inst=self.dataset_inst,
-                    shift_inst=self.shift_inst,
-                )
+                events = self.producer_func(events, **self.get_producer_kwargs(self))
 
                 # manually remove colums that should not be kept
                 if not remove_routes:

@@ -8,13 +8,19 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, PlotMixin
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 
-class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    PlotMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -40,7 +46,6 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
     '''
 
     def store_parts(self):
-        # print("Hello from store_parts")
         parts = super(Plotting, self).store_parts()
         # add process names after config name
         procs = ""
@@ -54,7 +59,6 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
         return parts
 
     def create_branch_map(self):
-        # print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
 
@@ -75,7 +79,6 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
         }
 
     def requires(self):
-        # print('Hello from requires')
         c = self.config_inst
         # determine which datasets to require
         if not self.processes:
@@ -87,7 +90,6 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
         }
 
     def output(self):
-        # print('Hello from output')
         return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
 
     @PlotMixin.view_output_plots
@@ -96,6 +98,7 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
         import hist
         import matplotlib.pyplot as plt
         import mplhep
+
         plt.style.use(mplhep.style.CMS)
 
         with self.publish_step(
@@ -220,7 +223,13 @@ class Plotting(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorW
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShifts(CalibratorsSelectorMixin, PlotMixin, law.LocalWorkflow, HTCondorWorkflow):
+class PlotShifts(
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    PlotMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"

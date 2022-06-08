@@ -20,7 +20,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CalibrateEvents.shifts | SelectEvents.shifts
+    shifts = {CalibrateEvents, SelectEvents}
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -138,7 +138,7 @@ class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
         description="the maximum file size of merged files; default unit is MB; default: '500MB'",
     )
 
-    shifts = set(ReduceEvents.shifts)
+    shifts = {ReduceEvents}
 
     def requires(self):
         return ReduceEvents.req(self)
@@ -216,7 +216,7 @@ class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.Forest
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(SelectEvents.shifts)
+    shifts = {SelectEvents}
 
     # recursively merge 8 files into one
     merge_factor = 8

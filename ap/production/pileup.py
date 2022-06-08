@@ -32,7 +32,7 @@ def pu_weights(events, *, pu_weights=None, **kwargs):
 
 
 @pu_weights.requires
-def requires(task, reqs):
+def requires(self, task, reqs):
     if "pu_weights" not in reqs:
         from ap.tasks.external import CreatePileupWeights
         reqs["pu_weights"] = CreatePileupWeights.req(task)
@@ -40,5 +40,5 @@ def requires(task, reqs):
 
 
 @pu_weights.setup
-def setup(task, inputs, producer_kwargs, **kwargs):
-    producer_kwargs["pu_weights"] = ak.zip(inputs["pu_weights"].load(formatter="json"))
+def setup(self, task, inputs, call_kwargs, **kwargs):
+    call_kwargs["pu_weights"] = ak.zip(inputs["pu_weights"].load(formatter="json"))
