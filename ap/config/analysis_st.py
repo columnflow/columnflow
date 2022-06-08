@@ -103,7 +103,7 @@ config_2018.add_shift(name="hdamp_up", id=3, type="shape")
 config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 config_2018.add_shift(name="jec_up", id=5, type="shape")
 config_2018.add_shift(name="jec_down", id=6, type="shape")
-add_aliases("jec", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+add_aliases("jec", {"Jet.pt": "Jet.pt_{name}", "Jet_mass": "Jet.mass_{name}"})
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 
