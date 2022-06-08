@@ -7,6 +7,7 @@ import os
 
 from ap.util import maybe_import, memoize
 from ap.calibration import calibrator
+from ap.columnar_util import set_ak_column
 
 from coffea.lookup_tools.extractor import extractor as coffea_extractor
 from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
@@ -125,20 +126,21 @@ def get_jec_providers(config, dataset):
 
 
 @calibrator(
-    uses={"nJet", "Jet_pt", "Jet_eta", "Jet_area", "Jet_mass", "Jet_rawFactor", "fixedGridRhoFastjetAll"},
+    uses={"nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor", "fixedGridRhoFastjetAll"},
     produces=set((
-        "Jet_pt", "Jet_mass", "Jet_rawFactor",
+        "Jet.pt", "Jet.mass", "Jet.rawFactor",
     ) + tuple(
-        "Jet_pt_{junc_name}_{junc_dir}"
-        for junc_name in ("Total", ) for junc_dir in ('up', 'down')
+        f"Jet.pt_{junc_name}_{junc_dir}"
+        for junc_name in ("Total", ) for junc_dir in ('up', 'dn')
         # TODO: different sources depend on campaign -> how to resolve dynamically?
     )),
 )
 def jec(events, **kwargs):
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources."""
+
     # calculate uncorrected pt, mass
-    events["Jet", "pt_raw"] = events.Jet.pt * (1 - events.Jet.rawFactor)
-    events["Jet", "mass_raw"] = events.Jet.mass * (1 - events.Jet.rawFactor)
+    set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
+    set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
     jec_providers = get_jec_providers(kwargs["config_inst"], kwargs["dataset_inst"])
 
@@ -151,9 +153,9 @@ def jec(events, **kwargs):
     )
 
     # store corrected pt, mass and recalculate rawFactor
-    events["Jet", "pt"] = events.Jet.pt_raw * jec_factors
-    events["Jet", "mass"] = events.Jet.mass_raw * jec_factors
-    events["Jet", "rawFactor"] = (1 - events.Jet.pt_raw / events.Jet.pt)
+    set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
+    set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
+    set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
 
     # [('SourceName', [[up_val down_val]_jet1 ... ]), ...]
     jec_uncertainties = jec_providers["junc"].getUncertainty(
@@ -162,7 +164,7 @@ def jec(events, **kwargs):
     )
     for name, jec_unc_factors in jec_uncertainties:
         # jec_unc_factors[I_EVT][I_JET][I_VAR]
-        events["Jet", f"pt_{name}_up"] = events.Jet.pt * jec_unc_factors[:, :, 0]
-        events["Jet", f"pt_{name}_dn"] = events.Jet.pt * jec_unc_factors[:, :, 1]
+        set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
+        set_ak_column(events, f"Jet.pt_{name}_dn", events.Jet.pt * jec_unc_factors[:, :, 1])
 
     return events

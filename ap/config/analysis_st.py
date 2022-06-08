@@ -116,7 +116,7 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 for i, jec_source in enumerate(config_2018.get_aux("jec")["uncertainty_sources"]):
     config_2018.add_shift(name=f"jec_{jec_source}_up", id=500 + 2 * i, type="shape")
     config_2018.add_shift(name=f"jec_{jec_source}_down", id=501 + 2 * i, type="shape")
-    add_aliases(f"jec_{jec_source}", {"Jet_pt": "Jet_pt_{name}", "Jet_mass": "Jet_mass_{name}"})
+    add_aliases(f"jec_{jec_source}", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
 
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
