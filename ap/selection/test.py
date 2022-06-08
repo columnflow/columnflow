@@ -6,6 +6,7 @@ Selection methods for testing purposes.
 
 from ap.util import maybe_import
 from ap.selection import selector, SelectionResult
+from typing import Callable, List, AnyStr
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -40,12 +41,118 @@ def req_muon(events):
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet_pt", "nJet", "Jet_eta", "Jet_phi", "Jet_e",
-                "Muon_pt", "nMuon", "Muon_eta", "Muon_phi", "Muon_e"})
-def req_delta_r_match(events, threshold=0.4):
-    from IPython import embed
-    embed()
-    return 1
+def cleaning_factory(
+    selector_name: AnyStr,
+    to_clean: AnyStr,
+    *clean_against: List[AnyStr],
+) -> Callable:
+    """
+    factory to generate a function with name *selector_name* that cleans the
+    field *to_clean* in the NanoEventArrays agains the field(s) *clean_agains*.
+    First, the necessary column names to construct four-momenta for the
+    different object fields are constructed, i.e. pt, eta, phi and e for the
+    different objects.
+    Finally, the actual selector function is generated, which uses these
+    columns.
+    """
+
+    # compile the list of variables that are necessary for the four momenta
+    # this list is always the same
+    variables_for_lorentzvec = "pt eta phi e".split()
+
+    # sum up all fields aht are to be considered, i.e. the field *to_clean*
+    # and all fields in *clean_against*
+    all_fields = list(clean_against[:])
+    all_fields.append(to_clean)
+
+    # construct the set of columns that is necessary for the four momenta in
+    # the different fields (and thus also for the current implementation of
+    # the cleaning itself) by looping through the fields and variables.
+    # TODO: might make sense to use the *Route* class here that was introduced
+    # in a later PR (would have to merge first)
+    uses = {
+        f"{x}_{var}" for x in all_fields for var in variables_for_lorentzvec
+    }
+
+    # additionally, also load the lengths of the different fields
+    uses |= {f"n{x}" for x in all_fields}
+
+    # finally, construct selector function itself
+    @selector(uses=uses, name=selector_name)
+    def func(
+        events: ak.Array,
+        to_clean: AnyStr,
+        clean_against: List[AnyStr],
+        metric: Callable = lambda a, b: a.delta_r(b),
+        threshold: float = 0.4,
+    ) -> List[int]:
+        """
+        abstract function to perform a cleaning of field *to_clean* against
+        a (list of) field(s) *clean_against* based on an abitrary metric
+        *metric* (e.g. deltaR).
+        First concatenate all fields in *clean_against*, which thus includes
+        all fields that are to be used for the comparison of the metric.
+        Then construct the metric for all permutations of the different objects
+        using the coffea nearest implementation.
+        All objects in field *to_clean* are removed if the metric is below the
+        *threshold*.
+        """
+
+        # concatenate the fields that are to be used in the construction
+        # of the metric table
+        summed_clean_against = ak.concatenate(
+            [events[x] for x in clean_against],
+            axis=1,
+        )
+
+        # load actual NanoEventArray that is to be cleaned
+        to_clean_field = events[to_clean]
+
+        # construct metric table for these objects. The metric table contains
+        # the minimal value of the metric *metric* for each object in field
+        # *to_clean* w.r.t. all objects in *summed_clean_against*. Thus,
+        # it has the dimensions nevents x nto_clean, where *nevents* is
+        # the number of events in the current chunk of data and *nto_clean*
+        # is the length of the field *to_clean*. Note that the argument
+        # *threshold* in the *nearest* function must be set to None since
+        # the function will perform a selection itself to extract the nearest
+        # objects (i.e. applies the selection we want here in reverse)
+        _, metric = to_clean_field.nearest(
+            summed_clean_against,
+            metric=metric,
+            return_metric=True,
+            threshold=None,
+        )
+        # build a binary mask based on the selection threshold provided by the
+        # user
+        mask = metric > threshold
+
+        # construct final result. Currently, this is the list of indices for
+        # clean jets, sorted for pt
+        # WARNING: this still contains the bug with the application of the mask
+        #           which will be adressed in a PR in the very near future
+        # TODO: return the mask itself instead of the list of indices
+        sorted_list = ak.argsort(to_clean_field.pt, axis=-1, ascending=False)[mask]
+        return sorted_list
+
+    return func
+
+
+deltaR_jet_lepton = cleaning_factory("deltaR_jet_lepton", "Jet", "Muon", "Electron")
+
+
+def req_delta_r_match(
+    events: ak.Array,
+    to_clean: AnyStr,
+    clean_against: List[AnyStr],
+    threshold: float = 0.4,
+) -> List[int]:
+    """
+    do the cleaning of jets with respect to leptons.
+    returns indices of good (clean) jets, sorted by pt
+    *TODO*: this should probably changed to return the boolean masks
+    """
+    return deltaR_jet_lepton(events, to_clean, clean_against, threshold=threshold)
 
 
 @selector(uses={"Jet_pt", "Jet_eta"})
@@ -223,14 +330,23 @@ def deepjet_selection_test(events, stats):
     )
 
 
-@selector(uses={req_delta_r_match})
-def delta_r_selection_test(events, stats):
-    clean_jets = req_delta_r_match(events)
-    deepjet_sel = ak.num(clean_jets.Jets, axis=1) >= 1
+@selector(uses={deltaR_jet_lepton})
+def jet_lepton_deltaR_selection(events, stats, threshold=0.4):
+    """
+    function to apply the selection requirements necessary for a
+    cleaning of jets against leptons.
+    The function calls the requirements to clean the field *Jet* against
+    the concatination of the fields *[Muon, Electron]*, i.e. all leptons
+    and passes the desired threshold for the selection
+    """
+    clean_jet_indices = req_delta_r_match(events,
+                                        "Jet",
+                                        ["Muon", "Electron"],
+                                        threshold=threshold,
+    )
 
     return SelectionResult(
-        steps={"Deepjet": deepjet_sel},
-        objects={"Deepjet": clean_jets},
+        objects={"Jet": clean_jet_indices},
     )
 
 
@@ -316,14 +432,11 @@ def test(events, stats, config_inst):
     return results
 
 
-@selector(uses={delta_r_selection_test})
-def delta_r_test(events, stats, config_inst):
-    # example cuts:
-    # - jet_selection_test
-    # - lepton_selection_test
-    # example stats:
-    # - number of events before and after selection
-    # - sum of mc weights before and after selection
-
-    results = delta_r_selection_test(events, stats)
+@selector(uses={jet_lepton_deltaR_selection})
+def jet_lepton_deltaR_cleaning(events, stats, config_inst, threshold=0.4):
+    """
+    Selector function that performs cleaning of jets against leptons
+    based on a deltaR requirement
+    """
+    results = jet_lepton_deltaR_selection(events, stats, threshold)
     return results
