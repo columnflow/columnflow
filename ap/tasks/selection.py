@@ -20,7 +20,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CalibrateEvents.shifts | {"jec_up", "jec_down"}
+    shifts = {CalibrateEvents, "jec_up", "jec_down"}
 
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
@@ -28,14 +28,22 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+
+        # add selector dependent requirements
+        reqs["selector"] = self.selector_func.run_requires(self)
+
         return reqs
 
     def requires(self):
-        # workflow branches are normal tasks, so define requirements the normal way
-        return {
+        reqs = {
             "lfns": GetDatasetLFNs.req(self),
             "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
         }
+
+        # add selector dependent requirements
+        reqs["selector"] = self.selector_func.run_requires(self)
+
+        return reqs
 
     def output(self):
         return {
@@ -51,7 +59,6 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
             Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
         )
-        from ap.selection import Selector
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -60,6 +67,9 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         output_chunks = {}
         stats = defaultdict(float)
 
+        # run the selector setup
+        self.selector_func.run_setup(self, inputs["selector"])
+
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
@@ -67,11 +77,8 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
-        # get the selection function
-        select = Selector.get(self.selector)
-
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | select.used_columns
+        load_columns = mandatory_coffea_columns | self.selector_func.used_columns
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -101,13 +108,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = select(
-                    events,
-                    stats,
-                    config_inst=self.config_inst,
-                    dataset_inst=self.dataset_inst,
-                    shift_inst=self.shift_inst,
-                )
+                results = self.selector_func(events, stats, **self.get_selector_kwargs(self))
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
@@ -141,7 +142,7 @@ SelectEventsWrapper = wrapper_factory(
 
 class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
 
-    shifts = set(SelectEvents.shifts)
+    shifts = {SelectEvents}
 
     # recursively merge 20 files into one
     merge_factor = 20

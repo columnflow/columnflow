@@ -15,7 +15,7 @@ ak = maybe_import("awkward")
     uses={"PV.npvs"},
     produces={"pu_weight.nominal", "pu_weight.minbias_xs_up", "pu_weight.minbias_xs_down"},
 )
-def pu_weights(events, *, pu_weights=None, **kwargs):
+def pu_weights(events, pu_weights, **kwargs):
     # compute the indices for looking up weights
     indices = events.PV.npvs.to_numpy() - 1
     max_bin = len(pu_weights) - 1
@@ -32,7 +32,7 @@ def pu_weights(events, *, pu_weights=None, **kwargs):
 
 
 @pu_weights.requires
-def requires(task, reqs):
+def requires(self, task, reqs):
     if "pu_weights" not in reqs:
         from ap.tasks.external import CreatePileupWeights
         reqs["pu_weights"] = CreatePileupWeights.req(task)
@@ -40,5 +40,5 @@ def requires(task, reqs):
 
 
 @pu_weights.setup
-def setup(task, inputs, producer_kwargs, **kwargs):
-    producer_kwargs["pu_weights"] = ak.zip(inputs["pu_weights"].load(formatter="json"))
+def setup(self, task, inputs, call_kwargs, **kwargs):
+    call_kwargs["pu_weights"] = ak.zip(inputs["pu_weights"].load(formatter="json"))
