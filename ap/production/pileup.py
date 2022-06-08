@@ -15,7 +15,7 @@ ak = maybe_import("awkward")
     uses={"PV.npvs"},
     produces={"pu_weight.nominal", "pu_weight.minbias_xs_up", "pu_weight.minbias_xs_down"},
 )
-def pu_weights(events, *, pu_weights=None, **kwargs):
+def pu_weights(events, pu_weights, **kwargs):
     # compute the indices for looking up weights
     indices = events.PV.npvs.to_numpy() - 1
     max_bin = len(pu_weights) - 1
