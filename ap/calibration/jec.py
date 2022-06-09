@@ -9,15 +9,15 @@ from ap.util import maybe_import, memoize
 from ap.calibration import calibrator
 from ap.columnar_util import set_ak_column
 
-from coffea.lookup_tools.extractor import extractor as coffea_extractor
-from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
-
-from coffea.lookup_tools.txt_converters import (convert_jec_txt_file, convert_junc_txt_file)
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+coffea = maybe_import("coffea")
 
+coffea_extractor = maybe_import("coffea.lookup_tools.extractor")
+coffea_jetmet_tools = maybe_import("coffea.jetmet_tools")
+coffea_txt_converters = maybe_import("coffea.lookup_tools.txt_converters")
 
+@memoize
 def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     """
     Create a coffea helper object for looking up information in files of various formats.
@@ -39,7 +39,7 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     """
 
     # the extractor reads the information contained in the files
-    extractor = coffea_extractor()
+    extractor = coffea_extractor.extractor()
 
     # files contain one or more lookup tables, each identified by a name
     all_names = []
@@ -84,14 +84,14 @@ def get_jec_files(base_dir, version, sample, jet_type, names):
 
 
 @memoize
-def get_jec_providers(config, dataset):
+def get_jec_providers(config_inst, dataset_inst):
     """Construct the lookup helpers used by the calibrator. Expensive, so memoized for efficiency."""
 
     # get the global JEC configuration (version, levels, etc.)
-    jec = config.get_aux("jec")
+    jec = config_inst.get_aux("jec")
 
     # determine the correct JEC files for the dataset
-    if dataset.is_data:
+    if dataset_inst.is_data:
         # look up data era
         #sample = "Run2018A"  # TODO: implement data eras  # noqa
         raise NotImplementedError("JEC calibrator for data has not been implemented yet.")
@@ -109,13 +109,13 @@ def get_jec_providers(config, dataset):
     return {
         "jec": get_lookup_provider(
             jec_files,
-            convert_jec_txt_file,
-            FactorizedJetCorrector,
+            coffea_txt_converters.convert_jec_txt_file,
+            coffea_jetmet_tools.FactorizedJetCorrector,
         ),
         "junc": get_lookup_provider(
             junc_files,
-            convert_junc_txt_file,
-            JetCorrectionUncertainty,
+            coffea_txt_converters.convert_junc_txt_file,
+            coffea_jetmet_tools.JetCorrectionUncertainty,
             # only select uncertainties of interest
             names=[
                 "_".join([os.path.basename(junc_files[0]).split('.')[0], junc_src])
@@ -127,22 +127,18 @@ def get_jec_providers(config, dataset):
 
 @calibrator(
     uses={"nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor", "fixedGridRhoFastjetAll"},
-    produces=set((
+    produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
-    ) + tuple(
-        f"Jet.pt_{junc_name}_{junc_dir}"
-        for junc_name in ("Total", ) for junc_dir in ('up', 'dn')
-        # TODO: different sources depend on campaign -> how to resolve dynamically?
-    )),
+    },
 )
-def jec(events, **kwargs):
+def jec(events, config_inst, dataset_inst, **kwargs):
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources."""
 
     # calculate uncorrected pt, mass
     set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
     set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
-    jec_providers = get_jec_providers(kwargs["config_inst"], kwargs["dataset_inst"])
+    jec_providers = get_jec_providers(config_inst, dataset_inst)
 
     # retrieve JEC correction factors
     jec_factors = jec_providers["jec"].getCorrection(
@@ -166,5 +162,19 @@ def jec(events, **kwargs):
         # jec_unc_factors[I_EVT][I_JET][I_VAR]
         set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
         set_ak_column(events, f"Jet.pt_{name}_dn", events.Jet.pt * jec_unc_factors[:, :, 1])
+        set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
+        set_ak_column(events, f"Jet.mass_{name}_dn", events.Jet.mass * jec_unc_factors[:, :, 1])
 
     return events
+
+
+@jec.update
+def update(self, config_inst, **kwargs):
+    """Add JEC uncertainty shifts to the list of produced columns."""
+    # get the global JEC configuration (version, levels, etc.)
+    jec = config_inst.get_aux("jec")
+
+    self.produces |= {
+        f"Jet.pt_{junc_name}_{junc_dir}"
+        for junc_name in jec.uncertainty_sources for junc_dir in ('up', 'dn')
+    }

@@ -47,13 +47,70 @@ analysis_st.set_aux("config_groups", {})
 config_2018 = analysis_st.add_config(campaign_2018)
 
 # location of JEC txt files
-config_2018.set_aux("jec", {
+config_2018.set_aux("jec", DotDict.wrap({
     "levels": ("L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"),
     "version": "Summer19UL18_V5",
     "jet_type": "AK4PFchs",
     "txt_file_path": expand_path("$AP_BASE/static/jec/"),  # TODO: use external_files
-    "uncertainty_sources": ("Total",),  # TODO: use to construct custom calibrator
-})
+    "uncertainty_sources": (
+        "AbsoluteStat",
+        "AbsoluteScale",
+        "AbsoluteSample",
+        "AbsoluteFlavMap",
+        "AbsoluteMPFBias",
+        "Fragmentation",
+        "SinglePionECAL",
+        "SinglePionHCAL",
+        "FlavorQCD",
+        "TimePtEta",
+        "RelativeJEREC1",
+        "RelativeJEREC2",
+        "RelativeJERHF",
+        "RelativePtBB",
+        "RelativePtEC1",
+        "RelativePtEC2",
+        "RelativePtHF",
+        "RelativeBal",
+        "RelativeSample",
+        "RelativeFSR",
+        "RelativeStatFSR",
+        "RelativeStatEC",
+        "RelativeStatHF",
+        "PileUpDataMC",
+        "PileUpPtRef",
+        "PileUpPtBB",
+        "PileUpPtEC1",
+        "PileUpPtEC2",
+        "PileUpPtHF",
+        "PileUpMuZero",
+        "PileUpEnvelope",
+        "SubTotalPileUp",
+        "SubTotalRelative",
+        "SubTotalPt",
+        "SubTotalScale",
+        "SubTotalAbsolute",
+        "SubTotalMC",
+        "Total",
+        "TotalNoFlavor",
+        "TotalNoTime",
+        "TotalNoFlavorNoTime",
+        "FlavorZJet",
+        "FlavorPhotonJet",
+        "FlavorPureGluon",
+        "FlavorPureQuark",
+        "FlavorPureCharm",
+        "FlavorPureBottom",
+        "TimeRunA",
+        "TimeRunB",
+        "TimeRunC",
+        "TimeRunD",
+        "CorrelationGroupMPFInSitu",
+        "CorrelationGroupIntercalibration",
+        "CorrelationGroupbJES",
+        "CorrelationGroupFlavor",
+        "CorrelationGroupUncorrelated",
+    ),
+}))
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
@@ -138,6 +195,10 @@ config_2018.set_aux("external_files", DotDict.wrap({
             "minbias_xs_up": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-72400ub-99bins.root", "v1"),  # noqa
             "minbias_xs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
         },
+    },
+
+    "jec": {
+        "txt_files": {},
     },
 }))
 
