@@ -386,17 +386,16 @@ def memoize(f):
     """
     Function decorator that implements memoization. Function results are cached on
     first call and returned from cache on every subsequent call with the same arguments.
-    NOTE: only positional arguments are supported!
     """
     _cache = {}
 
     @wraps(f)
-    def wrapper(*args):
-        frozen_args = freeze(args)
+    def wrapper(*args, **kwargs):
+        frozen_args = freeze(dict(args=args, kwargs=kwargs))
         if frozen_args in _cache:
             return _cache[frozen_args]
         else:
-            value = _cache[frozen_args] = f(*frozen_args)
+            value = _cache[frozen_args] = f(*args, **kwargs)
             return value
 
     return wrapper
