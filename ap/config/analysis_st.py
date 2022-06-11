@@ -14,7 +14,6 @@ import ap.config.processes as procs
 from ap.config.campaign_2018 import campaign_2018
 from ap.util import DotDict
 
-from ap.util import expand_path
 
 #
 # the main analysis object
@@ -48,10 +47,12 @@ config_2018 = analysis_st.add_config(campaign_2018)
 
 # location of JEC txt files
 config_2018.set_aux("jec", DotDict.wrap({
-    "levels": ("L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"),
-    "version": "Summer19UL18_V5",
+    "source": "https://raw.githubusercontent.com/cms-jet/JECDatabase/master/textFiles",
+    "campaign": "Summer19UL18",
+    "version": "V5",
     "jet_type": "AK4PFchs",
-    "txt_file_path": expand_path("$AP_BASE/static/jec/"),  # TODO: use external_files
+    "levels": ("L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"),
+    "data_eras": ("RunA", "RunB", "RunC", "RunD"),
     "uncertainty_sources": (
         "AbsoluteStat",
         "AbsoluteScale",
@@ -112,6 +113,23 @@ config_2018.set_aux("jec", DotDict.wrap({
     ),
 }))
 
+
+def make_jme_filenames(jme_aux, sample_type, names, era=None):
+    """Convenience function to compute paths to JEC files."""
+
+    # normalize and validate sample type
+    sample_type = sample_type.upper()
+    if sample_type not in ("DATA", "MC"):
+        raise ValueError(f"Invalid sample type '{sample_type}'. Expected either 'DATA' or 'MC'.")
+
+    jme_full_version = "_".join(s for s in (jme_aux.campaign, era, jme_aux.version, sample_type) if s)
+
+    return [
+        f"{jme_aux.source}/{jme_full_version}/{jme_full_version}_{name}_{jme_aux.jet_type}.txt"
+        for name in names
+    ]
+
+
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
 config_2018.set_aux("luminosity", Number(59740, {
@@ -170,7 +188,7 @@ config_2018.add_shift(name="hdamp_up", id=3, type="shape")
 config_2018.add_shift(name="hdamp_down", id=4, type="shape")
 
 # FIXME: ensure JEC shifts get the same id every time
-for i, jec_source in enumerate(config_2018.get_aux("jec")["uncertainty_sources"]):
+for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
     config_2018.add_shift(name=f"jec_{jec_source}_up", id=500 + 2 * i, type="shape")
     config_2018.add_shift(name=f"jec_{jec_source}_down", id=501 + 2 * i, type="shape")
     add_aliases(f"jec_{jec_source}", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
@@ -197,8 +215,28 @@ config_2018.set_aux("external_files", DotDict.wrap({
         },
     },
 
+    # jet energy correction
     "jec": {
-        "txt_files": {},
+        "mc": [
+            (fname, "v1")
+            for fname in make_jme_filenames(config_2018.x.jec, 'mc', names=config_2018.x.jec.levels)
+        ],
+        "data": {
+            era: [
+                (fname, "v1")
+                for fname in make_jme_filenames(config_2018.x.jec, 'data', names=config_2018.x.jec.levels, era=era)
+            ]
+            for era in config_2018.x.jec.data_eras
+        },
+    },
+
+    # jec energy correction uncertainties
+    "junc": {
+        "mc": [(make_jme_filenames(config_2018.x.jec, 'mc', names=["UncertaintySources"])[0], "v1")],
+        "data": {
+            era: [(make_jme_filenames(config_2018.x.jec, 'data', names=["UncertaintySources"], era=era)[0], "v1")]
+            for era in config_2018.x.jec.data_eras
+        },
     },
 }))
 
