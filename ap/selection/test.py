@@ -20,9 +20,28 @@ def extract(array, idx):
     return array
 
 
+# pseudo-selectors for declaring dependence on shifts
+
+@selector
+def jet_energy_shifts(events):
+    return events
+
+
+@jet_energy_shifts.update
+def update(self, config_inst, dataset_inst, **kwargs):
+    """Declare dependence on JEC/JER uncertainty shifts."""
+    self.shifts |= {
+        f"jec_{junc_name}_{junc_dir}"
+        for junc_name in config_inst.x.jec.uncertainty_sources
+        for junc_dir in ('up', 'down')
+    }
+    if dataset_inst.is_mc:
+        self.shifts |= {"jer_up", "jer_down"}
+
+
 # object definitions
 # TODO: Producer instead of Selector
-@selector(uses={"Jet.pt", "Jet.eta"})
+@selector(uses={"Jet.pt", "Jet.eta"}, shifts={jet_energy_shifts})
 def req_jet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
@@ -40,13 +59,13 @@ def req_muon(events):
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet.pt", "Jet.eta"})
+@selector(uses={"Jet.pt", "Jet.eta"}, shifts={jet_energy_shifts})
 def req_forwardJet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"})
+@selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"}, shifts={jet_energy_shifts})
 def req_deepjet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
@@ -58,6 +77,7 @@ def req_deepjet(events):
         "Electron.pt", "Electron.eta", "Muon.pt", "Muon.eta", "Jet.pt", "Jet.eta",
         "Jet.btagDeepFlavB",
     },
+    shifts={jet_energy_shifts},
 )
 def variables(events):
     columns = {}
