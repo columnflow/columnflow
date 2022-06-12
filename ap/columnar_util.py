@@ -856,9 +856,9 @@ class TaskArrayFunction(ArrayFunction):
         shifts = self.shifts
 
         # add those of all other known intances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
-                shifts |= obj.shifts
+                shifts |= obj.all_shifts
 
         return shifts
 
@@ -892,7 +892,7 @@ class TaskArrayFunction(ArrayFunction):
         *kwargs*.
         """
         # run the update of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_update(**kwargs)
 
@@ -932,7 +932,7 @@ class TaskArrayFunction(ArrayFunction):
             reqs = {}
 
         # run the requirements of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_requires(task, reqs=reqs)
 
@@ -971,7 +971,7 @@ class TaskArrayFunction(ArrayFunction):
             call_kwargs = {}
 
         # run the setup of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_setup(task, inputs, call_kwargs=call_kwargs)
 
