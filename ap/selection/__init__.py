@@ -188,14 +188,20 @@ class SelectionResult(object):
         """
         Converts the contained fields into a nested awkward array and returns it.
         """
-        return ak.zip(law.util.merge_dicts(
+        to_merge = {}
+        if self.steps:
+            to_merge["steps"] = ak.zip(self.steps)
+        if self.objects:
+            to_merge["objects"] = ak.zip(self.objects, depth_limit=1)  # limit due to ragged axis 1
+        if self.columns:
+            to_merge["columns"] = ak.zip(self.columns)
+
+        ak_array = ak.zip(law.util.merge_dicts(
             self.main,
-            {
-                "steps": ak.zip(self.steps),
-                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged axis 1
-                "columns": ak.zip(self.columns),
-            },
+            to_merge,
+            deep=True,
         ))
+        return ak_array
 
 
 # import all selection modules
