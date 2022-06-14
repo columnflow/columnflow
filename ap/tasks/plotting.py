@@ -38,12 +38,12 @@ class Plotting(
         description="comma-separated category names to create plots for; default: ('incl',)",
     )
     # how to handle the logy defaults given by config?
-    '''
+    """
     logy = luigi.BoolParameter(
         default=False,
         description="Whether to plot the y scale logarithmically or not"
     )
-    '''
+    """
 
     def store_parts(self):
         parts = super(Plotting, self).store_parts()

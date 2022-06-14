@@ -1,6 +1,7 @@
-# version 2
+# version 3
 # packages are installed in addition to those in requirements_prod.txt
 
 ipython==7.16.*
 flake8==4.0.*
 flake8-commas==2.1.*
+flake8-quotes==3.3.*

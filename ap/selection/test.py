@@ -145,7 +145,7 @@ def sel_1mu_ge2b_highHT(events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
 
 
-'''
+"""
 # combination of all categories, taking categories from each level into account, not only leaf categories
 @selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b, sel_1mu_ge2b_highHT, sel_1mu_ge2b_lowHT})
 def categories(events, config):
@@ -168,8 +168,7 @@ def categories(events, config):
         #columns={"cat_titles": cat_titles, "cat_array": cat_array}
         columns={"cat_array": cat_array}
     )
-
-'''
+"""
 
 
 # combination of all leaf categories
