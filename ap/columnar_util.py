@@ -853,12 +853,14 @@ class TaskArrayFunction(ArrayFunction):
 
     @property
     def all_shifts(self):
-        shifts = self.shifts
+        shifts = set()
 
         # add those of all other known intances
-        for obj in self.uses | self.produces:
+        for obj in self.shifts:
             if isinstance(obj, self.__class__):
-                shifts |= obj.shifts
+                shifts |= obj.all_shifts
+            else:
+                shifts.add(obj)
 
         return shifts
 
@@ -888,11 +890,11 @@ class TaskArrayFunction(ArrayFunction):
     def run_update(self, **kwargs) -> None:
         """
         Recursively runs the update function of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) forwarding *this* instance and all additional
-        *kwargs*.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
+        all additional *kwargs*.
         """
         # run the update of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_update(**kwargs)
 
@@ -925,14 +927,15 @@ class TaskArrayFunction(ArrayFunction):
     def run_requires(self, task: law.Task, reqs: Optional[dict] = None) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* using this instance. *reqs*
-        defaults to an empty dictionary which should be filled to store the requirements.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
+        instance. *reqs* defaults to an empty dictionary which should be filled to store the
+        requirements.
         """
         if reqs is None:
             reqs = {}
 
         # run the requirements of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_requires(task, reqs=reqs)
 
@@ -962,16 +965,16 @@ class TaskArrayFunction(ArrayFunction):
     def run_setup(self, task: law.Task, inputs: dict, call_kwargs: Optional[dict] = None) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* and *inputs* corresponding to the
-        requirements created by :py:func:`run_requires`. *call_kwargs* defaults to an empty
-        dictionary which should be filled to store arguments which are later on passed to the
-        wrapped function.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
+        corresponding to the requirements created by :py:func:`run_requires`. *call_kwargs* defaults
+        to an empty dictionary which should be filled to store arguments which are later on passed
+        to the wrapped function.
         """
         if call_kwargs is None:
             call_kwargs = {}
 
         # run the setup of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_setup(task, inputs, call_kwargs=call_kwargs)
 
