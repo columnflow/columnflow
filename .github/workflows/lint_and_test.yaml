@@ -22,7 +22,6 @@ jobs:
         run: |
           cd "${AP_JOB_ID}"
           source setup.sh ""
-          python3 -m pip install flake8
 
       - name: Lint 🔍
         run: |
