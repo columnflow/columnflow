@@ -718,21 +718,27 @@ class ArrayFunction(object):
     @property
     def used_columns(self) -> Set[str]:
         columns = set()
+
+        # add those of all other known intances
         for obj in self.uses:
             if isinstance(obj, self.__class__):
                 columns |= obj.used_columns
             else:
                 columns.add(obj)
+
         return columns
 
     @property
     def produced_columns(self) -> Set[str]:
         columns = set()
+
+        # add those of all other known intances
         for obj in self.produces:
             if isinstance(obj, self.__class__):
                 columns |= obj.produced_columns
             else:
                 columns.add(obj)
+
         return columns
 
     def __repr__(self) -> str:
@@ -759,7 +765,7 @@ class TaskArrayFunction(ArrayFunction):
     :py:class:`ArrayFunction` base class. It can be a sequence or set of shift names, or other
     instances that are called by this one. The :py:attr:`all_shifts` property returns a flat set of
     all shifts, potentially resolving information from other :py:class:`TaskArrayFunction`
-    instances.
+    instances registered in `py:attr:`uses`, `py:attr:`produces` and `py:attr:`shifts` itself.
 
     Custom task requirements are be defined in a programmatic way by wrapping a function through a
     decorator. A custom setup function, using results of the custom task requirements to (e.g.)
@@ -795,7 +801,6 @@ class TaskArrayFunction(ArrayFunction):
             weights = inputs["weights_task"].load(formatter="json")
             # add it to the call_kwargs which will be forwarded to every call to the main function
             call_kwargs["weights"] = weights
-
 
     For a possible implementation, see :py:mod:`ap.production.pileup`.
 
@@ -853,12 +858,14 @@ class TaskArrayFunction(ArrayFunction):
 
     @property
     def all_shifts(self):
-        shifts = self.shifts
+        shifts = set()
 
         # add those of all other known intances
         for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 shifts |= obj.all_shifts
+            else:
+                shifts.add(obj)
 
         return shifts
 
@@ -888,8 +895,8 @@ class TaskArrayFunction(ArrayFunction):
     def run_update(self, **kwargs) -> None:
         """
         Recursively runs the update function of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) forwarding *this* instance and all additional
-        *kwargs*.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
+        all additional *kwargs*.
         """
         # run the update of all other known instances
         for obj in self.uses | self.produces | self.shifts:
@@ -925,8 +932,9 @@ class TaskArrayFunction(ArrayFunction):
     def run_requires(self, task: law.Task, reqs: Optional[dict] = None) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* using this instance. *reqs*
-        defaults to an empty dictionary which should be filled to store the requirements.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
+        instance. *reqs* defaults to an empty dictionary which should be filled to store the
+        requirements.
         """
         if reqs is None:
             reqs = {}
@@ -962,10 +970,10 @@ class TaskArrayFunction(ArrayFunction):
     def run_setup(self, task: law.Task, inputs: dict, call_kwargs: Optional[dict] = None) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* and *inputs* corresponding to the
-        requirements created by :py:func:`run_requires`. *call_kwargs* defaults to an empty
-        dictionary which should be filled to store arguments which are later on passed to the
-        wrapped function.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
+        corresponding to the requirements created by :py:func:`run_requires`. *call_kwargs* defaults
+        to an empty dictionary which should be filled to store arguments which are later on passed
+        to the wrapped function.
         """
         if call_kwargs is None:
             call_kwargs = {}
