@@ -29,23 +29,23 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     """
     Create a coffea helper object for looking up information in files of various formats.
 
-    This function reads in the `files` containing lookup tables (e.g. JEC text files), extracts
-    the table of values ("weights") using the conversion function `conversion_func` implemented
-    in coffea, and uses them to construct a helper object of type `provider_cls` that can be
-    passed event data to yield the lookup values (e.g. a `FactorizedJetCorrector` or
-    `JetCorrectionUncertainty`).
+    This function reads in the *files* containing lookup tables (e.g. JEC text files), extracts
+    the table of values ("weights") using the conversion function *conversion_func* implemented
+    in coffea, and uses them to construct a helper object of type *provider_cls* that can be
+    passed event data to yield the lookup values (e.g. a :py:class:`FactorizedJetCorrector` or
+    :py:class:`JetCorrectionUncertainty`).
 
-    Optionally, a list of `names` can be supplied to select only a subset of weight tables
+    Optionally, a list of *names* can be supplied to select only a subset of weight tables
     for constructing the provider object (the default is to use all of them). This is intended
     to be useful for e.g. selecting only a particular set of jet energy uncertainties from an
-    "UncertaintySources" file. By convention, the `names` always start with the basename of the
+    "UncertaintySources" file. By convention, the *names* always start with the basename of the
     file that contains the corresponding weight table.
 
-    Entries in `names` may also be tuples of the form (`src_name`, `dst_name`), in which case the
-    `src_name` will be replaced by `dst_name` when passing the names to the `provider_cls`.
+    Entries in *names* may also be tuples of the form (*src_name*, *dst_name*), in which case the
+    *src_name* will be replaced by *dst_name* when passing the names to the *provider_cls*.
 
-    The user must ensure that the `files` can be parsed by the `conversion_func` supplied, and that
-    the information contained in the files is meaningful in connection with the `provider_cls`.
+    The user must ensure that the *files* can be parsed by the *conversion_func* supplied, and that
+    the information contained in the files is meaningful in connection with the *provider_cls*.
     """
 
     # the extractor reads the information contained in the files
@@ -96,8 +96,8 @@ def get_basenames(struct):
 
 # https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
 def ak_random(*args, rand_func):
-    """Return an awkward array filled with random numbers. The `args` must be broadcastable
-    awkward arrays and will be passed as positional arguments to `rand_func` to obtain the
+    """Return an awkward array filled with random numbers. The *args* must be broadcastable
+    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
     random numbers."""
     from awkward import Array
     from awkward.layout import ListOffsetArray64
@@ -138,6 +138,8 @@ def jec(events, config_inst, dataset_inst, jec_files, junc_files, jec_names, jun
     set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
     # build/retrieve lookup providers for JECs and uncertainties
+    # NOTE: could also be moved to `jec_setup`, but keep here in case the provider ever needs
+    #       to change based on the event content (JEC change in the middle of a run)
     jec_provider = get_lookup_provider(
         jec_files,
         coffea_txt_converters.convert_jec_txt_file,
@@ -182,12 +184,12 @@ def jec(events, config_inst, dataset_inst, jec_files, junc_files, jec_names, jun
 @jec.update
 def jec_update(self, config_inst, **kwargs):
     """Add JEC uncertainty shifts to the list of produced columns."""
-    for shifted_var in ("pt", "mass"):
-        self.produces |= {
-            f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
-            for junc_name in config_inst.x.jec.uncertainty_sources
-            for junc_dir in ('up', 'down')
-        }
+    self.produces |= {
+        f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
+        for shifted_var in ("pt", "mass")
+        for junc_name in config_inst.x.jec.uncertainty_sources
+        for junc_dir in ('up', 'down')
+    }
 
 
 @jec.requires
@@ -275,6 +277,8 @@ def jer(events, config_inst, dataset_inst, jer_files, jersf_files, jer_names, je
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
     # build/retrieve lookup providers for JECs and uncertainties
+    # NOTE: could also be moved to `jer_setup`, but keep here in case the provider ever needs
+    #       to change based on the event content (JER change in the middle of a run)
     jer_provider = get_lookup_provider(
         jer_files,
         coffea_txt_converters.convert_jr_txt_file,

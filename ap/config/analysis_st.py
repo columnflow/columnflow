@@ -51,9 +51,9 @@ config_2018.set_aux("jec", DotDict.wrap({
     "campaign": "Summer19UL18",
     "version": "V5",
     "jet_type": "AK4PFchs",
-    "levels": ("L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"),
-    "data_eras": ("RunA", "RunB", "RunC", "RunD"),
-    "uncertainty_sources": (
+    "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+    "data_eras": ["RunA", "RunB", "RunC", "RunD"],
+    "uncertainty_sources": [
         # comment out most for now to prevent large file sizes
         # "AbsoluteStat",
         # "AbsoluteScale",
@@ -111,7 +111,7 @@ config_2018.set_aux("jec", DotDict.wrap({
         "CorrelationGroupbJES",
         "CorrelationGroupFlavor",
         "CorrelationGroupUncorrelated",
-    ),
+    ],
 }))
 
 config_2018.set_aux("jer", DotDict.wrap({

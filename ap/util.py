@@ -368,8 +368,8 @@ def dev_sandbox(sandbox: str) -> str:
 def freeze(cont):
     """Constructs an immutable version of a native Python container.
 
-    Recursively replaces all mutable containers (`dict`, `list`, `set`) encountered within
-    `cont` by an immutable equivalent: Lists are converted to tuples, sets to `frozenset`
+    Recursively replaces all mutable containers (``dict``, ``list``, ``set``) encountered within
+    *cont* by an immutable equivalent: Lists are converted to tuples, sets to ``frozenset``
     objects, and dictionaries to tuples of (*key*, *value*) pairs.
     """
 
