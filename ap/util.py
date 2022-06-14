@@ -392,10 +392,8 @@ def memoize(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         frozen_args = freeze(dict(args=args, kwargs=kwargs))
-        if frozen_args in _cache:
-            return _cache[frozen_args]
-        else:
-            value = _cache[frozen_args] = f(*args, **kwargs)
-            return value
+        if frozen_args not in _cache:
+            _cache[frozen_args] = f(*args, **kwargs)
+        return _cache[frozen_args]
 
     return wrapper
