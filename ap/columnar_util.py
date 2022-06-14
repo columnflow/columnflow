@@ -414,7 +414,7 @@ def add_ak_alias(
     dst_route = Route.check(dst_route)
 
     # check that the src exists
-    if not has_ak_column(src_route):
+    if not has_ak_column(ak_array, src_route):
         raise ValueError(f"no column found in array for route '{src_route}'")
 
     # add the alias, potentially overwriting existing columns
@@ -718,22 +718,34 @@ class ArrayFunction(object):
     @property
     def used_columns(self) -> Set[str]:
         columns = set()
+
+        # add those of all other known intances
         for obj in self.uses:
             if isinstance(obj, self.__class__):
                 columns |= obj.used_columns
             else:
                 columns.add(obj)
+
         return columns
 
     @property
     def produced_columns(self) -> Set[str]:
         columns = set()
+
+        # add those of all other known intances
         for obj in self.produces:
             if isinstance(obj, self.__class__):
                 columns |= obj.produced_columns
             else:
                 columns.add(obj)
+
         return columns
+
+    def __repr__(self) -> str:
+        """
+        Returns a unique string representation.
+        """
+        return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
 
     def __call__(self, *args, **kwargs):
         """
@@ -745,18 +757,20 @@ class ArrayFunction(object):
 class TaskArrayFunction(ArrayFunction):
     """
     Subclass of :py:class:`ArrayFunction` providing an interface to certain task features such as
-    declaring task requirements and dependent or produced shifts, and defining a custom setup
-    function.
+    declaring dependent or produced shifts, task requirements, and defining a custom setup
+    function. In addition, there is the option to update all these configurations based on task
+    attributes.
 
     *shifts* can be defined similarly to columns to use and/or produce in the
     :py:class:`ArrayFunction` base class. It can be a sequence or set of shift names, or other
     instances that are called by this one. The :py:attr:`all_shifts` property returns a flat set of
     all shifts, potentially resolving information from other :py:class:`TaskArrayFunction`
-    instances.
+    instances registered in `py:attr:`uses`, `py:attr:`produces` and `py:attr:`shifts` itself.
 
     Custom task requirements are be defined in a programmatic way by wrapping a function through a
     decorator. A custom setup function, using results of the custom task requirements to (e.g.)
-    initialize some state, can be defined in a similar way. tExample:
+    initialize some state, can be defined in a similar way. Any of these configurations can also be
+    updated based on attributes of a task using another wrapped function. Example:
 
     .. code-block:: python
 
@@ -769,19 +783,24 @@ class TaskArrayFunction(ArrayFunction):
         # define the function
         ArrayFunction.new(my_func, uses={"foo"}, produces={"bar"})
 
+        # define config-dependent updates (e.g. extending shifts, or used and produced columns)
+        @my_func.update
+        def update(self, config_inst):
+            self.shifts |= {"some_shift_up", "some_shift_down"}
+
         # define requirements that (e.g.) compute the weights
         @my_func.requires
-        def requires(task, reqs):
+        def requires(self, task, reqs):
             # fill the requirements dict
             reqs["weights_task"] = SomeWeightsTask.req(task)
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(task, inputs, producer_kwargs):
+        def setup(self, task, inputs, call_kwargs):
             # load the weights once
             weights = inputs["weights_task"].load(formatter="json")
-            # add it to the producer_kwargs which will be forwarded to every producer call
-            producer_kwargs["weights"] = weights
+            # add it to the call_kwargs which will be forwarded to every call to the main function
+            call_kwargs["weights"] = weights
 
     For a possible implementation, see :py:mod:`ap.production.pileup`.
 
@@ -797,6 +816,11 @@ class TaskArrayFunction(ArrayFunction):
 
        The resolved, flat set of dependent or produced shifts.
 
+    .. py:attribute: update_func
+       type: callable
+
+       The registered function defining what to update, or *None*.
+
     .. py:attribute: requires_func
        type: callable
 
@@ -807,7 +831,7 @@ class TaskArrayFunction(ArrayFunction):
 
        The registered function performing the custom setup step, or *None*.
 
-    .. py:attribute:: producer_kwargs
+    .. py:attribute:: call_kwargs
        type: dict
 
        A dictionary of arguments that are set by :py:attr:`setup_func` and forwarded to the
@@ -827,29 +851,71 @@ class TaskArrayFunction(ArrayFunction):
 
         # store attributes
         self.shifts = set(law.util.make_list(shifts)) if shifts else set()
+        self.update_func = None
         self.requires_func = None
         self.setup_func = None
-        self.producer_kwargs = None
+        self.call_kwargs = None
 
     @property
     def all_shifts(self):
-        shifts = self.shifts
+        shifts = set()
 
         # add those of all other known intances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
-                shifts |= obj.shifts
+                shifts |= obj.all_shifts
+            else:
+                shifts.add(obj)
 
         return shifts
 
-    def requires(self, func: Callable[[law.Task, dict], dict]) -> None:
+    def update(self, func: Callable[["TaskArrayFunction", Any], None]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:attr:`update_func`
+        which is used to update *this* instance dependent on specific task attributes. The function
+        should accept
+
+            - *self* (positional), the instance of the array function itself,
+            - and additional keyword arguments that are set depending on the task that invokes the
+              update.
+
+        In any case it is recommended for the wrapped function to catch all additional keyword
+        arguments. The decorator does not return the wrapped function.
+
+        .. note::
+
+            When the task invoking the requirement is workflow, be aware that both the actual
+            workflow instance as well as branch tasks might call the wrapped function. When the
+            requirements should differ between them, make sure to use the
+            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
+            distinguish the cases.
+        """
+        self.update_func = func
+
+    def run_update(self, **kwargs) -> None:
+        """
+        Recursively runs the update function of this and all other known instances (via
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
+        all additional *kwargs*.
+        """
+        # run the update of all other known instances
+        for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.__class__):
+                obj.run_update(**kwargs)
+
+        # run this instance's update function
+        if self.update_func:
+            self.update_func(self, **kwargs)
+
+    def requires(self, func: Callable[["TaskArrayFunction", law.Task, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`requires_func`
-        which is used to define additional task requirements. The function should accept two
+        which is used to define additional task requirements. The function should accept three
         arguments,
 
-            - *task*, the :py:class:`law.Task` instance, and
-            - *reqs*, a dictionary into which requirements should be inserted.
+            - *self* (positional), the instance of the array function itself,
+            - *task* (positional), the :py:class:`law.Task` instance, and
+            - *reqs* (positional), a dictionary into which requirements should be inserted.
 
         The decorator does not return the wrapped function.
 
@@ -863,72 +929,74 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.requires_func = func
 
-    def run_requires(self, task: law.Task, reqs: Optional[dict] = None):
+    def run_requires(self, task: law.Task, reqs: Optional[dict] = None) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* using this instance. *reqs*
-        defaults to an empty dictionary which should be filled to store the requirements.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
+        instance. *reqs* defaults to an empty dictionary which should be filled to store the
+        requirements.
         """
         if reqs is None:
             reqs = {}
 
         # run the requirements of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
                 obj.run_requires(task, reqs=reqs)
 
         # run this instance's requires function
         if self.requires_func:
-            self.requires_func(task, reqs)
+            self.requires_func(self, task, reqs)
 
         return reqs
 
     def setup(self, func: Callable[[law.Task, dict, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`setup_func`
-        which is used to perform a custom setup of objects. The function should accept three
+        which is used to perform a custom setup of objects. The function should accept four
         arguments,
 
-           - *task*, the :py:class:`law.Task` instance,
-           - *inputs*, a dictionary with input targets corresponding to the requirements created by
-             :py:meth:`run_requires`, and
-           - *producer_kwargs*, a dictionary into which arguments should be inserted that are later
-             on passed to the wrapped function.
+            - *self* (positional), the instance of the array function itself,
+            - *task*, the :py:class:`law.Task` instance,
+            - *inputs*, a dictionary with input targets corresponding to the requirements created by
+              :py:meth:`run_requires`, and
+            - *call_kwargs*, a dictionary into which arguments should be inserted that are later
+              on passed to the wrapped function.
 
         The decorator does not return the wrapped function.
         """
         self.setup_func = func
 
-    def run_setup(self, task: law.Task, inputs: dict, producer_kwargs: Optional[dict] = None):
+    def run_setup(self, task: law.Task, inputs: dict, call_kwargs: Optional[dict] = None) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
-        :py:attr:`uses` and :py:attr:`produces`) given the *task* and *inputs* corresponding to the
-        requirements created by :py:func:`run_requires`. *producer_kwargs* defaults to an empty
-        dictionary which should be filled to store arguments which are later on passed to the
-        wrapped function.
+        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
+        corresponding to the requirements created by :py:func:`run_requires`. *call_kwargs* defaults
+        to an empty dictionary which should be filled to store arguments which are later on passed
+        to the wrapped function.
         """
-        if producer_kwargs is None:
-            producer_kwargs = {}
+        if call_kwargs is None:
+            call_kwargs = {}
 
         # run the setup of all other known instances
-        for obj in self.uses | self.produces:
+        for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.__class__):
-                obj.run_setup(task, inputs, producer_kwargs=producer_kwargs)
+                obj.run_setup(task, inputs, call_kwargs=call_kwargs)
 
         # run this instance's setup function
         if self.setup_func:
-            self.setup_func(task, inputs, producer_kwargs)
+            self.setup_func(self, task, inputs, call_kwargs)
 
         # store it
-        self.producer_kwargs = producer_kwargs
+        self.call_kwargs = call_kwargs
 
     def __call__(self, *args, **kwargs):
         """
-        Calls the wrapped function with all *args* and *kwargs*, update with
-        :py:attr:`producer_kwargs` when set.
+        Calls the wrapped function with all *args* and *kwargs*, update with :py:attr:`call_kwargs`
+        when set.
         """
-        if self.producer_kwargs:
-            kwargs.update(self.producer_kwargs)
+        if self.call_kwargs:
+            kwargs.update(self.call_kwargs)
 
         return super().__call__(*args, **kwargs)
 

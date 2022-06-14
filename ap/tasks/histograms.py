@@ -14,11 +14,17 @@ from ap.tasks.production import ProduceColumns
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = ReduceEvents.shifts
+    shifts = {ReduceEvents}
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
@@ -66,7 +72,7 @@ class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, la
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # not working yet since parquet columns are nested
+            # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
@@ -118,11 +124,17 @@ class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, la
         self.output().dump(histograms, formatter="pickle")
 
 
-class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.tasks.ForestMerge,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CreateHistograms.shifts
+    shifts = {CreateHistograms}
 
     # in each step, merge 10 into 1
     merge_factor = 10
@@ -158,7 +170,13 @@ class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMer
             output.dump(merged, formatter="pickle")
 
 
-class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class MergeShiftedHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -170,7 +188,7 @@ class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWor
 
     # disable the shift parameter
     shift = None
-    # effective_shift = None
+    # effective_shift = None  # TODO: debug why this is needed
     allow_empty_shift = True
 
     def workflow_requires(self):
