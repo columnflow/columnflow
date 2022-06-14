@@ -203,7 +203,7 @@ for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
 
 config_2018.add_shift(name="jer_up", id=600, type="shape")
 config_2018.add_shift(name="jer_down", id=601, type="shape")
-add_aliases("jer", {"Jet.pt": "Jet.pt_JERSF", "Jet.mass": "Jet.mass_JERSF"})
+add_aliases("jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
 
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")

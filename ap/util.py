@@ -375,7 +375,7 @@ def freeze(cont):
 
     if isinstance(cont, dict):
         return tuple((k, freeze(v)) for k, v in cont.items())
-    elif isinstance(cont, list) or isinstance(cont, tuple):
+    elif isinstance(cont, (list, tuple)):
         return tuple(freeze(v) for v in cont)
     elif isinstance(cont, set):
         return frozenset(freeze(v) for v in cont)

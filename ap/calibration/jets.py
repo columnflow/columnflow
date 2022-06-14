@@ -357,7 +357,7 @@ def jer(events, config_inst, dataset_inst, jer_files, jersf_files, jer_names, je
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
     # applu the final smearing factors to the pt and mass
-    for idx, suffix in enumerate(("", "_JERSF_up", "_JERSF_down")):
+    for idx, suffix in enumerate(("", "_jer_up", "_jer_down")):
         set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
         set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
 
