@@ -353,10 +353,20 @@ def sort_ak_fields(
 
     # identify fields with nested structure, then sort and reassign them
     nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
-    for field in nested_fields:
-        ak_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+    nested_fields = sorted(nested_fields, key=sort_fn)
+    # awkward arrays are immutable, so we need to create a new array if there
+    # are nested levels in the array
 
-    return ak_array
+    # first, create dummy array with the same behavior as the original
+    new_array = ak.Array({}, behavior=ak_array.behavior)
+    # if there are no nested fields, the following loop will do nothing
+    # In that case, the return array is the current array
+    if len(nested_fields) == 0:
+        new_array = ak_array
+    for field in nested_fields:
+        new_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn).tolist()
+
+    return new_array
 
 
 def sorted_ak_to_parquet(
