@@ -115,7 +115,8 @@ def deterministic_jet_seeds(
         events = deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
 
     # create the per jet seeds
-    jet_seed = events.deterministic_seed + primes[18] * ak.values_astype(ak.local_index(events.Jet), np.uint64)
+    prime_seed = 18
+    jet_seed = events.deterministic_seed + primes[prime_seed] * ak.values_astype(ak.local_index(events.Jet), np.uint64)
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = create_seed(np_jet_seed)
 
