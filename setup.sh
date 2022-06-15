@@ -118,7 +118,7 @@ setup() {
         echo "version prod $sw_version_prod" >> "$flag_file_sw"
         echo "version dev $sw_version_dev" >> "$flag_file_sw"
     else
-        if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
+        if [ "$AP_REMOTE_JOB" = "1" ]; then
             source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
             export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_prod"
         else
