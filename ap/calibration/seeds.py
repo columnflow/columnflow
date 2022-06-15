@@ -5,10 +5,13 @@ Methods related to creating event and object seeds during calibration.
 """
 
 import hashlib
+from typing import Callable
+
+import law
 
 from ap.calibration import calibrator
 from ap.util import maybe_import, primes
-from ap.columnar_util import Route, get_ak_indices, set_ak_column, has_ak_column
+from ap.columnar_util import Route, set_ak_column, has_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -25,13 +28,30 @@ ak = maybe_import("awkward")
     },
     produces={"deterministic_seed"},
 )
-def deterministic_event_seeds(events, create_seed, **kwargs):
+def deterministic_event_seeds(
+    events: ak.Array,
+    create_seed: Callable,
+    **kwargs,
+) -> ak.Array:
+    """
+    Produces deterministic event seeds and stores them in *events* which is also returned.
+    *create_seed* is expected to be a function that produces seeds based on integers, that are
+    usually composed of event and first-object integer features, multiplied with primes.
+
+    Strategy:
+      1. gather a selection of unambiguous integer features
+      2. multiply them with a vector of primes
+      3. use the resulting integer as an input to sha256 and hex-digest the result
+      4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
+    """
     # start with a seed of the event number itself as the most sensitive integer
+    # and define the offset of the first prime to use
     seed = create_seed(events.event)
+    prime_offset = 3
 
     # get global integers
     global_fields = ["nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon", "nElectron", "nTau", "nSV"]
-    for i, f in enumerate(global_fields, 3):
+    for i, f in enumerate(global_fields, prime_offset):
         seed = seed + primes[i] * (events[f] if f in events.fields else ak.num(events[f[1:]]))
 
     # get first-object integers
@@ -39,7 +59,7 @@ def deterministic_event_seeds(events, create_seed, **kwargs):
         "Tau.jetIdx", "Tau.decayMode", "Muon.jetIdx", "Muon.nStations", "Jet.nConstituents",
         "Jet.nElectrons", "Jet.nMuons",
     ]
-    for i, f in enumerate(object_fields, i + 1):
+    for i, f in enumerate(object_fields, prime_offset + len(global_fields)):
         values = events[Route(f).fields]
         seed = seed + primes[i] * (ak.fill_none(ak.firsts(values, axis=1), -1) + 1)
 
@@ -57,14 +77,17 @@ def deterministic_event_seeds(events, create_seed, **kwargs):
 
 
 @deterministic_event_seeds.setup
-def deterministic_event_seeds_setup(self, task, inputs, call_kwargs, **kwargs):
-    # define the vectorized seed creation function once
-    # strategy:
-    #   1. gather a selection of unambiguous integer features
-    #   2. multiply them with a vector of primes
-    #   3. use the resulting integer as an input to sha256 and hex-digest the result
-    #   4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
-    # the method below performs steps 3 and 4 while 1 and 2 should be done outside
+def deterministic_event_seeds_setup(
+    self,
+    task: law.Task,
+    inputs: dict,
+    call_kwargs: dict,
+    **kwargs,
+) -> None:
+    """
+    Setup function that defines the vectorized seed creation function once and stores it in
+    *call_kwargs*.
+    """
     def create_seed(n: int) -> int:
         return int(hashlib.sha256(bytes(str(n), "utf-8")).hexdigest()[:-16:-1], base=16)
 
@@ -76,13 +99,23 @@ def deterministic_event_seeds_setup(self, task, inputs, call_kwargs, **kwargs):
     uses={deterministic_event_seeds, "nJet"},
     produces={"Jet.deterministic_seed"},
 )
-def deterministic_jet_seeds(events, create_seed, **kwargs):
+def deterministic_jet_seeds(
+    events: ak.Array,
+    create_seed: Callable,
+    **kwargs,
+) -> ak.Array:
+    """
+    Produces deterministic seeds for each jet and stores them in *events* which is also returned.
+    The seeds are based on the event seeds produced by :py:func:`deterministic_event_seeds` whose
+    setup function is used to access the *create_seed* function. The strategy for producing seeds is
+    identical.
+    """
     # create the event seeds if not already present
     if not has_ak_column(events, "deterministic_seed"):
         events = deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
 
     # create the per jet seeds
-    jet_seed = events.deterministic_seed + primes[18] * get_ak_indices(events.Jet)
+    jet_seed = events.deterministic_seed + primes[18] * ak.values_astype(ak.local_index(events.Jet), np.uint64)
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = create_seed(np_jet_seed)
 
@@ -102,7 +135,14 @@ def deterministic_jet_seeds(events, create_seed, **kwargs):
     uses={deterministic_event_seeds, deterministic_jet_seeds},
     produces={deterministic_event_seeds, deterministic_jet_seeds},
 )
-def deterministic_seeds(events, **kwargs):
+def deterministic_seeds(
+    events: ak.Array,
+    **kwargs,
+) -> ak.Array:
+    """
+    Wrapper calibrator that invokes :py:func:`deterministic_event_seeds` and
+    :py:func:`deterministic_jet_seeds`.
+    """
     # create the event seeds
     events = deterministic_event_seeds(events, **kwargs)
 
