@@ -4,8 +4,8 @@
 Column production methods for testing purposes.
 """
 
-from ap.util import maybe_import
 from ap.production import producer
+from ap.util import maybe_import
 
 ak = maybe_import("awkward")
 
