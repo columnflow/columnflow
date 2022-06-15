@@ -4,8 +4,8 @@
 Selection methods for testing purposes.
 """
 
-from ap.util import maybe_import
 from ap.selection import selector, SelectionResult
+from ap.util import maybe_import
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
