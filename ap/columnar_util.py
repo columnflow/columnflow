@@ -719,14 +719,41 @@ class ArrayFunction(object):
         self.uses = set(law.util.make_list(uses)) if uses else set()
         self.produces = set(law.util.make_list(produces)) if produces else set()
 
-    @property
-    def used_columns(self) -> Set[str]:
+    def _get_used_columns(self, _cache: Optional[set] = None) -> Set[str]:
         columns = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
 
         # add those of all other known intances
         for obj in self.uses:
             if isinstance(obj, ArrayFunction):
-                columns |= obj.used_columns
+                if obj not in _cache:
+                    _cache.add(obj)
+                    columns |= obj._get_used_columns(_cache=_cache)
+            else:
+                columns.add(obj)
+
+        return columns
+
+    @property
+    def used_columns(self) -> Set[str]:
+        return self._get_used_columns()
+
+    def _get_produced_columns(self, _cache: Optional[set] = None) -> Set[str]:
+        columns = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
+        # add those of all other known intances
+        for obj in self.produces:
+            if isinstance(obj, ArrayFunction):
+                if obj not in _cache:
+                    _cache.add(obj)
+                    columns |= obj._get_produced_columns(_cache=_cache)
             else:
                 columns.add(obj)
 
@@ -734,16 +761,7 @@ class ArrayFunction(object):
 
     @property
     def produced_columns(self) -> Set[str]:
-        columns = set()
-
-        # add those of all other known intances
-        for obj in self.produces:
-            if isinstance(obj, ArrayFunction):
-                columns |= obj.produced_columns
-            else:
-                columns.add(obj)
-
-        return columns
+        return self._get_produced_columns()
 
     def __repr__(self) -> str:
         """
@@ -860,18 +878,27 @@ class TaskArrayFunction(ArrayFunction):
         self.setup_func = None
         self.call_kwargs = None
 
-    @property
-    def all_shifts(self):
+    def _get_all_shifts(self, _cache: Optional[set] = None) -> Set[str]:
         shifts = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
 
         # add those of all other known intances
         for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, TaskArrayFunction):
-                shifts |= obj.all_shifts
+                if obj not in _cache:
+                    _cache.add(obj)
+                    shifts |= obj._get_all_shifts(_cache=_cache)
             else:
                 shifts.add(obj)
 
         return shifts
+
+    @property
+    def all_shifts(self) -> Set[str]:
+        return self._get_all_shifts()
 
     def update(self, func: Callable[["TaskArrayFunction", Any], None]) -> None:
         """
@@ -896,16 +923,21 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.update_func = func
 
-    def run_update(self, **kwargs) -> None:
+    def run_update(self, _cache: Optional[set] = None, **kwargs) -> None:
         """
         Recursively runs the update function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
         all additional *kwargs*.
         """
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the update of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, TaskArrayFunction):
-                obj.run_update(**kwargs)
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                obj.run_update(_cache=_cache, **kwargs)
 
         # run this instance's update function
         if self.update_func:
@@ -933,7 +965,12 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.requires_func = func
 
-    def run_requires(self, task: law.Task, reqs: Optional[dict] = None) -> dict:
+    def run_requires(
+        self,
+        task: law.Task,
+        reqs: Optional[dict] = None,
+        _cache: Optional[set] = None,
+    ) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
@@ -943,9 +980,14 @@ class TaskArrayFunction(ArrayFunction):
         if reqs is None:
             reqs = {}
 
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the requirements of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, TaskArrayFunction):
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
                 obj.run_requires(task, reqs=reqs)
 
         # run this instance's requires function
@@ -971,7 +1013,13 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.setup_func = func
 
-    def run_setup(self, task: law.Task, inputs: dict, call_kwargs: Optional[dict] = None) -> None:
+    def run_setup(
+        self,
+        task: law.Task,
+        inputs: dict,
+        call_kwargs: Optional[dict] = None,
+        _cache: Optional[set] = None,
+    ) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
@@ -982,16 +1030,21 @@ class TaskArrayFunction(ArrayFunction):
         if call_kwargs is None:
             call_kwargs = {}
 
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the setup of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, TaskArrayFunction):
-                obj.run_setup(task, inputs, call_kwargs=call_kwargs)
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                obj.run_setup(task, inputs, call_kwargs=call_kwargs, _cache=_cache)
 
         # run this instance's setup function
         if self.setup_func:
             self.setup_func(self, task, inputs, call_kwargs)
 
-        # store it
+        # store the call kwargs
         self.call_kwargs = call_kwargs
 
     def __call__(self, *args, **kwargs):
