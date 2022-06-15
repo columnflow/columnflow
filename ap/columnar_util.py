@@ -96,26 +96,29 @@ class Route(object):
        The name of the corresponding column in nano-style underscore format.
     """
 
+    DOT_SEP = "."
+    NANO_SEP = "_"
+
     @classmethod
     def join(cls, fields: Sequence[str]) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
         """
-        return ".".join(fields)
+        return cls.DOT_SEP.join(fields)
 
     @classmethod
     def join_nano(cls, fields: Sequence[str]) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
         """
-        return "_".join(fields)
+        return cls.NANO_SEP.join(fields)
 
     @classmethod
     def split(cls, column: str) -> List[str]:
         """
         Splits a string assumed to be in dot format and returns the string fragments.
         """
-        return column.split(".")
+        return column.split(cls.DOT_SEP)
 
     @classmethod
     def split_nano(cls, column: str) -> List[str]:
@@ -123,7 +126,7 @@ class Route(object):
         Splits a string assumed to be in nano-style underscore format and returns the string
         fragments.
         """
-        return column.split("_")
+        return column.split(cls.NANO_SEP)
 
     @classmethod
     def check(cls, route: Union["Route", Sequence[str], str]):
