@@ -60,10 +60,11 @@ def deterministic_event_seeds(events, create_seed, **kwargs):
 def deterministic_event_seeds_setup(self, task, inputs, call_kwargs, **kwargs):
     # define the vectorized seed creation function once
     # strategy:
-    #   1. Gather a selection of unambiguous integer features.
-    #   2. Multiply them with a vector of primes.
-    #   3. Use the resulting integer as an input to sha256 and hex-digest the result.
-    #   4. Reverse it and int-cast the leading 16 characters, leading to a 64 bit int.
+    #   1. gather a selection of unambiguous integer features
+    #   2. multiply them with a vector of primes
+    #   3. use the resulting integer as an input to sha256 and hex-digest the result
+    #   4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
+    # the method below performs steps 3 and 4 while 1 and 2 should be done outside
     def create_seed(n: int) -> int:
         return int(hashlib.sha256(bytes(str(n), "utf-8")).hexdigest()[:-16:-1], base=16)
 

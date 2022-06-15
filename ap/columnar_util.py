@@ -1028,11 +1028,11 @@ class TaskArrayFunction(ArrayFunction):
 
     def __call__(self, *args, **kwargs):
         """
-        Calls the wrapped function with all *args* and *kwargs*, update with :py:attr:`call_kwargs`
-        when set.
+        Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
+        :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
         """
         if self.call_kwargs:
-            kwargs.update(self.call_kwargs)
+            kwargs = law.util.merge_dicts(self.call_kwargs, kwargs)
 
         return super().__call__(*args, **kwargs)
 
