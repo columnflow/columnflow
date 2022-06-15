@@ -168,7 +168,7 @@ class Route(object):
         return len(self._fields)
 
     def __eq__(self, other: Union["Route", Sequence[str], str]) -> bool:
-        if isinstance(other, self.__class__):
+        if isinstance(other, Route):
             return self.fields == other.fields
         elif isinstance(other, (list, tuple)):
             return self.fields == tuple(other)
@@ -208,12 +208,12 @@ class Route(object):
         a string in dot format to the fields if *this* instance. A *ValueError* is raised when
         *other* could not be interpreted.
         """
-        if isinstance(other, str):
-            self._fields.extend(self.split(other))
+        if isinstance(other, Route):
+            self._fields.extend(other._fields)
         elif isinstance(other, (list, tuple)):
             self._fields.extend(list(other))
-        elif isinstance(other, self.__class__):
-            self._fields.extend(other._fields)
+        elif isinstance(other, str):
+            self._fields.extend(self.split(other))
         else:
             raise ValueError(f"cannot add '{other}' to route '{self}'")
 
@@ -757,7 +757,7 @@ class ArrayFunction(object):
 
         # add those of all other known intances
         for obj in self.uses:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, ArrayFunction):
                 columns |= obj.used_columns
             else:
                 columns.add(obj)
@@ -770,7 +770,7 @@ class ArrayFunction(object):
 
         # add those of all other known intances
         for obj in self.produces:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, ArrayFunction):
                 columns |= obj.produced_columns
             else:
                 columns.add(obj)
@@ -898,7 +898,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # add those of all other known intances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, TaskArrayFunction):
                 shifts |= obj.all_shifts
             else:
                 shifts.add(obj)
@@ -936,7 +936,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # run the update of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, TaskArrayFunction):
                 obj.run_update(**kwargs)
 
         # run this instance's update function
@@ -977,7 +977,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, TaskArrayFunction):
                 obj.run_requires(task, reqs=reqs)
 
         # run this instance's requires function
@@ -1016,7 +1016,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, TaskArrayFunction):
                 obj.run_setup(task, inputs, call_kwargs=call_kwargs)
 
         # run this instance's setup function
