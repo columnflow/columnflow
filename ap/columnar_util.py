@@ -9,7 +9,7 @@ __all__ = [
     "Route", "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
     "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
     "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet",
+    "sorted_ak_to_parquet", "get_ak_indices",
 ]
 
 
@@ -27,6 +27,7 @@ import law
 
 from ap.util import maybe_import
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
@@ -594,6 +595,41 @@ def sorted_ak_to_parquet(
         differently ordered schemas.
     """
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
+
+
+def get_ak_indices(ak_array: ak.Array) -> ak.Array:
+    """
+    Takes an awkward array *ak_array* with 1 or 2 dimensions and returns an index array with same
+    dimensions. A *ValueError* is raised in case the number of dimensions is not supported.
+
+    .. code-block:: python
+
+        a = ak.Array([42, 9, 55])
+        get_ak_indices(a).to_list()  # -> [0, 1, 2]
+
+        a = ak.Array([[42, 9], [55, 1, 2], [3])
+        get_ak_indices(a).to_list()  # -> [[0, 1], [0, 1, 2], [0]]
+    """
+    if ak_array.ndim == 1:
+        # trivial case
+        return ak.Array(np.arange(len(ak_array), dtype=np.uint64))
+
+    elif ak_array.ndim == 2:
+        # start from a range up to the full count of elements, with offsets identical to the input
+        single_range_with_offsets = ak.Array(ak.layout.ListOffsetArray64(
+            ak_array.layout.offsets,
+            ak.layout.NumpyArray(np.arange(ak.sum(ak.num(ak_array, axis=1)), dtype=np.uint64)),
+        ))
+
+        # define broadcastable offsets (removing the last stop)
+        offsets = np.array(ak_array.layout.offsets, dtype=np.uint64)[:-1]
+
+        # obtain indices by subtracting per-range offsets
+        indices = single_range_with_offsets - offsets
+
+        return indices
+
+    raise ValueError(f"only arrays with 1 or 2 dimensions are supported, found {ak_array.ndim}")
 
 
 class ArrayFunction(object):
