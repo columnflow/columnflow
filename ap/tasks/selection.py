@@ -119,19 +119,18 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["res"], local=True)
 
-        # if len(stats) > 0:
-        #     # save stats
-        #     outputs["stat"].dump(stats, formatter="json")
+        # save stats
+        outputs["stat"].dump(stats, formatter="json")
 
-        #     # print some stats
-        #     eff = stats["n_events_selected"] / stats["n_events"]
-        #     eff_weighted = stats["sum_mc_weight_selected"] / stats["sum_mc_weight"]
-        #     self.publish_message(f"all events         : {int(stats['n_events'])}")
-        #     self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
-        #     self.publish_message(f"efficiency         : {eff:.4f}")
-        #     self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
-        #     self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
-        #     self.publish_message(f"efficiency         : {eff_weighted:.4f}")
+        # print some stats
+        eff = stats["n_events_selected"] / stats["n_events"]
+        eff_weighted = stats["sum_mc_weight_selected"] / stats["sum_mc_weight"]
+        self.publish_message(f"all events         : {int(stats['n_events'])}")
+        self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
+        self.publish_message(f"efficiency         : {eff:.4f}")
+        self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
+        self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
+        self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
 SelectEventsWrapper = wrapper_factory(
