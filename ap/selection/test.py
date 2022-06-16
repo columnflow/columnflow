@@ -4,9 +4,12 @@
 Selection methods for testing purposes.
 """
 
+from ast import Call
+from optparse import Option
+from select import select
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -312,7 +315,8 @@ def test(events, stats, config_inst, **kwargs):
 def cleaning_factory(
     selector_name: str,
     to_clean: str,
-    *clean_against: List[str],
+    metric: Callable,
+    clean_against: List[str],
 ) -> Callable:
     """
     factory to generate a function with name *selector_name* that cleans the
@@ -323,11 +327,14 @@ def cleaning_factory(
     Finally, the actual selector function is generated, which uses these
     columns.
     """
+    # default of the metric function is the delta_r function
+    # of the coffea LorentzVectors
+    if metric is None:
+        metric = lambda a, b: a.delta_r(b)
 
     # compile the list of variables that are necessary for the four momenta
     # this list is always the same
     variables_for_lorentzvec = ["pt", "eta", "phi", "e"]
-
 
     # sum up all fields aht are to be considered, i.e. the field *to_clean*
     # and all fields in *clean_against*
@@ -350,7 +357,7 @@ def cleaning_factory(
         events: ak.Array,
         to_clean: str,
         clean_against: List[str],
-        metric: Callable = lambda a, b: a.delta_r(b),
+        metric: Optional[Callable] = metric,
         threshold: float = 0.4,
     ) -> List[int]:
         """
@@ -405,7 +412,12 @@ def cleaning_factory(
     return func
 
 
-deltaR_jet_lepton = cleaning_factory("deltaR_jet_lepton", "Jet", "Muon", "Electron")
+deltaR_jet_lepton = cleaning_factory(
+    selector_name="deltaR_jet_lepton",
+    to_clean="Jet",
+    clean_against=["Muon", "Electron"],
+    metric=lambda a, b: a.delta_r(b),
+)
 
 
 def req_delta_r_match(
