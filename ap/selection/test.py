@@ -326,12 +326,12 @@ def cleaning_factory(
 
     # compile the list of variables that are necessary for the four momenta
     # this list is always the same
-    variables_for_lorentzvec = "pt eta phi e".split()
+    variables_for_lorentzvec = ["pt", "eta", "phi", "e"]
+
 
     # sum up all fields aht are to be considered, i.e. the field *to_clean*
     # and all fields in *clean_against*
-    all_fields = list(clean_against[:])
-    all_fields.append(to_clean)
+    all_fields = clean_against + [to_clean]
 
     # construct the set of columns that is necessary for the four momenta in
     # the different fields (and thus also for the current implementation of
@@ -431,11 +431,7 @@ def jet_lepton_deltaR_selection(events, stats, threshold=0.4):
     the concatination of the fields *[Muon, Electron]*, i.e. all leptons
     and passes the desired threshold for the selection
     """
-    clean_jet_indices = req_delta_r_match(events,
-                                        "Jet",
-                                        ["Muon", "Electron"],
-                                        threshold=threshold,
-    )
+    clean_jet_indices = req_delta_r_match(events, "Jet", ["Muon", "Electron"], threshold=threshold)
 
     return SelectionResult(
         objects={"Jet": clean_jet_indices},
@@ -448,5 +444,6 @@ def jet_lepton_deltaR_cleaning(events, stats, threshold=0.4, **kwargs):
     Selector function that performs cleaning of jets against leptons
     based on a deltaR requirement
     """
-    results = jet_lepton_deltaR_selection(events, stats, threshold)
+    results = jet_lepton_deltaR_selection(events, stats, threshold=threshold)
+
     return results
