@@ -6,7 +6,7 @@ Selection methods for testing purposes.
 
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
-from typing import Callable, List, AnyStr
+from typing import Callable, List
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -310,9 +310,9 @@ def test(events, stats, config_inst, **kwargs):
 
 
 def cleaning_factory(
-    selector_name: AnyStr,
-    to_clean: AnyStr,
-    *clean_against: List[AnyStr],
+    selector_name: str,
+    to_clean: str,
+    *clean_against: List[str],
 ) -> Callable:
     """
     factory to generate a function with name *selector_name* that cleans the
@@ -348,8 +348,8 @@ def cleaning_factory(
     @selector(uses=uses, name=selector_name)
     def func(
         events: ak.Array,
-        to_clean: AnyStr,
-        clean_against: List[AnyStr],
+        to_clean: str,
+        clean_against: List[str],
         metric: Callable = lambda a, b: a.delta_r(b),
         threshold: float = 0.4,
     ) -> List[int]:
@@ -410,8 +410,8 @@ deltaR_jet_lepton = cleaning_factory("deltaR_jet_lepton", "Jet", "Muon", "Electr
 
 def req_delta_r_match(
     events: ak.Array,
-    to_clean: AnyStr,
-    clean_against: List[AnyStr],
+    to_clean: str,
+    clean_against: List[str],
     threshold: float = 0.4,
 ) -> List[int]:
     """
