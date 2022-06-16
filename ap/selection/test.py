@@ -312,7 +312,7 @@ def test(events, stats, config_inst, **kwargs):
 def cleaning_factory(
     selector_name: str,
     to_clean: str,
-    metric: Callable,
+    metric: Optional[Callable] = None,
     clean_against: List[str],
 ) -> Callable:
     """
