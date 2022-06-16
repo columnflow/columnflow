@@ -31,13 +31,13 @@ class CreateHistograms(
         if not self.pilot:
             reqs["events"] = ReduceEvents.req(self)
             if self.producers:
-                reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def requires(self):
         reqs = {"events": ReduceEvents.req(self)}
         if self.producers:
-            reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def output(self):
@@ -68,7 +68,7 @@ class CreateHistograms(
         # iterate over chunks of events and diffs
         files = [inputs["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["columns"]])
+            files.extend([inp.path for inp in inputs["producers"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],

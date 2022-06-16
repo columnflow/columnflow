@@ -26,15 +26,15 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
-            reqs["sel"] = SelectEvents.req(self)
+            reqs["calibrations"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+            reqs["selection"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
-            "sel": SelectEvents.req(self),
+            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "selection": SelectEvents.req(self),
         }
 
     def output(self):
@@ -77,10 +77,10 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
         # iterate over chunks of events and diffs
         input_paths = [nano_file]
-        input_paths.append(inputs["sel"]["res"].path)
-        input_paths.extend([inp.path for inp in inputs["calib"]])
+        input_paths.append(inputs["selection"]["results"].path)
+        input_paths.extend([inp.path for inp in inputs["calibrations"]])
         if self.selector_func.produced_columns:
-            input_paths.append(inputs["sel"]["cols"].path)
+            input_paths.append(inputs["selection"]["columns"].path)
         with ChunkedReader(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],

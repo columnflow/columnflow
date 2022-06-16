@@ -37,7 +37,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
     def requires(self):
         reqs = {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
         }
 
         # add selector dependent requirements
@@ -47,13 +47,13 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     def output(self):
         outputs = {
-            "res": self.local_target(f"results_{self.branch}.parquet"),
-            "stat": self.local_target(f"stats_{self.branch}.json"),
+            "results": self.local_target(f"results_{self.branch}.parquet"),
+            "stats": self.local_target(f"stats_{self.branch}.json"),
         }
 
         # add additional columns in case the selector produces some
         if self.selector_func.produced_columns:
-            outputs["cols"] = self.local_target(f"columns_{self.branch}.parquet")
+            outputs["columns"] = self.local_target(f"columns_{self.branch}.parquet")
 
         return outputs
 
@@ -100,9 +100,9 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks of events and diffs
-        n_calib = len(inputs["calib"])
+        n_calib = len(inputs["calibrations"])
         with ChunkedReader(
-            [nano_file] + [inp.path for inp in inputs["calib"]],
+            [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ) as reader:
@@ -154,15 +154,15 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["res"], local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
 
         # merge the column files
         if keep_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["cols"], local=True)
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
 
         # save stats
-        outputs["stat"].dump(stats, formatter="json")
+        outputs["stats"].dump(stats, formatter="json")
 
         # print some stats
         save_div = lambda x, y: (x / y) if y else 0.0
@@ -207,7 +207,7 @@ class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.Fores
         # merge input stats
         merged_stats = defaultdict(float)
         for inp in inputs:
-            stats = inp["stat"].load(formatter="json")
+            stats = inp["stats"].load(formatter="json")
             self.merge_counts(merged_stats, stats)
 
         # write the output
