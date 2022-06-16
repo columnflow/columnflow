@@ -312,8 +312,8 @@ def test(events, stats, config_inst, **kwargs):
 def cleaning_factory(
     selector_name: str,
     to_clean: str,
-    metric: Optional[Callable] = None,
     clean_against: List[str],
+    metric: Optional[Callable] = None,
 ) -> Callable:
     """
     factory to generate a function with name *selector_name* that cleans the
