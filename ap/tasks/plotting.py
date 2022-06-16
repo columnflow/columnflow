@@ -8,14 +8,19 @@ from itertools import product
 
 import law
 
-from ap.tasks.framework import ConfigTask, HTCondorWorkflow
-from ap.tasks.selection import SelectorMixin
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin, PlotMixin
+from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.util import ensure_proxy
 from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
 
 
-class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class Plotting(
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    PlotMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -33,15 +38,14 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         description="comma-separated category names to create plots for; default: ('incl',)",
     )
     # how to handle the logy defaults given by config?
-    '''
+    """
     logy = luigi.BoolParameter(
         default=False,
         description="Whether to plot the y scale logarithmically or not"
     )
-    '''
+    """
 
     def store_parts(self):
-        # print("Hello from store_parts")
         parts = super(Plotting, self).store_parts()
         # add process names after config name
         procs = ""
@@ -55,7 +59,6 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         return parts
 
     def create_branch_map(self):
-        # print('Hello from create_branch_map')
         if not self.variables:
             self.variables = self.config_inst.variables.names()
 
@@ -76,7 +79,6 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         }
 
     def requires(self):
-        # print('Hello from requires')
         c = self.config_inst
         # determine which datasets to require
         if not self.processes:
@@ -88,19 +90,20 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
         }
 
     def output(self):
-        # print('Hello from output')
         return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
 
-    @law.decorator.safe_output
-    @ensure_proxy
+    @PlotMixin.view_output_plots
     def run(self):
+        import numpy as np
+        import hist
+        import matplotlib.pyplot as plt
+        import mplhep
+
+        plt.style.use(mplhep.style.CMS)
+
         with self.publish_step(
-                f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}"):
-            import numpy as np
-            import hist
-            import matplotlib.pyplot as plt
-            import mplhep
-            plt.style.use(mplhep.style.CMS)
+            f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}",
+        ):
 
             inputs = self.input()
             c = self.config_inst
@@ -109,7 +112,7 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
             h_total = None
             colors = []
             label = []
-            category = self.branch_data['category']
+            category = self.branch_data["category"]
 
             with self.publish_step("Adding histograms together ..."):
                 for p in self.processes:
@@ -117,8 +120,8 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
                     h_proc = None
                     for d in getDatasetNamesFromProcess(c, p):
                         # print("----- dataset:", d)
-                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data['variable']]
-
+                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data["variable"]]
+                        # Note: this assumes that the category axis only contains leaf_cats
                         if category == "incl":
                             leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                         elif c.get_category(category).is_leaf_category:
@@ -126,9 +129,15 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
                         else:
                             leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
 
-                        h_in = h_in[{"category": leaf_cats}]
+                        # to access the correct bins in the IntCat axis, we need
+                        # the position of the bins, not the id itself
+                        leaf_to_pos = [hist.loc(i) for i in leaf_cats]
+
+                        h_in = h_in[{"category": leaf_to_pos}]
                         h_in = h_in[{"category": sum}]
-                        h_in = h_in[{"shift": "nominal"}]
+                        if len(h_in.axes["shift"]) != 1:
+                            raise ValueError("In Plotting: shift axis is supposed to only contain 1 bin")
+                        h_in = h_in[{"shift": sum}]
                         print("dataset {}: {}".format(d, h_in[::sum]))
 
                         if h_proc is None:
@@ -160,7 +169,7 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
                     color=colors,
                 )
                 ax.stairs(
-                    edges=h_total.axes[self.branch_data['variable']].edges,
+                    edges=h_total.axes[self.branch_data["variable"]].edges,
                     baseline=h_total.view().value - np.sqrt(h_total.view().variance),
                     values=h_total.view().value + np.sqrt(h_total.view().variance),
                     hatch="///",
@@ -214,7 +223,13 @@ class Plotting(ConfigTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
+class PlotShifts(
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    PlotMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
     # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
@@ -264,10 +279,12 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                     self.branch_data["variable"] + "_" + self.branch_data["shift_source"] + ".pdf")
         return self.local_target(filename)
 
+    @PlotMixin.view_output_plots
     def run(self):
         with self.publish_step("Hello from PlotShiftograms"):
             import matplotlib.pyplot as plt
             import mplhep
+            import hist
             plt.style.use(mplhep.style.CMS)
 
             c = self.config_inst
@@ -276,8 +293,8 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
             h_proc = None
             for d in getDatasetNamesFromProcess(c, self.branch_data["process"]):
                 h_in = self.input()[d].load(formatter="pickle")[self.branch_data["variable"]]
-                # categorization
-                # for now, only leaf categories are considered
+
+                # Note: this assumes that the category axis only contains leaf_cats
                 if category == "incl":
                     leaf_cats = [cat.id for cat in c.get_leaf_categories()]
                 elif c.get_category(category).is_leaf_category:
@@ -285,9 +302,10 @@ class PlotShifts(ConfigTask, law.LocalWorkflow, HTCondorWorkflow):
                 else:
                     leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
 
-                # Note: this only works because the category axis is sorted and does not skip an integer
-                # h_in[{"category": [0,5]}] gives the categories that are at the position 0 and 5
-                h_in = h_in[{"category": leaf_cats}]
+                # to access the correct bins in the IntCat axis, we need the position of the bins, not the id itself
+                leaf_to_pos = [hist.loc(i) for i in leaf_cats]
+
+                h_in = h_in[{"category": leaf_to_pos}]
                 h_in = h_in[{"category": sum}]
 
                 if h_proc is None:

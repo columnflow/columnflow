@@ -16,43 +16,12 @@ import six
 
 class BaseTask(law.Task):
 
-    version = luigi.Parameter(description="mandatory version that is encoded into output paths")
-
     task_namespace = os.getenv("AP_TASK_NAMESPACE")
-
-    @classmethod
-    def modify_param_values(cls, params):
-        """
-        Hook to modify command line arguments before instances of this class are created.
-        """
-        return params
-
-    @classmethod
-    def req_params(cls, inst, **kwargs):
-        """
-        Returns parameters that are jointly defined in this class and another task instance of some
-        other class. The parameters are used when calling ``Task.req(self)``.
-        """
-        # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
-        _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
-        _prefer_cli.add("version")
-        kwargs["_prefer_cli"] = _prefer_cli
-
-        # default to the version of the requested task class in the version map accessible through
-        # the task instance
-        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
-            version_map = cls.get_version_map(inst)
-            if version_map is not NotImplemented and cls.__name__ in version_map:
-                kwargs["version"] = version_map[cls.__name__]
-
-        return super().req_params(inst, **kwargs)
-
-    @classmethod
-    def get_version_map(cls, task):
-        return NotImplemented
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
+
+    version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
     allow_empty_sandbox = True
     sandbox = None
@@ -71,12 +40,82 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if analysis == "analysis_st":
             from ap.config.analysis_st import analysis_st
             return analysis_st
-        else:
-            raise ValueError(f"unknown analysis {analysis}")
+
+        raise ValueError(f"unknown analysis {analysis}")
+
+    @classmethod
+    def req_params(cls, inst, **kwargs):
+        """
+        Returns parameters that are jointly defined in this class and another task instance of some
+        other class. The parameters are used when calling ``Task.req(self)``.
+        """
+        # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
+        _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
+        _prefer_cli.add("version")
+        kwargs["_prefer_cli"] = _prefer_cli
+
+        # when cls accepts a version, but non was actively requested, use the version map to assign it
+        version_map = None
+        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+            version_map = cls.get_version_map(inst)
+
+        # build the params
+        params = super().req_params(inst, **kwargs)
+
+        # when the version map is set, lookup the key with which to find a version in the map and overwrite it
+        if version_map and cls.task_family in version_map:
+            version_params = list(cls.get_version_params())
+            version = version_map[cls.task_family]
+            while isinstance(version, dict) and version_params:
+                param = version_params.pop(0)
+                if param not in params:
+                    break
+                value = params[param]
+                if value not in version:
+                    if None not in version:
+                        break
+                    value = None
+                version = version[value]
+            params["version"] = version
+
+        return params
 
     @classmethod
     def get_version_map(cls, task):
         return task.analysis_inst.get_aux("versions", {})
+
+    @classmethod
+    def get_version_params(cls):
+        return ()
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        # implemented only for simplified mro control
+        return set()
+
+    @classmethod
+    def get_array_function_kwargs(cls, inst=None, **params):
+        kwargs = {}
+        if inst:
+            kwargs["analysis_inst"] = inst.analysis_inst
+        else:
+            kwargs["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
+        return kwargs
+
+    @classmethod
+    def get_calibrator_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def get_selector_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def get_producer_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -96,7 +135,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         parts["analysis"] = self.analysis_inst.name
 
         # in this base class, just add the task class name
-        parts["task_class"] = self.task_family
+        parts["task_family"] = self.task_family
 
         # add the version when set
         if self.version is not None:
@@ -178,6 +217,15 @@ class ConfigTask(AnalysisTask):
 
         return super().get_version_map(task)
 
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            kwargs["config_inst"] = task.config_inst
+        elif "config" in params and "analysis_inst" in kwargs:
+            kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
+        return kwargs
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -188,7 +236,7 @@ class ConfigTask(AnalysisTask):
         parts = super().store_parts()
 
         # add the config name
-        parts.insert_after("task_class", "config", self.config_inst.name)
+        parts.insert_after("task_family", "config", self.config_inst.name)
 
         return parts
 
@@ -212,6 +260,13 @@ class ShiftTask(ConfigTask):
     exclude_params_sandbox = {"effective_shift"}
 
     allow_empty_shift = False
+
+    @classmethod
+    def get_version_params(cls):
+        params = super().get_version_params()
+        if cls.shift:
+            params += ("shift",)
+        return params
 
     @classmethod
     def modify_param_values(cls, params):
@@ -264,7 +319,29 @@ class ShiftTask(ConfigTask):
     @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
         # for the basic shift task, only the shifts implemented by this task class are allowed
-        return set(cls.shifts)
+        # still call super for simplified mro control
+        shifts = super().determine_allowed_shifts(config_inst, params)
+
+        # add class level shifts, resolving those of other classes as well
+        for shift in cls.shifts:
+            if isinstance(shift, str):
+                shifts.add(shift)
+            else:
+                # assume shift to be a task class defining shifts on its own
+                shifts |= shift.determine_allowed_shifts(config_inst, params)
+
+        return shifts
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            if task.shift_inst:
+                kwargs["shift_inst"] = task.shift_inst
+        elif "effective_shift" in params and "config_inst" in kwargs:
+            if params["effective_shift"] != law.NO_STR:
+                kwargs["shift_inst"] = kwargs["config_inst"].get_shift(params["effective_shift"])
+        return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -294,6 +371,15 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
+    def get_version_params(cls):
+        params = super().get_version_params()
+        if cls.shift:
+            params = params[:-1] + ("dataset", "shift")
+        else:
+            params += ("dataset",)
+        return params
+
+    @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
         # dataset can have shifts, so extend the set of allowed shifts
         allowed_shifts = super().determine_allowed_shifts(config_inst, params)
@@ -306,6 +392,15 @@ class DatasetTask(ShiftTask):
                 allowed_shifts |= set(dataset_inst.info.keys())
 
         return allowed_shifts
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            kwargs["dataset_inst"] = task.dataset_inst
+        elif "dataset" in params and "config_inst" in kwargs:
+            kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])
+        return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

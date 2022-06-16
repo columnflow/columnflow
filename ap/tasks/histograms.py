@@ -6,28 +6,39 @@ Task to produce and merge histograms.
 
 import law
 
-from ap.tasks.framework import DatasetTask, HTCondorWorkflow
-from ap.tasks.selection import SelectorMixin
+from ap.tasks.framework.base import DatasetTask
+from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin
+from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import ReduceEvents
+from ap.tasks.production import ProduceColumns
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = ReduceEvents.shifts
+    shifts = {ReduceEvents}
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
         if not self.pilot:
             reqs["events"] = ReduceEvents.req(self)
+            if self.producers:
+                reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def requires(self):
-        return {
-            "events": ReduceEvents.req(self),
-        }
+        reqs = {"events": ReduceEvents.req(self)}
+        if self.producers:
+            reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        return reqs
 
     def output(self):
         return self.local_target(f"histograms_{self.branch}.pickle")
@@ -37,7 +48,7 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
     @ensure_proxy
     def run(self):
         import hist
-        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns
+        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns, update_ak_array
         from ap.selection import Selector
 
         # prepare inputs and outputs
@@ -52,27 +63,35 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
 
         # define nano columns that need to be loaded
         variables = Selector.get("variables")
-        load_columns = set(mandatory_coffea_columns) | variables.used_columns
+        load_columns = set(mandatory_coffea_columns) | variables.used_columns  # noqa
 
         # iterate over chunks of events and diffs
+        files = [inputs["events"].path]
+        if self.producers:
+            files.extend([inp.path for inp in inputs["columns"]])
         with ChunkedReader(
-            inputs["events"].path,
-            source_type="awkward_parquet",
-            read_options={"iteritems_options": {"filter_name": load_columns}},
+            files,
+            source_type=len(files) * ["awkward_parquet"],
+            # TODO: not working yet since parquet columns are nested
+            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # add additional columns
+                events = update_ak_array(events, *columns)
+
+                # calculate variables
+                results = variables(events)
+
                 # weights
                 lumi = self.config_inst.x.luminosity.get("nominal")
                 sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
                 weight = sampleweight * events.LHEWeight.originalXWGTUP
 
-                results = variables(events)
-
                 # get all viable category ids (only leaf categories)
-                # cat_ids = []
-                # for cat in self.config_inst.get_leaf_categories():
-                #    cat_ids.append(cat.id)
+                cat_ids = []
+                for cat in self.config_inst.get_leaf_categories():
+                    cat_ids.append(cat.id)
 
                 # define & fill histograms
                 var_names = self.config_inst.variables.names()
@@ -82,9 +101,7 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
                             var = self.config_inst.variables.get(var_name)
                             h_var = (
                                 hist.Hist.new
-                                # .IntCat(cat_ids, name="category")  # , growth=True)
-                                # quick fix to access categories correct in plot task
-                                .IntCat(range(0, 10), name="category")
+                                .IntCat(cat_ids, name="category")
                                 .StrCategory([], name="shift", growth=True)
                                 .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
                                 .Weight()
@@ -107,20 +124,20 @@ class CreateHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWo
         self.output().dump(histograms, formatter="pickle")
 
 
-class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.tasks.ForestMerge,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CreateHistograms.shifts
+    shifts = {CreateHistograms}
 
     # in each step, merge 10 into 1
     merge_factor = 10
-
-    @classmethod
-    def modify_param_values(cls, params):
-        params = cls._call_super_cls_method(DatasetTask.modify_param_values, params)
-        params = cls._call_super_cls_method(law.tasks.ForestMerge.modify_param_values, params)
-        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
@@ -153,7 +170,13 @@ class MergeHistograms(DatasetTask, SelectorMixin, law.tasks.ForestMerge, HTCondo
             output.dump(merged, formatter="pickle")
 
 
-class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class MergeShiftedHistograms(
+    DatasetTask,
+    ProducersMixin,
+    CalibratorsSelectorMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -165,6 +188,7 @@ class MergeShiftedHistograms(DatasetTask, SelectorMixin, law.LocalWorkflow, HTCo
 
     # disable the shift parameter
     shift = None
+    # effective_shift = None  # TODO: debug why this is needed
     allow_empty_shift = True
 
     def workflow_requires(self):

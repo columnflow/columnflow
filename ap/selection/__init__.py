@@ -9,85 +9,21 @@ from typing import Optional, Union, Callable
 import law
 
 from ap.util import maybe_import, DotDict
-from ap.columnar_util import ArrayFunction
+from ap.columnar_util import TaskArrayFunction
 
 ak = maybe_import("awkward")
 
 
-_selector_doc = """
-    Wrapper class for functions performing object and event calibration on (most likely) coffea nano
-    event arrays. The main purpose of wrappers is to store information about required columns next
-    to the implementation. In addition, they have a unique name which allows for using it in a
-    config file.
+class Selector(TaskArrayFunction):
 
-    The use of the :py:func:`selector` decorator function is recommended to create selector
-    instances. Example:
+    # dedicated instance cache
+    _instances = {}
 
-    .. code-block:: python
 
-        @selector(uses={"nJet", "Jet_pt"})
-        def my_jet_selection(events):
-            jet_mask = events.Jet.pt > 30
-            jet_sel = ak.sum(jet_mask, axis=1) >= 4
-
-            return SelectionResult(steps={"jet": jet_sel}, objects={"jet": jet_mask})
-
-    This will register and return an instance named "my_jet_selection" that *uses* the "nJet" and
-    "Jet_pt" columns of the array structure.
-
-    The name defaults to the name of the function itself and can be altered by passing a custom
-    *name*. It is used internally to store the instance in a cache from which it can be retrieved
-    through the :py:meth:`get` class method.
-
-    Knowledge of the columns to load is especially useful when opening files and selecting the
-    content to deserialize. *uses* accepts not only strings but also previously registered instances
-    to denote in inner dependence. Column names should always be given in the flat nano nomenclature
-    (using underscores). The :py:attr:`used_columns` property will resolve this information and
-    return a set of column names. Example:
-
-    .. code-block:: python
-
-        @selector(uses={my_jet_selection})
-        def my_event_selection(events):
-            result = my_jet_selection(events)
-            return result
-
-        print(my_event_selection.used_columns)
-        # -> {"nJet", "Jet_pt"}
-
-    .. py:attribute:: func
-       type: callable
-
-       The wrapped function.
-
-    .. py:attribute:: name
-       type: str
-
-       The name of the selector in the instance cache.
-
-    .. py:attribute:: uses
-       type: set
-
-       The set of column names or other selector instances to recursively resolve the names of
-       required columns.
-
-    .. py::attribute:: used_columns
-       type: set
-       read-only
-
-       The resolved, flat set of used column names.
+def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
     """
-
-
-Selector = ArrayFunction.create_subclass("Selector", {"__doc__": _selector_doc})
-
-
-def selector(
-    func: Optional[Callable] = None,
-    **kwargs,
-) -> Union[Selector, Callable]:
-    """
-    Decorator for registering new selector functions. See :py:class:`Selector` for documentation.
+    Decorator for registering new selector functions. All *kwargs* are forwarded to the
+    :py:class:`Selector` constructor.
     """
     def decorator(func):
         return Selector.new(func, **kwargs)
@@ -99,7 +35,7 @@ class SelectionResult(object):
     """
     Lightweight class that wraps selection decisions (e.g. masks and new columns) and provides
     convenience methods to merge them or to dump them into an awkward array. The resulting structure
-    looks like the example following:
+    looks like the following example:
 
     .. code-block:: python
 

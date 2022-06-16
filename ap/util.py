@@ -5,7 +5,7 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
-    "env_is_remote", "env_is_dev",
+    "env_is_remote", "env_is_dev", "primes",
     "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
@@ -31,6 +31,15 @@ env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
 
 #: Boolean denoting whether the environment is used for development (based on ``AP_DEV``).
 env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("AP_DEV", "0"))
+
+#: List of the first 100 primes.
+primes = [
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
+    101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193,
+    197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
+    311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
+    431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541,
+]
 
 
 class DotDict(dict):
@@ -67,6 +76,15 @@ class DotDict(dict):
     def copy(self):
         """"""
         return self.__class__(self)
+
+    @classmethod
+    def wrap(cls, d: dict) -> "DotDict":
+        """
+        Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
+        with :py:class:`DitDict`'s for deep attribute-style access.
+        """
+        wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
+        return wrap(d)
 
 
 class MockModule(object):

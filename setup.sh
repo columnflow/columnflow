@@ -61,13 +61,13 @@ setup() {
     #
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh"
+    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
     if [ -f "$AP_LCG_SETUP" ]; then
         source "$AP_LCG_SETUP" ""
     elif [ "$AP_CI_JOB" = "1" ]; then
-        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing in CI env, skipping"
+        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing in CI env, skipping"
     else
-        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing"
+        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing"
         return "1"
     fi
 
@@ -103,24 +103,22 @@ setup() {
         python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
         ap_make_venv_relocateable ap_prod
 
-        # setup the local dev env when not running the ci
-        if [ "$AP_CI_JOB" != "1" ]; then
-            ap_create_venv ap_dev || return "$?"
-            source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
-            python3 -m pip install -U pip
-            python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-            python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
-            if [ -f "$AP_BASE/requirements_user.txt" ]; then
-                python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
-            fi
-            ap_make_venv_relocateable ap_dev
+        # setup the dev env
+        ap_create_venv ap_dev || return "$?"
+        source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
+        python3 -m pip install -U pip
+        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
+        python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
+        if [ -f "$AP_BASE/requirements_user.txt" ]; then
+            python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
         fi
+        ap_make_venv_relocateable ap_dev
 
-        date "timestamp +%s" > "$flag_file_sw"
+        echo "timestamp $( date "+%s" )" > "$flag_file_sw"
         echo "version prod $sw_version_prod" >> "$flag_file_sw"
         echo "version dev $sw_version_dev" >> "$flag_file_sw"
     else
-        if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
+        if [ "$AP_REMOTE_JOB" = "1" ]; then
             source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
             export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_prod"
         else
