@@ -118,8 +118,17 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 # add aliases
                 events = add_ak_aliases(events, aliases)
 
-                # invoke the selection function
-                results, events = self.selector_func(events, stats, **self.get_selector_kwargs(self))
+                # invoke the selection function and parse the result which can be a single
+                # SelectionResult or a 2-tuple (SelectionResult, events)
+                obj = self.selector_func(events, stats, **self.get_selector_kwargs(self))
+                if not isinstance(obj, tuple):
+                    results = obj
+                elif len(obj) == 2:
+                    results, events = obj
+                else:
+                    raise ValueError(
+                        f"cannot interpret return value '{obj}' of selector {self.selector}",
+                    )
 
                 # save results as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")

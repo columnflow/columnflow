@@ -58,8 +58,8 @@ class SelectionResult(object):
             },
         }
 
-    The fields can be configured through the *main*, *steps*, *objects* and *columns* keyword
-    arguments. The following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
+    following example creates the structure above.
 
     .. code-block:: python
 
@@ -67,7 +67,6 @@ class SelectionResult(object):
             main={...},
             steps={"jet": array, "muon": array, ...}
             objects={"jet": array, "muon": array, ...}
-            columns={"my_new_column_a": array, "my_new_column_b": array, ...}
         )
         res.to_ak()
     """
