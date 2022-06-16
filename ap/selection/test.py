@@ -9,7 +9,7 @@ from optparse import Option
 from select import select
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -412,15 +412,15 @@ def cleaning_factory(
     return func
 
 
-deltaR_jet_lepton = cleaning_factory(
-    selector_name="deltaR_jet_lepton",
+delta_r_jet_lepton = cleaning_factory(
+    selector_name="delta_r_jet_lepton",
     to_clean="Jet",
     clean_against=["Muon", "Electron"],
     metric=lambda a, b: a.delta_r(b),
 )
 
 
-def req_delta_r_match(
+def req_clean_delta_r_match_jet_lepton(
     events: ak.Array,
     to_clean: str,
     clean_against: List[str],
@@ -431,11 +431,15 @@ def req_delta_r_match(
     returns indices of good (clean) jets, sorted by pt
     *TODO*: this should probably changed to return the boolean masks
     """
-    return deltaR_jet_lepton(events, to_clean, clean_against, threshold=threshold)
+    return delta_r_jet_lepton(events, to_clean, clean_against, threshold=threshold)
 
 
-@selector(uses={deltaR_jet_lepton})
-def jet_lepton_deltaR_selection(events, stats, threshold=0.4):
+@selector(uses={delta_r_jet_lepton})
+def jet_lepton_delta_r_cleaning_selection(
+    events: ak.Array,
+    stats: Dict,
+    threshold: float = 0.4,
+) -> SelectionResult:
     """
     function to apply the selection requirements necessary for a
     cleaning of jets against leptons.
@@ -443,19 +447,24 @@ def jet_lepton_deltaR_selection(events, stats, threshold=0.4):
     the concatination of the fields *[Muon, Electron]*, i.e. all leptons
     and passes the desired threshold for the selection
     """
-    clean_jet_indices = req_delta_r_match(events, "Jet", ["Muon", "Electron"], threshold=threshold)
+    clean_jet_indices = req_clean_delta_r_match_jet_lepton(events, "Jet", ["Muon", "Electron"], threshold=threshold)
 
     return SelectionResult(
         objects={"Jet": clean_jet_indices},
     )
 
 
-@selector(uses={jet_lepton_deltaR_selection})
-def jet_lepton_deltaR_cleaning(events, stats, threshold=0.4, **kwargs):
+@selector(uses={jet_lepton_delta_r_cleaning_selection})
+def jet_lepton_delta_r_cleaning(
+    events: ak.Array,
+    stats: Dict,
+    threshold: float = 0.4,
+    **kwargs: Dict,
+) -> SelectionResult:
     """
     Selector function that performs cleaning of jets against leptons
-    based on a deltaR requirement
+    based on a delta_r requirement
     """
-    results = jet_lepton_deltaR_selection(events, stats, threshold=threshold)
+    results = jet_lepton_delta_r_cleaning_selection(events, stats, threshold=threshold)
 
     return results
