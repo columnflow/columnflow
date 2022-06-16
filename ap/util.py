@@ -50,20 +50,25 @@ class DotDict(dict):
 
     .. code-block:: python
 
-       d = DotDict()
-       d["foo"] = 1
+        d = DotDict()
+        d["foo"] = 1
 
-       print(d["foo"])
-       # => 1
+        print(d["foo"])
+        # => 1
 
-       print(d.foo)
-       # => 1
+        print(d.foo)
+        # => 1
 
-       print(d["bar"])
-       # => KeyError
+        print(d["bar"])
+        # => KeyError
 
-       print(d.bar)
-       # => AttributeError
+        print(d.bar)
+        # => AttributeError
+
+        # use wrap() to convert a nested dict
+        d = DotDict({"foo": {"bar": 1}})
+        print(d.foo.bar)
+        # => 1
     """
 
     def __getattr__(self, attr):
@@ -81,7 +86,7 @@ class DotDict(dict):
     def wrap(cls, d: dict) -> "DotDict":
         """
         Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
-        with :py:class:`DitDict`'s for deep attribute-style access.
+        with :py:class:`DotDict`'s for deep attribute-style access.
         """
         wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
         return wrap(d)

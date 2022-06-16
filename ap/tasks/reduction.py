@@ -26,15 +26,15 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
-            reqs["sel"] = SelectEvents.req(self)
+            reqs["calibrations"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+            reqs["selection"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
-            "sel": SelectEvents.req(self),
+            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "selection": SelectEvents.req(self),
         }
 
     def output(self):
@@ -76,30 +76,38 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks of events and diffs
+        input_paths = [nano_file]
+        input_paths.append(inputs["selection"]["results"].path)
+        input_paths.extend([inp.path for inp in inputs["calibrations"]])
+        if self.selector_func.produced_columns:
+            input_paths.append(inputs["selection"]["columns"].path)
         with ChunkedReader(
-            [nano_file] + [inp.path for inp in inputs["calib"]] + [inputs["sel"]["res"].path],
-            source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}, None, None],
+            input_paths,
+            source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, *diffs, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would simply apply the mask from the selection results
                 # to filter events and objects
 
-                # add the calibrated diffs and new columns from selection results
-                events = update_ak_array(events, *(diffs + [sel.columns]))
+                # add the calibrated diffs and potentially new columns
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
                 events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # apply the event mask
-                events = events[sel.event]
+                event_mask = sel.event if "event" in sel.fields else Ellipsis
+                events = events[event_mask]
 
                 # apply all object masks whose names are present
+                # TODO: this should not be done automagically based on names as there might be
+                #       multiple collections of the same object type
                 for name in sel.objects.fields:
                     if name in events.fields:
                         # apply the event mask to the object mask first
-                        object_mask = sel.objects[name][sel.event]
+                        object_mask = sel.objects[name][event_mask]
                         events[name] = events[name][object_mask]
 
                 # manually remove colums that should not be kept

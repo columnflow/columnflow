@@ -33,9 +33,9 @@ def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Calla
 
 class SelectionResult(object):
     """
-    Lightweight class that wraps selection decisions (e.g. masks and new columns) and provides
-    convenience methods to merge them or to dump them into an awkward array. The resulting structure
-    looks like the following example:
+    Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
+    provides convenience methods to merge them or to dump them into an awkward array. The resulting
+    structure looks like the following example:
 
     .. code-block:: python
 
@@ -56,17 +56,10 @@ class SelectionResult(object):
                 "muon": array,
                 ...
             },
-
-            "columns": {
-                # any structure of new columns to be added
-                "my_new_column_a": array,
-                "my_new_column_b": array,
-                ...
-            }
         }
 
-    The fields can be configured through the *main*, *steps*, *objects* and *columns* keyword
-    arguments. The following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
+    following example creates the structure above.
 
     .. code-block:: python
 
@@ -74,7 +67,6 @@ class SelectionResult(object):
             main={...},
             steps={"jet": array, "muon": array, ...}
             objects={"jet": array, "muon": array, ...}
-            columns={"my_new_column_a": array, "my_new_column_b": array, ...}
         )
         res.to_ak()
     """
@@ -84,20 +76,24 @@ class SelectionResult(object):
         main: Optional[Union[DotDict, dict]] = None,
         steps: Optional[Union[DotDict, dict]] = None,
         objects: Optional[Union[DotDict, dict]] = None,
-        columns: Optional[Union[DotDict, dict]] = None,
     ):
         super().__init__()
 
         # store fields
-        self.main = DotDict(main or {})
-        self.steps = DotDict(steps or {})
-        self.objects = DotDict(objects or {})
-        self.columns = DotDict(columns or {})
+        self.main = DotDict.wrap(main or {})
+        self.steps = DotDict.wrap(steps or {})
+        self.objects = DotDict.wrap(objects or {})
 
-    def __iadd__(self, other: "SelectionResult") -> "SelectionResult":
+    def __iadd__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """
-        Adds the field of a *other* instance in-place.
+        Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
+        unchanged.
         """
+        # do nothing if the other instance is none
+        if other is None:
+            return self
+
+        # type check
         if not isinstance(other, SelectionResult):
             raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
 
@@ -105,18 +101,24 @@ class SelectionResult(object):
         self.main.update(other.main)
         self.steps.update(other.steps)
         self.objects.update(other.objects)
-        self.columns.update(other.columns)
 
         return self
 
-    def __add__(self, other: "SelectionResult") -> "SelectionResult":
+    def __add__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """
-        Returns a new instance with all fields of *this* and an *other* instance merged.
+        Returns a new instance with all fields of *this* and an *other* instance merged. When
+        *None*, a copy of *this* instance is returned.
         """
         inst = self.__class__()
 
+        # add this instance
         inst += self
-        inst += other
+
+        # add the other instance if not none
+        if other is not None:
+            if not isinstance(other, SelectionResult):
+                raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
+            inst += other
 
         return inst
 
@@ -129,15 +131,8 @@ class SelectionResult(object):
             to_merge["steps"] = ak.zip(self.steps)
         if self.objects:
             to_merge["objects"] = ak.zip(self.objects, depth_limit=1)  # limit due to ragged axis 1
-        if self.columns:
-            to_merge["columns"] = ak.zip(self.columns)
 
-        ak_array = ak.zip(law.util.merge_dicts(
-            self.main,
-            to_merge,
-            deep=True,
-        ))
-        return ak_array
+        return ak.zip(law.util.merge_dicts(self.main, to_merge))
 
 
 # import all selection modules

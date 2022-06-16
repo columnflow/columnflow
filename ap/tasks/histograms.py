@@ -31,13 +31,13 @@ class CreateHistograms(
         if not self.pilot:
             reqs["events"] = ReduceEvents.req(self)
             if self.producers:
-                reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def requires(self):
         reqs = {"events": ReduceEvents.req(self)}
         if self.producers:
-            reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
     def output(self):
@@ -68,7 +68,7 @@ class CreateHistograms(
         # iterate over chunks of events and diffs
         files = [inputs["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["columns"]])
+            files.extend([inp.path for inp in inputs["producers"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -81,7 +81,9 @@ class CreateHistograms(
                 events = update_ak_array(events, *columns)
 
                 # calculate variables
-                results = variables(events)
+                # TODO: the variables callable is currently a selection function and should be a
+                #       producer soon
+                variables(events)
 
                 # weights
                 lumi = self.config_inst.x.luminosity.get("nominal")
@@ -109,11 +111,9 @@ class CreateHistograms(
                             fill_kwargs = {
                                 "category": events.cat_array,
                                 "shift": self.shift,
-                                var_name: results.columns[var_name],
+                                var_name: events[var_name],
                                 "weight": weight,
                             }
-                            print(results.columns[var_name])
-                            print(self.shift)
                             h_var.fill(**fill_kwargs)
                             if var_name in histograms:
                                 histograms[var_name] += h_var
