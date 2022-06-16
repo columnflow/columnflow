@@ -4,9 +4,6 @@
 Selection methods for testing purposes.
 """
 
-from ast import Call
-from optparse import Option
-from select import select
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
 from typing import Callable, Dict, List, Optional
