@@ -50,20 +50,25 @@ class DotDict(dict):
 
     .. code-block:: python
 
-       d = DotDict()
-       d["foo"] = 1
+        d = DotDict()
+        d["foo"] = 1
 
-       print(d["foo"])
-       # => 1
+        print(d["foo"])
+        # => 1
 
-       print(d.foo)
-       # => 1
+        print(d.foo)
+        # => 1
 
-       print(d["bar"])
-       # => KeyError
+        print(d["bar"])
+        # => KeyError
 
-       print(d.bar)
-       # => AttributeError
+        print(d.bar)
+        # => AttributeError
+
+        # use wrap() to convert a nested dict
+        d = DotDict({"foo": {"bar": 1}})
+        print(d.foo.bar)
+        # => 1
     """
 
     def __getattr__(self, attr):
