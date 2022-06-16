@@ -81,7 +81,7 @@ class DotDict(dict):
     def wrap(cls, d: dict) -> "DotDict":
         """
         Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
-        with :py:class:`DitDict`'s for deep attribute-style access.
+        with :py:class:`DotDict`'s for deep attribute-style access.
         """
         wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
         return wrap(d)

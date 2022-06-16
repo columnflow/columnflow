@@ -6,6 +6,7 @@ Selection methods for testing purposes.
 
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
+from ap.columnar_util import set_ak_column
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -53,28 +54,31 @@ def req_deepjet(events):
 
 
 # variables (after reducing events)
+# TODO: this should maybe be a producer
 @selector(
     uses={
         "Electron.pt", "Electron.eta", "Muon.pt", "Muon.eta", "Jet.pt", "Jet.eta",
         "Jet.btagDeepFlavB",
     },
+    produces={"HT", "nJet", "nElectron", "nMuon", "nDeepjet", "Electron1_pt", "Muon1_pt"} | {
+        f"Jet{i}_{attr}"
+        for i in range(1, 4 + 1)
+        for attr in ["pt", "eta"]
+    },
 )
 def variables(events):
-    columns = {}
-    columns["HT"] = ak.sum(events.Jet.pt, axis=1)
-    for i in range(1, 5):
-        columns["Jet" + str(i) + "_pt"] = extract(events.Jet.pt, i - 1)
-        columns["Jet" + str(i) + "_eta"] = extract(events.Jet.eta, i - 1)
+    set_ak_column(events, "HT", ak.sum(events.Jet.pt, axis=1))
+    for i in range(1, 4 + 1):
+        set_ak_column[events, f"Jet{i}_pt"] = extract(events.Jet.pt, i - 1)
+        set_ak_column[events, f"Jet{i}_eta"] = extract(events.Jet.eta, i - 1)
+    set_ak_column(events, "nJet", ak.num(events.Jet.pt, axis=1))
+    set_ak_column(events, "nElectron", ak.num(events.Electron.pt, axis=1))
+    set_ak_column(events, "nMuon", ak.num(events.Muon.pt, axis=1))
+    set_ak_column(events, "nDeepjet", ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1))
+    set_ak_column(events, "Electron1_pt", extract(events.Electron.pt, 0))
+    set_ak_column(events, "Muon1_pt", extract(events.Muon.pt, 0))
 
-    columns["nJet"] = ak.num(events.Jet.pt, axis=1)
-    columns["nElectron"] = ak.num(events.Electron.pt, axis=1)
-    columns["nMuon"] = ak.num(events.Muon.pt, axis=1)
-    # columns["nDeepjet"] = ak.num(events.Deepjet.pt, axis=1)
-    columns["nDeepjet"] = ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1)
-    columns["Electron1_pt"] = extract(events.Electron.pt, 0)
-    columns["Muon1_pt"] = extract(events.Muon.pt, 0)
-
-    return SelectionResult(columns=columns)
+    return None, events
 
 
 @selector(uses={req_jet})
@@ -172,7 +176,10 @@ def categories(events, config):
 
 
 # combination of all leaf categories
-@selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b})
+@selector(
+    uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b},
+    produces={"cat_array"},
+)
 def categories(events, config_inst):
     cat_array = 0
     mask_int = 0
@@ -186,11 +193,14 @@ def categories(events, config_inst):
             print("Leaf categories are not fully orthogonal")
         else:
             print("Some events are without leaf category")
-    return SelectionResult(columns={"cat_array": cat_array})
+
+    set_ak_column(events, "cat_array", cat_array)
+
+    return None, events
 
 
-@selector(uses={req_jet})
-def jet_selection_test(events, stats):
+@selector(uses={req_jet}, produces={"jet_high_multiplicity"})
+def jet_selection_test(events, stats, **kwargs):
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
     # example columns:
@@ -200,11 +210,12 @@ def jet_selection_test(events, stats):
     jet_sel = ak.num(jet_indices, axis=1) >= 4
     jet_high_multiplicity = ak.num(jet_indices, axis=1) >= 6
 
-    # build and return selection results
-    return SelectionResult(
-        steps={"Jet": jet_sel},
-        objects={"Jet": jet_indices},
-        columns={"jet_high_multiplicity": jet_high_multiplicity},
+    set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
+
+    # build and return selection results plus new columns
+    return (
+        SelectionResult(steps={"Jet": jet_sel}, objects={"Jet": jet_indices}),
+        events,
     )
 
 
@@ -213,9 +224,9 @@ def deepjet_selection_test(events, stats):
     deepjet_indices = req_deepjet(events)
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
 
-    return SelectionResult(
-        steps={"Deepjet": deepjet_sel},
-        objects={"Deepjet": deepjet_indices},
+    return (
+        SelectionResult(steps={"Deepjet": deepjet_sel}, objects={"Deepjet": deepjet_indices}),
+        events,
     )
 
 
@@ -228,9 +239,9 @@ def muon_selection_test(events, stats):
     muon_sel = ak.num(muon_indices, axis=1) == 1
 
     # build and return selection results
-    return SelectionResult(
-        steps={"Muon": muon_sel},
-        objects={"Muon": muon_indices},
+    return (
+        SelectionResult(steps={"Muon": muon_sel}, objects={"Muon": muon_indices}),
+        events,
     )
 
 
@@ -243,9 +254,9 @@ def electron_selection_test(events, stats):
     electron_sel = ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
-    return SelectionResult(
-        steps={"Electron": electron_sel},
-        objects={"Electron": electron_indices},
+    return (
+        SelectionResult(steps={"Electron": electron_sel}, objects={"Electron": electron_indices}),
+        events,
     )
 
 
@@ -259,9 +270,12 @@ def lepton_selection_test(events, stats):
     lepton_sel = ak.num(muon_indices, axis=1) + ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
-    return SelectionResult(
-        steps={"Lepton": lepton_sel},
-        objects={"Muon": muon_indices, "Electron": electron_indices},
+    return (
+        SelectionResult(
+            steps={"Lepton": lepton_sel},
+            objects={"Muon": muon_indices, "Electron": electron_indices},
+        ),
+        events,
     )
 
 
@@ -269,6 +283,9 @@ def lepton_selection_test(events, stats):
     uses={
         jet_selection_test, lepton_selection_test, deepjet_selection_test,
         "LHEWeight.originalXWGTUP",
+    },
+    produces={
+        categories,
     },
 )
 def test(events, stats, config_inst, **kwargs):
@@ -279,21 +296,27 @@ def test(events, stats, config_inst, **kwargs):
     # - number of events before and after selection
     # - sum of mc weights before and after selection
 
-    jet_results = jet_selection_test(events, stats)
-    lepton_results = lepton_selection_test(events, stats)
-    deepjet_results = deepjet_selection_test(events, stats)
+    # prepare the selection results that are updated at every step
+    results = SelectionResult()
+
+    # jet selection
+    jet_results, events = jet_selection_test(events, stats)
+    results += jet_results
+
+    # lepton selection
+    lepton_results, events = lepton_selection_test(events, stats)
+    results += lepton_results
+
+    # deep jet selection
+    deepjet_results, events = deepjet_selection_test(events, stats)
+    results += deepjet_results
 
     # combined event selection after all steps
     event_sel = jet_results.steps.Jet & lepton_results.steps.Lepton & deepjet_results.steps.Deepjet
-
-    # build and merge selection results
-    results = SelectionResult(main={"event": event_sel})
-    results += jet_results
-    results += lepton_results
-    results += deepjet_results
+    results.main["event"] = event_sel
 
     # include categories into results
-    category_results = categories(events, config_inst)
+    category_results, events = categories(events, config_inst)
     results += category_results
 
     # increment stats
@@ -303,4 +326,4 @@ def test(events, stats, config_inst, **kwargs):
     stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
     stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
 
-    return results
+    return results, events

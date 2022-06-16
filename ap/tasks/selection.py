@@ -46,10 +46,16 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         return reqs
 
     def output(self):
-        return {
+        outputs = {
             "res": self.local_target(f"results_{self.branch}.parquet"),
             "stat": self.local_target(f"stats_{self.branch}.json"),
         }
+
+        # add additional columns in case the selector produces some
+        if self.selector_func.produced_columns:
+            outputs["cols"] = self.local_target(f"columns_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.safe_output
     @law.decorator.localize
@@ -57,14 +63,15 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
     def run(self):
         from ap.columnar_util import (
             Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            sorted_ak_to_parquet, get_ak_routes, remove_ak_column,
         )
 
         # prepare inputs and outputs
         inputs = self.input()
         lfn_task = self.requires()["lfns"]
         outputs = self.output()
-        output_chunks = {}
+        result_chunks = {}
+        column_chunks = {}
         stats = defaultdict(float)
 
         # run the selector setup
@@ -80,6 +87,10 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | self.selector_func.used_columns
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
+
+        # define columns that will be saved
+        keep_columns = self.selector_func.produced_columns
+        remove_routes = None
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -108,23 +119,46 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = self.selector_func(events, stats, **self.get_selector_kwargs(self))
+                results, events = self.selector_func(events, stats, **self.get_selector_kwargs(self))
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
-                output_chunks[(lfn_index, pos.index)] = chunk
+                # save results as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
+                result_chunks[(lfn_index, pos.index)] = chunk
                 reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
-        # merge the mask files
-        sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+                # filter events if columns are produced
+                if keep_columns:
+                    # manually remove colums that should not be kept
+                    if not remove_routes:
+                        remove_routes = {
+                            route
+                            for route in get_ak_routes(events)
+                            if not law.util.multi_match(route.column, keep_columns)
+                        }
+                    for route in remove_routes:
+                        events = remove_ak_column(events, route)
+
+                    # save additional columns as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
+                    column_chunks[(lfn_index, pos.index)] = chunk
+                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+
+        # merge the result files
+        sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["res"], local=True)
+
+        # merge the column files
+        if keep_columns:
+            sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["cols"], local=True)
 
         # save stats
         outputs["stat"].dump(stats, formatter="json")
 
         # print some stats
-        eff = stats["n_events_selected"] / stats["n_events"]
-        eff_weighted = stats["sum_mc_weight_selected"] / stats["sum_mc_weight"]
+        save_div = lambda x, y: (x / y) if y else 0.0
+        eff = save_div(stats["n_events_selected"], stats["n_events"])
+        eff_weighted = save_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
         self.publish_message(f"all events         : {int(stats['n_events'])}")
         self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
         self.publish_message(f"efficiency         : {eff:.4f}")
