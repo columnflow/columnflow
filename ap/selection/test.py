@@ -443,7 +443,7 @@ def jet_lepton_deltaR_selection(events, stats, threshold=0.4):
 
 
 @selector(uses={jet_lepton_deltaR_selection})
-def jet_lepton_deltaR_cleaning(events, stats, config_inst, threshold=0.4):
+def jet_lepton_deltaR_cleaning(events, stats, threshold=0.4, **kwargs):
     """
     Selector function that performs cleaning of jets against leptons
     based on a deltaR requirement
