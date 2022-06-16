@@ -6,7 +6,7 @@ Selection methods for testing purposes.
 
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -434,7 +434,7 @@ def req_clean_delta_r_match_jet_lepton(
 @selector(uses={delta_r_jet_lepton})
 def jet_lepton_delta_r_cleaning_selection(
     events: ak.Array,
-    stats: Dict,
+    stats: Dict[str, Union[int, float]],
     threshold: float = 0.4,
 ) -> SelectionResult:
     """
@@ -454,9 +454,9 @@ def jet_lepton_delta_r_cleaning_selection(
 @selector(uses={jet_lepton_delta_r_cleaning_selection})
 def jet_lepton_delta_r_cleaning(
     events: ak.Array,
-    stats: Dict,
+    stats: Dict[str, Union[int, float]],
     threshold: float = 0.4,
-    **kwargs: Dict,
+    **kwargs,
 ) -> SelectionResult:
     """
     Selector function that performs cleaning of jets against leptons
