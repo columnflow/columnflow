@@ -245,7 +245,6 @@ class ShiftTask(ConfigTask):
 
     shift = luigi.Parameter(
         default="nominal",
-        significant=False,
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
         "default: 'nominal'",
     )
