@@ -50,7 +50,9 @@ class CreateHistograms(
         import hist
         import numpy as np
         import awkward as ak
-        from ap.columnar_util import Route, ChunkedReader, update_ak_array, add_ak_aliases
+        from ap.columnar_util import (
+            Route, ChunkedReader, update_ak_array, add_ak_aliases, has_ak_column,
+        )
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -85,10 +87,11 @@ class CreateHistograms(
 
                 # build the full event weight
                 weight = ak.Array(np.ones(len(events)))
-                weight_columns = self.config_inst.x.event_weights
-                weight_columns += self.dataset_inst.x("event_weights", [])
-                for column in weight_columns:
+                for column in self.config_inst.x.event_weights:
                     weight = weight * events[Route(column).fields]
+                for column in self.dataset_inst.x("event_weights", []):
+                    if has_ak_column(events, column):
+                        weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
                 cat_ids = []
