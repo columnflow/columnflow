@@ -150,6 +150,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_sl",
         id=5,
         processes=[procs.process_tt_sl],
+        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -193,6 +194,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_dl",
         id=6,
         processes=[procs.process_tt_dl],
+        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -236,6 +238,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_fh",
         id=7,
         processes=[procs.process_tt_fh],
+        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[

@@ -26,6 +26,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     allow_empty_sandbox = True
     sandbox = None
 
+    local_workflow_require_branches = False
     output_collection_cls = law.SiblingFileCollection
 
     # hard-coded analysis name, could be changed to a parameter
