@@ -4,6 +4,8 @@
 Column production methods related to sample normalization event weights.
 """
 
+from typing import Dict, Union
+
 import law
 import order as od
 
@@ -20,7 +22,7 @@ ak = maybe_import("awkward")
 )
 def normalization_weights(
     events: ak.Array,
-    selection_stats: dict,
+    selection_stats: Dict[str, Union[int, float]],
     config_inst: od.Config,
     dataset_inst: od.Dataset,
     **kwargs,
