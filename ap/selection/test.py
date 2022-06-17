@@ -14,17 +14,8 @@ ak = maybe_import("awkward")
 np = maybe_import("numpy")
 
 
-def extract(array, idx):
-    """
-    inputs jagged array and index and returns padded array from given index
-    """
-    array = ak.pad_none(array, idx + 1)
-    array = ak.fill_none(array[:, idx], -999)
-    return array
-
-
 # object definitions
-# TODO: Producer instead of Selector
+# TODO: return masks instead of indices and build indices as late as possible
 @selector(uses={"Jet.pt", "Jet.eta"})
 def req_jet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
@@ -53,35 +44,6 @@ def req_forwardJet(events):
 def req_deepjet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
-
-
-# variables (after reducing events)
-# TODO: this should maybe be a producer
-@selector(
-    uses={
-        "Electron.pt", "Electron.eta", "Muon.pt", "Muon.eta", "Jet.pt", "Jet.eta",
-        "Jet.btagDeepFlavB",
-    },
-    produces={"HT", "nJet", "nElectron", "nMuon", "nDeepjet", "Electron1_pt", "Muon1_pt"} | {
-        f"Jet{i}_{attr}"
-        for i in range(1, 4 + 1)
-        for attr in ["pt", "eta"]
-    },
-)
-def variables(events):
-    set_ak_column(events, "HT", ak.sum(events.Jet.pt, axis=1))
-    set_ak_column(events, "nJet", ak.num(events.Jet.pt, axis=1))
-    set_ak_column(events, "nElectron", ak.num(events.Electron.pt, axis=1))
-    set_ak_column(events, "nMuon", ak.num(events.Muon.pt, axis=1))
-    set_ak_column(events, "nDeepjet", ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1))
-    set_ak_column(events, "Electron1_pt", extract(events.Electron.pt, 0))
-    set_ak_column(events, "Muon1_pt", extract(events.Muon.pt, 0))
-
-    for i in range(1, 4 + 1):
-        set_ak_column(events, f"Jet{i}_pt", extract(events.Jet.pt, i - 1))
-        set_ak_column(events, f"Jet{i}_eta", extract(events.Jet.eta, i - 1))
-
-    return None, events
 
 
 @selector(uses={req_jet})
@@ -150,56 +112,6 @@ def sel_1mu_ge2b_lowHT(events):
 @selector(uses={sel_1mu_ge2b, var_HT})
 def sel_1mu_ge2b_highHT(events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
-
-
-"""
-# combination of all categories, taking categories from each level into account, not only leaf categories
-@selector(uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b, sel_1mu_ge2b_highHT, sel_1mu_ge2b_lowHT})
-def categories(events, config):
-    cat_titles = []# ["no_cat"]
-    cat_array = "no_cat"
-    mask_int = 0
-
-    def write_cat_array(events, categories, cat_titles, cat_array):
-        for cat in categories:
-            cat_titles.append(cat.name)
-            mask = globals()[cat.selection](events)
-            cat_array = np.where(mask, cat.name, cat_array)
-            if not cat.is_leaf_category:
-                cat_titles, cat_array = write_cat_array(events, cat.categories, cat_titles, cat_array)
-        return cat_titles, cat_array
-
-    cat_titles, cat_array = write_cat_array(events, config.categories, cat_titles, cat_array)
-    # TODO checks that categories are set up properly
-    return SelectionResult(
-        #columns={"cat_titles": cat_titles, "cat_array": cat_array}
-        columns={"cat_array": cat_array}
-    )
-"""
-
-
-# combination of all leaf categories
-@selector(
-    uses={sel_1e_eq1b, sel_1e_ge2b, sel_1mu_eq1b, sel_1mu_ge2b},
-    produces={"cat_array"},
-)
-def categories(events, config_inst):
-    cat_array = 0
-    mask_int = 0
-    for cat in config_inst.get_leaf_categories():
-        cat_sel = cat.selection
-        mask = globals()[cat_sel](events)
-        cat_array = np.where(mask, cat.id, cat_array)
-        mask_int = mask_int + np.where(mask, 1, 0)  # to check orthogonality of categories
-    if not ak.all(mask_int == 1):
-        if ak.any(mask_int >= 2):
-            print("Leaf categories are not fully orthogonal")
-        else:
-            print("Some events are without leaf category")
-
-    set_ak_column(events, "cat_array", cat_array)
-
-    return None, events
 
 
 @selector(uses={req_jet}, produces={"jet_high_multiplicity"})
@@ -288,7 +200,7 @@ def lepton_selection_test(events, stats):
         "LHEWeight.originalXWGTUP",
     },
     produces={
-        categories,
+        jet_selection_test, lepton_selection_test, deepjet_selection_test, "cat_array",
     },
 )
 def test(events, stats, config_inst, **kwargs):
@@ -318,9 +230,20 @@ def test(events, stats, config_inst, **kwargs):
     event_sel = jet_results.steps.Jet & lepton_results.steps.Lepton & deepjet_results.steps.Deepjet
     results.main["event"] = event_sel
 
-    # include categories into results
-    category_results, events = categories(events, config_inst)
-    results += category_results
+    # build categories
+    cat_array = 0
+    mask_int = 0
+    for cat in config_inst.get_leaf_categories():
+        cat_sel = cat.selection
+        mask = globals()[cat_sel](events)
+        cat_array = np.where(mask, cat.id, cat_array)
+        mask_int = mask_int + np.where(mask, 1, 0)  # to check orthogonality of categories
+    if not ak.all(mask_int == 1):
+        if ak.any(mask_int >= 2):
+            print("Leaf categories are not fully orthogonal")
+        else:
+            print("Some events are without leaf category")
+    set_ak_column(events, "cat_array", cat_array)
 
     # increment stats
     events_sel = events[event_sel]

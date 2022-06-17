@@ -48,8 +48,11 @@ class CreateHistograms(
     @ensure_proxy
     def run(self):
         import hist
-        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns, update_ak_array
-        from ap.selection import Selector
+        import numpy as np
+        import awkward as ak
+        from ap.columnar_util import (
+            Route, ChunkedReader, update_ak_array, add_ak_aliases, has_ak_column,
+        )
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -61,9 +64,8 @@ class CreateHistograms(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that need to be loaded
-        variables = Selector.get("variables")
-        load_columns = set(mandatory_coffea_columns) | variables.used_columns  # noqa
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
 
         # iterate over chunks of events and diffs
         files = [inputs["events"].path]
@@ -80,15 +82,16 @@ class CreateHistograms(
                 # add additional columns
                 events = update_ak_array(events, *columns)
 
-                # calculate variables
-                # TODO: the variables callable is currently a selection function and should be a
-                #       producer soon
-                variables(events)
+                # add aliases
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # weights
-                lumi = self.config_inst.x.luminosity.get("nominal")
-                sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
-                weight = sampleweight * events.LHEWeight.originalXWGTUP
+                # build the full event weight
+                weight = ak.Array(np.ones(len(events)))
+                for column in self.config_inst.x.event_weights:
+                    weight = weight * events[Route(column).fields]
+                for column in self.dataset_inst.x("event_weights", []):
+                    if has_ak_column(events, column):
+                        weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
                 cat_ids = []
@@ -144,8 +147,7 @@ class MergeHistograms(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        # TODO(riga): hard-coded branches for the hackathon, to be removed afterwards
-        return CreateHistograms.req(self, _exclude=["branches"], branches=[(0, 2)])
+        return CreateHistograms.req(self, _exclude=["branches"])
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]

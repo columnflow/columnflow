@@ -28,7 +28,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         description="number of replicas to generate; default: 5",
     )
     skip_check = luigi.BoolParameter(
-        default=False,
+        default=True,  # set to True as long as we are doing tests with reduced n_files in datasets
         significant=False,
         description="whether to skip the check of the number of obtained LFNs vs. expected ones; "
         "default: False",

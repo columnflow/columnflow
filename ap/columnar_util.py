@@ -36,8 +36,11 @@ maybe_import("coffea.nanoevents.methods.base")
 pq = maybe_import("pyarrow.parquet")
 
 
-#: columns that are always required when opening a nano file with coffea
+#: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
+
+#: Empty-value definition in places where a number is expected.
+EMPTY = -99999
 
 
 class Route(object):
