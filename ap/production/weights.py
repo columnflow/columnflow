@@ -23,9 +23,9 @@ def event_weights(events: ak.Array, **kwargs) -> ak.Array:
     might possibly change any of the weights.
     """
     # compute normalization weights
-    normalization_weights(events, **kwargs)
+    events = normalization_weights(events, **kwargs)
 
     # compute pu weights
-    pu_weights(events, **kwargs)
+    events = pu_weights(events, **kwargs)
 
     return events
