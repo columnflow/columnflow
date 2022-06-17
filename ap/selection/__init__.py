@@ -133,9 +133,3 @@ class SelectionResult(object):
             to_merge["objects"] = ak.zip(self.objects, depth_limit=1)  # limit due to ragged axis 1
 
         return ak.zip(law.util.merge_dicts(self.main, to_merge))
-
-
-# import all selection modules
-if law.config.has_option("analysis", "selection_modules"):
-    for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
-        maybe_import(mod.strip())

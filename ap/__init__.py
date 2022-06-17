@@ -4,7 +4,12 @@
 Main entry point for top-level settings and fixes before anything else is imported.
 """
 
+import logging
+
 import law
+
+
+logger = logging.getLogger(__name__)
 
 
 # package infos
@@ -26,3 +31,24 @@ if law.config.has_option("target", "wlcg_file_systems"):
         law.wlcg.WLCGFileSystem(fs.strip())
         for fs in law.config.get_expanded("target", "wlcg_file_systems", split_csv=True)
     ]
+
+# initialize producers, calibrators and selectors
+import ap.production  # noqa
+import ap.calibration  # noqa
+import ap.selection  # noqa
+from ap.util import maybe_import
+
+if law.config.has_option("analysis", "production_modules"):
+    for mod in law.config.get_expanded("analysis", "production_modules", split_csv=True):
+        logger.debug(f"loading production module '{mod}'")
+        maybe_import(mod.strip())
+
+if law.config.has_option("analysis", "calibration_modules"):
+    for mod in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
+        logger.debug(f"loading calibration module '{mod}'")
+        maybe_import(mod.strip())
+
+if law.config.has_option("analysis", "selection_modules"):
+    for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
+        logger.debug(f"loading selection module '{mod}'")
+        maybe_import(mod.strip())
