@@ -106,6 +106,7 @@ config_2018.add_shift(name="jec_down", id=6, type="shape")
 add_aliases("jec", {"Jet.pt": "Jet.pt_{name}", "Jet_mass": "Jet.mass_{name}"})
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
+add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
 
 # external files
 config_2018.set_aux("external_files", DotDict.wrap({
@@ -147,6 +148,9 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
 config_2018.set_aux("default_producer", None)
+
+# event weight columns
+config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
 
 # file merging values
 # key -> dataset -> files per branch (-1 or not present = all)
