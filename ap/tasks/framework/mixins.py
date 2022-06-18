@@ -23,8 +23,8 @@ class CalibratorMixin(ConfigTask):
         params = super().modify_param_values(params)
 
         # add the default calibrator when empty
-        if "config" in params and params.get("calibrator") == law.NO_STR:
-            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+        if "config_inst" in params and params.get("calibrator") == law.NO_STR:
+            config_inst = params["config_inst"]
             if config_inst.x("default_calibrator", None):
                 params["calibrator"] = config_inst.x.default_calibrator
 
@@ -88,8 +88,8 @@ class CalibratorsMixin(ConfigTask):
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config" in params and params.get("calibrators") == ():
-            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+        if "config_inst" in params and params.get("calibrators") == ():
+            config_inst = params["config_inst"]
             if config_inst.x("default_calibrator", None):
                 params["calibrators"] = (config_inst.x.default_calibrator,)
 
@@ -138,8 +138,8 @@ class SelectorMixin(ConfigTask):
         params = super().modify_param_values(params)
 
         # add the default selector when empty
-        if "config" in params and params.get("selector") == law.NO_STR:
-            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+        if "config_inst" in params and params.get("selector") == law.NO_STR:
+            config_inst = config_inst = params["config_inst"]
             if config_inst.x("default_selector", None):
                 params["selector"] = config_inst.x.default_selector
 
@@ -208,8 +208,8 @@ class ProducerMixin(ConfigTask):
         params = super().modify_param_values(params)
 
         # add the default producer when empty
-        if "config" in params and params.get("producer") == law.NO_STR:
-            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+        if "config_inst" in params and params.get("producer") == law.NO_STR:
+            config_inst = params["config_inst"]
             if config_inst.x("default_producer", None):
                 params["producer"] = config_inst.x.default_producer
 
@@ -267,8 +267,8 @@ class ProducersMixin(ConfigTask):
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config" in params and params.get("producers") == ():
-            config_inst = cls.get_analysis_inst(cls.analysis).get_config(params["config"])
+        if "config_inst" in params and params.get("producers") == ():
+            config_inst = params["config_inst"]
             if config_inst.x("default_producer", None):
                 params["producers"] = (config_inst.x.default_producer,)
 

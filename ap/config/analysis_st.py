@@ -76,12 +76,20 @@ for dataset_name in dataset_names:
 
 
 # process groups for conveniently looping over certain processs
-# (used in wrapper_factory)
-analysis_st.set_aux("process_groups", {})
+# (used in wrapper_factory and during plotting)
+config_2018.set_aux("process_groups", {})
 
 # dataset groups for conveniently looping over certain datasets
-# (used in wrapper_factory)
-analysis_st.set_aux("dataset_groups", {})
+# (used in wrapper_factory and during plotting)
+config_2018.set_aux("dataset_groups", {})
+
+# category groups for conveniently looping over certain categories
+# (used during plotting)
+config_2018.set_aux("category_groups", {})
+
+# variable groups for conveniently looping over certain variables
+# (used during plotting)
+config_2018.set_aux("variable_groups", {})
 
 
 # helper to add column aliases for both shifts of a source

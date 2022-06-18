@@ -37,6 +37,15 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_wlcg_fs = "wlcg_fs"
 
     @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # store a reference to the analysis inst
+        params["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
+
+        return params
+
+    @classmethod
     def get_analysis_inst(cls, analysis):
         if analysis == "analysis_st":
             from ap.config.analysis_st import analysis_st
@@ -212,6 +221,16 @@ class ConfigTask(AnalysisTask):
     )
 
     @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # store a reference to the config inst
+        if "analysis_inst" in params and "config" in params:
+            params["config_inst"] = params["analysis_inst"].get_config(params["config"])
+
+        return params
+
+    @classmethod
     def get_version_map(cls, task):
         if isinstance(task, ConfigTask):
             return task.config_inst.get_aux("versions", {})
@@ -281,7 +300,7 @@ class ShiftTask(ConfigTask):
             params = super_func(params)
 
         # get params
-        requested_config = params.get("config")
+        config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
         requested_effective_shift = params.get("effective_shift")
 
@@ -291,7 +310,7 @@ class ShiftTask(ConfigTask):
             params["effective_shift"] = "nominal"
 
         # do nothing when the effective shift is already set and no config is defined
-        if requested_effective_shift not in no_values or requested_config in no_values:
+        if requested_effective_shift not in no_values or config_inst in no_values:
             return params
 
         # shift must be set
@@ -299,9 +318,6 @@ class ShiftTask(ConfigTask):
             if cls.allow_empty_shift:
                 return params
             raise Exception(f"no shift found in params: {params}")
-
-        # get the config instance
-        config_inst = cls.get_analysis_inst(cls.analysis).get_config(requested_config)
 
         # complain when the requested shift is not known
         if requested_shift not in config_inst.shifts:
@@ -313,6 +329,10 @@ class ShiftTask(ConfigTask):
         # when allowed, add it to the task parameters
         if requested_shift in allowed_shifts:
             params["effective_shift"] = requested_shift
+
+        # store references
+        params["shift_inst"] = config_inst.get_shift(requested_shift)
+        params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
 
         return params
 
@@ -369,6 +389,16 @@ class DatasetTask(ShiftTask):
     )
 
     file_merging = None
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # store a reference to the dataset inst
+        if "config_inst" in params and "dataset" in params:
+            params["dataset_inst"] = params["config_inst"].get_dataset(params["dataset"])
+
+        return params
 
     @classmethod
     def get_version_params(cls):
@@ -429,7 +459,7 @@ class DatasetTask(ShiftTask):
         merging_info = self.config_inst.get_aux("file_merging")
         n_files = self.dataset_info_inst.n_files
 
-        if isinstance(self.file_merging, six.integer_types):
+        if isinstance(self.file_merging, int):
             # interpret the file_merging attribute as the merging factor itself
             # non-positive numbers mean "merge all in one"
             n_merge = self.file_merging if self.file_merging > 0 else n_files
