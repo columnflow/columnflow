@@ -27,7 +27,7 @@ def update(self, config_inst, dataset_inst, **kwargs):
     self.shifts |= {
         f"jec_{junc_name}_{junc_dir}"
         for junc_name in config_inst.x.jec.uncertainty_sources
-        for junc_dir in ('up', 'down')
+        for junc_dir in ("up", "down")
     }
     if dataset_inst.is_mc:
         self.shifts |= {"jer_up", "jer_down"}

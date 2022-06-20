@@ -104,7 +104,7 @@ def ak_random(*args, rand_func):
 
     args = ak.broadcast_arrays(*args)
 
-    if hasattr(args[0].layout, 'offsets'):
+    if hasattr(args[0].layout, "offsets"):
         # convert to flat numpy arrays
         np_args = [np.asarray(a.layout.content) for a in args]
 
@@ -188,7 +188,7 @@ def jec_update(self, config_inst, **kwargs):
         f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
         for junc_name in config_inst.x.jec.uncertainty_sources
-        for junc_dir in ('up', 'down')
+        for junc_dir in ("up", "down")
     }
 
 
@@ -260,8 +260,8 @@ def jec_setup(self, task, inputs, call_kwargs, **kwargs):
         "Jet.pt_unsmeared", "Jet.mass_unsmeared",
     } | {
         f"Jet.{shifted_var}_JERSF_{jersf_dir}"
-        for shifted_var in ('pt', 'mass')
-        for jersf_dir in ('up', 'down')
+        for shifted_var in ("pt", "mass")
+        for jersf_dir in ("up", "down")
 
     },
 )

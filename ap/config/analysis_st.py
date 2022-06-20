@@ -235,12 +235,12 @@ config_2018.set_aux("external_files", DotDict.wrap({
     "jec": {
         "mc": [
             (fname, "v1")
-            for fname in make_jme_filenames(config_2018.x.jec, 'mc', names=config_2018.x.jec.levels)
+            for fname in make_jme_filenames(config_2018.x.jec, "mc", names=config_2018.x.jec.levels)
         ],
         "data": {
             era: [
                 (fname, "v1")
-                for fname in make_jme_filenames(config_2018.x.jec, 'data', names=config_2018.x.jec.levels, era=era)
+                for fname in make_jme_filenames(config_2018.x.jec, "data", names=config_2018.x.jec.levels, era=era)
             ]
             for era in config_2018.x.jec.data_eras
         },
@@ -248,21 +248,21 @@ config_2018.set_aux("external_files", DotDict.wrap({
 
     # jec energy correction uncertainties
     "junc": {
-        "mc": [(make_jme_filenames(config_2018.x.jec, 'mc', names=["UncertaintySources"])[0], "v1")],
+        "mc": [(make_jme_filenames(config_2018.x.jec, "mc", names=["UncertaintySources"])[0], "v1")],
         "data": {
-            era: [(make_jme_filenames(config_2018.x.jec, 'data', names=["UncertaintySources"], era=era)[0], "v1")]
+            era: [(make_jme_filenames(config_2018.x.jec, "data", names=["UncertaintySources"], era=era)[0], "v1")]
             for era in config_2018.x.jec.data_eras
         },
     },
 
     # jet energy resolution (pt resolution)
     "jer": {
-        "mc": [(make_jme_filenames(config_2018.x.jer, 'mc', names=["PtResolution"])[0], "v1")],
+        "mc": [(make_jme_filenames(config_2018.x.jer, "mc", names=["PtResolution"])[0], "v1")],
     },
 
     # jet energy resolution (data/mc scale factors)
     "jersf": {
-        "mc": [(make_jme_filenames(config_2018.x.jer, 'mc', names=["SF"])[0], "v1")],
+        "mc": [(make_jme_filenames(config_2018.x.jer, "mc", names=["SF"])[0], "v1")],
     },
 
 }))
