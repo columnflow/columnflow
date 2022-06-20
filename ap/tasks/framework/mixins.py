@@ -21,6 +21,8 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
+    update_calibrator = False
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -41,7 +43,7 @@ class CalibratorMixin(ConfigTask):
         if params.get("calibrator") not in (None, law.NO_STR):
             calibrator_func = cls.get_calibrator_func(
                 params["calibrator"],
-                **cls.get_calibrator_kwargs(**params),
+                **(cls.get_calibrator_kwargs(**params) if cls.update_calibrator else {}),
             )
             shifts |= calibrator_func.all_shifts
 
@@ -66,10 +68,10 @@ class CalibratorMixin(ConfigTask):
     @property
     def calibrator_func(self):
         if self._calibrator_func is None:
-            # store a copy of the updated calibrator
+            # store a copy of the calibrator
             self._calibrator_func = self.get_calibrator_func(
                 self.calibrator,
-                **self.get_calibrator_kwargs(self),
+                **(self.get_calibrator_kwargs(self) if self.update_calibrator else {}),
             )
         return self._calibrator_func
 
@@ -86,6 +88,8 @@ class CalibratorsMixin(ConfigTask):
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
     )
+
+    update_calibrators = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -104,12 +108,39 @@ class CalibratorsMixin(ConfigTask):
 
         # get the calibrators, update them and add their shifts
         if params.get("calibrators") not in (None, law.NO_STR):
-            calibrator_kwargs = cls.get_calibrator_kwargs(**params)
+            calibrator_kwargs = cls.get_calibrator_kwargs(**params) if cls.update_calibrators else {}
             for calibrator in params["calibrators"]:
-                calibrator_func = CalibratorMixin.get_calibrator_func(calibrator, **calibrator_kwargs)
+                calibrator_func = cls.get_calibrator_func(calibrator, **calibrator_kwargs)
                 shifts |= calibrator_func.all_shifts
 
         return shifts
+
+    @classmethod
+    def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
+        from ap.calibration import Calibrator
+
+        func = Calibrator.get(calibrator, copy=copy)
+        if update_kwargs:
+            func.run_update(**update_kwargs)
+
+        return func
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cache for calibrator funcs
+        self._calibrator_funcs = None
+
+    @property
+    def calibrator_funcs(self):
+        if self._calibrator_funcs is None:
+            # store copies of all calibrators
+            calibrator_kwargs = self.get_calibrator_kwargs(self) if self.update_calibrators else {}
+            self._calibrator_funcs = [
+                self.get_calibrator_func(calibrator, **calibrator_kwargs)
+                for calibrator in self.calibrators
+            ]
+        return self._calibrator_funcs
 
     def store_parts(self):
         parts = super().store_parts()
@@ -130,11 +161,7 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # cache for selector func
-        self._selector_func = None
+    update_selector = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -156,7 +183,7 @@ class SelectorMixin(ConfigTask):
         if params.get("selector") not in (None, law.NO_STR):
             selector_func = cls.get_selector_func(
                 params["selector"],
-                **cls.get_selector_kwargs(**params),
+                **(cls.get_selector_kwargs(**params) if cls.update_selector else {}),
             )
             shifts |= selector_func.all_shifts
 
@@ -172,13 +199,19 @@ class SelectorMixin(ConfigTask):
 
         return func
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cache for selector func
+        self._selector_func = None
+
     @property
     def selector_func(self):
         if self._selector_func is None:
-            # store a copy of the selector and update it
+            # store a copy of the selector
             self._selector_func = self.get_selector_func(
                 self.selector,
-                **self.get_selector_kwargs(self),
+                **(self.get_selector_kwargs(self) if self.update_selector else {}),
             )
         return self._selector_func
 
@@ -200,11 +233,7 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # cache for producer func
-        self._producer_func = None
+    update_producer = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -226,7 +255,7 @@ class ProducerMixin(ConfigTask):
         if params.get("producer") not in (None, law.NO_STR):
             producer_func = cls.get_producer_func(
                 params["producer"],
-                **cls.get_producer_kwargs(**params),
+                **(cls.get_producer_kwargs(**params) if cls.update_producer else {}),
             )
             shifts |= producer_func.all_shifts
 
@@ -242,13 +271,19 @@ class ProducerMixin(ConfigTask):
 
         return func
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cache for producer func
+        self._producer_func = None
+
     @property
     def producer_func(self):
         if self._producer_func is None:
-            # store a copy of the producer and update it
+            # store a copy of the producer
             self._producer_func = self.get_producer_func(
                 self.producer,
-                **self.get_producer_kwargs(self),
+                **(self.get_producer_kwargs(self) if self.update_producer else {}),
             )
         return self._producer_func
 
@@ -265,6 +300,8 @@ class ProducersMixin(ConfigTask):
         default=(),
         description="comma-separated names of producers to be applied; empty default",
     )
+
+    update_producers = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -283,12 +320,39 @@ class ProducersMixin(ConfigTask):
 
         # get the producers, update them and add their shifts
         if params.get("producers") not in (None, law.NO_STR):
-            producer_kwargs = cls.get_producer_kwargs(**params)
+            producer_kwargs = cls.get_producer_kwargs(**params) if cls.update_producers else {}
             for producer in params["producers"]:
-                producer_func = ProducerMixin.get_producer_func(producer, **producer_kwargs)
+                producer_func = cls.get_producer_func(producer, **producer_kwargs)
                 shifts |= producer_func.all_shifts
 
         return shifts
+
+    @classmethod
+    def get_producer_func(cls, producer, copy=True, **update_kwargs):
+        from ap.production import Producer
+
+        func = Producer.get(producer, copy=copy)
+        if update_kwargs:
+            func.run_update(**update_kwargs)
+
+        return func
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cache for producer funcs
+        self._producer_funcs = None
+
+    @property
+    def producer_funcs(self):
+        if self._producer_funcs is None:
+            # store copies of all producers
+            producer_kwargs = self.get_producer_kwargs(self) if self.update_producers else {}
+            self._producer_funcs = [
+                self.get_producer_func(producer, **producer_kwargs)
+                for producer in self.producers
+            ]
+        return self._producer_funcs
 
     def store_parts(self):
         parts = super().store_parts()

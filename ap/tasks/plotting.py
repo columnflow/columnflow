@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 import law
 
+from ap.tasks.framework.base import ShiftTask
 from ap.tasks.framework.mixins import (
     CalibratorsSelectorMixin, ProducersMixin, PlotMixin, CategoriesMixin, VariablesMixin,
     DatasetsProcessesMixin, ShiftSourcesMixin,
@@ -34,6 +35,7 @@ class ProcessPlotBase(
 
 
 class PlotVariables(
+    ShiftTask,
     ProducersMixin,
     CalibratorsSelectorMixin,
     ProcessPlotBase,
@@ -42,6 +44,8 @@ class PlotVariables(
 ):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    shifts = {MergeHistograms}
 
     def create_branch_map(self):
         return [
