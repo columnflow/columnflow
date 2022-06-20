@@ -82,22 +82,22 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # just invoke the calibration function
-                arr = self.calibrator_func(events, **self.get_calibrator_kwargs(self))
+                events = self.calibrator_func(events, **self.get_calibrator_kwargs(self))
 
                 # manually remove colums that should not be kept
                 if not remove_routes:
                     remove_routes = {
                         route
-                        for route in get_ak_routes(arr)
+                        for route in get_ak_routes(events)
                         if not law.util.multi_match(route.column, keep_columns)
                     }
                 for route in remove_routes:
-                    arr = remove_ak_column(arr, route)
+                    events = remove_ak_column(events, route)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (arr, chunk.path))
+                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:

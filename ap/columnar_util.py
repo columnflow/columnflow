@@ -27,6 +27,7 @@ import law
 
 from ap.util import maybe_import
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
@@ -35,8 +36,11 @@ maybe_import("coffea.nanoevents.methods.base")
 pq = maybe_import("pyarrow.parquet")
 
 
-#: columns that are always required when opening a nano file with coffea
+#: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
+
+#: Empty-value definition in places where a number is expected.
+EMPTY = -99999
 
 
 class Route(object):
@@ -95,26 +99,29 @@ class Route(object):
        The name of the corresponding column in nano-style underscore format.
     """
 
+    DOT_SEP = "."
+    NANO_SEP = "_"
+
     @classmethod
     def join(cls, fields: Sequence[str]) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
         """
-        return ".".join(fields)
+        return cls.DOT_SEP.join(fields)
 
     @classmethod
     def join_nano(cls, fields: Sequence[str]) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
         """
-        return "_".join(fields)
+        return cls.NANO_SEP.join(fields)
 
     @classmethod
     def split(cls, column: str) -> List[str]:
         """
         Splits a string assumed to be in dot format and returns the string fragments.
         """
-        return column.split(".")
+        return column.split(cls.DOT_SEP)
 
     @classmethod
     def split_nano(cls, column: str) -> List[str]:
@@ -122,7 +129,7 @@ class Route(object):
         Splits a string assumed to be in nano-style underscore format and returns the string
         fragments.
         """
-        return column.split("_")
+        return column.split(cls.NANO_SEP)
 
     @classmethod
     def check(cls, route: Union["Route", Sequence[str], str]):
@@ -167,7 +174,7 @@ class Route(object):
         return len(self._fields)
 
     def __eq__(self, other: Union["Route", Sequence[str], str]) -> bool:
-        if isinstance(other, self.__class__):
+        if isinstance(other, Route):
             return self.fields == other.fields
         elif isinstance(other, (list, tuple)):
             return self.fields == tuple(other)
@@ -207,12 +214,12 @@ class Route(object):
         a string in dot format to the fields if *this* instance. A *ValueError* is raised when
         *other* could not be interpreted.
         """
-        if isinstance(other, str):
-            self._fields.extend(self.split(other))
+        if isinstance(other, Route):
+            self._fields.extend(other._fields)
         elif isinstance(other, (list, tuple)):
             self._fields.extend(list(other))
-        elif isinstance(other, self.__class__):
-            self._fields.extend(other._fields)
+        elif isinstance(other, str):
+            self._fields.extend(self.split(other))
         else:
             raise ValueError(f"cannot add '{other}' to route '{self}'")
 
@@ -715,14 +722,41 @@ class ArrayFunction(object):
         self.uses = set(law.util.make_list(uses)) if uses else set()
         self.produces = set(law.util.make_list(produces)) if produces else set()
 
-    @property
-    def used_columns(self) -> Set[str]:
+    def _get_used_columns(self, _cache: Optional[set] = None) -> Set[str]:
         columns = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
 
         # add those of all other known intances
         for obj in self.uses:
-            if isinstance(obj, self.__class__):
-                columns |= obj.used_columns
+            if isinstance(obj, ArrayFunction):
+                if obj not in _cache:
+                    _cache.add(obj)
+                    columns |= obj._get_used_columns(_cache=_cache)
+            else:
+                columns.add(obj)
+
+        return columns
+
+    @property
+    def used_columns(self) -> Set[str]:
+        return self._get_used_columns()
+
+    def _get_produced_columns(self, _cache: Optional[set] = None) -> Set[str]:
+        columns = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
+        # add those of all other known intances
+        for obj in self.produces:
+            if isinstance(obj, ArrayFunction):
+                if obj not in _cache:
+                    _cache.add(obj)
+                    columns |= obj._get_produced_columns(_cache=_cache)
             else:
                 columns.add(obj)
 
@@ -730,16 +764,7 @@ class ArrayFunction(object):
 
     @property
     def produced_columns(self) -> Set[str]:
-        columns = set()
-
-        # add those of all other known intances
-        for obj in self.produces:
-            if isinstance(obj, self.__class__):
-                columns |= obj.produced_columns
-            else:
-                columns.add(obj)
-
-        return columns
+        return self._get_produced_columns()
 
     def __repr__(self) -> str:
         """
@@ -856,18 +881,27 @@ class TaskArrayFunction(ArrayFunction):
         self.setup_func = None
         self.call_kwargs = None
 
-    @property
-    def all_shifts(self):
+    def _get_all_shifts(self, _cache: Optional[set] = None) -> Set[str]:
         shifts = set()
+
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
 
         # add those of all other known intances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
-                shifts |= obj.all_shifts
+            if isinstance(obj, TaskArrayFunction):
+                if obj not in _cache:
+                    _cache.add(obj)
+                    shifts |= obj._get_all_shifts(_cache=_cache)
             else:
                 shifts.add(obj)
 
         return shifts
+
+    @property
+    def all_shifts(self) -> Set[str]:
+        return self._get_all_shifts()
 
     def update(self, func: Callable[["TaskArrayFunction", Any], None]) -> None:
         """
@@ -892,16 +926,21 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.update_func = func
 
-    def run_update(self, **kwargs) -> None:
+    def run_update(self, _cache: Optional[set] = None, **kwargs) -> None:
         """
         Recursively runs the update function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
         all additional *kwargs*.
         """
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the update of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
-                obj.run_update(**kwargs)
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                obj.run_update(_cache=_cache, **kwargs)
 
         # run this instance's update function
         if self.update_func:
@@ -929,7 +968,12 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.requires_func = func
 
-    def run_requires(self, task: law.Task, reqs: Optional[dict] = None) -> dict:
+    def run_requires(
+        self,
+        task: law.Task,
+        reqs: Optional[dict] = None,
+        _cache: Optional[set] = None,
+    ) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
@@ -939,9 +983,14 @@ class TaskArrayFunction(ArrayFunction):
         if reqs is None:
             reqs = {}
 
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the requirements of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
                 obj.run_requires(task, reqs=reqs)
 
         # run this instance's requires function
@@ -967,7 +1016,13 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.setup_func = func
 
-    def run_setup(self, task: law.Task, inputs: dict, call_kwargs: Optional[dict] = None) -> None:
+    def run_setup(
+        self,
+        task: law.Task,
+        inputs: dict,
+        call_kwargs: Optional[dict] = None,
+        _cache: Optional[set] = None,
+    ) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
@@ -978,25 +1033,30 @@ class TaskArrayFunction(ArrayFunction):
         if call_kwargs is None:
             call_kwargs = {}
 
+        # init the cache to prevent same objects being called twice
+        if _cache is None:
+            _cache = set()
+
         # run the setup of all other known instances
         for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.__class__):
-                obj.run_setup(task, inputs, call_kwargs=call_kwargs)
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                obj.run_setup(task, inputs, call_kwargs=call_kwargs, _cache=_cache)
 
         # run this instance's setup function
         if self.setup_func:
             self.setup_func(self, task, inputs, call_kwargs)
 
-        # store it
+        # store the call kwargs
         self.call_kwargs = call_kwargs
 
     def __call__(self, *args, **kwargs):
         """
-        Calls the wrapped function with all *args* and *kwargs*, update with :py:attr:`call_kwargs`
-        when set.
+        Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
+        :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
         """
         if self.call_kwargs:
-            kwargs.update(self.call_kwargs)
+            kwargs = law.util.merge_dicts(self.call_kwargs, kwargs)
 
         return super().__call__(*args, **kwargs)
 
