@@ -97,7 +97,7 @@ class CreateHistograms(
                         weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
-                leaf_cat_ids = [cat.id for cat in self.category_inst.get_leaf_categories()]
+                leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
 
                 # define and fill histograms
                 for var_name in self.variables:
