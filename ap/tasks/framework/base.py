@@ -140,7 +140,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         context: Optional[str] = None,
     ) -> List[str]:
         """
-        TODO.
+        Returns all names of objects of type *object_cls* known to a *container* (e.g.
+        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
+        pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
+        *object_group* that matches group names to object names. When *deep* is *True* the lookup of
+        objects in the *container*. *context* is forwarded to all container lookup methods. Example:
+
+        .. code-block:: python
+
+            find_config_objects(["st_tchannel_*"], config_inst, od.Dataset)
+            # -> ["st_tchannel_t", "st_tchannel_tbar"]
         """
         singular = object_cls.cls_name_singular
         plural = object_cls.cls_name_plural

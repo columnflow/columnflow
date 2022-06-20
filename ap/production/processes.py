@@ -19,7 +19,9 @@ ak = maybe_import("awkward")
 )
 def process_ids(events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Array:
     """
-    TODO.
+    Assigns each event a single process id, based on the first process that is registered for the
+    *dataset_inst*. This is rather a dummy method and should be further implemented depending on
+    future needs (e.g. for sample stitching).
     """
     # trivial case
     process_id = dataset_inst.processes.get_first().id
