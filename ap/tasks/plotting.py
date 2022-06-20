@@ -168,23 +168,36 @@ class PlotVariables(
                 linewidth=0,
                 color="black",
             )
+
+            # compute asymmetric poisson errors for data
+            # TODO: passing the output of poisson_interval to as yerr to mpl.plothist leads to buggy
+            #       error bars and the documentation is clearly wrong (mplhep 0.3.12, hist 2.4.0),
+            #       so adjust the output to make up for that, but maybe update or remove the next
+            #       lines if this is fixed to not correct it "twice"
+            from hist.intervals import poisson_interval
+            yerr = poisson_interval(h_data.view().value, h_data.view().variance)
+            yerr[np.isnan(yerr)] = 0
+            yerr[0] = h_data.view().value - yerr[0]
+            yerr[1] -= h_data.view().value
+
             h_data.plot1d(
                 ax=ax,
                 histtype="errorbar",
                 color="k",
                 label="Pseudodata",
+                yerr=yerr,
             )
 
+            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
             ax.set_ylabel(variable_inst.get_full_y_title())
-            ax.legend(title="Processes")
+            ax.legend()
             if variable_inst.log_y:
                 ax.set_yscale("log")
 
-            from hist.intervals import ratio_uncertainty
             rax.errorbar(
                 x=h_data.axes[variable_inst.name].centers,
                 y=h_data.view().value / h_sum.view().value,
-                yerr=ratio_uncertainty(h_data.view().value, h_sum.view().value, "poisson"),
+                yerr=yerr / h_sum.view().value,
                 color="k",
                 linestyle="none",
                 marker="o",
@@ -202,8 +215,9 @@ class PlotVariables(
 
             rax.axhline(y=1.0, linestyle="dashed", color="gray")
             rax.set_ylabel("Data / MC", loc="center")
-            rax.set_ylim(0.9, 1.1)
+            rax.set_ylim(0.85, 1.15)
             rax.set_xlabel(variable_inst.get_full_x_title())
+            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
             lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
             mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
@@ -333,8 +347,9 @@ class PlotShiftedVariables(
                 overlay="shift",
                 color=["black", "red", "blue"],
             )
-            ax.legend(title=process_inst.name)
+            ax.legend(title=process_inst.name)  # TODO
             ax.set_ylabel(variable_inst.get_full_y_title())
+            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
             norm = h_sum[{"shift": "nominal"}].view().value
             rax.step(
@@ -350,6 +365,7 @@ class PlotShiftedVariables(
             rax.axhline(y=1., color="black")
             rax.set_ylim(0.25, 1.75)
             rax.set_xlabel(variable_inst.get_full_x_title())
+            rax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
             lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
             mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
