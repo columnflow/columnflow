@@ -4,8 +4,11 @@
 Lightweight mixins task classes.
 """
 
+from typing import Union, Sequence, List, Set
+
 import law
 import luigi
+import order as od
 
 from ap.tasks.framework.base import AnalysisTask, ConfigTask
 
@@ -298,6 +301,212 @@ class ProducersMixin(ConfigTask):
         parts.insert_before("version", "producers", f"prod__{producers}")
 
         return parts
+
+
+class CategoriesMixin(ConfigTask):
+
+    categories = law.CSVParameter(
+        default=("1mu",),
+        description="comma-separated category names or patterns to select; can also be the key of "
+        "a mapping defined in 'category_groups' auxiliary data of the config; default: ('1mu',)",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve categories
+        if "categories" in params:
+            categories = cls.find_config_objects(
+                params["categories"],
+                config_inst,
+                od.Category,
+                config_inst.x("category_groups", {}),
+                deep=True,
+            )
+            params["categories"] = tuple(sorted(categories))
+
+        return params
+
+    @property
+    def categories_repr(self):
+        if len(self.categories) == 1:
+            return self.categories[0]
+
+        return f"{len(self.categories)}_{law.util.create_hash(self.categories)}"
+
+
+class VariablesMixin(ConfigTask):
+
+    variables = law.CSVParameter(
+        default=(),
+        description="comma-separated variable names or patterns to select; can also be the key of a "
+        "mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
+        "all variables of the config; empty default",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve variables
+        if "variables" in params:
+            if params["variables"]:
+                variables = cls.find_config_objects(
+                    params["variables"],
+                    config_inst,
+                    od.Variable,
+                    config_inst.x("variable_groups", {}),
+                )
+            else:
+                variables = config_inst.variables.names()
+            params["variables"] = tuple(sorted(variables))
+
+        return params
+
+    @property
+    def variables_repr(self):
+        if len(self.variables) == 1:
+            return self.variables[0]
+
+        return f"{len(self.variables)}_{law.util.create_hash(self.variables)}"
+
+
+class DatasetsProcessesMixin(ConfigTask):
+
+    datasets = law.CSVParameter(
+        default=(),
+        description="comma-separated dataset names or patters to select; can also be the key of a "
+        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
+        "all datasets registered in the config that contain any of the selected --processes; empty "
+        "default",
+    )
+    processes = law.CSVParameter(
+        default=(),
+        description="comma-separated process names or patterns for filtering processes; can also "
+        "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
+        "uses all processes of the config when empty; empty default",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve processes
+        if "processes" in params:
+            if params["processes"]:
+                processes = cls.find_config_objects(
+                    params["processes"],
+                    config_inst,
+                    od.Process,
+                    config_inst.x("process_groups", {}),
+                    deep=True,
+                )
+            else:
+                processes = config_inst.processes.names()
+            params["processes"] = tuple(processes)
+
+        # resolve datasets
+        if "datasets" in params:
+            if params["datasets"]:
+                datasets = cls.find_config_objects(
+                    params["datasets"],
+                    config_inst,
+                    od.Dataset,
+                    config_inst.x("dataset_groups", {}),
+                )
+            elif "processes" in params:
+                # pick all datasets that contain any of the requested (sub) processes
+                sub_process_insts = sum((
+                    [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
+                    for process_inst in map(config_inst.get_process, params["processes"])
+                ), [])
+                datasets = (
+                    dataset_inst.name
+                    for dataset_inst in config_inst.datasets
+                    if any(map(dataset_inst.has_process, sub_process_insts))
+                )
+            params["datasets"] = tuple(sorted(datasets))
+
+        return params
+
+    @property
+    def datasets_repr(self):
+        if len(self.datasets) == 1:
+            return self.datasets[0]
+
+        return f"{len(self.datasets)}_{law.util.create_hash(self.datasets)}"
+
+    @property
+    def processes_repr(self):
+        if len(self.processes) == 1:
+            return self.processes[0]
+
+        return f"{len(self.processes)}_{law.util.create_hash(self.processes)}"
+
+
+class ShiftSourcesMixin(ConfigTask):
+
+    shift_sources = law.CSVParameter(
+        default=("minbias_xs",),
+        description="comma-separated shift source names (without direction) or patterns to select; "
+        "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
+        "config; default: ('minbias_xs',)",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve shift sources
+        if "shift_sources" in params:
+            # convert to full shift first to do the object finding
+            shifts = cls.find_config_objects(
+                cls.expand_shift_sources(params["shift_sources"]),
+                config_inst,
+                od.Shift,
+                config_inst.x("shift_groups", {}),
+            )
+            # convert back to sources
+            params["shift_sources"] = tuple(sorted(cls.reduce_shifts(shifts)))
+
+        return params
+
+    @classmethod
+    def expand_shift_sources(cls, sources: Union[Sequence[str], Set[str]]) -> List[str]:
+        return sum(([f"{s}_up", f"{s}_down"] for s in sources), [])
+
+    @classmethod
+    def reduce_shifts(cls, shifts: Union[Sequence[str], Set[str]]) -> List[str]:
+        return list(set(od.Shift.split_name(shift)[0] for shift in shifts))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.shifts = self.expand_shift_sources(self.shift_sources)
+
+    @property
+    def shift_sources_repr(self):
+        if len(self.shift_sources) == 1:
+            return self.shift_sources[0]
+
+        return f"{len(self.shift_sources)}_{law.util.create_hash(self.shift_sources)}"
 
 
 class PlotMixin(AnalysisTask):

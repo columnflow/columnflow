@@ -4,93 +4,73 @@
 Task to plot different types of histograms
 """
 
-from itertools import product
+from collections import OrderedDict
 
 import law
 
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin, PlotMixin
+from ap.tasks.framework.mixins import (
+    CalibratorsSelectorMixin, ProducersMixin, PlotMixin, CategoriesMixin, VariablesMixin,
+    DatasetsProcessesMixin, ShiftSourcesMixin,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.order_util import getDatasetNamesFromProcesses, getDatasetNamesFromProcess
+from ap.util import DotDict
 
 
-class Plotting(
+class ProcessPlotBase(
+    CategoriesMixin,
+    VariablesMixin,
+    DatasetsProcessesMixin,
+    PlotMixin,
+):
+    """
+    Base class for tasks creating plots where contributions of different processes are shown.
+    """
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts["plot"] = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
+        return parts
+
+
+class PlotVariables(
     ProducersMixin,
     CalibratorsSelectorMixin,
-    PlotMixin,
+    ProcessPlotBase,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
-
-    processes = law.CSVParameter(
-        default=(),
-        description="comma-separated process names to plot; default: ()",
-    )
-    variables = law.CSVParameter(
-        default=(),
-        description="comma-separated variable names to plot; default: ()",
-    )
-    categories = law.CSVParameter(
-        default=("incl",),
-        description="comma-separated category names to create plots for; default: ('incl',)",
-    )
-    # how to handle the logy defaults given by config?
-    """
-    logy = luigi.BoolParameter(
-        default=False,
-        description="Whether to plot the y scale logarithmically or not"
-    )
-    """
-
-    def store_parts(self):
-        parts = super(Plotting, self).store_parts()
-        # add process names after config name
-        procs = ""
-        # required here to check if output already exists. These two lines can possibly be removed from requires
-        if not self.processes:
-            self.processes = self.config_inst.analysis.get_processes(self.config_inst).names()
-        for p in self.processes:
-            procs += p + "_"
-        procs = procs[:-1]
-        parts.insert_after("config", "processes", procs)
-        return parts
 
     def create_branch_map(self):
-        if not self.variables:
-            self.variables = self.config_inst.variables.names()
-
         return [
-            {"variable": var_name, "category": cat_name}
-            for var_name, cat_name in product(self.variables, self.categories)
+            DotDict({"category": cat_name, "variable": var_name})
+            for cat_name in sorted(self.categories)
+            for var_name in sorted(self.variables)
         ]
 
     def workflow_requires(self):
-        c = self.config_inst
-        # determine which datasets to require
-        if not self.processes:
-            self.processes = c.analysis.get_processes(c).names()
-        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
-        return {
-            d: MergeHistograms.req(self, dataset=d, tree_index=0, _exclude={"branches"})
-            for d in self.datasets
-        }
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
 
     def requires(self):
-        c = self.config_inst
-        # determine which datasets to require
-        if not self.processes:
-            self.processes = c.analysis.get_processes(c).names()
-        self.datasets = getDatasetNamesFromProcesses(c, self.processes)
         return {
-            d: MergeHistograms.req(self, dataset=d, branch=-1, tree_index=0)
+            d: MergeHistograms.req(
+                self,
+                dataset=d,
+                branch=-1,
+                tree_index=0,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
             for d in self.datasets
         }
 
     def output(self):
-        return self.local_target(f"plot_{self.branch_data['category']}_{self.branch_data['variable']}.pdf")
+        b = self.branch_data
+        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
@@ -99,252 +79,275 @@ class Plotting(
         import matplotlib.pyplot as plt
         import mplhep
 
-        plt.style.use(mplhep.style.CMS)
+        # prepare config objects
+        variable_inst = self.config_inst.get_variable(self.branch_data.variable)
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
 
-        with self.publish_step(
-            f"Variable {self.branch_data['variable']}, Category {self.branch_data['category']}",
-        ):
+        # histogram data per process
+        hists = OrderedDict()
 
-            inputs = self.input()
-            c = self.config_inst
+        with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
+            for dataset, inp in self.input().items():
+                dataset_inst = self.config_inst.get_dataset(dataset)
+                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
 
-            histograms = []
-            h_total = None
-            colors = []
-            label = []
-            category = self.branch_data["category"]
+                # sanity checks
+                n_shifts = len(h_in.axes["shift"])
+                if n_shifts != 1:
+                    raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
 
-            with self.publish_step("Adding histograms together ..."):
-                for p in self.processes:
-                    # print("-------- process:", p)
-                    h_proc = None
-                    for d in getDatasetNamesFromProcess(c, p):
-                        # print("----- dataset:", d)
-                        h_in = inputs[d]["collection"][0].load(formatter="pickle")[self.branch_data["variable"]]
-                        # Note: this assumes that the category axis only contains leaf_cats
-                        if category == "incl":
-                            leaf_cats = [cat.id for cat in c.get_leaf_categories()]
-                        elif c.get_category(category).is_leaf_category:
-                            leaf_cats = [c.get_category(category).id]
-                        else:
-                            leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
+                # loop and extract one histogram per process
+                for process_inst in process_insts:
+                    # skip when the dataset is already known to not contain any sub process
+                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                        continue
 
-                        # to access the correct bins in the IntCat axis, we need
-                        # the position of the bins, not the id itself
-                        leaf_to_pos = [hist.loc(i) for i in leaf_cats]
+                    # work on a copy
+                    h = h_in.copy()
 
-                        h_in = h_in[{"category": leaf_to_pos}]
-                        h_in = h_in[{"category": sum}]
-                        if len(h_in.axes["shift"]) != 1:
-                            raise ValueError("In Plotting: shift axis is supposed to only contain 1 bin")
-                        h_in = h_in[{"shift": sum}]
-                        print("dataset {}: {}".format(d, h_in[::sum]))
+                    # axis selections
+                    h = h[{
+                        "process": [
+                            hist.loc(p.id)
+                            for p in sub_process_insts[process_inst]
+                            if p.id in h.axes["process"]
+                        ],
+                        "category": [
+                            hist.loc(c.id)
+                            for c in leaf_category_insts
+                            if c.id in h.axes["category"]
+                        ],
+                    }]
 
-                        if h_proc is None:
-                            h_proc = h_in.copy()
-                        else:
-                            h_proc += h_in
+                    # axis reductions
+                    h = h[{"process": sum, "category": sum, "shift": sum}]
 
-                    if h_total is None:
-                        h_total = h_proc.copy()
+                    # add the histogram
+                    if process_inst in hists:
+                        hists[process_inst] += h
                     else:
-                        h_total += h_proc
-                    histograms.append(h_proc)
-                    colors.append(c.get_process(p).color)
-                    label.append(c.get_process(p).label)
+                        hists[process_inst] = h
 
-                h_final = hist.Stack(*histograms)
-                h_data = h_total.copy()
-                h_data.reset()
-                h_data.fill(np.repeat(h_total.axes[0].centers, np.random.poisson(h_total.view().value)))
+            # there should be hists to plot
+            if not hists:
+                raise Exception("no histograms found to plot")
 
-            with self.publish_step("Starting plotting routine ..."):
-                fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+            # create the stack and a fake data hist using the smeared sum
+            h_final = hist.Stack(*hists.values())
+            h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+            h_data = h_sum.copy().reset()
+            h_data.fill(np.repeat(h_sum.axes[0].centers, np.random.poisson(h_sum.view().value)))
 
-                h_final.plot(
-                    ax=ax,
-                    stack=True,
-                    histtype="fill",
-                    label=label,
-                    color=colors,
-                )
-                ax.stairs(
-                    edges=h_total.axes[self.branch_data["variable"]].edges,
-                    baseline=h_total.view().value - np.sqrt(h_total.view().variance),
-                    values=h_total.view().value + np.sqrt(h_total.view().variance),
-                    hatch="///",
-                    label="MC Stat. unc.",
-                    facecolor="none",
-                    linewidth=0,
-                    color="black",
-                )
-                h_data.plot1d(
-                    ax=ax,
-                    histtype="errorbar",
-                    color="k",
-                    label="Pseudodata",
-                )
+            plt.style.use(mplhep.style.CMS)
+            fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
 
-                ax.set_ylabel(c.get_variable(self.branch_data["variable"]).get_full_y_title())
-                ax.legend(title="Processes")
-                if c.get_variable(self.branch_data["variable"]).log_y:
-                    ax.set_yscale("log")
+            h_final.plot(
+                ax=ax,
+                stack=True,
+                histtype="fill",
+                label=[process_inst.label for process_inst in hists],
+                color=[process_inst.color for process_inst in hists],
+            )
+            ax.stairs(
+                edges=h_sum.axes[variable_inst.name].edges,
+                baseline=h_sum.view().value - np.sqrt(h_sum.view().variance),
+                values=h_sum.view().value + np.sqrt(h_sum.view().variance),
+                hatch="///",
+                label="MC Stat. unc.",
+                facecolor="none",
+                linewidth=0,
+                color="black",
+            )
+            h_data.plot1d(
+                ax=ax,
+                histtype="errorbar",
+                color="k",
+                label="Pseudodata",
+            )
 
-                from hist.intervals import ratio_uncertainty
-                rax.errorbar(
-                    x=h_data.axes[self.branch_data["variable"]].centers,
-                    y=h_data.view().value / h_total.view().value,
-                    yerr=ratio_uncertainty(h_data.view().value, h_total.view().value, "poisson"),
-                    color="k",
-                    linestyle="none",
-                    marker="o",
-                    elinewidth=1,
-                )
-                rax.stairs(
-                    edges=h_total.axes[self.branch_data["variable"]].edges,
-                    baseline=1 - np.sqrt(h_total.view().variance) / h_total.view().value,
-                    values=1 + np.sqrt(h_total.view().variance) / h_total.view().value,
-                    facecolor="grey",
-                    linewidth=0,
-                    hatch="///",
-                    color="grey",
-                )
+            ax.set_ylabel(variable_inst.get_full_y_title())
+            ax.legend(title="Processes")
+            if variable_inst.log_y:
+                ax.set_yscale("log")
 
-                rax.axhline(y=1.0, linestyle="dashed", color="gray")
-                rax.set_ylabel("Data / MC", loc="center")
-                rax.set_ylim(0.9, 1.1)
-                rax.set_xlabel(c.variables.get(self.branch_data["variable"]).get_full_x_title())
+            from hist.intervals import ratio_uncertainty
+            rax.errorbar(
+                x=h_data.axes[variable_inst.name].centers,
+                y=h_data.view().value / h_sum.view().value,
+                yerr=ratio_uncertainty(h_data.view().value, h_sum.view().value, "poisson"),
+                color="k",
+                linestyle="none",
+                marker="o",
+                elinewidth=1,
+            )
+            rax.stairs(
+                edges=h_sum.axes[variable_inst.name].edges,
+                baseline=1 - np.sqrt(h_sum.view().variance) / h_sum.view().value,
+                values=1 + np.sqrt(h_sum.view().variance) / h_sum.view().value,
+                facecolor="grey",
+                linewidth=0,
+                hatch="///",
+                color="grey",
+            )
 
-                lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
-                mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
+            rax.axhline(y=1.0, linestyle="dashed", color="gray")
+            rax.set_ylabel("Data / MC", loc="center")
+            rax.set_ylim(0.9, 1.1)
+            rax.set_xlabel(variable_inst.get_full_x_title())
 
-                plt.tight_layout()
+            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
+            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
+            plt.tight_layout()
+
+            # save the plot
             self.output().dump(plt, formatter="mpl")
 
 
-class PlotShifts(
+class PlotShiftedVariables(
     ProducersMixin,
     CalibratorsSelectorMixin,
-    PlotMixin,
+    ProcessPlotBase,
+    ShiftSourcesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-    # sandbox = "bash::$AP_BASE/sandboxes/venv_columnar.sh"
 
-    processes = law.CSVParameter(
-        default=("st_tchannel_t",),
-        description="List of processes to create plots for",
-    )
-    variables = law.CSVParameter(
-        default=("HT",),
-        description="List of variables to plot",
-    )
-    categories = law.CSVParameter(
-        default=("incl",),
-        description="List of categories to create plots for",
-    )
-    shift_sources = law.CSVParameter(
-        default=("jec",),
-        description="List of systematic uncertainties to consider",
-    )
+    def store_parts(self):
+        parts = super().store_parts()
+        parts["plot"] += f"__shifts_{self.shift_sources_repr}"
+        return parts
 
     def create_branch_map(self):
-        if not self.variables:
-            self.variables = self.config_inst.variables.names()
-        branch_map = {}
-        prod = product(self.variables, self.categories, self.processes, self.shift_sources)
-        for i, x in enumerate(prod):
-            branch_map[i] = {"variable": x[0], "category": x[1], "process": x[2], "shift_source": x[3]}
-        return branch_map
+        return [
+            DotDict({"category": cat_name, "variable": var_name, "shift_source": source})
+            for cat_name in sorted(self.categories)
+            for var_name in sorted(self.variables)
+            for source in sorted(self.shift_sources)
+        ]
 
     def workflow_requires(self):
-        self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
-        req_map = {}
-        for d in self.datasets:
-            req_map[d] = MergeShiftedHistograms.req(self)
-        return req_map
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
 
     def requires(self):
-        self.datasets = getDatasetNamesFromProcesses(self.config_inst, self.processes)
-        req_map = {}
-        for d in self.datasets:
-            req_map[d] = MergeShiftedHistograms.req(self, dataset=d)
-        return req_map
+        return {
+            d: MergeShiftedHistograms.req(
+                self,
+                dataset=d,
+                branch=-1,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
+            for d in self.datasets
+        }
 
     def output(self):
-        filename = ("systplot_" + self.branch_data["category"] + "_" + self.branch_data["process"] + "_" +
-                    self.branch_data["variable"] + "_" + self.branch_data["shift_source"] + ".pdf")
-        return self.local_target(filename)
+        b = self.branch_data
+        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
-        with self.publish_step("Hello from PlotShiftograms"):
-            import matplotlib.pyplot as plt
-            import mplhep
-            import hist
+        import hist
+        import matplotlib.pyplot as plt
+        import mplhep
+
+        # prepare config objects
+        variable_inst = self.config_inst.get_variable(self.branch_data.variable)
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+        shift_inst_up = self.config_inst.get_shift(f"{self.branch_data.shift_source}_up")
+        shift_inst_down = self.config_inst.get_shift(f"{self.branch_data.shift_source}_down")
+
+        # histogram data per process
+        hists = OrderedDict()
+
+        with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
+            for dataset, inp in self.input().items():
+                dataset_inst = self.config_inst.get_dataset(dataset)
+                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
+
+                # loop and extract one histogram per process
+                for process_inst in process_insts:
+                    # skip when the dataset is already known to not contain any sub process
+                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                        continue
+
+                    # work on a copy
+                    h = h_in.copy()
+
+                    # axis selections
+                    h = h[{
+                        "process": [
+                            hist.loc(p.id)
+                            for p in sub_process_insts[process_inst]
+                            if p.id in h.axes["process"]
+                        ],
+                        "category": [
+                            hist.loc(c.id)
+                            for c in leaf_category_insts
+                            if c.id in h.axes["category"]
+                        ],
+                    }]
+
+                    # axis reductions
+                    h = h[{"process": sum, "category": sum}]
+
+                    # add the histogram
+                    if process_inst in hists:
+                        hists[process_inst] += h
+                    else:
+                        hists[process_inst] = h
+
+            # there should be hists to plot
+            if not hists:
+                raise Exception("no histograms found to plot")
+
+            # create the stack and the sum
+            # h_final = hist.Stack(*hists.values())
+            h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+
             plt.style.use(mplhep.style.CMS)
+            fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
 
-            c = self.config_inst
-            category = self.branch_data["category"]
+            h_sum.plot1d(
+                ax=ax,
+                overlay="shift",
+                color=["black", "red", "blue"],
+            )
+            ax.legend(title=process_inst.name)
+            ax.set_ylabel(variable_inst.get_full_y_title())
 
-            h_proc = None
-            for d in getDatasetNamesFromProcess(c, self.branch_data["process"]):
-                h_in = self.input()[d].load(formatter="pickle")[self.branch_data["variable"]]
+            norm = h_sum[{"shift": "nominal"}].view().value
+            rax.step(
+                x=h_sum.axes[variable_inst.name].edges[1:],
+                y=h_sum[{"shift": shift_inst_up.name}].view().value / norm,
+                color="red",
+            )
+            rax.step(
+                x=h_sum.axes[variable_inst.name].edges[1:],
+                y=h_sum[{"shift": shift_inst_down.name}].view().value / norm,
+                color="blue",
+            )
+            rax.axhline(y=1., color="black")
+            rax.set_ylim(0.25, 1.75)
+            rax.set_xlabel(variable_inst.get_full_x_title())
 
-                # Note: this assumes that the category axis only contains leaf_cats
-                if category == "incl":
-                    leaf_cats = [cat.id for cat in c.get_leaf_categories()]
-                elif c.get_category(category).is_leaf_category:
-                    leaf_cats = [c.get_category(category).id]
-                else:
-                    leaf_cats = [cat.id for cat in c.get_category(category).get_leaf_categories()]
-
-                # to access the correct bins in the IntCat axis, we need the position of the bins, not the id itself
-                leaf_to_pos = [hist.loc(i) for i in leaf_cats]
-
-                h_in = h_in[{"category": leaf_to_pos}]
-                h_in = h_in[{"category": sum}]
-
-                if h_proc is None:
-                    h_proc = h_in.copy()
-                else:
-                    h_proc += h_in
-
-            with self.publish_step("Starting plotting routine ..."):
-                fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
-
-                print("------")
-                print(h_proc.axes)
-                print(h_proc.view())
-                h_proc.plot1d(
-                    ax=ax,
-                    overlay="shift",
-                    color=["black", "red", "blue"],
-                )
-                print("------")
-                ax.legend(title=self.branch_data["process"])
-                ax.set_ylabel(c.get_variable(self.branch_data["variable"]).get_full_y_title())
-
-                norm = h_proc[{"shift": "nominal"}].view().value
-                rax.step(
-                    x=h_proc.axes[self.branch_data["variable"]].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data["shift_source"] + "_up"}].view().value / norm,
-                    color="red",
-                )
-                print("------")
-                rax.step(
-                    x=h_proc.axes[self.branch_data["variable"]].edges[+1:],
-                    y=h_proc[{"shift": self.branch_data["shift_source"] + "_down"}].view().value / norm,
-                    color="blue",
-                )
-                rax.axhline(y=1., color="black")
-                rax.set_ylim(0.25, 1.75)
-                rax.set_xlabel(c.variables.get(self.branch_data["variable"]).get_full_x_title())
-                print("------")
-                # lumi = c.x.luminosity.get("nominal") / 1000  # pb -> fb
-                # mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
+            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
+            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
             self.output().dump(plt, formatter="mpl")
