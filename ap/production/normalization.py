@@ -10,21 +10,25 @@ import law
 import order as od
 
 from ap.production import Producer, producer
+from ap.production.processes import process_ids
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column
+from ap.columnar_util import set_ak_column, has_ak_column
 
+np = maybe_import("numpy")
+sp = maybe_import("scipy")
+maybe_import("scipy.sparse")
 ak = maybe_import("awkward")
 
 
 @producer(
-    uses={"LHEWeight.originalXWGTUP"},
-    produces={"normalization_weight"},
+    uses={process_ids, "LHEWeight.originalXWGTUP"},
+    produces={process_ids, "normalization_weight"},
 )
 def normalization_weights(
     events: ak.Array,
     selection_stats: Dict[str, Union[int, float]],
+    xs_table: sp.sparse.lil.lil_matrix,
     config_inst: od.Config,
-    dataset_inst: od.Dataset,
     **kwargs,
 ) -> ak.Array:
     """
@@ -32,11 +36,17 @@ def normalization_weights(
     *dataset_inst* and the sum of event weights from *selection_stats* to assign each event a
     normalization weight.
     """
-    # get lumi and cross section of the first process contained in the dataset
-    # TODO: the process should depend on the process id per event for which we need a LUT
-    #       that is cached through a simple mutable argument
+    if has_ak_column(events, "normalization_weight"):
+        return events
+
+    # add process ids
+    events = process_ids(events, config_inst=config_inst, **kwargs)
+
+    # get the lumi
     lumi = config_inst.x.luminosity.nominal
-    xs = dataset_inst.processes.get_first().get_xsec(config_inst.campaign.ecm).nominal
+
+    # read the cross section per process from the lookup table
+    xs = np.array(xs_table[0, np.asarray(events.process_id)].todense())[0]
 
     # compute the weight and store it
     norm_weight = events.LHEWeight.originalXWGTUP * lumi * xs / selection_stats["sum_mc_weight"]
@@ -68,7 +78,20 @@ def normalization_weights_setup(
     **kwargs,
 ):
     """
-    Loads the selection stats added through the requirements and saves them in the *call_kwargs* for
-    simpler access in the actual callable.
+    Sets up objects required by the computation of normalization weights and stores them in
+    *call_kwargs*:
+
+        - "selection_stats": The stats dict loaded from the output of MergeSelectionsStats.
+        - "xs_table": A sparse array serving as a lookup table for all processes known to the
+                      config of the *task*, with keys being process ids.
     """
+    # load the selection stats
     call_kwargs["selection_stats"] = inputs["selection_stats"].load(formatter="json")
+
+    # create a lookup table as a sparse array with all known processes
+    process_insts = [process_inst for process_inst, _, _ in task.config_inst.walk_processes()]
+    max_id = max(process_inst.id for process_inst in process_insts)
+    xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
+    for process_inst in process_insts:
+        xs_table[0, process_inst.id] = process_inst.get_xsec(task.config_inst.campaign.ecm).nominal
+    call_kwargs["xs_table"] = xs_table
