@@ -133,7 +133,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         cls,
         names: Union[str, Sequence[str], Set[str]],
         container: od.UniqueObject,
-        object_cls: type,
+        object_cls: od.UniqueObjectMeta,
         object_group: Optional[str] = None,
         accept_patterns: bool = True,
         deep: bool = False,
@@ -144,7 +144,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
         pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
         *object_group* that matches group names to object names. When *deep* is *True* the lookup of
-        objects in the *container*. *context* is forwarded to all container lookup methods. Example:
+        objects in the *container* is recursive. *context* is forwarded to all container lookup
+        methods. Example:
 
         .. code-block:: python
 

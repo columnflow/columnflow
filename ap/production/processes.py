@@ -27,6 +27,11 @@ def process_ids(events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Arra
         return events
 
     # trivial case
+    if len(dataset_inst.processes) != 1:
+        raise NotImplementedError(
+            f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} processes assigned, "
+            "which is not yet implemented",
+        )
     process_id = dataset_inst.processes.get_first().id
 
     # store the column
