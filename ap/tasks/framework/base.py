@@ -11,7 +11,6 @@ from typing import Optional, Sequence
 
 import luigi
 import law
-import six
 
 
 class BaseTask(law.Task):
