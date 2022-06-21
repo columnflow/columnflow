@@ -168,6 +168,7 @@ class SelectorMixin(ConfigTask):
         params = super().modify_param_values(params)
 
         # add the default selector when empty
+        if "config_inst" in params and params.get("selector") == law.NO_STR:
             config_inst = params["config_inst"]
             if config_inst.x("default_selector", None):
                 params["selector"] = config_inst.x.default_selector
