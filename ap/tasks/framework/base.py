@@ -8,7 +8,7 @@ import os
 import itertools
 import inspect
 import functools
-from typing import Optional, Sequence, List, Union, Set
+from typing import Optional, Sequence, List, Union, Set, Dict
 
 import luigi
 import law
@@ -134,7 +134,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         names: Union[str, Sequence[str], Set[str]],
         container: od.UniqueObject,
         object_cls: od.UniqueObjectMeta,
-        object_group: Optional[str] = None,
+        object_groups: Optional[Dict[str, list]] = None,
         accept_patterns: bool = True,
         deep: bool = False,
         context: Optional[str] = None,
@@ -179,31 +179,21 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 )
             return _cache["has_obj_func"](name)
 
-        object_names = set()
-        patterns = set()
-        lookup = list(names)
-        while lookup:
-            name = lookup.pop(0)
-            if accept_patterns and name == "*":
-                # special case
-                object_names |= get_all_object_names()
-                patterns = None
-                break
-            elif has_obj(name):
-                # known object
-                object_names.add(name)
-            elif object_group and name in object_group:
-                # a key in the object group dict
-                lookup.extend(list(object_group[name]))
-            elif accept_patterns:
-                # must eventually be a pattern, store it for object traversal
-                patterns.add(name)
+        # define the lookup as the given names plus all matching lists in object groups
+        lookup = set(names)
+        lookup.update(*[object_groups.get(name, []) for name in names])
 
-        # if patterns are found, loop through existing objects instead and compare
-        if patterns:
-            for name in get_all_object_names():
-                if law.util.multi_match(name, patterns):
-                    object_names.add(name)
+        # if patterns are allowed, we can treat the input names *lookup* directly as patterns and check all object names
+        if accept_patterns:
+            filterfunc = functools.partial(law.util.multi_match, patterns=lookup)
+            unfiltered_list = get_all_object_names()
+        else:
+            # if patterns are not allowed, we really need to check the individual names in *lookup*
+            filterfunc = has_obj
+            unfiltered_list = lookup
+
+        # apply the filter func to the full list of names
+        object_names = set(filter(filterfunc, unfiltered_list))
 
         return object_names
 
