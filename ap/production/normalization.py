@@ -29,6 +29,7 @@ def normalization_weights(
     selection_stats: Dict[str, Union[int, float]],
     xs_table: sp.sparse.lil.lil_matrix,
     config_inst: od.Config,
+    dataset_inst: od.Dataset,
     **kwargs,
 ) -> ak.Array:
     """
@@ -40,7 +41,11 @@ def normalization_weights(
         return events
 
     # add process ids
-    events = process_ids(events, config_inst=config_inst, **kwargs)
+    events = process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+
+    # stop here for data
+    if dataset_inst.is_data:
+        return events
 
     # get the lumi
     lumi = config_inst.x.luminosity.nominal
@@ -63,7 +68,7 @@ def normalization_weights_requires(self: Producer, task: law.Task, reqs: dict) -
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
-    if "selection_stats" not in reqs:
+    if reqs.get("selection_stats") is None and task.dataset_inst.is_mc:
         from ap.tasks.selection import MergeSelectionStats
         reqs["selection_stats"] = MergeSelectionStats.req(task, tree_index=0)
     return reqs
@@ -85,11 +90,20 @@ def normalization_weights_setup(
         - "xs_table": A sparse array serving as a lookup table for all processes known to the
                       config of the *task*, with keys being process ids.
     """
+    if call_kwargs.get("selection_stats") is not None or task.dataset_inst.is_data:
+        call_kwargs.setdefault("selection_stats", None)
+        call_kwargs.setdefault("xs_table", None)
+        return
+
     # load the selection stats
     call_kwargs["selection_stats"] = inputs["selection_stats"].load(formatter="json")
 
     # create a lookup table as a sparse array with all known processes
-    process_insts = [process_inst for process_inst, _, _ in task.config_inst.walk_processes()]
+    process_insts = [
+        process_inst
+        for process_inst, _, _ in task.config_inst.walk_processes()
+        if process_inst.is_mc
+    ]
     max_id = max(process_inst.id for process_inst in process_insts)
     xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
     for process_inst in process_insts:

@@ -145,10 +145,11 @@ class CalibratorsMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        calib = "__".join(self.calibrators[:5])
-        if len(self.calibrators) > 5:
-            calib += f"__{law.util.create_hash(self.calibrators[5:])}"
-        parts.insert_before("version", "calibrators", f"calib__{calib}")
+        calibrators = sorted(self.calibrators)
+        part = "__".join(calibrators[:5])
+        if len(calibrators) > 5:
+            part += f"__{law.util.create_hash(calibrators[5:])}"
+        parts.insert_before("version", "calibrators", f"calib__{part}")
 
         return parts
 
@@ -357,12 +358,13 @@ class ProducersMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        producers = "none"
-        if self.producers:
-            producers = "__".join(self.producers[:5])
-            if len(self.producers) > 5:
-                producers += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"prod__{producers}")
+        producers = sorted(self.producers)
+        part = "none"
+        if producers:
+            part = "__".join(producers[:5])
+            if len(producers) > 5:
+                part += f"__{law.util.create_hash(producers[5:])}"
+        parts.insert_before("version", "producers", f"prod__{part}")
 
         return parts
 
@@ -401,7 +403,7 @@ class CategoriesMixin(ConfigTask):
         if len(self.categories) == 1:
             return self.categories[0]
 
-        return f"{len(self.categories)}_{law.util.create_hash(self.categories)}"
+        return f"{len(self.categories)}_{law.util.create_hash(sorted(self.categories))}"
 
 
 class VariablesMixin(ConfigTask):
@@ -441,7 +443,7 @@ class VariablesMixin(ConfigTask):
         if len(self.variables) == 1:
             return self.variables[0]
 
-        return f"{len(self.variables)}_{law.util.create_hash(self.variables)}"
+        return f"{len(self.variables)}_{law.util.create_hash(sorted(self.variables))}"
 
 
 class DatasetsProcessesMixin(ConfigTask):
@@ -511,7 +513,7 @@ class DatasetsProcessesMixin(ConfigTask):
         if len(self.datasets) == 1:
             return self.datasets[0]
 
-        return f"{len(self.datasets)}_{law.util.create_hash(self.datasets)}"
+        return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
 
     @property
     def processes_repr(self):
@@ -570,7 +572,7 @@ class ShiftSourcesMixin(ConfigTask):
         if len(self.shift_sources) == 1:
             return self.shift_sources[0]
 
-        return f"{len(self.shift_sources)}_{law.util.create_hash(self.shift_sources)}"
+        return f"{len(self.shift_sources)}_{law.util.create_hash(sorted(self.shift_sources))}"
 
 
 class PlotMixin(AnalysisTask):
