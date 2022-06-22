@@ -68,9 +68,12 @@ def normalization_weights_requires(self: Producer, task: law.Task, reqs: dict) -
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
-    if reqs.get("selection_stats") is None and task.dataset_inst.is_mc:
-        from ap.tasks.selection import MergeSelectionStats
-        reqs["selection_stats"] = MergeSelectionStats.req(task, tree_index=0)
+    if reqs.get("selection_stats") is not None or task.dataset_inst.is_data:
+        return reqs
+
+    from ap.tasks.selection import MergeSelectionStats
+    reqs["selection_stats"] = MergeSelectionStats.req(task, tree_index=0)
+
     return reqs
 
 

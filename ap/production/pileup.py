@@ -53,9 +53,12 @@ def pu_weights_requires(self: Producer, task: law.Task, reqs: dict) -> dict:
     """
     Adds the requirements needed by *task* to derive the pileup weights into *reqs*.
     """
-    if reqs.get("pu_weight") is None and task.dataset_inst.is_mc:
-        from ap.tasks.external import CreatePileupWeights
-        reqs["pu_weights"] = CreatePileupWeights.req(task)
+    if reqs.get("pu_weights") is not None or task.dataset_inst.is_data:
+        return reqs
+
+    from ap.tasks.external import CreatePileupWeights
+    reqs["pu_weights"] = CreatePileupWeights.req(task)
+
     return reqs
 
 
@@ -71,7 +74,7 @@ def pu_weights_setup(
     Loads the pileup weights added through the requirements and saves them in the *call_kwargs* for
     simpler access in the actual callable.
     """
-    if call_kwargs.get("pu_weight") is not None or task.dataset_inst.is_data:
+    if call_kwargs.get("pu_weights") is not None or task.dataset_inst.is_data:
         call_kwargs.setdefault("pu_weights", None)
         return
 
