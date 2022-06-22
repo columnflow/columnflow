@@ -76,12 +76,24 @@ for dataset_name in dataset_names:
 
 
 # process groups for conveniently looping over certain processs
-# (used in wrapper_factory)
-analysis_st.set_aux("process_groups", {})
+# (used in wrapper_factory and during plotting)
+config_2018.set_aux("process_groups", {})
 
 # dataset groups for conveniently looping over certain datasets
-# (used in wrapper_factory)
-analysis_st.set_aux("dataset_groups", {})
+# (used in wrapper_factory and during plotting)
+config_2018.set_aux("dataset_groups", {})
+
+# category groups for conveniently looping over certain categories
+# (used during plotting)
+config_2018.set_aux("category_groups", {})
+
+# variable groups for conveniently looping over certain variables
+# (used during plotting)
+config_2018.set_aux("variable_groups", {})
+
+# shift groups for conveniently looping over certain shifts
+# (used during plotting)
+config_2018.set_aux("shift_groups", {})
 
 
 # helper to add column aliases for both shifts of a source
@@ -150,7 +162,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
 # default calibrator, selector and producer
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
-config_2018.set_aux("default_producer", None)
+config_2018.set_aux("default_producer", "variables")
 
 # event weight columns
 config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
@@ -222,85 +234,72 @@ cat_mu_bb_highHT = cat_mu_bb.add_category(
 # TODO: move their definition to dedicated file
 config_2018.add_variable(
     name="HT",
-    expression="var_HT",
     binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
     unit="GeV",
     x_title="HT",
 )
 config_2018.add_variable(
     name="nElectron",
-    expression="var_nElectron",
     binning=(6, -0.5, 5.5),
     x_title="Number of electrons",
 )
 config_2018.add_variable(
     name="nMuon",
-    expression="var_nMuon",
     binning=(6, -0.5, 5.5),
     x_title="Number of muons",
 )
 config_2018.add_variable(
     name="Electron1_pt",
-    expression="var_Electron1_pt",
     binning=(40, 0., 400.),
     unit="GeV",
     x_title="Leading electron $p_{T}$",
 )
 config_2018.add_variable(
     name="Muon1_pt",
-    expression="var_Muon1_pt",
     binning=(40, 0., 400.),
     unit="GeV",
     x_title="Leading muon $p_{T}$",
 )
 config_2018.add_variable(
     name="nJet",
-    expression="var_nJet",
     binning=(11, -0.5, 10.5),
     x_title="Number of jets",
 )
 config_2018.add_variable(
     name="nDeepjet",
-    expression="var_nDeepjet",
     binning=(8, -0.5, 7.5),
     x_title="Number of deepjets",
 )
 config_2018.add_variable(
     name="Jet1_pt",
-    expression="var_Jet1_pt",
     binning=(40, 0., 400.),
     unit="GeV",
     x_title="Leading jet $p_{T}$",
 )
 config_2018.add_variable(
     name="Jet2_pt",
-    expression="var_Jet2_pt",
     binning=(40, 0., 400.),
     unit="GeV",
     x_title="Jet 2 $p_{T}$",
 )
 config_2018.add_variable(
     name="Jet3_pt",
-    expression="var_Jet3_pt",
     binning=(40, 0., 400.),
     unit="GeV",
     x_title="Jet 3 $p_{T}$",
 )
 config_2018.add_variable(
     name="Jet1_eta",
-    expression="var_Jet1_eta",
     binning=(50, -2.5, 2.5),
     x_title=r"Leading jet $\eta$",
 )
 config_2018.add_variable(
     name="Jet2_eta",
-    expression="var_Jet2_eta",
     binning=(50, -2.5, 2.5),
     x_title=r"Jet 2 $\eta$",
 )
 config_2018.add_variable(
     name="Jet3_eta",
-    expression="var_Jet3_eta",
     binning=(50, -2.5, 2.5),
     x_title=r"Jet 3 $\eta$",
 )

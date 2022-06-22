@@ -17,6 +17,10 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
+    update_calibrator = True
+
+    shifts = {GetDatasetLFNs}
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)

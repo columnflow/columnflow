@@ -137,7 +137,7 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
+class MergeReductionStats(DatasetTask, CalibratorsSelectorMixin):
 
     merged_size = law.BytesParameter(
         default=500.0,
@@ -213,9 +213,9 @@ class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
         self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
 
 
-GatherReductionStatsWrapper = wrapper_factory(
+MergeReductionStatsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
-    require_cls=GatherReductionStats,
+    require_cls=MergeReductionStats,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 
