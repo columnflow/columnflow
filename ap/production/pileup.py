@@ -8,7 +8,7 @@ import law
 
 from ap.production import Producer, producer
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column
+from ap.columnar_util import set_ak_column, has_ak_column
 
 ak = maybe_import("awkward")
 
@@ -22,6 +22,9 @@ def pu_weights(events: ak.Array, pu_weights: ak.Array, **kwargs) -> ak.Array:
     Based on the number of primary vertices, assigns each event pileup weights using the profile
     of pileup ratios *pu_weights* that is provided by the requires and setup functions below.
     """
+    if has_ak_column(events, "pu_weight"):
+        return events
+
     # compute the indices for looking up weights
     indices = events.PV.npvs.to_numpy() - 1
     max_bin = len(pu_weights) - 1

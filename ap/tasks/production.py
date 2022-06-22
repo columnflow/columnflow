@@ -17,7 +17,9 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = ReduceEvents.shifts
+    shifts = {ReduceEvents}
+
+    update_producer = True
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

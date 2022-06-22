@@ -140,6 +140,17 @@ class Route(object):
         """
         return route if isinstance(route, cls) else cls(route)
 
+    @classmethod
+    def select(cls, ak_array: ak.Array, route: Union["Route", Sequence[str], str]) -> ak.Array:
+        """
+        Returns a selection of an *ak_array* at a certain *route*. This method is a shorthand for
+
+        .. code-block:: python
+
+           ak_array[Route.check(route).fields]
+        """
+        return ak_array[cls.check(route).fields]
+
     def __init__(self, route=None):
         super().__init__()
 

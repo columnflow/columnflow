@@ -7,7 +7,9 @@ Task to produce and merge histograms.
 import law
 
 from ap.tasks.framework.base import DatasetTask
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin
+from ap.tasks.framework.mixins import (
+    CalibratorsSelectorMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import ReduceEvents
 from ap.tasks.production import ProduceColumns
@@ -18,6 +20,7 @@ class CreateHistograms(
     DatasetTask,
     ProducersMixin,
     CalibratorsSelectorMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
@@ -41,7 +44,7 @@ class CreateHistograms(
         return reqs
 
     def output(self):
-        return self.local_target(f"histograms_{self.branch}.pickle")
+        return self.local_target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
 
     @law.decorator.safe_output
     @law.decorator.localize
@@ -94,34 +97,36 @@ class CreateHistograms(
                         weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
-                cat_ids = []
-                for cat in self.config_inst.get_leaf_categories():
-                    cat_ids.append(cat.id)
+                leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
 
-                # define & fill histograms
-                var_names = self.config_inst.variables.names()
-                with self.publish_step("looping over all variables in config ...."):
-                    for var_name in var_names:
-                        with self.publish_step("var: %s" % var_name):
-                            var = self.config_inst.variables.get(var_name)
-                            h_var = (
-                                hist.Hist.new
-                                .IntCat(cat_ids, name="category")
-                                .StrCategory([], name="shift", growth=True)
-                                .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
-                                .Weight()
+                # define and fill histograms
+                for var_name in self.variables:
+                    variable_inst = self.config_inst.get_variable(var_name)
+                    with self.publish_step("var: %s" % var_name):
+                        h_var = (
+                            hist.Hist.new
+                            .IntCat([], name="process", growth=True)
+                            .IntCat(leaf_cat_ids, name="category")
+                            .StrCategory([], name="shift", growth=True)
+                            .Var(
+                                variable_inst.bin_edges,
+                                name=var_name,
+                                label=variable_inst.get_full_x_title(),
                             )
-                            fill_kwargs = {
-                                "category": events.cat_array,
-                                "shift": self.shift,
-                                var_name: events[var_name],
-                                "weight": weight,
-                            }
-                            h_var.fill(**fill_kwargs)
-                            if var_name in histograms:
-                                histograms[var_name] += h_var
-                            else:
-                                histograms[var_name] = h_var
+                            .Weight()
+                        )
+                        fill_kwargs = {
+                            var_name: events[Route.check(variable_inst.expression).fields],
+                            "process": events.process_id,
+                            "category": events.cat_array,
+                            "shift": self.shift,
+                            "weight": weight,
+                        }
+                        h_var.fill(**fill_kwargs)
+                        if var_name in histograms:
+                            histograms[var_name] += h_var
+                        else:
+                            histograms[var_name] = h_var
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")
@@ -131,6 +136,7 @@ class MergeHistograms(
     DatasetTask,
     ProducersMixin,
     CalibratorsSelectorMixin,
+    VariablesMixin,
     law.tasks.ForestMerge,
     HTCondorWorkflow,
 ):
@@ -153,7 +159,7 @@ class MergeHistograms(
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target("histograms.pickle")
+        return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
@@ -176,46 +182,46 @@ class MergeShiftedHistograms(
     DatasetTask,
     ProducersMixin,
     CalibratorsSelectorMixin,
+    VariablesMixin,
+    ShiftSourcesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shift_sources = law.CSVParameter(
-        default=("jec",),
-        description="comma-separated source of shifts without direction to consider; default: "
-        "('jec',)",
-    )
-
     # disable the shift parameter
     shift = None
-    # effective_shift = None  # TODO: debug why this is needed
+    effective_shift = None
     allow_empty_shift = True
 
     def workflow_requires(self):
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
 
         # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0)
-        reqs["nominal"] = req("nominal")
-        for s in self.shift_sources:
-            reqs[f"{s}_up"] = req(f"{s}_up")
-            reqs[f"{s}_down"] = req(f"{s}_down")
+        for shift in ["nominal"] + self.shifts:
+            reqs[shift] = MergeHistograms.req(
+                self,
+                shift=shift,
+                tree_index=0,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
 
         return reqs
 
     def requires(self):
-        reqs = {}
-
-        # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0, _exclude={"branch"})
-        reqs["nominal"] = req("nominal")
-        for s in self.shift_sources:
-            reqs[f"{s}_up"] = req(f"{s}_up")
-            reqs[f"{s}_down"] = req(f"{s}_down")
-
-        return reqs
+        return {
+            shift: MergeHistograms.req(
+                self,
+                shift=shift,
+                branch=-1,
+                tree_index=0,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
+            for shift in ["nominal"] + self.shifts
+        }
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
@@ -223,21 +229,14 @@ class MergeShiftedHistograms(
 
     def store_parts(self):
         parts = super(MergeShiftedHistograms, self).store_parts()
-
-        # add sorted shifts sources, add hash after the first five
-        sources = sorted(self.shift_sources)
-        sources_str = "_".join(sources[:5])
-        if len(sources) > 5:
-            sources_str += f"_{law.util.create_hash(sources[5:])}"
-        parts.insert_after("dataset", "shift_sources", sources_str)
-
+        parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts
 
     def output(self):
-        return self.local_target("shifted_histograms.pickle")
+        return self.local_target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
 
     def run(self):
-        with self.publish_step("Hello from MergeShiftedHistograms"):
+        with self.publish_step(f"merging shift sources {', '.join(self.shift_sources)} ..."):
             inputs_list = [
                 inp["collection"][0].load(formatter="pickle")
                 for inp in self.input().values()

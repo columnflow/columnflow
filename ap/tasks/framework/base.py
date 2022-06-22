@@ -7,10 +7,12 @@ Generic tools and base tasks that are defined along typical objects in an analys
 import os
 import itertools
 import inspect
-from typing import Optional, Sequence
+import functools
+from typing import Optional, Sequence, List, Union, Set, Dict
 
 import luigi
 import law
+import order as od
 
 
 class BaseTask(law.Task):
@@ -125,6 +127,75 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def get_producer_kwargs(cls, task=None, **params):
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def find_config_objects(
+        cls,
+        names: Union[str, Sequence[str], Set[str]],
+        container: od.UniqueObject,
+        object_cls: od.UniqueObjectMeta,
+        object_groups: Optional[Dict[str, list]] = None,
+        accept_patterns: bool = True,
+        deep: bool = False,
+        context: Optional[str] = None,
+    ) -> List[str]:
+        """
+        Returns all names of objects of type *object_cls* known to a *container* (e.g.
+        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
+        pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
+        *object_group* that matches group names to object names. When *deep* is *True* the lookup of
+        objects in the *container* is recursive. *context* is forwarded to all container lookup
+        methods. Example:
+
+        .. code-block:: python
+
+            find_config_objects(["st_tchannel_*"], config_inst, od.Dataset)
+            # -> ["st_tchannel_t", "st_tchannel_tbar"]
+        """
+        singular = object_cls.cls_name_singular
+        plural = object_cls.cls_name_plural
+        _cache = {}
+
+        def get_all_object_names():
+            if "all_object_names" not in _cache:
+                if deep:
+                    _cache["all_object_names"] = {
+                        obj.name
+                        for obj, _, _ in
+                        getattr(container, "walk_{}".format(plural))(context=context)
+                    }
+                else:
+                    _cache["all_object_names"] = set(getattr(container, plural).names(context=context))
+            return _cache["all_object_names"]
+
+        def has_obj(name):
+            if "has_obj_func" not in _cache:
+                kwargs = {"context": context}
+                if object_cls in container._deep_child_classes:
+                    kwargs["deep"] = deep
+                _cache["has_obj_func"] = functools.partial(
+                    getattr(container, "has_{}".format(singular)),
+                    **kwargs,
+                )
+            return _cache["has_obj_func"](name)
+
+        # define the lookup as the given names plus all matching lists in object groups
+        lookup = set(names)
+        lookup.update(*[object_groups.get(name, []) for name in names])
+
+        # if patterns are allowed, we can treat the input names *lookup* directly as patterns and check all object names
+        if accept_patterns:
+            filterfunc = functools.partial(law.util.multi_match, patterns=lookup)
+            unfiltered_list = get_all_object_names()
+        else:
+            # if patterns are not allowed, we really need to check the individual names in *lookup*
+            filterfunc = has_obj
+            unfiltered_list = lookup
+
+        # apply the filter func to the full list of names
+        object_names = set(filter(filterfunc, unfiltered_list))
+
+        return object_names
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -736,36 +807,6 @@ def wrapper_factory(
     if has_datasets:
         check_class_compatibility("datasets", DatasetTask, ShiftTask)
 
-    # generic helper to find objects on unique object indices or mappings
-    def find_objects(names, object_index, object_group, accept_patterns=True):
-        object_names = set()
-        patterns = set()
-        lookup = list(names)
-        while lookup:
-            name = lookup.pop(0)
-            if accept_patterns and name == "*":
-                # special case
-                object_names |= set(object_index.names())
-                patterns = None
-                break
-            elif name in object_index:
-                # known object
-                object_names.add(name)
-            elif object_group and name in object_group:
-                # a key in the object group dict
-                lookup.extend(list(object_group[name]))
-            elif accept_patterns:
-                # must eventually be a pattern, store it for object traversal
-                patterns.add(name)
-
-        # if patterns are found, loop through existing objects instead and compare
-        if patterns:
-            for name in object_index.names():
-                if law.util.multi_match(name, patterns):
-                    object_names.add(name)
-
-        return object_names
-
     # create the class
     class Wrapper(base_cls, law.WrapperTask):
 
@@ -839,9 +880,10 @@ def wrapper_factory(
 
             # get the target config instances
             if self.wrapper_has_configs:
-                configs = find_objects(
+                configs = self.find_config_objects(
                     self.configs,
-                    self.analysis_inst.configs,
+                    self.analysis_inst,
+                    od.Config,
                     self.analysis_inst.x("config_groups", {}),
                 )
                 if not configs:
@@ -849,9 +891,10 @@ def wrapper_factory(
                         f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
                     )
                 if self.wrapper_has_skip_configs:
-                    configs -= find_objects(
+                    configs -= self.find_config_objects(
                         self.skip_configs,
-                        self.analysis_inst.configs,
+                        self.analysis_inst,
+                        od.Config,
                         self.analysis_inst.x("config_groups", {}),
                     )
                     if not configs:
@@ -872,9 +915,10 @@ def wrapper_factory(
 
                 # find all shifts
                 if self.wrapper_has_shifts:
-                    shifts = find_objects(
+                    shifts = self.find_config_objects(
                         self.shifts,
-                        config_inst.shifts,
+                        config_inst,
+                        od.Shift,
                         config_inst.x("shift_groups", {}),
                     )
                     if not shifts:
@@ -882,9 +926,10 @@ def wrapper_factory(
                             f"no shifts found in config {config_inst} matching {self.shifts}",
                         )
                     if self.wrapper_has_skip_shifts:
-                        shifts -= find_objects(
+                        shifts -= self.find_config_objects(
                             self.skip_shifts,
-                            config_inst.shifts,
+                            config_inst,
+                            od.Shift,
                             config_inst.x("shift_groups", {}),
                         )
                     if not shifts:
@@ -900,9 +945,10 @@ def wrapper_factory(
 
                 # find all datasets
                 if self.wrapper_has_datasets:
-                    datasets = find_objects(
+                    datasets = self.find_config_objects(
                         self.datasets,
-                        config_inst.datasets,
+                        config_inst,
+                        od.Dataset,
                         config_inst.x("dataset_groups", {}),
                     )
                     if not datasets:
@@ -911,9 +957,10 @@ def wrapper_factory(
                             f"{self.datasets}",
                         )
                     if self.wrapper_has_skip_datasets:
-                        datasets -= find_objects(
+                        datasets -= self.find_config_objects(
                             self.skip_datasets,
-                            config_inst.datasets,
+                            config_inst,
+                            od.Dataset,
                             config_inst.x("dataset_groups", {}),
                         )
                         if not datasets:
