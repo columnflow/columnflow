@@ -68,6 +68,7 @@ def normalization_weights_requires(self: Producer, task: law.Task, reqs: dict) -
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
+    # do nothing when requirements are already present or for data
     if reqs.get("selection_stats") is not None or task.dataset_inst.is_data:
         return reqs
 
@@ -93,7 +94,11 @@ def normalization_weights_setup(
         - "xs_table": A sparse array serving as a lookup table for all processes known to the
                       config of the *task*, with keys being process ids.
     """
-    if call_kwargs.get("selection_stats") is not None or task.dataset_inst.is_data:
+    if call_kwargs.get("selection_stats") is not None:
+        # do nothing when already present
+        return
+    if task.dataset_inst.is_data:
+        # set to None for data
         call_kwargs.setdefault("selection_stats", None)
         call_kwargs.setdefault("xs_table", None)
         return
