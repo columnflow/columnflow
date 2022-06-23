@@ -815,9 +815,9 @@ class ArrayFunction(object):
                     continue
                 # either call used or produced columns
                 if wrapped.io_flag == self.IOFlag.USES:
-                    columns |= obj.inst._get_used_columns(_cache=_cache, **kwargs)
+                    columns |= wrapped.inst._get_used_columns(_cache=_cache, **kwargs)
                 else:
-                    columns |= obj.inst._get_produced_columns(_cache=_cache, **kwargs)
+                    columns |= wrapped.inst._get_produced_columns(_cache=_cache, **kwargs)
             else:
                 columns.add(obj)
 

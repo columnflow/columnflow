@@ -58,11 +58,13 @@ config_2018.set_aux("luminosity", Number(59740, {
 config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
 
 # add processes we are interested in
+config_2018.add_process(procs.process_data)
 config_2018.add_process(procs.process_st)
 config_2018.add_process(procs.process_tt)
 
 # add datasets we need to study
 dataset_names = [
+    "data_mu_a",
     "st_tchannel_t",
     "st_tchannel_tbar",
     "st_twchannel_t",

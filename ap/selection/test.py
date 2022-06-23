@@ -4,7 +4,10 @@
 Selection methods for testing purposes.
 """
 
-from typing import Callable, Dict, List, Optional, Union
+from collections import defaultdict
+from typing import Callable, Dict, List, Optional, Union, Tuple
+
+import order as od
 
 from ap.selection import selector, SelectionResult
 from ap.util import maybe_import
@@ -203,7 +206,13 @@ def lepton_selection_test(events, stats):
         jet_selection_test, lepton_selection_test, deepjet_selection_test, "cat_array",
     },
 )
-def test(events, stats, config_inst, **kwargs):
+def test(
+    events: ak.Array,
+    stats: defaultdict,
+    config_inst: od.Config,
+    dataset_inst: od.Dataset,
+    **kwargs,
+) -> Tuple[SelectionResult, ak.Array]:
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test
@@ -249,8 +258,9 @@ def test(events, stats, config_inst, **kwargs):
     events_sel = events[event_sel]
     stats["n_events"] += len(events)
     stats["n_events_selected"] += ak.sum(event_sel, axis=0)
-    stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
-    stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
+    if dataset_inst.is_mc:
+        stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
+        stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
 
     return results, events
 

@@ -5,6 +5,7 @@ Column production methods related to pileup weights.
 """
 
 import law
+import order as od
 
 from ap.production import Producer, producer
 from ap.util import maybe_import
@@ -17,12 +18,21 @@ ak = maybe_import("awkward")
     uses={"PV.npvs"},
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
 )
-def pu_weights(events: ak.Array, pu_weights: ak.Array, **kwargs) -> ak.Array:
+def pu_weights(
+    events: ak.Array,
+    pu_weights: ak.Array,
+    dataset_inst: od.Dataset,
+    **kwargs,
+) -> ak.Array:
     """
     Based on the number of primary vertices, assigns each event pileup weights using the profile
     of pileup ratios *pu_weights* that is provided by the requires and setup functions below.
     """
     if has_ak_column(events, "pu_weight"):
+        return events
+
+    # stop here for data
+    if dataset_inst.is_data:
         return events
 
     # compute the indices for looking up weights
@@ -43,9 +53,13 @@ def pu_weights_requires(self: Producer, task: law.Task, reqs: dict) -> dict:
     """
     Adds the requirements needed by *task* to derive the pileup weights into *reqs*.
     """
-    if "pu_weights" not in reqs:
-        from ap.tasks.external import CreatePileupWeights
-        reqs["pu_weights"] = CreatePileupWeights.req(task)
+    # do nothing when requirements are already present or for data
+    if reqs.get("pu_weights") is not None or task.dataset_inst.is_data:
+        return reqs
+
+    from ap.tasks.external import CreatePileupWeights
+    reqs["pu_weights"] = CreatePileupWeights.req(task)
+
     return reqs
 
 
@@ -61,4 +75,12 @@ def pu_weights_setup(
     Loads the pileup weights added through the requirements and saves them in the *call_kwargs* for
     simpler access in the actual callable.
     """
+    if call_kwargs.get("pu_weights") is not None:
+        # do nothing when already present
+        return
+    if task.dataset_inst.is_data:
+        # set to None for data
+        call_kwargs.setdefault("pu_weights", None)
+        return
+
     call_kwargs["pu_weights"] = ak.zip(inputs["pu_weights"].load(formatter="json"))

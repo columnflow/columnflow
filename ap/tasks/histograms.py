@@ -90,11 +90,12 @@ class CreateHistograms(
 
                 # build the full event weight
                 weight = ak.Array(np.ones(len(events)))
-                for column in self.config_inst.x.event_weights:
-                    weight = weight * events[Route(column).fields]
-                for column in self.dataset_inst.x("event_weights", []):
-                    if has_ak_column(events, column):
+                if self.dataset_inst.is_mc:
+                    for column in self.config_inst.x.event_weights:
                         weight = weight * events[Route(column).fields]
+                    for column in self.dataset_inst.x("event_weights", []):
+                        if has_ak_column(events, column):
+                            weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
                 leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
