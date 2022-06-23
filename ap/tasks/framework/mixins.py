@@ -145,10 +145,9 @@ class CalibratorsMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        calibrators = sorted(self.calibrators)
-        part = "__".join(calibrators[:5])
-        if len(calibrators) > 5:
-            part += f"__{law.util.create_hash(calibrators[5:])}"
+        part = "__".join(self.calibrators[:5])
+        if len(self.calibrators) > 5:
+            part += f"__{law.util.create_hash(self.calibrators[5:])}"
         parts.insert_before("version", "calibrators", f"calib__{part}")
 
         return parts
@@ -358,12 +357,11 @@ class ProducersMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        producers = sorted(self.producers)
         part = "none"
-        if producers:
-            part = "__".join(producers[:5])
-            if len(producers) > 5:
-                part += f"__{law.util.create_hash(producers[5:])}"
+        if self.producers:
+            part = "__".join(self.producers[:5])
+            if len(self.producers) > 5:
+                part += f"__{law.util.create_hash(self.producers[5:])}"
         parts.insert_before("version", "producers", f"prod__{part}")
 
         return parts
