@@ -18,6 +18,11 @@ jobs:
           submodules: recursive
           path: ${{ env.AP_JOB_ID }}
 
+      - name: Setup python 3.6 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
+
       - name: Install dependencies ☕️
         run: |
           cd "${AP_JOB_ID}"
@@ -45,6 +50,11 @@ jobs:
           submodules: recursive
           path: ${{ env.AP_JOB_ID }}
 
+      - name: Setup python 3.6 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
+
       - name: Install dependencies ☕️
         run: |
           cd "${AP_JOB_ID}"
@@ -59,3 +69,33 @@ jobs:
       - name: Cleanup 🧹
         if: always()
         run: rm -rf "${AP_JOB_ID}"
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ⬇️
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          submodules: recursive
+          path: ${{ env.AP_JOB_ID }}
+
+      - name: Setup python 3.6 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
+
+      - name: Install dependencies ☕️
+        run: |
+          cd "${AP_JOB_ID}"
+          source setup.sh ""
+
+      - name: Run coverage test 🎢
+        run: pytest --cov=ap --cov-report xml:coverage_36.xml tests
+
+      - name: Upload report 🔝
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage_36.xml
+          flags: unittests

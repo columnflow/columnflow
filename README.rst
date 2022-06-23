@@ -13,6 +13,10 @@ Analysis playground
    :target: https://github.com/uhh-cms/analysis_playground/blob/master/LICENSE
    :alt: License
 
+.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=MePbStZF7U
+   :target: https://codecov.io/gh/uhh-cms/analysis_playground
+   :alt: Code coverge
+
 Demonstrator for a Python-based, vectorized analysis with a bunch of public HEP tools.
 
 
