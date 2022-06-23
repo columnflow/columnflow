@@ -91,11 +91,14 @@ jobs:
           source setup.sh ""
 
       - name: Run coverage test 🎢
-        run: pytest --cov=ap --cov-report xml:coverage_36.xml tests
+        run: |
+          cd "${AP_JOB_ID}"
+          source setup.sh ""
+          ./tests/run_coverage
 
       - name: Upload report 🔝
         uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage_36.xml
+          files: ./coverage.xml
           flags: unittests
