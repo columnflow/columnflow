@@ -5,6 +5,10 @@ Analysis playground
    :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
+.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=33FLINPXFP
+   :target: https://codecov.io/gh/uhh-cms/analysis_playground
+   :alt: Code coverge
+
 .. image:: https://readthedocs.org/projects/analysis_playground/badge
    :target: http://analysis_playground.readthedocs.io
    :alt: Documentation status

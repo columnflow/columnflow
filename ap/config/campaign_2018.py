@@ -31,6 +31,18 @@ campaign_2018 = Campaign(
 # place datasets in a uniqueness context so that names and ids won't collide with other campaigns
 with uniqueness_context(campaign_2018.name):
     campaign_2018.add_dataset(
+        name="data_mu_a",
+        id=200,
+        is_data=True,
+        processes=[procs.process_data_mu],
+        keys=[
+            "/SingleMuon/Run2018A-02Apr2020-v1/NANOAOD",
+        ],
+        n_files=2,  # 225,
+        n_events=241608232,
+    )
+
+    campaign_2018.add_dataset(
         name="st_tchannel_t",
         id=1,
         processes=[procs.process_st_tchannel_t],

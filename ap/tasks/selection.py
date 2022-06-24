@@ -22,6 +22,8 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     shifts = {CalibrateEvents}
 
+    update_selector = True
+
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()

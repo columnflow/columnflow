@@ -10,7 +10,7 @@ from ap.production import Producer, producer
 from ap.production.pileup import pu_weights
 from ap.production.normalization import normalization_weights
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column
+from ap.columnar_util import set_ak_column, has_ak_column
 
 ak = maybe_import("awkward")
 
@@ -24,6 +24,9 @@ def top_pt_weights(events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.A
     Adds a dummy top pt weight and its variations to *events* in case *dataset_inst* represents a
     ttbar dataset.
     """
+    if has_ak_column(events, "top_pt_weight"):
+        return events
+
     # skip when not a ttbar dataset
     if not dataset_inst.x("is_ttbar", False):
         return events

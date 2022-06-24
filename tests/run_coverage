@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Script that runs all unit tests.
+# Script that runs coverage tests.
 
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
@@ -10,7 +10,7 @@ action() {
 
     (
         cd "$ap_dir" && \
-        python -m unittest "$test_base"
+        pytest --cov=ap --cov-report xml:coverage.xml "$test_base"
     )
 }
 action "$@"

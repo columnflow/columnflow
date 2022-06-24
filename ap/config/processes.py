@@ -21,6 +21,13 @@ process_data = Process(
     label="data",
 )
 
+process_data_mu = process_data.add_process(
+    name="data_mu",
+    id=10,
+    is_data=True,
+    label=r"Data $\mu$",
+)
+
 
 #
 # single-top

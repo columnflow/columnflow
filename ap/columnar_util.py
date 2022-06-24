@@ -16,6 +16,7 @@ __all__ = [
 import math
 import time
 import copy as _copy
+import enum
 import weakref
 import multiprocessing
 import multiprocessing.pool
@@ -138,6 +139,17 @@ class Route(object):
         constructor to convert it into one.
         """
         return route if isinstance(route, cls) else cls(route)
+
+    @classmethod
+    def select(cls, ak_array: ak.Array, route: Union["Route", Sequence[str], str]) -> ak.Array:
+        """
+        Returns a selection of an *ak_array* at a certain *route*. This method is a shorthand for
+
+        .. code-block:: python
+
+           ak_array[Route.check(route).fields]
+        """
+        return ak_array[cls.check(route).fields]
 
     def __init__(self, route=None):
         super().__init__()
@@ -627,10 +639,24 @@ class ArrayFunction(object):
         print(func.produced_columns)  # -> {"bar"}
         func(some_array)
 
+        # create a second function that calls my_func
+        def my_other_func(arr):
+            # just call my_func
+            return my_func(arr)
+
+        ArrayFunction.new(my_other_func, uses={my_func.USES}, produces={my_func.PRODUCES})
+
     The signatures of the constructor and :py:meth:`new` are identical. *func* refers to the
     function to be wrapped. Unless a custom *name* is given, the function's name is used as a key to
-    store it in the cache. *uses* and *produces* should be strings denoting a column in underscore
-    format, other :py:class:`ArrayFunction` instances, or a sequence or set of the two.
+    store it in the cache. *uses* and *produces* should be strings denoting a column in dot format
+    or a :py:class:`Route` instance, other :py:class:`ArrayFunction` instances, or a sequence or set
+    of the two.
+
+    In case other :py:class:`ArrayFunction` instances are placed within *uses* or *produces*, the
+    columns used and produced by these instances are added. In the example above, *my_other_func*
+    declares a dependence on *my_func* by listing it in both sets with excplicit flags to denote
+    the type of columns to inherit. Omitting these flags, or using *AUTO* will transparently inherit
+    used columns in *use*, and produced columns in *produce*.
 
     Knowledge of the columns to load (save) is especially useful when opening (writing) files and
     selecting the content to deserialize (serialize). The :py:attr:`used_columns` and
@@ -670,9 +696,37 @@ class ArrayFunction(object):
        read-only
 
        The resolved, flat set of produced column names.
+
+    .. py:attribute:: AUTO
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote automatic
+       resolution of column names.
+
+    .. py:attribute:: USES
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote columns names
+       in the :py:attr:`uses` set.
+
+    .. py:attribute:: PRODUCES
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote columns names
+       in the :py:attr:`produces` set.
     """
 
+    # cache for instances
     _instances = {}
+
+    # flags for declaring inputs (via uses) or outputs (via produces)
+    class IOFlag(enum.Flag):
+        AUTO = enum.auto()
+        USES = enum.auto()
+        PRODUCES = enum.auto()
+
+    # shallow wrapper around an instance and an instance
+    FlaggedInst = namedtuple("FlaggedInst", ["inst", "io_flag"])
 
     @classmethod
     def new(cls, *args, **kwargs) -> "ArrayFunction":
@@ -722,45 +776,62 @@ class ArrayFunction(object):
         self.uses = set(law.util.make_list(uses)) if uses else set()
         self.produces = set(law.util.make_list(produces)) if produces else set()
 
-    def _get_used_columns(self, _cache: Optional[set] = None) -> Set[str]:
+    @property
+    def AUTO(self):
+        return self.FlaggedInst(self, self.IOFlag.AUTO)
+
+    @property
+    def USES(self):
+        return self.FlaggedInst(self, self.IOFlag.USES)
+
+    @property
+    def PRODUCES(self):
+        return self.FlaggedInst(self, self.IOFlag.PRODUCES)
+
+    def _get_columns(self, io_flag: IOFlag, _cache: Optional[set] = None, **kwargs) -> Set[str]:
+        if io_flag == self.IOFlag.AUTO:
+            raise ValueError("io_flag in internal _get_columns method must not be AUTO")
+
+        # start with an empty set
         columns = set()
 
         # init the cache to prevent same objects being called twice
         if _cache is None:
             _cache = set()
 
-        # add those of all other known intances
-        for obj in self.uses:
-            if isinstance(obj, ArrayFunction):
-                if obj not in _cache:
-                    _cache.add(obj)
-                    columns |= obj._get_used_columns(_cache=_cache)
+        # declare _this_ call cached
+        _cache.add(self.FlaggedInst(self, io_flag))
+
+        # add those of all other known instances
+        for obj in (self.uses if io_flag == self.IOFlag.USES else self.produces):
+            if isinstance(obj, (ArrayFunction, self.FlaggedInst)):
+                wrapped = obj
+                if isinstance(obj, ArrayFunction):
+                    wrapped = self.FlaggedInst(obj, io_flag)
+                elif obj.io_flag == self.IOFlag.AUTO:
+                    wrapped = self.FlaggedInst(obj.inst, io_flag)
+                # skip when already cached
+                if wrapped in _cache:
+                    continue
+                # either call used or produced columns
+                if wrapped.io_flag == self.IOFlag.USES:
+                    columns |= wrapped.inst._get_used_columns(_cache=_cache, **kwargs)
+                else:
+                    columns |= wrapped.inst._get_produced_columns(_cache=_cache, **kwargs)
             else:
                 columns.add(obj)
 
         return columns
+
+    def _get_used_columns(self, _cache: Optional[set] = None) -> Set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
     def used_columns(self) -> Set[str]:
         return self._get_used_columns()
 
     def _get_produced_columns(self, _cache: Optional[set] = None) -> Set[str]:
-        columns = set()
-
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
-
-        # add those of all other known intances
-        for obj in self.produces:
-            if isinstance(obj, ArrayFunction):
-                if obj not in _cache:
-                    _cache.add(obj)
-                    columns |= obj._get_produced_columns(_cache=_cache)
-            else:
-                columns.add(obj)
-
-        return columns
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
     def produced_columns(self) -> Set[str]:
@@ -890,6 +961,8 @@ class TaskArrayFunction(ArrayFunction):
 
         # add those of all other known intances
         for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
             if isinstance(obj, TaskArrayFunction):
                 if obj not in _cache:
                     _cache.add(obj)
@@ -938,6 +1011,8 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the update of all other known instances
         for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
             if isinstance(obj, TaskArrayFunction) and obj not in _cache:
                 _cache.add(obj)
                 obj.run_update(_cache=_cache, **kwargs)
@@ -989,6 +1064,8 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all other known instances
         for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
             if isinstance(obj, TaskArrayFunction) and obj not in _cache:
                 _cache.add(obj)
                 obj.run_requires(task, reqs=reqs)
@@ -1039,6 +1116,8 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all other known instances
         for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
             if isinstance(obj, TaskArrayFunction) and obj not in _cache:
                 _cache.add(obj)
                 obj.run_setup(task, inputs, call_kwargs=call_kwargs, _cache=_cache)
