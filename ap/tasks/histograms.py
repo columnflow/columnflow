@@ -154,6 +154,8 @@ class MergeHistograms(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # tell ForestMerge to not cache the internal merging structure by default,
+        # (this is enabled in merge_workflow_requires)
         self._cache_forest = False
 
     def create_branch_map(self):

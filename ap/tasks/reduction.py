@@ -248,12 +248,18 @@ class MergeReducedEventsUser(DatasetTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cached value of the file_merging until it's positive and the branch map is stable
+        # cached value of the file_merging until it's positive
         self._cached_file_merging = -1
+
+        # in case this is a workflow, do not cache branches by default
+        # (this is enabled in reduced_file_merging once positive)
         self._cache_branches = False
 
     @property
     def file_merging(self):
+        """
+        Needed by DatasetTask to define the default branch map.
+        """
         return self.reduced_file_merging
 
     @property
@@ -271,10 +277,13 @@ class MergeReducedEventsUser(DatasetTask):
         return self._cached_file_merging
 
     def reduced_dummy_output(self):
+        # dummy output to be returned in case the merging stats are not present yet
         return self.local_target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
 
     @classmethod
     def maybe_dummy(cls, func):
+        # meant to wrap output methods of tasks depending on merging stats
+        # to inject a dummy output in case the status are not there yet
         @functools.wraps(func)
         def wrapper(self):
             # when the merging stats do not exist yet, return a dummy target
