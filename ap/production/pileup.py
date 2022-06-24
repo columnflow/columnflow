@@ -9,7 +9,7 @@ import order as od
 
 from ap.production import Producer, producer
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column, has_ak_column
+from ap.columnar_util import set_ak_column
 
 ak = maybe_import("awkward")
 
@@ -28,9 +28,6 @@ def pu_weights(
     Based on the number of primary vertices, assigns each event pileup weights using the profile
     of pileup ratios *pu_weights* that is provided by the requires and setup functions below.
     """
-    if has_ak_column(events, "pu_weight"):
-        return events
-
     # stop here for data
     if dataset_inst.is_data:
         return events

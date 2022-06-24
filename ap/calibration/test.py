@@ -44,6 +44,6 @@ def jec_test(events, **kwargs):
 
 @calibrator(uses={jec_test}, produces={jec_test})
 def test(events, **kwargs):
-    events = jec_test(events, **kwargs)
+    jec_test(events, **kwargs)
 
     return events

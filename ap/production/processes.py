@@ -8,7 +8,7 @@ import order as od
 
 from ap.production import producer
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column, has_ak_column
+from ap.columnar_util import set_ak_column
 
 ak = maybe_import("awkward")
 
@@ -23,9 +23,6 @@ def process_ids(events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Arra
     *dataset_inst*. This is rather a dummy method and should be further implemented depending on
     future needs (e.g. for sample stitching).
     """
-    if has_ak_column(events, "process_id"):
-        return events
-
     # trivial case
     if len(dataset_inst.processes) != 1:
         raise NotImplementedError(

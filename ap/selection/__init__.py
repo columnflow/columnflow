@@ -19,6 +19,13 @@ class Selector(TaskArrayFunction):
     # dedicated instance cache
     _instances = {}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # flag denoting whether this selector is exposed, i.e., callable from tasks and returning
+        # an actual SelectionResult
+        self.exposed = False
+
 
 def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
     """
@@ -29,6 +36,18 @@ def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Calla
         return Selector.new(func, **kwargs)
 
     return decorator(func) if func else decorator
+
+
+def expose(selector: Optional[Selector] = None) -> Selector:
+    """
+    Decorator that wraps :py:class:`Selector` objects and sets their :py:attr:`exposed` attribute to
+    *True*.
+    """
+    def decorator(selector):
+        selector.exposed = True
+        return selector
+
+    return decorator(selector) if selector else decorator
 
 
 class SelectionResult(object):

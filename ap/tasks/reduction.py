@@ -98,10 +98,10 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 # to filter events and objects
 
                 # add the calibrated diffs and potentially new columns
-                events = update_ak_array(events, *diffs)
+                update_ak_array(events, *diffs)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                add_ak_aliases(events, aliases, remove_src=True)
 
                 # apply the event mask
                 n_all += len(events)

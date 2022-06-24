@@ -86,7 +86,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # just invoke the calibration function
-                events = self.calibrator_func(events, **self.get_calibrator_kwargs(self))
+                self.calibrator_func(events, **self.get_calibrator_kwargs(self))
 
                 # manually remove colums that should not be kept
                 if not remove_routes:

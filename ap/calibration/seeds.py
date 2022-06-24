@@ -11,7 +11,7 @@ import law
 
 from ap.calibration import calibrator
 from ap.util import maybe_import, primes
-from ap.columnar_util import Route, set_ak_column, has_ak_column
+from ap.columnar_util import Route, set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -110,9 +110,8 @@ def deterministic_jet_seeds(
     setup function is used to access the *create_seed* function. The strategy for producing seeds is
     identical.
     """
-    # create the event seeds if not already present
-    if not has_ak_column(events, "deterministic_seed"):
-        events = deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
+    # create the event seeds
+    deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
 
     # create the per jet seeds
     prime_offset = 18
@@ -147,9 +146,9 @@ def deterministic_seeds(
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds
-    events = deterministic_event_seeds(events, **kwargs)
+    deterministic_event_seeds(events, **kwargs)
 
     # create the jet seeds
-    events = deterministic_jet_seeds(events, **kwargs)
+    deterministic_jet_seeds(events, **kwargs)
 
     return events

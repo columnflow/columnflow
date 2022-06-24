@@ -85,10 +85,10 @@ class CreateHistograms(
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
-                events = update_ak_array(events, *columns)
+                update_ak_array(events, *columns)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                add_ak_aliases(events, aliases, remove_src=True)
 
                 # build the full event weight
                 weight = ak.Array(np.ones(len(events)))
