@@ -38,7 +38,7 @@ def update(self, config_inst, dataset_inst, **kwargs):
 
 # object definitions
 # TODO: return masks instead of indices and build indices as late as possible
-@selector(uses={"Jet.pt", "Jet.eta"}, shifts={jet_energy_shifts})
+@selector(uses={"Jet.pt", "Jet.eta"})
 def req_jet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
@@ -56,13 +56,13 @@ def req_muon(events):
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet.pt", "Jet.eta"}, shifts={jet_energy_shifts})
+@selector(uses={"Jet.pt", "Jet.eta"})
 def req_forwardJet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
-@selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"}, shifts={jet_energy_shifts})
+@selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"})
 def req_deepjet(events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
@@ -223,6 +223,9 @@ def lepton_selection_test(events, stats):
     },
     produces={
         jet_selection_test, lepton_selection_test, deepjet_selection_test, "cat_array",
+    },
+    shifts={
+        jet_energy_shifts,
     },
 )
 def test(
