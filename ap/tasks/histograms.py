@@ -165,9 +165,8 @@ class MergeHistograms(
     def merge_workflow_requires(self):
         req = CreateHistograms.req(self, _exclude=["branches"])
 
-        # if the reduced merging factor is present, allow the forest to be cached
-        if req.reduced_file_merging >= 1:
-            self._cache_forest = True
+        # if the merging stats exist, allow the forest to be cached
+        self._cache_forest = req.merging_stats_exist
 
         return req
 

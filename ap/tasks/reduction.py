@@ -260,10 +260,6 @@ class MergeReducedEventsUser(DatasetTask):
         """
         Needed by DatasetTask to define the default branch map.
         """
-        return self.reduced_file_merging
-
-    @property
-    def reduced_file_merging(self):
         if self._cached_file_merging < 0:
             # reset the forest in case this is a forest ForestMerge task
             self._forest_built = False
@@ -276,6 +272,10 @@ class MergeReducedEventsUser(DatasetTask):
 
         return self._cached_file_merging
 
+    @property
+    def merging_stats_exist(self):
+        return self.file_merging >= 1
+
     def reduced_dummy_output(self):
         # dummy output to be returned in case the merging stats are not present yet
         return self.local_target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
@@ -287,7 +287,7 @@ class MergeReducedEventsUser(DatasetTask):
         @functools.wraps(func)
         def wrapper(self):
             # when the merging stats do not exist yet, return a dummy target
-            if self.reduced_file_merging < 1:
+            if not self.merging_stats_exist:
                 return self.reduced_dummy_output()
 
             # otherwise, bind the wrapped function and call it
