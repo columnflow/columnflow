@@ -143,88 +143,111 @@ class PlotVariables(
                 raise Exception("no histograms found to plot")
 
             # create the stack and a fake data hist using the smeared sum
-            h_final = hist.Stack(*hists.values())
-            h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
-            h_data = h_sum.copy().reset()
-            h_data.fill(np.repeat(h_sum.axes[0].centers, np.random.poisson(h_sum.view().value)))
+            data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
+            mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
+            mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
+            mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
 
+            h_data, h_mc, h_mc_stack = None, None, None
+            if data_hists:
+                h_data = sum(data_hists[1:], data_hists[0].copy())
+            if mc_hists:
+                h_mc = sum(mc_hists[1:], mc_hists[0].copy())
+                h_mc_stack = hist.Stack(*mc_hists)
+
+            # start plotting
             plt.style.use(mplhep.style.CMS)
             fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
 
-            h_final.plot(
-                ax=ax,
-                stack=True,
-                histtype="fill",
-                label=[process_inst.label for process_inst in hists],
-                color=[process_inst.color for process_inst in hists],
-            )
-            ax.stairs(
-                edges=h_sum.axes[variable_inst.name].edges,
-                baseline=h_sum.view().value - np.sqrt(h_sum.view().variance),
-                values=h_sum.view().value + np.sqrt(h_sum.view().variance),
-                hatch="///",
-                label="MC Stat. unc.",
-                facecolor="none",
-                linewidth=0,
-                color="black",
-            )
+            if h_mc:
+                h_mc_stack.plot(
+                    ax=ax,
+                    stack=True,
+                    histtype="fill",
+                    label=mc_labels,
+                    color=mc_colors,
+                )
+                ax.stairs(
+                    edges=h_mc.axes[variable_inst.name].edges,
+                    baseline=h_mc.view().value - np.sqrt(h_mc.view().variance),
+                    values=h_mc.view().value + np.sqrt(h_mc.view().variance),
+                    hatch="///",
+                    label="MC Stat. unc.",
+                    facecolor="none",
+                    linewidth=0,
+                    color="black",
+                )
 
-            # compute asymmetric poisson errors for data
-            # TODO: passing the output of poisson_interval to as yerr to mpl.plothist leads to buggy
-            #       error bars and the documentation is clearly wrong (mplhep 0.3.12, hist 2.4.0),
-            #       so adjust the output to make up for that, but maybe update or remove the next
-            #       lines if this is fixed to not correct it "twice"
-            from hist.intervals import poisson_interval
-            yerr = poisson_interval(h_data.view().value, h_data.view().variance)
-            yerr[np.isnan(yerr)] = 0
-            yerr[0] = h_data.view().value - yerr[0]
-            yerr[1] -= h_data.view().value
+            if h_data:
+                # compute asymmetric poisson errors for data
+                # TODO: passing the output of poisson_interval to as yerr to mpl.plothist leads to
+                #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
+                #       hist 2.4.0), so adjust the output to make up for that, but maybe update or
+                #       remove the next lines if this is fixed to not correct it "twice"
+                from hist.intervals import poisson_interval
+                yerr = poisson_interval(h_data.view().value, h_data.view().variance)
+                yerr[np.isnan(yerr)] = 0
+                yerr[0] = h_data.view().value - yerr[0]
+                yerr[1] -= h_data.view().value
 
-            h_data.plot1d(
-                ax=ax,
-                histtype="errorbar",
-                color="k",
-                label="Pseudodata",
-                yerr=yerr,
-            )
+                h_data.plot1d(
+                    ax=ax,
+                    histtype="errorbar",
+                    color="k",
+                    label="Data",
+                    yerr=yerr,
+                )
 
+            # styles
+            legend_args = ()
+            if h_data:
+                handles, labels = ax.get_legend_handles_labels()
+                handles.insert(0, handles.pop())
+                labels.insert(0, labels.pop())
+                legend_args = (handles, labels)
+            ax.legend(*legend_args)
             ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
             ax.set_ylabel(variable_inst.get_full_y_title())
-            ax.legend()
             if variable_inst.log_y:
                 ax.set_yscale("log")
 
-            rax.errorbar(
-                x=h_data.axes[variable_inst.name].centers,
-                y=h_data.view().value / h_sum.view().value,
-                yerr=yerr / h_sum.view().value,
-                color="k",
-                linestyle="none",
-                marker="o",
-                elinewidth=1,
-            )
-            rax.stairs(
-                edges=h_sum.axes[variable_inst.name].edges,
-                baseline=1 - np.sqrt(h_sum.view().variance) / h_sum.view().value,
-                values=1 + np.sqrt(h_sum.view().variance) / h_sum.view().value,
-                facecolor="grey",
-                linewidth=0,
-                hatch="///",
-                color="grey",
-            )
+            # mc stat errors in the ratio
+            if h_mc:
+                rax.stairs(
+                    edges=h_mc.axes[variable_inst.name].edges,
+                    baseline=1 - np.sqrt(h_mc.view().variance) / h_mc.view().value,
+                    values=1 + np.sqrt(h_mc.view().variance) / h_mc.view().value,
+                    facecolor="grey",
+                    linewidth=0,
+                    hatch="///",
+                    color="grey",
+                )
 
+            # data points in ratio
+            if h_data and h_mc:
+                rax.errorbar(
+                    x=h_data.axes[variable_inst.name].centers,
+                    y=h_data.view().value / h_mc.view().value,
+                    yerr=yerr / h_mc.view().value,
+                    color="k",
+                    linestyle="none",
+                    marker="o",
+                    elinewidth=1,
+                )
+
+            # ratio styles
             rax.axhline(y=1.0, linestyle="dashed", color="gray")
             rax.set_ylabel("Data / MC", loc="center")
             rax.set_ylim(0.85, 1.15)
             rax.set_xlabel(variable_inst.get_full_x_title())
             ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
+            # labels
             lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
             mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
 
-            plt.tight_layout()
-
             # save the plot
+            plt.tight_layout()
             self.output().dump(plt, formatter="mpl")
 
 

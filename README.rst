@@ -5,6 +5,10 @@ Analysis playground
    :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
+.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=33FLINPXFP
+   :target: https://codecov.io/gh/uhh-cms/analysis_playground
+   :alt: Code coverge
+
 .. image:: https://readthedocs.org/projects/analysis_playground/badge
    :target: http://analysis_playground.readthedocs.io
    :alt: Documentation status
@@ -12,10 +16,6 @@ Analysis playground
 .. image:: https://img.shields.io/github/license/uhh-cms/analysis_playground.svg
    :target: https://github.com/uhh-cms/analysis_playground/blob/master/LICENSE
    :alt: License
-
-.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=MePbStZF7U
-   :target: https://codecov.io/gh/uhh-cms/analysis_playground
-   :alt: Code coverge
 
 Demonstrator for a Python-based, vectorized analysis with a bunch of public HEP tools.
 
