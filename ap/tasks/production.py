@@ -6,40 +6,42 @@ Tasks related to producing new columns.
 
 import law
 
-from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from ap.tasks.framework.base import AnalysisTask, wrapper_factory
 from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducerMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
-from ap.tasks.reduction import ReduceEvents
+from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ProduceColumns(
+    MergeReducedEventsUser,
+    ProducerMixin,
+    CalibratorsSelectorMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {ReduceEvents}
+    shifts = {MergeReducedEvents}
 
     update_producer = True
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        if not self.pilot:
-            reqs["events"] = ReduceEvents.req(self)
-
-        # add producer dependent requirements
+        reqs["events"] = MergeReducedEvents.req(self)
         reqs["producer"] = self.producer_func.run_requires(self)
 
         return reqs
 
     def requires(self):
-        reqs = {"events": ReduceEvents.req(self)}
+        return {
+            "events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "producer": self.producer_func.run_requires(self),
+        }
 
-        # add producer dependent requirements
-        reqs["producer"] = self.producer_func.run_requires(self)
-
-        return reqs
-
+    @MergeReducedEventsUser.maybe_dummy
     def output(self):
         return self.local_target(f"columns_{self.branch}.parquet")
 
@@ -73,7 +75,7 @@ class ProduceColumns(DatasetTask, ProducerMixin, CalibratorsSelectorMixin, law.L
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
-            inputs["events"].path,
+            inputs["events"]["collection"][0].path,
             source_type="awkward_parquet",
             # TODO: not working yet since parquet columns are nested
             # open_options={"columns": load_columns},
