@@ -17,6 +17,25 @@ ak = maybe_import("awkward")
 np = maybe_import("numpy")
 
 
+# pseudo-selectors for declaring dependence on shifts
+
+@selector
+def jet_energy_shifts(events):
+    return events
+
+
+@jet_energy_shifts.update
+def update(self, config_inst, dataset_inst, **kwargs):
+    """Declare dependence on JEC/JER uncertainty shifts."""
+    self.shifts |= {
+        f"jec_{junc_name}_{junc_dir}"
+        for junc_name in config_inst.x.jec.uncertainty_sources
+        for junc_dir in ("up", "down")
+    }
+    if dataset_inst.is_mc:
+        self.shifts |= {"jer_up", "jer_down"}
+
+
 # object definitions
 # TODO: return masks instead of indices and build indices as late as possible
 @selector(uses={"Jet.pt", "Jet.eta"})
@@ -195,6 +214,9 @@ def lepton_selection_test(events, stats):
     },
     produces={
         jet_selection_test, lepton_selection_test, deepjet_selection_test, "cat_array",
+    },
+    shifts={
+        jet_energy_shifts,
     },
 )
 def test(

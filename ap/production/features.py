@@ -9,6 +9,8 @@ from ap.production.weights import event_weights
 from ap.util import maybe_import
 from ap.columnar_util import EMPTY, set_ak_column
 
+from ap.selection.test import jet_energy_shifts
+
 ak = maybe_import("awkward")
 
 
@@ -35,6 +37,7 @@ def extract(ak_array: ak.Array, idx: int) -> ak.Array:
         for i in range(1, 4 + 1)
         for attr in ["pt", "eta"]
     },
+    shifts={jet_energy_shifts},
 )
 def variables(events: ak.Array, **kwargs) -> ak.Array:
     set_ak_column(events, "HT", ak.sum(events.Jet.pt, axis=1))
