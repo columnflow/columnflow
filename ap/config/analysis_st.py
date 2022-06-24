@@ -45,6 +45,99 @@ analysis_st.set_aux("config_groups", {})
 # create a config by passing the campaign, so id and name will be identical
 config_2018 = analysis_st.add_config(campaign_2018)
 
+# location of JEC txt files
+config_2018.set_aux("jec", DotDict.wrap({
+    "source": "https://raw.githubusercontent.com/cms-jet/JECDatabase/master/textFiles",
+    "campaign": "Summer19UL18",
+    "version": "V5",
+    "jet_type": "AK4PFchs",
+    "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+    "data_eras": ["RunA", "RunB", "RunC", "RunD"],
+    "uncertainty_sources": [
+        # comment out most for now to prevent large file sizes
+        # "AbsoluteStat",
+        # "AbsoluteScale",
+        # "AbsoluteSample",
+        # "AbsoluteFlavMap",
+        # "AbsoluteMPFBias",
+        # "Fragmentation",
+        # "SinglePionECAL",
+        # "SinglePionHCAL",
+        # "FlavorQCD",
+        # "TimePtEta",
+        # "RelativeJEREC1",
+        # "RelativeJEREC2",
+        # "RelativeJERHF",
+        # "RelativePtBB",
+        # "RelativePtEC1",
+        # "RelativePtEC2",
+        # "RelativePtHF",
+        # "RelativeBal",
+        # "RelativeSample",
+        # "RelativeFSR",
+        # "RelativeStatFSR",
+        # "RelativeStatEC",
+        # "RelativeStatHF",
+        # "PileUpDataMC",
+        # "PileUpPtRef",
+        # "PileUpPtBB",
+        # "PileUpPtEC1",
+        # "PileUpPtEC2",
+        # "PileUpPtHF",
+        # "PileUpMuZero",
+        # "PileUpEnvelope",
+        # "SubTotalPileUp",
+        # "SubTotalRelative",
+        # "SubTotalPt",
+        # "SubTotalScale",
+        # "SubTotalAbsolute",
+        # "SubTotalMC",
+        "Total",
+        # "TotalNoFlavor",
+        # "TotalNoTime",
+        # "TotalNoFlavorNoTime",
+        # "FlavorZJet",
+        # "FlavorPhotonJet",
+        # "FlavorPureGluon",
+        # "FlavorPureQuark",
+        # "FlavorPureCharm",
+        # "FlavorPureBottom",
+        # "TimeRunA",
+        # "TimeRunB",
+        # "TimeRunC",
+        # "TimeRunD",
+        "CorrelationGroupMPFInSitu",
+        "CorrelationGroupIntercalibration",
+        "CorrelationGroupbJES",
+        "CorrelationGroupFlavor",
+        "CorrelationGroupUncorrelated",
+    ],
+}))
+
+config_2018.set_aux("jer", DotDict.wrap({
+    "source": "https://raw.githubusercontent.com/cms-jet/JRDatabase/master/textFiles",
+    "campaign": "Summer19UL18",
+    "version": "JRV2",
+    "jet_type": "AK4PFchs",
+}))
+
+
+def make_jme_filenames(jme_aux, sample_type, names, era=None):
+    """Convenience function to compute paths to JEC files."""
+
+    # normalize and validate sample type
+    sample_type = sample_type.upper()
+    if sample_type not in ("DATA", "MC"):
+        raise ValueError(f"Invalid sample type '{sample_type}'. Expected either 'DATA' or 'MC'.")
+
+    jme_full_version = "_".join(s for s in (jme_aux.campaign, era, jme_aux.version, sample_type) if s)
+
+    return [
+        f"{jme_aux.source}/{jme_full_version}/{jme_full_version}_{name}_{jme_aux.jet_type}.txt"
+        for name in names
+    ]
+
+
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
 config_2018.set_aux("luminosity", Number(59740, {
@@ -119,9 +212,17 @@ config_2018.add_shift(name="tune_up", id=1, type="shape")
 config_2018.add_shift(name="tune_down", id=2, type="shape")
 config_2018.add_shift(name="hdamp_up", id=3, type="shape")
 config_2018.add_shift(name="hdamp_down", id=4, type="shape")
-config_2018.add_shift(name="jec_up", id=5, type="shape")
-config_2018.add_shift(name="jec_down", id=6, type="shape")
-add_aliases("jec", {"Jet.pt": "Jet.pt_{name}", "Jet_mass": "Jet.mass_{name}"})
+
+# FIXME: ensure JEC shifts get the same id every time
+for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
+    config_2018.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * i, type="shape")
+    config_2018.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * i, type="shape")
+    add_aliases(f"jec_{jec_source}", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
+
+config_2018.add_shift(name="jer_up", id=600, type="shape")
+config_2018.add_shift(name="jer_down", id=601, type="shape")
+add_aliases("jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
+
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
@@ -147,6 +248,41 @@ config_2018.set_aux("external_files", DotDict.wrap({
             "minbias_xs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
         },
     },
+
+    # jet energy correction
+    "jec": {
+        "mc": [
+            (fname, "v1")
+            for fname in make_jme_filenames(config_2018.x.jec, "mc", names=config_2018.x.jec.levels)
+        ],
+        "data": {
+            era: [
+                (fname, "v1")
+                for fname in make_jme_filenames(config_2018.x.jec, "data", names=config_2018.x.jec.levels, era=era)
+            ]
+            for era in config_2018.x.jec.data_eras
+        },
+    },
+
+    # jec energy correction uncertainties
+    "junc": {
+        "mc": [(make_jme_filenames(config_2018.x.jec, "mc", names=["UncertaintySources"])[0], "v1")],
+        "data": {
+            era: [(make_jme_filenames(config_2018.x.jec, "data", names=["UncertaintySources"], era=era)[0], "v1")]
+            for era in config_2018.x.jec.data_eras
+        },
+    },
+
+    # jet energy resolution (pt resolution)
+    "jer": {
+        "mc": [(make_jme_filenames(config_2018.x.jer, "mc", names=["PtResolution"])[0], "v1")],
+    },
+
+    # jet energy resolution (data/mc scale factors)
+    "jersf": {
+        "mc": [(make_jme_filenames(config_2018.x.jer, "mc", names=["SF"])[0], "v1")],
+    },
+
 }))
 
 # columns to keep after certain steps

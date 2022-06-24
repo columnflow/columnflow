@@ -20,7 +20,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {CalibrateEvents, "jec_up", "jec_down"}
+    shifts = {CalibrateEvents}
 
     update_selector = True
 
