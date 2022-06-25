@@ -20,7 +20,7 @@ class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {CalibrateEvents}
+    shifts = set(CalibrateEvents.shifts)
 
     update_selector = True
 
@@ -178,7 +178,7 @@ SelectEventsWrapper = wrapper_factory(
 
 class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
 
-    shifts = {SelectEvents}
+    shifts = set(SelectEvents.shifts)
 
     # recursively merge 20 files into one
     merge_factor = 20

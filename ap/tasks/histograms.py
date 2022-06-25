@@ -27,7 +27,7 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {MergeReducedEvents}
+    shifts = set(MergeReducedEvents.shifts)
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
@@ -146,7 +146,7 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {CreateHistograms}
+    shifts = set(CreateHistograms.shifts)
 
     # in each step, merge 10 into 1
     merge_factor = 10

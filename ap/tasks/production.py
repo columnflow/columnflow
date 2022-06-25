@@ -23,7 +23,7 @@ class ProduceColumns(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {MergeReducedEvents}
+    shifts = set(MergeReducedEvents.shifts)
 
     update_producer = True
 

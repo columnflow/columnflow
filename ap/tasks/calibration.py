@@ -19,7 +19,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
     update_calibrator = True
 
-    shifts = {GetDatasetLFNs}
+    shifts = set(GetDatasetLFNs.shifts)
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

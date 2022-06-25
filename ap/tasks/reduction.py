@@ -22,7 +22,7 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {CalibrateEvents, SelectEvents}
+    shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -166,7 +166,7 @@ class MergeReductionStats(DatasetTask, CalibratorsSelectorMixin):
         description="the maximum file size of merged files; default unit is MB; default: '500MB'",
     )
 
-    shifts = {ReduceEvents}
+    shifts = set(ReduceEvents.shifts)
 
     def requires(self):
         return ReduceEvents.req(self, branches=((0, self.n_inputs),))
@@ -300,7 +300,7 @@ class MergeReducedEvents(MergeReducedEventsUser, CalibratorsSelectorMixin, law.t
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {ReduceEvents, MergeReductionStats}
+    shifts = ReduceEvents.shifts | MergeReductionStats.shifts
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
