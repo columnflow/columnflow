@@ -194,7 +194,7 @@ class SelectorMixin(ConfigTask):
         from ap.selection import Selector
 
         func = Selector.get(selector, copy=copy)
-        if not func.exposed:
+        if not func.expose:
             raise RuntimeError(f"cannot use unexposed selector '{func.__name__}' in {cls.__name__}")
         if update_kwargs:
             func.run_update(**update_kwargs)
