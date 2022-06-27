@@ -4,6 +4,8 @@
 Task to produce and merge histograms.
 """
 
+import re
+
 import law
 
 from ap.tasks.framework.base import DatasetTask
@@ -105,6 +107,29 @@ class CreateHistograms(
                 # define and fill histograms
                 for var_name in self.variables:
                     variable_inst = self.config_inst.get_variable(var_name)
+
+                    # get the expression and when it's a string, parse it to extract trailing index
+                    # lookups, e.g. "Jet.pt.0", and convert them to functions with optional padding
+                    expr = variable_inst.expression
+                    if isinstance(expr, str):
+                        fields = Route.check(expr).fields
+                        # first, assume a normal route
+                        expr = lambda events: events[fields]
+                        # when the last field is an integer, perform filling and padding with the
+                        # variable's null value
+                        if len(fields) > 1 and re.match(r"^\d+$", fields[-1]):
+                            if variable_inst.null_value is None:
+                                raise ValueError(
+                                    "variable expressions with a trailing index require a "
+                                    f"null_value, but '{variable_inst}' has none",
+                                )
+                            idx = int(fields[-1])
+                            def expr(events):
+                                return ak.fill_none(
+                                    ak.pad_none(events[fields[:-1]], idx + 1, axis=-1)[..., idx],
+                                    variable_inst.null_value,
+                                )
+
                     with self.publish_step("var: %s" % var_name):
                         h_var = (
                             hist.Hist.new
@@ -119,7 +144,7 @@ class CreateHistograms(
                             .Weight()
                         )
                         fill_kwargs = {
-                            var_name: events[Route.check(variable_inst.expression).fields],
+                            var_name: expr(events),
                             "process": events.process_id,
                             "category": events.cat_array,
                             "shift": self.shift,
