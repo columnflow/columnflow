@@ -11,13 +11,13 @@ from ap.tasks.framework.mixins import (
     CalibratorsSelectorMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
-from ap.tasks.reduction import ReduceEvents
+from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
 from ap.util import ensure_proxy, dev_sandbox
 
 
 class CreateHistograms(
-    DatasetTask,
+    MergeReducedEventsUser,
     ProducersMixin,
     CalibratorsSelectorMixin,
     VariablesMixin,
@@ -27,22 +27,24 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {ReduceEvents}
+    shifts = {MergeReducedEvents}
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
-        if not self.pilot:
-            reqs["events"] = ReduceEvents.req(self)
-            if self.producers:
-                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+
+        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        if not self.pilot and self.producers:
+            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+
         return reqs
 
     def requires(self):
-        reqs = {"events": ReduceEvents.req(self)}
+        reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
             reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
+    @MergeReducedEventsUser.maybe_dummy
     def output(self):
         return self.local_target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
 
@@ -71,7 +73,7 @@ class CreateHistograms(
         aliases = self.shift_inst.x("column_aliases", {})
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"].path]
+        files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
         with ChunkedReader(
@@ -149,12 +151,24 @@ class MergeHistograms(
     # in each step, merge 10 into 1
     merge_factor = 10
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # tell ForestMerge to not cache the internal merging structure by default,
+        # (this is enabled in merge_workflow_requires)
+        self._cache_forest = False
+
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return CreateHistograms.req(self, _exclude=["branches"])
+        req = CreateHistograms.req(self, _exclude={"branches"})
+
+        # if the merging stats exist, allow the forest to be cached
+        self._cache_forest = req.merging_stats_exist
+
+        return req
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]

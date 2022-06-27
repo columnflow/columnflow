@@ -4,9 +4,11 @@
 Tasks related to reducing events for use on further tasks.
 """
 
+import functools
 from collections import OrderedDict
 
 import law
+import luigi
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from ap.tasks.framework.mixins import CalibratorsSelectorMixin
@@ -68,6 +70,10 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
         remove_routes = None
 
+        # event counters
+        n_all = 0
+        n_reduced = 0
+
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
@@ -98,8 +104,10 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # apply the event mask
+                n_all += len(events)
                 event_mask = sel.event if "event" in sel.fields else Ellipsis
                 events = events[event_mask]
+                n_reduced += len(events)
 
                 # apply all object masks whose names are present
                 # TODO: this should not be done automagically based on names as there might be
@@ -125,6 +133,12 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 output_chunks[pos.index] = chunk
                 reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
+        # some logs
+        save_div = lambda x, y: (x / y) if y else 0.0
+        self.publish_message(
+            f"reduced {n_all} to {n_reduced} events ({save_div(n_reduced, n_all) * 100:.2f}%)",
+        )
+
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
@@ -139,20 +153,26 @@ ReduceEventsWrapper = wrapper_factory(
 
 class MergeReductionStats(DatasetTask, CalibratorsSelectorMixin):
 
+    n_inputs = luigi.IntParameter(
+        default=2,
+        significant=True,
+        description="minimal number of input files for sufficient statistics to infer merging "
+        "factors; default: 2",  # TODO: update once going to production
+    )
     merged_size = law.BytesParameter(
-        default=500.0,
+        default=1024.0,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; default: '500MB'",
+        description="the maximum file size of merged files; default unit is MB; default: '1024MB'",
     )
 
     shifts = {ReduceEvents}
 
     def requires(self):
-        return ReduceEvents.req(self)
+        return ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
-        return self.local_target("stats.json")
+        return self.local_target(f"stats_n{self.n_inputs}.json")
 
     @law.decorator.safe_output
     def run(self):
@@ -220,28 +240,91 @@ MergeReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
-
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = {SelectEvents}
+class MergeReducedEventsUser(DatasetTask):
 
     # recursively merge 8 files into one
     merge_factor = 8
 
-    # the key of the config that defines the merging in the branch map of DatasetTask
-    file_merging = "after_reduction"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached value of the file_merging until it's positive
+        self._cached_file_merging = -1
+
+        # in case this is a workflow, do not cache branches by default
+        # (this is enabled in reduced_file_merging once positive)
+        self._cache_branches = False
+
+    @property
+    def file_merging(self):
+        """
+        Needed by DatasetTask to define the default branch map.
+        """
+        if self._cached_file_merging < 0:
+            # reset the forest in case this is a forest ForestMerge task
+            self._forest_built = False
+
+            # check of the merging stats is present and of so, set the cached file merging value
+            output = MergeReductionStats.req(self).output()
+            if output.exists():
+                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
+                self._cache_branches = True
+
+        return self._cached_file_merging
+
+    @property
+    def merging_stats_exist(self):
+        return self.file_merging >= 1
+
+    def reduced_dummy_output(self):
+        # dummy output to be returned in case the merging stats are not present yet
+        return self.local_target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
+
+    @classmethod
+    def maybe_dummy(cls, func):
+        # meant to wrap output methods of tasks depending on merging stats
+        # to inject a dummy output in case the status are not there yet
+        @functools.wraps(func)
+        def wrapper(self):
+            # when the merging stats do not exist yet, return a dummy target
+            if not self.merging_stats_exist:
+                return self.reduced_dummy_output()
+
+            # otherwise, bind the wrapped function and call it
+            return func.__get__(self, self.__class__)()
+
+        return wrapper
+
+
+class MergeReducedEvents(MergeReducedEventsUser, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+
+    shifts = {ReduceEvents, MergeReductionStats}
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return ReduceEvents.req(self, _exclude={"branches"})
+        return {
+            "stats": MergeReductionStats.req(self),
+            "events": ReduceEvents.req(self, _exclude={"branches"}),
+        }
 
     def merge_requires(self, start_branch, end_branch):
-        return [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+        return {
+            "stats": MergeReductionStats.req(self),
+            "events": [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
+        }
 
+    def trace_merge_workflow_inputs(self, inputs):
+        return super().trace_merge_workflow_inputs(inputs["events"])
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs(inputs["events"])
+
+    @MergeReducedEventsUser.maybe_dummy
     def merge_output(self):
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))

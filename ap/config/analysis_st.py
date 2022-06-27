@@ -184,7 +184,11 @@ config_2018.set_aux("category_groups", {})
 
 # variable groups for conveniently looping over certain variables
 # (used during plotting)
-config_2018.set_aux("variable_groups", {})
+config_2018.set_aux("variable_groups", {
+    "default": {
+        "HT", "nJet", "nElectron", "nMuon", "nDeepjet", "Electron1_pt", "Muon1_pt",
+    },
+})
 
 # shift groups for conveniently looping over certain shifts
 # (used during plotting)
@@ -304,12 +308,6 @@ config_2018.set_aux("default_producer", "variables")
 
 # event weight columns
 config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
-
-# file merging values
-# key -> dataset -> files per branch (-1 or not present = all)
-# TODO: maybe add selector name as additional layer
-config_2018.set_aux("file_merging", {
-})
 
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value
