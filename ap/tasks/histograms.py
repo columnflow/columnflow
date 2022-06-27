@@ -32,7 +32,7 @@ class CreateHistograms(
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
 
-        reqs["events"] = MergeReducedEvents.req(self)
+        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot and self.producers:
             reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
 
@@ -163,7 +163,7 @@ class MergeHistograms(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        req = CreateHistograms.req(self, _exclude=["branches"])
+        req = CreateHistograms.req(self, _exclude={"branches"})
 
         # if the merging stats exist, allow the forest to be cached
         self._cache_forest = req.merging_stats_exist
