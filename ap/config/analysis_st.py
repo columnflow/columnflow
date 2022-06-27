@@ -307,12 +307,6 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
 # event weight columns
 config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
 
-# file merging values
-# key -> dataset -> files per branch (-1 or not present = all)
-# TODO: maybe add selector name as additional layer
-config_2018.set_aux("file_merging", {
-})
-
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value
 config_2018.set_aux("versions", {
