@@ -5,7 +5,7 @@ Helpers and utilities for working with columnar libraries.
 """
 
 __all__ = [
-    "mandatory_coffea_columns",
+    "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
     "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
     "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
@@ -40,8 +40,11 @@ pq = maybe_import("pyarrow.parquet")
 #: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
 
-#: Empty-value definition in places where a number is expected.
-EMPTY = -99999
+#: Empty-value definition in places where an integer number is expected but not present.
+EMPTY_INT = -99999
+
+#: Empty-value definition in places where a float number is expected but not present.
+EMPTY_FLOAT = -99999.0
 
 
 class Route(object):
