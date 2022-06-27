@@ -30,7 +30,7 @@ class ProduceColumns(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["events"] = MergeReducedEvents.req(self)
+        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
         reqs["producer"] = self.producer_func.run_requires(self)
 
         return reqs
