@@ -24,7 +24,7 @@ class Selector(TaskArrayFunction):
 
         # flag denoting whether this selector is exposed, i.e., callable from tasks and returning
         # an actual SelectionResult
-        self.exposed = False
+        self.exposed = exposed
 
 
 def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
