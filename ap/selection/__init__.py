@@ -19,12 +19,12 @@ class Selector(TaskArrayFunction):
     # dedicated instance cache
     _instances = {}
 
-    def __init__(self, *args, expose=False, **kwargs):
+    def __init__(self, *args, exposed=False, **kwargs):
         super().__init__(*args, **kwargs)
 
         # flag denoting whether this selector is exposed, i.e., callable from tasks and returning
         # an actual SelectionResult
-        self.expose = False
+        self.exposed = False
 
 
 def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:

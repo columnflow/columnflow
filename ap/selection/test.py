@@ -136,7 +136,7 @@ def sel_1mu_ge2b_highHT(events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
 
 
-@selector(uses={req_jet}, produces={"jet_high_multiplicity"}, expose=True)
+@selector(uses={req_jet}, produces={"jet_high_multiplicity"}, exposed=True)
 def jet_selection_test(events, stats, **kwargs):
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
@@ -153,7 +153,7 @@ def jet_selection_test(events, stats, **kwargs):
     return SelectionResult(steps={"Jet": jet_sel}, objects={"Jet": jet_indices})
 
 
-@selector(uses={req_deepjet}, expose=True)
+@selector(uses={req_deepjet}, exposed=True)
 def deepjet_selection_test(events, stats):
     deepjet_indices = req_deepjet(events)
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
@@ -161,7 +161,7 @@ def deepjet_selection_test(events, stats):
     return SelectionResult(steps={"Deepjet": deepjet_sel}, objects={"Deepjet": deepjet_indices})
 
 
-@selector(uses={req_muon}, expose=True)
+@selector(uses={req_muon}, exposed=True)
 def muon_selection_test(events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
@@ -173,7 +173,7 @@ def muon_selection_test(events, stats):
     return SelectionResult(steps={"Muon": muon_sel}, objects={"Muon": muon_indices})
 
 
-@selector(uses={req_electron}, expose=True)
+@selector(uses={req_electron}, exposed=True)
 def electron_selection_test(events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
@@ -185,7 +185,7 @@ def electron_selection_test(events, stats):
     return SelectionResult(steps={"Electron": electron_sel}, objects={"Electron": electron_indices})
 
 
-@selector(uses={req_muon, req_electron}, expose=True)
+@selector(uses={req_muon, req_electron}, exposed=True)
 def lepton_selection_test(events, stats):
     # example cuts:
     # - require exactly one lepton with pt>25, eta<2.4 and tight Id
@@ -212,7 +212,7 @@ def lepton_selection_test(events, stats):
     shifts={
         jet_energy_shifts,
     },
-    expose=True,
+    exposed=True,
 )
 def test(
     events: ak.Array,
