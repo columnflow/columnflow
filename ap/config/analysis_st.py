@@ -94,6 +94,9 @@ config_2018.set_aux("shift_groups", {})
 # default calibrator, selector, producer and ml_model
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
+config_2018.set_aux("default_selector_steps", {
+    "test": ("Lepton", "Jet", "Deepjet"),
+})
 config_2018.set_aux("default_producer", "variables")
 config_2018.set_aux("default_ml_model", None)
 

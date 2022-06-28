@@ -13,6 +13,7 @@ from ap.selection import Selector, SelectionResult, selector
 from ap.production.categories import category_ids
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
+from ap.production.processes import process_ids
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -222,10 +223,11 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP",
+        "LHEWeight.originalXWGTUP", process_ids, var_HT,
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
+        "LHEWeight.originalXWGTUP", process_ids, "ht",
     },
     shifts={
         jet_energy_shifts,
@@ -268,6 +270,12 @@ def test(
 
     # build categories
     self.stack.category_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+
+    # for cutflow plots
+    self.stack.process_ids(events, dataset_inst=dataset_inst, **kwargs)
+    # calculating variables before and after applying object cleaning requires two definitions
+    # of the variable; might lead to ambiguities if not careful
+    set_ak_column(events, "ht", self.stack.var_HT(events))
 
     # increment stats
     events_sel = events[event_sel]

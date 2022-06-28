@@ -235,6 +235,14 @@ class SelectorStepsMixin(SelectorMixin):
     def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         params = super().modify_param_values(params)
 
+        # add the default selector_steps when empty
+        if "config_inst" in params and params.get("selector_steps") == ():
+            config_inst = params["config_inst"]
+            selector = params.get("selector", None)
+            if config_inst.x("default_selector_steps", None):
+                if selector in config_inst.x.default_selector_steps:
+                    params["selector_steps"] = config_inst.x.default_selector_steps[selector]
+
         # sort selector steps when the order does not matter
         if not cls.selector_steps_order_sensitive and "selector_steps" in params:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))

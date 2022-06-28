@@ -39,7 +39,8 @@ def normalization_weights(
     normalization weight.
     """
     # add process ids
-    self.stack.process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    if "process_id" not in events.fields:
+        self.stack.process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
     # stop here for data
     if dataset_inst.is_data:
