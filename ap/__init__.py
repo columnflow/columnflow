@@ -53,6 +53,11 @@ if law.config.has_option("analysis", "selection_modules"):
         logger.debug(f"loading selection module '{mod}'")
         maybe_import(mod.strip())
 
+if law.config.has_option("analysis", "ml_modules"):
+    for mod in law.config.get_expanded("analysis", "ml_modules", split_csv=True):
+        logger.debug(f"loading ml module '{mod}'")
+        maybe_import(mod.strip())
+
 # preload all task modules so that task parameters are globally known and accepted
 if law.config.has_section("modules"):
     for mod in law.config.options("modules"):

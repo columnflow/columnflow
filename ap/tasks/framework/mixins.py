@@ -369,6 +369,89 @@ class ProducersMixin(ConfigTask):
         return parts
 
 
+class MLModelMixin(ConfigTask):
+
+    ml_model = luigi.Parameter(
+        default=law.NO_STR,
+        description="the name of the ML model to the applied; default: value of the "
+        "'default_ml_model' config",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # add the default ml model when empty
+        if "config_inst" in params and params.get("ml_model") == law.NO_STR:
+            config_inst = params["config_inst"]
+            if config_inst.x("default_ml_model", None):
+                params["ml_model"] = config_inst.x.default_ml_model
+
+        return params
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the ML model instance
+        from ap.ml import MLModel
+        self.ml_model_inst = MLModel.get(self.ml_model, copy=True)
+        self.ml_model_inst.config_inst = self.config_inst
+
+    def events_used_in_training(self, dataset_inst, shift_inst):
+        # evaluate whether the events for the combination of dataset_inst and shift_inst
+        # shall be used in the training
+        return (
+            dataset_inst in self.ml_model_inst.datasets and
+            not shift_inst.x("disjoint", False)
+        )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        ml_model = f"ml__{self.ml_model}" if self.ml_model != law.NO_STR else "none"
+        parts.insert_before("version", "ml_model", ml_model)
+        return parts
+
+
+class MLModelsMixin(ConfigTask):
+
+    ml_models = law.CSVParameter(
+        default=(),
+        description="comma-separated names of ML models to be applied; empty default",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" in params and params.get("ml_models") == ():
+            config_inst = params["config_inst"]
+            if config_inst.x("default_ml_model", None):
+                params["ml_models"] = (config_inst.x.default_ml_model,)
+
+        return params
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the ML model instances
+        from ap.ml import MLModel
+        self.ml_model_insts = []
+        for ml_model in self.ml_models:
+            ml_model_inst = MLModel.get(ml_model, copy=True)
+            ml_model_inst.config_inst = self.config_inst
+            self.ml_model_insts.append(ml_model_inst)
+
+    def store_parts(self):
+        parts = super().store_parts()
+
+        part = "none"
+        if self.ml_models:
+            part = "__".join(self.ml_models)
+        parts.insert_before("version", "ml_models", f"ml__{part}")
+
+        return parts
+
+
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(

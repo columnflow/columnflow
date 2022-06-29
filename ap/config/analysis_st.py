@@ -87,10 +87,11 @@ config_2018.set_aux("variable_groups", {})
 # (used during plotting)
 config_2018.set_aux("shift_groups", {})
 
-# default calibrator, selector and producer
+# default calibrator, selector, producer and ml_model
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
 config_2018.set_aux("default_producer", "variables")
+config_2018.set_aux("default_ml_model", "test")
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
@@ -194,10 +195,10 @@ def add_aliases(shift_source, aliases):
 
 # register shifts
 config_2018.add_shift(name="nominal", id=0)
-config_2018.add_shift(name="tune_up", id=1, type="shape")
-config_2018.add_shift(name="tune_down", id=2, type="shape")
-config_2018.add_shift(name="hdamp_up", id=3, type="shape")
-config_2018.add_shift(name="hdamp_down", id=4, type="shape")
+config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint": True})
+config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint": True})
+config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint": True})
+config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint": True})
 
 # FIXME: ensure JEC shifts get the same id every time
 for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
@@ -288,22 +289,6 @@ config_2018.set_aux("external_files", DotDict.wrap({
 
 }))
 
-# columns to keep after certain steps
-config_2018.set_aux("keep_columns", DotDict.wrap({
-    "ReduceEvents": {
-        "run", "luminosityBlock", "event",
-        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
-        "nMuon", "Muon.pt", "Muon.eta",
-        "nElectron", "Electron.pt", "Electron.eta",
-        "LHEWeight.originalXWGTUP",
-        "PV.npvs",
-        "jet_high_multiplicity", "cat_array",
-    },
-    "CreateHistograms": {
-        "LHEWeight.originalXWGTUP",
-    },
-}))
-
 # event weight columns
 config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
 
@@ -317,3 +302,22 @@ add_categories(config_2018)
 
 # add variables
 add_variables(config_2018)
+
+# columns to keep after certain steps
+config_2018.set_aux("keep_columns", DotDict.wrap({
+    # test
+    "ReduceEvents": {
+        "run", "luminosityBlock", "event",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
+        "nMuon", "Muon.pt", "Muon.eta",
+        "nElectron", "Electron.pt", "Electron.eta",
+        "LHEWeight.originalXWGTUP",
+        "PV.npvs",
+        "jet_high_multiplicity", "cat_array", "deterministic_seed",
+    },
+
+    # test
+    "CreateHistograms": {
+        "LHEWeight.originalXWGTUP",
+    },
+}))
