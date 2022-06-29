@@ -50,4 +50,4 @@ class TestModel(MLModel):
 
 
 # pre-register models
-TestModel.new("test", folds=5)
+TestModel.new("test_model", folds=3)

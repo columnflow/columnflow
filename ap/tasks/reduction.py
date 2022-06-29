@@ -266,7 +266,7 @@ class MergeReducedEventsUser(DatasetTask):
             # check of the merging stats is present and of so, set the cached file merging value
             output = MergeReductionStats.req(self).output()
             if output.exists():
-                self._cached_file_merging = 1  # output.load(formatter="json")["merge_factor"]
+                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
                 self._cache_branches = True
 
         return self._cached_file_merging

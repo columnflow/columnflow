@@ -359,12 +359,11 @@ class ProducersMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        part = "none"
         if self.producers:
             part = "__".join(self.producers[:5])
             if len(self.producers) > 5:
                 part += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"prod__{part}")
+            parts.insert_before("version", "producers", f"prod__{part}")
 
         return parts
 
@@ -444,10 +443,9 @@ class MLModelsMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        part = "none"
         if self.ml_models:
             part = "__".join(self.ml_models)
-        parts.insert_before("version", "ml_models", f"ml__{part}")
+            parts.insert_before("version", "ml_models", f"ml__{part}")
 
         return parts
 

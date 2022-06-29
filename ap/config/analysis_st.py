@@ -91,7 +91,7 @@ config_2018.set_aux("shift_groups", {})
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
 config_2018.set_aux("default_producer", "variables")
-config_2018.set_aux("default_ml_model", "test")
+config_2018.set_aux("default_ml_model", None)
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb

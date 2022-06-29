@@ -10,16 +10,18 @@ import law
 
 from ap.tasks.framework.base import DatasetTask
 from ap.tasks.framework.mixins import (
-    CalibratorsSelectorMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+    CalibratorsSelectorMixin, ProducersMixin, MLModelsMixin, VariablesMixin, ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
+from ap.tasks.ml import MLEvaluation
 from ap.util import dev_sandbox
 
 
 class CreateHistograms(
     MergeReducedEventsUser,
+    MLModelsMixin,
     ProducersMixin,
     CalibratorsSelectorMixin,
     VariablesMixin,
@@ -35,8 +37,11 @@ class CreateHistograms(
         reqs = super(CreateHistograms, self).workflow_requires()
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
-        if not self.pilot and self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if not self.pilot:
+            if self.producers:
+                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            if self.ml_models:
+                reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
 
         return reqs
 
@@ -44,6 +49,8 @@ class CreateHistograms(
         reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
             reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if self.ml_models:
+            reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -77,6 +84,8 @@ class CreateHistograms(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
+        if self.ml_models:
+            files.extend([inp.path for inp in inputs["ml"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -148,6 +157,7 @@ class CreateHistograms(
 
 class MergeHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     CalibratorsSelectorMixin,
     VariablesMixin,
@@ -206,6 +216,7 @@ class MergeHistograms(
 
 class MergeShiftedHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     CalibratorsSelectorMixin,
     VariablesMixin,
