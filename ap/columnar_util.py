@@ -1150,7 +1150,7 @@ class TaskArrayFunction(ArrayFunction):
                 call_cache = defaultdict(int)
 
             # check if the instance was called before
-            cache_key = (self.__class__, self.__name__)
+            cache_key = (self.__class__, self.name)
             if call_cache[cache_key] > 0 and not call_force:
                 return
 
