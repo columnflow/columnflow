@@ -14,14 +14,16 @@ ak = maybe_import("awkward")
 
 
 @calibrator(
-    uses={"nJet", "Jet.pt", "Jet.mass"},
+    uses={
+        "nJet", "Jet.pt", "Jet.mass",
+    },
     produces={
         "Jet.pt", "Jet.mass",
         "Jet.pt_jec_up", "Jet.mass_jec_up",
         "Jet.pt_jec_down", "Jet.mass_jec_down",
     },
 )
-def jec_test(events, **kwargs):
+def jec_test(self, events, **kwargs):
     # a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
     # b) add 4 new columns representing the effect of JEC variations
 

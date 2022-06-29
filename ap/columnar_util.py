@@ -13,6 +13,7 @@ __all__ = [
 ]
 
 
+import re
 import math
 import time
 import copy as _copy
@@ -628,7 +629,7 @@ class ArrayFunction(object):
     .. code-block:: python
 
         # define the function to wrap
-        def my_func(arr):
+        def my_func(self, arr):
             foo = arr.foo
             arr["bar"] = foo * 2
             return arr
@@ -643,7 +644,7 @@ class ArrayFunction(object):
         func(some_array)
 
         # create a second function that calls my_func
-        def my_other_func(arr):
+        def my_other_func(self, arr):
             # just call my_func
             return my_func(arr)
 
@@ -848,9 +849,10 @@ class ArrayFunction(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Invokes the wrapped :py:attr:`func`, forwarding all *args* and *kwargs*.
+        Invokes the wrapped :py:attr:`func` while bound to this instance, forwarding all *args* and
+        *kwargs*.
         """
-        return self.func(*args, **kwargs)
+        return self.func.__get__(self, self.__class__)(*args, **kwargs)
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -874,7 +876,7 @@ class TaskArrayFunction(ArrayFunction):
     .. code-block:: python
 
         # define the function to wrap, that requires some weights that are defined
-        def my_func(arr, weights, **kwargs):
+        def my_func(self, arr, weights, **kwargs):
             foo = arr.foo
             arr["bar"] = foo * weights
             return arr
@@ -983,11 +985,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`update_func`
         which is used to update *this* instance dependent on specific task attributes. The function
-        should accept
-
-            - *self* (positional), the instance of the array function itself,
-            - and additional keyword arguments that are set depending on the task that invokes the
-              update.
+        is invoked while bound to this instance, fowarding all keyword arguments.
 
         In any case it is recommended for the wrapped function to catch all additional keyword
         arguments. The decorator does not return the wrapped function.
@@ -1022,15 +1020,14 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's update function
         if self.update_func:
-            self.update_func(self, **kwargs)
+            self.update_func.__get__(self, self.__class__)(**kwargs)
 
     def requires(self, func: Callable[["TaskArrayFunction", law.Task, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`requires_func`
-        which is used to define additional task requirements. The function should accept three
-        arguments,
+        which is used to define additional task requirements. The function is invoked while bound to
+        this instance and should accept two arguments,
 
-            - *self* (positional), the instance of the array function itself,
             - *task* (positional), the :py:class:`law.Task` instance, and
             - *reqs* (positional), a dictionary into which requirements should be inserted.
 
@@ -1075,17 +1072,16 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if self.requires_func:
-            self.requires_func(self, task, reqs)
+            self.requires_func.__get__(self, self.__class__)(task, reqs)
 
         return reqs
 
     def setup(self, func: Callable[[law.Task, dict, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`setup_func`
-        which is used to perform a custom setup of objects. The function should accept four
-        arguments,
+        which is used to perform a custom setup of objects. The function is invoked while bound to
+        this instance should accept three arguments,
 
-            - *self* (positional), the instance of the array function itself,
             - *task*, the :py:class:`law.Task` instance,
             - *inputs*, a dictionary with input targets corresponding to the requirements created by
               :py:meth:`run_requires`, and
@@ -1127,7 +1123,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if self.setup_func:
-            self.setup_func(self, task, inputs, call_kwargs)
+            self.setup_func.__get__(self, self.__class__)(task, inputs, call_kwargs)
 
         # store the call kwargs
         self.call_kwargs = call_kwargs

@@ -17,7 +17,7 @@ ak = maybe_import("awkward")
     uses={"event"},
     produces={"process_id"},
 )
-def process_ids(events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Array:
+def process_ids(self, events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Array:
     """
     Assigns each event a single process id, based on the first process that is registered for the
     *dataset_inst*. This is rather a dummy method and should be further implemented depending on

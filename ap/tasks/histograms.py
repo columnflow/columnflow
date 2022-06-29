@@ -29,7 +29,7 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(MergeReducedEvents.shifts)
+    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()

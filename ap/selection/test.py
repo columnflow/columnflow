@@ -20,7 +20,7 @@ np = maybe_import("numpy")
 # pseudo-selectors for declaring dependence on shifts
 
 @selector
-def jet_energy_shifts(events):
+def jet_energy_shifts(self, events):
     return events
 
 
@@ -39,105 +39,105 @@ def update(self, config_inst, dataset_inst, **kwargs):
 # object definitions
 # TODO: return masks instead of indices and build indices as late as possible
 @selector(uses={"Jet.pt", "Jet.eta"})
-def req_jet(events):
+def req_jet(self, events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Electron.pt", "Electron.eta", "Electron.cutBased"})
-def req_electron(events):
+def req_electron(self, events):
     mask = (events.Electron.pt > 25) & (abs(events.Electron.eta) < 2.4) & (events.Electron.cutBased == 4)
     return ak.argsort(events.Electron.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Muon.pt", "Muon.eta", "Muon.tightId"})
-def req_muon(events):
+def req_muon(self, events):
     mask = (events.Muon.pt > 25) & (abs(events.Muon.eta) < 2.4) & (events.Muon.tightId)
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Jet.pt", "Jet.eta"})
-def req_forwardJet(events):
+def req_forwardJet(self, events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"})
-def req_deepjet(events):
+def req_deepjet(self, events):
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={req_jet})
-def var_nJet(events):
+def var_nJet(self, events):
     return ak.num(req_jet(events), axis=1)
 
 
 @selector(uses={req_deepjet})
-def var_nDeepjet(events):
+def var_nDeepjet(self, events):
     return ak.num(req_deepjet(events), axis=1)
 
 
 @selector(uses={req_electron})
-def var_nElectron(events):
+def var_nElectron(self, events):
     return ak.num(req_electron(events), axis=1)
 
 
 @selector(uses={req_muon})
-def var_nMuon(events):
+def var_nMuon(self, events):
     return ak.num(req_muon(events), axis=1)
 
 
 @selector(uses={req_jet, "Jet.pt"})
-def var_HT(events):
+def var_HT(self, events):
     jet_pt_sorted = events.Jet.pt[req_jet(events)]
     return ak.sum(jet_pt_sorted, axis=1)
 
 
 # selection for the main categories
 @selector(uses={var_nMuon, var_nElectron})
-def sel_1e(events):
+def sel_1e(self, events):
     return (var_nMuon(events) == 0) & (var_nElectron(events) == 1)
 
 
 @selector(uses={var_nMuon, var_nElectron})
-def sel_1mu(events):
+def sel_1mu(self, events):
     return (var_nMuon(events) == 1) & (var_nElectron(events) == 0)
 
 
 # selection for the sub-categories
 @selector(uses={sel_1e, var_nDeepjet})
-def sel_1e_eq1b(events):
+def sel_1e_eq1b(self, events):
     return (sel_1e(events)) & (var_nDeepjet(events) == 1)
 
 
 @selector(uses={sel_1e, var_nDeepjet})
-def sel_1e_ge2b(events):
+def sel_1e_ge2b(self, events):
     return (sel_1e(events)) & (var_nDeepjet(events) >= 2)
 
 
 @selector(uses={sel_1mu, var_nDeepjet})
-def sel_1mu_eq1b(events):
+def sel_1mu_eq1b(self, events):
     return (sel_1mu(events)) & (var_nDeepjet(events) == 1)
 
 
 @selector(uses={sel_1mu, var_nDeepjet})
-def sel_1mu_ge2b(events):
+def sel_1mu_ge2b(self, events):
     return (sel_1mu(events)) & (var_nDeepjet(events) >= 2)
 
 
 @selector(uses={sel_1mu_ge2b, var_HT})
-def sel_1mu_ge2b_lowHT(events):
+def sel_1mu_ge2b_lowHT(self, events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) <= 300)
 
 
 @selector(uses={sel_1mu_ge2b, var_HT})
-def sel_1mu_ge2b_highHT(events):
+def sel_1mu_ge2b_highHT(self, events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
 
 
 @selector(uses={req_jet}, produces={"jet_high_multiplicity"}, exposed=True)
-def jet_selection_test(events, stats, **kwargs):
+def jet_selection_test(self, events, stats, **kwargs):
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
     # example columns:
@@ -154,7 +154,7 @@ def jet_selection_test(events, stats, **kwargs):
 
 
 @selector(uses={req_deepjet}, exposed=True)
-def deepjet_selection_test(events, stats):
+def deepjet_selection_test(self, events, stats):
     deepjet_indices = req_deepjet(events)
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
 
@@ -162,7 +162,7 @@ def deepjet_selection_test(events, stats):
 
 
 @selector(uses={req_muon}, exposed=True)
-def muon_selection_test(events, stats):
+def muon_selection_test(self, events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
 
@@ -174,7 +174,7 @@ def muon_selection_test(events, stats):
 
 
 @selector(uses={req_electron}, exposed=True)
-def electron_selection_test(events, stats):
+def electron_selection_test(self, events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
 
@@ -186,7 +186,7 @@ def electron_selection_test(events, stats):
 
 
 @selector(uses={req_muon, req_electron}, exposed=True)
-def lepton_selection_test(events, stats):
+def lepton_selection_test(self, events, stats):
     # example cuts:
     # - require exactly one lepton with pt>25, eta<2.4 and tight Id
 
@@ -215,6 +215,7 @@ def lepton_selection_test(events, stats):
     exposed=True,
 )
 def test(
+    self,
     events: ak.Array,
     stats: defaultdict,
     config_inst: od.Config,
@@ -400,6 +401,7 @@ def req_clean_delta_r_match_jet_lepton(
 
 @selector(uses={delta_r_jet_lepton})
 def jet_lepton_delta_r_cleaning_selection(
+    self,
     events: ak.Array,
     stats: Dict[str, Union[int, float]],
     threshold: float = 0.4,
@@ -418,6 +420,7 @@ def jet_lepton_delta_r_cleaning_selection(
 
 @selector(uses={jet_lepton_delta_r_cleaning_selection})
 def jet_lepton_delta_r_cleaning(
+    self,
     events: ak.Array,
     stats: Dict[str, Union[int, float]],
     threshold: float = 0.4,
