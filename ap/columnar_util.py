@@ -1144,7 +1144,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # call caching
         cache_kwargs = {}
-        if call_cache is False:
+        if call_cache is not False:
             # setup a new call cache when not present yet
             if call_cache is None:
                 call_cache = defaultdict(int)
