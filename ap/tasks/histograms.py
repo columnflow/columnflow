@@ -4,7 +4,7 @@
 Task to produce and merge histograms.
 """
 
-import re
+import functools
 
 import law
 
@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import dev_sandbox
 
 
 class CreateHistograms(
@@ -52,7 +52,6 @@ class CreateHistograms(
 
     @law.decorator.safe_output
     @law.decorator.localize
-    @ensure_proxy
     def run(self):
         import hist
         import numpy as np
@@ -108,27 +107,14 @@ class CreateHistograms(
                 for var_name in self.variables:
                     variable_inst = self.config_inst.get_variable(var_name)
 
-                    # get the expression and when it's a string, parse it to extract trailing index
-                    # lookups, e.g. "Jet.pt.0", and convert them to functions with optional padding
+                    # get the expression and when it's a string, parse it to extract index lookups
                     expr = variable_inst.expression
                     if isinstance(expr, str):
-                        fields = Route.check(expr).fields
-                        # first, assume a normal route
-                        expr = lambda events: events[fields]
-                        # when the last field is an integer, perform filling and padding with the
-                        # variable's null value
-                        if len(fields) > 1 and re.match(r"^\d+$", fields[-1]):
-                            if variable_inst.null_value is None:
-                                raise ValueError(
-                                    "variable expressions with a trailing index require a "
-                                    f"null_value, but '{variable_inst}' has none",
-                                )
-                            idx = int(fields[-1])
-                            def expr(events):
-                                return ak.fill_none(
-                                    ak.pad_none(events[fields[:-1]], idx + 1, axis=-1)[..., idx],
-                                    variable_inst.null_value,
-                                )
+                        expr = functools.partial(
+                            Route.select,
+                            route=Route.check(expr),
+                            null_value=variable_inst.null_value,
+                        )
 
                     with self.publish_step("var: %s" % var_name):
                         h_var = (

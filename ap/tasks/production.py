@@ -10,7 +10,7 @@ from ap.tasks.framework.base import AnalysisTask, wrapper_factory
 from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducerMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import dev_sandbox
 
 
 class ProduceColumns(
@@ -47,7 +47,6 @@ class ProduceColumns(
 
     @law.decorator.safe_output
     @law.decorator.localize
-    @ensure_proxy
     def run(self):
         from ap.columnar_util import (
             ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,

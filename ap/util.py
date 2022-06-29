@@ -379,7 +379,7 @@ def dev_sandbox(sandbox: str) -> str:
     return law.Sandbox.join_key(_type, dev_path)
 
 
-def freeze(cont):
+def freeze(cont: Any) -> Any:
     """Constructs an immutable version of a native Python container.
 
     Recursively replaces all mutable containers (``dict``, ``list``, ``set``) encountered within
@@ -396,7 +396,7 @@ def freeze(cont):
     return cont
 
 
-def memoize(f):
+def memoize(f: Callable) -> Callable:
     """
     Function decorator that implements memoization. Function results are cached on
     first call and returned from cache on every subsequent call with the same arguments.

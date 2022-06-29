@@ -7,6 +7,7 @@ Calibration methods for testing purposes.
 from ap.calibration import calibrator
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
+from ap.production.seeds import deterministic_seeds
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -42,8 +43,9 @@ def jec_test(events, **kwargs):
     return events
 
 
-@calibrator(uses={jec_test}, produces={jec_test})
-def test(events, **kwargs):
+@calibrator(uses={jec_test, deterministic_seeds}, produces={jec_test, deterministic_seeds})
+def test(self, events, **kwargs):
     jec_test(events, **kwargs)
+    deterministic_seeds(events, **kwargs)
 
     return events
