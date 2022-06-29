@@ -145,15 +145,32 @@ class Route(object):
         return route if isinstance(route, cls) else cls(route)
 
     @classmethod
-    def select(cls, ak_array: ak.Array, route: Union["Route", Sequence[str], str]) -> ak.Array:
+    def select(
+        cls,
+        ak_array: ak.Array,
+        route: Union["Route", Sequence[str], str],
+        null_value: Optional[Any] = None,
+    ) -> ak.Array:
         """
-        Returns a selection of an *ak_array* at a certain *route*. This method is a shorthand for
-
-        .. code-block:: python
-
-           ak_array[Route.check(route).fields]
+        Returns a selection of an *ak_array* at a certain *route*. When the last field of the route
+        is an integer, it is interpreted as the index of the object referred to by the leading
+        fields. In case no object exists at that index, its values are filled with *null_value*.
         """
-        return ak_array[cls.check(route).fields]
+        # get fields
+        fields = cls.check(route).fields
+
+        # when the last field is an integer, try to get the matching object and maybe pad
+        if len(fields) > 1 and re.match(r"^\d+$", str(fields[-1])):
+            # pad with None
+            idx = int(fields[-1])
+            result = ak.pad_none(ak_array[fields[:-1]], idx + 1, axis=-1)[..., idx]
+            # optionally fill with null_value
+            if null_value is not None:
+                result = ak.fill_none(result, null_value)
+            return result
+
+        # default case
+        return ak_array[fields]
 
     def __init__(self, route=None):
         super().__init__()

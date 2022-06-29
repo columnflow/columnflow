@@ -16,7 +16,7 @@ import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
-from ap.util import ensure_proxy, wget
+from ap.util import ensure_proxy, wget, safe_div
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
@@ -288,10 +288,7 @@ class CreatePileupWeights(ConfigTask):
                 )
 
             # store them
-            weights[shift] = [
-                (d / m) if m > 0 else 0.0
-                for m, d in zip(mc_profile, data_profile)
-            ]
+            weights[shift] = [safe_div(d, m) for m, d in zip(mc_profile, data_profile)]
             self.publish_message(f"computed pu weights for shift {shift}")
 
         # save it

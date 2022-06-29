@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import CalibratorsSelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import ensure_proxy, dev_sandbox, safe_div
 
 
 class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -134,9 +134,8 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
-        save_div = lambda x, y: (x / y) if y else 0.0
         self.publish_message(
-            f"reduced {n_all} to {n_reduced} events ({save_div(n_reduced, n_all) * 100:.2f}%)",
+            f"reduced {n_all} to {n_reduced} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
         )
 
         # merge output files
@@ -267,7 +266,7 @@ class MergeReducedEventsUser(DatasetTask):
             # check of the merging stats is present and of so, set the cached file merging value
             output = MergeReductionStats.req(self).output()
             if output.exists():
-                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
+                self._cached_file_merging = 1  # output.load(formatter="json")["merge_factor"]
                 self._cache_branches = True
 
         return self._cached_file_merging
