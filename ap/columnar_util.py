@@ -1158,8 +1158,8 @@ class TaskArrayFunction(ArrayFunction):
             call_cache[cache_key] += 1
             cache_kwargs["call_cache"] = call_cache
 
-        if self.call_kwargs:
-            kwargs = law.util.merge_dicts(self.call_kwargs, kwargs)
+        # stack all kwargs
+        kwargs = law.util.merge_dicts(cache_kwargs, self.call_kwargs or {}, kwargs)
 
         return super().__call__(*args, **kwargs)
 
