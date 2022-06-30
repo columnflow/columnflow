@@ -10,7 +10,10 @@ from typing import Optional, Union, Sequence, List, Tuple, Any, Set
 import law
 import order as od
 
+from ap.util import maybe_import
 from ap.columnar_util import Route
+
+ak = maybe_import("awkward")
 
 
 class MLModel(object):
@@ -75,14 +78,18 @@ class MLModel(object):
 
         # store attributes
         self.name = name
-        self.config_inst = config_inst
+        self.config_inst = None
         self.folds = folds
         self.parameters = parameters or []
 
         # cache for attributes that need to be defined in inheriting classes
-        self._datasets = None
-        self._uses = None
-        self._produces = None
+        self._used_datasets = None
+        self._used_columns = None
+        self._produced_columns = None
+
+        # set the config when given
+        if config_inst:
+            self.set_config(config_inst)
 
     def __str__(self):
         return f"{self.__class__.__name__}__{self.name}"
@@ -90,47 +97,77 @@ class MLModel(object):
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
 
-    def _join_parameter_pairs(self) -> str:
-        return "__".join(f"{name}_{value}" for name, value in self.parameter_pairs())
+    def _format_value(self, value):
+        if isinstance(value, (list, tuple)):
+            return "_".join(map(self._format_value, value))
+        if isinstance(value, bool):
+            return str(value).lower()
+        if isinstance(value, float):
+            # scientific notation when too small
+            return f"{value}" if value >= 0.01 else f"{value:.2e}"
 
-    def parameter_pairs(self) -> List[Tuple[str, Any]]:
+        # any other case
+        return str(value)
+
+    def _join_parameter_pairs(self) -> str:
+        return "__".join(
+            f"{name}_{self._format_value(value)}"
+            for name, value in self.parameter_pairs(only_significant=True)
+        )
+
+    def set_config(self, config_inst: od.Config) -> None:
+        self.config_inst = config_inst
+
+    def parameter_pairs(self, only_significant: bool = False) -> List[Tuple[str, Any]]:
         return self.parameters
 
     @property
+    def used_datasets(self) -> Set[od.Dataset]:
+        if self._used_datasets is None:
+            self._used_datasets = set(self.datasets())
+        return self._used_datasets
+
+    @property
+    def used_columns(self) -> Set[Union[Route, str]]:
+        if self._used_columns is None:
+            self._used_columns = set(self.uses())
+        return self._used_columns
+
+    @property
+    def produced_columns(self) -> Set[Union[Route, str]]:
+        if self._produced_columns is None:
+            self._produced_columns = set(self.produces())
+        return self._produced_columns
+
     def datasets(self) -> Set[od.Dataset]:
-        if self._datasets is None:
-            self._datasets = set(self.define_datasets())
-        return self._datasets
+        raise NotImplementedError()
 
-    @property
     def uses(self) -> Set[Union[Route, str]]:
-        if self._uses is None:
-            self._uses = set(self.define_used_columns())
-        return self._uses
+        raise NotImplementedError()
 
-    @property
     def produces(self) -> Set[Union[Route, str]]:
-        if self._produces is None:
-            self._produces = set(self.define_produced_columns())
-        return self._produces
-
-    def define_datasets(self) -> Set[od.Dataset]:
         raise NotImplementedError()
 
-    def define_used_columns(self) -> Set[Union[Route, str]]:
-        raise NotImplementedError()
-
-    def define_produced_columns(self) -> Set[Union[Route, str]]:
-        raise NotImplementedError()
-
-    def define_output(self, task: law.Task) -> Any:
+    def output(self, task: law.Task) -> Any:
         raise NotImplementedError()
 
     def open_model(self, output: Any) -> Any:
         raise NotImplementedError()
 
-    def train(self, input: Any, output: Any) -> None:
+    def train(
+        self,
+        task: law.Task,
+        input: Any,
+        output: Any,
+    ) -> None:
         raise NotImplementedError()
 
-    def evaluate(self) -> None:
+    def evaluate(
+        self,
+        task: law.Task,
+        events: ak.Array,
+        models: List[Any],
+        fold_indices: ak.Array,
+        events_used_in_training: bool = False,
+    ) -> None:
         raise NotImplementedError()

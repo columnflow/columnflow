@@ -26,10 +26,12 @@ class PrepareMLEvents(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
+    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # complain for cases where this task is not needed
+        # complain when this task is run for events that are not needed for training
         if not self.events_used_in_training(self.dataset_inst, self.shift_inst):
             raise Exception(
                 f"for ML model '{self.ml_model_inst.name}', the dataset '{self.dataset_inst.name}' "
@@ -65,6 +67,7 @@ class PrepareMLEvents(
     def run(self):
         from ap.columnar_util import (
             ChunkedReader, sorted_ak_to_parquet, update_ak_array, get_ak_routes, remove_ak_column,
+            add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -76,8 +79,11 @@ class PrepareMLEvents(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
+
         # define nano columns that should be loaded and those that should be kept
-        keep_columns = self.ml_model_inst.uses
+        keep_columns = self.ml_model_inst.used_columns
         load_columns = keep_columns | {"deterministic_seed"}  # noqa
         remove_routes = None
 
@@ -97,12 +103,16 @@ class PrepareMLEvents(
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # add additional columns
-                update_ak_array(events, *columns)
                 n_events += len(events)
 
+                # add additional columns
+                update_ak_array(events, *columns)
+
+                # add aliases
+                add_ak_aliases(events, aliases, remove_src=True)
+
                 # generate fold indices
-                indices = events.deterministic_seed % self.ml_model_inst.folds
+                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
                 # manually remove colums that should not be kept
                 if not remove_routes:
@@ -116,7 +126,7 @@ class PrepareMLEvents(
 
                 # loop over folds, use indices to generate masks and project into files
                 for f in range(self.ml_model_inst.folds):
-                    fold_events = events[indices == f]
+                    fold_events = events[fold_indices == f]
                     n_fold_events[f] += len(fold_events)
 
                     # save as parquet via a thread in the same pool
@@ -139,7 +149,7 @@ class PrepareMLEvents(
 PrepareMLEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=PrepareMLEvents,
-    enable=["configs", "skip_configs", "shifts", "skip_shifts", "datasets", "skip_datasets"],
+    enable=["configs", "skip_configs", "datasets", "skip_datasets"],
 )
 
 
@@ -240,13 +250,13 @@ class MLTraining(MLModelMixin, ProducersMixin, CalibratorsSelectorMixin):
                 for f in range(self.ml_model_inst.folds)
                 if f != self.fold
             ]
-            for dataset_inst in self.ml_model_inst.datasets
+            for dataset_inst in self.ml_model_inst.used_datasets
         }
 
     def output(self):
         return law.util.map_struct(
             (lambda func_args: func_args(self.local_target)),
-            self.ml_model_inst.define_output(self),
+            self.ml_model_inst.output(self),
         )
 
     @law.decorator.safe_output
@@ -324,8 +334,8 @@ class MLEvaluation(
         events_used_in_training = self.events_used_in_training(self.dataset_inst, self.shift_inst)
 
         # define nano columns that should be loaded and those that should be kept
-        load_columns = self.ml_model_inst.uses | {"deterministic_seed"}  # noqa
-        keep_columns = self.ml_model_inst.produces
+        load_columns = self.ml_model_inst.used_columns | {"deterministic_seed"}  # noqa
+        keep_columns = self.ml_model_inst.produced_columns
         remove_routes = None
 
         # iterate over chunks of events and diffs
@@ -346,11 +356,15 @@ class MLEvaluation(
                 # add aliases
                 add_ak_aliases(events, aliases, remove_src=True)
 
+                # asdasd
+                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+
                 # evaluate the model
                 self.ml_model_inst.evaluate(
                     self,
-                    models,
                     events,
+                    models,
+                    fold_indices,
                     events_used_in_training=events_used_in_training,
                 )
 

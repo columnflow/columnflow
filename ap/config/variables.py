@@ -100,9 +100,3 @@ def add_variables(config: od.Config) -> None:
         binning=(50, -2.5, 2.5),
         x_title=r"Jet 3 $\eta$",
     )
-    config.add_variable(
-        name="test_model.n_muon",
-        null_value=-1,
-        binning=(4, -1.5, 2.5),
-        x_title="Predicted number of muons",
-    )

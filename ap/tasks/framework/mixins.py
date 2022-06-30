@@ -381,26 +381,38 @@ class MLModelMixin(ConfigTask):
         params = super().modify_param_values(params)
 
         # add the default ml model when empty
-        if "config_inst" in params and params.get("ml_model") == law.NO_STR:
+        if "config_inst" in params:
             config_inst = params["config_inst"]
-            if config_inst.x("default_ml_model", None):
+            if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
                 params["ml_model"] = config_inst.x.default_ml_model
 
+            # initialize it once to trigger its set_config hook
+            if params.get("ml_model") not in (law.NO_STR, None):
+                cls.get_ml_model_inst(params["ml_model"], config_inst)
+
         return params
+
+    @classmethod
+    def get_ml_model_inst(cls, ml_model, config_inst=None, copy=True):
+        from ap.ml import MLModel
+
+        ml_model_inst = MLModel.get(ml_model, copy=True)
+        if config_inst:
+            ml_model_inst.set_config(config_inst)
+
+        return ml_model_inst
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # get the ML model instance
-        from ap.ml import MLModel
-        self.ml_model_inst = MLModel.get(self.ml_model, copy=True)
-        self.ml_model_inst.config_inst = self.config_inst
+        self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
 
     def events_used_in_training(self, dataset_inst, shift_inst):
         # evaluate whether the events for the combination of dataset_inst and shift_inst
         # shall be used in the training
         return (
-            dataset_inst in self.ml_model_inst.datasets and
+            dataset_inst in self.ml_model_inst.used_datasets and
             not shift_inst.x("disjoint", False)
         )
 
@@ -422,10 +434,15 @@ class MLModelsMixin(ConfigTask):
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config_inst" in params and params.get("ml_models") == ():
+        if "config_inst" in params:
             config_inst = params["config_inst"]
-            if config_inst.x("default_ml_model", None):
+            if params.get("ml_models") == () and config_inst.x("default_ml_model", None):
                 params["ml_models"] = (config_inst.x.default_ml_model,)
+
+            # initialize them once to trigger their set_config hook
+            if params.get("ml_models"):
+                for ml_model in params["ml_models"]:
+                    MLModelMixin.get_ml_model_inst(ml_model, config_inst)
 
         return params
 
@@ -433,12 +450,10 @@ class MLModelsMixin(ConfigTask):
         super().__init__(*args, **kwargs)
 
         # get the ML model instances
-        from ap.ml import MLModel
-        self.ml_model_insts = []
-        for ml_model in self.ml_models:
-            ml_model_inst = MLModel.get(ml_model, copy=True)
-            ml_model_inst.config_inst = self.config_inst
-            self.ml_model_insts.append(ml_model_inst)
+        self.ml_model_insts = [
+            MLModelMixin.get_ml_model_inst(ml_model, self.config_inst)
+            for ml_model in self.ml_models
+        ]
 
     def store_parts(self):
         parts = super().store_parts()
