@@ -12,7 +12,7 @@ import order as od
 from ap.production import Producer, producer
 from ap.production.processes import process_ids
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column, has_ak_column
+from ap.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
@@ -37,11 +37,8 @@ def normalization_weights(
     *dataset_inst* and the sum of event weights from *selection_stats* to assign each event a
     normalization weight.
     """
-    if has_ak_column(events, "normalization_weight"):
-        return events
-
     # add process ids
-    events = process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
     # stop here for data
     if dataset_inst.is_data:

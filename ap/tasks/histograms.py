@@ -29,7 +29,7 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {MergeReducedEvents}
+    shifts = set(MergeReducedEvents.shifts)
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
@@ -87,10 +87,10 @@ class CreateHistograms(
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
-                events = update_ak_array(events, *columns)
+                update_ak_array(events, *columns)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                add_ak_aliases(events, aliases, remove_src=True)
 
                 # build the full event weight
                 weight = ak.Array(np.ones(len(events)))
@@ -171,7 +171,7 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {CreateHistograms}
+    shifts = set(CreateHistograms.shifts)
 
     # in each step, merge 10 into 1
     merge_factor = 10

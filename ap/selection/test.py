@@ -136,7 +136,7 @@ def sel_1mu_ge2b_highHT(events):
     return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
 
 
-@selector(uses={req_jet}, produces={"jet_high_multiplicity"})
+@selector(uses={req_jet}, produces={"jet_high_multiplicity"}, exposed=True)
 def jet_selection_test(events, stats, **kwargs):
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
@@ -145,29 +145,23 @@ def jet_selection_test(events, stats, **kwargs):
 
     jet_indices = req_jet(events)
     jet_sel = ak.num(jet_indices, axis=1) >= 4
-    jet_high_multiplicity = ak.num(jet_indices, axis=1) >= 6
 
+    jet_high_multiplicity = ak.num(jet_indices, axis=1) >= 6
     set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
 
     # build and return selection results plus new columns
-    return (
-        SelectionResult(steps={"Jet": jet_sel}, objects={"Jet": jet_indices}),
-        events,
-    )
+    return SelectionResult(steps={"Jet": jet_sel}, objects={"Jet": jet_indices})
 
 
-@selector(uses={req_deepjet})
+@selector(uses={req_deepjet}, exposed=True)
 def deepjet_selection_test(events, stats):
     deepjet_indices = req_deepjet(events)
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
 
-    return (
-        SelectionResult(steps={"Deepjet": deepjet_sel}, objects={"Deepjet": deepjet_indices}),
-        events,
-    )
+    return SelectionResult(steps={"Deepjet": deepjet_sel}, objects={"Deepjet": deepjet_indices})
 
 
-@selector(uses={req_muon})
+@selector(uses={req_muon}, exposed=True)
 def muon_selection_test(events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
@@ -176,13 +170,10 @@ def muon_selection_test(events, stats):
     muon_sel = ak.num(muon_indices, axis=1) == 1
 
     # build and return selection results
-    return (
-        SelectionResult(steps={"Muon": muon_sel}, objects={"Muon": muon_indices}),
-        events,
-    )
+    return SelectionResult(steps={"Muon": muon_sel}, objects={"Muon": muon_indices})
 
 
-@selector(uses={req_electron})
+@selector(uses={req_electron}, exposed=True)
 def electron_selection_test(events, stats):
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
@@ -191,13 +182,10 @@ def electron_selection_test(events, stats):
     electron_sel = ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
-    return (
-        SelectionResult(steps={"Electron": electron_sel}, objects={"Electron": electron_indices}),
-        events,
-    )
+    return SelectionResult(steps={"Electron": electron_sel}, objects={"Electron": electron_indices})
 
 
-@selector(uses={req_muon, req_electron})
+@selector(uses={req_muon, req_electron}, exposed=True)
 def lepton_selection_test(events, stats):
     # example cuts:
     # - require exactly one lepton with pt>25, eta<2.4 and tight Id
@@ -207,12 +195,9 @@ def lepton_selection_test(events, stats):
     lepton_sel = ak.num(muon_indices, axis=1) + ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
-    return (
-        SelectionResult(
-            steps={"Lepton": lepton_sel},
-            objects={"Muon": muon_indices, "Electron": electron_indices},
-        ),
-        events,
+    return SelectionResult(
+        steps={"Lepton": lepton_sel},
+        objects={"Muon": muon_indices, "Electron": electron_indices},
     )
 
 
@@ -227,6 +212,7 @@ def lepton_selection_test(events, stats):
     shifts={
         jet_energy_shifts,
     },
+    exposed=True,
 )
 def test(
     events: ak.Array,
@@ -246,15 +232,15 @@ def test(
     results = SelectionResult()
 
     # jet selection
-    jet_results, events = jet_selection_test(events, stats)
+    jet_results = jet_selection_test(events, stats)
     results += jet_results
 
     # lepton selection
-    lepton_results, events = lepton_selection_test(events, stats)
+    lepton_results = lepton_selection_test(events, stats)
     results += lepton_results
 
     # deep jet selection
-    deepjet_results, events = deepjet_selection_test(events, stats)
+    deepjet_results = deepjet_selection_test(events, stats)
     results += deepjet_results
 
     # combined event selection after all steps
@@ -284,7 +270,7 @@ def test(
         stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
         stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
 
-    return results, events
+    return results
 
 
 # deltaR cleaning
@@ -427,9 +413,7 @@ def jet_lepton_delta_r_cleaning_selection(
     """
     clean_jet_indices = req_clean_delta_r_match_jet_lepton(events, "Jet", ["Muon", "Electron"], threshold=threshold)
 
-    return SelectionResult(
-        objects={"Jet": clean_jet_indices},
-    )
+    return SelectionResult(objects={"Jet": clean_jet_indices})
 
 
 @selector(uses={jet_lepton_delta_r_cleaning_selection})

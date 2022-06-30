@@ -45,7 +45,7 @@ class PlotVariables(
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    shifts = {MergeHistograms}
+    shifts = set(MergeHistograms.shifts)
 
     def create_branch_map(self):
         return [

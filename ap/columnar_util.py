@@ -21,7 +21,7 @@ import weakref
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict
+from collections import namedtuple, OrderedDict, defaultdict
 from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
 
 import law
@@ -1132,13 +1132,34 @@ class TaskArrayFunction(ArrayFunction):
         # store the call kwargs
         self.call_kwargs = call_kwargs
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, call_cache=None, call_force=False, **kwargs):
         """
         Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
         :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
+
+        Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
+        this instance was called before (identified by its class and :py:attr:`name`), it is not
+        called again but *None* is returned. This check can be bypassed for this call only by
+        setting *call_force* to *True*.
         """
-        if self.call_kwargs:
-            kwargs = law.util.merge_dicts(self.call_kwargs, kwargs)
+        # call caching
+        cache_kwargs = {}
+        if call_cache is not False:
+            # setup a new call cache when not present yet
+            if call_cache is None:
+                call_cache = defaultdict(int)
+
+            # check if the instance was called before
+            cache_key = (self.__class__, self.name)
+            if call_cache[cache_key] > 0 and not call_force:
+                return
+
+            # increase the count and set kwargs for the call downstream
+            call_cache[cache_key] += 1
+            cache_kwargs["call_cache"] = call_cache
+
+        # stack all kwargs
+        kwargs = law.util.merge_dicts(cache_kwargs, self.call_kwargs or {}, kwargs)
 
         return super().__call__(*args, **kwargs)
 

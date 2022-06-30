@@ -412,13 +412,8 @@ class ShiftTask(ConfigTask):
         # still call super for simplified mro control
         shifts = super().determine_allowed_shifts(config_inst, params)
 
-        # add class level shifts, resolving those of other classes as well
-        for shift in cls.shifts:
-            if isinstance(shift, str):
-                shifts.add(shift)
-            else:
-                # assume shift to be a task class defining shifts on its own
-                shifts |= shift.determine_allowed_shifts(config_inst, params)
+        # add class level shifts
+        shifts |= cls.shifts
 
         return shifts
 

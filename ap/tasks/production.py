@@ -23,7 +23,7 @@ class ProduceColumns(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {MergeReducedEvents}
+    shifts = set(MergeReducedEvents.shifts)
 
     update_producer = True
 
@@ -83,7 +83,7 @@ class ProduceColumns(
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # invoke the producer
-                events = self.producer_func(events, **self.get_producer_kwargs(self))
+                self.producer_func(events, **self.get_producer_kwargs(self))
 
                 # manually remove colums that should not be kept
                 if not remove_routes:

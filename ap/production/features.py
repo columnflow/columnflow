@@ -7,7 +7,7 @@ Column production methods related to higher-level features.
 from ap.production import producer
 from ap.production.weights import event_weights
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column, has_ak_column
+from ap.columnar_util import set_ak_column
 
 from ap.selection.test import jet_energy_shifts
 
@@ -27,9 +27,6 @@ ak = maybe_import("awkward")
     shifts={jet_energy_shifts},
 )
 def variables(events: ak.Array, **kwargs) -> ak.Array:
-    if has_ak_column(events, "ht"):
-        return events
-
     set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1))
     set_ak_column(events, "n_electron", ak.num(events.Electron.pt, axis=1))
