@@ -1157,13 +1157,13 @@ class TaskArrayFunction(ArrayFunction):
         """
         # call caching
         cache_kwargs = {}
-        if call_cache is False:
+        if call_cache is not False:
             # setup a new call cache when not present yet
             if call_cache is None:
                 call_cache = defaultdict(int)
 
             # check if the instance was called before
-            cache_key = (self.__class__, self.__name__)
+            cache_key = (self.__class__, self.name)
             if call_cache[cache_key] > 0 and not call_force:
                 return
 
@@ -1171,8 +1171,8 @@ class TaskArrayFunction(ArrayFunction):
             call_cache[cache_key] += 1
             cache_kwargs["call_cache"] = call_cache
 
-        if self.call_kwargs:
-            kwargs = law.util.merge_dicts(self.call_kwargs, kwargs)
+        # stack all kwargs
+        kwargs = law.util.merge_dicts(cache_kwargs, self.call_kwargs or {}, kwargs)
 
         return super().__call__(*args, **kwargs)
 

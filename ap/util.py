@@ -56,7 +56,7 @@ class FunctionArgs(object):
         self.args = args
         self.kwargs = kwargs
 
-    def __call__(self, func: Callable):
+    def __call__(self, func: Callable) -> Any:
         return func(*self.args, **self.kwargs)
 
 
