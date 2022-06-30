@@ -4,13 +4,17 @@
 Lightweight mixins task classes.
 """
 
-from typing import Union, Sequence, List, Set
+from typing import Union, Sequence, List, Set, Dict, Any, Optional
 
 import law
 import luigi
 import order as od
 
 from ap.tasks.framework.base import AnalysisTask, ConfigTask
+from ap.calibration import Calibrator
+from ap.selection import Selector
+from ap.production import Producer
+from ap.ml import MLModel
 
 
 class CalibratorMixin(ConfigTask):
@@ -51,8 +55,6 @@ class CalibratorMixin(ConfigTask):
 
     @classmethod
     def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        from ap.calibration import Calibrator
-
         func = Calibrator.get(calibrator, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -117,8 +119,6 @@ class CalibratorsMixin(ConfigTask):
 
     @classmethod
     def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        from ap.calibration import Calibrator
-
         func = Calibrator.get(calibrator, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -191,8 +191,6 @@ class SelectorMixin(ConfigTask):
 
     @classmethod
     def get_selector_func(cls, selector, copy=True, **update_kwargs):
-        from ap.selection import Selector
-
         func = Selector.get(selector, copy=copy)
         if not func.exposed:
             raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
@@ -265,8 +263,6 @@ class ProducerMixin(ConfigTask):
 
     @classmethod
     def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        from ap.production import Producer
-
         func = Producer.get(producer, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -331,8 +327,6 @@ class ProducersMixin(ConfigTask):
 
     @classmethod
     def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        from ap.production import Producer
-
         func = Producer.get(producer, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -377,7 +371,7 @@ class MLModelMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params):
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         params = super().modify_param_values(params)
 
         # add the default ml model when empty
@@ -393,9 +387,12 @@ class MLModelMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_ml_model_inst(cls, ml_model, config_inst=None, copy=True):
-        from ap.ml import MLModel
-
+    def get_ml_model_inst(
+        cls,
+        ml_model: str,
+        config_inst: Optional[od.Config] = None,
+        copy: bool = True,
+    ) -> MLModel:
         ml_model_inst = MLModel.get(ml_model, copy=True)
         if config_inst:
             ml_model_inst.set_config(config_inst)
@@ -408,7 +405,7 @@ class MLModelMixin(ConfigTask):
         # get the ML model instance
         self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
 
-    def events_used_in_training(self, dataset_inst, shift_inst):
+    def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
         # evaluate whether the events for the combination of dataset_inst and shift_inst
         # shall be used in the training
         return (
@@ -416,7 +413,7 @@ class MLModelMixin(ConfigTask):
             not shift_inst.x("disjoint", False)
         )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         ml_model = f"ml__{self.ml_model}" if self.ml_model != law.NO_STR else "none"
         parts.insert_before("version", "ml_model", ml_model)
@@ -431,7 +428,7 @@ class MLModelsMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params):
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         params = super().modify_param_values(params)
 
         if "config_inst" in params:
@@ -455,7 +452,7 @@ class MLModelsMixin(ConfigTask):
             for ml_model in self.ml_models
         ]
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         if self.ml_models:
