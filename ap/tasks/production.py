@@ -7,7 +7,7 @@ Tasks related to producing new columns.
 import law
 
 from ap.tasks.framework.base import AnalysisTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducerMixin
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin, ProducerMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.util import ensure_proxy, dev_sandbox
@@ -16,7 +16,8 @@ from ap.util import ensure_proxy, dev_sandbox
 class ProduceColumns(
     MergeReducedEventsUser,
     ProducerMixin,
-    CalibratorsSelectorMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):

@@ -9,14 +9,14 @@ from collections import defaultdict
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.calibration import CalibrateEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class SelectEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -176,7 +176,7 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge):
+class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.tasks.ForestMerge):
 
     shifts = set(SelectEvents.shifts)
 

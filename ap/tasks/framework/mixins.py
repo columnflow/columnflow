@@ -4,7 +4,7 @@
 Lightweight mixins task classes.
 """
 
-from typing import Union, Sequence, List, Set
+from typing import Union, Sequence, List, Set, Dict, Any
 
 import law
 import luigi
@@ -223,8 +223,36 @@ class SelectorMixin(ConfigTask):
         return parts
 
 
-class CalibratorsSelectorMixin(SelectorMixin, CalibratorsMixin):
-    pass
+class SelectorStepsMixin(SelectorMixin):
+
+    selector_steps = law.CSVParameter(
+        default=(),
+        description="a subset of steps of the selector to apply; uses all steps when empty; "
+        "empty default",
+    )
+
+    selector_steps_order_sensitive = False
+
+    @classmethod
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        # sort selector steps when the order does not matter
+        if not cls.selector_steps_order_sensitive and "selector_steps" in params:
+            params["selector_steps"] = tuple(sorted(params["selector_steps"]))
+
+        return params
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+
+        steps = self.selector_steps
+        if not self.selector_steps_order_sensitive:
+            steps = sorted(steps)
+        if steps:
+            parts["selector"] += "__steps_" + "_".join(steps)
+
+        return parts
 
 
 class ProducerMixin(ConfigTask):

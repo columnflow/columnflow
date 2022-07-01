@@ -10,7 +10,7 @@ import law
 
 from ap.tasks.framework.base import DatasetTask
 from ap.tasks.framework.mixins import (
-    CalibratorsSelectorMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -21,7 +21,8 @@ from ap.util import ensure_proxy, dev_sandbox
 class CreateHistograms(
     MergeReducedEventsUser,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
     VariablesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
@@ -163,7 +164,8 @@ class CreateHistograms(
 class MergeHistograms(
     DatasetTask,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
     VariablesMixin,
     law.tasks.ForestMerge,
     HTCondorWorkflow,
@@ -221,7 +223,8 @@ class MergeHistograms(
 class MergeShiftedHistograms(
     DatasetTask,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
     VariablesMixin,
     ShiftSourcesMixin,
     law.LocalWorkflow,
