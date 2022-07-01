@@ -11,14 +11,14 @@ import law
 import luigi
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -103,9 +103,24 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 # add aliases
                 add_ak_aliases(events, aliases, remove_src=True)
 
-                # apply the event mask
+                # build the event mask
+                if self.selector_steps:
+                    # check if all steps are present
+                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
+                    if missing_steps:
+                        raise Exception(
+                            f"selector steps {','.join(missing_steps)} are not produced by "
+                            f"selector '{self.selector}'",
+                        )
+                    event_mask = functools.reduce(
+                        (lambda a, b: a & b),
+                        (sel["steps", step] for step in self.selector_steps),
+                    )
+                else:
+                    event_mask = sel.event if "event" in sel.fields else Ellipsis
+
+                # apply the mask
                 n_all += len(events)
-                event_mask = sel.event if "event" in sel.fields else Ellipsis
                 events = events[event_mask]
                 n_reduced += len(events)
 
@@ -151,7 +166,7 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(DatasetTask, CalibratorsSelectorMixin):
+class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
     n_inputs = luigi.IntParameter(
         default=2,
@@ -296,7 +311,13 @@ class MergeReducedEventsUser(DatasetTask):
         return wrapper
 
 
-class MergeReducedEvents(MergeReducedEventsUser, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeReducedEvents(
+    MergeReducedEventsUser,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    law.tasks.ForestMerge,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
