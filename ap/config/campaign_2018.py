@@ -162,7 +162,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_sl",
         id=5,
         processes=[procs.process_tt_sl],
-        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
+        aux={"is_ttbar": True, "event_weights": ["top_pt_weight"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[

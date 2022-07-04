@@ -34,9 +34,9 @@ def top_pt_weights(
         return events
 
     # save dummy, asymmetric top pt weights
-    set_ak_column(events, "top_pt_weight", ak.ones_like(events.Jet.pt) * 1.0)
-    set_ak_column(events, "top_pt_weight_up", ak.ones_like(events.Jet.pt) * 1.1)
-    set_ak_column(events, "top_pt_weight_down", ak.ones_like(events.Jet.pt) * 1.0)
+    set_ak_column(events, "top_pt_weight", ak.ones_like(events.event) * 1.0)
+    set_ak_column(events, "top_pt_weight_up", ak.ones_like(events.event) * 1.1)
+    set_ak_column(events, "top_pt_weight_down", ak.ones_like(events.event) * 1.0)
 
     return events
 

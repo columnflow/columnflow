@@ -113,7 +113,7 @@ class CreateHistograms(
                         else:
                             self.logger.warning_once(
                                 "missing_dataset_weight",
-                                f"weight '{column}' for dataset {self.datatset_inst.name} not found",
+                                f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                             )
 
                 # define and fill histograms
