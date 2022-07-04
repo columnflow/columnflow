@@ -26,6 +26,17 @@ class Selector(TaskArrayFunction):
         # an actual SelectionResult
         self.exposed = exposed
 
+    def copy(self) -> "Selector":
+        """
+        Returns a copy if this instance.
+        """
+        inst = super().copy()
+
+        # additional attributes
+        inst.exposed = self.exposed
+
+        return inst
+
 
 def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
     """

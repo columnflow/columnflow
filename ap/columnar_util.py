@@ -771,7 +771,7 @@ class ArrayFunction(object):
     def copy_obj(
         cls,
         obj: Union["ArrayFunction", FlaggedInst, Any],
-        copy_cache: Optional[Dict[Any, Any]] = None
+        copy_cache: Optional[Dict[Any, Any]] = None,
     ) -> Union["ArrayFunction", FlaggedInst, Any]:
         """
         Returns the copy if an object *obj* which can be either an ArrayFunction or a FlaggedInst.
@@ -1111,7 +1111,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # init the call cache
         if call_cache is None:
-            call_cache = {}
+            call_cache = set()
 
         # init the copy cache
         if copy_cache is None:
