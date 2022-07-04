@@ -4,8 +4,8 @@
 Calibration methods for testing purposes.
 """
 
-from ap.util import maybe_import
 from ap.calibration import calibrator
+from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -44,6 +44,6 @@ def jec_test(events, **kwargs):
 
 @calibrator(uses={jec_test}, produces={jec_test})
 def test(events, **kwargs):
-    events = jec_test(events, **kwargs)
+    jec_test(events, **kwargs)
 
     return events

@@ -4,46 +4,63 @@
 Task to produce and merge histograms.
 """
 
+import re
+
 import law
 
 from ap.tasks.framework.base import DatasetTask
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin
+from ap.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow
-from ap.tasks.reduction import ReduceEvents
+from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CreateHistograms(
+    MergeReducedEventsUser,
+    ProducersMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    VariablesMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = ReduceEvents.shifts
+    shifts = set(MergeReducedEvents.shifts)
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
-        if not self.pilot:
-            reqs["events"] = ReduceEvents.req(self)
-            if self.producers:
-                reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+
+        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        if not self.pilot and self.producers:
+            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+
         return reqs
 
     def requires(self):
-        reqs = {"events": ReduceEvents.req(self)}
+        reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
-            reqs["columns"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
         return reqs
 
+    @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"histograms_{self.branch}.pickle")
+        return self.local_target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
 
     @law.decorator.safe_output
     @law.decorator.localize
     @ensure_proxy
     def run(self):
         import hist
-        from ap.columnar_util import ChunkedReader, mandatory_coffea_columns, update_ak_array
-        from ap.selection import Selector
+        import numpy as np
+        import awkward as ak
+        from ap.columnar_util import (
+            Route, ChunkedReader, update_ak_array, add_ak_aliases, has_ak_column,
+        )
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -55,91 +72,136 @@ class CreateHistograms(DatasetTask, ProducersMixin, CalibratorsSelectorMixin, la
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that need to be loaded
-        variables = Selector.get("variables")
-        load_columns = set(mandatory_coffea_columns) | variables.used_columns  # noqa
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"].path]
+        files = [inputs["events"]["collection"][0].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["columns"]])
+            files.extend([inp.path for inp in inputs["producers"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # not working yet since parquet columns are nested
+            # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
-                events = update_ak_array(events, *columns)
+                update_ak_array(events, *columns)
 
-                # calculate variables
-                results = variables(events)
+                # add aliases
+                add_ak_aliases(events, aliases, remove_src=True)
 
-                # weights
-                lumi = self.config_inst.x.luminosity.get("nominal")
-                sampleweight = lumi / self.config_inst.get_dataset(self.dataset).n_events
-                weight = sampleweight * events.LHEWeight.originalXWGTUP
+                # build the full event weight
+                weight = ak.Array(np.ones(len(events)))
+                if self.dataset_inst.is_mc:
+                    for column in self.config_inst.x.event_weights:
+                        weight = weight * events[Route(column).fields]
+                    for column in self.dataset_inst.x("event_weights", []):
+                        if has_ak_column(events, column):
+                            weight = weight * events[Route(column).fields]
 
                 # get all viable category ids (only leaf categories)
-                cat_ids = []
-                for cat in self.config_inst.get_leaf_categories():
-                    cat_ids.append(cat.id)
+                leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
 
-                # define & fill histograms
-                var_names = self.config_inst.variables.names()
-                with self.publish_step("looping over all variables in config ...."):
-                    for var_name in var_names:
-                        with self.publish_step("var: %s" % var_name):
-                            var = self.config_inst.variables.get(var_name)
-                            h_var = (
-                                hist.Hist.new
-                                .IntCat(cat_ids, name="category")
-                                .StrCategory([], name="shift", growth=True)
-                                .Var(var.bin_edges, name=var_name, label=var.get_full_x_title())
-                                .Weight()
+                # define and fill histograms
+                for var_name in self.variables:
+                    variable_inst = self.config_inst.get_variable(var_name)
+
+                    # get the expression and when it's a string, parse it to extract trailing index
+                    # lookups, e.g. "Jet.pt.0", and convert them to functions with optional padding
+                    expr = variable_inst.expression
+                    if isinstance(expr, str):
+                        fields = Route.check(expr).fields
+                        # first, assume a normal route
+                        expr = lambda events: events[fields]
+                        # when the last field is an integer, perform filling and padding with the
+                        # variable's null value
+                        if len(fields) > 1 and re.match(r"^\d+$", fields[-1]):
+                            if variable_inst.null_value is None:
+                                raise ValueError(
+                                    "variable expressions with a trailing index require a "
+                                    f"null_value, but '{variable_inst}' has none",
+                                )
+                            idx = int(fields[-1])
+                            def expr(events):
+                                return ak.fill_none(
+                                    ak.pad_none(events[fields[:-1]], idx + 1, axis=-1)[..., idx],
+                                    variable_inst.null_value,
+                                )
+
+                    with self.publish_step("var: %s" % var_name):
+                        h_var = (
+                            hist.Hist.new
+                            .IntCat([], name="process", growth=True)
+                            .IntCat(leaf_cat_ids, name="category")
+                            .StrCategory([], name="shift", growth=True)
+                            .Var(
+                                variable_inst.bin_edges,
+                                name=var_name,
+                                label=variable_inst.get_full_x_title(),
                             )
-                            fill_kwargs = {
-                                "category": events.cat_array,
-                                "shift": self.shift,
-                                var_name: results.columns[var_name],
-                                "weight": weight,
-                            }
-                            print(results.columns[var_name])
-                            print(self.shift)
-                            h_var.fill(**fill_kwargs)
-                            if var_name in histograms:
-                                histograms[var_name] += h_var
-                            else:
-                                histograms[var_name] = h_var
+                            .Weight()
+                        )
+                        fill_kwargs = {
+                            var_name: expr(events),
+                            "process": events.process_id,
+                            "category": events.cat_array,
+                            "shift": self.shift,
+                            "weight": weight,
+                        }
+                        h_var.fill(**fill_kwargs)
+                        if var_name in histograms:
+                            histograms[var_name] += h_var
+                        else:
+                            histograms[var_name] = h_var
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")
 
 
-class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
+class MergeHistograms(
+    DatasetTask,
+    ProducersMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    VariablesMixin,
+    law.tasks.ForestMerge,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CreateHistograms.shifts
+    shifts = set(CreateHistograms.shifts)
 
     # in each step, merge 10 into 1
     merge_factor = 10
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # tell ForestMerge to not cache the internal merging structure by default,
+        # (this is enabled in merge_workflow_requires)
+        self._cache_forest = False
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        # TODO(riga): hard-coded branches for the hackathon, to be removed afterwards
-        return CreateHistograms.req(self, _exclude=["branches"], branches=[(0, 2)])
+        req = CreateHistograms.req(self, _exclude={"branches"})
+
+        # if the merging stats exist, allow the forest to be cached
+        self._cache_forest = req.merging_stats_exist
+
+        return req
 
     def merge_requires(self, start_leaf, end_leaf):
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target("histograms.pickle")
+        return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
         with self.publish_step("Hello from MergeHistograms"):
@@ -158,44 +220,51 @@ class MergeHistograms(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMer
             output.dump(merged, formatter="pickle")
 
 
-class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class MergeShiftedHistograms(
+    DatasetTask,
+    ProducersMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    VariablesMixin,
+    ShiftSourcesMixin,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shift_sources = law.CSVParameter(
-        default=("jec",),
-        description="comma-separated source of shifts without direction to consider; default: "
-        "('jec',)",
-    )
-
     # disable the shift parameter
     shift = None
-    # effective_shift = None
+    effective_shift = None
     allow_empty_shift = True
 
     def workflow_requires(self):
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
 
         # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0)
-        reqs["nominal"] = req("nominal")
-        for s in self.shift_sources:
-            reqs[f"{s}_up"] = req(f"{s}_up")
-            reqs[f"{s}_down"] = req(f"{s}_down")
+        for shift in ["nominal"] + self.shifts:
+            reqs[shift] = MergeHistograms.req(
+                self,
+                shift=shift,
+                tree_index=0,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
 
         return reqs
 
     def requires(self):
-        reqs = {}
-
-        # add nominal and both directions per shift source
-        req = lambda shift: MergeHistograms.req(self, shift=shift, tree_index=0, _exclude={"branch"})
-        reqs["nominal"] = req("nominal")
-        for s in self.shift_sources:
-            reqs[f"{s}_up"] = req(f"{s}_up")
-            reqs[f"{s}_down"] = req(f"{s}_down")
-
-        return reqs
+        return {
+            shift: MergeHistograms.req(
+                self,
+                shift=shift,
+                branch=-1,
+                tree_index=0,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
+            for shift in ["nominal"] + self.shifts
+        }
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
@@ -203,21 +272,14 @@ class MergeShiftedHistograms(DatasetTask, CalibratorsSelectorMixin, law.LocalWor
 
     def store_parts(self):
         parts = super(MergeShiftedHistograms, self).store_parts()
-
-        # add sorted shifts sources, add hash after the first five
-        sources = sorted(self.shift_sources)
-        sources_str = "_".join(sources[:5])
-        if len(sources) > 5:
-            sources_str += f"_{law.util.create_hash(sources[5:])}"
-        parts.insert_after("dataset", "shift_sources", sources_str)
-
+        parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts
 
     def output(self):
-        return self.local_target("shifted_histograms.pickle")
+        return self.local_target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
 
     def run(self):
-        with self.publish_step("Hello from MergeShiftedHistograms"):
+        with self.publish_step(f"merging shift sources {', '.join(self.shift_sources)} ..."):
             inputs_list = [
                 inp["collection"][0].load(formatter="pickle")
                 for inp in self.input().values()

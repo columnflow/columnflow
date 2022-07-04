@@ -16,12 +16,16 @@
 *.yaml
 *.pb
 *.out
+*.parquet
 .env_*.sh
 .env_*.sh.tmp
+.coverage
+coverage*.xml
 requirements_user.txt
 __pycache__
 dist
 build
+static
 docs/_build
 tmp
 store

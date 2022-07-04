@@ -17,15 +17,26 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
+    update_calibrator = True
+
+    shifts = set(GetDatasetLFNs.shifts)
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
+
+        # add calibrator dependent requirements
+        reqs["calibrator"] = self.calibrator_func.run_requires(self)
+
         return reqs
 
     def requires(self):
-        return {
-            "lfns": GetDatasetLFNs.req(self),
-        }
+        reqs = {"lfns": GetDatasetLFNs.req(self)}
+
+        # add calibrator dependent requirements
+        reqs["calibrator"] = self.calibrator_func.run_requires(self)
+
+        return reqs
 
     def output(self):
         return self.local_target(f"calib_{self.branch}.parquet")
@@ -37,26 +48,26 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
             sorted_ak_to_parquet,
         )
-        from ap.calibration import Calibrator
 
         # prepare inputs and outputs
+        inputs = self.input()
         lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
+
+        # run the calibrator setup
+        self.calibrator_func.run_setup(self, inputs["calibrator"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # get the calibration function
-        calibrate = Calibrator.get(self.calibrator)
-
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | calibrate.used_columns
+        load_columns = mandatory_coffea_columns | self.calibrator_func.used_columns
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # define columns that will be saved
-        keep_columns = calibrate.produced_columns
+        keep_columns = self.calibrator_func.produced_columns
         remove_routes = None
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -75,27 +86,22 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # just invoke the calibration function
-                arr = calibrate(
-                    events,
-                    config_inst=self.config_inst,
-                    dataset_inst=self.dataset_inst,
-                    shift_inst=self.shift_inst,
-                )
+                self.calibrator_func(events, **self.get_calibrator_kwargs(self))
 
                 # manually remove colums that should not be kept
                 if not remove_routes:
                     remove_routes = {
                         route
-                        for route in get_ak_routes(arr)
+                        for route in get_ak_routes(events)
                         if not law.util.multi_match(route.column, keep_columns)
                     }
                 for route in remove_routes:
-                    arr = remove_ak_column(arr, route)
+                    events = remove_ak_column(events, route)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (arr, chunk.path))
+                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:

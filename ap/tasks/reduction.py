@@ -4,19 +4,21 @@
 Tasks related to reducing events for use on further tasks.
 """
 
+import functools
 from collections import OrderedDict
 
 import law
+import luigi
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
 from ap.util import ensure_proxy, dev_sandbox
 
 
-class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
@@ -26,15 +28,15 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         reqs = super().workflow_requires()
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
-            reqs["sel"] = SelectEvents.req(self)
+            reqs["calibrations"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+            reqs["selection"] = SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
             "lfns": GetDatasetLFNs.req(self),
-            "calib": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
-            "sel": SelectEvents.req(self),
+            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "selection": SelectEvents.req(self),
         }
 
     def output(self):
@@ -68,6 +70,10 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
         remove_routes = None
 
+        # event counters
+        n_all = 0
+        n_reduced = 0
+
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
@@ -76,30 +82,55 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks of events and diffs
+        input_paths = [nano_file]
+        input_paths.append(inputs["selection"]["results"].path)
+        input_paths.extend([inp.path for inp in inputs["calibrations"]])
+        if self.selector_func.produced_columns:
+            input_paths.append(inputs["selection"]["columns"].path)
         with ChunkedReader(
-            [nano_file] + [inp.path for inp in inputs["calib"]] + [inputs["sel"]["res"].path],
-            source_type=["coffea_root", "awkward_parquet", "awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}, None, None],
+            input_paths,
+            source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
+            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
-            for (events, *diffs, sel), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+            for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # here, we would simply apply the mask from the selection results
                 # to filter events and objects
 
-                # add the calibrated diffs and new columns from selection results
-                events = update_ak_array(events, *(diffs + [sel.columns]))
+                # add the calibrated diffs and potentially new columns
+                update_ak_array(events, *diffs)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                add_ak_aliases(events, aliases, remove_src=True)
 
-                # apply the event mask
-                events = events[sel.event]
+                # build the event mask
+                if self.selector_steps:
+                    # check if all steps are present
+                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
+                    if missing_steps:
+                        raise Exception(
+                            f"selector steps {','.join(missing_steps)} are not produced by "
+                            f"selector '{self.selector}'",
+                        )
+                    event_mask = functools.reduce(
+                        (lambda a, b: a & b),
+                        (sel["steps", step] for step in self.selector_steps),
+                    )
+                else:
+                    event_mask = sel.event if "event" in sel.fields else Ellipsis
+
+                # apply the mask
+                n_all += len(events)
+                events = events[event_mask]
+                n_reduced += len(events)
 
                 # apply all object masks whose names are present
+                # TODO: this should not be done automagically based on names as there might be
+                #       multiple collections of the same object type
                 for name in sel.objects.fields:
                     if name in events.fields:
                         # apply the event mask to the object mask first
-                        object_mask = sel.objects[name][sel.event]
+                        object_mask = sel.objects[name][event_mask]
                         events[name] = events[name][object_mask]
 
                 # manually remove colums that should not be kept
@@ -117,6 +148,12 @@ class ReduceEvents(DatasetTask, CalibratorsSelectorMixin, law.LocalWorkflow, HTC
                 output_chunks[pos.index] = chunk
                 reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
+        # some logs
+        save_div = lambda x, y: (x / y) if y else 0.0
+        self.publish_message(
+            f"reduced {n_all} to {n_reduced} events ({save_div(n_reduced, n_all) * 100:.2f}%)",
+        )
+
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
@@ -129,22 +166,28 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
+class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
+    n_inputs = luigi.IntParameter(
+        default=2,
+        significant=True,
+        description="minimal number of input files for sufficient statistics to infer merging "
+        "factors; default: 2",  # TODO: update once going to production
+    )
     merged_size = law.BytesParameter(
-        default=500.0,
+        default=1024.0,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; default: '500MB'",
+        description="the maximum file size of merged files; default unit is MB; default: '1024MB'",
     )
 
     shifts = set(ReduceEvents.shifts)
 
     def requires(self):
-        return ReduceEvents.req(self)
+        return ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
-        return self.local_target("stats.json")
+        return self.local_target(f"stats_n{self.n_inputs}.json")
 
     @law.decorator.safe_output
     def run(self):
@@ -205,35 +248,104 @@ class GatherReductionStats(DatasetTask, CalibratorsSelectorMixin):
         self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
 
 
-GatherReductionStatsWrapper = wrapper_factory(
+MergeReductionStatsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
-    require_cls=GatherReductionStats,
+    require_cls=MergeReductionStats,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 
 
-class MergeReducedEvents(DatasetTask, CalibratorsSelectorMixin, law.tasks.ForestMerge, HTCondorWorkflow):
-
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(SelectEvents.shifts)
+class MergeReducedEventsUser(DatasetTask):
 
     # recursively merge 8 files into one
     merge_factor = 8
 
-    # the key of the config that defines the merging in the branch map of DatasetTask
-    file_merging = "after_reduction"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached value of the file_merging until it's positive
+        self._cached_file_merging = -1
+
+        # in case this is a workflow, do not cache branches by default
+        # (this is enabled in reduced_file_merging once positive)
+        self._cache_branches = False
+
+    @property
+    def file_merging(self):
+        """
+        Needed by DatasetTask to define the default branch map.
+        """
+        if self._cached_file_merging < 0:
+            # reset the forest in case this is a forest ForestMerge task
+            self._forest_built = False
+
+            # check of the merging stats is present and of so, set the cached file merging value
+            output = MergeReductionStats.req(self).output()
+            if output.exists():
+                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
+                self._cache_branches = True
+
+        return self._cached_file_merging
+
+    @property
+    def merging_stats_exist(self):
+        return self.file_merging >= 1
+
+    def reduced_dummy_output(self):
+        # dummy output to be returned in case the merging stats are not present yet
+        return self.local_target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
+
+    @classmethod
+    def maybe_dummy(cls, func):
+        # meant to wrap output methods of tasks depending on merging stats
+        # to inject a dummy output in case the status are not there yet
+        @functools.wraps(func)
+        def wrapper(self):
+            # when the merging stats do not exist yet, return a dummy target
+            if not self.merging_stats_exist:
+                return self.reduced_dummy_output()
+
+            # otherwise, bind the wrapped function and call it
+            return func.__get__(self, self.__class__)()
+
+        return wrapper
+
+
+class MergeReducedEvents(
+    MergeReducedEventsUser,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    law.tasks.ForestMerge,
+    HTCondorWorkflow,
+):
+
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+
+    shifts = ReduceEvents.shifts | MergeReductionStats.shifts
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return ReduceEvents.req(self, _exclude={"branches"})
+        return {
+            "stats": MergeReductionStats.req(self),
+            "events": ReduceEvents.req(self, _exclude={"branches"}),
+        }
 
     def merge_requires(self, start_branch, end_branch):
-        return [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+        return {
+            "stats": MergeReductionStats.req(self),
+            "events": [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
+        }
 
+    def trace_merge_workflow_inputs(self, inputs):
+        return super().trace_merge_workflow_inputs(inputs["events"])
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs(inputs["events"])
+
+    @MergeReducedEventsUser.maybe_dummy
     def merge_output(self):
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))

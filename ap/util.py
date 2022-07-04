@@ -5,7 +5,7 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
-    "env_is_remote", "env_is_dev",
+    "env_is_remote", "env_is_dev", "primes",
     "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
@@ -20,6 +20,7 @@ import subprocess
 import importlib
 import multiprocessing
 import multiprocessing.pool
+from functools import wraps
 from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
@@ -32,6 +33,15 @@ env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
 #: Boolean denoting whether the environment is used for development (based on ``AP_DEV``).
 env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("AP_DEV", "0"))
 
+#: List of the first 100 primes.
+primes = [
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
+    101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193,
+    197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
+    311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
+    431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541,
+]
+
 
 class DotDict(dict):
     """
@@ -41,20 +51,25 @@ class DotDict(dict):
 
     .. code-block:: python
 
-       d = DotDict()
-       d["foo"] = 1
+        d = DotDict()
+        d["foo"] = 1
 
-       print(d["foo"])
-       # => 1
+        print(d["foo"])
+        # => 1
 
-       print(d.foo)
-       # => 1
+        print(d.foo)
+        # => 1
 
-       print(d["bar"])
-       # => KeyError
+        print(d["bar"])
+        # => KeyError
 
-       print(d.bar)
-       # => AttributeError
+        print(d.bar)
+        # => AttributeError
+
+        # use wrap() to convert a nested dict
+        d = DotDict({"foo": {"bar": 1}})
+        print(d.foo.bar)
+        # => 1
     """
 
     def __getattr__(self, attr):
@@ -72,7 +87,7 @@ class DotDict(dict):
     def wrap(cls, d: dict) -> "DotDict":
         """
         Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
-        with :py:class:`DitDict`'s for deep attribute-style access.
+        with :py:class:`DotDict`'s for deep attribute-style access.
         """
         wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
         return wrap(d)
@@ -362,3 +377,37 @@ def dev_sandbox(sandbox: str) -> str:
 
     # all checks passed
     return law.Sandbox.join_key(_type, dev_path)
+
+
+def freeze(cont):
+    """Constructs an immutable version of a native Python container.
+
+    Recursively replaces all mutable containers (``dict``, ``list``, ``set``) encountered within
+    *cont* by an immutable equivalent: Lists are converted to tuples, sets to ``frozenset``
+    objects, and dictionaries to tuples of (*key*, *value*) pairs.
+    """
+
+    if isinstance(cont, dict):
+        return tuple((k, freeze(v)) for k, v in cont.items())
+    elif isinstance(cont, (list, tuple)):
+        return tuple(freeze(v) for v in cont)
+    elif isinstance(cont, set):
+        return frozenset(freeze(v) for v in cont)
+    return cont
+
+
+def memoize(f):
+    """
+    Function decorator that implements memoization. Function results are cached on
+    first call and returned from cache on every subsequent call with the same arguments.
+    """
+    _cache = {}
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        frozen_args = freeze(dict(args=args, kwargs=kwargs))
+        if frozen_args not in _cache:
+            _cache[frozen_args] = f(*args, **kwargs)
+        return _cache[frozen_args]
+
+    return wrapper
