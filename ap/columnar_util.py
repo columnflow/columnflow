@@ -735,7 +735,7 @@ class ArrayFunction(object):
     @classmethod
     def has(cls, name: str) -> bool:
         """
-        Returns whether there in instanced named *name* was previously registered.
+        Returns whether an instance named *name* was previously registered.
         """
         return name in cls._instances
 
