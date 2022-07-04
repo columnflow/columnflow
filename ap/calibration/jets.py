@@ -422,11 +422,11 @@ def jer_setup(self, task, inputs, call_kwargs, **kwargs):
 @calibrator(uses={jec}, produces={jec})
 def jets(self, events, **kwargs):
     # apply jet energy corrections
-    self.f.jec(events, **kwargs)
+    self.stack.jec(events, **kwargs)
 
     # apply jer smearing (MC only)
     if kwargs["dataset_inst"].is_mc:
-        self.f.jer(events, **kwargs)
+        self.stack.jer(events, **kwargs)
 
     return events
 

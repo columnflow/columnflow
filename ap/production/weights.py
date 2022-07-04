@@ -52,13 +52,13 @@ def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     might possibly change any of the weights.
     """
     # compute normalization weights
-    self.f.normalization_weights(events, **kwargs)
+    self.stack.normalization_weights(events, **kwargs)
 
     # compute pu weights
-    self.f.pu_weights(events, **kwargs)
+    self.stack.pu_weights(events, **kwargs)
 
     # compute top pt weights
-    self.f.top_pt_weights(events, **kwargs)
+    self.stack.top_pt_weights(events, **kwargs)
 
     return events
 

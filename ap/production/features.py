@@ -34,6 +34,6 @@ def variables(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     set_ak_column(events, "n_deepjet", ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1))
 
     # add event weights
-    self.f.event_weights(events, **kwargs)
+    self.stack.event_weights(events, **kwargs)
 
     return events

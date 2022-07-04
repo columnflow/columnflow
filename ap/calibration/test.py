@@ -44,6 +44,6 @@ def jec_test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @calibrator(uses={jec_test}, produces={jec_test})
 def test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    self.f.jec_test(events, **kwargs)
+    self.stack.jec_test(events, **kwargs)
 
     return events

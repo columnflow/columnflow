@@ -919,9 +919,9 @@ class TaskArrayFunction(ArrayFunction):
     decorator (similiar to ``property`` setters) as shown in the example below. When the update is
     triggered, other task array functions referred to in :py:attr:`uses`, :py:attr:`produces` and
     :py:attr:`shifts` are first copied (so that their state is consistent) and then updated
-    recursively. These copies are stored in a dictionary :py:attr:`f`, using their names as keys.
-    In some way, this can be seen as a call stack and calls to any dependent object should be done
-    via copies in this dictionary in order to maintain their consistent state.
+    recursively. These copies are stored in a dictionary :py:attr:`stack`, using their names as
+    keys. In some way, this can be seen as a call stack and calls to any dependent object should be
+    done via copies in this dictionary in order to maintain their consistent state.
 
     Custom task requirements, and a setup hook can be defined in a similar, programmatic way.
     Example:
@@ -959,7 +959,7 @@ class TaskArrayFunction(ArrayFunction):
         # another function using my_func
         def my_other_func(self, arr, **kwargs):
             # call the my_func copy
-            self.f.my_func(arr, **kwargs)
+            self.stack.my_func(arr, **kwargs)
 
         ArrayFunction.new(my_func, uses={my_func}, produces={my_func})
 
@@ -998,7 +998,7 @@ class TaskArrayFunction(ArrayFunction):
        A dictionary of arguments that are set by :py:attr:`setup_func` and forwarded to the
        invocation of the wrapped functon.
 
-    .. py:attribute:: f
+    .. py:attribute:: stack
        type: DotDict
 
        Dictionary providing named access to copies of all dependent objects in :py:attr:`uses`,
@@ -1028,7 +1028,7 @@ class TaskArrayFunction(ArrayFunction):
         self.call_kwargs = None
 
         # dict providing named access to copies of all dependent objects, generated during update
-        self.f = DotDict()
+        self.stack = DotDict()
 
     def copy(self) -> "TaskArrayFunction":
         """
@@ -1042,7 +1042,7 @@ class TaskArrayFunction(ArrayFunction):
         inst.requires_func = self.requires_func
         inst.setup_func = self.setup_func
         inst.call_kwargs = _copy.deepcopy(self.call_kwargs)
-        # f is not copied by choice
+        # stack is not copied by choice
 
         return inst
 
@@ -1137,7 +1137,7 @@ class TaskArrayFunction(ArrayFunction):
                 obj = obj.inst
             if isinstance(obj, TaskArrayFunction):
                 # store the reference
-                self.f[obj.name] = obj
+                self.stack[obj.name] = obj
                 # call its update
                 if obj not in call_cache:
                     call_cache.add(obj)

@@ -113,7 +113,7 @@ def deterministic_jet_seeds(
     identical.
     """
     # create the event seeds
-    self.f.deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
+    self.stack.deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
 
     # create the per jet seeds
     prime_offset = 18
@@ -149,9 +149,9 @@ def deterministic_seeds(
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds
-    self.f.deterministic_event_seeds(events, **kwargs)
+    self.stack.deterministic_event_seeds(events, **kwargs)
 
     # create the jet seeds
-    self.f.deterministic_jet_seeds(events, **kwargs)
+    self.stack.deterministic_jet_seeds(events, **kwargs)
 
     return events
