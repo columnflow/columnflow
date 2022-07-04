@@ -5,27 +5,33 @@ Selection methods for testing purposes.
 """
 
 from collections import defaultdict
-from typing import Callable, Dict, List, Optional, Union, Tuple
+from typing import Callable, Dict, List, Optional, Union
 
 import order as od
 
-from ap.selection import selector, SelectionResult
+from ap.selection import Selector, SelectionResult, selector
+from ap.production.categories import category_ids
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
 
-ak = maybe_import("awkward")
 np = maybe_import("numpy")
+ak = maybe_import("awkward")
 
 
 # pseudo-selectors for declaring dependence on shifts
 
 @selector
-def jet_energy_shifts(events, **kwargs):
+def jet_energy_shifts(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
 @jet_energy_shifts.update
-def update(self, config_inst, dataset_inst, **kwargs):
+def jet_energy_shifts_update(
+    self: Selector,
+    config_inst: od.Config,
+    dataset_inst: od.Dataset,
+    **kwargs,
+) -> None:
     """Declare dependence on JEC/JER uncertainty shifts."""
     self.shifts |= {
         f"jec_{junc_name}_{junc_dir}"
@@ -39,175 +45,187 @@ def update(self, config_inst, dataset_inst, **kwargs):
 # object definitions
 # TODO: return masks instead of indices and build indices as late as possible
 @selector(uses={"Jet.pt", "Jet.eta"})
-def req_jet(events, **kwargs):
+def req_jet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Electron.pt", "Electron.eta", "Electron.cutBased"})
-def req_electron(events, **kwargs):
+def req_electron(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Electron.pt > 25) & (abs(events.Electron.eta) < 2.4) & (events.Electron.cutBased == 4)
     return ak.argsort(events.Electron.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Muon.pt", "Muon.eta", "Muon.tightId"})
-def req_muon(events, **kwargs):
+def req_muon(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Muon.pt > 25) & (abs(events.Muon.eta) < 2.4) & (events.Muon.tightId)
     return ak.argsort(events.Muon.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Jet.pt", "Jet.eta"})
-def req_forwardJet(events, **kwargs):
+def req_forwardJet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) > 2.4) & (abs(events.Jet.eta) < 5.0)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={"Jet.pt", "Jet.eta", "Jet.btagDeepFlavB"})
-def req_deepjet(events, **kwargs):
+def req_deepjet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4) & (events.Jet.btagDeepFlavB > 0.3)
     return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
 
 
 @selector(uses={req_jet})
-def var_nJet(events, **kwargs):
-    return ak.num(req_jet(events), axis=1)
+def var_nJet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.num(self.f.req_jet(events), axis=1)
 
 
 @selector(uses={req_deepjet})
-def var_nDeepjet(events, **kwargs):
-    return ak.num(req_deepjet(events), axis=1)
+def var_nDeepjet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.num(self.f.req_deepjet(events), axis=1)
 
 
 @selector(uses={req_electron})
-def var_nElectron(events, **kwargs):
-    return ak.num(req_electron(events), axis=1)
+def var_nElectron(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.num(self.f.req_electron(events), axis=1)
 
 
 @selector(uses={req_muon})
-def var_nMuon(events, **kwargs):
-    return ak.num(req_muon(events), axis=1)
+def var_nMuon(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.num(self.f.req_muon(events), axis=1)
 
 
 @selector(uses={req_jet, "Jet.pt"})
-def var_HT(events, **kwargs):
-    jet_pt_sorted = events.Jet.pt[req_jet(events)]
+def var_HT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    jet_pt_sorted = events.Jet.pt[self.f.req_jet(events)]
     return ak.sum(jet_pt_sorted, axis=1)
 
 
 # selection for the main categories
 @selector(uses={var_nMuon, var_nElectron})
-def sel_1e(events, **kwargs):
-    return (var_nMuon(events) == 0) & (var_nElectron(events) == 1)
+def sel_1e(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.var_nMuon(events) == 0) & (self.f.var_nElectron(events) == 1)
 
 
 @selector(uses={var_nMuon, var_nElectron})
-def sel_1mu(events, **kwargs):
-    return (var_nMuon(events) == 1) & (var_nElectron(events) == 0)
+def sel_1mu(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.var_nMuon(events) == 1) & (self.f.var_nElectron(events) == 0)
 
 
 # selection for the sub-categories
 @selector(uses={sel_1e, var_nDeepjet})
-def sel_1e_eq1b(events, **kwargs):
-    return (sel_1e(events)) & (var_nDeepjet(events) == 1)
+def sel_1e_eq1b(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1e(events)) & (self.f.var_nDeepjet(events) == 1)
 
 
 @selector(uses={sel_1e, var_nDeepjet})
-def sel_1e_ge2b(events, **kwargs):
-    return (sel_1e(events)) & (var_nDeepjet(events) >= 2)
+def sel_1e_ge2b(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1e(events)) & (self.f.var_nDeepjet(events) >= 2)
 
 
 @selector(uses={sel_1mu, var_nDeepjet})
-def sel_1mu_eq1b(events, **kwargs):
-    return (sel_1mu(events)) & (var_nDeepjet(events) == 1)
+def sel_1mu_eq1b(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1mu(events)) & (self.f.var_nDeepjet(events) == 1)
 
 
 @selector(uses={sel_1mu, var_nDeepjet})
-def sel_1mu_ge2b(events, **kwargs):
-    return (sel_1mu(events)) & (var_nDeepjet(events) >= 2)
+def sel_1mu_ge2b(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1mu(events)) & (self.f.var_nDeepjet(events) >= 2)
 
 
 @selector(uses={sel_1mu_ge2b, var_HT})
-def sel_1mu_ge2b_lowHT(events, **kwargs):
-    return (sel_1mu_ge2b(events)) & (var_HT(events) <= 300)
+def sel_1mu_ge2b_lowHT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1mu_ge2b(events)) & (self.f.var_HT(events) <= 300)
 
 
 @selector(uses={sel_1mu_ge2b, var_HT})
-def sel_1mu_ge2b_highHT(events, **kwargs):
-    return (sel_1mu_ge2b(events)) & (var_HT(events) > 300)
+def sel_1mu_ge2b_highHT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return (self.f.sel_1mu_ge2b(events)) & (self.f.var_HT(events) > 300)
 
 
 @selector(uses={req_jet}, produces={"jet_high_multiplicity"}, exposed=True)
-def jet_selection_test(events, stats, **kwargs):
+def jet_selection_test(self: Selector, events: ak.Array, stats: defaultdict, **kwargs) -> SelectionResult:
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
     # example columns:
     # - high jet multiplicity region (>=6 selected jets)
 
-    jet_indices = req_jet(events)
+    jet_indices = self.f.req_jet(events)
     jet_sel = ak.num(jet_indices, axis=1) >= 4
 
     jet_high_multiplicity = ak.num(jet_indices, axis=1) >= 6
     set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
 
     # build and return selection results plus new columns
-    return SelectionResult(steps={"Jet": jet_sel}, objects={"Jet": jet_indices})
+    return SelectionResult(
+        steps={"Jet": jet_sel},
+        objects={"Jet": {"Jet": jet_indices}},
+    )
 
 
 @selector(uses={req_deepjet}, exposed=True)
-def deepjet_selection_test(events, stats, **kwargs):
-    deepjet_indices = req_deepjet(events)
+def deepjet_selection_test(self: Selector, events: ak.Array, stats: defaultdict, **kwargs) -> SelectionResult:
+    deepjet_indices = self.f.req_deepjet(events)
     deepjet_sel = ak.num(deepjet_indices, axis=1) >= 1
 
-    return SelectionResult(steps={"Deepjet": deepjet_sel}, objects={"Deepjet": deepjet_indices})
+    return SelectionResult(
+        steps={"Deepjet": deepjet_sel},
+        objects={"Jet": {"Deepjet": deepjet_indices}},
+    )
 
 
 @selector(uses={req_muon}, exposed=True)
-def muon_selection_test(events, stats, **kwargs):
+def muon_selection_test(self: Selector, events: ak.Array, stats: defaultdict, **kwargs) -> ak.Array:
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
 
-    muon_indices = req_muon(events)
+    muon_indices = self.f.req_muon(events)
     muon_sel = ak.num(muon_indices, axis=1) == 1
 
     # build and return selection results
-    return SelectionResult(steps={"Muon": muon_sel}, objects={"Muon": muon_indices})
+    return SelectionResult(
+        steps={"Muon": muon_sel},
+        objects={"Muon": {"Muon": muon_indices}},
+    )
 
 
 @selector(uses={req_electron}, exposed=True)
-def electron_selection_test(events, stats, **kwargs):
+def electron_selection_test(self: Selector, events: ak.Array, stats: defaultdict, **kwargs) -> SelectionResult:
     # example cuts:
     # - require exactly one muon with pt>25, eta<2.4 and tight Id
 
-    electron_indices = req_electron(events)
+    electron_indices = self.f.req_electron(events)
     electron_sel = ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
-    return SelectionResult(steps={"Electron": electron_sel}, objects={"Electron": electron_indices})
+    return SelectionResult(
+        steps={"Electron": electron_sel},
+        objects={"Electron": {"Electron": electron_indices}},
+    )
 
 
 @selector(uses={req_muon, req_electron}, exposed=True)
-def lepton_selection_test(events, stats, **kwargs):
+def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, **kwargs) -> SelectionResult:
     # example cuts:
     # - require exactly one lepton with pt>25, eta<2.4 and tight Id
 
-    muon_indices = req_muon(events)
-    electron_indices = req_electron(events)
+    muon_indices = self.f.req_muon(events)
+    electron_indices = self.f.req_electron(events)
     lepton_sel = ak.num(muon_indices, axis=1) + ak.num(electron_indices, axis=1) == 1
 
     # build and return selection results
     return SelectionResult(
         steps={"Lepton": lepton_sel},
-        objects={"Muon": muon_indices, "Electron": electron_indices},
+        objects={"Muon": {"Muon": muon_indices}, "Electron": {"Electron": electron_indices}},
     )
 
 
 @selector(
     uses={
-        jet_selection_test, lepton_selection_test, deepjet_selection_test,
+        category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
         "LHEWeight.originalXWGTUP",
     },
     produces={
-        jet_selection_test, lepton_selection_test, deepjet_selection_test, "cat_array",
+        category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
     },
     shifts={
         jet_energy_shifts,
@@ -215,12 +233,13 @@ def lepton_selection_test(events, stats, **kwargs):
     exposed=True,
 )
 def test(
+    self: Selector,
     events: ak.Array,
     stats: defaultdict,
     config_inst: od.Config,
     dataset_inst: od.Dataset,
     **kwargs,
-) -> Tuple[SelectionResult, ak.Array]:
+) -> SelectionResult:
     # example cuts:
     # - jet_selection_test
     # - lepton_selection_test
@@ -232,15 +251,15 @@ def test(
     results = SelectionResult()
 
     # jet selection
-    jet_results = jet_selection_test(events, stats)
+    jet_results = self.f.jet_selection_test(events, stats)
     results += jet_results
 
     # lepton selection
-    lepton_results = lepton_selection_test(events, stats)
+    lepton_results = self.f.lepton_selection_test(events, stats)
     results += lepton_results
 
     # deep jet selection
-    deepjet_results = deepjet_selection_test(events, stats)
+    deepjet_results = self.f.deepjet_selection_test(events, stats)
     results += deepjet_results
 
     # combined event selection after all steps
@@ -248,19 +267,7 @@ def test(
     results.main["event"] = event_sel
 
     # build categories
-    cat_array = 0
-    mask_int = 0
-    for cat in config_inst.get_leaf_categories():
-        cat_sel = cat.selection
-        mask = globals()[cat_sel](events)
-        cat_array = np.where(mask, cat.id, cat_array)
-        mask_int = mask_int + np.where(mask, 1, 0)  # to check orthogonality of categories
-    if not ak.all(mask_int == 1):
-        if ak.any(mask_int >= 2):
-            print("Leaf categories are not fully orthogonal")
-        else:
-            print("Some events are without leaf category")
-    set_ak_column(events, "cat_array", cat_array)
+    self.f.category_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
     # increment stats
     events_sel = events[event_sel]
@@ -318,6 +325,7 @@ def cleaning_factory(
     # finally, construct selector function itself
     @selector(uses=uses, name=selector_name)
     def func(
+        self: Selector,
         events: ak.Array,
         to_clean: str,
         clean_against: List[str],
@@ -384,22 +392,9 @@ delta_r_jet_lepton = cleaning_factory(
 )
 
 
-def req_clean_delta_r_match_jet_lepton(
-    events: ak.Array,
-    to_clean: str,
-    clean_against: List[str],
-    threshold: float = 0.4,
-) -> List[int]:
-    """
-    do the cleaning of jets with respect to leptons.
-    returns indices of good (clean) jets, sorted by pt
-    *TODO*: this should probably changed to return the boolean masks
-    """
-    return delta_r_jet_lepton(events, to_clean, clean_against, threshold=threshold)
-
-
 @selector(uses={delta_r_jet_lepton})
-def jet_lepton_delta_r_cleaning_selection(
+def jet_lepton_delta_r_cleaning(
+    self: Selector,
     events: ak.Array,
     stats: Dict[str, Union[int, float]],
     threshold: float = 0.4,
@@ -412,22 +407,7 @@ def jet_lepton_delta_r_cleaning_selection(
     the concatination of the fields *[Muon, Electron]*, i.e. all leptons
     and passes the desired threshold for the selection
     """
-    clean_jet_indices = req_clean_delta_r_match_jet_lepton(events, "Jet", ["Muon", "Electron"], threshold=threshold)
+    clean_jet_indices = self.f.delta_r_jet_lepton(events, "Jet", ["Muon", "Electron"], threshold=threshold)
 
+    # TODO: should not return a new object collection but an array with masks
     return SelectionResult(objects={"Jet": clean_jet_indices})
-
-
-@selector(uses={jet_lepton_delta_r_cleaning_selection})
-def jet_lepton_delta_r_cleaning(
-    events: ak.Array,
-    stats: Dict[str, Union[int, float]],
-    threshold: float = 0.4,
-    **kwargs,
-) -> SelectionResult:
-    """
-    Selector function that performs cleaning of jets against leptons
-    based on a delta_r requirement
-    """
-    results = jet_lepton_delta_r_cleaning_selection(events, stats, threshold=threshold)
-
-    return results

@@ -25,6 +25,7 @@ ak = maybe_import("awkward")
     produces={process_ids, "normalization_weight"},
 )
 def normalization_weights(
+    self: Producer,
     events: ak.Array,
     selection_stats: Dict[str, Union[int, float]],
     xs_table: sp.sparse.lil.lil_matrix,
@@ -38,7 +39,7 @@ def normalization_weights(
     normalization weight.
     """
     # add process ids
-    process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    self.f.process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
     # stop here for data
     if dataset_inst.is_data:

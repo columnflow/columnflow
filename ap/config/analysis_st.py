@@ -297,7 +297,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "nElectron", "Electron.pt", "Electron.eta",
         "LHEWeight.originalXWGTUP",
         "PV.npvs",
-        "jet_high_multiplicity", "cat_array",
+        "jet_high_multiplicity", "category_ids",
     },
     "CreateHistograms": {
         "LHEWeight.originalXWGTUP",

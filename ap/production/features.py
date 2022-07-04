@@ -4,7 +4,7 @@
 Column production methods related to higher-level features.
 """
 
-from ap.production import producer
+from ap.production import Producer, producer
 from ap.production.weights import event_weights
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
@@ -26,7 +26,7 @@ ak = maybe_import("awkward")
     },
     shifts={jet_energy_shifts},
 )
-def variables(events: ak.Array, **kwargs) -> ak.Array:
+def variables(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1))
     set_ak_column(events, "n_electron", ak.num(events.Electron.pt, axis=1))
@@ -34,6 +34,6 @@ def variables(events: ak.Array, **kwargs) -> ak.Array:
     set_ak_column(events, "n_deepjet", ak.num(events.Jet.pt[events.Jet.btagDeepFlavB > 0.3], axis=1))
 
     # add event weights
-    event_weights(events, **kwargs)
+    self.f.event_weights(events, **kwargs)
 
     return events
