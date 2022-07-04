@@ -134,12 +134,9 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                         dst_names.remove(src_name)
                         dst_names.append(src_name)
                     for dst_name in dst_names:
-                        object_mask = sel.objects[src_name][event_mask]
+                        object_mask = sel.objects[src_name, dst_name][event_mask]
                         dst_collection = events[src_name][object_mask]
-                        if dst_name == src_name:
-                            events[src_name] = dst_collection
-                        else:
-                            set_ak_column(events, dst_names, dst_collection)
+                        set_ak_column(events, dst_name, dst_collection)
 
                 # manually remove colums that should not be kept
                 if not remove_routes:

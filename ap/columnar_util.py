@@ -1186,7 +1186,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if self.requires_func:
-            self.requires_func.__get__(self, self.__class__)(self, task, reqs)
+            self.requires_func.__get__(self, self.__class__)(task, reqs)
 
         # run the requirements of all dependent objects
         for obj in self.uses | self.produces | self.shifts:
@@ -1235,7 +1235,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if self.setup_func:
-            self.setup_func.__get__(self, self.__class__)(self, task, inputs, self.call_kwargs)
+            self.setup_func.__get__(self, self.__class__)(task, inputs, self.call_kwargs)
 
         # run the setup of all dependent objects
         for obj in self.uses | self.produces | self.shifts:

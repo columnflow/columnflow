@@ -293,6 +293,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
     "ReduceEvents": {
         "run", "luminosityBlock", "event",
         "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
+        "Deepjet.pt", "Deepjet.eta", "Deepjet.btagDeepFlavB",
         "nMuon", "Muon.pt", "Muon.eta",
         "nElectron", "Electron.pt", "Electron.eta",
         "LHEWeight.originalXWGTUP",
