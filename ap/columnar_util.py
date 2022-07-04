@@ -1037,12 +1037,11 @@ class TaskArrayFunction(ArrayFunction):
         inst = super().copy()
 
         # add attributes
+        # call_kwargs and stack are not copied by choice
         inst.shifts = set(self.shifts)
         inst.update_func = self.update_func
         inst.requires_func = self.requires_func
         inst.setup_func = self.setup_func
-        inst.call_kwargs = _copy.deepcopy(self.call_kwargs)
-        # stack is not copied by choice
 
         return inst
 
@@ -1218,6 +1217,7 @@ class TaskArrayFunction(ArrayFunction):
         self,
         task: law.Task,
         inputs: dict,
+        call_kwargs: Optional[dict] = None,
         call_cache: Optional[set] = None,
     ) -> None:
         """
@@ -1226,8 +1226,8 @@ class TaskArrayFunction(ArrayFunction):
         corresponding to the requirements created by :py:func:`run_requires`.
         """
         # init the call kwargs
-        if self.call_kwargs is None:
-            self.call_kwargs = {}
+        if call_kwargs is None:
+            call_kwargs = {}
 
         # init the call cache
         if call_cache is None:
@@ -1235,7 +1235,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if self.setup_func:
-            self.setup_func.__get__(self, self.__class__)(task, inputs, self.call_kwargs)
+            self.setup_func.__get__(self, self.__class__)(task, inputs, call_kwargs)
 
         # run the setup of all dependent objects
         for obj in self.uses | self.produces | self.shifts:
@@ -1243,7 +1243,10 @@ class TaskArrayFunction(ArrayFunction):
                 obj = obj.inst
             if isinstance(obj, TaskArrayFunction) and obj not in call_cache:
                 call_cache.add(obj)
-                obj.run_setup(task, inputs, call_cache=call_cache)
+                obj.run_setup(task, inputs, call_kwargs=call_kwargs, call_cache=call_cache)
+
+        # store call_kwargs in the end
+        self.call_kwargs = call_kwargs
 
     def __call__(self, *args, call_cache=None, call_force=False, **kwargs):
         """
