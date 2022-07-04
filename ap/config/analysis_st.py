@@ -289,6 +289,23 @@ config_2018.set_aux("external_files", DotDict.wrap({
 
 }))
 
+# columns to keep after certain steps
+config_2018.set_aux("keep_columns", DotDict.wrap({
+    "ReduceEvents": {
+        "run", "luminosityBlock", "event",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
+        "Deepjet.pt", "Deepjet.eta", "Deepjet.btagDeepFlavB",
+        "nMuon", "Muon.pt", "Muon.eta",
+        "nElectron", "Electron.pt", "Electron.eta",
+        "LHEWeight.originalXWGTUP",
+        "PV.npvs",
+        "jet_high_multiplicity", "category_ids",
+    },
+    "CreateHistograms": {
+        "LHEWeight.originalXWGTUP",
+    },
+}))
+
 # event weight columns
 config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
 
@@ -302,22 +319,3 @@ add_categories(config_2018)
 
 # add variables
 add_variables(config_2018)
-
-# columns to keep after certain steps
-config_2018.set_aux("keep_columns", DotDict.wrap({
-    # test
-    "ReduceEvents": {
-        "run", "luminosityBlock", "event",
-        "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
-        "nMuon", "Muon.pt", "Muon.eta",
-        "nElectron", "Electron.pt", "Electron.eta",
-        "LHEWeight.originalXWGTUP",
-        "PV.npvs",
-        "jet_high_multiplicity", "cat_array", "deterministic_seed",
-    },
-
-    # test
-    "CreateHistograms": {
-        "LHEWeight.originalXWGTUP",
-    },
-}))

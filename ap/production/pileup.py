@@ -19,7 +19,7 @@ ak = maybe_import("awkward")
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
 )
 def pu_weights(
-    self,
+    self: Producer,
     events: ak.Array,
     pu_weights: ak.Array,
     dataset_inst: od.Dataset,

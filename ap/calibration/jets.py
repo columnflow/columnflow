@@ -125,7 +125,10 @@ def ak_random(*args, rand_func):
 #
 
 @calibrator(
-    uses={"nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor", "fixedGridRhoFastjetAll"},
+    uses={
+        "nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor",
+        "fixedGridRhoFastjetAll",
+    },
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
@@ -419,11 +422,11 @@ def jer_setup(self, task, inputs, call_kwargs, **kwargs):
 @calibrator(uses={jec}, produces={jec})
 def jets(self, events, **kwargs):
     # apply jet energy corrections
-    events = jec(events, **kwargs)
+    self.stack.jec(events, **kwargs)
 
     # apply jer smearing (MC only)
     if kwargs["dataset_inst"].is_mc:
-        events = jer(events, **kwargs)
+        self.stack.jer(events, **kwargs)
 
     return events
 
@@ -432,5 +435,6 @@ def jets(self, events, **kwargs):
 def jets_update(self, dataset_inst, **kwargs):
     """Ensure JER is run on MC"""
     if dataset_inst.is_mc:
-        self.uses |= {jer}
-        self.produces |= {jer}
+        _jer = jer.updated_copy(dataset_inst=dataset_inst, **kwargs)
+        self.uses.add(_jer)
+        self.produces.add(_jer)

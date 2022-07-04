@@ -19,7 +19,12 @@ ak = maybe_import("awkward")
     uses={"Jet.pt"},
     produces={"top_pt_weight", "top_pt_weight_up", "top_pt_weight_down"},
 )
-def top_pt_weights(self, events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Array:
+def top_pt_weights(
+    self: Producer,
+    events: ak.Array,
+    dataset_inst: od.Dataset,
+    **kwargs,
+) -> ak.Array:
     """
     Adds a dummy top pt weight and its variations to *events* in case *dataset_inst* represents a
     ttbar dataset.
@@ -41,19 +46,19 @@ def top_pt_weights(self, events: ak.Array, dataset_inst: od.Dataset, **kwargs) -
     produces={normalization_weights, pu_weights, top_pt_weights},
     shifts={"minbias_xs_up", "minbias_xs_down"},
 )
-def event_weights(self, events: ak.Array, **kwargs) -> ak.Array:
+def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Opinionated wrapper of several event weight producers. It declares dependence all shifts that
     might possibly change any of the weights.
     """
     # compute normalization weights
-    normalization_weights(events, **kwargs)
+    self.stack.normalization_weights(events, **kwargs)
 
     # compute pu weights
-    pu_weights(events, **kwargs)
+    self.stack.pu_weights(events, **kwargs)
 
     # compute top pt weights
-    top_pt_weights(events, **kwargs)
+    self.stack.top_pt_weights(events, **kwargs)
 
     return events
 

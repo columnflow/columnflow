@@ -110,9 +110,11 @@ class CreateHistograms(
                     for column in self.dataset_inst.x("event_weights", []):
                         if has_ak_column(events, column):
                             weight = weight * events[Route(column).fields]
-
-                # get all viable category ids (only leaf categories)
-                leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
+                        else:
+                            self.logger.warning_once(
+                                "missing_dataset_weight",
+                                f"weight '{column}' for dataset {self.datatset_inst.name} not found",
+                            )
 
                 # define and fill histograms
                 for var_name in self.variables:
@@ -128,30 +130,29 @@ class CreateHistograms(
                         )
 
                     with self.publish_step("var: %s" % var_name):
-                        h_var = (
-                            hist.Hist.new
-                            .IntCat([], name="process", growth=True)
-                            .IntCat(leaf_cat_ids, name="category")
-                            .StrCategory([], name="shift", growth=True)
-                            .Var(
-                                variable_inst.bin_edges,
-                                name=var_name,
-                                label=variable_inst.get_full_x_title(),
+                        if var_name not in histograms:
+                            histograms[var_name] = (
+                                hist.Hist.new
+                                .IntCat([], name="category", growth=True)
+                                .IntCat([], name="process", growth=True)
+                                .IntCat([], name="shift", growth=True)
+                                .Var(
+                                    variable_inst.bin_edges,
+                                    name=var_name,
+                                    label=variable_inst.get_full_x_title(),
+                                )
+                                .Weight()
                             )
-                            .Weight()
-                        )
+                        # broadcast arrays so that each event can be filled for all its categories
                         fill_kwargs = {
                             var_name: expr(events),
+                            "category": events.category_ids,
                             "process": events.process_id,
-                            "category": events.cat_array,
-                            "shift": self.shift,
+                            "shift": self.shift_inst.id,
                             "weight": weight,
                         }
-                        h_var.fill(**fill_kwargs)
-                        if var_name in histograms:
-                            histograms[var_name] += h_var
-                        else:
-                            histograms[var_name] = h_var
+                        arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                        histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")

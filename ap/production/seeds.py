@@ -10,7 +10,7 @@ from typing import Callable
 import law
 import order as od
 
-from ap.production import producer
+from ap.production import Producer, producer
 from ap.util import maybe_import, primes
 from ap.columnar_util import Route, set_ak_column
 
@@ -31,7 +31,7 @@ ak = maybe_import("awkward")
     produces={"deterministic_seed"},
 )
 def deterministic_event_seeds(
-    self,
+    self: Producer,
     events: ak.Array,
     create_seed: Callable,
     dataset_inst: od.Dataset,
@@ -83,7 +83,7 @@ def deterministic_event_seeds(
 
 @deterministic_event_seeds.setup
 def deterministic_event_seeds_setup(
-    self,
+    self: Producer,
     task: law.Task,
     inputs: dict,
     call_kwargs: dict,
@@ -105,7 +105,7 @@ def deterministic_event_seeds_setup(
     produces={"Jet.deterministic_seed"},
 )
 def deterministic_jet_seeds(
-    self,
+    self: Producer,
     events: ak.Array,
     create_seed: Callable,
     **kwargs,
@@ -117,7 +117,7 @@ def deterministic_jet_seeds(
     identical.
     """
     # create the event seeds
-    deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
+    self.stack.deterministic_event_seeds(events, create_seed=create_seed, **kwargs)
 
     # create the per jet seeds
     prime_offset = 18
@@ -144,7 +144,7 @@ def deterministic_jet_seeds(
     produces={deterministic_event_seeds, deterministic_jet_seeds},
 )
 def deterministic_seeds(
-    self,
+    self: Producer,
     events: ak.Array,
     **kwargs,
 ) -> ak.Array:
@@ -153,9 +153,9 @@ def deterministic_seeds(
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds
-    deterministic_event_seeds(events, **kwargs)
+    self.stack.deterministic_event_seeds(events, **kwargs)
 
     # create the jet seeds
-    deterministic_jet_seeds(events, **kwargs)
+    self.stack.deterministic_jet_seeds(events, **kwargs)
 
     return events

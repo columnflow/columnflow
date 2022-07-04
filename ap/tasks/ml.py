@@ -8,7 +8,7 @@ import law
 import luigi
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsSelectorMixin, ProducersMixin, MLModelMixin
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
@@ -19,7 +19,8 @@ class PrepareMLEvents(
     MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorMixin,
+    CalibratorsMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
@@ -157,7 +158,8 @@ class MergeMLEvents(
     DatasetTask,
     MLModelMixin,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorMixin,
+    CalibratorsMixin,
     law.tasks.ForestMerge,
     HTCondorWorkflow,
 ):
@@ -224,7 +226,7 @@ MergeMLEventsWrapper = wrapper_factory(
 )
 
 
-class MLTraining(MLModelMixin, ProducersMixin, CalibratorsSelectorMixin):
+class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
 
     fold = luigi.IntParameter(
         default=0,
@@ -274,7 +276,8 @@ class MLEvaluation(
     MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
-    CalibratorsSelectorMixin,
+    SelectorMixin,
+    CalibratorsMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):

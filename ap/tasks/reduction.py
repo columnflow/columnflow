@@ -48,7 +48,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
     def run(self):
         from ap.columnar_util import (
             Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_ak_aliases, remove_ak_column, sorted_ak_to_parquet,
+            add_ak_aliases, remove_ak_column, sorted_ak_to_parquet, set_ak_column,
         )
 
         # prepare inputs and outputs
@@ -124,14 +124,19 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                 events = events[event_mask]
                 n_reduced += len(events)
 
-                # apply all object masks whose names are present
-                # TODO: this should not be done automagically based on names as there might be
-                #       multiple collections of the same object type
-                for name in sel.objects.fields:
-                    if name in events.fields:
-                        # apply the event mask to the object mask first
-                        object_mask = sel.objects[name][event_mask]
-                        events[name] = events[name][object_mask]
+                # loop through all object selection, go through their masks
+                # and create new collections if required
+                for src_name in sel.objects.fields:
+                    # get all destination collections, handling those named identically to the
+                    # source collection last
+                    dst_names = sel["objects", src_name].fields
+                    if src_name in dst_names:
+                        dst_names.remove(src_name)
+                        dst_names.append(src_name)
+                    for dst_name in dst_names:
+                        object_mask = sel.objects[src_name, dst_name][event_mask]
+                        dst_collection = events[src_name][object_mask]
+                        set_ak_column(events, dst_name, dst_collection)
 
                 # manually remove colums that should not be kept
                 if not remove_routes:
