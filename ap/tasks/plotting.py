@@ -20,7 +20,6 @@ from ap.util import DotDict
 
 class ProcessPlotBase(
     CategoriesMixin,
-    VariablesMixin,
     DatasetsProcessesMixin,
     PlotMixin,
 ):
@@ -40,6 +39,7 @@ class PlotVariables(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
     HTCondorWorkflow,
@@ -264,6 +264,7 @@ class PlotShiftedVariables(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     ProcessPlotBase,
     ShiftSourcesMixin,
     law.LocalWorkflow,

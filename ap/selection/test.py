@@ -102,6 +102,11 @@ def var_HT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
 
 
 # selection for the main categories
+@selector(uses={"event"})
+def sel_incl(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.ones_like(events.event)
+
+
 @selector(uses={var_nMuon, var_nElectron})
 def sel_1e(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     return (self.stack.var_nMuon(events) == 0) & (self.stack.var_nElectron(events) == 1)

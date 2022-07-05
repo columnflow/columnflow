@@ -4,26 +4,27 @@
 Tasks to be implemented: MergeSelectionMasks, PlotCutflow
 """
 
+from collections import OrderedDict
+
 import law
 
-from ap.tasks.framework.base import DatasetTask
-from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, SelectorStepsMixin
+from ap.tasks.framework.base import DatasetTask, ShiftTask
+from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, SelectorStepsMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
+from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.util import dev_sandbox, ensure_proxy
+from ap.util import DotDict
 from ap.production import Producer
-
-# from ap.tasks.plotting import ProcessPlotBase
 
 
 class MergeSelectionMasks(
         DatasetTask, SelectorMixin, CalibratorsMixin, law.tasks.ForestMerge, HTCondorWorkflow,
 ):
-    # TODO move MergeSelectionMasks in selection.py?
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {SelectEvents}
+    shifts = set(SelectEvents.shifts)
 
     # recursively merge 8 files into one
     merge_factor = 8
@@ -68,7 +69,7 @@ class MergeSelectionMasks(
             tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
             tmp_dir.touch()
 
-            # setup normalizor using inputs in 1st branch
+            # setup normalizor using inputs in first branch
             normalizor = Producer.get("normalization_weights")
             normalizor.run_setup(self, inputs[0]["normalizor"])
             for inp in inputs:
@@ -95,7 +96,7 @@ class CreateCutflowHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = {MergeSelectionMasks}
+    shifts = set(MergeSelectionMasks.shifts)
 
     selector_steps_order_sensitive = True
 
@@ -197,7 +198,9 @@ class CreateCutflowHistograms(
                         mask = True
                         for step in selector_steps:
                             if step not in events.steps.fields:
-                                raise ValueError(f"selection step {step} is not defined in the Selector {self.selector}")
+                                raise ValueError(
+                                    f"selection step {step} is not defined in the Selector {self.selector}",
+                                )
                             mask = (mask) & (events.steps[step])
                             fill_kwargs = {
                                 var_name: columns[variable_inst.expression][mask],
@@ -213,7 +216,6 @@ class CreateCutflowHistograms(
         self.output().dump(histograms, formatter="pickle")
 
 
-"""
 class PlotCutflow(
         ShiftTask,
         SelectorStepsMixin,
@@ -224,4 +226,139 @@ class PlotCutflow(
 ):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
-"""
+
+    shifts = set(CreateCutflowHistograms.shifts)
+
+    selector_steps_order_sensitive = True
+
+    def create_branch_map(self):
+        return [DotDict({"category": cat_name}) for cat_name in sorted(self.categories)]
+
+    def workflow_requires(self):
+        reqs = super(PlotCutflow, self).workflow_requires()
+        reqs["cutflow_hists"] = CreateCutflowHistograms.req(self)
+        return reqs
+
+    def requires(self):
+        return {d: CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"}) for d in self.datasets}
+
+    def output(self):
+        b = self.branch_data
+        return self.local_target(f"cutflow__cat_{b.category}.pdf")
+
+    @PlotMixin.view_output_plots
+    def run(self):
+        # import numpy as np
+        import hist
+        import matplotlib.pyplot as plt
+        import mplhep
+
+        # prepare config objects
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        # histogram data per process
+        hists = OrderedDict()
+
+        with self.publish_step(f"plotting cutflow in {category_inst.name}"):
+            for dataset, inp in self.input().items():
+                dataset_inst = self.config_inst.get_dataset(dataset)
+                print(inp)
+                # take the first variable from input dict
+                variable_inst = self.config_inst.get_variable(list(sorted(inp.load(formatter="pickle").keys()))[0])
+                h_in = inp.load(formatter="pickle")[variable_inst.name]
+
+                # sanity checks
+                n_shifts = len(h_in.axes["shift"])
+                if n_shifts != 1:
+                    raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
+
+                # loop and extract one histogram per process
+                for process_inst in process_insts:
+                    # skip when the dataset is already known to not contain any sub process
+                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                        continue
+
+                    # work on a copy
+                    h = h_in.copy()
+
+                    # axis selections
+                    h = h[{
+                        "process": [
+                            hist.loc(p.id)
+                            for p in sub_process_insts[process_inst]
+                            if p.id in h.axes["process"]
+                        ],
+                        "category": [
+                            hist.loc(c.id)
+                            for c in leaf_category_insts
+                            if c.id in h.axes["category"]
+                        ],
+                    }]
+
+                    # axis reductions
+                    h = h[{"process": sum, "category": sum, "shift": sum, variable_inst.name: sum}]
+
+                    # add the histogram
+                    if process_inst in hists:
+                        hists[process_inst] += h
+                    else:
+                        hists[process_inst] = h
+
+            # there should be hists to plot
+            if not hists:
+                raise Exception("no histograms found to plot")
+
+            mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
+            mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
+            mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
+
+            # normalize histograms on number of events before applying cuts
+            mc_hists = [h / h[{"selection_steps": "noCuts"}].value for h in mc_hists]
+
+            # create the stack
+            h_mc_stack = None
+            if mc_hists:
+                h_mc_stack = hist.Stack(*mc_hists)
+
+            # start plotting
+            plt.style.use(mplhep.style.CMS)
+            fig, ax = plt.subplots()
+
+            plot_mc_kwargs = {
+                "ax": ax,
+                "stack": False,
+                "histtype": "step",
+                "color": mc_colors,
+                "label": mc_labels,
+            }
+            h_mc_stack.plot(**plot_mc_kwargs)
+
+            ax.set_xlabel("Selection steps")
+            ax.set_ylabel("Selection efficiency")
+
+            # legend
+            legend_kwargs = {
+                "title": "Processes",
+                "ncol": 1,
+                "loc": "upper right",
+            }
+            ax.legend(**legend_kwargs)
+
+            # CMS label
+            CMS_label_kwargs = {
+                "ax": ax,
+                "label": "Work in Progress",
+                "fontsize": 22,
+                "lumi": self.config_inst.x.luminosity.get("nominal") / 1000,
+            }
+            mplhep.cms.label(**CMS_label_kwargs)
+
+            # save the plot
+            plt.tight_layout()
+            self.output().dump(fig, formatter="mpl")
