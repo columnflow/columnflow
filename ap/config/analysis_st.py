@@ -4,10 +4,11 @@
 Configuration of the single top analysis.
 """
 
-from scinum import Number, REL
-
+import os
 import re
 
+import yaml
+from scinum import Number, REL
 from order import Analysis, Shift
 
 import ap.config.processes as procs
@@ -15,6 +16,9 @@ from ap.config.campaign_2018 import campaign_2018
 from ap.config.categories import add_categories
 from ap.config.variables import add_variables
 from ap.util import DotDict
+
+
+thisdir = os.path.dirname(os.path.abspath(__file__))
 
 
 #
@@ -199,23 +203,24 @@ config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint_from_no
 config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint_from_nominal": True})
 config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint_from_nominal": True})
 config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint_from_nominal": True})
-
-# FIXME: ensure JEC shifts get the same id every time, also across different configs
-for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
-    config_2018.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * i, type="shape")
-    config_2018.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * i, type="shape")
-    add_aliases(f"jec_{jec_source}", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
-
-config_2018.add_shift(name="jer_up", id=600, type="shape")
-config_2018.add_shift(name="jer_down", id=601, type="shape")
-add_aliases("jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
-
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
 config_2018.add_shift(name="top_pt_up", id=9, type="shape")
 config_2018.add_shift(name="top_pt_down", id=10, type="shape")
 add_aliases("top_pt", {"top_pt_weight": "top_pt_weight_{direction}"})
+
+with open(os.path.join(thisdir, "jec_sources.yaml"), "r") as f:
+    all_jec_sources = yaml.load(f, yaml.Loader)["names"]
+for jec_source in config_2018.x.jec["uncertainty_sources"]:
+    idx = all_jec_sources.index(jec_source)
+    config_2018.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * idx, type="shape")
+    config_2018.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * idx, type="shape")
+    add_aliases(f"jec_{jec_source}", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
+
+config_2018.add_shift(name="jer_up", id=6000, type="shape")
+config_2018.add_shift(name="jer_down", id=6001, type="shape")
+add_aliases("jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
 
 
 def make_jme_filenames(jme_aux, sample_type, names, era=None):
