@@ -422,7 +422,7 @@ class CategoriesMixin(ConfigTask):
                 config_inst.x("category_groups", {}),
                 deep=True,
             )
-            params["categories"] = tuple(sorted(categories))
+            params["categories"] = tuple(categories)
 
         return params
 
@@ -438,8 +438,8 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(),
-        description="comma-separated variable names or patterns to select; can also be the key of a "
-        "mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
+        description="comma-separated variable names or patterns to select; can also be the key of "
+        "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
     )
 
@@ -462,7 +462,7 @@ class VariablesMixin(ConfigTask):
                 )
             else:
                 variables = config_inst.variables.names()
-            params["variables"] = tuple(sorted(variables))
+            params["variables"] = tuple(variables)
 
         return params
 
@@ -532,7 +532,7 @@ class DatasetsProcessesMixin(ConfigTask):
                     for dataset_inst in config_inst.datasets
                     if any(map(dataset_inst.has_process, sub_process_insts))
                 )
-            params["datasets"] = tuple(sorted(datasets))
+            params["datasets"] = tuple(datasets)
 
         return params
 
@@ -578,7 +578,7 @@ class ShiftSourcesMixin(ConfigTask):
                 config_inst.x("shift_groups", {}),
             )
             # convert back to sources
-            params["shift_sources"] = tuple(sorted(cls.reduce_shifts(shifts)))
+            params["shift_sources"] = tuple(cls.reduce_shifts(shifts))
 
         return params
 
