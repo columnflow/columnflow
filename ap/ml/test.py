@@ -22,7 +22,7 @@ class TestModel(MLModel):
     def set_config(self, *args, **kwargs):
         super().set_config(*args, **kwargs)
 
-        # dynamically add variables for the quantities produced by thia model
+        # dynamically add variables for the quantities produced by this model
         if f"{self.name}.n_muon" not in self.config_inst.variables:
             self.config_inst.add_variable(
                 name=f"{self.name}.n_muon",
@@ -52,8 +52,8 @@ class TestModel(MLModel):
     def output(self, task: law.Task) -> FunctionArgs:
         return FunctionArgs(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
 
-    def open_model(self, output: law.LocalDirectoryTarget) -> tf.keras.models.Model:
-        return tf.keras.models.load_model(output.path)
+    def open_model(self, target: law.LocalDirectoryTarget) -> tf.keras.models.Model:
+        return tf.keras.models.load_model(target.path)
 
     def train(
         self,

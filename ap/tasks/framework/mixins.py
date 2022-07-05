@@ -438,7 +438,7 @@ class MLModelMixin(ConfigTask):
         # shall be used in the training
         return (
             dataset_inst in self.ml_model_inst.used_datasets and
-            not shift_inst.x("disjoint", False)
+            not shift_inst.x("disjoint_from_nominal", False)
         )
 
     def store_parts(self) -> law.util.InsertableDict:

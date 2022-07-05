@@ -195,12 +195,12 @@ def add_aliases(shift_source, aliases):
 
 # register shifts
 config_2018.add_shift(name="nominal", id=0)
-config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint": True})
-config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint": True})
-config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint": True})
-config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint": True})
+config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint_from_nominal": True})
 
-# FIXME: ensure JEC shifts get the same id every time
+# FIXME: ensure JEC shifts get the same id every time, also across different configs
 for i, jec_source in enumerate(config_2018.x.jec["uncertainty_sources"]):
     config_2018.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * i, type="shape")
     config_2018.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * i, type="shape")

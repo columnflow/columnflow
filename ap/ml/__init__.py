@@ -44,7 +44,8 @@ class MLModel(object):
     .. py:attribute:: parameters
        type: OrderedDict
 
-       A dictionary mapping parameter names to arbitrary values.
+       A dictionary mapping parameter names to arbitrary values, such as
+       ``{"layers": 5, "units": 128}``.
 
     .. py:attribute:: used_datasets
        type: set
@@ -76,7 +77,7 @@ class MLModel(object):
         """
         # check if the instance is already registered
         if name in cls._instances:
-            raise ValueError(f"a model named '{name}' was already registered ({cls.get(name)})")
+            raise ValueError(f"a ML model named '{name}' was already registered ({cls.get(name)})")
 
         # create it
         cls._instances[name] = cls(name, *args, **kwargs)
@@ -90,7 +91,7 @@ class MLModel(object):
         is *True*. A *ValueError* is raised when no instance was found with that name.
         """
         if name not in cls._instances:
-            raise ValueError(f"no model named named '{name}' found")
+            raise ValueError(f"no ML model named '{name}' found")
 
         return _copy.copy(cls._instances[name]) if copy else cls._instances[name]
 
@@ -108,7 +109,7 @@ class MLModel(object):
         self.name = name
         self.config_inst = None
         self.folds = folds
-        self.parameters = parameters or OrderedDict()
+        self.parameters = OrderedDict(parameters or {})
 
         # cache for attributes that need to be defined in inheriting classes
         self._used_datasets = None
@@ -142,7 +143,9 @@ class MLModel(object):
 
     def _join_parameter_pairs(self, only_significant: bool = True) -> str:
         """
-        Returns a joined string representation of all significant paramters.
+        Returns a joined string representation of all significant parameters. In this context,
+        significant parameters are those that potentially lead to different results (e.g. network
+        architecture parameters as opposed to some log level).
         """
         return "__".join(
             f"{name}_{self._format_value(value)}"
@@ -151,7 +154,9 @@ class MLModel(object):
 
     def parameter_pairs(self, only_significant: bool = False) -> List[Tuple[str, Any]]:
         """
-        Returns a list of all parameter name-value tuples.
+        Returns a list of all parameter name-value tuples. In this context, significant parameters
+        are those that potentially lead to different results (e.g. network architecture parameters
+        as opposed to some log level).
         """
         return list(self.parameters.items())
 
@@ -204,9 +209,9 @@ class MLModel(object):
         """
         raise NotImplementedError()
 
-    def open_model(self, output: Any) -> Any:
+    def open_model(self, target: Any) -> Any:
         """
-        Implemenents the opening of a trained model from *output* (corresponding to the structure
+        Implemenents the opening of a trained model from *target* (corresponding to the structure
         returned by :py:meth:`output`). To be implemented in subclasses.
         """
         raise NotImplementedError()
