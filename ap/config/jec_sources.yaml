@@ -1,4 +1,5 @@
 # full list of jec sources in a fixed order that is used to assign consistent ids across configs
+# (please add new sources at the bottom to preserve the order of existing ones)
 names:
   - AbsoluteStat
   - AbsoluteScale

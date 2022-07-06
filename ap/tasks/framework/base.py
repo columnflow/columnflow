@@ -197,14 +197,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     object_names = list(get_all_object_names())
                     del patterns[:]
                     break
-                patterns.add(name)
+                patterns.append(name)
 
         # if patterns are found, loop through them to preserve the order of patterns
         # and compare to all existing names
         for pattern in patterns:
             for name in get_all_object_names():
                 if law.util.multi_match(name, pattern):
-                    object_names.add(name)
+                    object_names.append(name)
 
         return law.util.make_unique(object_names)
 
