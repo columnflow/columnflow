@@ -234,10 +234,13 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         "the number of folds defined in the ML model; default: 0",
     )
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_ml_tf.sh")
+    sandbox = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # set the sandbox
+        self.sandbox = self.ml_model_inst.sandbox(self)
 
         if not (0 <= self.fold < self.ml_model_inst.folds):
             raise ValueError(
@@ -282,9 +285,15 @@ class MLEvaluation(
     HTCondorWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_ml_tf.sh")
+    sandbox = None
 
     shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # set the sandbox
+        self.sandbox = self.ml_model_inst.sandbox(self)
 
     def workflow_requires(self):
         reqs = super(MLEvaluation, self).workflow_requires()
