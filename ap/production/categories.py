@@ -55,16 +55,16 @@ def category_ids_update(self: Producer, config_inst: od.Config, **kwargs) -> Non
     # store a mapping from leaf category to selector instance for faster lookup
     self.category_to_selector = {}
 
-    # add all selectors obtained from leaf category expressions to the used columns
+    # add all selectors obtained from leaf category selection expressions to the used columns
     for cat_inst in config_inst.get_leaf_categories():
-        expr = cat_inst.expression
-        if isinstance(expr, Selector):
-            selector = expr
-        elif isinstance(expr, str) and Selector.has(expr):
-            selector = Selector.get(expr)
+        sel = cat_inst.selection
+        if isinstance(sel, Selector):
+            selector = sel
+        elif isinstance(sel, str) and Selector.has(sel):
+            selector = Selector.get(sel)
         else:
             raise Exception(
-                f"expression '{expr}' of category {cat_inst.name} does not refer to an existing "
+                f"selection '{sel}' of category {cat_inst.name} does not refer to an existing "
                 "selector",
             )
 
@@ -72,7 +72,7 @@ def category_ids_update(self: Producer, config_inst: od.Config, **kwargs) -> Non
         # return SelectionResult's but a flat per-event mask
         if selector.exposed:
             logger.warning(
-                f"expression of category {cat_inst.name} seems to refer to an exposed selector "
+                f"selection of category {cat_inst.name} seems to refer to an exposed selector "
                 "whose return value is most likely incompatible with category masks",
             )
 
