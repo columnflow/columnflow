@@ -96,7 +96,7 @@ class PlotVariables(
         }
 
         # histogram data per process
-        hists = OrderedDict()
+        hists = {}
 
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
@@ -143,6 +143,12 @@ class PlotVariables(
             # there should be hists to plot
             if not hists:
                 raise Exception("no histograms found to plot")
+
+            # sort hists by process order
+            hists = OrderedDict(
+                (process_inst, hists[process_inst])
+                for process_inst in sorted(hists, key=process_insts.index)
+            )
 
             # create the stack and a fake data hist using the smeared sum
             data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
