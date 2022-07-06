@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import ensure_proxy, dev_sandbox, safe_div
 
 
 class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -154,9 +154,8 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                 reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
-        save_div = lambda x, y: (x / y) if y else 0.0
         self.publish_message(
-            f"reduced {n_all} to {n_reduced} events ({save_div(n_reduced, n_all) * 100:.2f}%)",
+            f"reduced {n_all} to {n_reduced} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
         )
 
         # merge output files

@@ -10,7 +10,7 @@ import law
 
 from ap.tasks.framework.base import ShiftTask
 from ap.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, PlotMixin, CategoriesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin, CategoriesMixin,
     VariablesMixin, DatasetsProcessesMixin, ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
@@ -36,6 +36,7 @@ class ProcessPlotBase(
 
 class PlotVariables(
     ShiftTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -253,6 +254,7 @@ class PlotVariables(
 
 
 class PlotShiftedVariables(
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,

@@ -24,7 +24,9 @@ ak = maybe_import("awkward")
         event_weights,
         "ht", "n_jet", "n_electron", "n_muon", "n_deepjet",
     },
-    shifts={jet_energy_shifts},
+    shifts={
+        jet_energy_shifts,
+    },
 )
 def variables(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))

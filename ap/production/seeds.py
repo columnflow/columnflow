@@ -8,6 +8,7 @@ import hashlib
 from typing import Callable
 
 import law
+import order as od
 
 from ap.production import Producer, producer
 from ap.util import maybe_import, primes
@@ -20,7 +21,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={
         # global columns for event seed
-        "event", "nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon", "nElectron", "nTau", "nSV",
+        "run", "luminosityBlock", "event", "nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon",
+        "nElectron", "nTau", "nSV",
         # first-object columns for event seed
         "Tau.jetIdx", "Tau.decayMode",
         "Muon.jetIdx", "Muon.nStations",
@@ -32,6 +34,7 @@ def deterministic_event_seeds(
     self: Producer,
     events: ak.Array,
     create_seed: Callable,
+    dataset_inst: od.Dataset,
     **kwargs,
 ) -> ak.Array:
     """
@@ -50,8 +53,9 @@ def deterministic_event_seeds(
     seed = create_seed(events.event)
     prime_offset = 3
 
-    # get global integers
-    global_fields = ["nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon", "nElectron", "nTau", "nSV"]
+    # get global integers, with a slight difference between data and mc
+    global_fields = ["nGenJet", "nGenPart"] if dataset_inst.is_mc else ["run", "luminosityBlock"]
+    global_fields.extend(["nJet", "nPhoton", "nMuon", "nElectron", "nTau", "nSV"])
     for i, f in enumerate(global_fields, prime_offset):
         seed = seed + primes[i] * (events[f] if f in events.fields else ak.num(events[f[1:]]))
 
@@ -145,7 +149,7 @@ def deterministic_seeds(
     **kwargs,
 ) -> ak.Array:
     """
-    Wrapper calibrator that invokes :py:func:`deterministic_event_seeds` and
+    Wrapper producer that invokes :py:func:`deterministic_event_seeds` and
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds

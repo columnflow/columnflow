@@ -91,10 +91,11 @@ config_2018.set_aux("variable_groups", {})
 # (used during plotting)
 config_2018.set_aux("shift_groups", {})
 
-# default calibrator, selector and producer
+# default calibrator, selector, producer and ml_model
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
 config_2018.set_aux("default_producer", "variables")
+config_2018.set_aux("default_ml_model", None)
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
@@ -198,10 +199,10 @@ def add_aliases(shift_source, aliases):
 
 # register shifts
 config_2018.add_shift(name="nominal", id=0)
-config_2018.add_shift(name="tune_up", id=1, type="shape")
-config_2018.add_shift(name="tune_down", id=2, type="shape")
-config_2018.add_shift(name="hdamp_up", id=3, type="shape")
-config_2018.add_shift(name="hdamp_down", id=4, type="shape")
+config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint_from_nominal": True})
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
@@ -303,7 +304,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "nElectron", "Electron.pt", "Electron.eta",
         "LHEWeight.originalXWGTUP",
         "PV.npvs",
-        "jet_high_multiplicity", "category_ids",
+        "category_ids", "deterministic_seed",
     },
     "CreateHistograms": {
         "LHEWeight.originalXWGTUP",

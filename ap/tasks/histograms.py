@@ -4,22 +4,25 @@
 Task to produce and merge histograms.
 """
 
-import re
+import functools
 
 import law
 
 from ap.tasks.framework.base import DatasetTask
 from ap.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
+    ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
-from ap.util import ensure_proxy, dev_sandbox
+from ap.tasks.ml import MLEvaluation
+from ap.util import dev_sandbox
 
 
 class CreateHistograms(
     MergeReducedEventsUser,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -30,14 +33,17 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(MergeReducedEvents.shifts)
+    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
-        if not self.pilot and self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if not self.pilot:
+            if self.producers:
+                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            if self.ml_models:
+                reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
 
         return reqs
 
@@ -45,6 +51,8 @@ class CreateHistograms(
         reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
             reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if self.ml_models:
+            reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -53,7 +61,6 @@ class CreateHistograms(
 
     @law.decorator.safe_output
     @law.decorator.localize
-    @ensure_proxy
     def run(self):
         import hist
         import numpy as np
@@ -79,6 +86,8 @@ class CreateHistograms(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
+        if self.ml_models:
+            files.extend([inp.path for inp in inputs["ml"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -104,34 +113,21 @@ class CreateHistograms(
                         else:
                             self.logger.warning_once(
                                 "missing_dataset_weight",
-                                f"weight '{column}' for dataset {self.datatset_inst.name} not found",
+                                f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                             )
 
                 # define and fill histograms
                 for var_name in self.variables:
                     variable_inst = self.config_inst.get_variable(var_name)
 
-                    # get the expression and when it's a string, parse it to extract trailing index
-                    # lookups, e.g. "Jet.pt.0", and convert them to functions with optional padding
+                    # get the expression and when it's a string, parse it to extract index lookups
                     expr = variable_inst.expression
                     if isinstance(expr, str):
-                        fields = Route.check(expr).fields
-                        # first, assume a normal route
-                        expr = lambda events: events[fields]
-                        # when the last field is an integer, perform filling and padding with the
-                        # variable's null value
-                        if len(fields) > 1 and re.match(r"^\d+$", fields[-1]):
-                            if variable_inst.null_value is None:
-                                raise ValueError(
-                                    "variable expressions with a trailing index require a "
-                                    f"null_value, but '{variable_inst}' has none",
-                                )
-                            idx = int(fields[-1])
-                            def expr(events):
-                                return ak.fill_none(
-                                    ak.pad_none(events[fields[:-1]], idx + 1, axis=-1)[..., idx],
-                                    variable_inst.null_value,
-                                )
+                        expr = functools.partial(
+                            Route.select,
+                            route=Route.check(expr),
+                            null_value=variable_inst.null_value,
+                        )
 
                     with self.publish_step("var: %s" % var_name):
                         if var_name not in histograms:
@@ -164,6 +160,7 @@ class CreateHistograms(
 
 class MergeHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -223,6 +220,7 @@ class MergeHistograms(
 
 class MergeShiftedHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,

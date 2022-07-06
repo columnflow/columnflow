@@ -13,7 +13,7 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.calibration import CalibrateEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import ensure_proxy, dev_sandbox, safe_div
 
 
 class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -158,9 +158,8 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         outputs["stats"].dump(stats, formatter="json")
 
         # print some stats
-        save_div = lambda x, y: (x / y) if y else 0.0
-        eff = save_div(stats["n_events_selected"], stats["n_events"])
-        eff_weighted = save_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
+        eff = safe_div(stats["n_events_selected"], stats["n_events"])
+        eff_weighted = safe_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
         self.publish_message(f"all events         : {int(stats['n_events'])}")
         self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
         self.publish_message(f"efficiency         : {eff:.4f}")
