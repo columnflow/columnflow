@@ -1010,6 +1010,13 @@ class TaskArrayFunction(ArrayFunction):
 
        The registered function performing the custom setup step, or *None*.
 
+    .. py:attribute:: call_force
+       type: None, bool
+
+       When a bool, this flag decides whether calls of this instance are cached. However, note that
+       when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
+       this attribute.
+
     .. py:attribute:: call_kwargs
        type: dict
 
@@ -1030,12 +1037,14 @@ class TaskArrayFunction(ArrayFunction):
             str, "TaskArrayFunction", Sequence[str], Sequence["TaskArrayFunction"], Set[str],
             Set["TaskArrayFunction"],
         ]] = None,
+        call_force: Optional[bool] = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
         # store attributes
         self.shifts = set(law.util.make_list(shifts)) if shifts else set()
+        self.call_force = call_force
 
         # wrapped functions
         self.update_func = None
@@ -1266,33 +1275,39 @@ class TaskArrayFunction(ArrayFunction):
         # store call_kwargs in the end
         self.call_kwargs = call_kwargs
 
-    def __call__(self, *args, call_cache=None, call_force=False, **kwargs):
+    def __call__(
+        self,
+        *args,
+        call_cache: Optional[Union[bool, defaultdict]] = None,
+        call_force: Optional[bool] = None,
+        **kwargs,
+    ) -> Any:
         """
         Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
         :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
         Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before (identified by its class and :py:attr:`name`), it is not
-        called again but *None* is returned. This check can be bypassed for this call only by
-        setting *call_force* to *True*.
+        this instance was called before, it is not called again but *None* is returned. This check
+        is bypassed when either *call_force* is *True*, or when it is *None* and the
+        :py:attr:`call_force` attribute of this instance is *True*.
         """
         # call caching
-        cache_kwargs = {}
         if call_cache is not False:
             # setup a new call cache when not present yet
-            if call_cache is None:
+            if not isinstance(call_cache, dict):
                 call_cache = defaultdict(int)
 
-            # check if the instance was called before
+            # check if the instance was called before or wether the call is forced
+            if call_force is None:
+                call_force = self.call_force
             if call_cache[self] > 0 and not call_force:
                 return
 
             # increase the count and set kwargs for the call downstream
             call_cache[self] += 1
-            cache_kwargs["call_cache"] = call_cache
 
         # stack all kwargs
-        kwargs = law.util.merge_dicts(cache_kwargs, self.call_kwargs or {}, kwargs)
+        kwargs = law.util.merge_dicts({"call_cache": call_cache}, self.call_kwargs or {}, kwargs)
 
         return super().__call__(*args, **kwargs)
 

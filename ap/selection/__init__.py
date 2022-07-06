@@ -26,6 +26,11 @@ class Selector(TaskArrayFunction):
         # an actual SelectionResult
         self.exposed = exposed
 
+        # when not exposed and call_force is not specified,
+        # set it to True which prevents calls from being cached
+        if self.call_force is None and not self.exposed:
+            self.call_force = True
+
     def copy(self) -> "Selector":
         """
         Returns a copy if this instance.
