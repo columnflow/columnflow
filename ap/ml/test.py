@@ -10,7 +10,7 @@ import law
 import order as od
 
 from ap.ml import MLModel
-from ap.util import maybe_import, FunctionArgs
+from ap.util import maybe_import, dev_sandbox, FunctionArgs
 from ap.columnar_util import Route, set_ak_column
 
 ak = maybe_import("awkward")
@@ -36,6 +36,9 @@ class TestModel(MLModel):
                 binning=(4, -1.5, 2.5),
                 x_title="Predicted number of electrons",
             )
+
+    def sandbox(self, task: law.Task) -> str:
+        return dev_sandbox("bash::$AP_BASE/sandboxes/venv_ml_tf.sh")
 
     def datasets(self) -> Set[od.Dataset]:
         return {
