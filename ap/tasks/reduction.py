@@ -47,8 +47,8 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_ak_aliases, remove_ak_column, sorted_ak_to_parquet, set_ak_column,
+            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet, set_ak_column,
         )
 
         # prepare inputs and outputs
@@ -68,7 +68,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
         load_columns = keep_columns | set(mandatory_coffea_columns)
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # event counters
         n_all = 0
@@ -138,15 +138,8 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                         dst_collection = events[src_name][object_mask]
                         set_ak_column(events, dst_name, dst_collection)
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")

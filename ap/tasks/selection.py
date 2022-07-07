@@ -64,8 +64,8 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet, get_ak_routes, remove_ak_column,
+            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -92,7 +92,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
         # define columns that will be saved
         keep_columns = self.selector_func.produced_columns
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -128,17 +128,9 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 result_chunks[(lfn_index, pos.index)] = chunk
                 reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
-                # filter events if columns are produced
+                # remove columns
                 if keep_columns:
-                    # manually remove colums that should not be kept
-                    if not remove_routes:
-                        remove_routes = {
-                            route
-                            for route in get_ak_routes(events)
-                            if not law.util.multi_match(route.column, keep_columns)
-                        }
-                    for route in remove_routes:
-                        events = remove_ak_column(events, route)
+                    events = route_filter(events)
 
                     # save additional columns as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")

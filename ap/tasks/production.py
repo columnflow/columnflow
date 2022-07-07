@@ -50,8 +50,7 @@ class ProduceColumns(
     @law.decorator.localize
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
-            sorted_ak_to_parquet,
+            RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -71,7 +70,7 @@ class ProduceColumns(
 
         # define columns that will be saved
         keep_columns = self.producer_func.produced_columns
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # iterate over chunks of events and diffs
         with ChunkedReader(
@@ -85,15 +84,8 @@ class ProduceColumns(
                 # invoke the producer
                 self.producer_func(events, **self.get_producer_kwargs(self))
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")

@@ -67,8 +67,7 @@ class PrepareMLEvents(
     @law.decorator.localize
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, sorted_ak_to_parquet, update_ak_array, get_ak_routes, remove_ak_column,
-            add_ak_aliases,
+            RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -86,7 +85,7 @@ class PrepareMLEvents(
         # define nano columns that should be loaded and those that should be kept
         keep_columns = self.ml_model_inst.used_columns
         load_columns = keep_columns | {"deterministic_seed"}  # noqa
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # stats for logging
         n_events = 0
@@ -115,15 +114,8 @@ class PrepareMLEvents(
                 # generate fold indices
                 fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # loop over folds, use indices to generate masks and project into files
                 for f in range(self.ml_model_inst.folds):
@@ -323,8 +315,7 @@ class MLEvaluation(
     @law.decorator.localize
     def run(self):
         from ap.columnar_util import (
-            ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases, get_ak_routes,
-            remove_ak_column,
+            RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -348,7 +339,7 @@ class MLEvaluation(
         # define nano columns that should be loaded and those that should be kept
         load_columns = self.ml_model_inst.used_columns | {"deterministic_seed"}  # noqa
         keep_columns = self.ml_model_inst.produced_columns
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
@@ -380,15 +371,8 @@ class MLEvaluation(
                     events_used_in_training=events_used_in_training,
                 )
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
