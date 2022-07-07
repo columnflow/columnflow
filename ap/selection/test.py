@@ -228,11 +228,11 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids, var_HT,
+        "LHEWeight.originalXWGTUP", process_ids,
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids, "ht",
+        "LHEWeight.originalXWGTUP", process_ids,
     },
     shifts={
         jet_energy_shifts,
@@ -276,11 +276,8 @@ def test(
     # build categories
     self.stack.category_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
-    # for cutflow plots
+    # create process ids
     self.stack.process_ids(events, dataset_inst=dataset_inst, **kwargs)
-    # calculating variables before and after applying object cleaning requires two definitions
-    # of the variable; might lead to ambiguities if not careful
-    set_ak_column(events, "ht", self.stack.var_HT(events))
 
     # increment stats
     events_sel = events[event_sel]

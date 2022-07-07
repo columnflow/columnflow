@@ -6,7 +6,8 @@ Helpers and utilities for working with columnar libraries.
 
 __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
-    "Route", "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
+    "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
+    "PreloadedNanoEventsFactory",
     "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
     "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
@@ -634,6 +635,61 @@ def sorted_ak_to_parquet(
         differently ordered schemas.
     """
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
+
+
+class RouteFilter(object):
+    """
+    Shallow helper class that handles removal of routes in an awkward array that do not match those
+    in *keep_routes*. Each route can either be a :py:class:`Route` instance, or anything that is
+    accepted by its constructor. Example:
+
+    .. code-block:: python
+
+        route_filter = RouteFilter(["Jet.pt", "Jet.eta"])
+        events = route_filter(events)
+
+        print(get_ak_routes(events))
+        # [
+        #    "Jet.pt",
+        #    "Jet.eta",
+        # ]
+
+    .. py:attribute:: keep_routes
+       type: list
+
+       The routes to keep.
+
+    .. py:attribute:: remove_routes
+       type: None, set
+
+       A set of :py:class:`Route` instances that are removed, defined after the first call to this
+       instance.
+    """
+
+    def __init__(self, keep_routes):
+        super().__init__()
+
+        self.keep_routes = list(keep_routes)
+        self.remove_routes = None
+
+    def __call__(self, ak_array):
+        # manually remove colums that should not be kept
+        if self.remove_routes is None:
+            # convert routes to keep into string columns for pattern checks
+            keep_columns = [Route.check(route).column for route in self.keep_routes]
+
+            # determine routes to remove
+            self.remove_routes = {
+                route
+                for route in get_ak_routes(ak_array)
+                if not law.util.multi_match(route.column, keep_columns)
+            }
+
+        # apply the filtering
+        for route in self.remove_routes:
+            ak_array = remove_ak_column(ak_array, route)
+
+        return ak_array
 
 
 class ArrayFunction(object):

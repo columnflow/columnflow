@@ -71,6 +71,12 @@ for dataset_name in dataset_names:
     config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
 
 
+# default calibrator, selector, producer and ml_model
+config_2018.set_aux("default_calibrator", "test")
+config_2018.set_aux("default_selector", "test")
+config_2018.set_aux("default_producer", "variables")
+config_2018.set_aux("default_ml_model", None)
+
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 config_2018.set_aux("process_groups", {})
@@ -91,14 +97,11 @@ config_2018.set_aux("variable_groups", {})
 # (used during plotting)
 config_2018.set_aux("shift_groups", {})
 
-# default calibrator, selector, producer and ml_model
-config_2018.set_aux("default_calibrator", "test")
-config_2018.set_aux("default_selector", "test")
-config_2018.set_aux("default_selector_steps", {
-    "test": ("Lepton", "Jet", "Deepjet"),
+# selector step groups for conveniently looping over certain steps
+# (used in cutflow tasks)
+config_2018.set_aux("selector_step_groups", {
+    "test": ["Lepton", "Jet", "Deepjet"],
 })
-config_2018.set_aux("default_producer", "variables")
-config_2018.set_aux("default_ml_model", None)
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
@@ -309,8 +312,8 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "PV.npvs",
         "category_ids", "deterministic_seed",
     },
-    "CreateHistograms": {
-        "LHEWeight.originalXWGTUP",
+    "MergeSelectionMasks": {
+        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids",
     },
 }))
 
