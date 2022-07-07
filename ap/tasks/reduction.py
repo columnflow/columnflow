@@ -94,14 +94,11 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # here, we would simply apply the mask from the selection results
-                # to filter events and objects
-
                 # add the calibrated diffs and potentially new columns
-                update_ak_array(events, *diffs)
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
-                add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # build the event mask
                 if self.selector_steps:

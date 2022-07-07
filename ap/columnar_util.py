@@ -354,10 +354,11 @@ def set_ak_column(
     value: ak.Array,
 ) -> ak.Array:
     """
-    Inserts a new column into awkward array *ak_array* and returns it. The column can be defined
-    through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each string refers
-    to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``), and the
-    column *value* itself. Intermediate, non-existing fields are automatically created. Example:
+    Inserts a new column into awkward array *ak_array* in-place and returns it. The column can be
+    defined through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each
+    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
+    ``"Jet.pt"``), and the column *value* itself. Intermediate, non-existing fields are
+    automatically created. Example:
 
     .. code-block:: python
 
@@ -365,6 +366,13 @@ def set_ak_column(
 
         set_ak_column(arr, "Jet.mass", [40])
         set_ak_column(arr, "Muon.pt", [25])  # creates subfield "Muon" first
+
+    .. note::
+
+        Issues can arise in cases where the route to add already exists and has a different type
+        than the newly added *value*. If this is the case, you should consider remove the column
+        first with :py:func:`remove_ak_column`. As this one might return a new view, it is not
+        automatically handled in *this* function which is meant to perform an in-place operation.
     """
     route = Route.check(route)
 
@@ -442,10 +450,11 @@ def add_ak_alias(
     remove_src: bool = False,
 ) -> ak.Array:
     """
-    Adds an alias to an awkward array *ak_array*, pointing the array at *src_route* to
-    *dst_route*. Both routes can be a :py:class:`Route` instance, a tuple of strings where each
-    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
-    ``"Jet.pt"``). A *ValueError* is raised when *src_route* does not exist.
+    Adds an alias to an awkward array *ak_array* in-place (depending on *remove_src*, see below),
+    pointing the array at *src_route* to *dst_route*. Both routes can be a :py:class:`Route`
+    instance, a tuple of strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or
+    a string with dot format (e.g. ``"Jet.pt"``). A *ValueError* is raised when *src_route* does not
+    exist.
 
     Note that existing columns referred to by *dst_route* might be overwritten. When *remove_src* is
     *True*, a view of the input array is returned with the column referred to by *src_route*
@@ -475,12 +484,13 @@ def add_ak_aliases(
 ) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
-    an awkward array *ak_array*. Each column in this dictionary can be referred to by a
-    :py:class:`Route` instance, a tuple of strings where each string refers to a subfield, e.g.
-    ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``). See
-    :py:func:`add_ak_aliases` for more info. When *remove_src* is *True*, a view of the input array
-    is returned with all source columns missing. Otherwise, the input array is returned with all
-    columns.
+    an awkward array *ak_array* in-place (depending on *remove_src*, see below). Each column in this
+    dictionary can be referred to by a :py:class:`Route` instance, a tuple of strings where each
+    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
+    ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
+
+    When *remove_src* is *True*, a view of the input array is returned with all source columns
+    missing. Otherwise, the input array is returned with all columns.
     """
     # add all aliases
     for dst_route, src_route in aliases.items():
@@ -497,9 +507,10 @@ def update_ak_array(
     concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
 ) -> ak.Array:
     """
-    Updates an awkward array *ak_array* in-place with the content of multiple different arrays
-    *others*. Internally, :py:func:`get_ak_routes` is used to obtain the list of all routes pointing
-    to potentially deeply nested arrays. The input array is also returned.
+    Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
+    potentially (see below) returns a new view. Internally, :py:func:`get_ak_routes` is used to
+    obtain the list of all routes pointing to potentially deeply nested arrays. The input array is
+    also returned.
 
     If two columns overlap during this update process, four different cases can be configured to
     occur:
@@ -512,7 +523,7 @@ def update_ak_array(
            actual implementation to awkward.
         3. If cases 1 and 2 do not apply and *overwrite_routes* is either *True* or a list of routes
            containing the route in question, new columns (right most in *others*) overwrite
-           existing ones.
+           existing ones. A new view is returned in case this case occurs at least once.
         4. If none of the cases above apply, an exception is raised.
     """
     # trivial case
@@ -540,7 +551,6 @@ def update_ak_array(
     # go through all other arrays and merge their columns
     for other in others:
         for route in get_ak_routes(other):
-
             if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
@@ -553,7 +563,8 @@ def update_ak_array(
                     # add and reassign
                     set_ak_column(ak_array, route, ak_array[route.fields] + other[route.fields])
                 elif do_overwrite(route):
-                    # just replace the column
+                    # delete the column first for type safety and then re-add it
+                    ak_array = remove_ak_column(ak_array, route)
                     set_ak_column(ak_array, route, other[route.fields])
                 else:
                     raise Exception(f"cannot update already existing array column '{route}'")

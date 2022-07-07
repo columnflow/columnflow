@@ -115,10 +115,10 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 # book-keeping of stats
 
                 # apply the calibrated diffs
-                update_ak_array(events, *diffs)
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
-                add_ak_aliases(events, aliases)
+                events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
                 results = self.selector_func(events, stats, **self.get_selector_kwargs(self))

@@ -106,10 +106,10 @@ class PrepareMLEvents(
                 n_events += len(events)
 
                 # add additional columns
-                update_ak_array(events, *columns)
+                events = update_ak_array(events, *columns)
 
                 # add aliases
-                add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # generate fold indices
                 fold_indices = events.deterministic_seed % self.ml_model_inst.folds
@@ -354,10 +354,10 @@ class MLEvaluation(
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
-                update_ak_array(events, *columns)
+                events = update_ak_array(events, *columns)
 
                 # add aliases
-                add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # asdasd
                 fold_indices = events.deterministic_seed % self.ml_model_inst.folds
