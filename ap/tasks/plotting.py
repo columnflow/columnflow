@@ -16,6 +16,7 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.util import DotDict
+from ap.plotting.plotter import plot_all
 
 
 class ProcessPlotBase(
@@ -80,10 +81,7 @@ class PlotVariables(
 
     @PlotMixin.view_output_plots
     def run(self):
-        import numpy as np
         import hist
-        import matplotlib.pyplot as plt
-        import mplhep
 
         # prepare config objects
         variable_inst = self.config_inst.get_variable(self.branch_data.variable)
@@ -163,100 +161,60 @@ class PlotVariables(
                 h_mc = sum(mc_hists[1:], mc_hists[0].copy())
                 h_mc_stack = hist.Stack(*mc_hists)
 
-            # start plotting
-            plt.style.use(mplhep.style.CMS)
-            fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+            # setup plotting configs
+            # loop over plot_cfgs fields, hard-coded names "method", "hist", "kwargs", "ratio_kwargs"
+            plot_cfgs = {
+                "MC_stack": {
+                    "method": "draw_from_stack",
+                    "hist": h_mc_stack,
+                    "kwargs": {"norm": 1, "label": mc_labels, "color": mc_colors},
+                },
+                "MC_uncert": {
+                    "method": "draw_error_stairs",
+                    "hist": h_mc,
+                    "kwargs": {"label": "MC stat. unc."},
+                    "ratio_kwargs": {"norm": h_mc.values()},
+                },
+            }
+            # dummy since not implemented yet
+            MC_lines = False
+            if MC_lines:
+                plot_cfgs["MC_lines"] = {
+                    "method": "draw_from_stack",
+                    # "hist": h_lines_stack,
+                    # "kwargs": {"label": lines_label, "color": lines_colors, "stack": False, "histtype": "step"},
+                }
 
-            if h_mc:
-                h_mc_stack.plot(
-                    ax=ax,
-                    stack=True,
-                    histtype="fill",
-                    label=mc_labels,
-                    color=mc_colors,
-                )
-                ax.stairs(
-                    edges=h_mc.axes[variable_inst.name].edges,
-                    baseline=h_mc.view().value - np.sqrt(h_mc.view().variance),
-                    values=h_mc.view().value + np.sqrt(h_mc.view().variance),
-                    hatch="///",
-                    label="MC Stat. unc.",
-                    facecolor="none",
-                    linewidth=0,
-                    color="black",
-                )
+            if data_hists:
+                plot_cfgs["data"] = {
+                    "method": "draw_errorbars",
+                    "hist": h_data,
+                    "kwargs": {"label": "Data"},
+                    "ratio_kwargs": {"norm": h_mc.values()},
+                }
+            # hard-coded key names from style_cfgs, "ax_cfg", "rax_cfg", "legend_cfg", "CMS_label_cfg"
+            style_cfgs = {
+                "ax_cfg": {
+                    "xlim": (variable_inst.x_min, variable_inst.x_max),
+                    "ylabel": variable_inst.get_full_y_title(),
+                    # "xlabel": variable_inst.get_full_x_title(),
+                },
+                "rax_cfg": {
+                    "ylabel": "Data / MC",
+                    "xlabel": variable_inst.get_full_x_title(),
+                },
+                "legend_cfg": {},
+                "CMS_label_cfg": {
+                    "lumi": self.config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+                },
+            }
 
-            if h_data:
-                # compute asymmetric poisson errors for data
-                # TODO: passing the output of poisson_interval to as yerr to mpl.plothist leads to
-                #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
-                #       hist 2.4.0), so adjust the output to make up for that, but maybe update or
-                #       remove the next lines if this is fixed to not correct it "twice"
-                from hist.intervals import poisson_interval
-                yerr = poisson_interval(h_data.view().value, h_data.view().variance)
-                yerr[np.isnan(yerr)] = 0
-                yerr[0] = h_data.view().value - yerr[0]
-                yerr[1] -= h_data.view().value
+            # ToDo: allow updating plot_cfgs and style_cfgs from config
 
-                h_data.plot1d(
-                    ax=ax,
-                    histtype="errorbar",
-                    color="k",
-                    label="Data",
-                    yerr=yerr,
-                )
+            with self.publish_step("Starting plotting routine ..."):
+                fig = plot_all(plot_cfgs, style_cfgs, ratio=True)
 
-            # styles
-            legend_args = ()
-            if h_data:
-                handles, labels = ax.get_legend_handles_labels()
-                handles.insert(0, handles.pop())
-                labels.insert(0, labels.pop())
-                legend_args = (handles, labels)
-            ax.legend(*legend_args)
-            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
-            ax.set_ylabel(variable_inst.get_full_y_title())
-            if variable_inst.log_y:
-                ax.set_yscale("log")
-
-            # mc stat errors in the ratio
-            if h_mc:
-                rax.stairs(
-                    edges=h_mc.axes[variable_inst.name].edges,
-                    baseline=1 - np.sqrt(h_mc.view().variance) / h_mc.view().value,
-                    values=1 + np.sqrt(h_mc.view().variance) / h_mc.view().value,
-                    facecolor="grey",
-                    linewidth=0,
-                    hatch="///",
-                    color="grey",
-                )
-
-            # data points in ratio
-            if h_data and h_mc:
-                rax.errorbar(
-                    x=h_data.axes[variable_inst.name].centers,
-                    y=h_data.view().value / h_mc.view().value,
-                    yerr=yerr / h_mc.view().value,
-                    color="k",
-                    linestyle="none",
-                    marker="o",
-                    elinewidth=1,
-                )
-
-            # ratio styles
-            rax.axhline(y=1.0, linestyle="dashed", color="gray")
-            rax.set_ylabel("Data / MC", loc="center")
-            rax.set_ylim(0.85, 1.15)
-            rax.set_xlabel(variable_inst.get_full_x_title())
-            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
-
-            # labels
-            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
-            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
-
-            # save the plot
-            plt.tight_layout()
-            self.output().dump(plt, formatter="mpl")
+            self.output().dump(fig, formatter="mpl")
 
 
 class PlotShiftedVariables(
