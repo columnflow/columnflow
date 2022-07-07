@@ -14,7 +14,6 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={"event"},
     produces={"process_id"},
 )
 def process_ids(self: Producer, events: ak.Array, dataset_inst: od.Dataset, **kwargs) -> ak.Array:
@@ -32,6 +31,6 @@ def process_ids(self: Producer, events: ak.Array, dataset_inst: od.Dataset, **kw
     process_id = dataset_inst.processes.get_first().id
 
     # store the column
-    set_ak_column(events, "process_id", ak.ones_like(events.event) * process_id)
+    set_ak_column(events, "process_id", len(events) * [process_id])
 
     return events

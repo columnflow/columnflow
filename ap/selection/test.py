@@ -13,6 +13,7 @@ from ap.selection import Selector, SelectionResult, selector
 from ap.production.categories import category_ids
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
+from ap.production.processes import process_ids
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -101,6 +102,11 @@ def var_HT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
 
 
 # selection for the main categories
+@selector(uses={"event"})
+def sel_incl(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
+    return ak.ones_like(events.event)
+
+
 @selector(uses={var_nMuon, var_nElectron})
 def sel_1e(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     return (self.stack.var_nMuon(events) == 0) & (self.stack.var_nElectron(events) == 1)
@@ -222,10 +228,11 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP",
+        "LHEWeight.originalXWGTUP", process_ids,
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
+        "LHEWeight.originalXWGTUP", process_ids,
     },
     shifts={
         jet_energy_shifts,
@@ -268,6 +275,9 @@ def test(
 
     # build categories
     self.stack.category_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+
+    # create process ids
+    self.stack.process_ids(events, dataset_inst=dataset_inst, **kwargs)
 
     # increment stats
     events_sel = events[event_sel]

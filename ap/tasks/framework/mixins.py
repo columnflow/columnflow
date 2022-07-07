@@ -235,6 +235,13 @@ class SelectorStepsMixin(SelectorMixin):
     def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         params = super().modify_param_values(params)
 
+        # expand selector step groups
+        if "config_inst" in params and len(params.get("selector_steps", ())) == 1:
+            config_inst = params["config_inst"]
+            step_group = params["selector_steps"][0]
+            if step_group in config_inst.x("selector_step_groups", {}):
+                params["selector_steps"] = tuple(config_inst.x.selector_step_groups[step_group])
+
         # sort selector steps when the order does not matter
         if not cls.selector_steps_order_sensitive and "selector_steps" in params:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))

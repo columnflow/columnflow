@@ -184,6 +184,13 @@ class MLModel(object):
             self._produced_columns = set(self.produces())
         return self._produced_columns
 
+    def sandbox(self, task: law.Task) -> str:
+        """
+        Given a *task*, teturns the name of a sandbox that is needed to perform model training and
+        evaluation.
+        """
+        raise NotImplementedError()
+
     def datasets(self) -> Set[od.Dataset]:
         """
         Returns a set of all required datasets. To be implemented in subclasses.

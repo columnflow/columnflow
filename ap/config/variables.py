@@ -14,6 +14,12 @@ def add_variables(config: od.Config) -> None:
     Adds all variables to a *config*.
     """
     config.add_variable(
+        name="lhe_weight",
+        expression="LHEWeight.originalXWGTUP",
+        binning=(200, -10, 10),
+        x_title="LHE weight",
+    )
+    config.add_variable(
         name="ht",
         binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
         unit="GeV",
