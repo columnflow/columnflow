@@ -9,7 +9,7 @@ from collections import OrderedDict
 
 import law
 
-from ap.tasks.framework.base import DatasetTask, ShiftTask
+from ap.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
 from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, SelectorStepsMixin, PlotMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
@@ -108,6 +108,13 @@ class MergeSelectionMasks(
             sorted_ak_to_parquet(out, chunk.path)
 
         return chunks
+
+
+MergeSelectionMasksWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeSelectionMasks,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
 
 class CreateCutflowHistograms(
@@ -242,6 +249,13 @@ class CreateCutflowHistograms(
 
         # dump the histogram
         self.output().dump(histograms, formatter="pickle")
+
+
+CreateCutflowHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CreateCutflowHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
 
 class PlotCutflow(
@@ -388,3 +402,10 @@ class PlotCutflow(
             # save the plot
             plt.tight_layout()
             self.output().dump(fig, formatter="mpl")
+
+
+PlotCutflowWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=PlotCutflow,
+    enable=["configs", "skip_configs", "shifts", "skip_shifts"],
+)

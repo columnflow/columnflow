@@ -8,7 +8,7 @@ import functools
 
 import law
 
-from ap.tasks.framework.base import DatasetTask
+from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from ap.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
     ShiftSourcesMixin,
@@ -158,6 +158,13 @@ class CreateHistograms(
         self.output().dump(histograms, formatter="pickle")
 
 
+CreateHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CreateHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class MergeHistograms(
     DatasetTask,
     MLModelsMixin,
@@ -216,6 +223,13 @@ class MergeHistograms(
             }
 
             output.dump(merged, formatter="pickle")
+
+
+MergeHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
 
 class MergeShiftedHistograms(
@@ -295,3 +309,10 @@ class MergeShiftedHistograms(
             }
 
             self.output().dump(merged, formatter="pickle")
+
+
+MergeShiftedHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeShiftedHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets"],
+)
