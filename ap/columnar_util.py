@@ -113,8 +113,8 @@ class Route(object):
 
     @classmethod
     def slice_to_str(cls, s: slice) -> str:
-        s_str = (str(s.start) if s.start else "") + ":"
-        s_str += str(s.stop) if s.stop is not None else ""
+        s_str = ("" if s.start is None else str(s.start)) + ":"
+        s_str += "" if s.stop is None else str(s.stop)
         if s.step is not None:
             s_str += f":{s.step}"
         return s_str
