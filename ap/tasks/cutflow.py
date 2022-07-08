@@ -176,11 +176,8 @@ class CreateCutflowHistograms(
         for variable_inst in variable_insts:
             expr = variable_inst.expression
             if isinstance(expr, str):
-                expr = functools.partial(
-                    Route.select,
-                    route=Route.check(expr),
-                    null_value=variable_inst.null_value,
-                )
+                route = Route.check(expr)
+                expr = functools.partial(route.apply, null_value=variable_inst.null_value)
             expressions[variable_inst.name] = expr
 
         # create histograms per variable

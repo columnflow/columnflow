@@ -45,6 +45,14 @@ The task that you are about to start requires a valid voms proxy.
     # run your first task
     law run ReduceEvents --version v1 --dataset st_tchannel_t --branch 0
 
+    # create plots
+    law run PlotVariables \
+        --version v1 \
+        --datasets "st_tchannel_t,tt_sl" \
+        --producers variables \
+        --variables ht \
+        --workers 3
+
 
 Development
 -----------
