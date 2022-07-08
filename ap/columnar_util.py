@@ -8,8 +8,8 @@ __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
     "PreloadedNanoEventsFactory",
-    "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
-    "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
+    "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
 ]
 
@@ -28,7 +28,7 @@ from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, 
 
 import law
 
-from ap.util import maybe_import, DotDict
+from ap.util import UNSET, maybe_import, DotDict
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -48,8 +48,29 @@ EMPTY_INT = -99999
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
 
-#: Placeholder for an unset value.
-UNSET = object()
+
+class ItemEval(object):
+    """
+    Simple item evaluation helper, similar to NumPy's ``s_``. Example:
+
+    .. code-block:: python
+
+        ItemEval()[0:2, ...]
+        # -> (slice(0, 2), Ellipsis)
+
+        ItemEval()("[0:2, ...]")
+        # -> (slice(0, 2), Ellipsis)
+    """
+
+    def __getitem__(self, item: Any) -> Any:
+        return item
+
+    def __call__(self, s: str) -> Any:
+        return eval(f"self{s}")
+
+
+#: ItemEval singleton mimicking a function.
+eval_item = ItemEval()
 
 
 class Route(object):
@@ -217,8 +238,8 @@ class Route(object):
                 # when this point is reached all slices have been replaced
                 break
 
-        # evaluate all slices using numpy's item helper
-        slices = [eval(f"np.s_{s}") for s in slices]
+        # evaluate all slices
+        slices = [eval_item(s) for s in slices]
 
         # split parts and fill back evaluated slices
         parts = []

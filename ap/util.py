@@ -5,7 +5,7 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
-    "env_is_remote", "env_is_dev", "primes",
+    "UNSET", "env_is_remote", "env_is_dev", "primes",
     "FunctionArgs", "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
@@ -26,6 +26,9 @@ from types import ModuleType
 
 import law
 
+
+#: Placeholder for an unset value.
+UNSET = object()
 
 #: Boolean denoting whether the environment is in a remote job (based on ``AP_REMOTE_JOB``).
 env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
