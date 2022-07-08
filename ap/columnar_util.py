@@ -417,11 +417,9 @@ class Route(object):
                 pad_axis = 0
                 if isinstance(f, int):
                     max_idx = f
-                    pad_axis = 0
                 elif isinstance(f, list):
                     if all(isinstance(i, int) for i in f):
                         max_idx = max(f)
-                        pad_axis = 0
                 else:  # tuple
                     last = f[-1]
                     if isinstance(last, int):
