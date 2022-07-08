@@ -328,31 +328,32 @@ class PlotShiftedVariables(
                 raise Exception("no histograms found to plot")
 
             # create the stack and the sum
-            # h_final = hist.Stack(*hists.values())
             h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+            h_stack = h_sum.stack("shift")
+            label = [self.config_inst.get_shift(h_sum.axes["shift"][i]).label for i in range(3)]
 
             plt.style.use(mplhep.style.CMS)
             fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
 
-            h_sum.plot1d(
+            h_stack.plot(
                 ax=ax,
-                overlay="shift",
-                color=["black", "red", "blue"],
+                color=["black", "red", "blue"],  # hard-coded sequence of colors
+                label=label,
             )
             ax.legend(title=process_inst.name)  # TODO
             ax.set_ylabel(variable_inst.get_full_y_title())
             ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
             # nominal shift id is always 0
-            norm = h_sum[{"shift": 0}].view().value
+            norm = h_sum[{"shift": hist.loc(0)}].view().value
             rax.step(
                 x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": shift_inst_up.id}].view().value / norm,
+                y=h_sum[{"shift": hist.loc(shift_inst_up.id)}].view().value / norm,
                 color="red",
             )
             rax.step(
                 x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": shift_inst_down.id}].view().value / norm,
+                y=h_sum[{"shift": hist.loc(shift_inst_down.id)}].view().value / norm,
                 color="blue",
             )
             rax.axhline(y=1., color="black")
