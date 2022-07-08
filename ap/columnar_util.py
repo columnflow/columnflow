@@ -208,7 +208,7 @@ class Route(object):
                         start = column[:slice_start]
                         tmp = repl(len(slices) - 1)
                         rest = column[i + 1:]
-                        if rest and not rest.startswith(sep):
+                        if rest and not rest.startswith((sep, "[")):
                             raise ValueError(f"invalid column format '{column}'")
                         column = start + (sep if start else "") + tmp + rest
                         # start over
@@ -406,34 +406,47 @@ class Route(object):
             # in most scenarios we can just look for the field except when
             # - padding is enabled, and
             # - f is the last field, and
-            # - f is a list (advanced indexing) or tuple (slicing)
-            if not pad or not isinstance(f, (list, tuple)) or i < len(self) - 1:
+            # - f is an integer (indexing), list (advanced indexing) or tuple (slicing)
+            if not pad or not isinstance(f, (list, tuple, int)) or i < len(self) - 1:
                 res = res[f]
 
             else:
-                # at this point f is either a list or tuple and padding is enabled,
+                # at this point f is either an integer, a list or a tuple and padding is enabled,
                 # so determine the pad size depending on f
                 max_idx = -1
-                if isinstance(f, list):
+                pad_axis = 0
+                if isinstance(f, int):
+                    max_idx = f
+                    pad_axis = 0
+                elif isinstance(f, list):
                     if all(isinstance(i, int) for i in f):
                         max_idx = max(f)
+                        pad_axis = 0
                 else:  # tuple
                     last = f[-1]
                     if isinstance(last, int):
                         max_idx = last
+                        pad_axis = len(f) - 1
                     elif isinstance(last, list) and all(isinstance(i, int) for i in last):
                         max_idx = max(last)
+                        pad_axis = len(f) - 1
 
                 # do the padding on the last axis
                 if max_idx >= 0:
-                    res = ak.pad_none(res, max_idx + 1, axis=len(f) - 1)
+                    res = ak.pad_none(res, max_idx + 1, axis=pad_axis)
 
                 # lookup the field
                 res = res[f]
 
                 # fill nones
                 if max_idx >= 0 and null_value is not None:
-                    res = ak.fill_none(res, null_value)
+                    # res can be an array or a value itself
+                    # TODO: is there a better check than testing for the type attribute?
+                    if getattr(res, "type", None) is None:
+                        if res is None:
+                            res = null_value
+                    else:
+                        res = ak.fill_none(res, null_value)
 
         return res
 
