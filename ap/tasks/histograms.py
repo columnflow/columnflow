@@ -123,36 +123,32 @@ class CreateHistograms(
                     # get the expression and when it's a string, parse it to extract index lookups
                     expr = variable_inst.expression
                     if isinstance(expr, str):
-                        expr = functools.partial(
-                            Route.select,
-                            route=Route.check(expr),
-                            null_value=variable_inst.null_value,
-                        )
+                        route = Route.check(expr)
+                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
 
-                    with self.publish_step("var: %s" % var_name):
-                        if var_name not in histograms:
-                            histograms[var_name] = (
-                                hist.Hist.new
-                                .IntCat([], name="category", growth=True)
-                                .IntCat([], name="process", growth=True)
-                                .IntCat([], name="shift", growth=True)
-                                .Var(
-                                    variable_inst.bin_edges,
-                                    name=var_name,
-                                    label=variable_inst.get_full_x_title(),
-                                )
-                                .Weight()
+                    if var_name not in histograms:
+                        histograms[var_name] = (
+                            hist.Hist.new
+                            .IntCat([], name="category", growth=True)
+                            .IntCat([], name="process", growth=True)
+                            .IntCat([], name="shift", growth=True)
+                            .Var(
+                                variable_inst.bin_edges,
+                                name=var_name,
+                                label=variable_inst.get_full_x_title(),
                             )
-                        # broadcast arrays so that each event can be filled for all its categories
-                        fill_kwargs = {
-                            var_name: expr(events),
-                            "category": events.category_ids,
-                            "process": events.process_id,
-                            "shift": self.shift_inst.id,
-                            "weight": weight,
-                        }
-                        arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                        histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
+                            .Weight()
+                        )
+                    # broadcast arrays so that each event can be filled for all its categories
+                    fill_kwargs = {
+                        var_name: expr(events),
+                        "category": events.category_ids,
+                        "process": events.process_id,
+                        "shift": self.shift_inst.id,
+                        "weight": weight,
+                    }
+                    arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                    histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")
@@ -209,20 +205,19 @@ class MergeHistograms(
         return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
-        with self.publish_step("Hello from MergeHistograms"):
-            inputs_list = [inp.load(formatter="pickle") for inp in inputs]
-            inputs_dict = {
-                var_name: [hists[var_name] for hists in inputs_list]
-                for var_name in inputs_list[0]
-            }
+        inputs_list = [inp.load(formatter="pickle") for inp in inputs]
+        inputs_dict = {
+            var_name: [hists[var_name] for hists in inputs_list]
+            for var_name in inputs_list[0]
+        }
 
-            # do the merging
-            merged = {
-                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
-                for var_name in inputs_dict
-            }
+        # do the merging
+        merged = {
+            var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+            for var_name in inputs_dict
+        }
 
-            output.dump(merged, formatter="pickle")
+        output.dump(merged, formatter="pickle")
 
 
 MergeHistogramsWrapper = wrapper_factory(

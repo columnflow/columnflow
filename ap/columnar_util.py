@@ -8,8 +8,8 @@ __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
     "PreloadedNanoEventsFactory",
-    "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
-    "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
+    "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
 ]
 
@@ -28,7 +28,7 @@ from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, 
 
 import law
 
-from ap.util import maybe_import, DotDict
+from ap.util import UNSET, maybe_import, DotDict
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -47,6 +47,30 @@ EMPTY_INT = -99999
 
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
+
+
+class ItemEval(object):
+    """
+    Simple item evaluation helper, similar to NumPy's ``s_``. Example:
+
+    .. code-block:: python
+
+        ItemEval()[0:2, ...]
+        # -> (slice(0, 2), Ellipsis)
+
+        ItemEval()("[0:2, ...]")
+        # -> (slice(0, 2), Ellipsis)
+    """
+
+    def __getitem__(self, item: Any) -> Any:
+        return item
+
+    def __call__(self, s: str) -> Any:
+        return eval(f"self{s}")
+
+
+#: ItemEval singleton mimicking a function.
+eval_item = ItemEval()
 
 
 class Route(object):
@@ -109,33 +133,137 @@ class Route(object):
     NANO_SEP = "_"
 
     @classmethod
-    def join(cls, fields: Sequence[str]) -> str:
+    def slice_to_str(cls, s: slice) -> str:
+        s_str = ("" if s.start is None else str(s.start)) + ":"
+        s_str += "" if s.stop is None else str(s.stop)
+        if s.step is not None:
+            s_str += f":{s.step}"
+        return s_str
+
+    @classmethod
+    def _join(
+        cls,
+        sep: str,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), tuple, list]],
+        _outer: bool = True,
+    ) -> str:
+        """
+        Joins a sequence of *fields* into a string with a certain separator *sep* and returns it.
+        """
+        s = ""
+        for field in fields:
+            if isinstance(field, str):
+                s += (sep if s else "") + (field if _outer else f"'{field}'")
+            elif isinstance(field, int):
+                s += f"[{field}]" if _outer else str(field)
+            elif isinstance(field, slice):
+                field_str = cls.slice_to_str(field)
+                s += f"[{field_str}]" if _outer else field_str
+            elif isinstance(field, type(Ellipsis)):
+                s += "[...]" if _outer else "..."
+            elif isinstance(field, tuple):
+                field_str = ",".join(cls._join(sep, [f], _outer=False) for f in field)
+                s += f"[{field_str}]" if _outer else field_str
+            elif isinstance(field, list):
+                field_str = ",".join(cls._join(sep, [f], _outer=False) for f in field)
+                field_str = f"[{field_str}]"
+                s += f"[{field_str}]" if _outer else field_str
+            else:
+                raise TypeError(f"cannot interpret field '{field}' for joining")
+        return s
+
+    @classmethod
+    def join(
+        cls,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+    ) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
         """
-        return cls.DOT_SEP.join(fields)
+        return cls._join(cls.DOT_SEP, fields)
 
     @classmethod
-    def join_nano(cls, fields: Sequence[str]) -> str:
+    def join_nano(
+        cls,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+    ) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
         """
-        return cls.NANO_SEP.join(fields)
+        return cls._join(cls.NANO_SEP, fields)
 
     @classmethod
-    def split(cls, column: str) -> List[str]:
+    def _split(
+        cls,
+        sep: str,
+        column: str,
+    ) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
         """
-        Splits a string assumed to be in dot format and returns the string fragments.
+        Splits a string at a separator *sep* and returns the fragments, potentially with selection,
+        slice and advanced indexing expressions.
         """
-        return column.split(cls.DOT_SEP)
+        # first extract and replace possibly nested slices
+        # TODO: a regexp would be far cleaner, but there are edge cases which possibly require
+        #       sequential regexp evaluations which might be less maintainable
+        slices = []
+        repl = lambda i: f"__slice_{i}__"
+        repl_cre = re.compile(r"^__slice_(\d+)__$")
+        while True:
+            depth = 0
+            slice_start = -1
+            for i, s in enumerate(column):
+                if s == "[":
+                    depth += 1
+                    # remember the starting point when the slice started
+                    if depth == 1:
+                        slice_start = i
+                elif s == "]":
+                    if depth <= 0:
+                        raise ValueError(f"invalid column format '{column}'")
+                    depth -= 1
+                    # when we are back at depth 0, the slice ended
+                    if depth == 0:
+                        # save the slice
+                        slices.append(column[slice_start:i + 1])
+                        # insert a temporary replacement
+                        start = column[:slice_start]
+                        tmp = repl(len(slices) - 1)
+                        rest = column[i + 1:]
+                        if rest and not rest.startswith((sep, "[")):
+                            raise ValueError(f"invalid column format '{column}'")
+                        column = start + (sep if start else "") + tmp + rest
+                        # start over
+                        break
+            else:
+                # when this point is reached all slices have been replaced
+                break
+
+        # evaluate all slices
+        slices = [eval_item(s) for s in slices]
+
+        # split parts and fill back evaluated slices
+        parts = []
+        for part in column.split(sep):
+            m = repl_cre.match(part)
+            parts.append(slices[int(m.group(1))] if m else part)
+
+        return tuple(parts)
 
     @classmethod
-    def split_nano(cls, column: str) -> List[str]:
+    def split(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
         """
-        Splits a string assumed to be in nano-style underscore format and returns the string
-        fragments.
+        Splits a string assumed to be in dot format and returns the fragments, potentially with
+        selection, slice and advanced indexing expressions.
         """
-        return column.split(cls.NANO_SEP)
+        return cls._split(cls.DOT_SEP, column)
+
+    @classmethod
+    def split_nano(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
+        """
+        Splits a string assumed to be in nano-style underscore format and returns the fragments,
+        potentially with selection, slice and advanced indexing expressions.
+        """
+        return cls._split(cls.NANO_SEP, column)
 
     @classmethod
     def check(cls, route: Union["Route", Sequence[str], str]):
@@ -144,34 +272,6 @@ class Route(object):
         constructor to convert it into one.
         """
         return route if isinstance(route, cls) else cls(route)
-
-    @classmethod
-    def select(
-        cls,
-        ak_array: ak.Array,
-        route: Union["Route", Sequence[str], str],
-        null_value: Optional[Any] = None,
-    ) -> ak.Array:
-        """
-        Returns a selection of an *ak_array* at a certain *route*. When the last field of the route
-        is an integer, it is interpreted as the index of the object referred to by the leading
-        fields. In case no object exists at that index, its values are filled with *null_value*.
-        """
-        # get fields
-        fields = cls.check(route).fields
-
-        # when the last field is an integer, try to get the matching object and maybe pad
-        if len(fields) > 1 and re.match(r"^\d+$", str(fields[-1])):
-            # pad with None
-            idx = int(fields[-1])
-            result = ak.pad_none(ak_array[fields[:-1]], idx + 1, axis=-1)[..., idx]
-            # optionally fill with null_value
-            if null_value is not None:
-                result = ak.fill_none(result, null_value)
-            return result
-
-        # default case
-        return ak_array[fields]
 
     def __init__(self, route=None):
         super().__init__()
@@ -217,32 +317,51 @@ class Route(object):
         return False
 
     def __bool__(self) -> bool:
-        return bool(self._fields)
+        return len(self._fields) > 0
 
     def __nonzero__(self) -> bool:
         return self.__bool__()
 
-    def __add__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __add__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         route = self.__class__(self)
         route.add(other)
         return route
 
-    def __radd__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __radd__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         return self.__add__(other)
 
-    def __iadd__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __iadd__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         self.add(other)
         return self
 
-    def __getitem__(self, index) -> Union["Route", str]:
+    def __getitem__(
+        self,
+        index: Any,
+    ) -> Union["Route", str, int, slice, type(Ellipsis), list, tuple]:
         # detect slicing and return a new instance with the selected fields
         field = self._fields.__getitem__(index)
         return field if isinstance(index, int) else self.__class__(field)
 
-    def __setitem__(self, index, value) -> None:
+    def __setitem__(
+        self,
+        index: Any,
+        value: Union[str, int, slice, type(Ellipsis), list, tuple],
+    ) -> None:
         self._fields.__setitem__(index, value)
 
-    def add(self, other: Union["Route", Sequence[str], str]) -> None:
+    def add(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> None:
         """
         Adds an *other* route instance, or the fields extracted from either a sequence of strings or
         a string in dot format to the fields if *this* instance. A *ValueError* is raised when
@@ -274,6 +393,81 @@ class Route(object):
         Returns a copy if this instance.
         """
         return self.__class__(self)
+
+    def apply(
+        self,
+        ak_array: ak.Array,
+        null_value: Any = UNSET,
+    ) -> ak.Array:
+        """
+        Returns a selection of *ak_array* using the fields in this route. When *null_value* is set,
+        it is used to fill up missing elements in the selection corresponding to this route.
+        Example:
+
+        .. code-block:: python
+
+            # select the 6th jet in each event
+            Route("Jet.pt[:, 5]").apply(events)
+            # -> might lead to "index out of range" errors for events with fewer jets
+
+            Route("Jet.pt[:, 5]").apply(events, -999)
+            # -> [
+            #     34.15625,
+            #     17.265625,
+            #     -999.0,  # 6th jet was missing here
+            #     19.40625,
+            #     ...
+            # ]
+        """
+        pad = null_value is not UNSET
+
+        # traverse fields and perform the lookup iteratively
+        res = ak_array
+        for i, f in enumerate(self._fields):
+            # in most scenarios we can just look for the field except when
+            # - padding is enabled, and
+            # - f is the last field, and
+            # - f is an integer (indexing), list (advanced indexing) or tuple (slicing)
+            if not pad or not isinstance(f, (list, tuple, int)) or i < len(self) - 1:
+                res = res[f]
+
+            else:
+                # at this point f is either an integer, a list or a tuple and padding is enabled,
+                # so determine the pad size depending on f
+                max_idx = -1
+                pad_axis = 0
+                if isinstance(f, int):
+                    max_idx = f
+                elif isinstance(f, list):
+                    if all(isinstance(i, int) for i in f):
+                        max_idx = max(f)
+                else:  # tuple
+                    last = f[-1]
+                    if isinstance(last, int):
+                        max_idx = last
+                        pad_axis = len(f) - 1
+                    elif isinstance(last, list) and all(isinstance(i, int) for i in last):
+                        max_idx = max(last)
+                        pad_axis = len(f) - 1
+
+                # do the padding on the last axis
+                if max_idx >= 0:
+                    res = ak.pad_none(res, max_idx + 1, axis=pad_axis)
+
+                # lookup the field
+                res = res[f]
+
+                # fill nones
+                if max_idx >= 0 and null_value is not None:
+                    # res can be an array or a value itself
+                    # TODO: is there a better check than testing for the type attribute?
+                    if getattr(res, "type", None) is None:
+                        if res is None:
+                            res = null_value
+                    else:
+                        res = ak.fill_none(res, null_value)
+
+        return res
 
 
 def get_ak_routes(

@@ -20,11 +20,20 @@ ak = maybe_import("awkward")
 class MLModel(object):
     """
     Minimal interface to ML models with connections to config objects (such as
-    py:class:`orderd.Config` or :py:class:`order.Dataset`) and, on an optional basis, to tasks.
+    py:class:`order.Config` or :py:class:`order.Dataset`) and, on an optional basis, to tasks.
 
-    Inheriting classes need to overwrite seven methods: :py:meth:`datasets`, :py:meth:`uses`,
-    :py:meth:`produces`, :py:meth:`output`, :py:meth:`open_model`, :py:meth:`train`, and
-    :py:meth:`evaluate`.
+    Inheriting classes need to overwrite eight methods:
+
+        - :py:meth:`sandbox`
+        - :py:meth:`datasets`
+        - :py:meth:`uses`,
+        - :py:meth:`produces`
+        - :py:meth:`output`
+        - :py:meth:`open_model`
+        - :py:meth:`train`
+        - :py:meth:`evaluate`
+
+    See their documentation below for more info.
 
     .. py:attribute:: name
        type: str
@@ -93,7 +102,7 @@ class MLModel(object):
         if name not in cls._instances:
             raise ValueError(f"no ML model named '{name}' found")
 
-        return _copy.copy(cls._instances[name]) if copy else cls._instances[name]
+        return _copy.deepcopy(cls._instances[name]) if copy else cls._instances[name]
 
     def __init__(
         self,
