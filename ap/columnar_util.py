@@ -185,7 +185,7 @@ class Route(object):
         # TODO: a regexp would be far cleaner, but there are edge cases which possibly require
         #       sequential regexp evaluations which might be less maintainable
         slices = []
-        replacement = lambda i: f"__slice_{i}__"
+        repl = lambda i: f"__slice_{i}__"
         repl_cre = re.compile(r"^__slice_(\d+)__$")
         while True:
             depth = 0
@@ -193,7 +193,7 @@ class Route(object):
             for i, s in enumerate(column):
                 if s == "[":
                     depth += 1
-                    # remember the starting point when the slices started
+                    # remember the starting point when the slice started
                     if depth == 1:
                         slice_start = i
                 elif s == "]":
@@ -206,11 +206,11 @@ class Route(object):
                         slices.append(column[slice_start:i + 1])
                         # insert a temporary replacement
                         start = column[:slice_start]
-                        repl = replacement(len(slices) - 1)
+                        tmp = repl(len(slices) - 1)
                         rest = column[i + 1:]
                         if rest and not rest.startswith(sep):
                             raise ValueError(f"invalid column format '{column}'")
-                        column = start + (sep if start else "") + repl + rest
+                        column = start + (sep if start else "") + tmp + rest
                         # start over
                         break
             else:
