@@ -16,7 +16,7 @@ from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.production import Producer
 from ap.util import dev_sandbox, ensure_proxy
-
+from ap.plotting.plotter import plot_all
 
 class MergeSelectionMasks(
     DatasetTask,
@@ -376,30 +376,40 @@ class PlotCutflow(
 
             # start plotting
             plt.style.use(mplhep.style.CMS)
-            fig, ax = plt.subplots()
 
-            h_mc_stack.plot(
-                ax=ax,
-                stack=False,
-                histtype="step",
-                color=mc_colors,
-                label=mc_labels,
-            )
 
-            ax.set_xlabel("Selection steps")
-            ax.set_ylabel("Selection efficiency")
+            plot_cfgs = {
+                "procs": {
+                    "method": "draw_from_stack",
+                    "hist": h_mc_stack,
+                    "kwargs": {
+                        "norm": 1,
+                        "label": mc_labels,
+                        "color": mc_colors,
+                        "histtype": "step",
+                        "stack": False,
+                    },
+                },
+            }
+            style_cfgs = {
+                "ax_cfg": {
+                    "ylabel": "Selection efficiency",
+                    "xlabel": "Selection steps",
+                },
+                "legend_cfg": {
+                    "loc": "upper right",
+                },
+                "CMS_label_cfg": {
+                    "lumi": self.config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+                },
+            }
 
-            # legend
-            ax.legend(ncol=1, loc="upper right")
+            # ToDo: allow updating plot_cfgs and style_cfgs from config
 
-            # labels
-            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
-            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
+            with self.publish_step("Starting plotting routine ..."):
+                fig = plot_all(plot_cfgs, style_cfgs, ratio=False)
 
-            # save the plot
-            plt.tight_layout()
             self.output().dump(fig, formatter="mpl")
-
 
 PlotCutflowWrapper = wrapper_factory(
     base_cls=AnalysisTask,
