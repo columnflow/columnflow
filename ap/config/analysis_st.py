@@ -71,11 +71,12 @@ for dataset_name in dataset_names:
     config_2018.add_dataset(campaign_2018.get_dataset(dataset_name))
 
 
-# default calibrator, selector, producer and ml_model
+# default calibrator, selector, producer, ml model and inference model
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
 config_2018.set_aux("default_producer", "variables")
 config_2018.set_aux("default_ml_model", None)
+config_2018.set_aux("default_inference_model", "test")
 
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)

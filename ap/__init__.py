@@ -32,31 +32,40 @@ if law.config.has_option("target", "wlcg_file_systems"):
         for fs in law.config.get_expanded("target", "wlcg_file_systems", split_csv=True)
     ]
 
-# initialize producers, calibrators and selectors
-import ap.production  # noqa
-import ap.calibration  # noqa
-import ap.selection  # noqa
+
+# initialize producers, calibrators, selectors, ml and stat models
 from ap.util import maybe_import
 
+import ap.production  # noqa
 if law.config.has_option("analysis", "production_modules"):
     for mod in law.config.get_expanded("analysis", "production_modules", split_csv=True):
         logger.debug(f"loading production module '{mod}'")
         maybe_import(mod.strip())
 
+import ap.calibration  # noqa
 if law.config.has_option("analysis", "calibration_modules"):
     for mod in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
         logger.debug(f"loading calibration module '{mod}'")
         maybe_import(mod.strip())
 
+import ap.selection  # noqa
 if law.config.has_option("analysis", "selection_modules"):
     for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
         logger.debug(f"loading selection module '{mod}'")
         maybe_import(mod.strip())
 
+import ap.ml  # noqa
 if law.config.has_option("analysis", "ml_modules"):
     for mod in law.config.get_expanded("analysis", "ml_modules", split_csv=True):
         logger.debug(f"loading ml module '{mod}'")
         maybe_import(mod.strip())
+
+import ap.inference  # noqa
+if law.config.has_option("analysis", "inference_modules"):
+    for mod in law.config.get_expanded("analysis", "inference_modules", split_csv=True):
+        logger.debug(f"loading inference module '{mod}'")
+        maybe_import(mod.strip())
+
 
 # preload all task modules so that task parameters are globally known and accepted
 if law.config.has_section("modules"):

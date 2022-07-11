@@ -21,6 +21,7 @@ campaign_2018 = Campaign(
     id=1,
     ecm=13,
     bx=25,
+    aux={"year": 2018},
 )
 
 

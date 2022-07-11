@@ -8,7 +8,8 @@ __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "FunctionArgs", "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
+    "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
+    "is_pattern", "is_regex", "pattern_matcher",
 ]
 
 
@@ -18,9 +19,12 @@ import queue
 import threading
 import subprocess
 import importlib
+import fnmatch
+import re
 import multiprocessing
 import multiprocessing.pool
 from functools import wraps
+from collections import OrderedDict
 from typing import Tuple, Callable, Any, Optional, Union
 from types import ModuleType
 
@@ -63,11 +67,11 @@ class FunctionArgs(object):
         return func(*self.args, **self.kwargs)
 
 
-class DotDict(dict):
+class DotDict(OrderedDict):
     """
-    Subclass of *dict* that provides read access for items via attributes by implementing
-    ``__getattr__``. In case a item is accessed via attribute and it does not exist, an
-    *AttriuteError* is raised rather than a *KeyError*. Example:
+    Subclass of *OrderedDict* that provides read and write access to items via attributes by
+    implementing ``__getattr__`` and ``__etattr__``. In case a item is accessed via attribute and it
+    does not exist, an *AttriuteError* is raised rather than a *KeyError*. Example:
 
     .. code-block:: python
 
@@ -86,6 +90,10 @@ class DotDict(dict):
         print(d.bar)
         # => AttributeError
 
+        d.bar = 123
+        print(d.bar)
+        # => 123
+
         # use wrap() to convert a nested dict
         d = DotDict({"foo": {"bar": 1}})
         print(d.foo.bar)
@@ -96,21 +104,23 @@ class DotDict(dict):
         try:
             return self[attr]
         except KeyError:
-            raise AttributeError("'{}' object has no attribute '{}'".format(
-                self.__class__.__name__, attr))
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+
+    def __setattr__(self, attr, value):
+        self[attr] = value
 
     def copy(self):
         """"""
         return self.__class__(self)
 
     @classmethod
-    def wrap(cls, d: dict) -> "DotDict":
+    def wrap(cls, *args, **kwargs) -> "DotDict":
         """
         Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
         with :py:class:`DotDict`'s for deep attribute-style access.
         """
         wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
-        return wrap(d)
+        return wrap(OrderedDict(*args, **kwargs))
 
 
 class MockModule(object):
@@ -243,6 +253,17 @@ def real_path(*path: str) -> str:
     expanded.
     """
     return os.path.realpath(expand_path(*path))
+
+
+def ensure_dir(path: str) -> str:
+    """
+    Ensures that a directory at *path* (and its subdirectories) exists and returns the full,
+    expanded path.
+    """
+    path = real_path(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
 
 
 def wget(src: str, dst: str, force: bool = False) -> str:
@@ -445,3 +466,52 @@ def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
     Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
     """
     return (a / b) if b else 0.0
+
+
+def is_pattern(s: str) -> bool:
+    """
+    Returns *True* if a string *s* contains pattern characters such as "*" or "?", and *False*
+    otherwise.
+    """
+    return "*" in s or "?" in s
+
+
+def is_regex(s: str) -> bool:
+    """
+    Returns *True* if a string *s* is a regular expression starting with "^" and ending with "$",
+    and *False* otherwise.
+    """
+    return s.startswith("^") and s.endswith("$")
+
+
+def pattern_matcher(pattern: str) -> Callable[[str], bool]:
+    r"""
+    Takes a string *pattern* which might be an actual pattern for fnmatching, a regular expressions
+    or just a plain string and returns a function that can be used to test of a string matches that
+    pattern. Example:
+
+    .. code-block:: python
+
+        matcher = pattern_matcher("foo*")
+        matcher("foo123")  # -> True
+        matcher("bar123")  # -> False
+
+        matcher = pattern_matcher(r"^foo\d+.*")
+        matcher("foox")  # -> False
+        matcher("foo1")  # -> True
+    """
+    # special cases
+    if pattern == "*":
+        return lambda s: True
+
+    # identify fnmatch patterns
+    if is_pattern(pattern):
+        return lambda s: fnmatch.fnmatch(s, pattern)
+
+    # identify regular expressions
+    if is_regex(pattern):
+        cre = re.compile(pattern)
+        return lambda s: cre.match(s) is not None
+
+    # fallback to string comparison
+    return lambda s: s == pattern

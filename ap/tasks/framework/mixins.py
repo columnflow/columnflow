@@ -15,6 +15,7 @@ from ap.calibration import Calibrator
 from ap.selection import Selector
 from ap.production import Producer
 from ap.ml import MLModel
+from ap.inference import InferenceModel
 
 
 class CalibratorMixin(ConfigTask):
@@ -415,7 +416,8 @@ class MLModelMixin(ConfigTask):
             if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
                 params["ml_model"] = config_inst.x.default_ml_model
 
-            # initialize it once to trigger its set_config hook
+            # initialize it once to trigger its set_config hook which might, in turn,
+            # add objects to the config itself
             if params.get("ml_model") not in (law.NO_STR, None):
                 cls.get_ml_model_inst(params["ml_model"], config_inst)
 
@@ -450,8 +452,8 @@ class MLModelMixin(ConfigTask):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        ml_model = f"ml__{self.ml_model}" if self.ml_model != law.NO_STR else "none"
-        parts.insert_before("version", "ml_model", ml_model)
+        if self.ml_model != law.NO_STR:
+            parts.insert_before("version", "ml_model", f"ml__{self.ml_model}")
         return parts
 
 
@@ -494,6 +496,52 @@ class MLModelsMixin(ConfigTask):
             part = "__".join(self.ml_models)
             parts.insert_before("version", "ml_models", f"ml__{part}")
 
+        return parts
+
+
+class InferenceModelMixin(ConfigTask):
+
+    inference_model = luigi.Parameter(
+        default=law.NO_STR,
+        description="the name of the inference model to the used; default: value of the "
+        "'default_inference_model' config",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        # add the default inference model when empty
+        if "config_inst" in params:
+            config_inst = params["config_inst"]
+            if params.get("inference_model") == law.NO_STR and config_inst.x("default_inference_model", None):
+                params["inference_model"] = config_inst.x.default_inference_model
+
+        return params
+
+    @classmethod
+    def get_inference_model_inst(
+        cls,
+        inference_model: str,
+        config_inst: Optional[od.Config] = None,
+        copy: bool = True,
+    ) -> InferenceModel:
+        inference_model_inst = InferenceModel.get(inference_model, copy=True)
+        if config_inst:
+            inference_model_inst.set_config(config_inst)
+
+        return inference_model_inst
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the inference model instance
+        self.inference_model_inst = self.get_inference_model_inst(self.inference_model, self.config_inst)
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+        if self.inference_model != law.NO_STR:
+            parts.insert_before("version", "inf_model", f"inf__{self.inference_model}")
         return parts
 
 
@@ -654,10 +702,10 @@ class DatasetsProcessesMixin(ConfigTask):
 class ShiftSourcesMixin(ConfigTask):
 
     shift_sources = law.CSVParameter(
-        default=("minbias_xs",),
+        default=(),
         description="comma-separated shift source names (without direction) or patterns to select; "
         "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
-        "config; default: ('minbias_xs',)",
+        "config; default: ()",
     )
 
     @classmethod
