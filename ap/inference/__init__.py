@@ -190,7 +190,7 @@ class InferenceModel(object):
         extra: Optional[Any] = None,
     ) -> DotDict:
         """
-        Returns a dictionary representing a category (interchangeable called bin or channel in other
+        Returns a dictionary representing a category (interchangeably called bin or channel in other
         tools), forwarding all arguments.
         """
         return DotDict([

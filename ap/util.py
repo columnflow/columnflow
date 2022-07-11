@@ -70,8 +70,8 @@ class FunctionArgs(object):
 class DotDict(OrderedDict):
     """
     Subclass of *OrderedDict* that provides read and write access to items via attributes by
-    implementing ``__getattr__`` and ``__etattr__``. In case a item is accessed via attribute and it
-    does not exist, an *AttriuteError* is raised rather than a *KeyError*. Example:
+    implementing ``__getattr__`` and ``__setattr__``. In case a item is accessed via attribute and
+    it does not exist, an *AttriuteError* is raised rather than a *KeyError*. Example:
 
     .. code-block:: python
 
@@ -501,7 +501,7 @@ def pattern_matcher(pattern: str) -> Callable[[str], bool]:
         matcher("foo1")  # -> True
     """
     # special cases
-    if pattern == "*":
+    if pattern in ["*", "^.*$"]:
         return lambda s: True
 
     # identify fnmatch patterns

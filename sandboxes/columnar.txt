@@ -1,4 +1,4 @@
-# version 3
+# version 2
 
 pyarrow==6.0.*
 coffea==0.7.*

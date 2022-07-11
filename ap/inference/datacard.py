@@ -21,8 +21,8 @@ uproot = maybe_import("uproot")
 
 class DatacardWriter(object):
     """
-    Generic writer for combine datacards using a instance of a :py:class:`InferenceModel`
-    *inference_model_inst* and a triply-nested dictionary "category -> process -> shift -> hist".
+    Generic writer for combine datacards using a instance of an :py:class:`InferenceModel`
+    *inference_model_inst* and a threefold nested dictionary "category -> process -> shift -> hist".
 
     *rate_precision* and *parameter_precision* control the number of digits of values for measured
     rates and parameter effects.
