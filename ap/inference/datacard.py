@@ -179,6 +179,8 @@ class DatacardWriter(object):
             )
         else:
             blocks.rates = self.align_lines(list(blocks.rates), sep=self.sep)
+        if blocks.mc_stats:
+            blocks.mc_stats = self.align_lines(list(blocks.mc_stats), sep=self.sep)
 
         # write the blocks
         with open(datacard_path, "w") as f:
