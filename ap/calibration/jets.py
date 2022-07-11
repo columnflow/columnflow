@@ -125,12 +125,15 @@ def ak_random(*args, rand_func):
 #
 
 @calibrator(
-    uses={"nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor", "fixedGridRhoFastjetAll"},
+    uses={
+        "nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor",
+        "fixedGridRhoFastjetAll",
+    },
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
 )
-def jec(events, config_inst, dataset_inst, jec_files, junc_files, jec_names, junc_names, **kwargs):
+def jec(self, events, config_inst, dataset_inst, jec_files, junc_files, jec_names, junc_names, **kwargs):
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources."""
 
     # calculate uncorrected pt, mass
@@ -265,7 +268,7 @@ def jec_setup(self, task, inputs, call_kwargs, **kwargs):
 
     },
 )
-def jer(events, config_inst, dataset_inst, jer_files, jersf_files, jer_names, jersf_names, **kwargs):
+def jer(self, events, config_inst, dataset_inst, jer_files, jersf_files, jer_names, jersf_names, **kwargs):
     """Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution."""
 
@@ -417,13 +420,13 @@ def jer_setup(self, task, inputs, call_kwargs, **kwargs):
 #
 
 @calibrator(uses={jec}, produces={jec})
-def jets(events, **kwargs):
+def jets(self, events, **kwargs):
     # apply jet energy corrections
-    events = jec(events, **kwargs)
+    self.stack.jec(events, **kwargs)
 
     # apply jer smearing (MC only)
     if kwargs["dataset_inst"].is_mc:
-        events = jer(events, **kwargs)
+        self.stack.jer(events, **kwargs)
 
     return events
 
@@ -432,5 +435,6 @@ def jets(events, **kwargs):
 def jets_update(self, dataset_inst, **kwargs):
     """Ensure JER is run on MC"""
     if dataset_inst.is_mc:
-        self.uses |= {jer}
-        self.produces |= {jer}
+        _jer = jer.updated_copy(dataset_inst=dataset_inst, **kwargs)
+        self.uses.add(_jer)
+        self.produces.add(_jer)

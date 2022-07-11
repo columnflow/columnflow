@@ -4,22 +4,25 @@
 Task to produce and merge histograms.
 """
 
-import re
+import functools
 
 import law
 
-from ap.tasks.framework.base import DatasetTask
+from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from ap.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, VariablesMixin, ShiftSourcesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
+    ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from ap.tasks.production import ProduceColumns
-from ap.util import ensure_proxy, dev_sandbox
+from ap.tasks.ml import MLEvaluation
+from ap.util import dev_sandbox
 
 
 class CreateHistograms(
     MergeReducedEventsUser,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -30,14 +33,17 @@ class CreateHistograms(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(MergeReducedEvents.shifts)
+    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     def workflow_requires(self):
         reqs = super(CreateHistograms, self).workflow_requires()
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
-        if not self.pilot and self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if not self.pilot:
+            if self.producers:
+                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            if self.ml_models:
+                reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
 
         return reqs
 
@@ -45,6 +51,8 @@ class CreateHistograms(
         reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
             reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+        if self.ml_models:
+            reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -53,7 +61,6 @@ class CreateHistograms(
 
     @law.decorator.safe_output
     @law.decorator.localize
-    @ensure_proxy
     def run(self):
         import hist
         import numpy as np
@@ -79,6 +86,8 @@ class CreateHistograms(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
+        if self.ml_models:
+            files.extend([inp.path for inp in inputs["ml"]])
         with ChunkedReader(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -88,10 +97,10 @@ class CreateHistograms(
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
-                update_ak_array(events, *columns)
+                events = update_ak_array(events, *columns)
 
                 # add aliases
-                add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # build the full event weight
                 weight = ak.Array(np.ones(len(events)))
@@ -101,42 +110,28 @@ class CreateHistograms(
                     for column in self.dataset_inst.x("event_weights", []):
                         if has_ak_column(events, column):
                             weight = weight * events[Route(column).fields]
-
-                # get all viable category ids (only leaf categories)
-                leaf_cat_ids = [cat.id for cat in self.config_inst.get_leaf_categories()]
+                        else:
+                            self.logger.warning_once(
+                                "missing_dataset_weight",
+                                f"weight '{column}' for dataset {self.dataset_inst.name} not found",
+                            )
 
                 # define and fill histograms
                 for var_name in self.variables:
                     variable_inst = self.config_inst.get_variable(var_name)
 
-                    # get the expression and when it's a string, parse it to extract trailing index
-                    # lookups, e.g. "Jet.pt.0", and convert them to functions with optional padding
+                    # get the expression and when it's a string, parse it to extract index lookups
                     expr = variable_inst.expression
                     if isinstance(expr, str):
-                        fields = Route.check(expr).fields
-                        # first, assume a normal route
-                        expr = lambda events: events[fields]
-                        # when the last field is an integer, perform filling and padding with the
-                        # variable's null value
-                        if len(fields) > 1 and re.match(r"^\d+$", fields[-1]):
-                            if variable_inst.null_value is None:
-                                raise ValueError(
-                                    "variable expressions with a trailing index require a "
-                                    f"null_value, but '{variable_inst}' has none",
-                                )
-                            idx = int(fields[-1])
-                            def expr(events):
-                                return ak.fill_none(
-                                    ak.pad_none(events[fields[:-1]], idx + 1, axis=-1)[..., idx],
-                                    variable_inst.null_value,
-                                )
+                        route = Route.check(expr)
+                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
 
-                    with self.publish_step("var: %s" % var_name):
-                        h_var = (
+                    if var_name not in histograms:
+                        histograms[var_name] = (
                             hist.Hist.new
+                            .IntCat([], name="category", growth=True)
                             .IntCat([], name="process", growth=True)
-                            .IntCat(leaf_cat_ids, name="category")
-                            .StrCategory([], name="shift", growth=True)
+                            .IntCat([], name="shift", growth=True)
                             .Var(
                                 variable_inst.bin_edges,
                                 name=var_name,
@@ -144,25 +139,31 @@ class CreateHistograms(
                             )
                             .Weight()
                         )
-                        fill_kwargs = {
-                            var_name: expr(events),
-                            "process": events.process_id,
-                            "category": events.cat_array,
-                            "shift": self.shift,
-                            "weight": weight,
-                        }
-                        h_var.fill(**fill_kwargs)
-                        if var_name in histograms:
-                            histograms[var_name] += h_var
-                        else:
-                            histograms[var_name] = h_var
+                    # broadcast arrays so that each event can be filled for all its categories
+                    fill_kwargs = {
+                        var_name: expr(events),
+                        "category": events.category_ids,
+                        "process": events.process_id,
+                        "shift": self.shift_inst.id,
+                        "weight": weight,
+                    }
+                    arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                    histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")
 
 
+CreateHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=CreateHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class MergeHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -204,24 +205,31 @@ class MergeHistograms(
         return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
-        with self.publish_step("Hello from MergeHistograms"):
-            inputs_list = [inp.load(formatter="pickle") for inp in inputs]
-            inputs_dict = {
-                var_name: [hists[var_name] for hists in inputs_list]
-                for var_name in inputs_list[0]
-            }
+        inputs_list = [inp.load(formatter="pickle") for inp in inputs]
+        inputs_dict = {
+            var_name: [hists[var_name] for hists in inputs_list]
+            for var_name in inputs_list[0]
+        }
 
-            # do the merging
-            merged = {
-                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
-                for var_name in inputs_dict
-            }
+        # do the merging
+        merged = {
+            var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
+            for var_name in inputs_dict
+        }
 
-            output.dump(merged, formatter="pickle")
+        output.dump(merged, formatter="pickle")
+
+
+MergeHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
 
 class MergeShiftedHistograms(
     DatasetTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -296,3 +304,10 @@ class MergeShiftedHistograms(
             }
 
             self.output().dump(merged, formatter="pickle")
+
+
+MergeShiftedHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeShiftedHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets"],
+)

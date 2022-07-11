@@ -6,13 +6,15 @@ Helpers and utilities for working with columnar libraries.
 
 __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
-    "Route", "ArrayFunction", "TaskArrayFunction", "ChunkedReader", "PreloadedNanoEventsFactory",
-    "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column", "add_ak_alias",
-    "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
+    "PreloadedNanoEventsFactory",
+    "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
+    "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet",
 ]
 
 
+import re
 import math
 import time
 import copy as _copy
@@ -26,7 +28,7 @@ from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, 
 
 import law
 
-from ap.util import maybe_import
+from ap.util import UNSET, maybe_import, DotDict
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -45,6 +47,30 @@ EMPTY_INT = -99999
 
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
+
+
+class ItemEval(object):
+    """
+    Simple item evaluation helper, similar to NumPy's ``s_``. Example:
+
+    .. code-block:: python
+
+        ItemEval()[0:2, ...]
+        # -> (slice(0, 2), Ellipsis)
+
+        ItemEval()("[0:2, ...]")
+        # -> (slice(0, 2), Ellipsis)
+    """
+
+    def __getitem__(self, item: Any) -> Any:
+        return item
+
+    def __call__(self, s: str) -> Any:
+        return eval(f"self{s}")
+
+
+#: ItemEval singleton mimicking a function.
+eval_item = ItemEval()
 
 
 class Route(object):
@@ -107,33 +133,137 @@ class Route(object):
     NANO_SEP = "_"
 
     @classmethod
-    def join(cls, fields: Sequence[str]) -> str:
+    def slice_to_str(cls, s: slice) -> str:
+        s_str = ("" if s.start is None else str(s.start)) + ":"
+        s_str += "" if s.stop is None else str(s.stop)
+        if s.step is not None:
+            s_str += f":{s.step}"
+        return s_str
+
+    @classmethod
+    def _join(
+        cls,
+        sep: str,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), tuple, list]],
+        _outer: bool = True,
+    ) -> str:
+        """
+        Joins a sequence of *fields* into a string with a certain separator *sep* and returns it.
+        """
+        s = ""
+        for field in fields:
+            if isinstance(field, str):
+                s += (sep if s else "") + (field if _outer else f"'{field}'")
+            elif isinstance(field, int):
+                s += f"[{field}]" if _outer else str(field)
+            elif isinstance(field, slice):
+                field_str = cls.slice_to_str(field)
+                s += f"[{field_str}]" if _outer else field_str
+            elif isinstance(field, type(Ellipsis)):
+                s += "[...]" if _outer else "..."
+            elif isinstance(field, tuple):
+                field_str = ",".join(cls._join(sep, [f], _outer=False) for f in field)
+                s += f"[{field_str}]" if _outer else field_str
+            elif isinstance(field, list):
+                field_str = ",".join(cls._join(sep, [f], _outer=False) for f in field)
+                field_str = f"[{field_str}]"
+                s += f"[{field_str}]" if _outer else field_str
+            else:
+                raise TypeError(f"cannot interpret field '{field}' for joining")
+        return s
+
+    @classmethod
+    def join(
+        cls,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+    ) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
         """
-        return cls.DOT_SEP.join(fields)
+        return cls._join(cls.DOT_SEP, fields)
 
     @classmethod
-    def join_nano(cls, fields: Sequence[str]) -> str:
+    def join_nano(
+        cls,
+        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+    ) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
         """
-        return cls.NANO_SEP.join(fields)
+        return cls._join(cls.NANO_SEP, fields)
 
     @classmethod
-    def split(cls, column: str) -> List[str]:
+    def _split(
+        cls,
+        sep: str,
+        column: str,
+    ) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
         """
-        Splits a string assumed to be in dot format and returns the string fragments.
+        Splits a string at a separator *sep* and returns the fragments, potentially with selection,
+        slice and advanced indexing expressions.
         """
-        return column.split(cls.DOT_SEP)
+        # first extract and replace possibly nested slices
+        # TODO: a regexp would be far cleaner, but there are edge cases which possibly require
+        #       sequential regexp evaluations which might be less maintainable
+        slices = []
+        repl = lambda i: f"__slice_{i}__"
+        repl_cre = re.compile(r"^__slice_(\d+)__$")
+        while True:
+            depth = 0
+            slice_start = -1
+            for i, s in enumerate(column):
+                if s == "[":
+                    depth += 1
+                    # remember the starting point when the slice started
+                    if depth == 1:
+                        slice_start = i
+                elif s == "]":
+                    if depth <= 0:
+                        raise ValueError(f"invalid column format '{column}'")
+                    depth -= 1
+                    # when we are back at depth 0, the slice ended
+                    if depth == 0:
+                        # save the slice
+                        slices.append(column[slice_start:i + 1])
+                        # insert a temporary replacement
+                        start = column[:slice_start]
+                        tmp = repl(len(slices) - 1)
+                        rest = column[i + 1:]
+                        if rest and not rest.startswith((sep, "[")):
+                            raise ValueError(f"invalid column format '{column}'")
+                        column = start + (sep if start else "") + tmp + rest
+                        # start over
+                        break
+            else:
+                # when this point is reached all slices have been replaced
+                break
+
+        # evaluate all slices
+        slices = [eval_item(s) for s in slices]
+
+        # split parts and fill back evaluated slices
+        parts = []
+        for part in column.split(sep):
+            m = repl_cre.match(part)
+            parts.append(slices[int(m.group(1))] if m else part)
+
+        return tuple(parts)
 
     @classmethod
-    def split_nano(cls, column: str) -> List[str]:
+    def split(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
         """
-        Splits a string assumed to be in nano-style underscore format and returns the string
-        fragments.
+        Splits a string assumed to be in dot format and returns the fragments, potentially with
+        selection, slice and advanced indexing expressions.
         """
-        return column.split(cls.NANO_SEP)
+        return cls._split(cls.DOT_SEP, column)
+
+    @classmethod
+    def split_nano(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
+        """
+        Splits a string assumed to be in nano-style underscore format and returns the fragments,
+        potentially with selection, slice and advanced indexing expressions.
+        """
+        return cls._split(cls.NANO_SEP, column)
 
     @classmethod
     def check(cls, route: Union["Route", Sequence[str], str]):
@@ -142,17 +272,6 @@ class Route(object):
         constructor to convert it into one.
         """
         return route if isinstance(route, cls) else cls(route)
-
-    @classmethod
-    def select(cls, ak_array: ak.Array, route: Union["Route", Sequence[str], str]) -> ak.Array:
-        """
-        Returns a selection of an *ak_array* at a certain *route*. This method is a shorthand for
-
-        .. code-block:: python
-
-           ak_array[Route.check(route).fields]
-        """
-        return ak_array[cls.check(route).fields]
 
     def __init__(self, route=None):
         super().__init__()
@@ -198,32 +317,51 @@ class Route(object):
         return False
 
     def __bool__(self) -> bool:
-        return bool(self._fields)
+        return len(self._fields) > 0
 
     def __nonzero__(self) -> bool:
         return self.__bool__()
 
-    def __add__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __add__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         route = self.__class__(self)
         route.add(other)
         return route
 
-    def __radd__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __radd__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         return self.__add__(other)
 
-    def __iadd__(self, other: Union["Route", Sequence[str], str]) -> "Route":
+    def __iadd__(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> "Route":
         self.add(other)
         return self
 
-    def __getitem__(self, index) -> Union["Route", str]:
+    def __getitem__(
+        self,
+        index: Any,
+    ) -> Union["Route", str, int, slice, type(Ellipsis), list, tuple]:
         # detect slicing and return a new instance with the selected fields
         field = self._fields.__getitem__(index)
         return field if isinstance(index, int) else self.__class__(field)
 
-    def __setitem__(self, index, value) -> None:
+    def __setitem__(
+        self,
+        index: Any,
+        value: Union[str, int, slice, type(Ellipsis), list, tuple],
+    ) -> None:
         self._fields.__setitem__(index, value)
 
-    def add(self, other: Union["Route", Sequence[str], str]) -> None:
+    def add(
+        self,
+        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+    ) -> None:
         """
         Adds an *other* route instance, or the fields extracted from either a sequence of strings or
         a string in dot format to the fields if *this* instance. A *ValueError* is raised when
@@ -255,6 +393,81 @@ class Route(object):
         Returns a copy if this instance.
         """
         return self.__class__(self)
+
+    def apply(
+        self,
+        ak_array: ak.Array,
+        null_value: Any = UNSET,
+    ) -> ak.Array:
+        """
+        Returns a selection of *ak_array* using the fields in this route. When *null_value* is set,
+        it is used to fill up missing elements in the selection corresponding to this route.
+        Example:
+
+        .. code-block:: python
+
+            # select the 6th jet in each event
+            Route("Jet.pt[:, 5]").apply(events)
+            # -> might lead to "index out of range" errors for events with fewer jets
+
+            Route("Jet.pt[:, 5]").apply(events, -999)
+            # -> [
+            #     34.15625,
+            #     17.265625,
+            #     -999.0,  # 6th jet was missing here
+            #     19.40625,
+            #     ...
+            # ]
+        """
+        pad = null_value is not UNSET
+
+        # traverse fields and perform the lookup iteratively
+        res = ak_array
+        for i, f in enumerate(self._fields):
+            # in most scenarios we can just look for the field except when
+            # - padding is enabled, and
+            # - f is the last field, and
+            # - f is an integer (indexing), list (advanced indexing) or tuple (slicing)
+            if not pad or not isinstance(f, (list, tuple, int)) or i < len(self) - 1:
+                res = res[f]
+
+            else:
+                # at this point f is either an integer, a list or a tuple and padding is enabled,
+                # so determine the pad size depending on f
+                max_idx = -1
+                pad_axis = 0
+                if isinstance(f, int):
+                    max_idx = f
+                elif isinstance(f, list):
+                    if all(isinstance(i, int) for i in f):
+                        max_idx = max(f)
+                else:  # tuple
+                    last = f[-1]
+                    if isinstance(last, int):
+                        max_idx = last
+                        pad_axis = len(f) - 1
+                    elif isinstance(last, list) and all(isinstance(i, int) for i in last):
+                        max_idx = max(last)
+                        pad_axis = len(f) - 1
+
+                # do the padding on the last axis
+                if max_idx >= 0:
+                    res = ak.pad_none(res, max_idx + 1, axis=pad_axis)
+
+                # lookup the field
+                res = res[f]
+
+                # fill nones
+                if max_idx >= 0 and null_value is not None:
+                    # res can be an array or a value itself
+                    # TODO: is there a better check than testing for the type attribute?
+                    if getattr(res, "type", None) is None:
+                        if res is None:
+                            res = null_value
+                    else:
+                        res = ak.fill_none(res, null_value)
+
+        return res
 
 
 def get_ak_routes(
@@ -335,10 +548,11 @@ def set_ak_column(
     value: ak.Array,
 ) -> ak.Array:
     """
-    Inserts a new column into awkward array *ak_array* and returns it. The column can be defined
-    through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each string refers
-    to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``), and the
-    column *value* itself. Intermediate, non-existing fields are automatically created. Example:
+    Inserts a new column into awkward array *ak_array* in-place and returns it. The column can be
+    defined through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each
+    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
+    ``"Jet.pt"``), and the column *value* itself. Intermediate, non-existing fields are
+    automatically created. Example:
 
     .. code-block:: python
 
@@ -346,6 +560,13 @@ def set_ak_column(
 
         set_ak_column(arr, "Jet.mass", [40])
         set_ak_column(arr, "Muon.pt", [25])  # creates subfield "Muon" first
+
+    .. note::
+
+        Issues can arise in cases where the route to add already exists and has a different type
+        than the newly added *value*. If this is the case, you should consider remove the column
+        first with :py:func:`remove_ak_column`. As this one might return a new view, it is not
+        automatically handled in *this* function which is meant to perform an in-place operation.
     """
     route = Route.check(route)
 
@@ -423,10 +644,11 @@ def add_ak_alias(
     remove_src: bool = False,
 ) -> ak.Array:
     """
-    Adds an alias to an awkward array *ak_array*, pointing the array at *src_route* to
-    *dst_route*. Both routes can be a :py:class:`Route` instance, a tuple of strings where each
-    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
-    ``"Jet.pt"``). A *ValueError* is raised when *src_route* does not exist.
+    Adds an alias to an awkward array *ak_array* in-place (depending on *remove_src*, see below),
+    pointing the array at *src_route* to *dst_route*. Both routes can be a :py:class:`Route`
+    instance, a tuple of strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or
+    a string with dot format (e.g. ``"Jet.pt"``). A *ValueError* is raised when *src_route* does not
+    exist.
 
     Note that existing columns referred to by *dst_route* might be overwritten. When *remove_src* is
     *True*, a view of the input array is returned with the column referred to by *src_route*
@@ -456,12 +678,13 @@ def add_ak_aliases(
 ) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
-    an awkward array *ak_array*. Each column in this dictionary can be referred to by a
-    :py:class:`Route` instance, a tuple of strings where each string refers to a subfield, e.g.
-    ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``). See
-    :py:func:`add_ak_aliases` for more info. When *remove_src* is *True*, a view of the input array
-    is returned with all source columns missing. Otherwise, the input array is returned with all
-    columns.
+    an awkward array *ak_array* in-place (depending on *remove_src*, see below). Each column in this
+    dictionary can be referred to by a :py:class:`Route` instance, a tuple of strings where each
+    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
+    ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
+
+    When *remove_src* is *True*, a view of the input array is returned with all source columns
+    missing. Otherwise, the input array is returned with all columns.
     """
     # add all aliases
     for dst_route, src_route in aliases.items():
@@ -478,9 +701,10 @@ def update_ak_array(
     concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
 ) -> ak.Array:
     """
-    Updates an awkward array *ak_array* in-place with the content of multiple different arrays
-    *others*. Internally, :py:func:`get_ak_routes` is used to obtain the list of all routes pointing
-    to potentially deeply nested arrays. The input array is also returned.
+    Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
+    potentially (see below) returns a new view. Internally, :py:func:`get_ak_routes` is used to
+    obtain the list of all routes pointing to potentially deeply nested arrays. The input array is
+    also returned.
 
     If two columns overlap during this update process, four different cases can be configured to
     occur:
@@ -493,7 +717,7 @@ def update_ak_array(
            actual implementation to awkward.
         3. If cases 1 and 2 do not apply and *overwrite_routes* is either *True* or a list of routes
            containing the route in question, new columns (right most in *others*) overwrite
-           existing ones.
+           existing ones. A new view is returned in case this case occurs at least once.
         4. If none of the cases above apply, an exception is raised.
     """
     # trivial case
@@ -521,7 +745,6 @@ def update_ak_array(
     # go through all other arrays and merge their columns
     for other in others:
         for route in get_ak_routes(other):
-
             if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
@@ -534,7 +757,8 @@ def update_ak_array(
                     # add and reassign
                     set_ak_column(ak_array, route, ak_array[route.fields] + other[route.fields])
                 elif do_overwrite(route):
-                    # just replace the column
+                    # delete the column first for type safety and then re-add it
+                    ak_array = remove_ak_column(ak_array, route)
                     set_ak_column(ak_array, route, other[route.fields])
                 else:
                     raise Exception(f"cannot update already existing array column '{route}'")
@@ -618,17 +842,73 @@ def sorted_ak_to_parquet(
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
+class RouteFilter(object):
+    """
+    Shallow helper class that handles removal of routes in an awkward array that do not match those
+    in *keep_routes*. Each route can either be a :py:class:`Route` instance, or anything that is
+    accepted by its constructor. Example:
+
+    .. code-block:: python
+
+        route_filter = RouteFilter(["Jet.pt", "Jet.eta"])
+        events = route_filter(events)
+
+        print(get_ak_routes(events))
+        # [
+        #    "Jet.pt",
+        #    "Jet.eta",
+        # ]
+
+    .. py:attribute:: keep_routes
+       type: list
+
+       The routes to keep.
+
+    .. py:attribute:: remove_routes
+       type: None, set
+
+       A set of :py:class:`Route` instances that are removed, defined after the first call to this
+       instance.
+    """
+
+    def __init__(self, keep_routes):
+        super().__init__()
+
+        self.keep_routes = list(keep_routes)
+        self.remove_routes = None
+
+    def __call__(self, ak_array):
+        # manually remove colums that should not be kept
+        if self.remove_routes is None:
+            # convert routes to keep into string columns for pattern checks
+            keep_columns = [Route.check(route).column for route in self.keep_routes]
+
+            # determine routes to remove
+            self.remove_routes = {
+                route
+                for route in get_ak_routes(ak_array)
+                if not law.util.multi_match(route.column, keep_columns)
+            }
+
+        # apply the filtering
+        for route in self.remove_routes:
+            ak_array = remove_ak_column(ak_array, route)
+
+        return ak_array
+
+
 class ArrayFunction(object):
     """
     Base class for function wrappers that act on arrays and keep track of used as well as produced
     columns, next to the implementation. In addition, they have a unique name which is used to store
     them in and retrieve them from an instance cache. This is automatically done when created with
-    :py:meth:`new` (recommended).
+    :py:meth:`new` (recommended). Besides these attributes, instances of this class are meant to be
+    fully stateless.
 
     .. code-block:: python
 
         # define the function to wrap
-        def my_func(arr):
+        def my_func(self, arr):
             foo = arr.foo
             arr["bar"] = foo * 2
             return arr
@@ -643,7 +923,7 @@ class ArrayFunction(object):
         func(some_array)
 
         # create a second function that calls my_func
-        def my_other_func(arr):
+        def my_other_func(self, arr):
             # just call my_func
             return my_func(arr)
 
@@ -732,6 +1012,13 @@ class ArrayFunction(object):
     FlaggedInst = namedtuple("FlaggedInst", ["inst", "io_flag"])
 
     @classmethod
+    def has(cls, name: str) -> bool:
+        """
+        Returns whether an instance named *name* was previously registered.
+        """
+        return name in cls._instances
+
+    @classmethod
     def new(cls, *args, **kwargs) -> "ArrayFunction":
         """
         Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
@@ -740,7 +1027,7 @@ class ArrayFunction(object):
         """
         inst = cls(*args, **kwargs)
 
-        if inst.name in cls._instances:
+        if cls.has(inst.name):
             raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
 
         cls._instances[inst.name] = inst
@@ -753,10 +1040,37 @@ class ArrayFunction(object):
         Returns a previously registered instance named *name* from the cache. If *copy* is *True*
         a copy is returned.
         """
-        if name not in cls._instances:
+        if not cls.has(name):
             raise ValueError(f"no {cls.__name__} named '{name}' registered")
 
-        return _copy.copy(cls._instances[name]) if copy else cls._instances[name]
+        inst = cls._instances[name]
+        return inst.copy() if copy else inst
+
+    @classmethod
+    def copy_obj(
+        cls,
+        obj: Union["ArrayFunction", FlaggedInst, Any],
+        copy_cache: Optional[Dict[Any, Any]] = None,
+    ) -> Union["ArrayFunction", FlaggedInst, Any]:
+        """
+        Returns the copy if an object *obj* which can be either an ArrayFunction or a FlaggedInst.
+        For any other type, a simple copy *obj* using :py:mod:`copy` is returned.
+        """
+        def get_copy(obj):
+            if isinstance(obj, ArrayFunction):
+                return obj.copy()
+            if isinstance(obj, cls.FlaggedInst):
+                return cls.FlaggedInst(obj.inst.copy(), obj.io_flag)
+            return _copy.copy(obj)
+
+        # use the cache when set
+        if copy_cache is not None:
+            if obj not in copy_cache:
+                copy_cache[obj] = get_copy(obj)
+            return copy_cache[obj]
+
+        # otherwise, just copy
+        return get_copy(obj)
 
     def __init__(
         self,
@@ -779,6 +1093,18 @@ class ArrayFunction(object):
         self.uses = set(law.util.make_list(uses)) if uses else set()
         self.produces = set(law.util.make_list(produces)) if produces else set()
 
+    def copy(self) -> "ArrayFunction":
+        """
+        Returns a copy if this instance.
+        """
+        inst = type(self)(func=self.func, name=self.name)
+
+        # add other attributes
+        inst.uses = set(self.uses)
+        inst.produces = set(self.produces)
+
+        return inst
+
     @property
     def AUTO(self):
         return self.FlaggedInst(self, self.IOFlag.AUTO)
@@ -791,21 +1117,21 @@ class ArrayFunction(object):
     def PRODUCES(self):
         return self.FlaggedInst(self, self.IOFlag.PRODUCES)
 
-    def _get_columns(self, io_flag: IOFlag, _cache: Optional[set] = None, **kwargs) -> Set[str]:
+    def _get_columns(self, io_flag: IOFlag, call_cache: Optional[set] = None, **kwargs) -> Set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
         # start with an empty set
         columns = set()
 
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
 
         # declare _this_ call cached
-        _cache.add(self.FlaggedInst(self, io_flag))
+        call_cache.add(self.FlaggedInst(self, io_flag))
 
-        # add those of all other known instances
+        # add columns of all dependent objects
         for obj in (self.uses if io_flag == self.IOFlag.USES else self.produces):
             if isinstance(obj, (ArrayFunction, self.FlaggedInst)):
                 wrapped = obj
@@ -814,27 +1140,27 @@ class ArrayFunction(object):
                 elif obj.io_flag == self.IOFlag.AUTO:
                     wrapped = self.FlaggedInst(obj.inst, io_flag)
                 # skip when already cached
-                if wrapped in _cache:
+                if wrapped in call_cache:
                     continue
                 # either call used or produced columns
                 if wrapped.io_flag == self.IOFlag.USES:
-                    columns |= wrapped.inst._get_used_columns(_cache=_cache, **kwargs)
+                    columns |= wrapped.inst._get_used_columns(call_cache=call_cache, **kwargs)
                 else:
-                    columns |= wrapped.inst._get_produced_columns(_cache=_cache, **kwargs)
+                    columns |= wrapped.inst._get_produced_columns(call_cache=call_cache, **kwargs)
             else:
                 columns.add(obj)
 
         return columns
 
-    def _get_used_columns(self, _cache: Optional[set] = None) -> Set[str]:
-        return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
+    def _get_used_columns(self, call_cache: Optional[set] = None) -> Set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, call_cache=call_cache)
 
     @property
     def used_columns(self) -> Set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, _cache: Optional[set] = None) -> Set[str]:
-        return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
+    def _get_produced_columns(self, call_cache: Optional[set] = None) -> Set[str]:
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, call_cache=call_cache)
 
     @property
     def produced_columns(self) -> Set[str]:
@@ -848,9 +1174,10 @@ class ArrayFunction(object):
 
     def __call__(self, *args, **kwargs):
         """
-        Invokes the wrapped :py:attr:`func`, forwarding all *args* and *kwargs*.
+        Invokes the wrapped :py:attr:`func` while bound to this instance, forwarding all *args* and
+        *kwargs*.
         """
-        return self.func(*args, **kwargs)
+        return self.func.__get__(self, self.__class__)(*args, **kwargs)
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -866,15 +1193,22 @@ class TaskArrayFunction(ArrayFunction):
     all shifts, potentially resolving information from other :py:class:`TaskArrayFunction`
     instances registered in `py:attr:`uses`, `py:attr:`produces` and `py:attr:`shifts` itself.
 
-    Custom task requirements are be defined in a programmatic way by wrapping a function through a
-    decorator. A custom setup function, using results of the custom task requirements to (e.g.)
-    initialize some state, can be defined in a similar way. Any of these configurations can also be
-    updated based on attributes of a task using another wrapped function. Example:
+    As opposed to more basic :py:class:`ArrayFunction`'s, instances of *this* class can have a state
+    that can be altered as needed. For this purpose, an update function can be wrapped through a
+    decorator (similiar to ``property`` setters) as shown in the example below. When the update is
+    triggered, other task array functions referred to in :py:attr:`uses`, :py:attr:`produces` and
+    :py:attr:`shifts` are first copied (so that their state is consistent) and then updated
+    recursively. These copies are stored in a dictionary :py:attr:`stack`, using their names as
+    keys. In some way, this can be seen as a call stack and calls to any dependent object should be
+    done via copies in this dictionary in order to maintain their consistent state.
+
+    Custom task requirements, and a setup hook can be defined in a similar, programmatic way.
+    Example:
 
     .. code-block:: python
 
         # define the function to wrap, that requires some weights that are defined
-        def my_func(arr, weights, **kwargs):
+        def my_func(self, arr, weights, **kwargs):
             foo = arr.foo
             arr["bar"] = foo * weights
             return arr
@@ -900,6 +1234,13 @@ class TaskArrayFunction(ArrayFunction):
             weights = inputs["weights_task"].load(formatter="json")
             # add it to the call_kwargs which will be forwarded to every call to the main function
             call_kwargs["weights"] = weights
+
+        # another function using my_func
+        def my_other_func(self, arr, **kwargs):
+            # call the my_func copy
+            self.stack.my_func(arr, **kwargs)
+
+        ArrayFunction.new(my_func, uses={my_func}, produces={my_func})
 
     For a possible implementation, see :py:mod:`ap.production.pileup`.
 
@@ -930,11 +1271,24 @@ class TaskArrayFunction(ArrayFunction):
 
        The registered function performing the custom setup step, or *None*.
 
+    .. py:attribute:: call_force
+       type: None, bool
+
+       When a bool, this flag decides whether calls of this instance are cached. However, note that
+       when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
+       this attribute.
+
     .. py:attribute:: call_kwargs
        type: dict
 
        A dictionary of arguments that are set by :py:attr:`setup_func` and forwarded to the
        invocation of the wrapped functon.
+
+    .. py:attribute:: stack
+       type: DotDict
+
+       Dictionary providing named access to copies of all dependent objects in :py:attr:`uses`,
+       :py:attr:`produces` and :py:attr:`shifts`. It is empty until :py:meth:`run_update` is called.
     """
 
     def __init__(
@@ -944,32 +1298,65 @@ class TaskArrayFunction(ArrayFunction):
             str, "TaskArrayFunction", Sequence[str], Sequence["TaskArrayFunction"], Set[str],
             Set["TaskArrayFunction"],
         ]] = None,
+        call_force: Optional[bool] = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
         # store attributes
         self.shifts = set(law.util.make_list(shifts)) if shifts else set()
+        self.call_force = call_force
+
+        # wrapped functions
         self.update_func = None
         self.requires_func = None
         self.setup_func = None
+
+        # keyword arguments forwarded to actual wrapped function, generated during setup
         self.call_kwargs = None
 
-    def _get_all_shifts(self, _cache: Optional[set] = None) -> Set[str]:
+        # dict providing named access to copies of all dependent objects, generated during update
+        self.stack = DotDict()
+
+    def copy(self) -> "TaskArrayFunction":
+        """
+        Returns a copy if this instance.
+        """
+        inst = super().copy()
+
+        # add attributes
+        # call_kwargs and stack are not copied by choice
+        inst.shifts = set(self.shifts)
+        inst.update_func = self.update_func
+        inst.requires_func = self.requires_func
+        inst.setup_func = self.setup_func
+
+        return inst
+
+    def updated_copy(self, **kwargs):
+        """
+        Returns a copy if *this* instance and invokes its :py:meth:`run_update` method, forwarding
+        all *kwargs*.
+        """
+        inst = self.copy()
+        inst.run_update(**kwargs)
+        return inst
+
+    def _get_all_shifts(self, call_cache: Optional[set] = None) -> Set[str]:
         shifts = set()
 
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
 
-        # add those of all other known intances
+        # add shifts of all dependent objects
         for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.FlaggedInst):
                 obj = obj.inst
             if isinstance(obj, TaskArrayFunction):
-                if obj not in _cache:
-                    _cache.add(obj)
-                    shifts |= obj._get_all_shifts(_cache=_cache)
+                if obj not in call_cache:
+                    call_cache.add(obj)
+                    shifts |= obj._get_all_shifts(call_cache=call_cache)
             else:
                 shifts.add(obj)
 
@@ -983,11 +1370,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`update_func`
         which is used to update *this* instance dependent on specific task attributes. The function
-        should accept
-
-            - *self* (positional), the instance of the array function itself,
-            - and additional keyword arguments that are set depending on the task that invokes the
-              update.
+        is invoked while bound to this instance, fowarding all keyword arguments.
 
         In any case it is recommended for the wrapped function to catch all additional keyword
         arguments. The decorator does not return the wrapped function.
@@ -1002,35 +1385,57 @@ class TaskArrayFunction(ArrayFunction):
         """
         self.update_func = func
 
-    def run_update(self, _cache: Optional[set] = None, **kwargs) -> None:
+    def run_update(
+        self,
+        copy_cache: Optional[Dict[Any, Any]] = None,
+        call_cache: Optional[set] = None,
+        **kwargs,
+    ) -> None:
         """
         Recursively runs the update function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
-        all additional *kwargs*.
+        all additional *kwargs*. Other known instances are copied first to preserve their states.
         """
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
 
-        # run the update of all other known instances
+        # init the copy cache
+        if copy_cache is None:
+            copy_cache = {}
+
+        # replace dependent objects with copies
+        self.uses = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.uses}
+        self.produces = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.produces}
+        self.shifts = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.shifts}
+
+        # run this instance's update function, passing also all caches so that update functions
+        # of newly added, dependent objects can be triggered under same conditions
+        if self.update_func:
+            self.update_func.__get__(self, self.__class__)(
+                copy_cache=copy_cache,
+                call_cache=call_cache,
+                **kwargs,
+            )
+
+        # run the update of all dependent objects
         for obj in self.uses | self.produces | self.shifts:
             if isinstance(obj, self.FlaggedInst):
                 obj = obj.inst
-            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
-                _cache.add(obj)
-                obj.run_update(_cache=_cache, **kwargs)
-
-        # run this instance's update function
-        if self.update_func:
-            self.update_func(self, **kwargs)
+            if isinstance(obj, TaskArrayFunction):
+                # store the reference
+                self.stack[obj.name] = obj
+                # call its update
+                if obj not in call_cache:
+                    call_cache.add(obj)
+                    obj.run_update(copy_cache=copy_cache, call_cache=call_cache, **kwargs)
 
     def requires(self, func: Callable[["TaskArrayFunction", law.Task, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`requires_func`
-        which is used to define additional task requirements. The function should accept three
-        arguments,
+        which is used to define additional task requirements. The function is invoked while bound to
+        this instance and should accept two arguments,
 
-            - *self* (positional), the instance of the array function itself,
             - *task* (positional), the :py:class:`law.Task` instance, and
             - *reqs* (positional), a dictionary into which requirements should be inserted.
 
@@ -1050,7 +1455,7 @@ class TaskArrayFunction(ArrayFunction):
         self,
         task: law.Task,
         reqs: Optional[dict] = None,
-        _cache: Optional[set] = None,
+        call_cache: Optional[set] = None,
     ) -> dict:
         """
         Recursively creates the requirements of this and all other known instances (via
@@ -1058,34 +1463,34 @@ class TaskArrayFunction(ArrayFunction):
         instance. *reqs* defaults to an empty dictionary which should be filled to store the
         requirements.
         """
+        # default requirements
         if reqs is None:
             reqs = {}
 
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
-
-        # run the requirements of all other known instances
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
-                _cache.add(obj)
-                obj.run_requires(task, reqs=reqs)
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
 
         # run this instance's requires function
         if self.requires_func:
-            self.requires_func(self, task, reqs)
+            self.requires_func.__get__(self, self.__class__)(task, reqs)
+
+        # run the requirements of all dependent objects
+        for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
+            if isinstance(obj, TaskArrayFunction) and obj not in call_cache:
+                call_cache.add(obj)
+                obj.run_requires(task, reqs=reqs, call_cache=call_cache)
 
         return reqs
 
     def setup(self, func: Callable[[law.Task, dict, dict], dict]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:attr:`setup_func`
-        which is used to perform a custom setup of objects. The function should accept four
-        arguments,
+        which is used to perform a custom setup of objects. The function is invoked while bound to
+        this instance should accept three arguments,
 
-            - *self* (positional), the instance of the array function itself,
             - *task*, the :py:class:`law.Task` instance,
             - *inputs*, a dictionary with input targets corresponding to the requirements created by
               :py:meth:`run_requires`, and
@@ -1101,65 +1506,69 @@ class TaskArrayFunction(ArrayFunction):
         task: law.Task,
         inputs: dict,
         call_kwargs: Optional[dict] = None,
-        _cache: Optional[set] = None,
+        call_cache: Optional[set] = None,
     ) -> None:
         """
         Recursively runs the setup function of this and all other known instances (via
         :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
-        corresponding to the requirements created by :py:func:`run_requires`. *call_kwargs* defaults
-        to an empty dictionary which should be filled to store arguments which are later on passed
-        to the wrapped function.
+        corresponding to the requirements created by :py:func:`run_requires`.
         """
+        # init the call kwargs
         if call_kwargs is None:
             call_kwargs = {}
 
-        # init the cache to prevent same objects being called twice
-        if _cache is None:
-            _cache = set()
-
-        # run the setup of all other known instances
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
-                _cache.add(obj)
-                obj.run_setup(task, inputs, call_kwargs=call_kwargs, _cache=_cache)
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
 
         # run this instance's setup function
         if self.setup_func:
-            self.setup_func(self, task, inputs, call_kwargs)
+            self.setup_func.__get__(self, self.__class__)(task, inputs, call_kwargs)
 
-        # store the call kwargs
+        # run the setup of all dependent objects
+        for obj in self.uses | self.produces | self.shifts:
+            if isinstance(obj, self.FlaggedInst):
+                obj = obj.inst
+            if isinstance(obj, TaskArrayFunction) and obj not in call_cache:
+                call_cache.add(obj)
+                obj.run_setup(task, inputs, call_kwargs=call_kwargs, call_cache=call_cache)
+
+        # store call_kwargs in the end
         self.call_kwargs = call_kwargs
 
-    def __call__(self, *args, call_cache=None, call_force=False, **kwargs):
+    def __call__(
+        self,
+        *args,
+        call_cache: Optional[Union[bool, defaultdict]] = None,
+        call_force: Optional[bool] = None,
+        **kwargs,
+    ) -> Any:
         """
         Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
         :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
         Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before (identified by its class and :py:attr:`name`), it is not
-        called again but *None* is returned. This check can be bypassed for this call only by
-        setting *call_force* to *True*.
+        this instance was called before, it is not called again but *None* is returned. This check
+        is bypassed when either *call_force* is *True*, or when it is *None* and the
+        :py:attr:`call_force` attribute of this instance is *True*.
         """
         # call caching
-        cache_kwargs = {}
         if call_cache is not False:
             # setup a new call cache when not present yet
-            if call_cache is None:
+            if not isinstance(call_cache, dict):
                 call_cache = defaultdict(int)
 
-            # check if the instance was called before
-            cache_key = (self.__class__, self.name)
-            if call_cache[cache_key] > 0 and not call_force:
+            # check if the instance was called before or wether the call is forced
+            if call_force is None:
+                call_force = self.call_force
+            if call_cache[self] > 0 and not call_force:
                 return
 
             # increase the count and set kwargs for the call downstream
-            call_cache[cache_key] += 1
-            cache_kwargs["call_cache"] = call_cache
+            call_cache[self] += 1
 
         # stack all kwargs
-        kwargs = law.util.merge_dicts(cache_kwargs, self.call_kwargs or {}, kwargs)
+        kwargs = law.util.merge_dicts({"call_cache": call_cache}, self.call_kwargs or {}, kwargs)
 
         return super().__call__(*args, **kwargs)
 

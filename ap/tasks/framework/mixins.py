@@ -4,13 +4,17 @@
 Lightweight mixins task classes.
 """
 
-from typing import Union, Sequence, List, Set, Dict, Any
+from typing import Union, Sequence, List, Set, Dict, Any, Optional
 
 import law
 import luigi
 import order as od
 
 from ap.tasks.framework.base import AnalysisTask, ConfigTask
+from ap.calibration import Calibrator
+from ap.selection import Selector
+from ap.production import Producer
+from ap.ml import MLModel
 
 
 class CalibratorMixin(ConfigTask):
@@ -51,8 +55,6 @@ class CalibratorMixin(ConfigTask):
 
     @classmethod
     def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        from ap.calibration import Calibrator
-
         func = Calibrator.get(calibrator, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -117,8 +119,6 @@ class CalibratorsMixin(ConfigTask):
 
     @classmethod
     def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        from ap.calibration import Calibrator
-
         func = Calibrator.get(calibrator, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -191,8 +191,6 @@ class SelectorMixin(ConfigTask):
 
     @classmethod
     def get_selector_func(cls, selector, copy=True, **update_kwargs):
-        from ap.selection import Selector
-
         func = Selector.get(selector, copy=copy)
         if not func.exposed:
             raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
@@ -236,6 +234,13 @@ class SelectorStepsMixin(SelectorMixin):
     @classmethod
     def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         params = super().modify_param_values(params)
+
+        # expand selector step groups
+        if "config_inst" in params and len(params.get("selector_steps", ())) == 1:
+            config_inst = params["config_inst"]
+            step_group = params["selector_steps"][0]
+            if step_group in config_inst.x("selector_step_groups", {}):
+                params["selector_steps"] = tuple(config_inst.x.selector_step_groups[step_group])
 
         # sort selector steps when the order does not matter
         if not cls.selector_steps_order_sensitive and "selector_steps" in params:
@@ -293,8 +298,6 @@ class ProducerMixin(ConfigTask):
 
     @classmethod
     def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        from ap.production import Producer
-
         func = Producer.get(producer, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -359,8 +362,6 @@ class ProducersMixin(ConfigTask):
 
     @classmethod
     def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        from ap.production import Producer
-
         func = Producer.get(producer, copy=copy)
         if update_kwargs:
             func.run_update(**update_kwargs)
@@ -387,12 +388,111 @@ class ProducersMixin(ConfigTask):
     def store_parts(self):
         parts = super().store_parts()
 
-        part = "none"
         if self.producers:
             part = "__".join(self.producers[:5])
             if len(self.producers) > 5:
                 part += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"prod__{part}")
+            parts.insert_before("version", "producers", f"prod__{part}")
+
+        return parts
+
+
+class MLModelMixin(ConfigTask):
+
+    ml_model = luigi.Parameter(
+        default=law.NO_STR,
+        description="the name of the ML model to the applied; default: value of the "
+        "'default_ml_model' config",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        # add the default ml model when empty
+        if "config_inst" in params:
+            config_inst = params["config_inst"]
+            if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
+                params["ml_model"] = config_inst.x.default_ml_model
+
+            # initialize it once to trigger its set_config hook
+            if params.get("ml_model") not in (law.NO_STR, None):
+                cls.get_ml_model_inst(params["ml_model"], config_inst)
+
+        return params
+
+    @classmethod
+    def get_ml_model_inst(
+        cls,
+        ml_model: str,
+        config_inst: Optional[od.Config] = None,
+        copy: bool = True,
+    ) -> MLModel:
+        ml_model_inst = MLModel.get(ml_model, copy=True)
+        if config_inst:
+            ml_model_inst.set_config(config_inst)
+
+        return ml_model_inst
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the ML model instance
+        self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
+
+    def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
+        # evaluate whether the events for the combination of dataset_inst and shift_inst
+        # shall be used in the training
+        return (
+            dataset_inst in self.ml_model_inst.used_datasets and
+            not shift_inst.x("disjoint_from_nominal", False)
+        )
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+        ml_model = f"ml__{self.ml_model}" if self.ml_model != law.NO_STR else "none"
+        parts.insert_before("version", "ml_model", ml_model)
+        return parts
+
+
+class MLModelsMixin(ConfigTask):
+
+    ml_models = law.CSVParameter(
+        default=(),
+        description="comma-separated names of ML models to be applied; empty default",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        if "config_inst" in params:
+            config_inst = params["config_inst"]
+            if params.get("ml_models") == () and config_inst.x("default_ml_model", None):
+                params["ml_models"] = (config_inst.x.default_ml_model,)
+
+            # initialize them once to trigger their set_config hook
+            if params.get("ml_models"):
+                for ml_model in params["ml_models"]:
+                    MLModelMixin.get_ml_model_inst(ml_model, config_inst)
+
+        return params
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the ML model instances
+        self.ml_model_insts = [
+            MLModelMixin.get_ml_model_inst(ml_model, self.config_inst)
+            for ml_model in self.ml_models
+        ]
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+
+        if self.ml_models:
+            part = "__".join(self.ml_models)
+            parts.insert_before("version", "ml_models", f"ml__{part}")
 
         return parts
 
@@ -422,7 +522,7 @@ class CategoriesMixin(ConfigTask):
                 config_inst.x("category_groups", {}),
                 deep=True,
             )
-            params["categories"] = tuple(sorted(categories))
+            params["categories"] = tuple(categories)
 
         return params
 
@@ -438,8 +538,8 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(),
-        description="comma-separated variable names or patterns to select; can also be the key of a "
-        "mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
+        description="comma-separated variable names or patterns to select; can also be the key of "
+        "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
     )
 
@@ -462,7 +562,7 @@ class VariablesMixin(ConfigTask):
                 )
             else:
                 variables = config_inst.variables.names()
-            params["variables"] = tuple(sorted(variables))
+            params["variables"] = tuple(variables)
 
         return params
 
@@ -532,7 +632,7 @@ class DatasetsProcessesMixin(ConfigTask):
                     for dataset_inst in config_inst.datasets
                     if any(map(dataset_inst.has_process, sub_process_insts))
                 )
-            params["datasets"] = tuple(sorted(datasets))
+            params["datasets"] = tuple(datasets)
 
         return params
 
@@ -578,7 +678,7 @@ class ShiftSourcesMixin(ConfigTask):
                 config_inst.x("shift_groups", {}),
             )
             # convert back to sources
-            params["shift_sources"] = tuple(sorted(cls.reduce_shifts(shifts)))
+            params["shift_sources"] = tuple(cls.reduce_shifts(shifts))
 
         return params
 

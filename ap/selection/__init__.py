@@ -26,6 +26,22 @@ class Selector(TaskArrayFunction):
         # an actual SelectionResult
         self.exposed = exposed
 
+        # when not exposed and call_force is not specified,
+        # set it to True which prevents calls from being cached
+        if self.call_force is None and not self.exposed:
+            self.call_force = True
+
+    def copy(self) -> "Selector":
+        """
+        Returns a copy if this instance.
+        """
+        inst = super().copy()
+
+        # additional attributes
+        inst.exposed = self.exposed
+
+        return inst
+
 
 def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
     """
@@ -107,7 +123,8 @@ class SelectionResult(object):
         # update fields in-place
         self.main.update(other.main)
         self.steps.update(other.steps)
-        self.objects.update(other.objects)
+        # use deep merging for objects
+        law.util.merge_dicts(self.objects, other.objects, inplace=True, deep=True)
 
         return self
 
@@ -137,6 +154,9 @@ class SelectionResult(object):
         if self.steps:
             to_merge["steps"] = ak.zip(self.steps)
         if self.objects:
-            to_merge["objects"] = ak.zip(self.objects, depth_limit=1)  # limit due to ragged axis 1
+            to_merge["objects"] = ak.zip({
+                src_name: ak.zip(dst_dict, depth_limit=1)  # limit due to ragged axis 1
+                for src_name, dst_dict in self.objects.items()
+            })
 
         return ak.zip(law.util.merge_dicts(self.main, to_merge))

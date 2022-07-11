@@ -5,10 +5,10 @@ Collection of general helpers and utilities.
 """
 
 __all__ = [
-    "env_is_remote", "env_is_dev", "primes",
-    "DotDict", "MockModule",
+    "UNSET", "env_is_remote", "env_is_dev", "primes",
+    "FunctionArgs", "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
+    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
 ]
 
 
@@ -27,6 +27,9 @@ from types import ModuleType
 import law
 
 
+#: Placeholder for an unset value.
+UNSET = object()
+
 #: Boolean denoting whether the environment is in a remote job (based on ``AP_REMOTE_JOB``).
 env_is_remote = law.util.flag_to_bool(os.getenv("AP_REMOTE_JOB", "0"))
 
@@ -41,6 +44,23 @@ primes = [
     311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421,
     431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541,
 ]
+
+
+class FunctionArgs(object):
+    """
+    Leight-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
+    different functions with them.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+        # store attributes
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, func: Callable) -> Any:
+        return func(*self.args, **self.kwargs)
 
 
 class DotDict(dict):
@@ -136,14 +156,21 @@ class MockModule(object):
         return False
 
 
-def maybe_import(name: str, package: Optional[str] = None) -> Union[ModuleType, MockModule]:
+def maybe_import(
+    name: str,
+    package: Optional[str] = None,
+    force: bool = False,
+) -> Union[ModuleType, MockModule]:
     """
     Calls *importlib.import_module* internally and returns the module if it exists, or otherwise a
-    :py:class:`MockModule` instance with the same name.
+    :py:class:`MockModule` instance with the same name. When *force* is *True* and the import fails,
+    an *ImportError* is raised.
     """
     try:
         return importlib.import_module(name, package)
     except ImportError:
+        if force:
+            raise
         if package:
             name = package + name
         return MockModule(name)
@@ -379,7 +406,7 @@ def dev_sandbox(sandbox: str) -> str:
     return law.Sandbox.join_key(_type, dev_path)
 
 
-def freeze(cont):
+def freeze(cont: Any) -> Any:
     """Constructs an immutable version of a native Python container.
 
     Recursively replaces all mutable containers (``dict``, ``list``, ``set``) encountered within
@@ -396,7 +423,7 @@ def freeze(cont):
     return cont
 
 
-def memoize(f):
+def memoize(f: Callable) -> Callable:
     """
     Function decorator that implements memoization. Function results are cached on
     first call and returned from cache on every subsequent call with the same arguments.
@@ -411,3 +438,10 @@ def memoize(f):
         return _cache[frozen_args]
 
     return wrapper
+
+
+def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
+    """
+    Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
+    """
+    return (a / b) if b else 0.0

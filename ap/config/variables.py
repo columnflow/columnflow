@@ -14,6 +14,12 @@ def add_variables(config: od.Config) -> None:
     Adds all variables to a *config*.
     """
     config.add_variable(
+        name="lhe_weight",
+        expression="LHEWeight.originalXWGTUP",
+        binning=(200, -10, 10),
+        x_title="LHE weight",
+    )
+    config.add_variable(
         name="ht",
         binning=[0, 80, 120, 160, 200, 240, 280, 320, 400, 500, 600, 800],
         unit="GeV",
@@ -31,7 +37,7 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="electron1_pt",
-        expression="Electron.pt.0",
+        expression="Electron.pt[:,0]",
         null_value=EMPTY_FLOAT,
         binning=(40, 0., 400.),
         unit="GeV",
@@ -39,7 +45,7 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="muon1_pt",
-        expression="Muon.pt.0",
+        expression="Muon.pt[:,0]",
         null_value=EMPTY_FLOAT,
         binning=(40, 0., 400.),
         unit="GeV",
@@ -57,7 +63,7 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="jet1_pt",
-        expression="Jet.pt.0",
+        expression="Jet.pt[:,0]",
         null_value=EMPTY_FLOAT,
         binning=(40, 0., 400.),
         unit="GeV",
@@ -65,7 +71,7 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="jet2_pt",
-        expression="Jet.pt.1",
+        expression="Jet.pt[:,1]",
         null_value=EMPTY_FLOAT,
         binning=(40, 0., 400.),
         unit="GeV",
@@ -73,7 +79,7 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="jet3_pt",
-        expression="Jet.pt.2",
+        expression="Jet.pt[:,2]",
         null_value=EMPTY_FLOAT,
         binning=(40, 0., 400.),
         unit="GeV",
@@ -81,21 +87,21 @@ def add_variables(config: od.Config) -> None:
     )
     config.add_variable(
         name="jet1_eta",
-        expression="Jet.eta.0",
+        expression="Jet.eta[:,0]",
         null_value=EMPTY_FLOAT,
         binning=(50, -2.5, 2.5),
         x_title=r"Jet 1 $\eta$",
     )
     config.add_variable(
         name="jet2_eta",
-        expression="Jet.eta.1",
+        expression="Jet.eta[:,1]",
         null_value=EMPTY_FLOAT,
         binning=(50, -2.5, 2.5),
         x_title=r"Jet 2 $\eta$",
     )
     config.add_variable(
         name="jet3_eta",
-        expression="Jet.eta.2",
+        expression="Jet.eta[:,2]",
         null_value=EMPTY_FLOAT,
         binning=(50, -2.5, 2.5),
         x_title=r"Jet 3 $\eta$",

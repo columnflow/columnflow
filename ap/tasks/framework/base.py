@@ -179,23 +179,34 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 )
             return _cache["has_obj_func"](name)
 
-        # define the lookup as the given names plus all matching lists in object groups
-        lookup = set(names)
-        lookup.update(*[object_groups.get(name, []) for name in names])
+        object_names = []
+        patterns = []
+        lookup = list(names)
+        while lookup:
+            name = lookup.pop(0)
+            if has_obj(name):
+                # known object
+                object_names.append(name)
+            elif object_groups and name in object_groups:
+                # a key in the object group dict
+                lookup.extend(list(object_groups[name]))
+            elif accept_patterns:
+                # must eventually be a pattern, store it for object traversal
+                # special case
+                if name == "*":
+                    object_names = list(get_all_object_names())
+                    del patterns[:]
+                    break
+                patterns.append(name)
 
-        # if patterns are allowed, we can treat the input names *lookup* directly as patterns and check all object names
-        if accept_patterns:
-            filterfunc = functools.partial(law.util.multi_match, patterns=lookup)
-            unfiltered_list = get_all_object_names()
-        else:
-            # if patterns are not allowed, we really need to check the individual names in *lookup*
-            filterfunc = has_obj
-            unfiltered_list = lookup
+        # if patterns are found, loop through them to preserve the order of patterns
+        # and compare to all existing names
+        for pattern in patterns:
+            for name in get_all_object_names():
+                if law.util.multi_match(name, pattern):
+                    object_names.append(name)
 
-        # apply the filter func to the full list of names
-        object_names = set(filter(filterfunc, unfiltered_list))
-
-        return object_names
+        return law.util.make_unique(object_names)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -860,18 +871,19 @@ def wrapper_factory(
                         f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
                     )
                 if self.wrapper_has_skip_configs:
-                    configs -= self.find_config_objects(
+                    skip_configs = self.find_config_objects(
                         self.skip_configs,
                         self.analysis_inst,
                         od.Config,
                         self.analysis_inst.x("config_groups", {}),
                     )
+                    configs = [c for c in configs if c not in skip_configs]
                     if not configs:
                         raise ValueError(
                             f"no configs found in analysis {self.analysis_inst} after skipping "
                             f"{self.skip_configs}",
                         )
-                config_insts = list(map(self.analysis_inst.get_config, configs))
+                config_insts = list(map(self.analysis_inst.get_config, sorted(configs)))
             else:
                 config_insts = [self.config_inst]
 
@@ -895,19 +907,20 @@ def wrapper_factory(
                             f"no shifts found in config {config_inst} matching {self.shifts}",
                         )
                     if self.wrapper_has_skip_shifts:
-                        shifts -= self.find_config_objects(
+                        skip_shifts = self.find_config_objects(
                             self.skip_shifts,
                             config_inst,
                             od.Shift,
                             config_inst.x("shift_groups", {}),
                         )
+                        shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
                         raise ValueError(
                             f"no shifts found in config {config_inst} after skipping "
                             f"{self.skip_shifts}",
                         )
-                    shifts = sorted(shifts)
                     # move "nominal" to the front if present
+                    shifts = sorted(shifts)
                     if "nominal" in shifts:
                         shifts.insert(0, shifts.pop(shifts.index("nominal")))
                     prod_sequences.append(shifts)
@@ -926,12 +939,13 @@ def wrapper_factory(
                             f"{self.datasets}",
                         )
                     if self.wrapper_has_skip_datasets:
-                        datasets -= self.find_config_objects(
+                        skip_datasets = self.find_config_objects(
                             self.skip_datasets,
                             config_inst,
                             od.Dataset,
                             config_inst.x("dataset_groups", {}),
                         )
+                        datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
                             raise ValueError(
                                 f"no datasets found in config {self.config_inst} after skipping "

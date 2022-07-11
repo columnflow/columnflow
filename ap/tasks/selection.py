@@ -13,7 +13,7 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.calibration import CalibrateEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import ensure_proxy, dev_sandbox, safe_div
 
 
 class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -64,8 +64,8 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            Route, ChunkedReader, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet, get_ak_routes, remove_ak_column,
+            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -92,7 +92,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
         # define columns that will be saved
         keep_columns = self.selector_func.produced_columns
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -115,10 +115,10 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 # book-keeping of stats
 
                 # apply the calibrated diffs
-                update_ak_array(events, *diffs)
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
-                add_ak_aliases(events, aliases)
+                events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
                 results = self.selector_func(events, stats, **self.get_selector_kwargs(self))
@@ -128,17 +128,9 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 result_chunks[(lfn_index, pos.index)] = chunk
                 reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
-                # filter events if columns are produced
+                # remove columns
                 if keep_columns:
-                    # manually remove colums that should not be kept
-                    if not remove_routes:
-                        remove_routes = {
-                            route
-                            for route in get_ak_routes(events)
-                            if not law.util.multi_match(route.column, keep_columns)
-                        }
-                    for route in remove_routes:
-                        events = remove_ak_column(events, route)
+                    events = route_filter(events)
 
                     # save additional columns as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
@@ -158,9 +150,8 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         outputs["stats"].dump(stats, formatter="json")
 
         # print some stats
-        save_div = lambda x, y: (x / y) if y else 0.0
-        eff = save_div(stats["n_events_selected"], stats["n_events"])
-        eff_weighted = save_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
+        eff = safe_div(stats["n_events_selected"], stats["n_events"])
+        eff_weighted = safe_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
         self.publish_message(f"all events         : {int(stats['n_events'])}")
         self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
         self.publish_message(f"efficiency         : {eff:.4f}")

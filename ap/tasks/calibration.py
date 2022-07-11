@@ -45,8 +45,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, remove_ak_column,
-            sorted_ak_to_parquet,
+            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -68,7 +67,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
         # define columns that will be saved
         keep_columns = self.calibrator_func.produced_columns
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -88,15 +87,8 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
                 # just invoke the calibration function
                 self.calibrator_func(events, **self.get_calibrator_kwargs(self))
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")

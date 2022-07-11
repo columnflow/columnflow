@@ -25,6 +25,7 @@ ak = maybe_import("awkward")
     produces={process_ids, "normalization_weight"},
 )
 def normalization_weights(
+    self: Producer,
     events: ak.Array,
     selection_stats: Dict[str, Union[int, float]],
     xs_table: sp.sparse.lil.lil_matrix,
@@ -38,7 +39,7 @@ def normalization_weights(
     normalization weight.
     """
     # add process ids
-    process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    self.stack.process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
 
     # stop here for data
     if dataset_inst.is_data:
@@ -65,8 +66,8 @@ def normalization_weights_requires(self: Producer, task: law.Task, reqs: dict) -
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
-    # do nothing when requirements are already present or for data
-    if reqs.get("selection_stats") is not None or task.dataset_inst.is_data:
+    # do nothing for data
+    if task.dataset_inst.is_data:
         return reqs
 
     from ap.tasks.selection import MergeSelectionStats
@@ -91,11 +92,8 @@ def normalization_weights_setup(
         - "xs_table": A sparse array serving as a lookup table for all processes known to the
                       config of the *task*, with keys being process ids.
     """
-    if call_kwargs.get("selection_stats") is not None:
-        # do nothing when already present
-        return
+    # set to None for data
     if task.dataset_inst.is_data:
-        # set to None for data
         call_kwargs.setdefault("selection_stats", None)
         call_kwargs.setdefault("xs_table", None)
         return

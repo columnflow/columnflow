@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import ensure_proxy, dev_sandbox, safe_div
 
 
 class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -47,8 +47,8 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
     @ensure_proxy
     def run(self):
         from ap.columnar_util import (
-            Route, ChunkedReader, mandatory_coffea_columns, get_ak_routes, update_ak_array,
-            add_ak_aliases, remove_ak_column, sorted_ak_to_parquet,
+            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet, set_ak_column,
         )
 
         # prepare inputs and outputs
@@ -68,7 +68,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
         load_columns = keep_columns | set(mandatory_coffea_columns)
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
-        remove_routes = None
+        route_filter = RouteFilter(keep_columns)
 
         # event counters
         n_all = 0
@@ -94,14 +94,11 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # here, we would simply apply the mask from the selection results
-                # to filter events and objects
-
                 # add the calibrated diffs and potentially new columns
-                update_ak_array(events, *diffs)
+                events = update_ak_array(events, *diffs)
 
                 # add aliases
-                add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
                 # build the event mask
                 if self.selector_steps:
@@ -124,24 +121,22 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                 events = events[event_mask]
                 n_reduced += len(events)
 
-                # apply all object masks whose names are present
-                # TODO: this should not be done automagically based on names as there might be
-                #       multiple collections of the same object type
-                for name in sel.objects.fields:
-                    if name in events.fields:
-                        # apply the event mask to the object mask first
-                        object_mask = sel.objects[name][event_mask]
-                        events[name] = events[name][object_mask]
+                # loop through all object selection, go through their masks
+                # and create new collections if required
+                for src_name in sel.objects.fields:
+                    # get all destination collections, handling those named identically to the
+                    # source collection last
+                    dst_names = sel["objects", src_name].fields
+                    if src_name in dst_names:
+                        dst_names.remove(src_name)
+                        dst_names.append(src_name)
+                    for dst_name in dst_names:
+                        object_mask = sel.objects[src_name, dst_name][event_mask]
+                        dst_collection = events[src_name][object_mask]
+                        set_ak_column(events, dst_name, dst_collection)
 
-                # manually remove colums that should not be kept
-                if not remove_routes:
-                    remove_routes = {
-                        route
-                        for route in get_ak_routes(events)
-                        if not law.util.multi_match(route.column, keep_columns)
-                    }
-                for route in remove_routes:
-                    events = remove_ak_column(events, route)
+                # remove columns
+                events = route_filter(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
@@ -149,9 +144,8 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
                 reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
-        save_div = lambda x, y: (x / y) if y else 0.0
         self.publish_message(
-            f"reduced {n_all} to {n_reduced} events ({save_div(n_reduced, n_all) * 100:.2f}%)",
+            f"reduced {n_all} to {n_reduced} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
         )
 
         # merge output files

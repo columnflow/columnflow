@@ -4,23 +4,26 @@
 Calibration methods for testing purposes.
 """
 
-from ap.calibration import calibrator
+from ap.calibration import Calibrator, calibrator
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
+from ap.production.seeds import deterministic_seeds
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
 @calibrator(
-    uses={"nJet", "Jet.pt", "Jet.mass"},
+    uses={
+        "nJet", "Jet.pt", "Jet.mass",
+    },
     produces={
         "Jet.pt", "Jet.mass",
         "Jet.pt_jec_up", "Jet.mass_jec_up",
         "Jet.pt_jec_down", "Jet.mass_jec_down",
     },
 )
-def jec_test(events, **kwargs):
+def jec_test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
     # b) add 4 new columns representing the effect of JEC variations
 
@@ -42,8 +45,13 @@ def jec_test(events, **kwargs):
     return events
 
 
-@calibrator(uses={jec_test}, produces={jec_test})
-def test(events, **kwargs):
-    jec_test(events, **kwargs)
+@calibrator(
+    uses={jec_test, deterministic_seeds},
+    produces={jec_test, deterministic_seeds},
+)
+def test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    self.stack.jec_test(events, **kwargs)
+
+    self.stack.deterministic_seeds(events, **kwargs)
 
     return events

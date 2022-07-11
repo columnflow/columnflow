@@ -10,7 +10,7 @@ import law
 
 from ap.tasks.framework.base import ShiftTask
 from ap.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, PlotMixin, CategoriesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin, CategoriesMixin,
     VariablesMixin, DatasetsProcessesMixin, ShiftSourcesMixin,
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
@@ -20,7 +20,6 @@ from ap.util import DotDict
 
 class ProcessPlotBase(
     CategoriesMixin,
-    VariablesMixin,
     DatasetsProcessesMixin,
     PlotMixin,
 ):
@@ -36,9 +35,11 @@ class ProcessPlotBase(
 
 class PlotVariables(
     ShiftTask,
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
     HTCondorWorkflow,
@@ -95,7 +96,7 @@ class PlotVariables(
         }
 
         # histogram data per process
-        hists = OrderedDict()
+        hists = {}
 
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
@@ -142,6 +143,12 @@ class PlotVariables(
             # there should be hists to plot
             if not hists:
                 raise Exception("no histograms found to plot")
+
+            # sort hists by process order
+            hists = OrderedDict(
+                (process_inst, hists[process_inst])
+                for process_inst in sorted(hists, key=process_insts.index)
+            )
 
             # create the stack and a fake data hist using the smeared sum
             data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
@@ -253,9 +260,11 @@ class PlotVariables(
 
 
 class PlotShiftedVariables(
+    MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     ProcessPlotBase,
     ShiftSourcesMixin,
     law.LocalWorkflow,
@@ -376,15 +385,16 @@ class PlotShiftedVariables(
             ax.set_ylabel(variable_inst.get_full_y_title())
             ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
 
-            norm = h_sum[{"shift": "nominal"}].view().value
+            # nominal shift id is always 0
+            norm = h_sum[{"shift": 0}].view().value
             rax.step(
                 x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": shift_inst_up.name}].view().value / norm,
+                y=h_sum[{"shift": shift_inst_up.id}].view().value / norm,
                 color="red",
             )
             rax.step(
                 x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": shift_inst_down.name}].view().value / norm,
+                y=h_sum[{"shift": shift_inst_down.id}].view().value / norm,
                 color="blue",
             )
             rax.axhline(y=1., color="black")
