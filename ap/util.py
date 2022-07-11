@@ -496,7 +496,7 @@ def pattern_matcher(pattern: str) -> Callable[[str], bool]:
         matcher("foo123")  # -> True
         matcher("bar123")  # -> False
 
-        matcher = pattern_matcher(r"^foo\d+.*")
+        matcher = pattern_matcher(r"^foo\d+.*$")
         matcher("foox")  # -> False
         matcher("foo1")  # -> True
     """
