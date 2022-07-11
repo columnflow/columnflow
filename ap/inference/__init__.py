@@ -6,7 +6,7 @@ Basic objects for defining statistical inference models.
 
 import enum
 import copy as _copy
-from typing import Optional, Any, Tuple, List, Union, Dict, Generator, Callable, TextIO, Sequence
+from typing import Optional, Tuple, List, Union, Dict, Generator, Callable, TextIO, Sequence
 
 import law
 import order as od
@@ -51,39 +51,38 @@ class InferenceModel(object):
 
         categories:
           - name: cat1
-            source: 1e
+            category: 1e
             variable: ht
-            data: [data_mu_a]
+            data_datasets: [data_mu_a]
             data_from_processes: []
             mc_stats: True
             processes:
               - name: HH
+                process: hh
                 signal: True
-                source: hh
-                mc: [hh_ggf]
+                mc_datasets: [hh_ggf]
                 parameters:
                   - name: lumi
                     type: rate
                     effect: 1.02
-                    source: null
+                    shift_source: null
                   - name: pu
                     type: rate
                     effect: [0.97, 1.02]
-                    source: null
+                    shift_source: null
                   - name: pileup
                     type: shape
                     effect: 1.0
-                    source: minbias_xs
+                    shift_source: minbias_xs
               - name: tt
                 signal: False
-                source: ttbar
-                mc: [tt_sl, tt_dl, tt_fh]
+                process: ttbar
+                mc_datasets: [tt_sl, tt_dl, tt_fh]
                 parameters:
                   - name: lumi
                     type: rate
                     effect: 1.02
-                    source: null
-            extra: Arbitrary content
+                    shift_source: null
 
           - name: cat2
             ...
@@ -172,6 +171,9 @@ class InferenceModel(object):
     def model_spec(cls) -> DotDict:
         """
         Returns a dictionary representing the top-level structure of the model.
+
+            - *categories*: List of :py:meth:`category_spec` objects.
+            - *parameter_groups*: List of :py:meth:`paramter_group_spec` objects.
         """
         return DotDict([
             ("categories", []),
@@ -182,44 +184,57 @@ class InferenceModel(object):
     def category_spec(
         cls,
         name: str,
-        variable: str,
-        data: Optional[Sequence[str]] = None,
+        category: Optional[str] = None,
+        variable: Optional[str] = None,
+        data_datasets: Optional[Sequence[str]] = None,
         data_from_processes: Optional[Sequence[str]] = None,
         mc_stats: bool = False,
-        source: Optional[str] = None,
-        extra: Optional[Any] = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a category (interchangeably called bin or channel in other
         tools), forwarding all arguments.
+
+            - *name*: The name of the category in the model.
+            - *category*: The name of the source category in the config to use. Note the possibly
+              ambiguous yet consistent naming.
+            - *variable*: The name of the variable in the config to use.
+            - *data_datasets*: List of names of datasets in the config to use for real data.
+            - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
+              when *data_datasets* is not defined, make of a fake data contribution.
+            - *mc_stats*: A boolean flag deciding whether MC stat uncertainties are to be applied.
         """
         return DotDict([
             ("name", str(name)),
-            ("variable", str(variable)),
-            ("source", str(source) if source is not None else None),
-            ("data", list(map(str, data or []))),
-            ("data_from_processes", list(map(str, data or []))),
+            ("category", str(category) if category else None),
+            ("variable", str(variable) if variable else None),
+            ("data_datasets", list(map(str, data_datasets or []))),
+            ("data_from_processes", list(map(str, data_from_processes or []))),
             ("mc_stats", bool(mc_stats)),
             ("processes", []),
-            ("extra", extra),
         ])
 
     @classmethod
     def process_spec(
         cls,
         name: str,
+        process: Optional[str] = None,
         signal: bool = False,
-        source: Optional[str] = None,
-        mc: Optional[Sequence[str]] = None,
+        mc_datasets: Optional[Sequence[str]] = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
+
+            - *name*: The name of the process in the model.
+            - *process*: The name of the source process in the config to use. Note the possibly
+              ambiguous yet consistent naming.
+            - *signal*: A boolean flag deciding whether this process describes signal.
+            - *mc_datasets*: List of names of MC datasets in the config to use.
         """
         return DotDict([
             ("name", str(name)),
+            ("process", str(process) if process else None),
             ("signal", bool(signal)),
-            ("source", str(source) if source is not None else None),
-            ("mc", list(map(str, mc or []))),
+            ("mc_datasets", list(map(str, mc_datasets or []))),
             ("parameters", []),
         ])
 
@@ -228,16 +243,23 @@ class InferenceModel(object):
         cls,
         name: str,
         type: Union[ParameterType, str],
-        source: Optional[str] = None,
+        shift_source: Optional[str] = None,
         effect: Union[float, Tuple[float, float]] = 1.0,
     ) -> DotDict:
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
+
+            - *name*: The name of the parameter in the model.
+            - *type*: A :py:class:`ParameterType` instance describing the type of this parameter.
+            - *shift_source*: The name of a systematic shift source in the config that this
+              parameter corresponds to.
+            - *effect*: A float or a 2-tuple with two floats describing the down and up variation
+              of this parameter.
         """
         return DotDict([
             ("name", str(name)),
             ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
-            ("source", str(source) if source is not None else None),
+            ("shift_source", str(shift_source) if shift_source else None),
             ("effect", float(effect) if isinstance(effect, (int, float)) else tuple(map(float, effect))),
         ])
 
@@ -245,13 +267,17 @@ class InferenceModel(object):
     def parameter_group_spec(
         cls,
         name: str,
+        parameter_names: Optional[Sequence[str]] = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a group of parameter names.
+
+            - *name*: The name of the parameter group in the model.
+            - *parameter_names*: Names of parameter objects this group contains.
         """
         return DotDict([
             ("name", str(name)),
-            ("parameter_names", []),
+            ("parameter_names", list(map(str, parameter_names or []))),
         ])
 
     def __init__(

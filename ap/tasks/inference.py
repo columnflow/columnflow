@@ -51,19 +51,19 @@ class CreateDatacards(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
-                        param_obj.source
+                        param_obj.shift_source
                         for param_obj in proc_obj.parameters
-                        if param_obj.type.is_shape and param_obj.source
+                        if param_obj.type.is_shape and param_obj.shift_source
                     ),
                     variables=(cat_obj.variable,),
                     branch=-1,
                     _exclude={"branches"},
                 )
-                for dataset in proc_obj.mc
+                for dataset in proc_obj.mc_datasets
             }
             for proc_obj in cat_obj.processes
         }
-        if cat_obj.data:
+        if cat_obj.data_datasets:
             reqs["data"] = {
                 dataset: MergeHistograms.req(
                     self,
@@ -73,14 +73,14 @@ class CreateDatacards(
                     tree_index=0,
                     _exclude={"branches"},
                 )
-                for dataset in cat_obj.data
+                for dataset in cat_obj.data_datasets
             }
 
         return reqs
 
     def output(self):
         cat_obj = self.branch_data
-        basename = lambda name, ext: f"{name}__cat_{cat_obj.source}__var_{cat_obj.variable}.{ext}"
+        basename = lambda name, ext: f"{name}__cat_{cat_obj.category}__var_{cat_obj.variable}.{ext}"
 
         return {
             "card": self.local_target(basename("datacard", "txt")),
@@ -98,8 +98,8 @@ class CreateDatacards(
 
         # prepare config objects
         cat_obj = self.branch_data
+        category_inst = self.config_inst.get_category(cat_obj.category)
         variable_inst = self.config_inst.get_variable(cat_obj.variable)
-        category_inst = self.config_inst.get_category(cat_obj.source)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process
@@ -112,7 +112,7 @@ class CreateDatacards(
                     process_inst = self.config_inst.get_process("data")
                 else:
                     proc_obj = self.inference_model_inst.get_process(proc_obj_name, category=cat_obj.name)
-                    process_inst = self.config_inst.get_process(proc_obj.source)
+                    process_inst = self.config_inst.get_process(proc_obj.process)
                 sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
                 h_proc = None
@@ -168,11 +168,11 @@ class CreateDatacards(
                 # per shift
                 if proc_obj:
                     for param_obj in proc_obj.parameters:
-                        if param_obj.type.is_shape or not param_obj.source:
+                        if not param_obj.type.is_shape or not param_obj.shift_source:
                             continue
                         hists[proc_obj_name][param_obj.name] = {}
                         for d in ["up", "down"]:
-                            shift_inst = self.config_inst.get_shift(f"{param_obj.source}_{d}")
+                            shift_inst = self.config_inst.get_shift(f"{param_obj.shift_source}_{d}")
                             hists[proc_obj_name][param_obj.name][d] = h_proc[
                                 {"shift": hist.loc(shift_inst.id)}
                             ]

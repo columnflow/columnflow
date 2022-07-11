@@ -303,7 +303,7 @@ class DatacardWriter(object):
 
             # dedicated data handling
             cat_obj = self.inference_model_inst.get_category(cat_name)
-            if cat_obj.data:
+            if cat_obj.data_datasets:
                 if "data" not in hists:
                     raise Exception(
                         f"the inference model '{self.inference_model_inst.name}' is configured to "
