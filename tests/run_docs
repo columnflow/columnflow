@@ -23,6 +23,6 @@ action() {
         source "$ap_dir/sandboxes/venv_docs_dev.sh" "" && \
         cd "$ap_dir/docs" && \
         make html
-    )
+    ) || return "$?"
 }
 action "$@"

@@ -17,10 +17,10 @@ action() {
 
         if [ -z "$sandbox" ]; then
             echo "testing $mod ..."
-            ( cd "$ap_dir"; python -m unittest "$mod" )
+            ( cd "$ap_dir"; python -m unittest "tests.$mod" )
         else
             echo "testing $mod in sandbox $sandbox ..."
-            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && python -m unittest $mod" )
+            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && python -m unittest tests.$mod" )
         fi
     }
 
@@ -29,12 +29,12 @@ action() {
     local ret
 
     # test_util
-    run_test tests.test_util
+    run_test test_util
     ret="$?"
     [ "$gret" = "0" ] && gret="$ret"
 
     # test_columnar_util
-    run_test tests.test_columnar_util "venv_columnar${dev}.sh"
+    run_test test_columnar_util "venv_columnar${dev}.sh"
     ret="$?"
     [ "$gret" = "0" ] && gret="$ret"
 
