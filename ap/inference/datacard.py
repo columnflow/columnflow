@@ -88,7 +88,6 @@ class DatacardWriter(object):
         # shape lines
         blocks.shapes = [("shapes", "*", "*", shapes_path_ref, nom_pattern, syst_pattern)]
         separators.add("shapes")
-        separators.add("shapes")
 
         # observations
         if all("data" in _rates for _rates in rates.values()):
