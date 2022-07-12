@@ -10,7 +10,10 @@ from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from ap.tasks.framework.mixins import CalibratorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
-from ap.util import ensure_proxy, dev_sandbox
+from ap.util import maybe_import, ensure_proxy, dev_sandbox
+
+
+ak = maybe_import("awkward")
 
 
 class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -84,6 +87,11 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+                # would result in the coffea behavior being partially lost after new columns are
+                # added, which - for some reason - does not happen on copies
+                events = ak.copy(events)
+
                 # just invoke the calibration function
                 self.calibrator_func(events, **self.get_calibrator_kwargs(self))
 

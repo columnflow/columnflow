@@ -105,10 +105,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return set()
 
     @classmethod
-    def get_array_function_kwargs(cls, inst=None, **params):
+    def get_array_function_kwargs(cls, task=None, **params):
         kwargs = {}
-        if inst:
-            kwargs["analysis_inst"] = inst.analysis_inst
+        if task:
+            kwargs["task"] = task
+            kwargs["analysis_inst"] = task.analysis_inst
         else:
             kwargs["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
         return kwargs
