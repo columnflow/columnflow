@@ -16,7 +16,7 @@ ak = maybe_import("awkward")
 
 @producer(
     uses={"nGenPart", "GenPart.*"},
-    produces={"top_decay"},
+    produces={"gen_top_decay"},
 )
 def gen_top_decay_products(
     self: Producer,
@@ -25,8 +25,8 @@ def gen_top_decay_products(
     **kwargs,
 ) -> ak.Array:
     """
-    Creates a new ragged column "top_decay" with one element per hard top quark. Each element is a
-    GenParticleArray with five objects in a distinct order: top quark, bottom quark, W boson,
+    Creates a new ragged column "gen_top_decay" with one element per hard top quark. Each element is
+    a GenParticleArray with five objects in a distinct order: top quark, bottom quark, W boson,
     down-type quark or charged lepton, up-type quark or neutrino.
     """
     if dataset_inst.is_data or not dataset_inst.x("has_top", False):
@@ -150,6 +150,6 @@ def gen_top_decay_products(
     )
 
     # save the column
-    set_ak_column(events, "top_decay", groups)
+    set_ak_column(events, "gen_top_decay", groups)
 
     return events
