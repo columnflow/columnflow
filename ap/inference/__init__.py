@@ -379,7 +379,7 @@ class InferenceModel(object):
 
     def get_categories(
         self,
-        category: Optional[str] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         only_names: bool = False,
     ) -> List[Union[DotDict, str]]:
         """
@@ -398,7 +398,7 @@ class InferenceModel(object):
 
     def get_category(
         self,
-        category: str,
+        category: Union[str, Sequence[str]],
         only_name: bool = False,
         silent: bool = False,
     ) -> Union[DotDict, str]:
@@ -427,7 +427,7 @@ class InferenceModel(object):
 
     def has_category(
         self,
-        category: str,
+        category: Union[str, Sequence[str]],
     ) -> bool:
         """
         Returns *True* if a category whose name matches *category* is existing, and *False*
@@ -457,7 +457,7 @@ class InferenceModel(object):
 
     def remove_category(
         self,
-        category: str,
+        category: Union[str, Sequence[str]],
     ) -> bool:
         """
         Removes one or more categories whose names match *category*. Returns *True* if at least one
@@ -487,8 +487,8 @@ class InferenceModel(object):
 
     def get_processes(
         self,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         only_names: bool = False,
         flat: bool = False,
     ) -> Union[Dict[str, Union[DotDict, str]], List[str]]:
@@ -532,8 +532,8 @@ class InferenceModel(object):
 
     def get_process(
         self,
-        process: str,
-        category: Optional[str] = None,
+        process: Union[str, Sequence[str]],
+        category: Optional[Union[str, Sequence[str]]] = None,
         only_name: bool = False,
         silent: bool = False,
     ) -> Union[DotDict, str]:
@@ -582,8 +582,8 @@ class InferenceModel(object):
 
     def has_process(
         self,
-        process: str,
-        category: Optional[str] = None,
+        process: Union[str, Sequence[str]],
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Returns *True* if a process whose name matches *process*, and optionally whose category's
@@ -599,7 +599,7 @@ class InferenceModel(object):
     def add_process(
         self,
         *args,
-        category: Optional[str] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
     ) -> None:
         """
@@ -629,8 +629,8 @@ class InferenceModel(object):
 
     def remove_process(
         self,
-        process: str,
-        category: Optional[str] = None,
+        process: Union[str, Sequence[str]],
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Removes one or more processes whose names match *process*, and optionally whose category's
@@ -667,9 +667,9 @@ class InferenceModel(object):
 
     def get_parameters(
         self,
-        parameter: Optional[str] = None,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Optional[Union[str, Sequence[str]]] = None,
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         only_names: bool = False,
         flat: bool = False,
     ) -> Union[Dict[str, Dict[str, Union[DotDict, str]]], List[str]]:
@@ -722,9 +722,9 @@ class InferenceModel(object):
 
     def get_parameter(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         only_name: bool = False,
         silent: bool = False,
     ) -> Union[DotDict, str]:
@@ -788,9 +788,9 @@ class InferenceModel(object):
 
     def has_parameter(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Returns *True* if a parameter whose name matches *parameter*, and optionally whose
@@ -812,8 +812,8 @@ class InferenceModel(object):
     def add_parameter(
         self,
         *args,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         **kwargs,
     ) -> DotDict:
         """
@@ -849,9 +849,9 @@ class InferenceModel(object):
 
     def remove_parameter(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Removes one or more parameters whose names match *parameter*, and optionally whose
@@ -890,7 +890,7 @@ class InferenceModel(object):
 
     def get_parameter_groups(
         self,
-        group: Optional[str] = None,
+        group: Optional[Union[str, Sequence[str]]] = None,
         only_names: bool = False,
     ) -> List[Union[DotDict, str]]:
         """
@@ -911,7 +911,7 @@ class InferenceModel(object):
 
     def get_parameter_group(
         self,
-        group: str,
+        group: Union[str, Sequence[str]],
         only_name: bool = False,
     ) -> Union[DotDict, str]:
         """
@@ -932,7 +932,10 @@ class InferenceModel(object):
 
         return groups[0]
 
-    def has_parameter_group(self, group: str) -> bool:
+    def has_parameter_group(
+        self,
+        group: Union[str, Sequence[str]],
+    ) -> bool:
         """
         Returns *True* if a parameter group whose name matches *group* is existing, and *False*
         otherwise.
@@ -958,7 +961,10 @@ class InferenceModel(object):
 
         self.parameter_groups.append(group)
 
-    def remove_parameter_group(self, group: str) -> bool:
+    def remove_parameter_group(
+        self,
+        group: Union[str, Sequence[str]],
+    ) -> bool:
         """
         Removes one or more parameter groups whose names match *group*. Returns *True* if at least
         one group was removed, and *False* otherwise.
@@ -979,8 +985,8 @@ class InferenceModel(object):
 
     def add_parameter_to_group(
         self,
-        parameter: str,
-        group: str,
+        parameter: Union[str, Sequence[str]],
+        group: Union[str, Sequence[str]],
     ) -> bool:
         """
         Adds a parameter named *parameter* to one or multiple parameter groups whose name match
@@ -997,11 +1003,13 @@ class InferenceModel(object):
         if not groups:
             return False
 
-        # when a pattern is given, get flat list of all existing parameters first
-        if is_pattern(parameter_pattern) or is_regex(parameter_pattern):
+        # when parameter(s) contain any pattern, get flat list of all existing parameters first
+        _is_pattern = lambda s: is_pattern(s) or is_regex(s)
+        parameter_pattern = law.util.make_list(parameter_pattern)
+        if any(map(_is_pattern, parameter_pattern)):
             parameter_names = self.get_parameters(parameter_pattern, flat=True)
         else:
-            parameter_names = [parameter_pattern]
+            parameter_names = parameter_pattern
 
         # add names
         added_any = False
@@ -1015,8 +1023,8 @@ class InferenceModel(object):
 
     def remove_parameter_from_groups(
         self,
-        parameter: str,
-        group: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        group: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Removes all parameters matching *parameter* from parameter groups whose names match *group*.
@@ -1050,7 +1058,7 @@ class InferenceModel(object):
 
     def get_categories_with_process(
         self,
-        process: str,
+        process: Union[str, Sequence[str]],
     ) -> List[str]:
         """
         Returns a flat list of category names that contain processes matching *process*.
@@ -1063,8 +1071,8 @@ class InferenceModel(object):
 
     def get_processes_with_parameter(
         self,
-        parameter: str,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        category: Optional[Union[str, Sequence[str]]] = None,
         flat: bool = True,
     ) -> Union[List[str], Dict[str, List[str]]]:
         """
@@ -1096,8 +1104,8 @@ class InferenceModel(object):
 
     def get_categories_with_parameter(
         self,
-        parameter: str,
-        process: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
         flat: bool = True,
     ) -> Union[List[str], Dict[str, List[str]]]:
         """
@@ -1129,7 +1137,7 @@ class InferenceModel(object):
 
     def get_groups_with_parameter(
         self,
-        parameter: str,
+        parameter: Union[str, Sequence[str]],
     ) -> List[str]:
         """
         Returns a list of names of parameter groups that contain a parameter whose name matches
@@ -1201,8 +1209,8 @@ class InferenceModel(object):
 
     def iter_processes(
         self,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> Generator[Tuple[DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all processes whose names match *process*, optionally
@@ -1216,9 +1224,9 @@ class InferenceModel(object):
 
     def iter_parameters(
         self,
-        parameter: Optional[str] = None,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Optional[Union[str, Sequence[str]]] = None,
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> Generator[Tuple[DotDict, DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all parameters whose names match *parameter*, optionally
@@ -1237,9 +1245,9 @@ class InferenceModel(object):
 
     def flip_parameter_effect(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Flips the effect of all parameters seleted by *parameter*, and optionally *process* and
@@ -1262,9 +1270,9 @@ class InferenceModel(object):
 
     def asymmetrize_parameter_effect(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Converts symmetric, single-float effects of all parameters seleted by *parameter*, and
@@ -1288,9 +1296,9 @@ class InferenceModel(object):
 
     def symmetrize_parameter_effect(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
         epsilon: float = 0.001,
         precision: int = 4,
     ) -> bool:
@@ -1324,9 +1332,9 @@ class InferenceModel(object):
 
     def align_parameter_effect(
         self,
-        parameter: str,
-        process: Optional[str] = None,
-        category: Optional[str] = None,
+        parameter: Union[str, Sequence[str]],
+        process: Optional[Union[str, Sequence[str]]] = None,
+        category: Optional[Union[str, Sequence[str]]] = None,
     ) -> bool:
         """
         Aligns possibly ill-defined effects of all parameters seleted by *parameter*, and optionally

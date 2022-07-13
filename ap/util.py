@@ -25,7 +25,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Tuple, Callable, Any, Optional, Union
+from typing import Tuple, Callable, Any, Optional, Union, Sequence
 from types import ModuleType
 
 import law
@@ -484,11 +484,16 @@ def is_regex(s: str) -> bool:
     return s.startswith("^") and s.endswith("$")
 
 
-def pattern_matcher(pattern: str) -> Callable[[str], bool]:
+def pattern_matcher(pattern: Union[Sequence[str], str], mode=any) -> Callable[[str], bool]:
     r"""
     Takes a string *pattern* which might be an actual pattern for fnmatching, a regular expressions
     or just a plain string and returns a function that can be used to test of a string matches that
-    pattern. Example:
+    pattern.
+
+    When *pattern* is a sequence, all its patterns are compared the same way and the result is the
+    combination given a *mode* which typically should be *any* or *all*.
+
+    Example:
 
     .. code-block:: python
 
@@ -499,7 +504,20 @@ def pattern_matcher(pattern: str) -> Callable[[str], bool]:
         matcher = pattern_matcher(r"^foo\d+.*$")
         matcher("foox")  # -> False
         matcher("foo1")  # -> True
+
+        matcher = pattern_matcher(("foo*", "*bar"), mody=any)
+        matcher("foo123")  # -> True
+        matcher("123bar")  # -> True
+
+        matcher = pattern_matcher(("foo*", "*bar"), mody=all)
+        matcher("foo123")     # -> False
+        matcher("123bar")     # -> False
+        matcher("foo123bar")  # -> True
     """
+    if isinstance(pattern, (list, tuple, set)):
+        matchers = [pattern_matcher(p) for p in pattern]
+        return lambda s: mode(matcher(s) for matcher in matchers)
+
     # special cases
     if pattern in ["*", "^.*$"]:
         return lambda s: True
