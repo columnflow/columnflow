@@ -86,8 +86,9 @@ def gen_top_decay_products(
     #     ...
     # ), axis=2)
     #
-    # the object slices, e.g. [[0, 1], [0], [0, 1, 2], ...] for t, make use of advanced indexing
-    # and are the result of a concatenation themselves from different index masks per amount of tops
+    # the object slices, e.g. [[1, 0], [0], [0, 2, 1], ...] for w, account for the mapping between
+    # the objects and for that matter, t dictate the order and therefore actually have no slicing
+    # the other particles, w, b, qs and ls, however, use them to match "their" top and
     # the [:, :, None] just adds a new axis that is required for concatenation
     # no grouping algorithm implemented yet for 3 or more t/W/b or for 2 with same charge
     # note: in case we can verify that gen particles are stored depth-first, then any matching of
@@ -97,9 +98,6 @@ def gen_top_decay_products(
     all_or_raise((nt != 2) | (ak.sum(t_sign, axis=1) == 0), "grouping not implemented for 2 ss tops, but found")
     all_or_raise(nt <= 2, "grouping not implemented for 3 or more tops, but found")
     mask2 = nt == 2
-
-    # the top dictates the order, so just use the local index on the object axis
-    t_idxs = ak.local_index(t, axis=1)
 
     # for w, start with the local index as is and for events with 2 objects, order using sign of the
     # pdg id so that it matches that of the top quark
@@ -141,7 +139,7 @@ def gen_top_decay_products(
     # create the groups
     groups = ak.concatenate(
         [
-            t[t_idxs][:, :, None],
+            t[:, :, None],
             w[w_idxs][:, :, None],
             b[b_idxs][:, :, None],
             w_prod,
