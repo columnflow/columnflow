@@ -53,7 +53,7 @@ class CreateDatacards(
                     shift_sources=tuple(
                         param_obj.shift_source
                         for param_obj in proc_obj.parameters
-                        if param_obj.type.is_shape and param_obj.shift_source
+                        if param_obj.type.from_shape and param_obj.shift_source
                     ),
                     variables=(cat_obj.variable,),
                     branch=-1,
@@ -168,7 +168,7 @@ class CreateDatacards(
                 # per shift
                 if proc_obj:
                     for param_obj in proc_obj.parameters:
-                        if not param_obj.type.is_shape or not param_obj.shift_source:
+                        if not param_obj.type.from_shape or not param_obj.shift_source:
                             continue
                         hists[proc_obj_name][param_obj.name] = {}
                         for d in ["up", "down"]:

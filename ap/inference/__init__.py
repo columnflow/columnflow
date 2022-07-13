@@ -6,7 +6,7 @@ Basic objects for defining statistical inference models.
 
 import enum
 import copy as _copy
-from typing import Optional, Tuple, List, Union, Dict, Generator, Callable, TextIO, Sequence
+from typing import Optional, Tuple, List, Union, Dict, Generator, Callable, TextIO, Sequence, Any
 
 import law
 import order as od
@@ -22,21 +22,49 @@ class ParameterType(enum.Enum):
     Parameter type flag.
     """
 
-    rate = "rate"
+    rate_gauss = "rate_gauss"
+    rate_uniform = "rate_uniform"
+    rate_unconstrained = "rate_unconstrained"
     shape = "shape"
     norm_shape = "norm_shape"
-    shape_to_rate = "shape_to_rate"
+    shape_to_rate_gauss = "shape_to_rate_gauss"
+    shape_to_rate_uniform = "shape_to_rate_uniform"
 
     def __str__(self):
         return self.value
 
     @property
     def is_rate(self):
-        return self in [self.rate, self.shape_to_rate]
+        return self in (
+            self.rate_gauss,
+            self.rate_uniform,
+            self.rate_unconstrained,
+            self.shape_to_rate_gauss,
+            self.shape_to_rate_uniform,
+        )
 
     @property
     def is_shape(self):
-        return self in [self.shape, self.norm_shape]
+        return self in (
+            self.shape,
+            self.norm_shape,
+        )
+
+    @property
+    def to_rate(self):
+        return self in (
+            self.shape_to_rate_gauss,
+            self.shape_to_rate_uniform,
+        )
+
+    @property
+    def from_shape(self):
+        return self in (
+            self.shape,
+            self.norm_shape,
+            self.shape_to_rate_gauss,
+            self.shape_to_rate_uniform,
+        )
 
 
 class InferenceModel(object):
@@ -63,11 +91,11 @@ class InferenceModel(object):
                 mc_datasets: [hh_ggf]
                 parameters:
                   - name: lumi
-                    type: rate
+                    type: rate_gauss
                     effect: 1.02
                     shift_source: null
                   - name: pu
-                    type: rate
+                    type: rate_gauss
                     effect: [0.97, 1.02]
                     shift_source: null
                   - name: pileup
@@ -80,7 +108,7 @@ class InferenceModel(object):
                 mc_datasets: [tt_sl, tt_dl, tt_fh]
                 parameters:
                   - name: lumi
-                    type: rate
+                    type: rate_gauss
                     effect: 1.02
                     shift_source: null
 
@@ -244,7 +272,7 @@ class InferenceModel(object):
         name: str,
         type: Union[ParameterType, str],
         shift_source: Optional[str] = None,
-        effect: Union[float, Tuple[float, float]] = 1.0,
+        effect: Union[Any] = 1.0,
     ) -> DotDict:
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
@@ -253,14 +281,14 @@ class InferenceModel(object):
             - *type*: A :py:class:`ParameterType` instance describing the type of this parameter.
             - *shift_source*: The name of a systematic shift source in the config that this
               parameter corresponds to.
-            - *effect*: A float or a 2-tuple with two floats describing the down and up variation
-              of this parameter.
+            - *effect*: An arbitrary object describing the effect of the parameter (e.g. float for
+              symmetric rate effects, 2-tuple for down/up variation, etc).
         """
         return DotDict([
             ("name", str(name)),
             ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
             ("shift_source", str(shift_source) if shift_source else None),
-            ("effect", float(effect) if isinstance(effect, (int, float)) else tuple(map(float, effect))),
+            ("effect", effect),
         ])
 
     @classmethod
@@ -1251,13 +1279,16 @@ class InferenceModel(object):
     ) -> bool:
         """
         Flips the effect of all parameters seleted by *parameter*, and optionally *process* and
-        *category* patterns.
+        *category* patterns. Parameters with type ``rate_unconstrained`` are excluded.
 
             - ``1.1`` -> ``0.9``
             - ``(0.9, 1.1)`` -> ``(1.1, 0.9)``
         """
         changed_any = False
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
+            if parameter.type == ParameterType.rate_unconstrained:
+                continue
+
             if isinstance(parameter.effect, tuple):
                 # simply reverse the order
                 parameter.effect = parameter.effect[::-1]
@@ -1276,7 +1307,8 @@ class InferenceModel(object):
     ) -> bool:
         """
         Converts symmetric, single-float effects of all parameters seleted by *parameter*, and
-        optionally *process* and *category* pattern into asymmetric ones.
+        optionally *process* and *category* pattern into asymmetric ones. Parameters with type
+        ``rate_unconstrained`` are excluded.
 
             - ``1.1`` -> ``(0.9, 1.1)``
             - ``0.9`` -> ``(1.1, 0.9)``
@@ -1284,7 +1316,7 @@ class InferenceModel(object):
         """
         changed_any = False
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
-            if isinstance(parameter.effect, tuple):
+            if parameter.type == ParameterType.rate_unconstrained or isinstance(parameter.effect, tuple):
                 continue
 
             # split into two parts (e.g. 1.2 -> (0.8, 1.2))
@@ -1306,7 +1338,7 @@ class InferenceModel(object):
         Converts asymmetric effects of all parameters seleted by *parameter*, and optionally
         *process* and *category* pattern into a single, symmetric one when the difference is below
         *epsilon*. When the difference is non-zero but below epsilon, the average effect is used,
-        rounded to *precision* digits.
+        rounded to *precision* digits. Parameters with type ``rate_unconstrained`` are excluded.
 
             - ``(0.9, 1.1)`` -> ``1.1``
             - ``(1.1, 0.9)`` -> ``0.9``
@@ -1314,7 +1346,7 @@ class InferenceModel(object):
         """
         changed_any = False
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
-            if not isinstance(parameter.effect, tuple):
+            if parameter.type == ParameterType.rate_unconstrained or not isinstance(parameter.effect, tuple):
                 continue
 
             # check the difference
@@ -1339,7 +1371,8 @@ class InferenceModel(object):
         """
         Aligns possibly ill-defined effects of all parameters seleted by *parameter*, and optionally
         *process* and *category* pattern such that the plus-1-sigma direction refers to a more
-        positive effect that the minus-1-sigma direction.
+        positive effect that the minus-1-sigma direction. Parameters with type
+        ``rate_unconstrained`` are excluded.
 
             - ``1.1`` -> ``1.1``, unchanged
             - ``0.9`` -> ``1.1``
@@ -1348,6 +1381,9 @@ class InferenceModel(object):
         """
         changed_any = True
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
+            if parameter.type == ParameterType.rate_unconstrained:
+                continue
+
             if isinstance(parameter.effect, tuple):
                 # simply reverse the order when the first element is larger
                 if parameter.effect[0] > parameter.effect[1]:

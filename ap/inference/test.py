@@ -41,7 +41,7 @@ def configure(self):
     for unc_name in lumi.uncertainties:
         self.add_parameter(
             unc_name,
-            type=ParameterType.rate,
+            type=ParameterType.rate_gauss,
             effect=lumi.get(names=unc_name, direction=("down", "up"), factor=True),
         )
         self.symmetrize_parameter_effect(unc_name)
@@ -49,6 +49,10 @@ def configure(self):
     # minbias xs
     self.add_parameter("CMS_pileup", type=ParameterType.shape, shift_source="minbias_xs")
     self.add_parameter_to_group("CMS_pileup", "experiment")
+
+    # test
+    self.add_parameter("QCDscale_ttbar", category="cat1", process="TT", type=ParameterType.rate_uniform)
+    self.add_parameter("QCDscale_ttbar_norm", category="cat1", process="TT", type=ParameterType.rate_unconstrained)
 
     #
     # post-processing

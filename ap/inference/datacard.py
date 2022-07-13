@@ -125,8 +125,8 @@ class DatacardWriter(object):
         ]
         separators.add("rates")
 
-        # parameters
-        blocks.parameters = []
+        # tabular-style parameters
+        blocks.tabular_parameters = []
         rnd = lambda f: round(f, self.parameter_precision)
         for param_name in self.inference_model_inst.get_parameters(flat=True):
             param_obj = None
@@ -138,47 +138,93 @@ class DatacardWriter(object):
                     process=proc_name,
                     silent=True,
                 )
+                # skip line-style parameters
+                # (currently only rate_unconstrained)
+                if _param_obj and _param_obj.type == ParameterType.rate_unconstrained:
+                    continue
+                # empty effect
                 if _param_obj is None:
                     effects.append("-")
                     continue
                 # compare with previous param_obj
                 if param_obj is None:
                     param_obj = _param_obj
-                elif _param_obj.type.is_rate != param_obj.type.is_rate:
+                elif _param_obj.type != param_obj.type:
                     raise ValueError(
                         f"misconfigured parameter '{param_name}' with type '{_param_obj.type}' "
                         f"that was previously seen with incompatible type '{param_obj.type}'")
+                # get the effect
                 effect = _param_obj.effect
-                if _param_obj.type == ParameterType.shape_to_rate:
+                if _param_obj.type.to_rate:
                     effect = shape_effects[cat_name][proc_name][param_name]
-                if isinstance(effect, tuple):
+                # encode the effect
+                if isinstance(effect, (int, float)):
+                    if effect == 0:
+                        effects.append("-")
+                    elif effect == 1 and _param_obj.type.is_shape:
+                        effects.append("1")
+                    else:
+                        effects.append(str(rnd(effect)))
+                elif isinstance(effect, tuple) and len(effect) == 2:
                     effects.append(f"{rnd(effect[0])}/{rnd(effect[1])}")
-                elif effect == 1 and _param_obj.type.is_shape:
-                    effects.append("1")
                 else:
-                    effects.append(str(rnd(effect)))
-            # add the line
-            if param_obj:
-                type_str = "shape" if param_obj.type.is_shape else "lnN"
-                blocks.parameters.append([param_name, type_str, effects])
+                    raise ValueError(
+                        f"effect '{effect}' of parameter '{param_name}' with type {param_obj.type} "
+                        "cannot be encoded",
+                    )
+            # add the tabular line
+            if param_obj and effects:
+                type_str = "shape"
+                if param_obj.type in (ParameterType.rate_gauss, ParameterType.shape_to_rate_gauss):
+                    type_str = "lnN"
+                elif param_obj.type in (ParameterType.rate_uniform, ParameterType.shape_to_rate_uniform):
+                    type_str = "lnU"
+                blocks.tabular_parameters.append([param_name, type_str, effects])
+        if blocks.tabular_parameters:
+            empty_lines.add("tabular_parameters")
+
+        # line-style parameters
+        blocks.line_parameters = []
+        for param_name in self.inference_model_inst.get_parameters(flat=True):
+            for cat_name, proc_name in flat_rates:
+                param_obj = self.inference_model_inst.get_parameter(
+                    param_name,
+                    category=cat_name,
+                    process=proc_name,
+                    silent=True,
+                )
+                # skip non-style parameters
+                if not param_obj or param_obj.type != ParameterType.rate_unconstrained:
+                    continue
+                # add the line
+                blocks.line_parameters.append([
+                    param_name,
+                    "rateParam",
+                    cat_name,
+                    proc_name,
+                    param_obj.effect,
+                ])
+        if blocks.line_parameters:
+            empty_lines.add("line_parameters")
 
         # mc stats
         blocks.mc_stats = []
         for cat_obj in cat_objects:
             if cat_obj.mc_stats:
                 blocks.mc_stats.append([cat_obj.name, "autoMCStats", 10])  # TODO: configure this
-                empty_lines.add("parameters")
 
         # prettify blocks
         blocks.observations = self.align_lines(list(blocks.observations), sep=self.sep)
-        if blocks.parameters:
-            blocks.rates, blocks.parameters = self.align_rates_and_parameters(
+        if blocks.tabular_parameters:
+            blocks.rates, blocks.tabular_parameters = self.align_rates_and_parameters(
                 list(blocks.rates),
-                list(blocks.parameters),
+                list(blocks.tabular_parameters),
                 sep=self.sep,
             )
         else:
             blocks.rates = self.align_lines(list(blocks.rates), sep=self.sep)
+        if blocks.line_parameters:
+            blocks.line_parameters = self.align_lines(list(blocks.line_parameters), sep=self.sep)
         if blocks.mc_stats:
             blocks.mc_stats = self.align_lines(list(blocks.mc_stats), sep=self.sep)
 
@@ -275,6 +321,13 @@ class DatacardWriter(object):
                         process=proc_name,
                     )
 
+                    # validate the type
+                    if not param_obj.type.from_shape:
+                        raise Exception(
+                            f"type '{param_obj.type}' of  parameter '{param_name}' is not "
+                            f"supported in the shape processing of {self.__class__.__name__}",
+                        )
+
                     f = []
                     for d in ["down", "up"]:
                         h_syst = __hists[d].copy()
@@ -290,7 +343,7 @@ class DatacardWriter(object):
                             h_syst.view().variance[mask] = fill_empty_bins
 
                         # save it
-                        if param_obj.type != ParameterType.shape_to_rate:
+                        if not param_obj.type.to_rate:
                             syst_name = syst_pattern.format(
                                 category=cat_name,
                                 process=proc_name,
