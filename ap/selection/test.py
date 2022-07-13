@@ -229,11 +229,11 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids,
+        process_ids, "LHEWeight.originalXWGTUP",
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids,
+        process_ids, "LHEWeight.originalXWGTUP",
     },
     shifts={
         jet_energy_shifts,
