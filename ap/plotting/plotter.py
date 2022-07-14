@@ -31,8 +31,22 @@ def draw_error_stairs(ax, h, kwargs={}):
 
 def draw_from_stack(ax, h, kwargs={}):
     norm = kwargs.pop("norm", 1)
-    # how to normalize stack?
-    # h = h / norm
+
+    # check if norm is a number
+    try:
+        int(norm)
+        h = hist.Stack(*[i / norm for i in h])
+    except:
+        norm = np.array(norm)
+        # 1 normalization factor/array per histogram
+        if len(norm) == len(h):
+            h = hist.Stack(*[h[i] / norm[i] for i in range(len(h))])
+        # same normalization for each histogram
+        # edge case N_bins = N_histograms not considered :(
+        # solution: transform norm -> [norm]*len(h)
+        else:
+            h = hist.Stack(*[i / norm for i in h])
+
     defaults = {
         "ax": ax,
         "stack": True,
@@ -115,7 +129,6 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
             raise ValueError("No histogram(s) given in plot_cfg entry {key}")
         hist = cfg["hist"]
         kwargs = cfg.get("kwargs", {})
-        print(globals)
         globals()[method](ax, hist, kwargs)
 
         if ratio and "ratio_kwargs" in cfg:
