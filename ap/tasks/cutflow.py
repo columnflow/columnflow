@@ -16,7 +16,8 @@ from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.production import Producer
 from ap.util import dev_sandbox, ensure_proxy
-from ap.plotting.plotter import plot_all
+from ap.plotting.variables import plot_cutflow
+
 
 class MergeSelectionMasks(
     DatasetTask,
@@ -293,10 +294,7 @@ class PlotCutflow(
 
     @PlotMixin.view_output_plots
     def run(self):
-        # import numpy as np
         import hist
-        import matplotlib.pyplot as plt
-        import mplhep
 
         # prepare config objects
         category_inst = self.config_inst.get_category(self.branch_data)
@@ -362,54 +360,10 @@ class PlotCutflow(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
-            mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
-            mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
-
-            # normalize histograms on number of events before applying cuts
-            mc_hists = [h / h[{"step": "Initial"}].value for h in mc_hists]
-
-            # create the stack
-            h_mc_stack = None
-            if mc_hists:
-                h_mc_stack = hist.Stack(*mc_hists)
-
-            # start plotting
-            plt.style.use(mplhep.style.CMS)
-
-
-            plot_cfgs = {
-                "procs": {
-                    "method": "draw_from_stack",
-                    "hist": h_mc_stack,
-                    "kwargs": {
-                        "norm": 1,
-                        "label": mc_labels,
-                        "color": mc_colors,
-                        "histtype": "step",
-                        "stack": False,
-                    },
-                },
-            }
-            style_cfgs = {
-                "ax_cfg": {
-                    "ylabel": "Selection efficiency",
-                    "xlabel": "Selection steps",
-                },
-                "legend_cfg": {
-                    "loc": "upper right",
-                },
-                "CMS_label_cfg": {
-                    "lumi": self.config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
-                },
-            }
-
-            # ToDo: allow updating plot_cfgs and style_cfgs from config
-
-            with self.publish_step("Starting plotting routine ..."):
-                fig = plot_all(plot_cfgs, style_cfgs, ratio=False)
+            fig = plot_cutflow(hists, self.config_inst)
 
             self.output().dump(fig, formatter="mpl")
+
 
 PlotCutflowWrapper = wrapper_factory(
     base_cls=AnalysisTask,

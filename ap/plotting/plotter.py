@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Externalized functions for plotting tasks
+Generalized plotting functions to create plots from hist histograms
 """
 
 from ap.util import maybe_import
@@ -96,15 +96,15 @@ def draw_errorbars(ax, h, kwargs={}):
     ax.errorbar(**defaults)
 
 
-def plot_all(plot_cfgs, style_cfgs, ratio=True):
+def plot_all(plot_config, style_config, ratio=True):
     """
-    plot_cfgs expects dictionaries with fields:
+    plot_config expects dictionaries with fields:
     "method": str, identical to the name of a function defined above,
     "hist": hist.Hist or hist.Stack,
     "kwargs": dict (optional),
     "ratio_kwargs": dict (optional),
 
-    style_cfgs expects fields (all optional):
+    style_config expects fields (all optional):
     "ax_cfg": dict,
     "rax_cfg": dict,
     "legend_cfg": dict,
@@ -119,8 +119,8 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
     else:
         fig, ax = plt.subplots()
 
-    for key in plot_cfgs:
-        cfg = plot_cfgs[key]
+    for key in plot_config:
+        cfg = plot_config[key]
         if "method" not in cfg:
             raise ValueError("No method given in plot_cfg entry {key}")
         method = cfg["method"]
@@ -142,7 +142,7 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
         "xlabel": "variable",
         "yscale": "linear",
     }
-    ax_kwargs.update(style_cfgs.get("ax_cfg", {}))
+    ax_kwargs.update(style_config.get("ax_cfg", {}))
     if ax_kwargs["yscale"] == "linear":
         ax_kwargs["ylim"] = 0.000001
     ax.set(**ax_kwargs)
@@ -156,7 +156,7 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
             "xlabel": "Variable",
             "yscale": "linear",
         }
-        rax_kwargs.update(style_cfgs.get("rax_cfg", {}))
+        rax_kwargs.update(style_config.get("rax_cfg", {}))
         rax.set(**rax_kwargs)
 
     # legend
@@ -165,7 +165,7 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
         "ncol": 1,
         "loc": "upper right",
     }
-    legend_kwargs.update(style_cfgs.pop("legend_cfg", {}))
+    legend_kwargs.update(style_config.get("legend_cfg", {}))
     ax.legend(**legend_kwargs)
 
     CMS_label_kwargs = {
@@ -173,7 +173,7 @@ def plot_all(plot_cfgs, style_cfgs, ratio=True):
         "label": "Work in Progress",
         "fontsize": 22,
     }
-    CMS_label_kwargs.update(style_cfgs.pop("CMS_label_cfg", {}))
+    CMS_label_kwargs.update(style_config.get("CMS_label_cfg", {}))
     mplhep.cms.label(**CMS_label_kwargs)
 
     plt.tight_layout()

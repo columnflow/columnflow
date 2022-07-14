@@ -16,7 +16,7 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.util import DotDict
-from ap.plotting.plotter import plot_all
+from ap.plotting.variables import plot_variables, plot_shifted_variables
 
 
 class ProcessPlotBase(
@@ -147,72 +147,7 @@ class PlotVariables(
                 (process_inst, hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
-
-            # create the stack and a fake data hist using the smeared sum
-            data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
-            mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
-            mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
-            mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
-
-            h_data, h_mc, h_mc_stack = None, None, None
-            if data_hists:
-                h_data = sum(data_hists[1:], data_hists[0].copy())
-            if mc_hists:
-                h_mc = sum(mc_hists[1:], mc_hists[0].copy())
-                h_mc_stack = hist.Stack(*mc_hists)
-
-            # setup plotting configs
-            # loop over plot_cfgs fields, hard-coded names "method", "hist", "kwargs", "ratio_kwargs"
-            plot_cfgs = {
-                "MC_stack": {
-                    "method": "draw_from_stack",
-                    "hist": h_mc_stack,
-                    "kwargs": {"norm": 1, "label": mc_labels, "color": mc_colors},
-                },
-                "MC_uncert": {
-                    "method": "draw_error_stairs",
-                    "hist": h_mc,
-                    "kwargs": {"label": "MC stat. unc."},
-                    "ratio_kwargs": {"norm": h_mc.values()},
-                },
-            }
-            # dummy since not implemented yet
-            MC_lines = False
-            if MC_lines:
-                plot_cfgs["MC_lines"] = {
-                    "method": "draw_from_stack",
-                    # "hist": h_lines_stack,
-                    # "kwargs": {"label": lines_label, "color": lines_colors, "stack": False, "histtype": "step"},
-                }
-
-            if data_hists:
-                plot_cfgs["data"] = {
-                    "method": "draw_errorbars",
-                    "hist": h_data,
-                    "kwargs": {"label": "Data"},
-                    "ratio_kwargs": {"norm": h_mc.values()},
-                }
-            # hard-coded key names from style_cfgs, "ax_cfg", "rax_cfg", "legend_cfg", "CMS_label_cfg"
-            style_cfgs = {
-                "ax_cfg": {
-                    "xlim": (variable_inst.x_min, variable_inst.x_max),
-                    "ylabel": variable_inst.get_full_y_title(),
-                    # "xlabel": variable_inst.get_full_x_title(),
-                },
-                "rax_cfg": {
-                    "ylabel": "Data / MC",
-                    "xlabel": variable_inst.get_full_x_title(),
-                },
-                "legend_cfg": {},
-                "CMS_label_cfg": {
-                    "lumi": self.config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
-                },
-            }
-
-            # ToDo: allow updating plot_cfgs and style_cfgs from config
-
-            with self.publish_step("Starting plotting routine ..."):
-                fig = plot_all(plot_cfgs, style_cfgs, ratio=True)
+            fig = plot_variables(hists, self.config_inst, variable_inst)
 
             self.output().dump(fig, formatter="mpl")
 
@@ -268,8 +203,6 @@ class PlotShiftedVariables(
     @PlotMixin.view_output_plots
     def run(self):
         import hist
-        import matplotlib.pyplot as plt
-        import mplhep
 
         # prepare config objects
         variable_inst = self.config_inst.get_variable(self.branch_data.variable)
@@ -280,8 +213,8 @@ class PlotShiftedVariables(
             proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
         }
-        shift_inst_up = self.config_inst.get_shift(f"{self.branch_data.shift_source}_up")
-        shift_inst_down = self.config_inst.get_shift(f"{self.branch_data.shift_source}_down")
+        # shift_inst_up = self.config_inst.get_shift(f"{self.branch_data.shift_source}_up")
+        # shift_inst_down = self.config_inst.get_shift(f"{self.branch_data.shift_source}_down")
 
         # histogram data per process
         hists = OrderedDict()
@@ -327,41 +260,5 @@ class PlotShiftedVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            # create the stack and the sum
-            h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
-            h_stack = h_sum.stack("shift")
-            label = [self.config_inst.get_shift(h_sum.axes["shift"][i]).label for i in range(3)]
-
-            plt.style.use(mplhep.style.CMS)
-            fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
-
-            h_stack.plot(
-                ax=ax,
-                color=["black", "red", "blue"],  # hard-coded sequence of colors
-                label=label,
-            )
-            ax.legend(title=process_inst.name)  # TODO
-            ax.set_ylabel(variable_inst.get_full_y_title())
-            ax.set_xlim(variable_inst.x_min, variable_inst.x_max)
-
-            # nominal shift id is always 0
-            norm = h_sum[{"shift": hist.loc(0)}].view().value
-            rax.step(
-                x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": hist.loc(shift_inst_up.id)}].view().value / norm,
-                color="red",
-            )
-            rax.step(
-                x=h_sum.axes[variable_inst.name].edges[1:],
-                y=h_sum[{"shift": hist.loc(shift_inst_down.id)}].view().value / norm,
-                color="blue",
-            )
-            rax.axhline(y=1., color="black")
-            rax.set_ylim(0.25, 1.75)
-            rax.set_xlabel(variable_inst.get_full_x_title())
-            rax.set_xlim(variable_inst.x_min, variable_inst.x_max)
-
-            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
-            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
-
-            self.output().dump(plt, formatter="mpl")
+            fig = plot_shifted_variables(hists, self.config_inst, process_inst, variable_inst)
+            self.output().dump(fig, formatter="mpl")
