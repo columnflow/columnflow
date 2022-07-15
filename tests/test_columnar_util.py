@@ -14,64 +14,56 @@ ak = maybe_import("awkward")
 
 class TestRoute(unittest.TestCase):
 
-    def setUp(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
         # setting standardcases
         self.route = Route(["i", "like", "trains"])
         self.empty_route = Route()
 
-    def tearDown(self):
-        del self.route
-        del self.empty_route
-
     def test_join(self):
         # SHOULD:   join a sequence of strings with DOT notation
-        join = Route.join
         result = "i.like.trains"
 
         # tuple list
-        self.assertEqual(join(("i", "like", "trains")), result)
-        self.assertEqual(join(["i", "like", "trains"]), result)
+        self.assertEqual(Route.join(("i", "like", "trains")), result)
+        self.assertEqual(Route.join(["i", "like", "trains"]), result)
 
         # mixed string notation
-        self.assertEqual(join(["i.like", "trains"]), result)
-        # mixed with both notations?
-        self.assertEqual(join(["i_like", "trains"]), result)
+        self.assertEqual(Route.join(["i.like", "trains"]), result)
+        self.assertNotEqual(Route.join(["i_like", "trains"]), result)
 
     def test_join_nano(self):
         # SHOULD: join a sequence of strings with NANO notation
         join_nano = Route.join_nano
         result = "i_like_trains"
+
         # tuple list
         self.assertEqual(join_nano(("i", "like", "trains")), result)
         self.assertEqual(join_nano(["i", "like", "trains"]), result)
 
         # mixed string notation
-        self.assertEqual(join_nano(["i.like", "trains"]), result)
-        # mixed with both notations?
         self.assertEqual(join_nano(["i_like", "trains"]), result)
+        self.assertNotEqual(join_nano(["i.like", "trains"]), result)
 
     def test_split(self):
         # SHOULD: string in DOT format into List[str]
-        split_result = self.empty_route.split("i.like.trains")
-        result = ["i", "like", "trains"]
+        split_result = Route.split("i.like.trains")
+        result = ("i", "like", "trains")
 
         # equality with tuples checks if order is the same
-        self.assertEqual(tuple(split_result), tuple(result))
-        # is list after operation
-        self.assertIsInstance(split_result, list)
+        self.assertEqual(split_result, result)
 
         # all values in the split are instance of str
         self.assertTrue(all(isinstance(value, str) for value in split_result))
 
     def test_split_nano(self):
         # SHOULD: string in NANO format into List[str]
-        split_result = self.empty_route.split_nano("i_like_trains")
-        result = ["i", "like", "trains"]
+        split_result = Route.split_nano("i_like_trains")
+        result = ("i", "like", "trains")
 
         # equality with tuples checks if order is the same
-        self.assertEqual(tuple(split_result), tuple(result))
-        # is list after operation
-        self.assertIsInstance(split_result, list)
+        self.assertEqual(split_result, result)
 
         # all values in the split are instance of str
         self.assertTrue(all(isinstance(value, str) for value in split_result))
@@ -91,29 +83,22 @@ class TestRoute(unittest.TestCase):
         route_from_str = Route.check(("i", "like", "trains"))
         self.assertEqual(route_from_str, self.route)
 
-    def test_select(self):
+    def test_apply(self):
         # SHOULD: Select value from awkward array using it slice mechanic
         # slice_name is nested, each element of a tuple is a nested level
         # aw.Array["1","2"] = aw.Array["1"]["2"]
 
-        select = Route.select
-        # self.Route.fields = ["i","like","trains"]
-        aw_dict = {"i": {"like": {"trains": [0, 1, 2, 3]}}}
-        aw_arr = ak.Array(aw_dict)
+        arr = ak.Array({"i": {"like": {"trains": [0, 1, 2, 3]}}})
 
-        aw_selection = select(aw_arr, self.route)
-        aw_slice_direct = aw_arr[tuple(self.route._fields)]
-        aw_slice_standard = aw_arr["i", "like", "trains"]
+        aw_selection = self.route.apply(arr)
+        aw_slice_direct = arr[tuple(self.route._fields)]
+        aw_slice_standard = arr["i", "like", "trains"]
 
         # slice and select are the same in ALL entries
         # awkward.Array has no equal_all operation
         same_array = ak.all(
             [(aw_selection == aw_slice_direct) == (aw_selection == aw_slice_standard)])
         self.assertTrue(same_array)
-
-        # should raise error if route does not exist
-        self.assertRaises(ValueError, select, aw_arr,
-                          ("does", "not", "exists"))
 
     def test__init__(self):
         # SHOULD: create an EMPTY LIST if route=None
@@ -133,17 +118,8 @@ class TestRoute(unittest.TestCase):
         self.assertFalse(self.route._fields is self.empty_route._fields)
         self.assertFalse(Route() is self.empty_route._fields)
 
-        # raise if input is not Sequence[str], str or Route
-        self.assertRaises(Exception, Route, [0, 1., "2", None])
-        self.assertRaises(Exception, Route, (0, 1, "2", None))
-        self.assertRaises(Exception, Route, 0)
-
         # self._fields can not have a DOT in substring
-        self.assertFalse(
-            any("." in s for s in Route("i.like", "trains")))
-        # same but with strings in Sequence
-        self.assertFalse(
-            any("." in s for s in Route(["i.like", "trains"])))
+        self.assertFalse(any("." in s for s in Route("i.like.trains").fields))
 
     def test_fields(self):
         # SHOULD: return tuple of strings, but no reference.
@@ -245,15 +221,6 @@ class TestRoute(unittest.TestCase):
         self.route[0] = "replaced"
         self.assertEqual(self.route, ("replaced", "like", "trains"))
 
-        # _fields should only hold "str" to be meaningful
-        self.route[0] = None
-        self.route[1] = 1
-        self.route[2] = self.empty_route
-
-        is_str_type = [isinstance(self.route[index], str)
-                       for index in range(0, 3)]
-        self.assertTrue(all(is_str_type), msg="Function enables to place elements that are not of type str")
-
     def test_add(self):
         # extend self._fields (a list)
         # if input is a...
@@ -278,9 +245,12 @@ class TestRoute(unittest.TestCase):
             str_route._fields) == tuple(self.empty_route._fields))
 
         # raise error if something else is added
-        self.assertRaises(ValueError, self.empty_route.add, 0)
-        self.assertRaises(ValueError, self.empty_route.add, [0, 1.])
-        self.assertRaises(ValueError, self.empty_route.add, None)
+        with self.assertRaises(ValueError):
+            self.empty_route.add(0)
+        with self.assertRaises(ValueError):
+            self.empty_route.add({})
+        with self.assertRaises(ValueError):
+            self.empty_route.add(None)
 
     def test_pop(self):
         # SHOULD: Remove entry at index from self._field AND
@@ -326,28 +296,47 @@ class TestRoute(unittest.TestCase):
 
 
 class TestArrayFunction(unittest.TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        test_array_dict = {"a_1": [0], "b_1": {"bb_1": [1], "bb_2": {"bbb_1": [2], "bbb_2": {
+            "bbbb_1": {"bbbbb_1": [3]}, "bbbb_2": [4]}}}, "c_1": {"cc_1": [5]}}
+
+        self.t_arr_A = ak.Array(test_array_dict)
+
+        if not ArrayFunction.has("test_empty"):
+            self.empty_arr_func = ArrayFunction.new(
+                self.empty_function,
+                "test_empty",
+                "any_input_A",
+                "all_empty",
+            )
+
+            self.add_arr_func = ArrayFunction.new(
+                self.add_function,
+                "test_add",
+                "any_input_B",
+                "plus_100",
+            )
+
+            self.combined_arr_func = ArrayFunction.new(
+                self.empty_function,
+                name="test_combined",
+                uses=("met", "pT.all", self.empty_arr_func, self.add_arr_func),
+                produces=(self.empty_arr_func, "pT.e"),
+            )
+        else:
+            self.empty_arr_func = ArrayFunction.get("test_empty")
+            self.add_arr_func = ArrayFunction.get("test_add")
+            self.combined_arr_func = ArrayFunction.get("test_combined")
+
     # 2 standard dummy functions
     def add_function(self, arr):
         return arr + 100
 
     def empty_function(self, arr):
         return ak.zeros_like(arr)
-
-    def setUp(self):
-        test_array_dict = {"a_1": [0], "b_1": {"bb_1": [1], "bb_2": {"bbb_1": [2], "bbb_2": {
-            "bbbb_1": {"bbbbb_1": [3]}, "bbbb_2": [4]}}}, "c_1": {"cc_1": [5]}}
-
-        self.t_arr_A = ak.Array(test_array_dict)
-
-        self.empty_arr_func = ArrayFunction.new(
-            self.empty_function, "test_empty", "any_input_A", "all_empty")
-
-        self.add_arr_func = ArrayFunction.new(
-            self.add_function, "test_add", "any_input_B", "plus_100")
-
-        self.combined_arr_func = ArrayFunction.new(self.empty_function, name="combined",
-        uses=("met", "pT.all", self.empty_arr_func, self.add_arr_func),
-            produces=(self.empty_arr_func, "pT.e"))
 
     def test_IOFlag(self):
         # SHOULD:   Create unique id for the class
@@ -541,6 +530,6 @@ class TestArrayFunction(unittest.TestCase):
 
         # should have the same result
         # coudnt find another way to check equality in an awkward array.
-        arr_func_result = self.empty_arr_func(self.t_arr).to_numpy()
-        func_result = self.empty_function(self.t_arr).to_numpy()
+        arr_func_result = self.empty_arr_func(self.t_arr_A).to_numpy()
+        func_result = self.empty_function(self.t_arr_A).to_numpy()
         self.assertTrue(all(func_result == arr_func_result))
