@@ -5,16 +5,19 @@ __all__ = ["TestRoute", "TestArrayFunction"]
 
 
 import unittest
-import ap.columnar_util as c_util
-import awkward as ak
+
+from ap.util import maybe_import
+from ap.columnar_util import Route, ArrayFunction
+
+ak = maybe_import("awkward")
 
 
 class TestRoute(unittest.TestCase):
 
     def setUp(self):
         # setting standardcases
-        self.route = c_util.Route(["i", "like", "trains"])
-        self.empty_route = c_util.Route()
+        self.route = Route(["i", "like", "trains"])
+        self.empty_route = Route()
 
     def tearDown(self):
         del self.route
@@ -22,7 +25,7 @@ class TestRoute(unittest.TestCase):
 
     def test_join(self):
         # SHOULD:   join a sequence of strings with DOT notation
-        join = c_util.Route.join
+        join = Route.join
         result = "i.like.trains"
 
         # tuple list
@@ -36,7 +39,7 @@ class TestRoute(unittest.TestCase):
 
     def test_join_nano(self):
         # SHOULD: join a sequence of strings with NANO notation
-        join_nano = c_util.Route.join_nano
+        join_nano = Route.join_nano
         result = "i_like_trains"
         # tuple list
         self.assertEqual(join_nano(("i", "like", "trains")), result)
@@ -78,14 +81,14 @@ class TestRoute(unittest.TestCase):
         # otherwise uses Route constructor with input
 
         # RouteInstance --> returns same object
-        self.assertIs(c_util.Route.check(self.route), self.route)
+        self.assertIs(Route.check(self.route), self.route)
 
         # if result of *check* with same fields as self.route, is equal to self.route
         # Sequence[str] --> RouteInstance
-        route_from_sequence = c_util.Route.check(("i", "like", "trains"))
+        route_from_sequence = Route.check(("i", "like", "trains"))
         self.assertEqual(route_from_sequence, self.route)
         # str --> RouteInstance
-        route_from_str = c_util.Route.check(("i", "like", "trains"))
+        route_from_str = Route.check(("i", "like", "trains"))
         self.assertEqual(route_from_str, self.route)
 
     def test_select(self):
@@ -93,7 +96,7 @@ class TestRoute(unittest.TestCase):
         # slice_name is nested, each element of a tuple is a nested level
         # aw.Array["1","2"] = aw.Array["1"]["2"]
 
-        select = c_util.Route.select
+        select = Route.select
         # self.Route.fields = ["i","like","trains"]
         aw_dict = {"i": {"like": {"trains": [0, 1, 2, 3]}}}
         aw_arr = ak.Array(aw_dict)
@@ -128,19 +131,19 @@ class TestRoute(unittest.TestCase):
         # this is tested because of the tricky behavior of
         # mutuable objects in init
         self.assertFalse(self.route._fields is self.empty_route._fields)
-        self.assertFalse(c_util.Route() is self.empty_route._fields)
+        self.assertFalse(Route() is self.empty_route._fields)
 
         # raise if input is not Sequence[str], str or Route
-        self.assertRaises(Exception, c_util.Route, [0, 1., "2", None])
-        self.assertRaises(Exception, c_util.Route, (0, 1, "2", None))
-        self.assertRaises(Exception, c_util.Route, 0)
+        self.assertRaises(Exception, Route, [0, 1., "2", None])
+        self.assertRaises(Exception, Route, (0, 1, "2", None))
+        self.assertRaises(Exception, Route, 0)
 
         # self._fields can not have a DOT in substring
         self.assertFalse(
-            any("." in s for s in c_util.Route("i.like", "trains")))
+            any("." in s for s in Route("i.like", "trains")))
         # same but with strings in Sequence
         self.assertFalse(
-            any("." in s for s in c_util.Route(["i.like", "trains"])))
+            any("." in s for s in Route(["i.like", "trains"])))
 
     def test_fields(self):
         # SHOULD: return tuple of strings, but no reference.
@@ -167,12 +170,12 @@ class TestRoute(unittest.TestCase):
     def test__hash__(self):
         # SHOULD: Return the same hash if two Routes
         # stores the same fields in the same order.
-        same_route = c_util.Route(("i", "like", "trains"))
+        same_route = Route(("i", "like", "trains"))
         self.assertTrue(hash(same_route) == hash(self.route) ==
                         hash(("i", "like", "trains")))
 
         # checks if not true when order is different
-        reverse_route = c_util.Route(("trains", "like", "i"))
+        reverse_route = Route(("trains", "like", "i"))
         self.assertNotEqual(hash(reverse_route), hash(self.route))
 
     def test__len__(self):
@@ -234,7 +237,7 @@ class TestRoute(unittest.TestCase):
 
         # slice -> new instance of Route
         copy_slice = self.route[:]
-        self.assertIsInstance(copy_slice, c_util.Route)
+        self.assertIsInstance(copy_slice, Route)
         self.assertIsNot(copy_slice, self.route)
 
     def test__setitem__(self):
@@ -262,10 +265,10 @@ class TestRoute(unittest.TestCase):
         input_in_dot = "i.like.trains"
 
         # case: str sequence
-        sequence_route = c_util.Route()
+        sequence_route = Route()
         sequence_route.add(input_as_sequence)
         # case: str in dot
-        str_route = c_util.Route()
+        str_route = Route()
         str_route.add(input_in_dot)
         # combine Routes instances
 
@@ -315,7 +318,7 @@ class TestRoute(unittest.TestCase):
         route_copy = self.route.copy()
 
         # same cls object
-        self.assertIsInstance(route_copy, c_util.Route)
+        self.assertIsInstance(route_copy, Route)
         # not a reference
         self.assertIsNot(self.route, route_copy)
         # same fields
@@ -336,20 +339,20 @@ class TestArrayFunction(unittest.TestCase):
 
         self.t_arr_A = ak.Array(test_array_dict)
 
-        self.empty_arr_func = c_util.ArrayFunction.new(
+        self.empty_arr_func = ArrayFunction.new(
             self.empty_function, "test_empty", "any_input_A", "all_empty")
 
-        self.add_arr_func = c_util.ArrayFunction.new(
+        self.add_arr_func = ArrayFunction.new(
             self.add_function, "test_add", "any_input_B", "plus_100")
 
-        self.combined_arr_func = c_util.ArrayFunction.new(self.empty_function, name="combined",
+        self.combined_arr_func = ArrayFunction.new(self.empty_function, name="combined",
         uses=("met", "pT.all", self.empty_arr_func, self.add_arr_func),
             produces=(self.empty_arr_func, "pT.e"))
 
     def test_IOFlag(self):
         # SHOULD:   Create unique id for the class
         #           Value of the id is not important
-        flag = c_util.ArrayFunction.IOFlag
+        flag = ArrayFunction.IOFlag
         self.assertIsNot(flag.USES, flag.PRODUCES,
                          msg="USES and PRODUCES flag be different")
         self.assertIsNot(flag.USES, flag.AUTO,
@@ -358,8 +361,8 @@ class TestArrayFunction(unittest.TestCase):
     def test_has(self):
         # SHOULD:   True if name is already in cache
 
-        c_util.ArrayFunction.new(self.empty_function, "cached")
-        self.assertIn("cached", c_util.ArrayFunction._instances,
+        ArrayFunction.new(self.empty_function, "cached")
+        self.assertIn("cached", ArrayFunction._instances,
                       msg="Cache does not contain \'cached\'")
 
     def test_new(self):
@@ -368,34 +371,34 @@ class TestArrayFunction(unittest.TestCase):
         # Raise Error if multiple instances has same name
         with self.assertRaises(ValueError):
             name = "same_name"
-            c_util.ArrayFunction.new(
+            ArrayFunction.new(
                 self.empty_function, name)
-            c_util.ArrayFunction.new(self.add_function, name)
+            ArrayFunction.new(self.add_function, name)
 
         # new ArrayFunction should be in cache
-        newly_af = c_util.ArrayFunction.new(
+        newly_af = ArrayFunction.new(
             self.empty_function, "new_af")
-        self.assertIn("new_af", c_util.ArrayFunction._instances,
+        self.assertIn("new_af", ArrayFunction._instances,
                       msg="ArrayFunction is missing in cache")
 
         # normal instance should not be in cache
-        c_util.ArrayFunction(self.empty_function, "wrong_af")
+        ArrayFunction(self.empty_function, "wrong_af")
         self.assertNotIn(
-            "wrong_af", c_util.ArrayFunction._instances, msg="Array")
+            "wrong_af", ArrayFunction._instances, msg="Array")
 
         # new ArrayFunction should be instance of ArrayFunction
-        self.assertIsInstance(newly_af, c_util.ArrayFunction)
+        self.assertIsInstance(newly_af, ArrayFunction)
 
     def test_get(self):
         # SHOULD:   Returns a cached instance, if <copy> is True, another instance is returned
 
         # raise error if name is not in cache:
         with self.assertRaises(ValueError):
-            c_util.ArrayFunction.get("not_registered", copy=False)
+            ArrayFunction.get("not_registered", copy=False)
 
         # get instance if copy is False, else create new copy
-        instanced_empty = c_util.ArrayFunction.get("test_empty", copy=False)
-        copy_empty = c_util.ArrayFunction.get("test_empty", copy=True)
+        instanced_empty = ArrayFunction.get("test_empty", copy=False)
+        copy_empty = ArrayFunction.get("test_empty", copy=True)
 
         self.assertIs(instanced_empty, self.empty_arr_func,
                       msg="Is a copy, but shouldn\'t be a copy ")
@@ -403,27 +406,27 @@ class TestArrayFunction(unittest.TestCase):
                          msg="Isn\' a copy, but should be a copy ")
 
         # return ArrayFunction
-        self.assertIsInstance(instanced_empty, c_util.ArrayFunction,
+        self.assertIsInstance(instanced_empty, ArrayFunction,
                               msg="Is not instance of ArrayFunction, but should be")
-        self.assertIsInstance(copy_empty, c_util.ArrayFunction,
+        self.assertIsInstance(copy_empty, ArrayFunction,
                               msg="Is not instance of ArrayFunction, but should be")
 
     def test__init__(self):
         # SHOULD: init witout populate the cachhe
 
         # cache should not contain a key with name "not_used_new" of the instance
-        arrayfunction = c_util.ArrayFunction(func=self.empty_function,
+        arrayfunction = ArrayFunction(func=self.empty_function,
                                     name="not_used_new",
                                     uses="nothing",
                                     produces="nothing_also")
-        self.assertNotIn("not_used_new", c_util.ArrayFunction._instances,
+        self.assertNotIn("not_used_new", ArrayFunction._instances,
         msg="Cache is used, but this should not be the case")
 
         # self.name set correctly if not None
         self.assertEqual(arrayfunction.name, "not_used_new")
 
         # self.name is really set to self.func.__name__, which is the name of the function
-        array_function_without_name = c_util.ArrayFunction(func=self.empty_function)
+        array_function_without_name = ArrayFunction(func=self.empty_function)
         self.assertEqual(array_function_without_name.name,
                          self.empty_function.__name__, msg="Name is not set to name of the function")
 
@@ -433,7 +436,7 @@ class TestArrayFunction(unittest.TestCase):
         # # Solution? use name of class/function instead?
         # # instance x --> type(x).__name__ OR x.__class__.__name__
         # with self.assertRaises(Exception):
-        #     array_function_with_array_function = c_util.ArrayFunction(
+        #     array_function_with_array_function = ArrayFunction(
         #         func=array_function_without_name)
 
         # self.uses and self.produces should have empty sets if None is provided
@@ -445,11 +448,11 @@ class TestArrayFunction(unittest.TestCase):
         use_str = "nothing"
         uses_sequence_str_arrayfunction = [use_str, arrayfunction]
 
-        arrayfunction_input = c_util.ArrayFunction(
+        arrayfunction_input = ArrayFunction(
             func=self.empty_function, uses=arrayfunction)
-        sequence_input = c_util.ArrayFunction(
+        sequence_input = ArrayFunction(
             func=self.empty_function, uses=uses_sequence_str_arrayfunction)
-        set_input = c_util.ArrayFunction(
+        set_input = ArrayFunction(
             func=self.empty_function, uses=set(uses_sequence_str_arrayfunction))
 
         # all cases return the correct result
@@ -479,7 +482,7 @@ class TestArrayFunction(unittest.TestCase):
         #           be found instead
 
         # create arr func with uses: "arr1, arr2, empty_arr_func.USES and add.arr_func.USES"
-        flag = c_util.ArrayFunction.IOFlag
+        flag = ArrayFunction.IOFlag
 
         used_columns = self.combined_arr_func._get_columns(
             io_flag=flag.USES)

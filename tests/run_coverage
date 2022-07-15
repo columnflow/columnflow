@@ -20,7 +20,7 @@ action() {
             ( cd "$ap_dir"; pytest --cov=ap --cov-report xml:coverage_${mod}.xml "tests/${mod}.py" )
         else
             echo "testing $mod in sandbox $sandbox ..."
-            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && pytest --cov=ap --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
+            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && echo \"running coverage in tests/${mod}.py\" && pytest --cov=ap --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
         fi
     }
 

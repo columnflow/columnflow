@@ -20,7 +20,7 @@ action() {
             ( cd "$ap_dir"; python -m unittest "tests.$mod" )
         else
             echo "testing $mod in sandbox $sandbox ..."
-            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && python -m unittest tests.$mod" )
+            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && echo \"testing tests.$mod\" && python -m unittest tests.$mod" )
         fi
     }
 
