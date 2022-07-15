@@ -26,45 +26,78 @@ class ParameterType(enum.Enum):
     rate_uniform = "rate_uniform"
     rate_unconstrained = "rate_unconstrained"
     shape = "shape"
-    norm_shape = "norm_shape"
-    shape_to_rate_gauss = "shape_to_rate_gauss"
-    shape_to_rate_uniform = "shape_to_rate_uniform"
 
     def __str__(self):
         return self.value
 
     @property
-    def is_rate(self):
+    def is_rate(self) -> bool:
         return self in (
             self.rate_gauss,
             self.rate_uniform,
             self.rate_unconstrained,
-            self.shape_to_rate_gauss,
-            self.shape_to_rate_uniform,
         )
 
     @property
-    def is_shape(self):
+    def is_shape(self) -> bool:
         return self in (
             self.shape,
-            self.norm_shape,
+        )
+
+
+class ParameterTransformation(enum.Enum):
+    """
+    Flags denoting transformations to be applied on parameters.
+    """
+
+    none = "none"
+    centralize = "centralize"
+    symmetrize = "symmetrize"
+    asymmetrize = "asymmetrize"
+    asymmetrize_if_large = "asymmetrize_if_large"
+    normalize = "normalize"
+    effect_from_shape = "effect_from_shape"
+    effect_from_rate = "effect_from_rate"
+
+    def __str__(self):
+        return self.value
+
+    @property
+    def from_shape(self) -> bool:
+        return self in (
+            self.effect_from_shape,
         )
 
     @property
-    def to_rate(self):
+    def from_rate(self) -> bool:
         return self in (
-            self.shape_to_rate_gauss,
-            self.shape_to_rate_uniform,
+            self.effect_from_rate,
         )
 
+
+class ParameterTransformations(tuple):
+    """
+    Container around a sequence of :py:class:`ParameterTransformation`'s with a few convenience
+    methods.
+    """
+
+    def __new__(cls, transformations):
+        # TODO: at this point one could interfere and complain in case incompatible transfos are used
+        transformations = [
+            (t if isinstance(t, ParameterTransformation) else ParameterTransformation[t])
+            for t in transformations
+        ]
+
+        # initialize
+        return super().__new__(cls, transformations)
+
     @property
-    def from_shape(self):
-        return self in (
-            self.shape,
-            self.norm_shape,
-            self.shape_to_rate_gauss,
-            self.shape_to_rate_uniform,
-        )
+    def any_from_shape(self) -> bool:
+        return any(t.from_shape for t in self)
+
+    @property
+    def any_from_rate(self) -> bool:
+        return any(t.from_rate for t in self)
 
 
 class InferenceModel(object):
@@ -271,6 +304,7 @@ class InferenceModel(object):
         cls,
         name: str,
         type: Union[ParameterType, str],
+        transformations: Sequence[Union[ParameterTransformation, str]] = (ParameterTransformation.none,),
         shift_source: Optional[str] = None,
         effect: Union[Any] = 1.0,
     ) -> DotDict:
@@ -279,6 +313,8 @@ class InferenceModel(object):
 
             - *name*: The name of the parameter in the model.
             - *type*: A :py:class:`ParameterType` instance describing the type of this parameter.
+            - *transformations*: A sequence of :py:class:`ParameterTransformation` instances
+              describing transformations to be applied to the effect of this parameter.
             - *shift_source*: The name of a systematic shift source in the config that this
               parameter corresponds to.
             - *effect*: An arbitrary object describing the effect of the parameter (e.g. float for
@@ -287,6 +323,7 @@ class InferenceModel(object):
         return DotDict([
             ("name", str(name)),
             ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
+            ("transformations", ParameterTransformations(transformations)),
             ("shift_source", str(shift_source) if shift_source else None),
             ("effect", effect),
         ])
@@ -307,6 +344,32 @@ class InferenceModel(object):
             ("name", str(name)),
             ("parameter_names", list(map(str, parameter_names or []))),
         ])
+
+    @classmethod
+    def require_shapes_for_parameter(self, param_obj: dict) -> bool:
+        """
+        Returns *True* if for a certain parameter object *param_obj* varied shapes are needed, and
+        *False* otherwise.
+        """
+        if param_obj.type.is_shape:
+            # the shape might be build from a rate, in which case input shapes are not required
+            if param_obj.transformations.any_from_rate:
+                return False
+            # in any other case, shapes are required
+            return True
+
+        if param_obj.type.is_rate:
+            # when the rate effect is extracted from shapes, they are required
+            if param_obj.transformations.any_from_shape:
+                return True
+            # in any other case, shapes are not required
+            return False
+
+        # other cases are not supported
+        raise Exception(
+            f"shape requirement cannot be evaluated of parameter '{param_obj.name}' with type "
+            f"'{param_obj.type}' and transformations {param_obj.transformations}",
+        )
 
     def __init__(
         self,
@@ -1289,13 +1352,14 @@ class InferenceModel(object):
             if parameter.type == ParameterType.rate_unconstrained:
                 continue
 
-            if isinstance(parameter.effect, tuple):
+            if isinstance(parameter.effect, tuple) and len(parameter.effect) == 2:
                 # simply reverse the order
                 parameter.effect = parameter.effect[::-1]
-            else:  # float
+                changed_any = True
+            elif isinstance(parameter.effect, float):
                 # mirror at one
                 parameter.effect = 2.0 - parameter.effect
-            changed_any = True
+                changed_any = True
 
         return changed_any
 
@@ -1316,13 +1380,14 @@ class InferenceModel(object):
         """
         changed_any = False
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
-            if parameter.type == ParameterType.rate_unconstrained or isinstance(parameter.effect, tuple):
+            if parameter.type == ParameterType.rate_unconstrained:
                 continue
 
-            # split into two parts (e.g. 1.2 -> (0.8, 1.2))
-            f = parameter.effect - 1.0
-            parameter.effect = (1.0 - f, f + 1.0)
-            changed_any = True
+            if isinstance(parameter.effect, float):
+                # split into two parts (e.g. 1.2 -> (0.8, 1.2))
+                f = parameter.effect - 1.0
+                parameter.effect = (1.0 - f, f + 1.0)
+                changed_any = True
 
         return changed_any
 
@@ -1346,19 +1411,20 @@ class InferenceModel(object):
         """
         changed_any = False
         for _, _, parameter in self.iter_parameters(parameter=parameter, process=process, category=category):
-            if parameter.type == ParameterType.rate_unconstrained or not isinstance(parameter.effect, tuple):
+            if parameter.type == ParameterType.rate_unconstrained:
                 continue
 
-            # check the difference
-            f_down = 1.0 - parameter.effect[0]
-            f_up = parameter.effect[1] - 1.0
-            if abs(f_up - f_down) > epsilon:
-                continue
+            if isinstance(parameter.effect, tuple):
+                # check the difference
+                f_down = 1.0 - parameter.effect[0]
+                f_up = parameter.effect[1] - 1.0
+                if abs(f_up - f_down) > epsilon:
+                    continue
 
-            # merge into one parameter
-            f = 0.5 * (f_up + f_down)
-            parameter.effect = round(1.0 + f, precision)
-            changed_any = True
+                # merge into one parameter
+                f = 0.5 * (f_up + f_down)
+                parameter.effect = round(1.0 + f, precision)
+                changed_any = True
 
         return changed_any
 

@@ -53,7 +53,7 @@ class CreateDatacards(
                     shift_sources=tuple(
                         param_obj.shift_source
                         for param_obj in proc_obj.parameters
-                        if param_obj.type.from_shape and param_obj.shift_source
+                        if self.inference_model_inst.require_shapes_for_parameter(param_obj)
                     ),
                     variables=(cat_obj.variable,),
                     branch=-1,
@@ -168,8 +168,10 @@ class CreateDatacards(
                 # per shift
                 if proc_obj:
                     for param_obj in proc_obj.parameters:
-                        if not param_obj.type.from_shape or not param_obj.shift_source:
+                        # skip the parameter when varied hists are not needed
+                        if not self.inference_model_inst.require_shapes_for_parameter(param_obj):
                             continue
+                        # store the varied hists
                         hists[proc_obj_name][param_obj.name] = {}
                         for d in ["up", "down"]:
                             shift_inst = self.config_inst.get_shift(f"{param_obj.shift_source}_{d}")

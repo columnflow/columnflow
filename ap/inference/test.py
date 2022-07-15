@@ -4,7 +4,7 @@
 Dummy inference model.
 """
 
-from ap.inference import InferenceModel, ParameterType
+from ap.inference import InferenceModel, ParameterType, ParameterTransformation
 
 
 # create a new cached model instance
@@ -47,8 +47,30 @@ def configure(self):
         self.symmetrize_parameter_effect(unc_name)
 
     # minbias xs
-    self.add_parameter("CMS_pileup", type=ParameterType.shape, shift_source="minbias_xs")
+    self.add_parameter(
+        "CMS_pileup",
+        type=ParameterType.shape,
+        shift_source="minbias_xs",
+    )
     self.add_parameter_to_group("CMS_pileup", "experiment")
+
+    # and again minbias xs, but encoded as symmetrized rate
+    self.add_parameter(
+        "CMS_pileup2",
+        type=ParameterType.rate_uniform,
+        transformations=[ParameterTransformation.effect_from_shape, ParameterTransformation.symmetrize],
+        shift_source="minbias_xs",
+    )
+    self.add_parameter_to_group("CMS_pileup2", "experiment")
+
+    # a custom asymmetric uncertainty that is converted from rate to shape
+    self.add_parameter(
+        "QCDscale_ST",
+        process="ST",
+        type=ParameterType.shape,
+        transformations=[ParameterTransformation.effect_from_rate],
+        effect=(0.5, 1.1),
+    )
 
     # test
     self.add_parameter("QCDscale_ttbar", category="cat1", process="TT", type=ParameterType.rate_uniform)
