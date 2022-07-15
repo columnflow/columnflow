@@ -1,5 +1,5 @@
 # version 4
-# packages are installed in addition to those in requirements_prod.txt
+# packages might be installed in addition to other requirements
 
 ipython==7.16.*
 pytest-cov==3.0.*

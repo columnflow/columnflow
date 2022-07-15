@@ -9,6 +9,10 @@ ap_create_venv() {
     #
     # Required environment variables:
     #   AP_VENV_PATH: The base path where AP virtual environments are stored.
+    #
+    # Optional environments variables:
+    #   AP_CI_JOB: When "1", the virtual environment is created the normal way without copies and
+    #              relocation.
 
     # check arguments
     local name="$1"
@@ -21,6 +25,12 @@ ap_create_venv() {
     if [ -z "$AP_VENV_PATH" ]; then
         2>&1 echo "environment variable AP_VENV_PATH must not be empty"
         return "2"
+    fi
+
+    # in CI jobs, just create the venv as is and finish
+    if [ "$AP_CI_JOB" = "1" ]; then
+        python3 -m venv "${AP_VENV_PATH}/${name}"
+        return "$?"
     fi
 
     # create the venv the usual way
