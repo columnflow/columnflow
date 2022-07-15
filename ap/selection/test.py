@@ -7,6 +7,7 @@ Selection methods for testing purposes.
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Union
 
+import law
 import order as od
 
 from ap.selection import Selector, SelectionResult, selector
@@ -228,11 +229,11 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids,
+        process_ids, "LHEWeight.originalXWGTUP",
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        "LHEWeight.originalXWGTUP", process_ids,
+        process_ids, "LHEWeight.originalXWGTUP",
     },
     shifts={
         jet_energy_shifts,
@@ -253,6 +254,10 @@ def test(
     # example stats:
     # - number of events before and after selection
     # - sum of mc weights before and after selection
+    fwd_kwargs = law.util.merge_dicts(
+        {"config_inst": config_inst, "dataset_inst": dataset_inst},
+        kwargs,
+    )
 
     # prepare the selection results that are updated at every step
     results = SelectionResult()
@@ -274,10 +279,10 @@ def test(
     results.main["event"] = event_sel
 
     # build categories
-    self.stack.category_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    self.stack.category_ids(events, **fwd_kwargs)
 
     # create process ids
-    self.stack.process_ids(events, dataset_inst=dataset_inst, **kwargs)
+    self.stack.process_ids(events, **fwd_kwargs)
 
     # increment stats
     events_sel = events[event_sel]

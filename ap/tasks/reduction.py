@@ -15,7 +15,10 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.selection import CalibrateEvents, SelectEvents
-from ap.util import ensure_proxy, dev_sandbox, safe_div
+from ap.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+
+
+ak = maybe_import("awkward")
 
 
 class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -94,6 +97,11 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+                # would result in the coffea behavior being partially lost after new columns are
+                # added, which - for some reason - does not happen on copies
+                events = ak.copy(events)
+
                 # add the calibrated diffs and potentially new columns
                 events = update_ak_array(events, *diffs)
 

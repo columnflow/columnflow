@@ -13,7 +13,10 @@ from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.external import GetDatasetLFNs
 from ap.tasks.calibration import CalibrateEvents
-from ap.util import ensure_proxy, dev_sandbox, safe_div
+from ap.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+
+
+ak = maybe_import("awkward")
 
 
 class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
@@ -110,9 +113,10 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         ) as reader:
             msg = f"iterate through {reader.n_entries} events ..."
             for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # here, we would start evaluating object and event selection criteria, store
-                # new columns related to the selection (e.g. categories or regions), and
-                # book-keeping of stats
+                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+                # would result in the coffea behavior being partially lost after new columns are
+                # added, which - for some reason - does not happen on copies
+                events = ak.copy(events)
 
                 # apply the calibrated diffs
                 events = update_ak_array(events, *diffs)
