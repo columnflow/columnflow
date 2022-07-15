@@ -1,17 +1,15 @@
 # coding: utf-8
 
 
-__all__ = ["test_Route"]
+__all__ = ["TestRoute", "TestArrayFunction"]
 
 
 import unittest
-from ap.columnar_util import add_ak_alias
 import ap.columnar_util as c_util
-from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
 import awkward as ak
 
 
-class test_Route(unittest.TestCase):
+class TestRoute(unittest.TestCase):
 
     def setUp(self):
         # setting standardcases
@@ -216,7 +214,7 @@ class test_Route(unittest.TestCase):
 
     def test__radd__(self):
         # SHOULD: Add is same for left and right, if left argument add's fails
-        self.assertEqual('test_string' + self.route,
+        self.assertEqual("test_string" + self.route,
                          ("i", "like", "trains", "test_string"))
 
     def test__iadd__(self):
@@ -262,8 +260,6 @@ class test_Route(unittest.TestCase):
 
         input_as_sequence = ["i", "like", "trains"]
         input_in_dot = "i.like.trains"
-
-        result = ("i", "like", "trains")
 
         # case: str sequence
         sequence_route = c_util.Route()
@@ -326,7 +322,7 @@ class test_Route(unittest.TestCase):
         self.assertEqual(tuple(self.route._fields), tuple(route_copy._fields))
 
 
-class test_ArrayFunction(unittest.TestCase):
+class TestArrayFunction(unittest.TestCase):
     # 2 standard dummy functions
     def add_function(self, arr):
         return arr + 100
@@ -364,13 +360,13 @@ class test_ArrayFunction(unittest.TestCase):
 
         c_util.ArrayFunction.new(self.empty_function, "cached")
         self.assertIn("cached", c_util.ArrayFunction._instances,
-                      msg="Cache does not contain \"cached\"")
+                      msg="Cache does not contain \'cached\'")
 
     def test_new(self):
         # SHOULD:   Create new instance of the class and adds its instance to the class cache.
 
         # Raise Error if multiple instances has same name
-        with self.assertRaises(ValueError) as error:
+        with self.assertRaises(ValueError):
             name = "same_name"
             c_util.ArrayFunction.new(
                 self.empty_function, name)
@@ -383,7 +379,7 @@ class test_ArrayFunction(unittest.TestCase):
                       msg="ArrayFunction is missing in cache")
 
         # normal instance should not be in cache
-        wrong_af = c_util.ArrayFunction(self.empty_function, "wrong_af")
+        c_util.ArrayFunction(self.empty_function, "wrong_af")
         self.assertNotIn(
             "wrong_af", c_util.ArrayFunction._instances, msg="Array")
 
@@ -394,7 +390,7 @@ class test_ArrayFunction(unittest.TestCase):
         # SHOULD:   Returns a cached instance, if <copy> is True, another instance is returned
 
         # raise error if name is not in cache:
-        with self.assertRaises(ValueError) as error:
+        with self.assertRaises(ValueError):
             c_util.ArrayFunction.get("not_registered", copy=False)
 
         # get instance if copy is False, else create new copy
@@ -420,7 +416,8 @@ class test_ArrayFunction(unittest.TestCase):
                                     name="not_used_new",
                                     uses="nothing",
                                     produces="nothing_also")
-        self.assertNotIn("not_used_new", c_util.ArrayFunction._instances, msg="Cache is used, but this should not be the case")
+        self.assertNotIn("not_used_new", c_util.ArrayFunction._instances,
+        msg="Cache is used, but this should not be the case")
 
         # self.name set correctly if not None
         self.assertEqual(arrayfunction.name, "not_used_new")
@@ -430,13 +427,12 @@ class test_ArrayFunction(unittest.TestCase):
         self.assertEqual(array_function_without_name.name,
                          self.empty_function.__name__, msg="Name is not set to name of the function")
 
-
         # # TODO: NOT SURE ABOUT THIS, ASK MARCEL
         # # <func> can be any Callable, but ArrayFunction instance is also a callable
         # # Should ArrayFunction Instances be able to used as Argument?
         # # Solution? use name of class/function instead?
-        # # instance x --> type(x).__name__ OR x x.__class__.__name__
-        # with self.assertRaises(Exception) as error:
+        # # instance x --> type(x).__name__ OR x.__class__.__name__
+        # with self.assertRaises(Exception):
         #     array_function_with_array_function = c_util.ArrayFunction(
         #         func=array_function_without_name)
 
@@ -491,8 +487,8 @@ class test_ArrayFunction(unittest.TestCase):
             io_flag=flag.PRODUCES)
 
         # raise error if flag is AUTO
-        with self.assertRaises(ValueError) as error:
-            auto = self.empty_arr_func._get_columns(io_flag=flag.AUTO)
+        with self.assertRaises(ValueError):
+            self.empty_arr_func._get_columns(io_flag=flag.AUTO)
 
         # return a Set
         self.assertIsInstance(used_columns, set, msg="Returned Object is not a set")
