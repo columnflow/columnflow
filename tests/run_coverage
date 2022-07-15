@@ -15,12 +15,12 @@ action() {
         local mod="$1"
         local sandbox="$2"
 
-        if [ -z "$sandbox" ]; then
-            echo "testing $mod ..."
+        if [ -z "${sandbox}" ]; then
+            echo "testing ${mod} ..."
             ( cd "$ap_dir"; pytest --cov=ap --cov-report xml:coverage_${mod}.xml "tests/${mod}.py" )
         else
-            echo "testing $mod in sandbox $sandbox ..."
-            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && echo \"running coverage in tests/${mod}.py\" && pytest --cov=ap --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
+            echo "testing ${mod} in sandbox ${sandbox} ..."
+            ( cd "$ap_dir"; bash -c "source sandboxes/${sandbox} && echo \"running coverage in tests/${mod}.py\" && pytest --cov=ap --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
         fi
     }
 
@@ -34,6 +34,7 @@ action() {
     [ "$gret" = "0" ] && gret="$ret"
 
     # test_columnar_util
+    echo
     run_coverage test_columnar_util "venv_columnar${dev}.sh"
     ret="$?"
     [ "$gret" = "0" ] && gret="$ret"

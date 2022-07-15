@@ -10,31 +10,18 @@ action() {
     # dev flag for sandboxes
     local dev="$( $AP_DEV && echo "_dev" || echo "" )"
 
-    # helper to run a test
-    run_test() {
-        local mod="$1"
-        local sandbox="$2"
-
-        if [ -z "$sandbox" ]; then
-            echo "testing $mod ..."
-            ( cd "$ap_dir"; python -m unittest "tests.$mod" )
-        else
-            echo "testing $mod in sandbox $sandbox ..."
-            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && echo \"testing tests.$mod\" && python -m unittest tests.$mod" )
-        fi
-    }
-
     # start tests and keep track of immediate and global return values
     local gret="0"
     local ret
 
     # test_util
-    run_test test_util
+    bash "${this_dir}/run_test" test_util
     ret="$?"
     [ "$gret" = "0" ] && gret="$ret"
 
     # test_columnar_util
-    run_test test_columnar_util "venv_columnar${dev}.sh"
+    echo
+    bash "${this_dir}/run_test" test_columnar_util "venv_columnar${dev}.sh"
     ret="$?"
     [ "$gret" = "0" ] && gret="$ret"
 
