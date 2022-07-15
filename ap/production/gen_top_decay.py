@@ -27,7 +27,12 @@ def gen_top_decay_products(
     """
     Creates a new ragged column "gen_top_decay" with one element per hard top quark. Each element is
     a GenParticleArray with five objects in a distinct order: top quark, bottom quark, W boson,
-    down-type quark or charged lepton, up-type quark or neutrino.
+    down-type quark or charged lepton, up-type quark or neutrino. Per event, the structure will be
+    similar to:
+
+    .. code-block:: python
+
+        [[t1, W1, b1, q1, q2], [t2, ...], ...]
     """
     if dataset_inst.is_data or not dataset_inst.x("has_top", False):
         return events
@@ -80,7 +85,7 @@ def gen_top_decay_products(
     # strategy: handle cases with different amounts of top quarks per event differently, and per
     # amount, create indices for each type of gen particle and do one large concatenation; example:
     #
-    # groups = np.concatenate((
+    # groups = ak.concatenate((
     #     t[[[0, 1], [0], [0, 1, 2], ...]][:, :, None],
     #     w[[[1, 0], [0], [0, 2, 1], ...]][:, :, None],
     #     ...
