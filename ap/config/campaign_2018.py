@@ -46,6 +46,7 @@ with uniqueness_context(campaign_2018.name):
         name="st_tchannel_t",
         id=1,
         processes=[procs.process_st_tchannel_t],
+        aux={"has_top": True},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -89,6 +90,7 @@ with uniqueness_context(campaign_2018.name):
         name="st_tchannel_tbar",
         id=2,
         processes=[procs.process_st_tchannel_tbar],
+        aux={"has_top": True},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -132,6 +134,7 @@ with uniqueness_context(campaign_2018.name):
         name="st_twchannel_t",
         id=3,
         processes=[procs.process_st_twchannel_t],
+        aux={"has_top": True},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -147,6 +150,7 @@ with uniqueness_context(campaign_2018.name):
         name="st_twchannel_tbar",
         id=4,
         processes=[procs.process_st_twchannel_tbar],
+        aux={"has_top": True},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -162,7 +166,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_sl",
         id=5,
         processes=[procs.process_tt_sl],
-        aux={"is_ttbar": True, "event_weights": ["top_pt_weight"]},
+        aux={"has_top": True, "is_ttbar": True, "event_weights": ["top_pt_weight"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -206,7 +210,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_dl",
         id=6,
         processes=[procs.process_tt_dl],
-        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
+        aux={"has_top": True, "is_ttbar": True, "event_weights": ["top_pt_weights"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
@@ -250,7 +254,7 @@ with uniqueness_context(campaign_2018.name):
         name="tt_fh",
         id=7,
         processes=[procs.process_tt_fh],
-        aux={"is_ttbar": True, "event_weights": ["top_pt_weights"]},
+        aux={"has_top": True, "is_ttbar": True, "event_weights": ["top_pt_weights"]},
         info=dict(
             nominal=DatasetInfo(
                 keys=[
