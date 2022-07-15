@@ -226,19 +226,20 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         "the number of folds defined in the ML model; default: 0",
     )
 
-    sandbox = None
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # set the sandbox
-        self.sandbox = self.ml_model_inst.sandbox(self)
-
+        # verify the fold
         if not (0 <= self.fold < self.ml_model_inst.folds):
             raise ValueError(
                 "the fold index is incompatible with the number of folds "
                 f"({self.ml_model_inst.fold}) for the ML model '{self.ml_model}'",
             )
+
+    @property
+    def sandbox(self):
+        # determine the sandbox dynamically based on the response of the model
+        return self.ml_model_inst.sandbox(self)
 
     def requires(self):
         return {
