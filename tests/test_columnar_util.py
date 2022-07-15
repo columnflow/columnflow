@@ -8,310 +8,540 @@ import unittest
 from ap.columnar_util import add_ak_alias
 import ap.columnar_util as c_util
 from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
+import awkward as ak
 
 
 class test_Route(unittest.TestCase):
 
-
-
     def setUp(self):
-
-        self.Route = c_util.Route()
-
-  #     ak_array1 = ak.Array([array1_content])
-
-    #     assert len(Route("b_bb1").fields) == 1
-    #     assert len(Route("b.bb1").fields) == 2
-
-        ak_array1_route1_str = "a"
-        ak_array1_route2_str = "b.bb1"
-        ak_array1_wrongroute1_str = "b_bb1"
-        ak_array1_route3_str = "b.bb2.bbb2.bbbb1.b_bbbb1"
-        route1_str=c_util.Route(ak_array1_route1_str)
-        print("route1 str", route1_str, route1_str._fields, route1_str.fields)
-        print("route1_str column and nano column", route1_str.column, route1_str.nano_column)
-
-        route2_str=c_util.Route(ak_array1_route2_str)
-        print("route2 str", route2_str, route2_str._fields, route2_str.fields)
-        print("route2_str column and nano column", route2_str.column, route2_str.nano_column)
-
-        wrongroute1_str=c_util.Route(ak_array1_wrongroute1_str)
-        # print("wrongroute1 str", wrongroute1_str, wrongroute1_str._fields, wrongroute1_str.fields)
-        # print("wrongroute1 str results", ak_array1[wrongroute1_str.fields])
-
-        route3_str=c_util.Route(ak_array1_route3_str)
-        print("route3_str column and nano column", route3_str.column, route3_str.nano_column)
-
-
-
+        # setting standardcases
+        self.route = c_util.Route(["i", "like", "trains"])
+        self.empty_route = c_util.Route()
 
     def tearDown(self):
-        pass
+        del self.route
+        del self.empty_route
 
     def test_join(self):
-        test_subject = tuple("i", "like", "trains")
-        self.assertEqual(self.Route.join(test_subject, "i.like.trains"))
-        self.assertEqual(self.Route.join(list(test_subject), "i.like.trains"))
-        self.assertEqual(self.Route.join("i, like, trains", "i.like.trains"))
+        # SHOULD:   join a sequence of strings with DOT notation
+        join = c_util.Route.join
+        result = "i.like.trains"
+
+        # tuple list
+        self.assertEqual(join(("i", "like", "trains")), result)
+        self.assertEqual(join(["i", "like", "trains"]), result)
+
+        # mixed string notation
+        self.assertEqual(join(["i.like", "trains"]), result)
+        # mixed with both notations?
+        self.assertEqual(join(["i_like", "trains"]), result)
 
     def test_join_nano(self):
-        self.assertEqual(self.Route.join_nano(tuple("i", "like", "trains"), "i_like_trains"))
-        self.assertEqual(self.Route.join_nano(list("i", "like", "trains"), "i_like_trains"))
-        self.assertEqual(self.Route.join_nano("i, like, trains", "i_like_trains"))
+        # SHOULD: join a sequence of strings with NANO notation
+        join_nano = c_util.Route.join_nano
+        result = "i_like_trains"
+        # tuple list
+        self.assertEqual(join_nano(("i", "like", "trains")), result)
+        self.assertEqual(join_nano(["i", "like", "trains"]), result)
 
+        # mixed string notation
+        self.assertEqual(join_nano(["i.like", "trains"]), result)
+        # mixed with both notations?
+        self.assertEqual(join_nano(["i_like", "trains"]), result)
 
     def test_split(self):
-        split = self.Route.split
-        self.assertEqual(tuple(split("i.like.trains")), tuple("i", "like", "trains") )
-        self.assertEqual(split("i.like.trains"), list("i", "like", "trains") )
+        # SHOULD: string in DOT format into List[str]
+        split_result = self.empty_route.split("i.like.trains")
+        result = ["i", "like", "trains"]
 
+        # equality with tuples checks if order is the same
+        self.assertEqual(tuple(split_result), tuple(result))
+        # is list after operation
+        self.assertIsInstance(split_result, list)
+
+        # all values in the split are instance of str
+        self.assertTrue(all(isinstance(value, str) for value in split_result))
 
     def test_split_nano(self):
-        self.assertEqual(tuple(self.Route.split("i_like_trains")), tuple("i", "like", "trains") )
-        self.assertEqual(self.Route.split("i_like_trains"), list("i", "like", "trains") )
+        # SHOULD: string in NANO format into List[str]
+        split_result = self.empty_route.split_nano("i_like_trains")
+        result = ["i", "like", "trains"]
+
+        # equality with tuples checks if order is the same
+        self.assertEqual(tuple(split_result), tuple(result))
+        # is list after operation
+        self.assertIsInstance(split_result, list)
+
+        # all values in the split are instance of str
+        self.assertTrue(all(isinstance(value, str) for value in split_result))
 
     def test_check(self):
+        # SHOULD: Returns input, if it is a Route instance,
+        # otherwise uses Route constructor with input
 
-        # RouteInstance --> RouteInstance
-        self.assertIsInstance(self.Route.check(self.Route), c_util.Route)
+        # RouteInstance --> returns same object
+        self.assertIs(c_util.Route.check(self.route), self.route)
+
+        # if result of *check* with same fields as self.route, is equal to self.route
         # Sequence[str] --> RouteInstance
-        self.assertIsinstance(self.Route.check(tuple("i","like","trains")), c_util.Route)
+        route_from_sequence = c_util.Route.check(("i", "like", "trains"))
+        self.assertEqual(route_from_sequence, self.route)
         # str --> RouteInstance
-        self.assertIsinstance(self.Route.check("i","like","trains"), c_util.Route)
-
-        # check if fields are the same
-        # print(c_util.Route.check(ak_array1_route2_list), c_util.Route.check(
-        #     ak_array1_route2_list) == ak_array1_route2_list)
-        # print(c_util.Route.check(ak_array1_route2_list) == route2_list)
-        # print(c_util.Route.check(route2_list),
-        #       c_util.Route.check(route2_list) == route2_list)
-        # print(c_util.Route.check(ak_array1_route2_list).fields, c_util.Route.check(
-        #     ak_array1_route2_list).fields == ak_array1_route2_list)
-        # print(c_util.Route.check(ak_array1_route2_list).fields == route2_list.fields)
-        # print(c_util.Route.check(route2_list).fields, c_util.Route.check(
-        #     route2_list).fields == route2_list.fields)
-        # print(hash(c_util.Route.check(route2_list)), hash(route2_list))
-        # print(hash(c_util.Route.check(ak_array1_route2_list)), hash(route2_list))
-        # # print(hash(c_util.Route.check(ak_array1_route2_list)),hash(ak_array1_route2_list))
+        route_from_str = c_util.Route.check(("i", "like", "trains"))
+        self.assertEqual(route_from_str, self.route)
 
     def test_select(self):
+        # SHOULD: Select value from awkward array using it slice mechanic
+        # slice_name is nested, each element of a tuple is a nested level
+        # aw.Array["1","2"] = aw.Array["1"]["2"]
+
+        select = c_util.Route.select
+        # self.Route.fields = ["i","like","trains"]
+        aw_dict = {"i": {"like": {"trains": [0, 1, 2, 3]}}}
+        aw_arr = ak.Array(aw_dict)
+
+        aw_selection = select(aw_arr, self.route)
+        aw_slice_direct = aw_arr[tuple(self.route._fields)]
+        aw_slice_standard = aw_arr["i", "like", "trains"]
+
+        # slice and select are the same in ALL entries
+        # awkward.Array has no equal_all operation
+        same_array = ak.all(
+            [(aw_selection == aw_slice_direct) == (aw_selection == aw_slice_standard)])
+        self.assertTrue(same_array)
+
+        # should raise error if route does not exist
+        self.assertRaises(ValueError, select, aw_arr,
+                          ("does", "not", "exists"))
+
+    def test__init__(self):
+        # SHOULD: create an EMPTY LIST if route=None
+        # raise error if *route* is not None and not compatible
+
+        # route = None --> _fields should be empty and list
+        self.assertFalse(self.empty_route._fields)
+        self.assertIsInstance(self.empty_route._fields, list)
+
+        # route != None __> fields be filled and list
+        self.assertTrue(self.route._fields)
+        self.assertIsInstance(self.route._fields, list)
+
+        # fields should never be shared among Route instances
+        # this is tested because of the tricky behavior of
+        # mutuable objects in init
+        self.assertFalse(self.route._fields is self.empty_route._fields)
+        self.assertFalse(c_util.Route() is self.empty_route._fields)
+
+        # raise if input is not Sequence[str], str or Route
+        self.assertRaises(Exception, c_util.Route, [0, 1., "2", None])
+        self.assertRaises(Exception, c_util.Route, (0, 1, "2", None))
+        self.assertRaises(Exception, c_util.Route, 0)
+
+        # self._fields can not have a DOT in substring
+        self.assertFalse(
+            any("." in s for s in c_util.Route("i.like", "trains")))
+        # same but with strings in Sequence
+        self.assertFalse(
+            any("." in s for s in c_util.Route(["i.like", "trains"])))
+
+    def test_fields(self):
+        # SHOULD: return tuple of strings, but no reference.
+
+        # _fields same as fields
+        self.assertEqual(self.route.fields, tuple(self.route._fields))
+        self.assertFalse(self.route.fields is tuple(self.route._fields))
+
+    def test_column(self):
+        # SHOULD: return fields in DOT
+        self.assertEqual(self.route.column, "i.like.trains")
+
+    def test_nano_column(self):
+        # SHOULD: return fields in NANO
+        self.assertEqual(self.route.nano_column, "i_like_trains")
+
+    def test__str__(self):
+        self.assertEqual(str(self.route), "i.like.trains")
+
+    def test__repr__(self):
+        # TODO: No idea how to test
         pass
 
+    def test__hash__(self):
+        # SHOULD: Return the same hash if two Routes
+        # stores the same fields in the same order.
+        same_route = c_util.Route(("i", "like", "trains"))
+        self.assertTrue(hash(same_route) == hash(self.route) ==
+                        hash(("i", "like", "trains")))
+
+        # checks if not true when order is different
+        reverse_route = c_util.Route(("trains", "like", "i"))
+        self.assertNotEqual(hash(reverse_route), hash(self.route))
+
+    def test__len__(self):
+        self.assertEqual(len(self.route), 3)
+        self.assertEqual(len(self.empty_route), 0)
+
+    def test__eq__(self):
+        # SHOULD: return True if fields of one Route are the same as
+        # fields from other Route
+        # value of lists and tuples
+        # the DOT Format of the str are equal
+        # ELSE False
+        self.assertFalse(self.route == self.empty_route)
+        self.assertTrue(self.route == ("i", "like", "trains"))
+        self.assertTrue(self.route.column == "i.like.trains")
+        self.assertFalse(self.route == 0)
+
+    def test__bool__(self):
+        # SHOULD: Return if fields are empty or not
+        # Since fields cannnot be nested, bool check of _fields is enough
+        self.assertFalse(bool(self.empty_route._fields))
+        self.assertTrue(bool(self.route._fields))
+
+    def test__nonzero__(self):
+        # same as test_bool__
+        pass
+
+    def test__add__(self):
+        # SHOULD return same as *add*
+        self.assertEqual(self.empty_route + self.route,
+                         ("i", "like", "trains"))
+        self.assertEqual(self.empty_route + "i.like.trains",
+                         ("i", "like", "trains"))
+        self.assertEqual(self.empty_route +
+                         ["i", "like", "trains"], ("i", "like", "trains"))
+
+        # this __add__ should be not inplace
+        self.assertFalse(self.empty_route)
+
+    def test__radd__(self):
+        # SHOULD: Add is same for left and right, if left argument add's fails
+        self.assertEqual('test_string' + self.route,
+                         ("i", "like", "trains", "test_string"))
+
+    def test__iadd__(self):
+        # +=
+        self.route += self.route
+        self.assertEqual(self.route, ("i", "like", "trains") * 2)
+
+    def test__getitem__(self):
+        # Should return value of self._fields at index
+        # if number is int, otherwise create new route instance
+        # indexing field[int]
+        self.assertEqual(self.route[2], "trains")
+        # indexing field[slice]
+
+        self.assertEqual(self.route[1:-1], "like")
+        self.assertEqual(self.route[0:2], ("i", "like"))
+
+        # slice -> new instance of Route
+        copy_slice = self.route[:]
+        self.assertIsInstance(copy_slice, c_util.Route)
+        self.assertIsNot(copy_slice, self.route)
+
+    def test__setitem__(self):
+        # SHOULD: replace values in self._fields
+        self.route[0] = "replaced"
+        self.assertEqual(self.route, ("replaced", "like", "trains"))
+
+        # _fields should only hold "str" to be meaningful
+        self.route[0] = None
+        self.route[1] = 1
+        self.route[2] = self.empty_route
+
+        is_str_type = [isinstance(self.route[index], str)
+                       for index in range(0, 3)]
+        self.assertTrue(all(is_str_type), msg="Function enables to place elements that are not of type str")
+
+    def test_add(self):
+        # extend self._fields (a list)
+        # if input is a...
+        # - Sequence[str] -> extend str to _fields
+        # - Route() instance -> extend Route._field
+        # - str in DOT format
+
+        input_as_sequence = ["i", "like", "trains"]
+        input_in_dot = "i.like.trains"
+
+        result = ("i", "like", "trains")
+
+        # case: str sequence
+        sequence_route = c_util.Route()
+        sequence_route.add(input_as_sequence)
+        # case: str in dot
+        str_route = c_util.Route()
+        str_route.add(input_in_dot)
+        # combine Routes instances
+
+        self.empty_route.add(str_route)
+        # comparison of fields are the same
+        self.assertTrue(tuple(sequence_route._fields) == tuple(
+            str_route._fields) == tuple(self.empty_route._fields))
+
+        # raise error if something else is added
+        self.assertRaises(ValueError, self.empty_route.add, 0)
+        self.assertRaises(ValueError, self.empty_route.add, [0, 1.])
+        self.assertRaises(ValueError, self.empty_route.add, None)
+
     def test_pop(self):
-        self.Route.add("a1.b1",)
-        # remove entry at index from self.field list
+        # SHOULD: Remove entry at index from self._field AND
+        # return the remove entry
 
+        # pop element at index, default last element
+        # default behavior: remove last element
+        self.assertEqual(self.route.pop(), "trains")
+        self.assertEqual(self.route.pop(0), "i")
 
-        # print(route3_str, route3_str.pop(0))
-        # print(route3_str, route3_str.pop(1))
-        # #default is -1
-        # print(route3_str, route3_str.pop())
-        # # useless, as pop occurs before print in the print statement, thought as a check of the removal of fields elements through pop
-        # print(route3_str)
+        # after 2 pops only 1 element left
+        self.assertTrue(len(self.route._fields), 1)
+
+        # error when doing pop too often
+        self.assertRaises(Exception, self.empty_route.pop, ())
 
     def test_reverse(self):
-        # test reverse
-        print("\n test reverse \n")
-        # route3_str = Route(ak_array1_route3_str)
-        # print(route3_str)
-        # route3_str.reverse()
-        # print(route3_str)
+        # SHOULD: reverse fields INPLACE
+        original = ("i", "like", "trains")
+        reverse = ("trains", "like", "i")
+        self.empty_route.add(original)
 
+        # double reverse should restore the content
+        self.route.reverse()
+        self.assertEqual(tuple(self.route._fields), reverse)
+        self.route.reverse()
+        self.assertEqual(tuple(self.route._fields), original)
 
+        # inplace operations should return nothing
+        self.assertIsNone(self.route.reverse())
 
     def test_copy(self):
-        # test copy
-        print("\n test copy \n")
-        # first print: the copy object is different from the original object
-        # second print: using two times copy gives each time a new object (as pop would else reduice the number of elements)
-        # third print: use pop and check if outcome is as it should be
-    #     print(route3_str, route3_str.copy(), route3_str.copy().pop())
-    #     # are objects identical? as well their fields as the fact that they are objects of the class Route with the attribute fields
-    #     print(route3_str == route3_str.copy(),
-    #           route3_str.fields == route3_str.copy().fields)
-    #     # useless as pop occurs before print in the print statement
-    #     print(route3_str)
+        # SHOULD: Copy instance.
+        # route is not empty
+        route_copy = self.route.copy()
 
-    #     # test copy
-    #     print("\n test inner/intrinsic params \n")
-    #     route3_str = Route(ak_array1_route3_str)
-    #     print(route3_str, route3_str.fields)
-    #     print("str", str(route3_str))
-    #     # "official" object representation in string format
-    #     print("repr", repr(route3_str))
-    #     print("repr string", repr("b.bb2.bbb2.bbbb1.b_bbbb1"),
-    #           repr(ak_array1_route3_str))
-    #     print("hash", hash(route3_str), "hash equalities string", hash(route3_str) == hash(ak_array1_route3_str), hash(route3_str) == hash("b.bb2.bbb2.bbbb1.b_bbbb1"), "hash equalities tuple", hash(
-    #         route3_str) == hash(ak_array1_route3_tuple), hash(route3_str) == hash(("b", "bb2", "bbb2", "bbbb1", "b_bbbb1")), hash(route3_str) == hash(route3_str.fields))
-    #     print("len", len(route3_str))
-    #     print("eq", "with route", route3_str == route3_str, "with str in dot format", route3_str == "b.bb2.bbb2.bbbb1.b_bbbb1", "with str in underscore format", route3_str == "b_bb2_bbb2_bbbb1_b_bbbb1", "with list",
-    #           route3_str == ["b", "bb2", "bbb2", "bbbb1", "b_bbbb1"], "with tuple", route3_str == ("b", "bb2", "bbb2", "bbbb1", "b_bbbb1"), "with anything else, e.g. its hash", route3_str == hash(route3_str))
-    #     print("bool", bool(route3_str), ", for an empty list:", bool(Route()))
-    #     # == python2 version of bool no test needed, already in bool
-    #     print("nonzero", "see bool")
-    #     print("add", route3_str + "foo")
-    #     print(route3_str)
-    #     print("radd", "bar" + route3_str)
-    #     print(route3_str)
-    #     route3_str += "rhabarberbarbarabarbarbarenbartbarbier"
-    #     print("iadd", route3_str)
-    #     print("getitem item -1", route3_str[-1], "item 1", route3_str[1])
-    #     route3_str[-1] = "shorter"
-    #     print("setitem", route3_str)
+        # same cls object
+        self.assertIsInstance(route_copy, c_util.Route)
+        # not a reference
+        self.assertIsNot(self.route, route_copy)
+        # same fields
+        self.assertEqual(tuple(self.route._fields), tuple(route_copy._fields))
 
 
-    # def test_add(self):
-    #     # extend self._fields of Route Instance with
-    #     # - other Route.field entries
-    #     # - str seqeuence
-    #     # - str in dot sequence
+class test_ArrayFunction(unittest.TestCase):
+    # 2 standard dummy functions
+    def add_function(self, arr):
+        return arr + 100
 
-    #     other_route = c_util.Route([])
-    #     route4_str=Route("b")
-    #     route4_str.add("bb1")
-    #     print("route4_str", route4_str.fields,ak_array1[route4_str.fields])
+    def empty_function(self, arr):
+        return ak.zeros_like(arr)
 
-    #     route5_str=Route("b")
-    #     route5_str.add("bb2")
-    #     route5_str.add("bbb2.bbbb1.b_bbbb1")
-    #     print("route5_str", route5_str.fields,ak_array1[route5_str.fields])
+    def setUp(self):
+        test_array_dict = {"a_1": [0], "b_1": {"bb_1": [1], "bb_2": {"bbb_1": [2], "bbb_2": {
+            "bbbb_1": {"bbbbb_1": [3]}, "bbbb_2": [4]}}}, "c_1": {"cc_1": [5]}}
 
-    #     # wrongroute5_str=Route("b")
-    #     # wrongroute5_str.add("bb2")
-    #     # wrongroute5_str.add("bbb2.bbbb1.b_bbbb2")
-    #     # print("wrongroute5_str", wrongroute5_str.fields,ak_array1[wrongroute5_str.fields])
+        self.t_arr_A = ak.Array(test_array_dict)
 
-    #     print("\n now we go to the tuples:\n ")
+        self.empty_arr_func = c_util.ArrayFunction.new(
+            self.empty_function, "test_empty", "any_input_A", "all_empty")
 
-    #     ak_array1_route1_tuple = ("a",)
-    #     ak_array1_route2_tuple = ("b", "bb1")
-    #     ak_array1_wrongroute1_tuple = ("a", "b")
-    #     ak_array1_wrongroute2_tuple = ("a", "bb1")
-    #     ak_array1_route3_tuple = ("b", "bb2", "bbb2", "bbbb1", "b_bbbb1")
-    #     route1_tuple=Route(ak_array1_route1_tuple)
-    #     print("route1 tuple", route1_tuple, route1_tuple._fields, route1_tuple.fields)
-    #     print("route1_tuple column and nano column", route1_tuple.column, route1_tuple.nano_column)
-    #     print("route1 tuple results", ak_array1[route1_tuple.fields])
+        self.add_arr_func = c_util.ArrayFunction.new(
+            self.add_function, "test_add", "any_input_B", "plus_100")
 
-    #     route2_tuple=Route(ak_array1_route2_tuple)
-    #     print("route2 tuple", route2_tuple, route2_tuple._fields, route2_tuple.fields)
-    #     print("route2_tuple column and nano column", route2_tuple.column, route2_tuple.nano_column)
-    #     print("route2 tuple results", ak_array1[route2_tuple.fields])
+        self.combined_arr_func = c_util.ArrayFunction.new(self.empty_function, name="combined",
+        uses=("met", "pT.all", self.empty_arr_func, self.add_arr_func),
+            produces=(self.empty_arr_func, "pT.e"))
 
-    #     wrongroute1_tuple=Route(ak_array1_wrongroute1_tuple)
-    #     # print("wrongroute1 tuple", wrongroute1_tuple, wrongroute1_tuple._fields, wrongroute1_tuple.fields)
-    #     # print("wrongroute1 tuple results", ak_array1[wrongroute1_tuple.fields])
+    def test_IOFlag(self):
+        # SHOULD:   Create unique id for the class
+        #           Value of the id is not important
+        flag = c_util.ArrayFunction.IOFlag
+        self.assertIsNot(flag.USES, flag.PRODUCES,
+                         msg="USES and PRODUCES flag be different")
+        self.assertIsNot(flag.USES, flag.AUTO,
+                         msg="USES and AUTO flag be different")
 
-    #     route3_tuple=Route(ak_array1_route3_tuple)
-    #     print("route3_tuple", route3_tuple.fields,ak_array1[route3_tuple.fields])
-    #     print("route3_tuple column and nano column", route3_tuple.column, route3_tuple.nano_column)
+    def test_has(self):
+        # SHOULD:   True if name is already in cache
 
-    #     #test add:
-    #     route4_tuple=Route(("b",))
-    #     route4_tuple.add(("bb1",))
-    #     print("route4_tuple", route4_tuple.fields,ak_array1[route4_tuple.fields])
+        c_util.ArrayFunction.new(self.empty_function, "cached")
+        self.assertIn("cached", c_util.ArrayFunction._instances,
+                      msg="Cache does not contain \"cached\"")
 
-    #     route5_tuple=Route(("b",))
-    #     route5_tuple.add(("bb2",))
-    #     route5_tuple.add(("bbb2", "bbbb1", "b_bbbb1"))
-    #     print("route5_tuple", route5_tuple.fields,ak_array1[route5_tuple.fields])
+    def test_new(self):
+        # SHOULD:   Create new instance of the class and adds its instance to the class cache.
 
-    #     # wrongroute5_tuple=Route(("b",))
-    #     # wrongroute5_tuple.add(("bb2",))
-    #     # wrongroute5_tuple.add(("bbb2", "bbbb1", "b_bbbb2"))
-    #     # print("wrongroute5_tuple", wrongroute5_tuple.fields,ak_array1[wrongroute5_tuple.fields])
+        # Raise Error if multiple instances has same name
+        with self.assertRaises(ValueError) as error:
+            name = "same_name"
+            c_util.ArrayFunction.new(
+                self.empty_function, name)
+            c_util.ArrayFunction.new(self.add_function, name)
 
-    #     print("\n now we go to the lists:\n ")
+        # new ArrayFunction should be in cache
+        newly_af = c_util.ArrayFunction.new(
+            self.empty_function, "new_af")
+        self.assertIn("new_af", c_util.ArrayFunction._instances,
+                      msg="ArrayFunction is missing in cache")
 
-    #     ak_array1_route1_list = ["a"]
-    #     ak_array1_route2_list = ["b", "bb1"]
-    #     ak_array1_wrongroute1_list = ["a", "b"]
-    #     ak_array1_wrongroute2_list = ["a", "bb1"]
-    #     ak_array1_route3_list = ["b", "bb2", "bbb2", "bbbb1", "b_bbbb1"]
-    #     route1_list=Route(ak_array1_route1_list)
-    #     print("route1 list", route1_list, route1_list._fields, route1_list.fields)
-    #     print("route1_list column and nano column", route1_list.column, route1_list.nano_column)
-    #     print("route1 list results", ak_array1[route1_list.fields])
+        # normal instance should not be in cache
+        wrong_af = c_util.ArrayFunction(self.empty_function, "wrong_af")
+        self.assertNotIn(
+            "wrong_af", c_util.ArrayFunction._instances, msg="Array")
 
-    #     route2_list=Route(ak_array1_route2_list)
-    #     print("route2 list", route2_list, route2_list._fields, route2_list.fields)
-    #     print("route2_list column and nano column", route2_list.column, route2_list.nano_column)
-    #     print("route2 list results", ak_array1[route2_list.fields])
+        # new ArrayFunction should be instance of ArrayFunction
+        self.assertIsInstance(newly_af, c_util.ArrayFunction)
 
-    #     wrongroute1_list=Route(ak_array1_wrongroute1_list)
-    #     # print("wrongroute1 list", wrongroute1_list, wrongroute1_list._fields, wrongroute1_list.fields)
-    #     # print("wrongroute1 list results", ak_array1[wrongroute1_list.fields])
+    def test_get(self):
+        # SHOULD:   Returns a cached instance, if <copy> is True, another instance is returned
 
-    #     route3_list=Route(ak_array1_route3_list)
-    #     print("route3_list", route3_list.fields,ak_array1[route3_list.fields])
-    #     print("route3_list column and nano column", route3_list.column, route3_list.nano_column)
+        # raise error if name is not in cache:
+        with self.assertRaises(ValueError) as error:
+            c_util.ArrayFunction.get("not_registered", copy=False)
 
-    #     #test add:
-    #     route4_list=Route(["b"])
-    #     route4_list.add(["bb1"])
-    #     print("route4_list", route4_list.fields,ak_array1[route4_list.fields])
+        # get instance if copy is False, else create new copy
+        instanced_empty = c_util.ArrayFunction.get("test_empty", copy=False)
+        copy_empty = c_util.ArrayFunction.get("test_empty", copy=True)
 
-    #     route5_list=Route(["b"])
-    #     route5_list.add(["bb2"])
-    #     route5_list.add(["bbb2", "bbbb1", "b_bbbb1"])
-    #     print("route5_list", route5_list.fields,ak_array1[route5_list.fields])
+        self.assertIs(instanced_empty, self.empty_arr_func,
+                      msg="Is a copy, but shouldn\'t be a copy ")
+        self.assertIsNot(copy_empty, self.empty_arr_func,
+                         msg="Isn\' a copy, but should be a copy ")
 
-    #     # wrongroute5_list=Route(["b"])
-    #     # wrongroute5_list.add(["bb2"])
-    #     # wrongroute5_list.add(["bbb2", "bbbb1", "b_bbbb2"])
-    #     # print("wrongroute5_list", wrongroute5_list.fields,ak_array1[wrongroute5_list.fields])
+        # return ArrayFunction
+        self.assertIsInstance(instanced_empty, c_util.ArrayFunction,
+                              msg="Is not instance of ArrayFunction, but should be")
+        self.assertIsInstance(copy_empty, c_util.ArrayFunction,
+                              msg="Is not instance of ArrayFunction, but should be")
 
-    #     # check if standard split function has been overwritten
-    #     print("\n try with whitespaces:\n ")
-    #     ak_array1_route3_whitespaces = "b bb2 bbb2 bbbb1 b_bbbb1"
-    #     ak_array1_route3_newlines = "b\nbb2\nbbb2\nbbbb1\nb_bbbb1"
-    #     route3_whitespaces=Route(ak_array1_route3_whitespaces)
-    #     route3_newlines=Route(ak_array1_route3_whitespaces)
-    #     print("route3_whitespaces", route3_whitespaces.fields)#,ak_array1[route3_whitespaces.fields])
-    #     print("route3_newlines", route3_newlines.fields)#,ak_array1[route3_newlines.fields])
+    def test__init__(self):
+        # SHOULD: init witout populate the cachhe
 
-    #     print("\n try with weird symbols:\n ")
+        # cache should not contain a key with name "not_used_new" of the instance
+        arrayfunction = c_util.ArrayFunction(func=self.empty_function,
+                                    name="not_used_new",
+                                    uses="nothing",
+                                    produces="nothing_also")
+        self.assertNotIn("not_used_new", c_util.ArrayFunction._instances, msg="Cache is used, but this should not be the case")
 
-    #     array2_content={"/!:;{}[]\ ":{"_-+*#`?=()$%§,¿¯≠·˜^£¢¶¬":0}}
-    #     ak_array2=ak.Array([array2_content])
-    #     ak_array2_route1 = "/!:;{}[]\ ._-+*#`?=()$%§,¿¯≠·˜^£¢¶¬"
-    #     route1_weird_symbols=Route(ak_array2_route1)
-    #     print("route1 with weird symbols", route1_weird_symbols,route1_weird_symbols.fields)
-    #     print("route1 with weird symbols results", ak_array2[route1_weird_symbols.fields])
+        # self.name set correctly if not None
+        self.assertEqual(arrayfunction.name, "not_used_new")
 
-        # !! Teste ob es mit is klappt!
-
-        # + test all submethods:
-        # __str__, __repr__, __hash__, __len__,
-        # __eq__, __bool__, __nonzero__, __add__, __radd__, __iadd__, __getitem__, __setitem__
-
-        # questions:
-        # - funktioniert es mit str, tuple, list?
-        # - teste auch str, tuple, list für die add Methode
-
-        # für all diese:
-        # - teste für strings mit underscores, punkte, whitespaces, newlines as delimiter
-        # - teste some random combination von Sonderzeichen mit einem punkt irgendwo dazwischen
-        # -
-
-        # - check if you can access the arrays in a simple way using the routes and the results are accurate
-        # -
-
-        # Fragen Marcel: ist die Struktur nur Punkte als delimiter, oder werden auch whitespaces akzeptiert?
-        # 2. Frage: was soll in die Tests der Klasse? e.g. keine spezifische Exception ausgegeben wenn Route nicht existiert, only in has_ak_column
-        #           maybe at least to be written as comment in the tests?   -> tests machen, aber nur mit Methode aus der Klasse auflösen
-        # 3. Frage: == tells you that the Route objects are the same as the corresponding field list... to change, to get info on Route/simple list?
-        #          if so, how to differentiate between a Route object and a list for example?  --> type check?   -> use is, not ==
-        # 4. Frage: organisation tests for a class: also in methods or all in one with comments for each section?
-        # 5. frage: tests kommentieren?     -> nur wenn notwendig
-        # 6. Frage what means the difference in implementation between add and iadd? simply that we use a copy?
-
-        # define all of these routes as object of the class Route and look at the properties/attributes/methods
-        # TODO
+        # self.name is really set to self.func.__name__, which is the name of the function
+        array_function_without_name = c_util.ArrayFunction(func=self.empty_function)
+        self.assertEqual(array_function_without_name.name,
+                         self.empty_function.__name__, msg="Name is not set to name of the function")
 
 
-# class ColumnarUtilTest(unittest.TestCase):
+        # # TODO: NOT SURE ABOUT THIS, ASK MARCEL
+        # # <func> can be any Callable, but ArrayFunction instance is also a callable
+        # # Should ArrayFunction Instances be able to used as Argument?
+        # # Solution? use name of class/function instead?
+        # # instance x --> type(x).__name__ OR x x.__class__.__name__
+        # with self.assertRaises(Exception) as error:
+        #     array_function_with_array_function = c_util.ArrayFunction(
+        #         func=array_function_without_name)
 
-# #
-# a = {"a": 0, "c_1": 1, "b": {"bb1": 1,
-#          "bb2": {"bbb1": 2, "bbb2": {"bbbb1": {"b_bbbb1": 4}, "bbbb2": 3}}}, "d": {"d_1": 1}}
+        # self.uses and self.produces should have empty sets if None is provided
+        self.assertTrue(array_function_without_name.uses == set())
+
+        # self.uses and self.producedes are the same function
+        # check input: str, ArrayFunction, Sequence[str, ArrayFunction], Set[str, ArrayFunction]
+        # law.util.make_list returns for all cases a list with the same content
+        use_str = "nothing"
+        uses_sequence_str_arrayfunction = [use_str, arrayfunction]
+
+        arrayfunction_input = c_util.ArrayFunction(
+            func=self.empty_function, uses=arrayfunction)
+        sequence_input = c_util.ArrayFunction(
+            func=self.empty_function, uses=uses_sequence_str_arrayfunction)
+        set_input = c_util.ArrayFunction(
+            func=self.empty_function, uses=set(uses_sequence_str_arrayfunction))
+
+        # all cases return the correct result
+        self.assertEqual(arrayfunction.uses, set([use_str]))
+        self.assertEqual(arrayfunction_input.uses, set([arrayfunction]))
+        self.assertEqual(sequence_input.uses, set(uses_sequence_str_arrayfunction))
+        self.assertEqual(set_input.uses, set(uses_sequence_str_arrayfunction))
+
+    def test_AUTO(self):
+        # SHOULD:   Named tuple of instance and unique class id
+
+        #           check uniquennes between instances
+        self.assertIsNot(self.empty_arr_func.AUTO, self.add_arr_func.AUTO)
+
+    def test_USES(self):
+        # SHOULD:   see test_AUTO
+        self.assertIsNot(self.empty_arr_func.USES, self.add_arr_func.USES)
+
+    def test_PRODUCES(self):
+        # SHOULD:   see test_AUTO
+        self.assertIsNot(self.empty_arr_func.PRODUCES,
+                         self.add_arr_func.PRODUCES)
+
+    def test__get_columns(self):
+        # SHOULD:   returns ALL *USES* or *PRODUCED* flagged columns depending on the used IOFlag
+        #           if ArrayFunction is used in *uses* or *produces* their respective input should
+        #           be found instead
+
+        # create arr func with uses: "arr1, arr2, empty_arr_func.USES and add.arr_func.USES"
+        flag = c_util.ArrayFunction.IOFlag
+
+        used_columns = self.combined_arr_func._get_columns(
+            io_flag=flag.USES)
+        produced_columns = self.combined_arr_func._get_columns(
+            io_flag=flag.PRODUCES)
+
+        # raise error if flag is AUTO
+        with self.assertRaises(ValueError) as error:
+            auto = self.empty_arr_func._get_columns(io_flag=flag.AUTO)
+
+        # return a Set
+        self.assertIsInstance(used_columns, set, msg="Returned Object is not a set")
+        self.assertIsInstance(produced_columns, set, msg="Returned Object is not a set")
+
+        # everythin within Set is a string
+        self.assertTrue(all(isinstance(column, str)
+                        for column in used_columns.union(produced_columns)), msg="Not all columns are strings")
+
+        # result should have USES: arr1, arr2, any_input_A, any_input_B
+        # PRODUCES : "empty_arr", "pT.e"
+        self.assertEqual(used_columns, set(["met", "pT.all", "any_input_A", "any_input_B"]))
+        self.assertEqual(produced_columns, set(["pT.e", "all_empty"]))
+
+    def test__get_used_columns(self):
+        # if get_columns passes this will pass too
+        pass
+
+    def test_used_columns(self):
+        # if get_columns passes this will pass too
+        pass
+
+    def test__get_produced_columns(self):
+        # if get_columns passes this will pass too
+        pass
+
+    def test_produced_columns(self):
+        # if get_columns passes this will pass too
+        pass
+
+    def test__repr__(self):
+        # SHOULD:   create unique string representation
+
+        # contains class name and name of the array function, as well as the hex-id of the instance
+        string_representation = repr(self.empty_arr_func)
+        hex_id = hex(id(self.empty_arr_func))
+        class_name = self.empty_arr_func.__class__.__name__
+        name = self.empty_arr_func.name
+        all_items = (hex_id, class_name, name)
+
+        # check if all information are withtin __repr__
+        self.assertTrue(
+            all([item in string_representation for item in all_items]))
+
+    def test__call__(self):
+        # SHOULD:   should pass arguments to the function in ArrayFunction.func
+
+        # should have the same result
+        # coudnt find another way to check equality in an awkward array.
+        arr_func_result = self.empty_arr_func(self.t_arr).to_numpy()
+        func_result = self.empty_function(self.t_arr).to_numpy()
+        self.assertTrue(all(func_result == arr_func_result))
