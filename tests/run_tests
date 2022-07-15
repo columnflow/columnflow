@@ -6,11 +6,38 @@ action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
     local ap_dir="$( dirname "$this_dir" )"
-    local test_base="$( basename "$this_dir" )"
 
-    (
-        cd "$ap_dir" && \
-        python -m unittest "$test_base"
-    )
+    # dev flag for sandboxes
+    local dev="$( $AP_DEV && echo "_dev" || echo "" )"
+
+    # helper to run a test
+    run_test() {
+        local mod="$1"
+        local sandbox="$2"
+
+        if [ -z "$sandbox" ]; then
+            echo "testing $mod ..."
+            ( cd "$ap_dir"; python -m unittest "tests.$mod" )
+        else
+            echo "testing $mod in sandbox $sandbox ..."
+            ( cd "$ap_dir"; bash -c "source sandboxes/$sandbox && python -m unittest tests.$mod" )
+        fi
+    }
+
+    # start tests and keep track of immediate and global return values
+    local gret="0"
+    local ret
+
+    # test_util
+    run_test test_util
+    ret="$?"
+    [ "$gret" = "0" ] && gret="$ret"
+
+    # test_columnar_util
+    run_test test_columnar_util "venv_columnar${dev}.sh"
+    ret="$?"
+    [ "$gret" = "0" ] && gret="$ret"
+
+    return "$gret"
 }
 action "$@"

@@ -62,6 +62,8 @@ jobs:
 
   coverage:
     runs-on: [self-hosted]
+    env:
+      AP_JOB_ID: ${{ github.run_number }}_${{ github.run_id }}_${{ github.run_attempt }}_coverage
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@v3
@@ -85,5 +87,9 @@ jobs:
         uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
+          files: ./coverage_*.xml
           flags: unittests
+
+      - name: Cleanup 🧹
+        if: always()
+        run: rm -rf "${AP_JOB_ID}"

@@ -1,6 +1,9 @@
 # coding: utf-8
 # flake8: noqa
 
+"""
+Entry point for all tests.
+"""
 
 __all__ = []
 
