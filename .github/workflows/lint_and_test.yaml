@@ -85,7 +85,7 @@ jobs:
           ./tests/run_coverage
 
       - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage_test_util.xml,./coverage_test_columnar_util.xml
