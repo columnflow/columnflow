@@ -111,12 +111,17 @@ def gen_top_decay_products(
     w_flip = mask2 & (ak.sum(t_sign * w_sign, axis=1) < 0)
     if ak.any(w_flip):
         w_idxs = ak.where(w_flip, w_idxs[:, ::-1], w_idxs)
+    # apply the indices and rebuilt the sign
+    w = w[w_idxs]
+    w_sign = sign(w)
 
     # for b, do the same as for w
     b_idxs = ak.local_index(b, axis=1)
     b_flip = mask2 & (ak.sum(t_sign * sign(b), axis=1) < 0)
     if ak.any(b_flip):
         b_idxs = ak.where(b_flip, b_idxs[:, ::-1], b_idxs)
+    # apply the indices
+    b = b[b_idxs]
 
     # for quarks and leptons, first build pairs under the assumption that two consecutive
     # objects make up a W (checked later)
@@ -134,19 +139,29 @@ def gen_top_decay_products(
     qs_pairs = qs_pairs[idxs_odd_pdg_id_first(qs_pairs)]
     ls_pairs = ls_pairs[idxs_odd_pdg_id_first(ls_pairs)]
 
-    # merge pairs and then order to match the correct W per pair, again using a sign comparison
+    # merge pairs and then order them to match the correct W per pair, again using a sign comparison
     w_prod = ak.concatenate([qs_pairs, ls_pairs], axis=1)
     w_prod_sign = ak.flatten(sign(w_prod[(w_prod.pdgId % 2 == 0)]), axis=2)
     w_prod_flip = (w_sign != w_prod_sign)[:, 0]
     if ak.any(w_prod_flip):
         w_prod = ak.where(w_prod_flip, w_prod[:, ::-1], w_prod)
 
+    # cross check w decay product pairing by comparing masses
+    # note: some w's appear to have photon radiations that are not covered by the decay products yet
+    #       and that affect the mass comparison; we should wait for the proper children lookup
+    #       behavior in coffea before revisting this
+    # w_prod_mass = (w_prod[:, :, ::2] + w_prod[:, :, 1::2])[:, :, 0].mass
+    # all_or_raise(
+    #     ak.isclose(w_prod_mass, w.mass, rtol=0.01, atol=0.0),
+    #     "grouping of W decay products leads to wrong masses",
+    # )
+
     # create the groups
     groups = ak.concatenate(
         [
             t[:, :, None],
-            w[w_idxs][:, :, None],
-            b[b_idxs][:, :, None],
+            w[:, :, None],
+            b[:, :, None],
             w_prod,
         ],
         axis=2,
