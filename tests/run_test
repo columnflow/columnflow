@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Script that runs a test, and optionally places the process into a sandbox.
+
+action() {
+    local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
+    local ap_dir="$( dirname "$this_dir" )"
+
+    # get and check arguments
+    local mod="$1"
+    local sandbox="$2"
+    if [ -z "${mod}" ]; then
+        2>&1 echo "missing module to test (argument 1)"
+        return "1"
+    fi
+
+    # run the test
+    if [ -z "${sandbox}" ]; then
+        echo "testing ${mod} ..."
+        (
+            cd "${ap_dir}" && \
+            python -m unittest "tests.${mod}"
+        )
+    else
+        echo "testing ${mod} in sandbox ${sandbox} ..."
+        (
+            cd "${ap_dir}" && \
+            bash -c "source sandboxes/${sandbox} && python -m unittest tests.${mod}"
+        )
+    fi
+}
+action "$@"

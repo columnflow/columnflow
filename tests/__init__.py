@@ -1,6 +1,9 @@
 # coding: utf-8
 # flake8: noqa
 
+"""
+Entry point for all tests.
+"""
 
 __all__ = []
 
@@ -14,3 +17,4 @@ import ap  # noqa
 
 # import all tests
 from .test_util import *
+from .test_columnar_util import *
