@@ -34,8 +34,8 @@ def selector(
 ) -> Union[DerivableMeta, Callable]:
     """
     Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases* and
-    attaching the decorated function to it as ``call_func``. All *kwargs* will become default
-    constructor arguments of the new class.
+    attaching the decorated function to it as ``call_func``. All additional *kwargs* are added as
+    class members of the new subclasses.
     """
     def decorator(func: Callable) -> DerivableMeta:
         # create the class dict

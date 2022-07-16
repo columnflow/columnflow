@@ -4,16 +4,12 @@
 Dummy inference model.
 """
 
-from ap.inference import InferenceModel, ParameterType, ParameterTransformation
+from ap.inference import inference_model, ParameterType, ParameterTransformation
 
 
-# create a new cached model instance
-m = InferenceModel.new("test")
+@inference_model
+def test(self):
 
-
-# configure hook
-@m.on_config
-def configure(self):
     #
     # categories
     #

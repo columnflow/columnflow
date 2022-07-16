@@ -11,7 +11,9 @@ from typing import Optional, Tuple, List, Union, Dict, Generator, Callable, Text
 import law
 import order as od
 
-from ap.util import maybe_import, DotDict, is_pattern, is_regex, pattern_matcher
+from ap.util import (
+    DerivableMeta, Derivable, maybe_import, DotDict, is_pattern, is_regex, pattern_matcher,
+)
 
 
 yaml = maybe_import("yaml")
@@ -100,7 +102,7 @@ class ParameterTransformations(tuple):
         return any(t.from_rate for t in self)
 
 
-class InferenceModel(object):
+class InferenceModel(Derivable):
     """
     Interface to statistical inference models with connections to config objects (such as
     py:class:`order.Config` or :py:class:`order.Dataset`).
@@ -174,8 +176,8 @@ class InferenceModel(object):
        The internal data structure representing the model.
     """
 
-    # instance cache
-    _instances = {}
+    # optional initialization method
+    init_func = None
 
     class YamlDumper(yaml.SafeDumper or object):
         """
@@ -198,35 +200,6 @@ class InferenceModel(object):
 
         def ignore_aliases(self, *args, **kwargs) -> bool:
             return True
-
-    @classmethod
-    def new(cls, name: str, *args, **kwargs) -> "InferenceModel":
-        """
-        Creates a new instance with *name* and all *args* and *kwargs*, adds it to the instance
-        cache and returns it. A *ValueError* is raised in case an instance with the same name was
-        registered before.
-        """
-        # check if the instance is already registered
-        if name in cls._instances:
-            raise ValueError(
-                f"an inference model named '{name}' was already registered ({cls.get(name)})",
-            )
-
-        # create it
-        cls._instances[name] = cls(name, *args, **kwargs)
-
-        return cls._instances[name]
-
-    @classmethod
-    def get(cls, name: str, copy: bool = False) -> "InferenceModel":
-        """
-        Returns a previously registered instance named *name* and optionally copies it when *copy*
-        is *True*. A *ValueError* is raised when no instance was found with that name.
-        """
-        if name not in cls._instances:
-            raise ValueError(f"no inference model named '{name}' found")
-
-        return cls._instances[name].copy() if copy else cls._instances[name]
 
     @classmethod
     def model_spec(cls) -> DotDict:
@@ -371,73 +344,18 @@ class InferenceModel(object):
             f"'{param_obj.type}' and transformations {param_obj.transformations}",
         )
 
-    def __init__(
-        self,
-        name: str,
-        *,
-        config_inst: Optional[od.Config] = None,
-        config_callbacks: Optional[Sequence[Callable]] = None,
-    ):
+    def __init__(self, config_inst: od.Config):
         super().__init__()
 
         # store attributes
-        self.name = name
-        self.config_inst = None
-        self.config_callbacks = list(config_callbacks or [])
+        self.config_inst = config_inst
 
         # model info
         self.model = self.model_spec()
 
-        # set the config when given
-        if config_inst:
-            self.set_config(config_inst)
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}__{self.name}"
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
-
-    def copy(self) -> "InferenceModel":
-        """
-        Returns a deep copy if this instance.
-        """
-        # create a new instance
-        inst = self.__class__(
-            self.name,
-            config_inst=self.config_inst,
-            config_callbacks=self.config_callbacks,
-        )
-
-        # overwrite the model with a deep copy
-        inst.model = _copy.deepcopy(self.model)
-
-        return inst
-
-    def set_config(self, config_inst: od.Config) -> None:
-        """
-        Sets the :py:attr:`config_inst` attribute to *config_inst* and, when set, invokes
-        :py:attr:`config_callback` bound to this instance.
-        """
-        self.config_inst = config_inst
-
-        # invoke the optional config callbacks
-        for func in self.config_callbacks:
-            if callable(func):
-                func.__get__(self, self.__class__)()
-
-    def on_config(self, func: Optional[Callable] = None, clear: bool = None) -> None:
-        """
-        Decorator to register a callable *func* in :py:attr:`config_callbacks` which are invoked
-        once a config object is set via :py:meth:`set_config`. When *clear* is *True*, the current
-        list of :py:attr:`config_callbacks` is cleared first.
-        """
-        def decorator(func):
-            if clear:
-                del self.config_callbacks[:]
-            self.config_callbacks.append(func)
-
-        return decorator(func) if func else decorator
+        # custom init function when set
+        if callable(self.init_func):
+            self.init_func()
 
     def to_yaml(self, stream: Optional[TextIO] = None) -> Union[None, str]:
         """
@@ -1462,3 +1380,26 @@ class InferenceModel(object):
                     changed_any = True
 
         return changed_any
+
+
+def inference_model(
+    func: Optional[Callable] = None,
+    bases=(),
+    **kwargs,
+) -> Union[DerivableMeta, Callable]:
+    """
+    Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
+    *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
+    added as class members of the new subclasses.
+    """
+    def decorator(func: Callable) -> DerivableMeta:
+        # create the class dict
+        cls_dict = {"init_func": func}
+        cls_dict.update(kwargs)
+
+        # create the subclass
+        subclass = InferenceModel.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+
+        return subclass
+
+    return decorator(func) if func else decorator
