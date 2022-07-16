@@ -8,7 +8,7 @@ from typing import Optional, Union, Callable
 
 import law
 
-from ap.util import maybe_import, DotDict
+from ap.util import maybe_import, DotDict, DerivableMeta
 from ap.columnar_util import TaskArrayFunction
 
 ak = maybe_import("awkward")
@@ -16,40 +16,36 @@ ak = maybe_import("awkward")
 
 class Selector(TaskArrayFunction):
 
-    # dedicated instance cache
-    _instances = {}
+    exposed = False
 
-    def __init__(self, *args, exposed=False, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # flag denoting whether this selector is exposed, i.e., callable from tasks and returning
-        # an actual SelectionResult
-        self.exposed = exposed
 
         # when not exposed and call_force is not specified,
         # set it to True which prevents calls from being cached
         if self.call_force is None and not self.exposed:
             self.call_force = True
 
-    def copy(self) -> "Selector":
-        """
-        Returns a copy if this instance.
-        """
-        inst = super().copy()
 
-        # additional attributes
-        inst.exposed = self.exposed
-
-        return inst
-
-
-def selector(func: Optional[Callable] = None, **kwargs) -> Union[Selector, Callable]:
+def selector(
+    func: Optional[Callable] = None,
+    bases=(),
+    **kwargs,
+) -> Union[DerivableMeta, Callable]:
     """
-    Decorator for registering new selector functions. All *kwargs* are forwarded to the
-    :py:class:`Selector` constructor.
+    Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases* and
+    attaching the decorated function to it as ``call_func``. All *kwargs* will become default
+    constructor arguments of the new class.
     """
-    def decorator(func):
-        return Selector.new(func, **kwargs)
+    def decorator(func: Callable) -> DerivableMeta:
+        # create the class dict
+        cls_dict = {"call_func": func}
+        cls_dict.update(kwargs)
+
+        # create the subclass
+        subclass = Selector.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+
+        return subclass
 
     return decorator(func) if func else decorator
 

@@ -4,8 +4,6 @@
 Column production methods related to generic event weights.
 """
 
-import order as od
-
 from ap.production import Producer, producer
 from ap.production.pileup import pu_weights
 from ap.production.normalization import normalization_weights
@@ -19,18 +17,13 @@ ak = maybe_import("awkward")
     uses={"Jet.pt"},
     produces={"top_pt_weight", "top_pt_weight_up", "top_pt_weight_down"},
 )
-def top_pt_weights(
-    self: Producer,
-    events: ak.Array,
-    dataset_inst: od.Dataset,
-    **kwargs,
-) -> ak.Array:
+def top_pt_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Adds a dummy top pt weight and its variations to *events* in case *dataset_inst* represents a
-    ttbar dataset.
+    Adds a dummy top pt weight and its variations to *events* in case the internal
+    py:attr:`dataset_inst` represents a ttbar dataset.
     """
     # skip when not a ttbar dataset
-    if not dataset_inst.x("is_ttbar", False):
+    if not self.dataset_inst.x("is_ttbar", False):
         return events
 
     # save dummy, asymmetric top pt weights
@@ -52,22 +45,24 @@ def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     might possibly change any of the weights.
     """
     # compute normalization weights
-    self.stack.normalization_weights(events, **kwargs)
+    self[normalization_weights](events, **kwargs)
 
     # compute pu weights
-    self.stack.pu_weights(events, **kwargs)
+    self[pu_weights](events, **kwargs)
 
     # compute top pt weights
-    self.stack.top_pt_weights(events, **kwargs)
+    self[top_pt_weights](events, **kwargs)
 
     return events
 
 
-@event_weights.update
-def event_weights_update(self: Producer, dataset_inst: od.Dataset, **kwargs) -> None:
+@event_weights.init
+def event_weights_init(self: Producer) -> None:
     """
-    Performs an update of the :py:obj:`event_weights` producer based on the *dataset_inst*.
+    Performs an update of the :py:obj:`event_weights` producer based on, when existing, the internal
+    py:attr:`dataset_inst` attribute.
     """
-    # add top pt weight shifts for ttbar
-    if dataset_inst.x("is_ttbar", False):
+    # add top pt weight shifts for ttbar, or when the dataset_inst is not even set, meaning that
+    # the owning task is a ConfigTask or higher
+    if not getattr(self, "dataset_inst", None) or self.dataset_inst.x("is_ttbar", False):
         self.shifts |= {"top_pt_up", "top_pt_down"}

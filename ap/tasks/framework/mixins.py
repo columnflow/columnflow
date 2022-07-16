@@ -4,7 +4,7 @@
 Lightweight mixins task classes.
 """
 
-from typing import Union, Sequence, List, Set, Dict, Any, Optional
+from typing import Union, Sequence, List, Set, Dict, Any
 
 import law
 import luigi
@@ -26,8 +26,6 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
-    update_calibrator = False
-
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -46,37 +44,33 @@ class CalibratorMixin(ConfigTask):
 
         # get the calibrator, update it and add its shifts
         if params.get("calibrator") not in (None, law.NO_STR):
-            calibrator_func = cls.get_calibrator_func(
+            calibrator_inst = cls.get_calibrator_inst(
                 params["calibrator"],
-                **(cls.get_calibrator_kwargs(**params) if cls.update_calibrator else {}),
+                cls.get_calibrator_kwargs(**params),
             )
-            shifts |= calibrator_func.all_shifts
+            shifts |= calibrator_inst.all_shifts
 
         return shifts
 
     @classmethod
-    def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        func = Calibrator.get(calibrator, copy=copy)
-        if update_kwargs:
-            func.run_update(**update_kwargs)
-
-        return func
+    def get_calibrator_inst(cls, calibrator, inst_dict=None):
+        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for calibrator func
-        self._calibrator_func = None
+        # cache for calibrator inst
+        self._calibrator_inst = None
 
     @property
-    def calibrator_func(self):
-        if self._calibrator_func is None:
-            # store a copy of the calibrator
-            self._calibrator_func = self.get_calibrator_func(
+    def calibrator_inst(self):
+        if self._calibrator_inst is None:
+            # store a calibrator instance
+            self._calibrator_inst = self.get_calibrator_inst(
                 self.calibrator,
-                **(self.get_calibrator_kwargs(self) if self.update_calibrator else {}),
+                self.get_calibrator_kwargs(self),
             )
-        return self._calibrator_func
+        return self._calibrator_inst
 
     def store_parts(self):
         parts = super().store_parts()
@@ -91,8 +85,6 @@ class CalibratorsMixin(ConfigTask):
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
     )
-
-    update_calibrators = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -111,37 +103,33 @@ class CalibratorsMixin(ConfigTask):
 
         # get the calibrators, update them and add their shifts
         if params.get("calibrators") not in (None, law.NO_STR):
-            calibrator_kwargs = cls.get_calibrator_kwargs(**params) if cls.update_calibrators else {}
+            calibrator_kwargs = cls.get_calibrator_kwargs(**params)
             for calibrator in params["calibrators"]:
-                calibrator_func = cls.get_calibrator_func(calibrator, **calibrator_kwargs)
-                shifts |= calibrator_func.all_shifts
+                calibrator_inst = cls.get_calibrator_inst(calibrator, calibrator_kwargs)
+                shifts |= calibrator_inst.all_shifts
 
         return shifts
 
     @classmethod
-    def get_calibrator_func(cls, calibrator, copy=True, **update_kwargs):
-        func = Calibrator.get(calibrator, copy=copy)
-        if update_kwargs:
-            func.run_update(**update_kwargs)
-
-        return func
+    def get_calibrator_inst(cls, calibrator, inst_dict=None):
+        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for calibrator funcs
-        self._calibrator_funcs = None
+        # cache for calibrator insts
+        self._calibrator_insts = None
 
     @property
-    def calibrator_funcs(self):
-        if self._calibrator_funcs is None:
-            # store copies of all calibrators
-            calibrator_kwargs = self.get_calibrator_kwargs(self) if self.update_calibrators else {}
-            self._calibrator_funcs = [
-                self.get_calibrator_func(calibrator, **calibrator_kwargs)
+    def calibrator_insts(self):
+        if self._calibrator_insts is None:
+            # store instances of all calibrators
+            calibrator_kwargs = self.get_calibrator_kwargs(self)
+            self._calibrator_insts = [
+                self.get_calibrator_inst(calibrator, calibrator_kwargs)
                 for calibrator in self.calibrators
             ]
-        return self._calibrator_funcs
+        return self._calibrator_insts
 
     def store_parts(self):
         parts = super().store_parts()
@@ -162,8 +150,6 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
-    update_selector = False
-
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -182,39 +168,38 @@ class SelectorMixin(ConfigTask):
 
         # get the selector, update it and add its shifts
         if params.get("selector") not in (None, law.NO_STR):
-            selector_func = cls.get_selector_func(
+            selector_inst = cls.get_selector_inst(
                 params["selector"],
-                **(cls.get_selector_kwargs(**params) if cls.update_selector else {}),
+                cls.get_selector_kwargs(**params),
             )
-            shifts |= selector_func.all_shifts
+            shifts |= selector_inst.all_shifts
 
         return shifts
 
     @classmethod
-    def get_selector_func(cls, selector, copy=True, **update_kwargs):
-        func = Selector.get(selector, copy=copy)
-        if not func.exposed:
-            raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
-        if update_kwargs:
-            func.run_update(**update_kwargs)
+    def get_selector_inst(cls, selector, inst_dict=None):
+        selector_cls = Selector.get_cls(selector)
 
-        return func
+        if not selector_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
+
+        return selector_cls(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for selector func
-        self._selector_func = None
+        # cache for selector inst
+        self._selector_inst = None
 
     @property
-    def selector_func(self):
-        if self._selector_func is None:
-            # store a copy of the selector
-            self._selector_func = self.get_selector_func(
+    def selector_inst(self):
+        if self._selector_inst is None:
+            # store a selector instance
+            self._selector_inst = self.get_selector_inst(
                 self.selector,
-                **(self.get_selector_kwargs(self) if self.update_selector else {}),
+                self.get_selector_kwargs(self),
             )
-        return self._selector_func
+        return self._selector_inst
 
     def store_parts(self):
         parts = super().store_parts()
@@ -269,8 +254,6 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
-    update_producer = False
-
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -289,37 +272,33 @@ class ProducerMixin(ConfigTask):
 
         # get the producer, update it and add its shifts
         if params.get("producer") not in (None, law.NO_STR):
-            producer_func = cls.get_producer_func(
+            producer_inst = cls.get_producer_inst(
                 params["producer"],
-                **(cls.get_producer_kwargs(**params) if cls.update_producer else {}),
+                cls.get_producer_kwargs(**params),
             )
-            shifts |= producer_func.all_shifts
+            shifts |= producer_inst.all_shifts
 
         return shifts
 
     @classmethod
-    def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        func = Producer.get(producer, copy=copy)
-        if update_kwargs:
-            func.run_update(**update_kwargs)
-
-        return func
+    def get_producer_inst(cls, producer, inst_dict=None):
+        return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for producer func
-        self._producer_func = None
+        # cache for producer inst
+        self._producer_inst = None
 
     @property
-    def producer_func(self):
-        if self._producer_func is None:
-            # store a copy of the producer
-            self._producer_func = self.get_producer_func(
+    def producer_inst(self):
+        if self._producer_inst is None:
+            # store a producer instance
+            self._producer_inst = self.get_producer_inst(
                 self.producer,
-                **(self.get_producer_kwargs(self) if self.update_producer else {}),
+                self.get_producer_kwargs(self),
             )
-        return self._producer_func
+        return self._producer_inst
 
     def store_parts(self):
         parts = super().store_parts()
@@ -334,8 +313,6 @@ class ProducersMixin(ConfigTask):
         default=(),
         description="comma-separated names of producers to be applied; empty default",
     )
-
-    update_producers = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -354,46 +331,43 @@ class ProducersMixin(ConfigTask):
 
         # get the producers, update them and add their shifts
         if params.get("producers") not in (None, law.NO_STR):
-            producer_kwargs = cls.get_producer_kwargs(**params) if cls.update_producers else {}
+            producer_kwargs = cls.get_producer_kwargs(**params)
             for producer in params["producers"]:
-                producer_func = cls.get_producer_func(producer, **producer_kwargs)
-                shifts |= producer_func.all_shifts
+                producer_inst = cls.get_producer_inst(producer, producer_kwargs)
+                shifts |= producer_inst.all_shifts
 
         return shifts
 
     @classmethod
-    def get_producer_func(cls, producer, copy=True, **update_kwargs):
-        func = Producer.get(producer, copy=copy)
-        if update_kwargs:
-            func.run_update(**update_kwargs)
-
-        return func
+    def get_producer_inst(cls, producer, inst_dict=None):
+        return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for producer funcs
-        self._producer_funcs = None
+        # cache for producer insts
+        self._producer_insts = None
 
     @property
-    def producer_funcs(self):
-        if self._producer_funcs is None:
-            # store copies of all producers
-            producer_kwargs = self.get_producer_kwargs(self) if self.update_producers else {}
-            self._producer_funcs = [
-                self.get_producer_func(producer, **producer_kwargs)
+    def producer_insts(self):
+        if self._producer_insts is None:
+            # store instances of all producers
+            producer_kwargs = self.get_producer_kwargs(self)
+            self._producer_insts = [
+                self.get_producer_inst(producer, producer_kwargs)
                 for producer in self.producers
             ]
-        return self._producer_funcs
+        return self._producer_insts
 
     def store_parts(self):
         parts = super().store_parts()
 
+        part = "none"
         if self.producers:
             part = "__".join(self.producers[:5])
             if len(self.producers) > 5:
                 part += f"__{law.util.create_hash(self.producers[5:])}"
-            parts.insert_before("version", "producers", f"prod__{part}")
+        parts.insert_before("version", "producers", f"prod__{part}")
 
         return parts
 
@@ -424,23 +398,16 @@ class MLModelMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_ml_model_inst(
-        cls,
-        ml_model: str,
-        config_inst: Optional[od.Config] = None,
-        copy: bool = True,
-    ) -> MLModel:
-        ml_model_inst = MLModel.get(ml_model, copy=True)
-        if config_inst:
-            ml_model_inst.set_config(config_inst)
-
-        return ml_model_inst
+    def get_ml_model_inst(cls, ml_model: str, config_inst: od.Config) -> MLModel:
+        return MLModel.get_cls(ml_model)(config_inst)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # get the ML model instance
-        self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
+        self.ml_model_inst = None
+        if self.ml_model != law.NO_STR:
+            self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
 
     def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
         # evaluate whether the events for the combination of dataset_inst and shift_inst
@@ -452,7 +419,7 @@ class MLModelMixin(ConfigTask):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        if self.ml_model != law.NO_STR:
+        if self.ml_model_inst:
             parts.insert_before("version", "ml_model", f"ml__{self.ml_model}")
         return parts
 
@@ -473,7 +440,7 @@ class MLModelsMixin(ConfigTask):
             if params.get("ml_models") == () and config_inst.x("default_ml_model", None):
                 params["ml_models"] = (config_inst.x.default_ml_model,)
 
-            # initialize them once to trigger their set_config hook
+            # special case: initialize them once to trigger their set_config hook
             if params.get("ml_models"):
                 for ml_model in params["ml_models"]:
                     MLModelMixin.get_ml_model_inst(ml_model, config_inst)
@@ -491,11 +458,9 @@ class MLModelsMixin(ConfigTask):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-
-        if self.ml_models:
+        if self.ml_model_insts:
             part = "__".join(self.ml_models)
             parts.insert_before("version", "ml_models", f"ml__{part}")
-
         return parts
 
 
@@ -520,17 +485,8 @@ class InferenceModelMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_inference_model_inst(
-        cls,
-        inference_model: str,
-        config_inst: Optional[od.Config] = None,
-        copy: bool = True,
-    ) -> InferenceModel:
-        inference_model_inst = InferenceModel.get(inference_model, copy=True)
-        if config_inst:
-            inference_model_inst.set_config(config_inst)
-
-        return inference_model_inst
+    def get_inference_model_inst(cls, inference_model: str, config_inst: od.Config) -> InferenceModel:
+        return InferenceModel.get_cls(inference_model)(config_inst)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

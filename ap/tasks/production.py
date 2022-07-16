@@ -26,20 +26,18 @@ class ProduceColumns(
 
     shifts = set(MergeReducedEvents.shifts)
 
-    update_producer = True
-
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
-        reqs["producer"] = self.producer_func.run_requires(self)
+        reqs["producer"] = self.producer_inst.run_requires()
 
         return reqs
 
     def requires(self):
         return {
             "events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-            "producer": self.producer_func.run_requires(self),
+            "producer": self.producer_inst.run_requires(),
         }
 
     @MergeReducedEventsUser.maybe_dummy
@@ -59,17 +57,17 @@ class ProduceColumns(
         output_chunks = {}
 
         # run the producer setup
-        self.producer_func.run_setup(self, inputs["producer"])
+        self.producer_inst.run_setup(inputs["producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.producer_func.used_columns  # noqa
+        load_columns = mandatory_coffea_columns | self.producer_inst.used_columns  # noqa
 
         # define columns that will be saved
-        keep_columns = self.producer_func.produced_columns
+        keep_columns = self.producer_inst.produced_columns
         route_filter = RouteFilter(keep_columns)
 
         # iterate over chunks of events and diffs
@@ -82,7 +80,7 @@ class ProduceColumns(
             msg = f"iterate through {reader.n_entries} events ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # invoke the producer
-                self.producer_func(events, **self.get_producer_kwargs(self))
+                self.producer_inst(events)
 
                 # remove columns
                 events = route_filter(events)

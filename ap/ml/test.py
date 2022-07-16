@@ -4,7 +4,7 @@
 Dummy training script.
 """
 
-from typing import List, Any, Set, Union
+from typing import List, Any, Set, Union, Optional
 
 import law
 import order as od
@@ -19,19 +19,23 @@ tf = maybe_import("tensorflow")
 
 class TestModel(MLModel):
 
-    def set_config(self, *args, **kwargs):
-        super().set_config(*args, **kwargs)
+    def __init__(self, *args, folds: Optional[int] = None, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+
+        # class- to instance-level attributes
+        # (before being set, self.folds refers to a class-level attribute)
+        self.folds = folds or self.folds
 
         # dynamically add variables for the quantities produced by this model
-        if f"{self.name}.n_muon" not in self.config_inst.variables:
+        if f"{self.cls_name}.n_muon" not in self.config_inst.variables:
             self.config_inst.add_variable(
-                name=f"{self.name}.n_muon",
+                name=f"{self.cls_name}.n_muon",
                 null_value=-1,
                 binning=(4, -1.5, 2.5),
                 x_title="Predicted number of muons",
             )
             self.config_inst.add_variable(
-                name=f"{self.name}.n_electron",
+                name=f"{self.cls_name}.n_electron",
                 null_value=-1,
                 binning=(4, -1.5, 2.5),
                 x_title="Predicted number of electrons",
@@ -50,7 +54,7 @@ class TestModel(MLModel):
         return {"ht", "n_jet", "n_muon", "n_electron", "normalization_weight"}
 
     def produces(self) -> Set[Union[Route, str]]:
-        return {f"{self.name}.n_muon", f"{self.name}.n_electron"}
+        return {f"{self.cls_name}.n_muon", f"{self.cls_name}.n_electron"}
 
     def output(self, task: law.Task) -> FunctionArgs:
         return FunctionArgs(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
@@ -83,9 +87,9 @@ class TestModel(MLModel):
         events_used_in_training: bool = False,
     ) -> None:
         # fake evaluation
-        set_ak_column(events, f"{self.name}.n_muon", 1)
-        set_ak_column(events, f"{self.name}.n_electron", 1)
+        set_ak_column(events, f"{self.cls_name}.n_muon", 1)
+        set_ak_column(events, f"{self.cls_name}.n_electron", 1)
 
 
-# pre-register models
-TestModel.new("test_model", folds=3)
+# usable derivations
+test_model = TestModel.derive("test_model", cls_dict={"folds": 3})

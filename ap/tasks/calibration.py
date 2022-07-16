@@ -20,8 +20,6 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    update_calibrator = True
-
     shifts = set(GetDatasetLFNs.shifts)
 
     def workflow_requires(self):
@@ -29,7 +27,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         reqs["lfns"] = GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_func.run_requires(self)
+        reqs["calibrator"] = self.calibrator_inst.run_requires()
 
         return reqs
 
@@ -37,7 +35,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         reqs = {"lfns": GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_func.run_requires(self)
+        reqs["calibrator"] = self.calibrator_inst.run_requires()
 
         return reqs
 
@@ -58,18 +56,18 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         output_chunks = {}
 
         # run the calibrator setup
-        self.calibrator_func.run_setup(self, inputs["calibrator"])
+        self.calibrator_inst.run_setup(inputs["calibrator"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.calibrator_func.used_columns
+        load_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # define columns that will be saved
-        keep_columns = self.calibrator_func.produced_columns
+        keep_columns = self.calibrator_inst.produced_columns
         route_filter = RouteFilter(keep_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -93,7 +91,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
                 events = ak.copy(events)
 
                 # just invoke the calibration function
-                self.calibrator_func(events, **self.get_calibrator_kwargs(self))
+                self.calibrator_inst(events)
 
                 # remove columns
                 events = route_filter(events)

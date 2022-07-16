@@ -83,12 +83,13 @@ jobs:
           cd "${AP_JOB_ID}"
           source setup.sh ""
           ./tests/run_coverage
+          ls -al
 
       - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage_*.xml
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
           flags: unittests
 
       - name: Cleanup 🧹

@@ -17,7 +17,7 @@ __all__ = [
 import re
 import math
 import time
-import copy as _copy
+import copy
 import enum
 import weakref
 import multiprocessing
@@ -28,7 +28,7 @@ from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, 
 
 import law
 
-from ap.util import UNSET, maybe_import, DotDict
+from ap.util import UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -897,70 +897,114 @@ class RouteFilter(object):
         return ak_array
 
 
-class ArrayFunction(object):
+class ArrayFunction(Derivable):
     """
     Base class for function wrappers that act on arrays and keep track of used as well as produced
-    columns, next to the implementation. In addition, they have a unique name which is used to store
-    them in and retrieve them from an instance cache. This is automatically done when created with
-    :py:meth:`new` (recommended). Besides these attributes, instances of this class are meant to be
-    fully stateless.
+    columns, as close as possible to the actual implementation. ArrayFunction's can express the
+    dependence between one another (either via used or produced columns) (1) and they can invoke one
+    another for the purpose of modularity (2). Knowledge of the columns to load (save) is especially
+    useful when opening (writing) files and selecting the content to deserialize (serialize).
+
+    To understand the internals of both (1) and (2), it is imperative to distinguish between
+    ArrayFunction subclasses and their instances, as shown in the example below.
 
     .. code-block:: python
 
-        # define the function to wrap
-        def my_func(self, arr):
-            foo = arr.foo
-            arr["bar"] = foo * 2
-            return arr
+        class my_func(ArrayFunction):
+            uses = {"Jet.pt"}
+            produces = {"Jet.pt2"}
 
-        # define the function
-        ArrayFunction.new(my_func, uses={"foo"}, produces={"bar"})
+            def call_func(self, events):
+                events["Jet", "pt"] = events.Jet.pt ** 2
 
-        # retrieve it later on
-        func = ArrayFunction.get(my_func)
-        print(func.used_columns)  # -> {"foo"}
-        print(func.produced_columns)  # -> {"bar"}
-        func(some_array)
+        class my_other_func(ArrayFunction):
+            uses = {my_func}
+            produces = {"Jet.pt4"}
 
-        # create a second function that calls my_func
-        def my_other_func(self, arr):
-            # just call my_func
-            return my_func(arr)
+            def call_func(self, events):
+                # call the correct my_func instance
+                self[my_func](events)
 
-        ArrayFunction.new(my_other_func, uses={my_func.USES}, produces={my_func.PRODUCES})
+                events["Jet", "pt4"] = events.Jet.pt2 ** 2
 
-    The signatures of the constructor and :py:meth:`new` are identical. *func* refers to the
-    function to be wrapped. Unless a custom *name* is given, the function's name is used as a key to
-    store it in the cache. *uses* and *produces* should be strings denoting a column in dot format
-    or a :py:class:`Route` instance, other :py:class:`ArrayFunction` instances, or a sequence or set
-    of the two.
+        # call my_other_func on a chunk of events
+        inst = my_other_func()
+        inst(events)
 
-    In case other :py:class:`ArrayFunction` instances are placed within *uses* or *produces*, the
-    columns used and produced by these instances are added. In the example above, *my_other_func*
-    declares a dependence on *my_func* by listing it in both sets with excplicit flags to denote
-    the type of columns to inherit. Omitting these flags, or using *AUTO* will transparently inherit
-    used columns in *use*, and produced columns in *produce*.
+    ArrayFunction's declare dependence between one another through class-level sets *uses* and
+    *produces*. This allows for the construction of an internal callstack. Once an ArrayFunction is
+    instantiated, all dependent objects in this callstack are instantiated as well and stored
+    internally *once per class*. This is strictly required as ArrayFunctions, and most likely their
+    subclasses, can have a state (a set of instance-level members that are allowed to differ between
+    instances). The instance of a dependency can be accessed via item syntax (``self[my_func]``
+    above).
 
-    Knowledge of the columns to load (save) is especially useful when opening (writing) files and
-    selecting the content to deserialize (serialize). The :py:attr:`used_columns` and
-    :py:attr:`produced_columns` properties each return a set of column names, potentially resolving
-    information from other :py:class:`ArrayFunction` instances.
+    .. note::
 
-    .. py:attribute:: func
-       type: callable
+        The above example uses explicit subclassing, but most certainly this might never be used in
+        practice. Instead, please consider using a decorator to wrap the main callable as done by
+        the :py:class:`Calibrator`, :py:class:`Selector` and :py:class:`Producer` interfaces.
 
-       The wrapped function.
+    *call_func* defines the function being invoked when the instance is *called*. *uses* and
+    *produces* should be strings denoting a column in dot format or a :py:class:`Route` instance,
+    other :py:class:`ArrayFunction` instances, or a sequence or set of the two. On instance-level,
+    the full sets of :py:attr:`used_columns` and :py:attr:`produced_columns` are simply resolvable
+    through attributes.
 
-    .. py:attribute:: name
-       type: str
+    In the example above, *my_other_func* declares a dependence on *my_func* by listing it in
+    *uses*. This means that *my_other_func* uses the columns that *my_func* also uses. The same
+    logic applies for *produces*. To make this dependence more explicit, the entry could also be
+    changed to ``my_func.USES`` which results in the same behavior, or ``my_func.PRODUCES`` to
+    reverse it - *my_other_func* would define that it is **using** the columns that *my_func*
+    **produces**. Omitting these flags is identical to using (e.g.) ``my_func.AUTO``.
 
-       The name of the instance in the cache dictionary.
-
-    .. py:attribute:: uses
+    .. py:classattribute:: uses
        type: set
 
-       The set of used column names or other instances to recursively resolve the names of used
+       The set of used column names or other dependencies to recursively resolve the names of used
        columns.
+
+    .. py:classattribute:: produces
+       type: set
+
+       The set of produced column names or other dependencies to recursively resolve the names of
+       produced columns.
+
+    .. py:classattribute:: AUTO
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote automatic
+       resolution of column names.
+
+    .. py:classattribute:: USES
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote columns names
+       in the :py:attr:`uses` set.
+
+    .. py:classattribute:: PRODUCES
+       type: ArrayFunction.IOFlag
+
+       Flag that can be used in nested dependencies between array functions to denote columns names
+       in the :py:attr:`produces` set.
+
+    .. py:attribute:: uses_instances
+       type: set
+
+       The set of used column names or instantiated dependencies to recursively resolve the names of
+       used columns. Set during the deferred initialization.
+
+    .. py:attribute:: produces_instances
+       type: set
+
+       The set of produces column names or instantiated dependencies to recursively resolve the
+       names of produced columns. Set during the deferred initialization.
+
+    .. py:attribute:: deps
+       type: dict
+
+       The callstack of dependencies, i.e., a dictionary mapping depenent classes to their instances
+       as to be used by *this* instance. Item access on this instance is forwarded to this object.
 
     .. py::attribute:: used_columns
        type: set
@@ -968,39 +1012,23 @@ class ArrayFunction(object):
 
        The resolved, flat set of used column names.
 
-    .. py:attribute:: produces
-       type: set
-
-       The set of produced column names or other instances to recursively resolve the names of
-       produced columns.
-
     .. py::attribute:: produced_columns
        type: set
        read-only
 
        The resolved, flat set of produced column names.
 
-    .. py:attribute:: AUTO
-       type: ArrayFunction.IOFlag
+    .. py:attribute:: call_func
+       type: callable
 
-       Flag that can be used in nested dependencies between array functions to denote automatic
-       resolution of column names.
-
-    .. py:attribute:: USES
-       type: ArrayFunction.IOFlag
-
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`uses` set.
-
-    .. py:attribute:: PRODUCES
-       type: ArrayFunction.IOFlag
-
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`produces` set.
+       The wrapped function to be called on arrays.
     """
 
-    # cache for instances
-    _instances = {}
+    # class-level attributes as defaults
+    call_func = None
+    uses = set()
+    produces = set()
+    dependency_sets = {"uses", "produces"}
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1008,116 +1036,133 @@ class ArrayFunction(object):
         USES = enum.auto()
         PRODUCES = enum.auto()
 
-    # shallow wrapper around an instance and an instance
-    FlaggedInst = namedtuple("FlaggedInst", ["inst", "io_flag"])
+    # shallow wrapper around an objects (a class or instance) and an IOFlag
+    Flagged = namedtuple("Flagged", ["wrapped", "io_flag"])
 
-    @classmethod
-    def has(cls, name: str) -> bool:
+    @classproperty
+    def AUTO(cls) -> Flagged:
         """
-        Returns whether an instance named *name* was previously registered.
+        Returns a :py:attr:`Flagged` object, wrapping this class and the AUTO flag.
         """
-        return name in cls._instances
+        return cls.Flagged(cls, cls.IOFlag.AUTO)
 
-    @classmethod
-    def new(cls, *args, **kwargs) -> "ArrayFunction":
+    @classproperty
+    def USES(cls) -> Flagged:
         """
-        Creates a new instance with all *args* and *kwargs*, adds it to the instance cache using its
-        name attribute, and returns it. An exception is raised if an instance with the same name was
-        already reigstered.
+        Returns a :py:attr:`Flagged` object, wrapping this class and the USES flag.
         """
-        inst = cls(*args, **kwargs)
+        return cls.Flagged(cls, cls.IOFlag.USES)
 
-        if cls.has(inst.name):
-            raise ValueError(f"{cls.__name__} named '{inst.name}' was already registered")
-
-        cls._instances[inst.name] = inst
-
-        return inst
-
-    @classmethod
-    def get(cls, name: str, copy: bool = False) -> "ArrayFunction":
+    @classproperty
+    def PRODUCES(cls) -> Flagged:
         """
-        Returns a previously registered instance named *name* from the cache. If *copy* is *True*
-        a copy is returned.
+        Returns a :py:attr:`Flagged` object, wrapping this class and the PRODUCES flag.
         """
-        if not cls.has(name):
-            raise ValueError(f"no {cls.__name__} named '{name}' registered")
-
-        inst = cls._instances[name]
-        return inst.copy() if copy else inst
-
-    @classmethod
-    def copy_obj(
-        cls,
-        obj: Union["ArrayFunction", FlaggedInst, Any],
-        copy_cache: Optional[Dict[Any, Any]] = None,
-    ) -> Union["ArrayFunction", FlaggedInst, Any]:
-        """
-        Returns the copy if an object *obj* which can be either an ArrayFunction or a FlaggedInst.
-        For any other type, a simple copy *obj* using :py:mod:`copy` is returned.
-        """
-        def get_copy(obj):
-            if isinstance(obj, ArrayFunction):
-                return obj.copy()
-            if isinstance(obj, cls.FlaggedInst):
-                return cls.FlaggedInst(obj.inst.copy(), obj.io_flag)
-            return _copy.copy(obj)
-
-        # use the cache when set
-        if copy_cache is not None:
-            if obj not in copy_cache:
-                copy_cache[obj] = get_copy(obj)
-            return copy_cache[obj]
-
-        # otherwise, just copy
-        return get_copy(obj)
+        return cls.Flagged(cls, cls.IOFlag.PRODUCES)
 
     def __init__(
         self,
-        func: Callable,
-        name: Optional[str] = None,
-        uses: Optional[Union[
-            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
-            Set["ArrayFunction"],
-        ]] = None,
-        produces: Optional[Union[
-            str, "ArrayFunction", Sequence[str], Sequence["ArrayFunction"], Set[str],
-            Set["ArrayFunction"],
-        ]] = None,
+        call_func: Optional[Callable] = None,
+        deferred_init: Optional[bool] = True,
+        instance_cache: Optional[dict] = None,
         **kwargs,
     ):
         super().__init__()
 
-        self.func = func
-        self.name = name or self.func.__name__
-        self.uses = set(law.util.make_list(uses)) if uses else set()
-        self.produces = set(law.util.make_list(produces)) if produces else set()
+        # when a custom call_func is passed, bind it to this instance
+        if call_func:
+            self.call_func = call_func.__get__(self, self.__class__)
 
-    def copy(self) -> "ArrayFunction":
+        # create instance-level sets of dependent ArrayFunction classes,
+        # optionally extended by sets passed in keyword arguments
+        for attr in self.dependency_sets:
+            deps = getattr(self.__class__, attr) | set(law.util.make_list(kwargs.get(attr) or []))
+            setattr(self, attr, deps)
+
+        # dictionary of dependency class to instance, set in create_dependencies
+        self.deps = DotDict()
+
+        # deferred part of the initialization
+        if deferred_init:
+            self.deferred_init(instance_cache or {})
+
+    def __getitem__(self, dep_cls: DerivableMeta) -> "ArrayFunction":
         """
-        Returns a copy if this instance.
+        Item access to dependencies.
         """
-        inst = type(self)(func=self.func, name=self.name)
+        return self.deps[dep_cls]
 
-        # add other attributes
-        inst.uses = set(self.uses)
-        inst.produces = set(self.produces)
+    def deferred_init(self, instance_cache: dict) -> None:
+        """
+        Controls the deferred part of the initialization process.
+        """
+        self.create_dependencies(instance_cache)
 
-        return inst
+    def create_dependencies(
+        self,
+        instance_cache: dict,
+    ) -> None:
+        # create instance-level sets to store instances of dependent ArrayFunction classes
+        # that are defined in class-level sets
+        def instantiate(cls):
+            if cls not in instance_cache:
+                # create the instance first without its deps, then cache it and
+                # finally create its deps
+                inst = self.instantiate_dependency(cls, deferred_init=False)
+                instance_cache[cls] = inst
+                inst.deferred_init(instance_cache)
+            return instance_cache[cls]
 
-    @property
-    def AUTO(self):
-        return self.FlaggedInst(self, self.IOFlag.AUTO)
+        def add_dep(inst):
+            self.deps[inst.__class__] = inst
+            return inst
 
-    @property
-    def USES(self):
-        return self.FlaggedInst(self, self.IOFlag.USES)
+        for attr in self.dependency_sets:
+            # get the current set of instances
+            deps = set()
 
-    @property
-    def PRODUCES(self):
-        return self.FlaggedInst(self, self.IOFlag.PRODUCES)
+            # go through all dependent objects and create instances of classes, considering caching
+            for obj in getattr(self, attr):
+                if ArrayFunction.derived_by(obj):
+                    obj = add_dep(instantiate(obj))
+                elif isinstance(obj, ArrayFunction):
+                    add_dep(obj)
+                elif isinstance(obj, self.Flagged):
+                    if ArrayFunction.derived_by(obj.wrapped):
+                        obj = self.Flagged(instantiate(obj.wrapped), obj.io_flag)
+                    add_dep(obj.wrapped)
+                else:
+                    obj = copy.deepcopy(obj)
+                deps.add(obj)
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: Optional[set] = None, **kwargs) -> Set[str]:
+            # save the updated set of dependencies
+            setattr(self, f"{attr}_instances", deps)
+
+    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> "ArrayFunction":
+        """
+        Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*.
+        """
+        return cls(**kwargs)
+
+    def get_dependencies(self, include_others: bool = False) -> Set[Union["ArrayFunction", Any]]:
+        """
+        Returns a set of instances of all dependencies. When *include_others* is *True*, also
+        non-ArrayFunction types are returned.
+        """
+        deps = set()
+
+        for attr in self.dependency_sets:
+            for obj in getattr(self, f"{attr}_instances"):
+                if isinstance(obj, ArrayFunction):
+                    deps.add(obj)
+                elif isinstance(obj, self.Flagged):
+                    deps.add(obj.wrapped)
+                elif include_others:
+                    deps.add(obj)
+
+        return deps
+
+    def _get_columns(self, io_flag: IOFlag, call_cache: Optional[set] = None) -> Set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1129,24 +1174,21 @@ class ArrayFunction(object):
             call_cache = set()
 
         # declare _this_ call cached
-        call_cache.add(self.FlaggedInst(self, io_flag))
+        call_cache.add(self.Flagged(self, io_flag))
 
         # add columns of all dependent objects
-        for obj in (self.uses if io_flag == self.IOFlag.USES else self.produces):
-            if isinstance(obj, (ArrayFunction, self.FlaggedInst)):
-                wrapped = obj
+        for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
+            if isinstance(obj, (ArrayFunction, self.Flagged)):
+                flagged = obj
                 if isinstance(obj, ArrayFunction):
-                    wrapped = self.FlaggedInst(obj, io_flag)
+                    flagged = self.Flagged(obj, io_flag)
                 elif obj.io_flag == self.IOFlag.AUTO:
-                    wrapped = self.FlaggedInst(obj.inst, io_flag)
+                    flagged = self.Flagged(obj.wrapped, io_flag)
                 # skip when already cached
-                if wrapped in call_cache:
+                if flagged in call_cache:
                     continue
-                # either call used or produced columns
-                if wrapped.io_flag == self.IOFlag.USES:
-                    columns |= wrapped.inst._get_used_columns(call_cache=call_cache, **kwargs)
-                else:
-                    columns |= wrapped.inst._get_produced_columns(call_cache=call_cache, **kwargs)
+                # add the columns
+                columns |= flagged.wrapped._get_columns(flagged.io_flag, call_cache=call_cache)
             else:
                 columns.add(obj)
 
@@ -1166,18 +1208,15 @@ class ArrayFunction(object):
     def produced_columns(self) -> Set[str]:
         return self._get_produced_columns()
 
-    def __repr__(self) -> str:
-        """
-        Returns a unique string representation.
-        """
-        return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
-
     def __call__(self, *args, **kwargs):
         """
-        Invokes the wrapped :py:attr:`func` while bound to this instance, forwarding all *args* and
-        *kwargs*.
+        Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
+        raised if :py:attr:`call_func` is not callable.
         """
-        return self.func.__get__(self, self.__class__)(*args, **kwargs)
+        if not callable(self.call_func):
+            raise Exception(f"call_func of {self} is not callable")
+
+        return self.call_func(*args, **kwargs)
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -1188,67 +1227,73 @@ class TaskArrayFunction(ArrayFunction):
     attributes.
 
     *shifts* can be defined similarly to columns to use and/or produce in the
-    :py:class:`ArrayFunction` base class. It can be a sequence or set of shift names, or other
-    instances that are called by this one. The :py:attr:`all_shifts` property returns a flat set of
-    all shifts, potentially resolving information from other :py:class:`TaskArrayFunction`
-    instances registered in `py:attr:`uses`, `py:attr:`produces` and `py:attr:`shifts` itself.
+    :py:class:`ArrayFunction` base class. It can be a sequence or set of shift names, or dependent
+    TaskArrayFunction's. Similar to :py:attr:`used_columns` and :py:attr:`produced_columns`,
+    the :py:attr:`all_shifts` property returns a flat set of all shifts, potentially resolving
+    information from dependencies registered in `py:attr:`uses`, `py:attr:`produces` and
+    `py:attr:`shifts` itself.
 
-    As opposed to more basic :py:class:`ArrayFunction`'s, instances of *this* class can have a state
-    that can be altered as needed. For this purpose, an update function can be wrapped through a
-    decorator (similiar to ``property`` setters) as shown in the example below. When the update is
-    triggered, other task array functions referred to in :py:attr:`uses`, :py:attr:`produces` and
-    :py:attr:`shifts` are first copied (so that their state is consistent) and then updated
-    recursively. These copies are stored in a dictionary :py:attr:`stack`, using their names as
-    keys. In some way, this can be seen as a call stack and calls to any dependent object should be
-    done via copies in this dictionary in order to maintain their consistent state.
-
-    Custom task requirements, and a setup hook can be defined in a similar, programmatic way.
-    Example:
+    As opposed to more basic :py:class:`ArrayFunction`'s, instances of *this* class have a direct
+    interface to tasks and can influence their behavior - and vice-versa. For this purpose, an
+    initialization function can be wrapped through a decorator (similiar to ``property`` setters) as
+    shown in the example below. Custom task requirements, and a setup of objects resulting from
+    these requirements can be defined in a similar, programmatic way. Exmple:
 
     .. code-block:: python
 
-        # define the function to wrap, that requires some weights that are defined
-        def my_func(self, arr, weights, **kwargs):
-            foo = arr.foo
-            arr["bar"] = foo * weights
-            return arr
+        class my_func(ArrayFunction):
+            uses = {"Jet.pt"}
+            produces = {"Jet.pt_weighted"}
 
-        # define the function
-        ArrayFunction.new(my_func, uses={"foo"}, produces={"bar"})
+            def call_func(self, events):
+                # self.weights is defined below
+                events["Jet", "pt_weighted"] = events.Jet.pt * self.weights
 
         # define config-dependent updates (e.g. extending shifts, or used and produced columns)
-        @my_func.update
-        def update(self, config_inst):
+        @my_func.init
+        def update(self):
             self.shifts |= {"some_shift_up", "some_shift_down"}
 
         # define requirements that (e.g.) compute the weights
         @my_func.requires
-        def requires(self, task, reqs):
+        def requires(self, reqs):
             # fill the requirements dict
-            reqs["weights_task"] = SomeWeightsTask.req(task)
+            reqs["weights_task"] = SomeWeightsTask.req(self.task)
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, task, inputs, call_kwargs):
-            # load the weights once
+        def setup(self, inputs):
+            # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
-            # add it to the call_kwargs which will be forwarded to every call to the main function
-            call_kwargs["weights"] = weights
 
-        # another function using my_func
-        def my_other_func(self, arr, **kwargs):
-            # call the my_func copy
-            self.stack.my_func(arr, **kwargs)
+            # save them as an instance attribute
+            self.weights = weights
 
-        ArrayFunction.new(my_func, uses={my_func}, produces={my_func})
+        # call my_func on a chunk of events
+        inst = my_func()
+        inst(events)
 
     For a possible implementation, see :py:mod:`ap.production.pileup`.
 
-    .. py:attribute:: shifts
+    .. note::
+
+        The above example uses explicit subclassing, mixed with decorator usage to extend the class.
+        This is most certainly never used in practice. Instead, please either consider defining the
+        class the normal way, or use a decorator to wrap the main callable first and by that
+        creating the class as done by the :py:class:`Calibrator`, :py:class:`Selector` and
+        :py:class:`Producer` interfaces.
+
+    .. py:classattribute:: shifts
        type: set
 
-       The set of dependent or produced shifts, or other instances to recursively resolve the full
-       list of shifts.
+       The set of dependent or produced shifts, or other dependencies to recursively resolve the
+       names of shifts.
+
+    .. py:attribute:: shifts_instances
+       type: set
+
+       The set of shift names or instantiated dependencies to recursively resolve the names of
+       shifts. Set during the deferred initialization.
 
     .. py:attribute:: all_shifts
        type: set
@@ -1256,7 +1301,7 @@ class TaskArrayFunction(ArrayFunction):
 
        The resolved, flat set of dependent or produced shifts.
 
-    .. py:attribute: update_func
+    .. py:attribute: init_func
        type: callable
 
        The registered function defining what to update, or *None*.
@@ -1277,167 +1322,21 @@ class TaskArrayFunction(ArrayFunction):
        When a bool, this flag decides whether calls of this instance are cached. However, note that
        when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
        this attribute.
-
-    .. py:attribute:: call_kwargs
-       type: dict
-
-       A dictionary of arguments that are set by :py:attr:`setup_func` and forwarded to the
-       invocation of the wrapped functon.
-
-    .. py:attribute:: stack
-       type: DotDict
-
-       Dictionary providing named access to copies of all dependent objects in :py:attr:`uses`,
-       :py:attr:`produces` and :py:attr:`shifts`. It is empty until :py:meth:`run_update` is called.
     """
 
-    def __init__(
-        self,
-        *args,
-        shifts: Optional[Union[
-            str, "TaskArrayFunction", Sequence[str], Sequence["TaskArrayFunction"], Set[str],
-            Set["TaskArrayFunction"],
-        ]] = None,
-        call_force: Optional[bool] = None,
-        **kwargs,
-    ):
-        super().__init__(*args, **kwargs)
+    # class-level attributes as defaults
+    init_func = None
+    requires_func = None
+    setup_func = None
+    shifts = set()
+    dependency_sets = ArrayFunction.dependency_sets | {"shifts"}
 
-        # store attributes
-        self.shifts = set(law.util.make_list(shifts)) if shifts else set()
-        self.call_force = call_force
-
-        # wrapped functions
-        self.update_func = None
-        self.requires_func = None
-        self.setup_func = None
-
-        # keyword arguments forwarded to actual wrapped function, generated during setup
-        self.call_kwargs = None
-
-        # dict providing named access to copies of all dependent objects, generated during update
-        self.stack = DotDict()
-
-    def copy(self) -> "TaskArrayFunction":
+    @classmethod
+    def init(cls, func: Callable[[], None]) -> None:
         """
-        Returns a copy if this instance.
-        """
-        inst = super().copy()
-
-        # add attributes
-        # call_kwargs and stack are not copied by choice
-        inst.shifts = set(self.shifts)
-        inst.update_func = self.update_func
-        inst.requires_func = self.requires_func
-        inst.setup_func = self.setup_func
-
-        return inst
-
-    def updated_copy(self, **kwargs):
-        """
-        Returns a copy if *this* instance and invokes its :py:meth:`run_update` method, forwarding
-        all *kwargs*.
-        """
-        inst = self.copy()
-        inst.run_update(**kwargs)
-        return inst
-
-    def _get_all_shifts(self, call_cache: Optional[set] = None) -> Set[str]:
-        shifts = set()
-
-        # init the call cache
-        if call_cache is None:
-            call_cache = set()
-
-        # add shifts of all dependent objects
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction):
-                if obj not in call_cache:
-                    call_cache.add(obj)
-                    shifts |= obj._get_all_shifts(call_cache=call_cache)
-            else:
-                shifts.add(obj)
-
-        return shifts
-
-    @property
-    def all_shifts(self) -> Set[str]:
-        return self._get_all_shifts()
-
-    def update(self, func: Callable[["TaskArrayFunction", Any], None]) -> None:
-        """
-        Decorator to wrap a function *func* that should be registered as :py:attr:`update_func`
-        which is used to update *this* instance dependent on specific task attributes. The function
-        is invoked while bound to this instance, fowarding all keyword arguments.
-
-        In any case it is recommended for the wrapped function to catch all additional keyword
-        arguments. The decorator does not return the wrapped function.
-
-        .. note::
-
-            When the task invoking the requirement is workflow, be aware that both the actual
-            workflow instance as well as branch tasks might call the wrapped function. When the
-            requirements should differ between them, make sure to use the
-            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
-            distinguish the cases.
-        """
-        self.update_func = func
-
-    def run_update(
-        self,
-        copy_cache: Optional[Dict[Any, Any]] = None,
-        call_cache: Optional[set] = None,
-        **kwargs,
-    ) -> None:
-        """
-        Recursively runs the update function of this and all other known instances (via
-        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) forwarding *this* instance and
-        all additional *kwargs*. Other known instances are copied first to preserve their states.
-        """
-        # init the call cache
-        if call_cache is None:
-            call_cache = set()
-
-        # init the copy cache
-        if copy_cache is None:
-            copy_cache = {}
-
-        # replace dependent objects with copies
-        self.uses = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.uses}
-        self.produces = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.produces}
-        self.shifts = {self.copy_obj(obj, copy_cache=copy_cache) for obj in self.shifts}
-
-        # run this instance's update function, passing also all caches so that update functions
-        # of newly added, dependent objects can be triggered under same conditions
-        if self.update_func:
-            self.update_func.__get__(self, self.__class__)(
-                copy_cache=copy_cache,
-                call_cache=call_cache,
-                **kwargs,
-            )
-
-        # run the update of all dependent objects
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction):
-                # store the reference
-                self.stack[obj.name] = obj
-                # call its update
-                if obj not in call_cache:
-                    call_cache.add(obj)
-                    obj.run_update(copy_cache=copy_cache, call_cache=call_cache, **kwargs)
-
-    def requires(self, func: Callable[["TaskArrayFunction", law.Task, dict], dict]) -> None:
-        """
-        Decorator to wrap a function *func* that should be registered as :py:attr:`requires_func`
-        which is used to define additional task requirements. The function is invoked while bound to
-        this instance and should accept two arguments,
-
-            - *task* (positional), the :py:class:`law.Task` instance, and
-            - *reqs* (positional), a dictionary into which requirements should be inserted.
+        Decorator to wrap a function *func* that should be registered as :py:meth:`init_func`
+        which is used to initialize *this* instance dependent on specific task attributes. The
+        function should not accept positional arguments.
 
         The decorator does not return the wrapped function.
 
@@ -1449,45 +1348,33 @@ class TaskArrayFunction(ArrayFunction):
             :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
             distinguish the cases.
         """
-        self.requires_func = func
+        cls.init_func = func
 
-    def run_requires(
-        self,
-        task: law.Task,
-        reqs: Optional[dict] = None,
-        call_cache: Optional[set] = None,
-    ) -> dict:
+    @classmethod
+    def requires(cls, func: Callable[[dict], None]) -> None:
         """
-        Recursively creates the requirements of this and all other known instances (via
-        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* using this
-        instance. *reqs* defaults to an empty dictionary which should be filled to store the
-        requirements.
+        Decorator to wrap a function *func* that should be registered as :py:meth:`requires_func`
+        which is used to define additional task requirements. The function should accept one
+        positional argument:
+
+            - *reqs*, a dictionary into which requirements should be inserted.
+
+        The decorator does not return the wrapped function.
+
+        .. note::
+
+            When the task invoking the requirement is workflow, be aware that both the actual
+            workflow instance as well as branch tasks might call the wrapped function. When the
+            requirements should differ between them, make sure to use the
+            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
+            distinguish the cases.
         """
-        # default requirements
-        if reqs is None:
-            reqs = {}
+        cls.requires_func = func
 
-        # init the call cache
-        if call_cache is None:
-            call_cache = set()
-
-        # run this instance's requires function
-        if self.requires_func:
-            self.requires_func.__get__(self, self.__class__)(task, reqs)
-
-        # run the requirements of all dependent objects
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction) and obj not in call_cache:
-                call_cache.add(obj)
-                obj.run_requires(task, reqs=reqs, call_cache=call_cache)
-
-        return reqs
-
-    def setup(self, func: Callable[[law.Task, dict, dict], dict]) -> None:
+    @classmethod
+    def setup(cls, func: Callable[[dict], None]) -> None:
         """
-        Decorator to wrap a function *func* that should be registered as :py:attr:`setup_func`
+        Decorator to wrap a function *func* that should be registered as :py:meth:`setup_func`
         which is used to perform a custom setup of objects. The function is invoked while bound to
         this instance should accept three arguments,
 
@@ -1499,42 +1386,145 @@ class TaskArrayFunction(ArrayFunction):
 
         The decorator does not return the wrapped function.
         """
-        self.setup_func = func
+        cls.setup_func = func
 
-    def run_setup(
+    def __init__(
         self,
-        task: law.Task,
-        inputs: dict,
-        call_kwargs: Optional[dict] = None,
-        call_cache: Optional[set] = None,
+        *args,
+        init_func: Optional[Callable] = None,
+        requires_func: Optional[Callable] = None,
+        setup_func: Optional[Callable] = None,
+        call_force: Optional[bool] = None,
+        inst_dict: Optional[dict] = None,
+        **kwargs,
+    ):
+        # store the inst dict with arbitrary attributes that are forwarded to dependency creation
+        self.inst_dict = dict(inst_dict or {})
+
+        super().__init__(*args, **kwargs)
+
+        # when custom funcs are passed, bind them to this instance
+        if init_func:
+            self.init_func = init_func.__get__(self, self.__class__)
+        if requires_func:
+            self.requires_func = requires_func.__get__(self, self.__class__)
+        if setup_func:
+            self.setup_func = setup_func.__get__(self, self.__class__)
+
+        # other attributes
+        self.call_force = call_force
+
+    def __getattr__(self, attr: str) -> Any:
+        """
+        Attribute access to objects named *attr* in the :py:attr:`inst_dict`.
+        """
+        if attr in self.inst_dict:
+            return self.inst_dict[attr]
+
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+
+    def deferred_init(
+        self,
+        instance_cache: dict,
     ) -> None:
         """
-        Recursively runs the setup function of this and all other known instances (via
-        :py:attr:`uses`, :py:attr:`produces` and :py:attr:`shifts`) given the *task* and *inputs*
-        corresponding to the requirements created by :py:func:`run_requires`.
+        Controls the deferred part of the initialization process, first calling this instances
+        :py:meth:`init_func` and then setting up dependencies.
         """
-        # init the call kwargs
-        if call_kwargs is None:
-            call_kwargs = {}
+        # run this instance's init function which might update dependent classes
+        if callable(self.init_func):
+            self.init_func()
+
+        # call super, which instantiates the dependencies
+        super().deferred_init(instance_cache)
+
+    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> "TaskArrayFunction":
+        """
+        Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*,
+        updated by *this* instances :py:attr:`inst_dict`.
+        """
+        # add inst_dict when cls is a TaskArrayFunction itself
+        if TaskArrayFunction.derived_by(cls):
+            kwargs.setdefault("inst_dict", self.inst_dict)
+
+        return super().instantiate_dependency(cls, **kwargs)
+
+    def _get_all_shifts(self, call_cache: Optional[set] = None) -> Set[str]:
+        shifts = set()
 
         # init the call cache
         if call_cache is None:
             call_cache = set()
 
+        # consider _this_ call cached
+        call_cache.add(self)
+
+        # add shifts of all dependent objects
+        for obj in self.get_dependencies(include_others=True):
+            if isinstance(obj, TaskArrayFunction):
+                if obj not in call_cache:
+                    call_cache.add(obj)
+                    shifts |= obj._get_all_shifts(call_cache=call_cache)
+            elif isinstance(obj, str):
+                shifts.add(obj)
+
+        return shifts
+
+    @property
+    def all_shifts(self) -> Set[str]:
+        return self._get_all_shifts()
+
+    def run_requires(
+        self,
+        reqs: Optional[dict] = None,
+        call_cache: Optional[set] = None,
+    ) -> dict:
+        """
+        Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
+        defaults to an empty dictionary which should be filled to store the requirements.
+        """
+        # default requirements
+        if reqs is None:
+            reqs = {}
+
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
+
+        # run this instance's requires function
+        if callable(self.requires_func):
+            self.requires_func(reqs)
+
+        # run the requirements of all dependent objects
+        for dep in self.get_dependencies():
+            if dep not in call_cache:
+                call_cache.add(dep)
+                dep.run_requires(reqs=reqs, call_cache=call_cache)
+
+        return reqs
+
+    def run_setup(
+        self,
+        inputs: dict,
+        call_cache: Optional[set] = None,
+    ) -> None:
+        """
+        Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *inputs*
+        corresponds to the requirements created by :py:func:`run_requires`.
+        """
+        # init the call cache
+        if call_cache is None:
+            call_cache = set()
+
         # run this instance's setup function
-        if self.setup_func:
-            self.setup_func.__get__(self, self.__class__)(task, inputs, call_kwargs)
+        if callable(self.setup_func):
+            self.setup_func(inputs)
 
         # run the setup of all dependent objects
-        for obj in self.uses | self.produces | self.shifts:
-            if isinstance(obj, self.FlaggedInst):
-                obj = obj.inst
-            if isinstance(obj, TaskArrayFunction) and obj not in call_cache:
-                call_cache.add(obj)
-                obj.run_setup(task, inputs, call_kwargs=call_kwargs, call_cache=call_cache)
-
-        # store call_kwargs in the end
-        self.call_kwargs = call_kwargs
+        for dep in self.get_dependencies():
+            if dep not in call_cache:
+                call_cache.add(dep)
+                dep.run_setup(inputs, call_cache=call_cache)
 
     def __call__(
         self,
@@ -1544,8 +1534,8 @@ class TaskArrayFunction(ArrayFunction):
         **kwargs,
     ) -> Any:
         """
-        Calls the wrapped function with all *args* and *kwargs*. The latter is updated with
-        :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
+        Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
+        with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
         Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
         this instance was called before, it is not called again but *None* is returned. This check
@@ -1568,7 +1558,7 @@ class TaskArrayFunction(ArrayFunction):
             call_cache[self] += 1
 
         # stack all kwargs
-        kwargs = law.util.merge_dicts({"call_cache": call_cache}, self.call_kwargs or {}, kwargs)
+        kwargs = law.util.merge_dicts({"call_cache": call_cache}, kwargs)
 
         return super().__call__(*args, **kwargs)
 
