@@ -4,8 +4,6 @@
 Producers that determine the generator-level particles related to a top quark decay.
 """
 
-import order as od
-
 from ap.production import Producer, producer
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
@@ -18,12 +16,7 @@ ak = maybe_import("awkward")
     uses={"nGenPart", "GenPart.*"},
     produces={"gen_top_decay"},
 )
-def gen_top_decay_products(
-    self: Producer,
-    events: ak.Array,
-    dataset_inst: od.Dataset,
-    **kwargs,
-) -> ak.Array:
+def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Creates a new ragged column "gen_top_decay" with one element per hard top quark. Each element is
     a GenParticleArray with five objects in a distinct order: top quark, bottom quark, W boson,
@@ -34,7 +27,7 @@ def gen_top_decay_products(
 
         [[t1, W1, b1, q1, q2], [t2, ...], ...]
     """
-    if dataset_inst.is_data or not dataset_inst.x("has_top", False):
+    if self.dataset_inst.is_data or not self.dataset_inst.x("has_top", False):
         return events
 
     # find hard top quarks
