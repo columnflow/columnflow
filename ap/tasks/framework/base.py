@@ -106,13 +106,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = {}
-        if task:
-            kwargs["task"] = task
-            kwargs["analysis_inst"] = task.analysis_inst
-        else:
-            kwargs["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
-        return kwargs
+        return {
+            "task": task,
+            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(cls.analysis),
+        }
 
     @classmethod
     def get_calibrator_kwargs(cls, task=None, **params):
@@ -496,7 +493,11 @@ class DatasetTask(ShiftTask):
             requested_dataset = params.get("dataset")
             if requested_dataset not in (None, law.NO_STR):
                 dataset_inst = config_inst.get_dataset(requested_dataset)
-                allowed_shifts |= set(dataset_inst.info.keys())
+                # clear shifts for data and extend with dataset variations for mc
+                if dataset_inst.is_data:
+                    allowed_shifts.clear()
+                else:
+                    allowed_shifts |= set(dataset_inst.info.keys())
 
         return allowed_shifts
 

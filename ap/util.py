@@ -6,9 +6,10 @@ Collection of general helpers and utilities.
 
 __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
-    "FunctionArgs", "DotDict", "MockModule",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
+    "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
+    "DerivableMeta", "Derivable",
 ]
 
 
@@ -18,6 +19,7 @@ import queue
 import threading
 import subprocess
 import importlib
+import inspect
 import multiprocessing
 import multiprocessing.pool
 from functools import wraps
@@ -46,121 +48,11 @@ primes = [
 ]
 
 
-class FunctionArgs(object):
-    """
-    Leight-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
-    different functions with them.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-
-        # store attributes
-        self.args = args
-        self.kwargs = kwargs
-
-    def __call__(self, func: Callable) -> Any:
-        return func(*self.args, **self.kwargs)
-
-
-class DotDict(dict):
-    """
-    Subclass of *dict* that provides read access for items via attributes by implementing
-    ``__getattr__``. In case a item is accessed via attribute and it does not exist, an
-    *AttriuteError* is raised rather than a *KeyError*. Example:
-
-    .. code-block:: python
-
-        d = DotDict()
-        d["foo"] = 1
-
-        print(d["foo"])
-        # => 1
-
-        print(d.foo)
-        # => 1
-
-        print(d["bar"])
-        # => KeyError
-
-        print(d.bar)
-        # => AttributeError
-
-        # use wrap() to convert a nested dict
-        d = DotDict({"foo": {"bar": 1}})
-        print(d.foo.bar)
-        # => 1
-    """
-
-    def __getattr__(self, attr):
-        try:
-            return self[attr]
-        except KeyError:
-            raise AttributeError("'{}' object has no attribute '{}'".format(
-                self.__class__.__name__, attr))
-
-    def copy(self):
-        """"""
-        return self.__class__(self)
-
-    @classmethod
-    def wrap(cls, d: dict) -> "DotDict":
-        """
-        Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
-        with :py:class:`DotDict`'s for deep attribute-style access.
-        """
-        wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
-        return wrap(d)
-
-
-class MockModule(object):
-    """
-    Mockup object that resembles a module with arbitrarily deep structure such that, e.g.,
-
-    .. code-block:: python
-
-        coffea = MockModule("coffea")
-        print(coffea.nanoevents.NanoEventsArray)
-        # -> "<MockupModule 'coffea' at 0x981jald1>"
-
-    will always succeed at declaration, but most likely fail at execution time. In fact, each
-    attribute access will return the mock object again. This might only be useful in places where
-    a module is potentially not existing (e.g. due to sandboxing) but one wants to import it either
-    way a) to perform only one top-level import as opposed to imports in all functions of a package,
-    or b) to provide type hints for documentation purposes.
-
-    .. py:attribute:: _name
-       type: str
-
-       The name of the mock module.
-    """
-
-    def __init__(self, name):
-        super().__init__()
-
-        self._name = name
-
-    def __getattr__(self, attr):
-        return self
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} '{self._name}' at {hex(id(self))}>"
-
-    def __call__(self, *args, **kwargs):
-        raise Exception(f"{self._name} is a mock module and cannot be called")
-
-    def __nonzero__(self):
-        return False
-
-    def __bool__(self):
-        return False
-
-
 def maybe_import(
     name: str,
     package: Optional[str] = None,
     force: bool = False,
-) -> Union[ModuleType, MockModule]:
+) -> Union[ModuleType, "MockModule"]:
     """
     Calls *importlib.import_module* internally and returns the module if it exists, or otherwise a
     :py:class:`MockModule` instance with the same name. When *force* is *True* and the import fails,
@@ -445,3 +337,280 @@ def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
     Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
     """
     return (a / b) if b else 0.0
+
+
+class DotDict(dict):
+    """
+    Subclass of *dict* that provides read access for items via attributes by implementing
+    ``__getattr__``. In case a item is accessed via attribute and it does not exist, an
+    *AttriuteError* is raised rather than a *KeyError*. Example:
+
+    .. code-block:: python
+
+        d = DotDict()
+        d["foo"] = 1
+
+        print(d["foo"])
+        # => 1
+
+        print(d.foo)
+        # => 1
+
+        print(d["bar"])
+        # => KeyError
+
+        print(d.bar)
+        # => AttributeError
+
+        # use wrap() to convert a nested dict
+        d = DotDict({"foo": {"bar": 1}})
+        print(d.foo.bar)
+        # => 1
+    """
+
+    def __getattr__(self, attr):
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError("'{}' object has no attribute '{}'".format(
+                self.__class__.__name__, attr))
+
+    def copy(self):
+        """"""
+        return self.__class__(self)
+
+    @classmethod
+    def wrap(cls, d: dict) -> "DotDict":
+        """
+        Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
+        with :py:class:`DotDict`'s for deep attribute-style access.
+        """
+        wrap = lambda d: cls((k, wrap(v)) for k, v in d.items()) if isinstance(d, dict) else d
+        return wrap(d)
+
+
+class MockModule(object):
+    """
+    Mockup object that resembles a module with arbitrarily deep structure such that, e.g.,
+
+    .. code-block:: python
+
+        coffea = MockModule("coffea")
+        print(coffea.nanoevents.NanoEventsArray)
+        # -> "<MockupModule 'coffea' at 0x981jald1>"
+
+    will always succeed at declaration, but most likely fail at execution time. In fact, each
+    attribute access will return the mock object again. This might only be useful in places where
+    a module is potentially not existing (e.g. due to sandboxing) but one wants to import it either
+    way a) to perform only one top-level import as opposed to imports in all functions of a package,
+    or b) to provide type hints for documentation purposes.
+
+    .. py:attribute:: _name
+       type: str
+
+       The name of the mock module.
+    """
+
+    def __init__(self, name):
+        super().__init__()
+
+        self._name = name
+
+    def __getattr__(self, attr):
+        return self
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} '{self._name}' at {hex(id(self))}>"
+
+    def __call__(self, *args, **kwargs):
+        raise Exception(f"{self._name} is a mock module and cannot be called")
+
+    def __nonzero__(self):
+        return False
+
+    def __bool__(self):
+        return False
+
+
+class FunctionArgs(object):
+    """
+    Leight-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
+    different functions with them.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+        # store attributes
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self, func: Callable) -> Any:
+        return func(*self.args, **self.kwargs)
+
+
+class ClassPropertyDescriptor(object):
+    """
+    Generic descriptor class that is used by :py:func:`classproperty`.
+    """
+
+    def __init__(self, fget: Callable, fset: Optional[Callable] = None):
+        super().__init__()
+
+        self.fget = fget
+        self.fset = fset
+
+    def __get__(self, obj: type, cls: Optional[type] = None) -> Any:
+        if cls is None:
+            cls = type(obj)
+
+        return self.fget.__get__(obj, cls)()
+
+    def __set__(self, obj: type, value: Any) -> None:
+        # fset must exist
+        if not self.fset:
+            raise AttributeError("can't set attribute")
+
+        return self.fset.__get__(obj, type(obj))(value)
+
+
+def classproperty(func):
+    """
+    Propety decorator for class-level methods.
+    """
+    if not isinstance(func, (classmethod, staticmethod)):
+        func = classmethod(func)
+
+    return ClassPropertyDescriptor(func)
+
+
+class DerivableMeta(type):
+    """
+    Meta class for :py:class:`Derivable` objects providing class-level features such as improved
+    tracing and lookup of subclasses, and single-line subclassing for partial-like overwriting of
+    class-level attributes.
+    """
+
+    _classes = {}
+
+    def __new__(
+        metacls,
+        cls_name: str,
+        bases: tuple,
+        cls_dict: dict,
+    ) -> "DerivableMeta":
+        """
+        Class creation.
+        """
+        # default attributes, irrespective of inheritance
+        cls_dict.setdefault("_subclasses", {})
+
+        # create the class
+        cls = super().__new__(metacls, cls_name, bases, cls_dict)
+
+        # save the class in the meta class dict
+        metacls._classes[cls_name] = cls
+
+        # save the class in the class cache of all subclassable base classes
+        for base in bases:
+            if isinstance(base, metacls):
+                # TODO: is it safe to overwrite here? probably yes
+                base._subclasses[cls_name] = cls
+
+        return cls
+
+    def has_cls(
+        cls,
+        cls_name: str,
+        deep: bool = True,
+    ) -> bool:
+        """
+        Returns *True* if this class has a subclass named *cls_name* and *False* otherwise. When
+        *deep* is *True*, the lookup is recursive through all levels of subclasses.
+        """
+        return cls.get_cls(cls_name, deep=deep, silent=True) is not None
+
+    def get_cls(
+        cls,
+        cls_name: str,
+        deep: bool = True,
+        silent: bool = False,
+    ) -> Union["DerivableMeta", None]:
+        """
+        Returns a previously created subclass named *cls_name*. When *deep* is *True*, the lookup is
+        recursive through all levels of subclasses. When no such subclass was found an exception is
+        raised, unless *silent* is *True* in which case *None* is returned.
+        """
+        if not deep:
+            if cls_name not in cls._subclasses:
+                if silent:
+                    return None
+                raise ValueError(f"no subclass named '{cls_name}' found")
+
+        # recursive implementation
+        lookup = [cls._subclasses]
+        while lookup:
+            subclasses = lookup.pop(0)
+            if cls_name in subclasses:
+                return subclasses[cls_name]
+            lookup.extend(
+                subcls._subclasses
+                for subcls in subclasses.values()
+                if issubclass(subcls, cls)
+            )
+
+        # lookup empty
+        if silent:
+            return None
+        raise ValueError(f"no subclass named '{cls_name}' found")
+
+    def derive(
+        cls,
+        cls_name: str,
+        bases: tuple = (),
+        cls_dict: Optional[dict] = None,
+    ) -> "DerivableMeta":
+        """
+        Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
+        *bases*. *cls_dict* will be attached as class-level attributes.
+        """
+        # prepare bases
+        bases = tuple(bases) if isinstance(bases, (list, tuple)) else (bases,)
+
+        # prepare the class dict
+        # cls_dict = law.util.merge_dicts({"_init_kwargs": init_kwargs or {}}, cls_dict)
+
+        # create the subclass
+        subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})
+
+        # overwrite __module__ to point to the module of the calling stack
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+        if module:
+            subcls.__module__ = module.__name__
+
+        return subcls
+
+    def derived_by(cls, other: "DerivableMeta") -> bool:
+        """
+        Returns if a class *other* is either *this* or derived from *this* class, and *False*
+        otherwise.
+        """
+        return isinstance(other, DerivableMeta) and issubclass(other, cls)
+
+
+class Derivable(object, metaclass=DerivableMeta):
+    """
+    Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
+
+    .. py:attribute:: cls_name
+       type: str
+       read-only
+
+       A shorthand to access the name of the class.
+    """
+
+    @property
+    def cls_name(self) -> str:
+        # shorthand to the class name
+        return self.__class__.__name__

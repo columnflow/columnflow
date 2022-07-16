@@ -295,6 +295,33 @@ class TestRoute(unittest.TestCase):
         self.assertEqual(tuple(self.route._fields), tuple(route_copy._fields))
 
 
+class test_add(ArrayFunction):
+
+    uses = {"any_input_B"}
+    produces = {"plus_100"}
+
+    def call_func(self, arr):
+        return arr + 100
+
+
+class test_empty(ArrayFunction):
+
+    uses = {"any_input_A"}
+    produces = {"all_empty"}
+
+    def call_func(self, arr):
+        return ak.zeros_like(arr)
+
+
+class test_combined(ArrayFunction):
+
+    uses = {"met", "pT.all", test_empty, test_add}
+    produces = {"pT.e", test_empty}
+
+    def call_func(self, arr):
+        return ak.zeros_like(arr)
+
+
 class TestArrayFunction(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
@@ -302,153 +329,45 @@ class TestArrayFunction(unittest.TestCase):
 
         test_array_dict = {"a_1": [0], "b_1": {"bb_1": [1], "bb_2": {"bbb_1": [2], "bbb_2": {
             "bbbb_1": {"bbbbb_1": [3]}, "bbbb_2": [4]}}}, "c_1": {"cc_1": [5]}}
-
         self.t_arr_A = ak.Array(test_array_dict)
 
-        if not ArrayFunction.has("test_empty"):
-            self.empty_arr_func = ArrayFunction.new(
-                self.empty_function,
-                "test_empty",
-                "any_input_A",
-                "all_empty",
-            )
-
-            self.add_arr_func = ArrayFunction.new(
-                self.add_function,
-                "test_add",
-                "any_input_B",
-                "plus_100",
-            )
-
-            self.combined_arr_func = ArrayFunction.new(
-                self.empty_function,
-                name="test_combined",
-                uses=("met", "pT.all", self.empty_arr_func, self.add_arr_func),
-                produces=(self.empty_arr_func, "pT.e"),
-            )
-        else:
-            self.empty_arr_func = ArrayFunction.get("test_empty")
-            self.add_arr_func = ArrayFunction.get("test_add")
-            self.combined_arr_func = ArrayFunction.get("test_combined")
-
-    # 2 standard dummy functions
-    def add_function(self, arr):
-        return arr + 100
-
-    def empty_function(self, arr):
-        return ak.zeros_like(arr)
+        self.empty_arr_func = ArrayFunction.get_cls("test_empty")
+        self.add_arr_func = ArrayFunction.get_cls("test_add")
+        self.combined_arr_func = ArrayFunction.get_cls("test_combined")
 
     def test_IOFlag(self):
         # SHOULD:   Create unique id for the class
         #           Value of the id is not important
         flag = ArrayFunction.IOFlag
-        self.assertIsNot(flag.USES, flag.PRODUCES,
-                         msg="USES and PRODUCES flag be different")
-        self.assertIsNot(flag.USES, flag.AUTO,
-                         msg="USES and AUTO flag be different")
+        self.assertIsNot(flag.USES, flag.PRODUCES)
+        self.assertIsNot(flag.USES, flag.AUTO)
 
-    def test_has(self):
+    def test_has_cls(self):
         # SHOULD:   True if name is already in cache
+        self.assertTrue(ArrayFunction.has_cls("test_empty"))
+        self.assertTrue(ArrayFunction.has_cls("test_add"))
+        self.assertTrue(ArrayFunction.has_cls("test_combined"))
 
-        ArrayFunction.new(self.empty_function, "cached")
-        self.assertIn("cached", ArrayFunction._instances,
-                      msg="Cache does not contain \'cached\'")
-
-    def test_new(self):
+    def test_derive(self):
         # SHOULD:   Create new instance of the class and adds its instance to the class cache.
 
-        # Raise Error if multiple instances has same name
-        with self.assertRaises(ValueError):
-            name = "same_name"
-            ArrayFunction.new(
-                self.empty_function, name)
-            ArrayFunction.new(self.add_function, name)
+        new_cls = ArrayFunction.derive("new_cls")
+        self.assertTrue(ArrayFunction.has_cls("new_cls"))
+        self.assertTrue(ArrayFunction.derived_by(new_cls))
 
         # new ArrayFunction should be in cache
-        newly_af = ArrayFunction.new(
-            self.empty_function, "new_af")
-        self.assertIn("new_af", ArrayFunction._instances,
-                      msg="ArrayFunction is missing in cache")
+        self.assertIn("new_cls", ArrayFunction._subclasses)
+        self.assertIn(new_cls, ArrayFunction._subclasses.values())
 
-        # normal instance should not be in cache
-        ArrayFunction(self.empty_function, "wrong_af")
-        self.assertNotIn(
-            "wrong_af", ArrayFunction._instances, msg="Array")
-
-        # new ArrayFunction should be instance of ArrayFunction
-        self.assertIsInstance(newly_af, ArrayFunction)
-
-    def test_get(self):
+    def test_get_cls(self):
         # SHOULD:   Returns a cached instance, if <copy> is True, another instance is returned
 
-        # raise error if name is not in cache:
-        with self.assertRaises(ValueError):
-            ArrayFunction.get("not_registered", copy=False)
+        self.assertFalse(ArrayFunction.has_cls("foo"))
+        self.assertIsNone(ArrayFunction.get_cls("foo", silent=True))
 
-        # get instance if copy is False, else create new copy
-        instanced_empty = ArrayFunction.get("test_empty", copy=False)
-        copy_empty = ArrayFunction.get("test_empty", copy=True)
-
-        self.assertIs(instanced_empty, self.empty_arr_func,
-                      msg="Is a copy, but shouldn\'t be a copy ")
-        self.assertIsNot(copy_empty, self.empty_arr_func,
-                         msg="Isn\' a copy, but should be a copy ")
-
-        # return ArrayFunction
-        self.assertIsInstance(instanced_empty, ArrayFunction,
-                              msg="Is not instance of ArrayFunction, but should be")
-        self.assertIsInstance(copy_empty, ArrayFunction,
-                              msg="Is not instance of ArrayFunction, but should be")
-
-    def test__init__(self):
-        # SHOULD: init witout populate the cachhe
-
-        # cache should not contain a key with name "not_used_new" of the instance
-        arrayfunction = ArrayFunction(func=self.empty_function,
-                                    name="not_used_new",
-                                    uses="nothing",
-                                    produces="nothing_also")
-        self.assertNotIn("not_used_new", ArrayFunction._instances,
-        msg="Cache is used, but this should not be the case")
-
-        # self.name set correctly if not None
-        self.assertEqual(arrayfunction.name, "not_used_new")
-
-        # self.name is really set to self.func.__name__, which is the name of the function
-        array_function_without_name = ArrayFunction(func=self.empty_function)
-        self.assertEqual(array_function_without_name.name,
-                         self.empty_function.__name__, msg="Name is not set to name of the function")
-
-        # # TODO: NOT SURE ABOUT THIS, ASK MARCEL
-        # # <func> can be any Callable, but ArrayFunction instance is also a callable
-        # # Should ArrayFunction Instances be able to used as Argument?
-        # # Solution? use name of class/function instead?
-        # # instance x --> type(x).__name__ OR x.__class__.__name__
-        # with self.assertRaises(Exception):
-        #     array_function_with_array_function = ArrayFunction(
-        #         func=array_function_without_name)
-
-        # self.uses and self.produces should have empty sets if None is provided
-        self.assertTrue(array_function_without_name.uses == set())
-
-        # self.uses and self.producedes are the same function
-        # check input: str, ArrayFunction, Sequence[str, ArrayFunction], Set[str, ArrayFunction]
-        # law.util.make_list returns for all cases a list with the same content
-        use_str = "nothing"
-        uses_sequence_str_arrayfunction = [use_str, arrayfunction]
-
-        arrayfunction_input = ArrayFunction(
-            func=self.empty_function, uses=arrayfunction)
-        sequence_input = ArrayFunction(
-            func=self.empty_function, uses=uses_sequence_str_arrayfunction)
-        set_input = ArrayFunction(
-            func=self.empty_function, uses=set(uses_sequence_str_arrayfunction))
-
-        # all cases return the correct result
-        self.assertEqual(arrayfunction.uses, set([use_str]))
-        self.assertEqual(arrayfunction_input.uses, set([arrayfunction]))
-        self.assertEqual(sequence_input.uses, set(uses_sequence_str_arrayfunction))
-        self.assertEqual(set_input.uses, set(uses_sequence_str_arrayfunction))
+        self.assertIs(ArrayFunction.get_cls("test_empty"), test_empty)
+        self.assertIs(ArrayFunction.get_cls("test_add"), test_add)
+        self.assertIs(ArrayFunction.get_cls("test_combined"), test_combined)
 
     def test_AUTO(self):
         # SHOULD:   Named tuple of instance and unique class id
@@ -462,8 +381,7 @@ class TestArrayFunction(unittest.TestCase):
 
     def test_PRODUCES(self):
         # SHOULD:   see test_AUTO
-        self.assertIsNot(self.empty_arr_func.PRODUCES,
-                         self.add_arr_func.PRODUCES)
+        self.assertIsNot(self.empty_arr_func.PRODUCES, self.add_arr_func.PRODUCES)
 
     def test__get_columns(self):
         # SHOULD:   returns ALL *USES* or *PRODUCED* flagged columns depending on the used IOFlag
@@ -473,63 +391,23 @@ class TestArrayFunction(unittest.TestCase):
         # create arr func with uses: "arr1, arr2, empty_arr_func.USES and add.arr_func.USES"
         flag = ArrayFunction.IOFlag
 
-        used_columns = self.combined_arr_func._get_columns(
-            io_flag=flag.USES)
-        produced_columns = self.combined_arr_func._get_columns(
-            io_flag=flag.PRODUCES)
+        inst = self.combined_arr_func()
+        used_columns = inst._get_columns(io_flag=flag.USES)
+        produced_columns = inst._get_columns(io_flag=flag.PRODUCES)
 
         # raise error if flag is AUTO
+        inst = self.empty_arr_func()
         with self.assertRaises(ValueError):
-            self.empty_arr_func._get_columns(io_flag=flag.AUTO)
+            inst._get_columns(io_flag=flag.AUTO)
 
         # return a Set
-        self.assertIsInstance(used_columns, set, msg="Returned Object is not a set")
-        self.assertIsInstance(produced_columns, set, msg="Returned Object is not a set")
+        self.assertIsInstance(used_columns, set)
+        self.assertIsInstance(produced_columns, set)
 
         # everythin within Set is a string
-        self.assertTrue(all(isinstance(column, str)
-                        for column in used_columns.union(produced_columns)), msg="Not all columns are strings")
+        self.assertTrue(all(isinstance(column, str) for column in used_columns.union(produced_columns)))
 
         # result should have USES: arr1, arr2, any_input_A, any_input_B
         # PRODUCES : "empty_arr", "pT.e"
         self.assertEqual(used_columns, set(["met", "pT.all", "any_input_A", "any_input_B"]))
         self.assertEqual(produced_columns, set(["pT.e", "all_empty"]))
-
-    def test__get_used_columns(self):
-        # if get_columns passes this will pass too
-        pass
-
-    def test_used_columns(self):
-        # if get_columns passes this will pass too
-        pass
-
-    def test__get_produced_columns(self):
-        # if get_columns passes this will pass too
-        pass
-
-    def test_produced_columns(self):
-        # if get_columns passes this will pass too
-        pass
-
-    def test__repr__(self):
-        # SHOULD:   create unique string representation
-
-        # contains class name and name of the array function, as well as the hex-id of the instance
-        string_representation = repr(self.empty_arr_func)
-        hex_id = hex(id(self.empty_arr_func))
-        class_name = self.empty_arr_func.__class__.__name__
-        name = self.empty_arr_func.name
-        all_items = (hex_id, class_name, name)
-
-        # check if all information are withtin __repr__
-        self.assertTrue(
-            all([item in string_representation for item in all_items]))
-
-    def test__call__(self):
-        # SHOULD:   should pass arguments to the function in ArrayFunction.func
-
-        # should have the same result
-        # coudnt find another way to check equality in an awkward array.
-        arr_func_result = self.empty_arr_func(self.t_arr_A).to_numpy()
-        func_result = self.empty_function(self.t_arr_A).to_numpy()
-        self.assertTrue(all(func_result == arr_func_result))
