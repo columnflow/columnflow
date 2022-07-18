@@ -391,11 +391,11 @@ def pattern_matcher(pattern: Union[Sequence[str], str], mode=any) -> Callable[[s
         matcher("foox")  # -> False
         matcher("foo1")  # -> True
 
-        matcher = pattern_matcher(("foo*", "*bar"), mody=any)
+        matcher = pattern_matcher(("foo*", "*bar"), mode=any)
         matcher("foo123")  # -> True
         matcher("123bar")  # -> True
 
-        matcher = pattern_matcher(("foo*", "*bar"), mody=all)
+        matcher = pattern_matcher(("foo*", "*bar"), mode=all)
         matcher("foo123")     # -> False
         matcher("123bar")     # -> False
         matcher("foo123bar")  # -> True
