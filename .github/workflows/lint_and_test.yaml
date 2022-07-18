@@ -61,7 +61,10 @@ jobs:
         run: rm -rf "${AP_JOB_ID}"
 
   coverage:
+    needs: test
     runs-on: [self-hosted]
+    env:
+      AP_JOB_ID: ${{ github.run_number }}_${{ github.run_id }}_${{ github.run_attempt }}_coverage
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@v3
@@ -80,10 +83,15 @@ jobs:
           cd "${AP_JOB_ID}"
           source setup.sh ""
           ./tests/run_coverage
+          ls -al
 
       - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
           flags: unittests
+
+      - name: Cleanup 🧹
+        if: always()
+        run: rm -rf "${AP_JOB_ID}"

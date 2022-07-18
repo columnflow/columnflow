@@ -4,11 +4,6 @@
 Column production methods related to sample normalization event weights.
 """
 
-from typing import Dict, Union
-
-import law
-import order as od
-
 from ap.production import Producer, producer
 from ap.production.processes import process_ids
 from ap.util import maybe_import
@@ -24,91 +19,76 @@ ak = maybe_import("awkward")
     uses={process_ids, "LHEWeight.originalXWGTUP"},
     produces={process_ids, "normalization_weight"},
 )
-def normalization_weights(
-    self: Producer,
-    events: ak.Array,
-    selection_stats: Dict[str, Union[int, float]],
-    xs_table: sp.sparse.lil.lil_matrix,
-    config_inst: od.Config,
-    dataset_inst: od.Dataset,
-    **kwargs,
-) -> ak.Array:
+def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Uses luminosity information of *config_inst*, the cross section of a process obtained through
-    *dataset_inst* and the sum of event weights from *selection_stats* to assign each event a
-    normalization weight.
+    Uses luminosity information of internal py:attr:`config_inst`, the cross section of a process
+    obtained through :py:class:`category_ids` and the sum of event weights from the
+    py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
     # add process ids
-    self.stack.process_ids(events, config_inst=config_inst, dataset_inst=dataset_inst, **kwargs)
+    self[process_ids](events, **kwargs)
 
     # stop here for data
-    if dataset_inst.is_data:
+    if self.dataset_inst.is_data:
         return events
 
     # get the lumi
-    lumi = config_inst.x.luminosity.nominal
+    lumi = self.config_inst.x.luminosity.nominal
 
     # read the cross section per process from the lookup table
-    xs = np.array(xs_table[0, np.asarray(events.process_id)].todense())[0]
+    xs = np.array(self.xs_table[0, np.asarray(events.process_id)].todense())[0]
 
     # compute the weight and store it
-    norm_weight = events.LHEWeight.originalXWGTUP * lumi * xs / selection_stats["sum_mc_weight"]
+    norm_weight = events.LHEWeight.originalXWGTUP * lumi * xs / self.selection_stats["sum_mc_weight"]
     set_ak_column(events, "normalization_weight", norm_weight)
 
     return events
 
 
 @normalization_weights.requires
-def normalization_weights_requires(self: Producer, task: law.Task, reqs: dict) -> dict:
+def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     """
-    Adds the requirements needed by *task* to access selection stats into *reqs*.
+    Adds the requirements needed by the underlying py:attr:`task` to access selection stats into
+    *reqs*.
     """
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
     # do nothing for data
-    if task.dataset_inst.is_data:
+    if self.dataset_inst.is_data:
         return reqs
 
     from ap.tasks.selection import MergeSelectionStats
-    reqs["selection_stats"] = MergeSelectionStats.req(task, tree_index=0)
-
-    return reqs
+    reqs["selection_stats"] = MergeSelectionStats.req(self.task, tree_index=0)
 
 
 @normalization_weights.setup
-def normalization_weights_setup(
-    self: Producer,
-    task: law.Task,
-    inputs: dict,
-    call_kwargs: dict,
-    **kwargs,
-):
+def normalization_weights_setup(self: Producer, inputs: dict) -> None:
     """
-    Sets up objects required by the computation of normalization weights and stores them in
-    *call_kwargs*:
+    Sets up objects required by the computation of normalization weights and stores them as instance
+    attributes:
 
-        - "selection_stats": The stats dict loaded from the output of MergeSelectionsStats.
-        - "xs_table": A sparse array serving as a lookup table for all processes known to the
-                      config of the *task*, with keys being process ids.
+        - py:attr:`selection_stats`: The stats dict loaded from the output of MergeSelectionsStats.
+        - py:attr:`xs_table`: A sparse array serving as a lookup table for all processes known to
+          the config of the task, with keys being process ids.
     """
     # set to None for data
-    if task.dataset_inst.is_data:
-        call_kwargs.setdefault("selection_stats", None)
-        call_kwargs.setdefault("xs_table", None)
+    if self.dataset_inst.is_data:
+        self.selection_stats = None
+        self.xs_table = None
         return
 
     # load the selection stats
-    call_kwargs["selection_stats"] = inputs["selection_stats"].load(formatter="json")
+    self.selection_stats = inputs["selection_stats"].load(formatter="json")
 
     # create a lookup table as a sparse array with all known processes
     process_insts = [
         process_inst
-        for process_inst, _, _ in task.config_inst.walk_processes()
+        for process_inst, _, _ in self.config_inst.walk_processes()
         if process_inst.is_mc
     ]
     max_id = max(process_inst.id for process_inst in process_insts)
     xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
     for process_inst in process_insts:
-        xs_table[0, process_inst.id] = process_inst.get_xsec(task.config_inst.campaign.ecm).nominal
-    call_kwargs["xs_table"] = xs_table
+        xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
+    self.xs_table = xs_table

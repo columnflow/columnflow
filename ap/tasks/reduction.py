@@ -88,7 +88,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         input_paths = [nano_file]
         input_paths.append(inputs["selection"]["results"].path)
         input_paths.extend([inp.path for inp in inputs["calibrations"]])
-        if self.selector_func.produced_columns:
+        if self.selector_inst.produced_columns:
             input_paths.append(inputs["selection"]["columns"].path)
         with ChunkedReader(
             input_paths,
