@@ -118,7 +118,7 @@ class InferenceModel(Derivable):
             variable: ht
             data_datasets: [data_mu_a]
             data_from_processes: []
-            mc_stats: True
+            mc_stats: 10
             processes:
               - name: HH
                 process: hh
@@ -222,7 +222,7 @@ class InferenceModel(Derivable):
         variable: Optional[str] = None,
         data_datasets: Optional[Sequence[str]] = None,
         data_from_processes: Optional[Sequence[str]] = None,
-        mc_stats: bool = False,
+        mc_stats: Optional[Union[float, tuple]] = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a category (interchangeably called bin or channel in other
@@ -235,7 +235,8 @@ class InferenceModel(Derivable):
             - *data_datasets*: List of names of datasets in the config to use for real data.
             - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
               when *data_datasets* is not defined, make of a fake data contribution.
-            - *mc_stats*: A boolean flag deciding whether MC stat uncertainties are to be applied.
+            - *mc_stats*: Either *None* to disable MC stat uncertainties, or a float or tuple of
+              floats to control the options of MC stat options.
         """
         return DotDict([
             ("name", str(name)),
@@ -243,7 +244,7 @@ class InferenceModel(Derivable):
             ("variable", str(variable) if variable else None),
             ("data_datasets", list(map(str, data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
-            ("mc_stats", bool(mc_stats)),
+            ("mc_stats", mc_stats),
             ("processes", []),
         ])
 
@@ -609,12 +610,14 @@ class InferenceModel(Derivable):
         self,
         *args,
         category: Optional[Union[str, Sequence[str]]] = None,
+        silent: bool = False,
         **kwargs,
     ) -> None:
         """
         Adds a new process to all categories whose names match *category*, with all *args* and
         *kwargs* used to create the structured process dictionary via :py:meth:`process_spec`. If a
-        process with the same name already exists in one of the categories, an exception is raised.
+        process with the same name already exists in one of the categories, an exception is raised
+        unless *silent* is *True*.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -625,15 +628,19 @@ class InferenceModel(Derivable):
         categories = self.get_categories(category_pattern)
 
         # check for duplicates
+        target_categories = []
         for category in categories:
             if self.has_process(process.name, category=category.name):
+                if silent:
+                    continue
                 raise ValueError(
                     f"process named '{process.name}' already registered in category "
                     f"'{category.name}'",
                 )
+            target_categories.append(category)
 
         # add independent copies to categories
-        for category in categories:
+        for category in target_categories:
             category.processes.append(_copy.deepcopy(process))
 
     def remove_process(
@@ -1076,7 +1083,7 @@ class InferenceModel(Derivable):
         process_pattern = process
 
         # plain name lookup
-        return list(self.get_processes(process=process_pattern, only_names=True))
+        return list(self.get_processes(process=process_pattern, only_names=True).keys())
 
     def get_processes_with_parameter(
         self,
@@ -1303,8 +1310,7 @@ class InferenceModel(Derivable):
 
             if isinstance(parameter.effect, float):
                 # split into two parts (e.g. 1.2 -> (0.8, 1.2))
-                f = parameter.effect - 1.0
-                parameter.effect = (1.0 - f, f + 1.0)
+                parameter.effect = (2.0 - parameter.effect, parameter.effect)
                 changed_any = True
 
         return changed_any

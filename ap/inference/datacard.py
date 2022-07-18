@@ -35,13 +35,15 @@ class DatacardWriter(object):
         wildcards for both bin and process resolution is created.
     """
 
+    # minimum separator between columns
+    col_sep = "  "
+
     def __init__(
         self,
         inference_model_inst: InferenceModel,
         histograms: Dict[str, Dict[str, Dict[str, hist.Hist]]],
         rate_precision: int = 4,
         parameter_precision: int = 4,
-        sep: str = "  ",
     ):
         super().__init__()
 
@@ -50,7 +52,6 @@ class DatacardWriter(object):
         self.histograms = histograms
         self.rate_precision = rate_precision
         self.parameter_precision = parameter_precision
-        self.sep = sep
 
     def write(
         self,
@@ -61,16 +62,13 @@ class DatacardWriter(object):
         """
         Writes the datacard into *datacard_path* with shapes saved in *shapes_path*. When the paths
         exhibit the same directory and *shapes_path_ref* is not set, the shapes file reference is
-        relative in the datacard.
+        relative to the datacard.
         """
         # determine full paths and the shapes path reference to put into the card
         datacard_path = real_path(datacard_path)
         shapes_path = real_path(shapes_path)
         if not shapes_path_ref:
             shapes_path_ref = os.path.relpath(shapes_path, os.path.dirname(datacard_path))
-            if shapes_path_ref.startswith(".."):
-                # not relative to each other, use the absolute path
-                shapes_path_ref = shapes_path
 
         # write the shapes files
         rates, shape_effects, nom_pattern, syst_pattern = self.write_shapes(shapes_path)
@@ -265,23 +263,27 @@ class DatacardWriter(object):
         # mc stats
         blocks.mc_stats = []
         for cat_obj in cat_objects:
-            if cat_obj.mc_stats:
-                blocks.mc_stats.append([cat_obj.name, "autoMCStats", 10])  # TODO: configure this
+            mc_stats = cat_obj.mc_stats
+            if mc_stats not in (None, False):
+                # default value when True
+                if isinstance(mc_stats, bool):
+                    mc_stats = 10
+                mc_stats_list = list(map(str, law.util.make_list(mc_stats)))
+                blocks.mc_stats.append([cat_obj.name, "autoMCStats"] + mc_stats_list)
 
         # prettify blocks
-        blocks.observations = self.align_lines(list(blocks.observations), sep=self.sep)
+        blocks.observations = self.align_lines(list(blocks.observations))
         if blocks.tabular_parameters:
             blocks.rates, blocks.tabular_parameters = self.align_rates_and_parameters(
                 list(blocks.rates),
                 list(blocks.tabular_parameters),
-                sep=self.sep,
             )
         else:
-            blocks.rates = self.align_lines(list(blocks.rates), sep=self.sep)
+            blocks.rates = self.align_lines(list(blocks.rates))
         if blocks.line_parameters:
-            blocks.line_parameters = self.align_lines(list(blocks.line_parameters), sep=self.sep)
+            blocks.line_parameters = self.align_lines(list(blocks.line_parameters))
         if blocks.mc_stats:
-            blocks.mc_stats = self.align_lines(list(blocks.mc_stats), sep=self.sep)
+            blocks.mc_stats = self.align_lines(list(blocks.mc_stats))
 
         # write the blocks
         with open(datacard_path, "w") as f:
@@ -292,7 +294,7 @@ class DatacardWriter(object):
                 # block lines
                 for line in lines:
                     if isinstance(line, (list, tuple)):
-                        line = self.sep.join(map(str, law.util.flatten(line)))
+                        line = self.col_sep.join(map(str, law.util.flatten(line)))
                     f.write(f"{line}\n")
 
                 # block separator
@@ -330,9 +332,9 @@ class DatacardWriter(object):
         # define shape patterns
         data_pattern = "{category}/data_obs"
         nom_pattern = "{category}/{process}"
-        nom_pattern_comb = "$BIN/$PROCESS"
+        nom_pattern_comb = "$CHANNEL/$PROCESS"
         syst_pattern = "{category}/{process}__{parameter}{direction}"
-        syst_pattern_comb = "$BIN/$PROCESS__$SYSTEMATIC"
+        syst_pattern_comb = "$CHANNEL/$PROCESS__$SYSTEMATIC"
 
         # prepare rates and shape effects
         rates = OrderedDict()
@@ -492,7 +494,6 @@ class DatacardWriter(object):
     def align_lines(
         cls,
         lines: Sequence[Any],
-        sep: str = "  ",
     ) -> List[str]:
         lines = [
             (line.split() if isinstance(line, str) else list(map(str, law.util.flatten(line))))
@@ -518,7 +519,7 @@ class DatacardWriter(object):
 
         # stitch back
         return [
-            sep.join((s + " " * (max_widths[j] - len(s))) for j, s in enumerate(line))
+            cls.col_sep.join((s + " " * (max_widths[j] - len(s))) for j, s in enumerate(line))
             for i, line in enumerate(lines)
         ]
 
@@ -527,7 +528,6 @@ class DatacardWriter(object):
         cls,
         rates: Sequence[Any],
         parameters: Sequence[Any],
-        sep: str = "  ",
     ) -> Tuple[List[str], List[str]]:
         rates, parameters = [
             [
@@ -538,13 +538,13 @@ class DatacardWriter(object):
         ]
 
         # first, align parameter names and types on their own
-        param_starts = cls.align_lines([line[:2] for line in parameters], sep=sep)
+        param_starts = cls.align_lines([line[:2] for line in parameters])
 
         # prepend to parameter lines
         parameters = [([start] + line[2:]) for start, line in zip(param_starts, parameters)]
 
         # align in conjunction with rates
         n_rate_lines = len(rates)
-        lines = cls.align_lines(rates + parameters, sep=sep)
+        lines = cls.align_lines(rates + parameters)
 
         return lines[:n_rate_lines], lines[n_rate_lines:]
