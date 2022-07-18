@@ -4,7 +4,9 @@
 Generalized plotting functions to create plots from hist histograms
 """
 
-from ap.util import maybe_import
+from typing import Optional, Sequence
+
+from ap.util import maybe_import, test_float
 
 np = maybe_import("numpy")
 hist = maybe_import("hist")
@@ -12,7 +14,9 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 
 
-def draw_error_stairs(ax, h, kwargs={}):
+def draw_error_stairs(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
+    if kwargs is None:
+        kwargs = {}
     norm = kwargs.pop("norm", 1)
     values = h.values() / norm
     error = np.sqrt(h.variances()) / norm
@@ -29,14 +33,18 @@ def draw_error_stairs(ax, h, kwargs={}):
     ax.stairs(**defaults)
 
 
-def draw_from_stack(ax, h, kwargs={}):
+def draw_from_stack(ax: plt.Axes, h: hist.Stack, kwargs: Optional[dict] = None) -> None:
+    if kwargs is None:
+        kwargs = {}
+
     norm = kwargs.pop("norm", 1)
 
     # check if norm is a number
-    try:
-        int(norm)
+    if test_float(norm):
         h = hist.Stack(*[i / norm for i in h])
-    except:
+    else:
+        if not isinstance(norm, Sequence) and not isinstance(norm, np.ndarray):
+            raise TypeError(f"norm must be either a number, sequence or np.ndarray, not a {type(norm)}")
         norm = np.array(norm)
         # 1 normalization factor/array per histogram
         if len(norm) == len(h):
@@ -56,7 +64,10 @@ def draw_from_stack(ax, h, kwargs={}):
     h.plot(**defaults)
 
 
-def draw_from_hist(ax, h, kwargs={}):
+def draw_from_hist(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
+    if kwargs is None:
+        kwargs = {}
+
     norm = kwargs.pop("norm", 1)
     h = h / norm
     defaults = {
@@ -68,7 +79,10 @@ def draw_from_hist(ax, h, kwargs={}):
     h.plot1d(**defaults)
 
 
-def draw_errorbars(ax, h, kwargs={}):
+def draw_errorbars(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
+    if kwargs is None:
+        kwargs = {}
+
     norm = kwargs.pop("norm", 1)
     values = h.values() / norm
     variances = np.sqrt(h.variances()) / norm
@@ -96,7 +110,7 @@ def draw_errorbars(ax, h, kwargs={}):
     ax.errorbar(**defaults)
 
 
-def plot_all(plot_config, style_config, ratio=True):
+def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.Figure:
     """
     plot_config expects dictionaries with fields:
     "method": str, identical to the name of a function defined above,
@@ -108,7 +122,7 @@ def plot_all(plot_config, style_config, ratio=True):
     "ax_cfg": dict,
     "rax_cfg": dict,
     "legend_cfg": dict,
-    "CMS_label_cfg": dict,
+    "cms_label_cfg": dict,
     """
 
     plt.style.use(mplhep.style.CMS)
@@ -168,14 +182,19 @@ def plot_all(plot_config, style_config, ratio=True):
     legend_kwargs.update(style_config.get("legend_cfg", {}))
     ax.legend(**legend_kwargs)
 
-    CMS_label_kwargs = {
+    cms_label_kwargs = {
         "ax": ax,
         "label": "Work in Progress",
         "fontsize": 22,
     }
-    CMS_label_kwargs.update(style_config.get("CMS_label_cfg", {}))
-    mplhep.cms.label(**CMS_label_kwargs)
+    cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+    mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()
 
     return fig
+
+    plot_methods = {  # noqa
+        func: globals()[func]
+        for func in ["plot_all"]
+    }

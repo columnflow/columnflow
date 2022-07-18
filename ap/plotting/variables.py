@@ -4,17 +4,23 @@
 Scripts to create plots using the plotter
 """
 
+from collections import OrderedDict
+from typing import Sequence
+
 from ap.util import maybe_import
 from ap.plotting.plotter import plot_all
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
+plt = maybe_import("matplotlib.pyplot")
+od = maybe_import("order")
 
 
-def plot_variables(hists, config_inst, variable_inst):
-    """
-    input expects a DotDict of histograms and their corresponding process insts and a single config+variable inst
-    """
+def plot_variables(
+    hists: OrderedDict,
+    config_inst: od.config,
+    variable_inst: od.variable,
+) -> plt.Figure:
 
     # create the stack and a fake data hist using the smeared sum
     data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
@@ -72,7 +78,7 @@ def plot_variables(hists, config_inst, variable_inst):
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
-        "CMS_label_cfg": {
+        "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
@@ -80,7 +86,12 @@ def plot_variables(hists, config_inst, variable_inst):
     return fig
 
 
-def plot_shifted_variables(hists, config_inst, process_inst, variable_inst):
+def plot_shifted_variables(
+    hists: Sequence[hist.Hist],
+    config_inst: od.config,
+    process_inst: od.process,
+    variable_inst: od.variable,
+) -> plt.Figure:
 
     # create the stack and the sum
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
@@ -113,7 +124,7 @@ def plot_shifted_variables(hists, config_inst, process_inst, variable_inst):
         "legend_cfg": {
             "title": process_inst.label,
         },
-        "CMS_label_cfg": {
+        "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
@@ -121,7 +132,10 @@ def plot_shifted_variables(hists, config_inst, process_inst, variable_inst):
     return fig
 
 
-def plot_cutflow(hists, config_inst):
+def plot_cutflow(
+    hists: OrderedDict,
+    config_inst: od.config,
+) -> plt.Figure:
 
     mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
     mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
@@ -154,7 +168,7 @@ def plot_cutflow(hists, config_inst):
         "legend_cfg": {
             "loc": "upper right",
         },
-        "CMS_label_cfg": {
+        "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }

@@ -445,3 +445,11 @@ def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
     Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
     """
     return (a / b) if b else 0.0
+
+
+def test_float(i):
+    try:
+        float(i)
+        return True
+    except (ValueError, TypeError):
+        return False
