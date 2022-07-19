@@ -577,9 +577,6 @@ class DerivableMeta(type):
         # prepare bases
         bases = tuple(bases) if isinstance(bases, (list, tuple)) else (bases,)
 
-        # prepare the class dict
-        # cls_dict = law.util.merge_dicts({"_init_kwargs": init_kwargs or {}}, cls_dict)
-
         # create the subclass
         subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})
 

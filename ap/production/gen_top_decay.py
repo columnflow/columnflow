@@ -12,20 +12,18 @@ from ap.columnar_util import set_ak_column
 ak = maybe_import("awkward")
 
 
-@producer(
-    uses={"nGenPart", "GenPart.*"},
-    produces={"gen_top_decay"},
-)
+@producer
 def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Creates a new ragged column "gen_top_decay" with one element per hard top quark. Each element is
-    a GenParticleArray with five objects in a distinct order: top quark, bottom quark, W boson,
-    down-type quark or charged lepton, up-type quark or neutrino. Per event, the structure will be
-    similar to:
+    a GenParticleArray with five or more objects in a distinct order: top quark, bottom quark,
+    W boson, down-type quark or charged lepton, up-type quark or neutrino, and any additional decay
+    produces of the W boson (if any, then most likly photon radiations). Per event, the structure
+    will be similar to:
 
     .. code-block:: python
 
-        [[t1, W1, b1, q1, q2], [t2, ...], ...]
+        [[t1, b1, W1, q1/l, q2/n(, additional_w_decay_products)], [t2, ...], ...]
     """
     if self.dataset_inst.is_data or not self.dataset_inst.x("has_top", False):
         return events
@@ -39,25 +37,25 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
 
     # bottoms from top decays
     b = events.GenPart[abs_id == 5]
-    b = b[b.hasFlags("isHardProcess") & ((abs(b.distinctParent.pdgId) == 6))]
+    b = b[b.hasFlags("isHardProcess") & (abs(b.distinctParent.pdgId) == 6)]
     b = b[~ak.is_none(b, axis=1)]
     nb = ak.num(b, axis=1)
 
     # Ws from top decays
     w = events.GenPart[abs_id == 24]
-    w = w[w.hasFlags("isHardProcess") & ((abs(w.distinctParent.pdgId) == 6))]
+    w = w[w.hasFlags("isHardProcess") & (abs(w.distinctParent.pdgId) == 6)]
     w = w[~ak.is_none(w, axis=1)]
     nw = ak.num(w, axis=1)
 
     # non-top quarks from W decays
     qs = events.GenPart[(abs_id >= 1) & (abs_id <= 5)]
-    qs = qs[qs.hasFlags("isHardProcess") & ((abs(qs.distinctParent.pdgId) == 24))]
+    qs = qs[qs.hasFlags("isHardProcess") & (abs(qs.distinctParent.pdgId) == 24)]
     qs = qs[~ak.is_none(qs, axis=1)]
     nqs = ak.num(qs, axis=1)
 
     # leptons from W decays
     ls = events.GenPart[(abs_id >= 11) & (abs_id <= 16)]
-    ls = ls[ls.hasFlags("isHardProcess") & ((abs(ls.distinctParent.pdgId) == 24))]
+    ls = ls[ls.hasFlags("isHardProcess") & (abs(ls.distinctParent.pdgId) == 24)]
     ls = ls[~ak.is_none(ls, axis=1)]
     nls = ak.num(ls, axis=1)
 
@@ -80,6 +78,7 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
     #
     # groups = ak.concatenate((
     #     t[[[0, 1], [0], [0, 1, 2], ...]][:, :, None],
+    #     b[[[1, 0], [0], [0, 1, 2], ...]][:, :, None],
     #     w[[[1, 0], [0], [0, 2, 1], ...]][:, :, None],
     #     ...
     # ), axis=2)
@@ -153,8 +152,8 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
     groups = ak.concatenate(
         [
             t[:, :, None],
-            w[:, :, None],
             b[:, :, None],
+            w[:, :, None],
             w_prod,
         ],
         axis=2,
@@ -164,3 +163,14 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
     set_ak_column(events, "gen_top_decay", groups)
 
     return events
+
+
+@gen_top_decay_products.init
+def gen_top_decay_products_init(self: Producer) -> None:
+    """
+    Ammends the set of used and produced columns of :py:class:`gen_top_decay_products` in case
+    a dataset including top decays is processed.
+    """
+    if getattr(self, "dataset_inst", None) and self.dataset_inst.x("has_top", False):
+        self.uses |= {"nGenPart", "GenPart.*"}
+        self.produces |= {"gen_top_decay"}

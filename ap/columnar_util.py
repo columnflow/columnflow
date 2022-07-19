@@ -1558,7 +1558,7 @@ class TaskArrayFunction(ArrayFunction):
             call_cache[self] += 1
 
         # stack all kwargs
-        kwargs = law.util.merge_dicts({"call_cache": call_cache}, kwargs)
+        kwargs = {"call_cache": call_cache, **kwargs}
 
         return super().__call__(*args, **kwargs)
 
@@ -1585,6 +1585,7 @@ class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):
                 self._mapping,
                 key_format=key_format,
                 lazy=False,
+                lazy_cache="new" if self._cache is None else self._cache,
                 behavior=behavior,
             )
             self._events = weakref.ref(events)
