@@ -202,22 +202,22 @@ class MergeHistograms(
         return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
 
     def merge_output(self):
-        return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
+        # list with single item -> single merge tree
+        return [
+            law.SiblingFileCollection({
+                variable_name: self.local_target(f"{variable_name}.pickle")
+                for variable_name in self.variables
+            }),
+        ]
 
     def merge(self, inputs, output):
-        inputs_list = [inp.load(formatter="pickle") for inp in inputs]
-        inputs_dict = {
-            var_name: [hists[var_name] for hists in inputs_list]
-            for var_name in inputs_list[0]
-        }
+        hists = [inp.load(formatter="pickle") for inp in inputs]
 
-        # do the merging
-        merged = {
-            var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
-            for var_name in inputs_dict
-        }
-
-        output.dump(merged, formatter="pickle")
+        # create a separate file per output variable
+        for variable_name, outp in output.targets.items():
+            variable_hists = [h[variable_name] for h in hists]
+            merged = sum(variable_hists[1:], variable_hists[0].copy())
+            outp.dump(merged, formatter="pickle")
 
 
 MergeHistogramsWrapper = wrapper_factory(
