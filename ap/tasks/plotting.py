@@ -16,7 +16,6 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from ap.util import DotDict
-from ap.plotting.variables import plot_variables, plot_shifted_variables
 
 
 class ProcessPlotBase(
@@ -50,6 +49,9 @@ class PlotVariables(
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     shifts = set(MergeHistograms.shifts)
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_variables"
 
     def create_branch_map(self):
         return [
@@ -148,8 +150,16 @@ class PlotVariables(
                 (process_inst, hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
-            fig = plot_variables(hists, self.config_inst, variable_inst)
 
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+                variable_inst=variable_inst,
+            )
+
+            # save the plot
             self.output().dump(fig, formatter="mpl")
 
 
@@ -166,6 +176,9 @@ class PlotShiftedVariables(
 ):
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_shifted_variables"
 
     def store_parts(self):
         parts = super().store_parts()
@@ -214,8 +227,6 @@ class PlotShiftedVariables(
             proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
         }
-        # shift_inst_up = self.config_inst.get_shift(f"{self.branch_data.shift_source}_up")
-        # shift_inst_down = self.config_inst.get_shift(f"{self.branch_data.shift_source}_down")
 
         # histogram data per process
         hists = OrderedDict()
@@ -261,5 +272,14 @@ class PlotShiftedVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            fig = plot_shifted_variables(hists, self.config_inst, process_inst, variable_inst)
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+                process_inst=process_inst,
+                variable_inst=variable_inst,
+            )
+
+            # save the plot
             self.output().dump(fig, formatter="mpl")

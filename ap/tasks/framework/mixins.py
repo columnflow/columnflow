@@ -4,7 +4,8 @@
 Lightweight mixins task classes.
 """
 
-from typing import Union, Sequence, List, Set, Dict, Any
+import importlib
+from typing import Union, Sequence, List, Set, Dict, Any, Callable
 
 import law
 import luigi
@@ -715,6 +716,43 @@ class PlotMixin(AnalysisTask):
         description="a command to execute after the task has run to visualize plots right in the "
         "terminal; no default",
     )
+
+    def get_plot_func(self, func_name: str) -> Callable:
+        """
+        Returns a function, imported from a module given *func_name* which should have the format
+        ``<module_to_import>.<function_name>``.
+        """
+        # prepare names
+        if "." not in func_name:
+            raise ValueError(f"invalid func_id format: {func_name}")
+        module_id, name = func_name.rsplit(".", 1)
+
+        # import the module
+        try:
+            mod = importlib.import_module(module_id)
+        except ImportError as e:
+            raise ImportError(f"cannot import plot function {name} from module {module_id}: {e}")
+
+        # get the function
+        func = getattr(mod, name, None)
+        if func is None:
+            raise Exception(f"module {module_id} does not contain plot function {name}")
+
+        return func
+
+    def call_plot_func(self, func_name: str, **kwargs) -> Any:
+        """
+        Gets the plot function referred to by *func_name* via :py:meth:`get_plot_func`, calls it
+        with all *kwargs* and returns its result. *kwargss* are updated through the
+        :py:meth:`update_plot_kwargs` hook first.
+        """
+        return self.get_plot_func(func_name)(**(self.update_plot_kwargs(kwargs)))
+
+    def update_plot_kwargs(self, kwargs: dict) -> dict:
+        """
+        Hook to update keyword arguments *kwargs* used for plotting in :py:meth:`call_plot_func`.
+        """
+        return kwargs
 
 
 @law.decorator.factory(accept_generator=True)
