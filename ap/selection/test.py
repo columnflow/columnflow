@@ -216,14 +216,53 @@ def lepton_selection_test(self: Selector, events: ak.Array, stats: defaultdict, 
     )
 
 
+@selector(uses={"LHEWeight.originalXWGTUP"})
+def increment_stats(
+    self: Selector,
+    events: ak.Array,
+    mask: ak.Array,
+    stats: dict,
+    **kwargs,
+) -> None:
+    """
+    Unexposed selector that does not actually select objects but instead increments selection
+    *stats* in-place based on all input *events* and the final selection *mask*.
+    """
+    # apply the mask to obtain selected events
+    events_sel = events[mask]
+
+    # increment plain counts
+    stats["n_events"] += len(events)
+    stats["n_events_selected"] += ak.sum(mask, axis=0)
+
+    # store sum of event weights for mc events
+    if self.dataset_inst.is_mc:
+        weights = events.LHEWeight.originalXWGTUP
+
+        # sum for all processes
+        stats["sum_mc_weight"] += ak.sum(weights)
+        stats["sum_mc_weight_selected"] += ak.sum(weights[mask])
+
+        # sums per process id
+        stats.setdefault("sum_mc_weight_per_process", defaultdict(float))
+        stats.setdefault("sum_mc_weight_selected_per_process", defaultdict(float))
+        for p in np.unique(events.process_id):
+            stats["sum_mc_weight_per_process"][int(p)] += ak.sum(
+                weights[events.process_id == p]
+            )
+            stats["sum_mc_weight_selected_per_process"][int(p)] += ak.sum(
+                weights[mask][events_sel.process_id == p]
+            )
+
+
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        process_ids, "LHEWeight.originalXWGTUP",
+        process_ids, increment_stats, "LHEWeight.originalXWGTUP",
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        process_ids, "LHEWeight.originalXWGTUP",
+        process_ids, increment_stats, "LHEWeight.originalXWGTUP",
     },
     shifts={
         jet_energy_shifts,
@@ -247,19 +286,23 @@ def test(
     results = SelectionResult()
 
     # jet selection
-    jet_results = self[jet_selection_test](events, stats)
+    jet_results = self[jet_selection_test](events, stats, **kwargs)
     results += jet_results
 
     # lepton selection
-    lepton_results = self[lepton_selection_test](events, stats)
+    lepton_results = self[lepton_selection_test](events, stats, **kwargs)
     results += lepton_results
 
     # deep jet selection
-    deepjet_results = self[deepjet_selection_test](events, stats)
+    deepjet_results = self[deepjet_selection_test](events, stats, **kwargs)
     results += deepjet_results
 
     # combined event selection after all steps
-    event_sel = jet_results.steps.Jet & lepton_results.steps.Lepton & deepjet_results.steps.Deepjet
+    event_sel = (
+        jet_results.steps.Jet &
+        lepton_results.steps.Lepton &
+        deepjet_results.steps.Deepjet
+    )
     results.main["event"] = event_sel
 
     # build categories
@@ -269,12 +312,7 @@ def test(
     self[process_ids](events, **kwargs)
 
     # increment stats
-    events_sel = events[event_sel]
-    stats["n_events"] += len(events)
-    stats["n_events_selected"] += ak.sum(event_sel, axis=0)
-    if self.dataset_inst.is_mc:
-        stats["sum_mc_weight"] += ak.sum(events.LHEWeight.originalXWGTUP)
-        stats["sum_mc_weight_selected"] += ak.sum(events_sel.LHEWeight.originalXWGTUP)
+    self[increment_stats](events, event_sel, stats, **kwargs)
 
     return results
 
