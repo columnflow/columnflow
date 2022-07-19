@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Task to plot different types of histograms
+Tasks to plot different types of histograms.
 """
 
 from collections import OrderedDict

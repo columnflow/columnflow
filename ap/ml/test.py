@@ -19,7 +19,7 @@ tf = maybe_import("tensorflow")
 
 class TestModel(MLModel):
 
-    def __init__(self, *args, folds: Optional[int] = None, **kwargs: Any):
+    def __init__(self, *args, folds: Optional[int] = None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # class- to instance-level attributes
