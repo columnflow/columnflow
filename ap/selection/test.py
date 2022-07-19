@@ -248,10 +248,10 @@ def increment_stats(
         stats.setdefault("sum_mc_weight_selected_per_process", defaultdict(float))
         for p in np.unique(events.process_id):
             stats["sum_mc_weight_per_process"][int(p)] += ak.sum(
-                weights[events.process_id == p]
+                weights[events.process_id == p],
             )
             stats["sum_mc_weight_selected_per_process"][int(p)] += ak.sum(
-                weights[mask][events_sel.process_id == p]
+                weights[mask][events_sel.process_id == p],
             )
 
 
