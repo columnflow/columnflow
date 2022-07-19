@@ -393,8 +393,9 @@ class InferenceModel(Derivable):
         only_names: bool = False,
     ) -> List[Union[DotDict, str]]:
         """
-        Returns a list of categories whose name match *category*. When *only_names* is *True*, only
-        names of categories are returned rather than structured dictionaries.
+        Returns a list of categories whose name match *category*. *category* can be a string, a
+        pattern, or sequence of them. When *only_names* is *True*, only names of categories are
+        returned rather than structured dictionaries.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -413,10 +414,10 @@ class InferenceModel(Derivable):
         silent: bool = False,
     ) -> Union[DotDict, str]:
         """
-        Returns a single category whose name matches *category*. An exception is raised if no or
-        more than one category is found, unless *silent* is *True* in which case *None* is returned.
-        When *only_name* is *True*, only the name of the category is returned rather than a
-        structured dictionary.
+        Returns a single category whose name matches *category*. *category* can be a string, a
+        pattern, or sequence of them. An exception is raised if no or more than one category is
+        found, unless *silent* is *True* in which case *None* is returned. When *only_name* is
+        *True*, only the name of the category is returned rather than a structured dictionary.
         """
         # rename arguments to make their meaning explicit
         category_name = category
@@ -441,7 +442,7 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Returns *True* if a category whose name matches *category* is existing, and *False*
-        otherwise.
+        otherwise. *category* can be a string, a pattern, or sequence of them.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -471,7 +472,8 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Removes one or more categories whose names match *category*. Returns *True* if at least one
-        category was removed, and *False* otherwise.
+        category was removed, and *False* otherwise. *category* can be a string, a pattern, or
+        sequence of them.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -504,7 +506,8 @@ class InferenceModel(Derivable):
     ) -> Union[Dict[str, Union[DotDict, str]], List[str]]:
         """
         Returns a dictionary of processes whose names match *process*, mapped to the name of the
-        category they belong to. Categories can optionally be filtered through a *category* pattern.
+        category they belong to. Categories can optionally be filtered through *category*. Both
+        *process* and *category* can be a string, a pattern, or sequence of them.
 
         When *only_names* is *True*, only names of processes are returned rather than structured
         dictionaries. When *flat* is *True*, a flat, unique list of process names is returned.
@@ -549,7 +552,10 @@ class InferenceModel(Derivable):
     ) -> Union[DotDict, str]:
         """
         Returns a single process whose name matches *process*, and optionally, whose category's name
-        matches *category*. An exception is raised if no or more than one process is found, unless
+        matches *category*. Both *process* and *category* can be a string, a pattern, or sequence of
+        them.
+
+        An exception is raised if no or more than one process is found, unless
         *silent* is *True* in which case *None* is returned. When *only_name* is *True*, only the
         name of the process is returned rather than a structured dictionary.
         """
@@ -597,7 +603,8 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Returns *True* if a process whose name matches *process*, and optionally whose category's
-        name matches *category*, is existing, and *False* otherwise.
+        name matches *category*, is existing, and *False* otherwise. Both *process* and *category*
+        can be a string, a pattern, or sequence of them.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -615,9 +622,11 @@ class InferenceModel(Derivable):
     ) -> None:
         """
         Adds a new process to all categories whose names match *category*, with all *args* and
-        *kwargs* used to create the structured process dictionary via :py:meth:`process_spec`. If a
-        process with the same name already exists in one of the categories, an exception is raised
-        unless *silent* is *True*.
+        *kwargs* used to create the structured process dictionary via :py:meth:`process_spec`.
+        *category* can be a string, a pattern, or sequence of them.
+
+        If a process with the same name already exists in one of the categories, an exception is
+        raised unless *silent* is *True*.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -650,8 +659,8 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Removes one or more processes whose names match *process*, and optionally whose category's
-        name match *category*. Returns *True* if at least one process was removed, and *False*
-        otherwise.
+        name match *category*. Both *process* and *category* can be a string, a pattern, or sequence
+        of them. Returns *True* if at least one process was removed, and *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -692,7 +701,8 @@ class InferenceModel(Derivable):
         """
         Returns a dictionary of parameter whose names match *parameter*, mapped twice to the name of
         the category and the name of the process they belong to. Categories and processes can
-        optionally be filtered through a *category* pattern and a *process* pattern.
+        optionally be filtered through *category* and *process*. All three, *parameter*, *process*
+        and *category* can be a string, a pattern, or sequence of them.
 
         When *only_names* is *True*, only names of parameters are returned rather than structured
         dictionaries. When *flat* is *True*, a flat, unique list of parameter names is returned.
@@ -746,10 +756,12 @@ class InferenceModel(Derivable):
     ) -> Union[DotDict, str]:
         """
         Returns a single parameter whose name matches *parameter*, and optionally, whose category's
-        and process' name matches *category* and *process*. An exception is raised if no or more
-        than one parameter is found, unless *silent* is *True* in which case *None* is returned.
-        When *only_name* is *True*, only the name of the parameter is returned rather than a
-        structured dictionary.
+        and process' name matches *category* and *process*. All three, *parameter*, *process* and
+        *category* can be a string, a pattern, or sequence of them.
+
+        An exception is raised if no or more than one parameter is found, unless *silent* is *True*
+        in which case *None* is returned. When *only_name* is *True*, only the name of the parameter
+        is returned rather than a structured dictionary.
         """
         # rename arguments to make their meaning explicit
         parameter_name = parameter
@@ -811,7 +823,8 @@ class InferenceModel(Derivable):
         """
         Returns *True* if a parameter whose name matches *parameter*, and optionally whose
         category's and process' name match *category* and *process*, is existing, and *False*
-        otherwise.
+        otherwise. All three, *parameter*, *process* and *category* can be a string, a pattern, or
+        sequence of them.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -835,8 +848,11 @@ class InferenceModel(Derivable):
         """
         Adds a new parameter to all categories and processes whose names match *category* and
         *process*, with all *args* and *kwargs* used to create the structured parameter dictionary
-        via :py:meth:`parameter_spec`. If a parameter with the same name already exists in one of
-        the processes throughout the categories, an exception is raised.
+        via :py:meth:`parameter_spec`. Both *process* and *category* can be a string, a pattern, or
+        sequence of them.
+
+        If a parameter with the same name already exists in one of the processes throughout the
+        categories, an exception is raised.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -871,8 +887,9 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Removes one or more parameters whose names match *parameter*, and optionally whose
-        category's and process' name match *category* and *process*. Returns *True* if at least
-        one parameter was removed, and *False* otherwise.
+        category's and process' name match *category* and *process*. All three, *parameter*,
+        *process* and *category* can be a string, a pattern, or sequence of them. Returns *True* if
+        at least one parameter was removed, and *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -910,7 +927,8 @@ class InferenceModel(Derivable):
         only_names: bool = False,
     ) -> List[Union[DotDict, str]]:
         """
-        Returns a list of parameter group whose name match *group*.
+        Returns a list of parameter group whose name match *group*. *group* can be a string, a
+        pattern, or sequence of them.
 
         When *only_names* is *True*, only names of parameter groups are returned rather than
         structured dictionaries.
@@ -931,9 +949,12 @@ class InferenceModel(Derivable):
         only_name: bool = False,
     ) -> Union[DotDict, str]:
         """
-        Returns a single parameter group whose name matches *group*. An exception is raised in case
-        no or more than one parameter group is found. When *only_name* is *True*, only the name of
-        the parameter group is returned rather than a structured dictionary.
+        Returns a single parameter group whose name matches *group*. *group* can be a string, a
+        pattern, or sequence of them.
+
+        An exception is raised in case no or more than one parameter group is found. When
+        *only_name* is *True*, only the name of the parameter group is returned rather than a
+        structured dictionary.
         """
         # rename arguments to make their meaning explicit
         group_name = group
@@ -954,7 +975,7 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Returns *True* if a parameter group whose name matches *group* is existing, and *False*
-        otherwise.
+        otherwise. *group* can be a string, a pattern, or sequence of them.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
@@ -982,8 +1003,9 @@ class InferenceModel(Derivable):
         group: Union[str, Sequence[str]],
     ) -> bool:
         """
-        Removes one or more parameter groups whose names match *group*. Returns *True* if at least
-        one group was removed, and *False* otherwise.
+        Removes one or more parameter groups whose names match *group*. *group* can be a string, a
+        pattern, or sequence of them. Returns *True* if at least one group was removed, and *False*
+        otherwise.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
@@ -1006,9 +1028,10 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Adds a parameter named *parameter* to one or multiple parameter groups whose name match
-        *group*. When *parameter* is a pattern or regular expression, all matcheing, previously
-        added parameters are added. Otherwise, *parameter* is added as as. If a parameter was added
-        to at least one group, *True* is returned and *False* otherwise.
+        *group*. *group* can be a string, a pattern, or sequence of them. When *parameter* is a
+        pattern or regular expression, all previously added, matching parameters are added.
+        Otherwise, *parameter* is added as as. If a parameter was added to at least one group,
+        *True* is returned and *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1044,7 +1067,8 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Removes all parameters matching *parameter* from parameter groups whose names match *group*.
-        Returns *True* if at least one parameter was removed, and *False* otherwise.
+        Both *parameter* and *group* can be a string, a pattern, or sequence of them. Returns *True*
+        if at least one parameter was removed, and *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1077,7 +1101,8 @@ class InferenceModel(Derivable):
         process: Union[str, Sequence[str]],
     ) -> List[str]:
         """
-        Returns a flat list of category names that contain processes matching *process*.
+        Returns a flat list of category names that contain processes matching *process*. *process*
+        can be a string, a pattern, or sequence of them.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -1093,8 +1118,10 @@ class InferenceModel(Derivable):
     ) -> Union[List[str], Dict[str, List[str]]]:
         """
         Returns a dictionary of names of processes that contain a parameter whose names match
-        *parameter*, mapped to categories names. Categories can optionally be filtered through a
-        *category* pattern. When *flat* is *True*, a flat, unique list of process names is returned.
+        *parameter*, mapped to categories names. Categories can optionally be filtered through
+        *category*. Both *parameter* and *category* can be a string, a pattern, or sequence of them.
+
+        When *flat* is *True*, a flat, unique list of process names is returned.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1126,8 +1153,10 @@ class InferenceModel(Derivable):
     ) -> Union[List[str], Dict[str, List[str]]]:
         """
         Returns a dictionary of category names mapping to process names that contain parameters
-        whose name match *parameter*. Processes can optionally be filtered through a *process*
-        pattern. When *flat* is *True*, a flat, unique list of category names is returned.
+        whose name match *parameter*. Processes can optionally be filtered through *process*. Both
+        *parameter* and *process* can be a string, a pattern, or sequence of them.
+
+        When *flat* is *True*, a flat, unique list of category names is returned.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1157,7 +1186,7 @@ class InferenceModel(Derivable):
     ) -> List[str]:
         """
         Returns a list of names of parameter groups that contain a parameter whose name matches
-        *parameter*.
+        *parameter*, which can be a string, a pattern, or sequence of them.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
