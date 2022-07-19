@@ -49,7 +49,7 @@ The task that you are about to start requires a valid voms proxy.
     law run PlotVariables \
         --version v1 \
         --datasets "st_tchannel_t,tt_sl" \
-        --producers variables \
+        --producers features \
         --variables ht \
         --workers 3
 
