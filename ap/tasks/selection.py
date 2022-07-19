@@ -25,8 +25,6 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     shifts = set(CalibrateEvents.shifts)
 
-    update_selector = True
-
     def workflow_requires(self):
         # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()
@@ -35,7 +33,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
             reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_func.run_requires(self)
+        reqs["selector"] = self.selector_inst.run_requires()
 
         return reqs
 
@@ -46,7 +44,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         }
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_func.run_requires(self)
+        reqs["selector"] = self.selector_inst.run_requires()
 
         return reqs
 
@@ -57,7 +55,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         }
 
         # add additional columns in case the selector produces some
-        if self.selector_func.produced_columns:
+        if self.selector_inst.produced_columns:
             outputs["columns"] = self.local_target(f"columns_{self.branch}.parquet")
 
         return outputs
@@ -80,7 +78,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         stats = defaultdict(float)
 
         # run the selector setup
-        self.selector_func.run_setup(self, inputs["selector"])
+        self.selector_inst.run_setup(inputs["selector"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -90,11 +88,11 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         aliases = self.shift_inst.x("column_aliases", {})
 
         # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.selector_func.used_columns
+        load_columns = mandatory_coffea_columns | self.selector_inst.used_columns
         load_columns_nano = [Route.check(column).nano_column for column in load_columns]
 
         # define columns that will be saved
-        keep_columns = self.selector_func.produced_columns
+        keep_columns = self.selector_inst.produced_columns
         route_filter = RouteFilter(keep_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -125,7 +123,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = self.selector_func(events, stats, **self.get_selector_kwargs(self))
+                results = self.selector_inst(events, stats)
 
                 # save results as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")

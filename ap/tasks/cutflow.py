@@ -38,8 +38,8 @@ class MergeSelectionMasks(
         super().__init__(*args, **kwargs)
 
         # store the normalization weight producer
-        self.norm_weight_producer = Producer.get("normalization_weights").updated_copy(
-            **self.get_producer_kwargs(self),
+        self.norm_weight_producer = Producer.get_cls("normalization_weights")(
+            inst_dict=self.get_producer_kwargs(self),
         )
 
     def create_branch_map(self):
@@ -49,13 +49,13 @@ class MergeSelectionMasks(
     def merge_workflow_requires(self):
         return {
             "selection": SelectEvents.req(self, _exclude={"branches"}),
-            "normalization": self.norm_weight_producer.run_requires(self),
+            "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
             "selection": [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
-            "normalization": self.norm_weight_producer.run_requires(self),
+            "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def trace_merge_workflow_inputs(self, inputs):
@@ -84,8 +84,7 @@ class MergeSelectionMasks(
         chunks = []
 
         # setup the normalization weights producer
-        self.norm_weight_producer.run_setup(self, self.input()["forest_merge"]["normalization"])
-        producer_kwargs = self.get_producer_kwargs(self)
+        self.norm_weight_producer.run_setup(self.input()["forest_merge"]["normalization"])
 
         # get columns to keep
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
@@ -96,7 +95,7 @@ class MergeSelectionMasks(
             steps = inp["results"].load(formatter="awkward").steps
 
             # add normalization weight
-            self.norm_weight_producer(events, **producer_kwargs)
+            self.norm_weight_producer(events)
 
             # remove columns
             events = route_filter(events)

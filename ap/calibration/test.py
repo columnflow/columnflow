@@ -5,9 +5,9 @@ Calibration methods for testing purposes.
 """
 
 from ap.calibration import Calibrator, calibrator
+from ap.production.seeds import deterministic_seeds
 from ap.util import maybe_import
 from ap.columnar_util import set_ak_column
-from ap.production.seeds import deterministic_seeds
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -50,8 +50,8 @@ def jec_test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     produces={jec_test, deterministic_seeds},
 )
 def test(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    self.stack.jec_test(events, **kwargs)
+    self[jec_test](events, **kwargs)
 
-    self.stack.deterministic_seeds(events, **kwargs)
+    self[deterministic_seeds](events, **kwargs)
 
     return events

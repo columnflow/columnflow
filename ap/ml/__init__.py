@@ -4,20 +4,19 @@
 Definition of basic objects for describing and creating ML models.
 """
 
-import copy as _copy
 from collections import OrderedDict
 from typing import Optional, Union, List, Tuple, Any, Set
 
 import law
 import order as od
 
-from ap.util import maybe_import
+from ap.util import maybe_import, Derivable
 from ap.columnar_util import Route
 
 ak = maybe_import("awkward")
 
 
-class MLModel(object):
+class MLModel(Derivable):
     """
     Minimal interface to ML models with connections to config objects (such as
     py:class:`order.Config` or :py:class:`order.Dataset`) and, on an optional basis, to tasks.
@@ -35,20 +34,15 @@ class MLModel(object):
 
     See their documentation below for more info.
 
-    .. py:attribute:: name
-       type: str
-
-       The unique name of this model.
-
-    .. py:attribute:: config_inst
-       type: order.Config, None
-
-       Reference to the :py:class:`order.Config` object.
-
-    .. py:attribute:: folds
+    .. py:classattribute:: folds
        type: int
 
        The number of folds for the k-fold cross-validation.
+
+    .. py:attribute:: config_inst
+       type: order.Config
+
+       Reference to the :py:class:`order.Config` object.
 
     .. py:attribute:: parameters
        type: OrderedDict
@@ -75,65 +69,25 @@ class MLModel(object):
        Column names or :py:class:`Route`'s that are produces by this model.
     """
 
-    _instances = {}
-
-    @classmethod
-    def new(cls, name: str, *args, **kwargs) -> "MLModel":
-        """
-        Creates a new instance with *name* and all *args* and *kwargs*, adds it to the instance
-        cache and returns it. A *ValueError* is raised in case an instance with the same name was
-        registered before.
-        """
-        # check if the instance is already registered
-        if name in cls._instances:
-            raise ValueError(f"a ML model named '{name}' was already registered ({cls.get(name)})")
-
-        # create it
-        cls._instances[name] = cls(name, *args, **kwargs)
-
-        return cls._instances[name]
-
-    @classmethod
-    def get(cls, name: str, copy: bool = False) -> "MLModel":
-        """
-        Returns a previously registered instance named *name* and optionally copies it when *copy*
-        is *True*. A *ValueError* is raised when no instance was found with that name.
-        """
-        if name not in cls._instances:
-            raise ValueError(f"no ML model named '{name}' found")
-
-        return _copy.deepcopy(cls._instances[name]) if copy else cls._instances[name]
+    # default number of folds
+    folds = 2
 
     def __init__(
         self,
-        name: str,
+        config_inst: od.Config,
         *,
-        config_inst: Optional[od.Config] = None,
         parameters: Optional[OrderedDict] = None,
-        folds: int = 2,
     ):
         super().__init__()
 
         # store attributes
-        self.name = name
-        self.config_inst = None
-        self.folds = folds
+        self.config_inst = config_inst
         self.parameters = OrderedDict(parameters or {})
 
         # cache for attributes that need to be defined in inheriting classes
         self._used_datasets = None
         self._used_columns = None
         self._produced_columns = None
-
-        # set the config when given
-        if config_inst:
-            self.set_config(config_inst)
-
-    def __str__(self):
-        return f"{self.__class__.__name__}__{self.name}"
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} '{self.name}' at {hex(id(self))}>"
 
     def _format_value(self, value: Any) -> str:
         """
@@ -168,12 +122,6 @@ class MLModel(object):
         as opposed to some log level).
         """
         return list(self.parameters.items())
-
-    def set_config(self, config_inst: od.Config) -> None:
-        """
-        Sets the :py:attr:`config_inst` attribute to *config_inst*.
-        """
-        self.config_inst = config_inst
 
     @property
     def used_datasets(self) -> Set[od.Dataset]:

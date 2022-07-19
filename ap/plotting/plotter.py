@@ -124,6 +124,11 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
     "legend_cfg": dict,
     "cms_label_cfg": dict,
     """
+    # available plot methods mapped to their names
+    plot_methods = {  # noqa
+        func.__name__: func
+        for func in [draw_error_stairs, draw_from_stack, draw_from_hist, draw_errorbars]
+    }
 
     plt.style.use(mplhep.style.CMS)
 
@@ -143,12 +148,12 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
             raise ValueError("No histogram(s) given in plot_cfg entry {key}")
         hist = cfg["hist"]
         kwargs = cfg.get("kwargs", {})
-        globals()[method](ax, hist, kwargs)
+        plot_methods[method](ax, hist, kwargs)
 
         if ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            globals()[method](rax, hist, cfg["ratio_kwargs"])
+            plot_methods[method](rax, hist, cfg["ratio_kwargs"])
 
     # axis styling
     ax_kwargs = {
@@ -193,8 +198,3 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
     plt.tight_layout()
 
     return fig
-
-    plot_methods = {  # noqa
-        func: globals()[func]
-        for func in ["plot_all"]
-    }

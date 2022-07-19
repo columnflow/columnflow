@@ -30,7 +30,8 @@ class ProcessPlotBase(
 
     def store_parts(self):
         parts = super().store_parts()
-        parts["plot"] = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
+        part = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
+        parts.insert_before("version", "plot", part)
         return parts
 
 

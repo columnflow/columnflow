@@ -3,12 +3,13 @@
 """
 Calibration methods for jets
 """
+
 import os
 
 import law
 
 from ap.util import maybe_import, memoize
-from ap.calibration import calibrator
+from ap.calibration import Calibrator, calibrator
 from ap.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -133,8 +134,10 @@ def ak_random(*args, rand_func):
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
 )
-def jec(self, events, config_inst, dataset_inst, jec_files, junc_files, jec_names, junc_names, **kwargs):
-    """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources."""
+def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
+    """
 
     # calculate uncorrected pt, mass
     set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -144,16 +147,16 @@ def jec(self, events, config_inst, dataset_inst, jec_files, junc_files, jec_name
     # NOTE: could also be moved to `jec_setup`, but keep here in case the provider ever needs
     #       to change based on the event content (JEC change in the middle of a run)
     jec_provider = get_lookup_provider(
-        jec_files,
+        self.jec_files,
         coffea_txt_converters.convert_jec_txt_file,
         coffea_jetmet_tools.FactorizedJetCorrector,
-        names=jec_names,
+        names=self.jec_names,
     )
     junc_provider = get_lookup_provider(
-        junc_files,
+        self.junc_files,
         coffea_txt_converters.convert_junc_txt_file,
         coffea_jetmet_tools.JetCorrectionUncertainty,
-        names=junc_names,
+        names=self.junc_names,
     )
 
     # look up JEC correction factors
@@ -184,36 +187,43 @@ def jec(self, events, config_inst, dataset_inst, jec_files, junc_files, jec_name
     return events
 
 
-@jec.update
-def jec_update(self, config_inst, **kwargs):
-    """Add JEC uncertainty shifts to the list of produced columns."""
+@jec.init
+def jec_init(self: Calibrator) -> None:
+    """
+    Add JEC uncertainty shifts to the list of produced columns.
+    """
     self.produces |= {
         f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
-        for junc_name in config_inst.x.jec.uncertainty_sources
+        for junc_name in self.config_inst.x.jec.uncertainty_sources
         for junc_dir in ("up", "down")
     }
 
 
 @jec.requires
-def jec_requires(self, task, reqs):
-    """Add external files bundle (for JEC text files) to dependencies."""
-    if "external_files" not in reqs:
-        from ap.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(task)
-    return reqs
+def jec_requires(self: Calibrator, reqs: dict) -> None:
+    """
+    Add external files bundle (for JEC text files) to dependencies.
+    """
+    if "external_files" in reqs:
+        return
+
+    from ap.tasks.external import BundleExternalFiles
+    reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
 @jec.setup
-def jec_setup(self, task, inputs, call_kwargs, **kwargs):
-    """Determine correct JEC files for task based on config/dataset and inject them
-    into the calibrator function call."""
+def jec_setup(self: Calibrator, inputs: dict) -> None:
+    """
+    Determine correct JEC files for task based on config/dataset and inject them
+    into the calibrator function call.
+    """
 
     # get external files bundle that contains JEC text files
-    bundle = task.requires()["calibrator"]["external_files"]
+    bundle = self.task.requires()["calibrator"]["external_files"]
 
     # make selector for JEC text files based on sample type (and era for data)
-    if task.dataset_inst.is_data:
+    if self.dataset_inst.is_data:
         raise NotImplementedError("JEC for data has not been implemented yet.")
         era = "RunA"  # task.dataset_inst.x.era  # TODO: implement data eras
         resolve_sample = lambda x: x.data[era]
@@ -223,29 +233,30 @@ def jec_setup(self, task, inputs, call_kwargs, **kwargs):
     # pass text files to calibrator method
     for key in ("jec", "junc"):
         # pass the paths to the text files that contain the corrections/uncertainties
-        files = call_kwargs[f"{key}_files"] = [
+        files = [
             t.path for t in resolve_sample(bundle.files[key])
         ]
+        setattr(self, f"{key}_files", files)
 
         # also pass a list of tuples encoding the correspondence between the original
         # file basenames and filenames on disk (as determined by `BundleExternalFiles`)
         # and the original file basenames (needed by coffea tools to handle the
         # weights correctly)
         basenames = get_basenames(files)
-        orig_basenames = get_basenames(resolve_sample(task.config_inst.x.external_files[key]))
-        call_kwargs[f"{key}_names"] = list(zip(basenames, orig_basenames))
+        orig_basenames = get_basenames(resolve_sample(self.config_inst.x.external_files[key]))
+        setattr(self, f"{key}_names", list(zip(basenames, orig_basenames)))
 
     # ensure exactly one 'UncertaintySources' file is passed
-    if len(call_kwargs["junc_names"]) != 1:
+    if len(self.junc_names) != 1:
         raise ValueError(
-            f"Expected exactly one 'UncertaintySources' file, got {len(call_kwargs['junc_names'])}",
+            f"expected exactly one 'UncertaintySources' file, got {len(self.junc_names)}",
         )
 
     # update the weight names to include the uncertainty sources specified in the config
-    call_kwargs["junc_names"] = [
+    self.junc_names = [
         (f"{basename}_{src}", f"{orig_basename}_{src}")
-        for basename, orig_basename in call_kwargs["junc_names"]
-        for src in task.config_inst.x.jec["uncertainty_sources"]
+        for basename, orig_basename in self.junc_names
+        for src in self.config_inst.x.jec["uncertainty_sources"]
     ]
 
 
@@ -268,31 +279,34 @@ def jec_setup(self, task, inputs, call_kwargs, **kwargs):
 
     },
 )
-def jer(self, events, config_inst, dataset_inst, jer_files, jersf_files, jer_names, jersf_names, **kwargs):
-    """Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
-    Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution."""
+def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
+    Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
+    """
 
     # save the unsmeared properties in case they are needed later
     set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
     set_ak_column(events, "Jet.mass_unsmeared", events.Jet.mass)
 
     # use event numbers in chunk to seed random number generator
+    # TODO: use seeds!
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
     # build/retrieve lookup providers for JECs and uncertainties
     # NOTE: could also be moved to `jer_setup`, but keep here in case the provider ever needs
     #       to change based on the event content (JER change in the middle of a run)
     jer_provider = get_lookup_provider(
-        jer_files,
+        self.jer_files,
         coffea_txt_converters.convert_jr_txt_file,
         coffea_jetmet_tools.JetResolution,
-        names=jer_names,
+        names=self.jer_names,
     )
     jersf_provider = get_lookup_provider(
-        jersf_files,
+        self.jersf_files,
         coffea_txt_converters.convert_jersf_txt_file,
         coffea_jetmet_tools.JetResolutionScaleFactor,
-        names=jersf_names,
+        names=self.jersf_names,
     )
 
     # look up jet energy resolutions
@@ -372,41 +386,46 @@ def jer(self, events, config_inst, dataset_inst, jer_files, jersf_files, jer_nam
 
 
 @jer.requires
-def jer_requires(self, task, reqs):
-    """Add external files bundle (for JR text files) to dependencies."""
-    if "external_files" not in reqs:
-        from ap.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(task)
-    return reqs
+def jer_requires(self: Calibrator, reqs: dict) -> None:
+    """
+    Add external files bundle (for JR text files) to dependencies.
+    """
+    if "external_files" in reqs:
+        return
+
+    from ap.tasks.external import BundleExternalFiles
+    reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
 @jer.setup
-def jer_setup(self, task, inputs, call_kwargs, **kwargs):
-    """Determine correct JR files for task based on config/dataset and inject them
-    into the calibrator function call."""
+def jer_setup(self: Calibrator, inputs: dict) -> None:
+    """
+    Determine correct JR files for task based on config/dataset and inject them
+    into the calibrator function call.
+    """
 
     # get external files bundle that contains JR text files
-    bundle = task.requires()["calibrator"]["external_files"]
+    bundle = self.task.requires()["calibrator"]["external_files"]
 
     # make selector for JEC text files based on sample type
-    if task.dataset_inst.is_data:
+    if self.dataset_inst.is_data:
         raise ValueError("Attempt to apply jet energy resolution smearing in data!")
-    else:
-        resolve_sample = lambda x: x.mc
+    resolve_sample = lambda x: x.mc
 
     # pass text files to calibrator method
     for key in ("jer", "jersf"):
         # pass the paths to the text files that contain the corrections/uncertainties
-        files = call_kwargs[f"{key}_files"] = [
+        files = [
             t.path for t in resolve_sample(bundle.files[key])
         ]
+        setattr(self, f"{key}_files", files)
 
         # also pass a list of tuples encoding the correspondence between the
         # file basenames on disk (as determined by `BundleExternalFiles`) and the
         # original file basenames (needed by coffea to identify the weights correctly)
         basenames = get_basenames(files)
-        orig_basenames = get_basenames(resolve_sample(task.config_inst.x.external_files[key]))
-        call_kwargs[f"{key}_names"] = list(zip(basenames, orig_basenames))
+        orig_basenames = get_basenames(resolve_sample(self.config_inst.x.external_files[key]))
+        setattr(self, f"{key}_names", list(zip(basenames, orig_basenames)))
 
         # ensure exactly one file is passed
         if len(files) != 1:
@@ -419,22 +438,13 @@ def jer_setup(self, task, inputs, call_kwargs, **kwargs):
 # General jets calibrator
 #
 
-@calibrator(uses={jec}, produces={jec})
-def jets(self, events, **kwargs):
+@calibrator(uses={jec, jer}, produces={jec, jer})
+def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
-    self.stack.jec(events, **kwargs)
+    self[jec](events, **kwargs)
 
-    # apply jer smearing (MC only)
-    if kwargs["dataset_inst"].is_mc:
-        self.stack.jer(events, **kwargs)
+    # apply jer smearing on MC only
+    if self.dataset_inst.is_mc:
+        self[jer](events, **kwargs)
 
     return events
-
-
-@jets.update
-def jets_update(self, dataset_inst, **kwargs):
-    """Ensure JER is run on MC"""
-    if dataset_inst.is_mc:
-        _jer = jer.updated_copy(dataset_inst=dataset_inst, **kwargs)
-        self.uses.add(_jer)
-        self.produces.add(_jer)
