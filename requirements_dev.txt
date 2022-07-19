@@ -2,6 +2,7 @@
 # packages might be installed in addition to other requirements
 
 ipython==7.16.*
+pytest==7.0.*
 pytest-cov==3.0.*
 flake8==4.0.*
 flake8-commas==2.1.*

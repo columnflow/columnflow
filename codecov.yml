@@ -1,1 +1,8 @@
 comment: false
+ignore:
+  - "modules"
+  - "docs"
+  - "data"
+  - ".github"
+  - ".law"
+  - ".setups"
