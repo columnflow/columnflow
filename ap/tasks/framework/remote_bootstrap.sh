@@ -10,6 +10,8 @@
 # tailored for remote jobs.
 bootstrap_htcondor_standalone() {
     # set env variables
+    export AP_ON_HTCONDOR="1"
+    export AP_REMOTE_JOB="1"
     export AP_DESY_USER="{{ap_desy_user}}"
     export AP_CERN_USER="{{ap_cern_user}}"
     export AP_BASE="$LAW_JOB_HOME/repo"
@@ -17,12 +19,8 @@ bootstrap_htcondor_standalone() {
     export AP_SOFTWARE="$AP_DATA/software"
     export AP_STORE_NAME="{{ap_store_name}}"
     export AP_STORE_LOCAL="{{ap_store_local}}"
-    export AP_WLCG_USE_CACHE="true"
-    export AP_WLCG_CACHE_CLEANUP="true"
     export AP_LOCAL_SCHEDULER="{{ap_local_scheduler}}"
     export AP_LCG_SETUP="{{ap_lcg_setup}}"
-    export AP_ON_HTCONDOR="1"
-    export AP_REMOTE_JOB="1"
     export X509_USER_PROXY="$PWD/{{proxy_file}}"
 
     # source the lcg software when defined

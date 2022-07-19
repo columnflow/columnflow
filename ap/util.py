@@ -8,7 +8,7 @@ __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
-    "is_pattern", "is_regex", "pattern_matcher",
+    "test_float", "is_pattern", "is_regex", "pattern_matcher",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
@@ -354,6 +354,17 @@ def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
     return (a / b) if b else 0.0
 
 
+def test_float(f: Any) -> bool:
+    """
+    Tests whether a value *i* can be converted to a float.
+    """
+    try:
+        float(f)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
 def is_pattern(s: str) -> bool:
     """
     Returns *True* if a string *s* contains pattern characters such as "*" or "?", and *False*
@@ -664,9 +675,6 @@ class DerivableMeta(type):
         """
         # prepare bases
         bases = tuple(bases) if isinstance(bases, (list, tuple)) else (bases,)
-
-        # prepare the class dict
-        # cls_dict = law.util.merge_dicts({"_init_kwargs": init_kwargs or {}}, cls_dict)
 
         # create the subclass
         subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})

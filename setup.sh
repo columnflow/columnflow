@@ -36,6 +36,14 @@ setup() {
     # (AP = Analysis Playground)
     #
 
+    # lang defaults
+    [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
+    [ -z "$LANG" ] && export LANG="en_US.UTF-8"
+    [ -z "$LC_ALL" ] && export LC_ALL="en_US.UTF-8"
+
+    # proxy
+    [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
+
     export AP_BASE="$this_dir"
     interactive_setup "$setup_name" || return "$?"
     export AP_SETUP_NAME="$setup_name"
@@ -47,13 +55,17 @@ setup() {
     export AP_ORIG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
     export AP_CI_JOB="$( [ "$GITHUB_ACTIONS" = "true" ] && echo 1 || echo 0 )"
 
-    # lang defaults
-    [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
-    [ -z "$LANG" ] && export LANG="en_US.UTF-8"
-    [ -z "$LC_ALL" ] && export LC_ALL="en_US.UTF-8"
+    # overwrite some variables in remote and ci jobs
+    if [ "$AP_REMOTE_JOB" = "1" ]; then
+        export AP_WLCG_USE_CACHE="true"
+        export AP_WLCG_CACHE_CLEANUP="true"
+        export AP_WORKER_KEEP_ALIVE="false"
+    elif [ "$AP_CI_JOB" = "1" ]; then
+        export AP_WORKER_KEEP_ALIVE="false"
+    fi
 
-    # proxy
-    [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
+    # some variable defaults
+    [ -z "$AP_WORKER_KEEP_ALIVE" ] && export AP_WORKER_KEEP_ALIVE="false"
 
 
     #

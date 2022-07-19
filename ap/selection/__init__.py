@@ -155,4 +155,4 @@ class SelectionResult(object):
                 for src_name, dst_dict in self.objects.items()
             })
 
-        return ak.zip(law.util.merge_dicts(self.main, to_merge))
+        return ak.zip({**self.main, **to_merge})
