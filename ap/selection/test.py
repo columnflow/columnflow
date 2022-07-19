@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional, Union
 from ap.selection import Selector, SelectionResult, selector
 from ap.production.categories import category_ids
 from ap.util import maybe_import
-from ap.columnar_util import set_ak_column
+from ap.columnar_util import set_ak_column, Route
 from ap.production.processes import process_ids
 
 np = maybe_import("numpy")
@@ -90,6 +90,17 @@ def var_nMuon(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
 def var_HT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     jet_pt_sorted = events.Jet.pt[self[req_jet](events)]
     return ak.sum(jet_pt_sorted, axis=1)
+
+
+@selector(
+    uses={var_nJet, var_HT, "Jet.pt"},
+    produces={"n_jet", "ht", "jet1_pt"},
+    exposed=True,
+)
+def cutflow_features(self: Selector, events: ak.Array, **kwargs) -> None:
+    set_ak_column(events, "n_jet", self[var_nJet](events))
+    set_ak_column(events, "ht", self[var_HT](events))
+    set_ak_column(events, "jet1_pt", Route("Jet.pt[:,0]").apply(events, -999))
 
 
 # selection for the main categories
@@ -258,11 +269,11 @@ def increment_stats(
 @selector(
     uses={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        process_ids, increment_stats, "LHEWeight.originalXWGTUP",
+        process_ids, increment_stats, "LHEWeight.originalXWGTUP", cutflow_features,
     },
     produces={
         category_ids, jet_selection_test, lepton_selection_test, deepjet_selection_test,
-        process_ids, increment_stats, "LHEWeight.originalXWGTUP",
+        process_ids, increment_stats, "LHEWeight.originalXWGTUP", cutflow_features,
     },
     shifts={
         jet_energy_shifts,
@@ -310,6 +321,9 @@ def test(
 
     # create process ids
     self[process_ids](events, **kwargs)
+
+    # include cutflow variables
+    self[cutflow_features](events, **kwargs)
 
     # increment stats
     self[increment_stats](events, event_sel, stats, **kwargs)
