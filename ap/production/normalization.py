@@ -73,7 +73,7 @@ def normalization_weights_setup(self: Producer, inputs: dict) -> None:
     attributes:
 
         - py:attr:`selection_stats`: The stats dict loaded from the output of MergeSelectionsStats.
-        - py:attr:`sum_weights_table`: A sprase array serving as a lookup table for the sum of event
+        - py:attr:`sum_weights_table`: A sparse array serving as a lookup table for the sum of event
           weights per process id.
         - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
           processes known to the config of the task, with keys being process ids.
