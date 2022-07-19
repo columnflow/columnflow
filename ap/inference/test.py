@@ -39,8 +39,8 @@ def test(self):
             unc_name,
             type=ParameterType.rate_gauss,
             effect=lumi.get(names=unc_name, direction=("down", "up"), factor=True),
+            transformations=[ParameterTransformation.symmetrize],
         )
-        self.symmetrize_parameter_effect(unc_name)
 
     # minbias xs
     self.add_parameter(

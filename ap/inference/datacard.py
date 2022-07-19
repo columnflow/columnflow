@@ -519,8 +519,8 @@ class DatacardWriter(object):
 
         # stitch back
         return [
-            cls.col_sep.join((s + " " * (max_widths[j] - len(s))) for j, s in enumerate(line))
-            for i, line in enumerate(lines)
+            cls.col_sep.join(f"{s: <{max_widths[j]}}" for j, s in enumerate(line))
+            for line in lines
         ]
 
     @classmethod
