@@ -7,7 +7,7 @@ Collection of general helpers and utilities.
 __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
+    "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div", "test_float",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
@@ -337,6 +337,17 @@ def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
     Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
     """
     return (a / b) if b else 0.0
+
+
+def test_float(f: Any) -> bool:
+    """
+    Tests whether a value *i* can be converted to a float.
+    """
+    try:
+        float(f)
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 class DotDict(dict):

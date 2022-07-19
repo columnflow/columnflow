@@ -16,6 +16,7 @@ from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.production import Producer
 from ap.util import dev_sandbox, ensure_proxy
+from ap.plotting.variables import plot_cutflow
 
 
 class MergeSelectionMasks(
@@ -292,10 +293,7 @@ class PlotCutflow(
 
     @PlotMixin.view_output_plots
     def run(self):
-        # import numpy as np
         import hist
-        import matplotlib.pyplot as plt
-        import mplhep
 
         # prepare config objects
         category_inst = self.config_inst.get_category(self.branch_data)
@@ -361,42 +359,8 @@ class PlotCutflow(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
-            mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
-            mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
+            fig = plot_cutflow(hists, self.config_inst)
 
-            # normalize histograms on number of events before applying cuts
-            mc_hists = [h / h[{"step": "Initial"}].value for h in mc_hists]
-
-            # create the stack
-            h_mc_stack = None
-            if mc_hists:
-                h_mc_stack = hist.Stack(*mc_hists)
-
-            # start plotting
-            plt.style.use(mplhep.style.CMS)
-            fig, ax = plt.subplots()
-
-            h_mc_stack.plot(
-                ax=ax,
-                stack=False,
-                histtype="step",
-                color=mc_colors,
-                label=mc_labels,
-            )
-
-            ax.set_xlabel("Selection steps")
-            ax.set_ylabel("Selection efficiency")
-
-            # legend
-            ax.legend(ncol=1, loc="upper right")
-
-            # labels
-            lumi = self.config_inst.x.luminosity.get("nominal") / 1000  # pb -> fb
-            mplhep.cms.label(ax=ax, lumi=lumi, label="Work in Progress", fontsize=22)
-
-            # save the plot
-            plt.tight_layout()
             self.output().dump(fig, formatter="mpl")
 
 
