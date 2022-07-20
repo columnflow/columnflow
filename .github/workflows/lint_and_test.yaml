@@ -33,7 +33,10 @@ jobs:
 
       - name: Cleanup 🧹
         if: always()
-        run: rm -rf "${AP_JOB_ID}"
+        run: |
+          pwd
+          ls -al
+          rm -rf "${AP_JOB_ID}"
 
   test:
     runs-on: [self-hosted]
