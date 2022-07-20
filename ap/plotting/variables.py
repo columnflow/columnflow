@@ -37,12 +37,12 @@ def plot_variables(
 
     # setup plotting configs
     plot_config = {
-        "MC_stack": {
+        "mc_stack": {
             "method": "draw_from_stack",
             "hist": h_mc_stack,
             "kwargs": {"norm": 1, "label": mc_labels, "color": mc_colors},
         },
-        "MC_uncert": {
+        "mc_uncert": {
             "method": "draw_error_stairs",
             "hist": h_mc,
             "kwargs": {"label": "MC stat. unc."},
