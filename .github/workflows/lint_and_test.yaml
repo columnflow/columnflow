@@ -34,8 +34,7 @@ jobs:
       - name: Cleanup 🧹
         if: always()
         run: |
-          pwd
-          ls -al
+          cd ..
           rm -rf "${AP_JOB_ID}"
 
   test:
@@ -65,7 +64,9 @@ jobs:
 
       - name: Cleanup 🧹
         if: always()
-        run: rm -rf "${AP_JOB_ID}"
+        run: |
+          cd ..
+          rm -rf "${AP_JOB_ID}"
 
   coverage:
     needs: test
@@ -105,4 +106,6 @@ jobs:
 
       - name: Cleanup 🧹
         if: always()
-        run: rm -rf "${AP_JOB_ID}"
+        run: |
+          cd ..
+          rm -rf "${AP_JOB_ID}"
