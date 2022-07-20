@@ -27,8 +27,11 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
 
     shifts = CalibrateEvents.shifts | SelectEvents.shifts
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["calibrations"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]

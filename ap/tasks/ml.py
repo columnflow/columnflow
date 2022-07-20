@@ -40,8 +40,10 @@ class PrepareMLEvents(
                 f"{self.__class__.__name__}",
             )
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot and self.producers:
@@ -288,8 +290,10 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super(MLEvaluation, self).workflow_requires()
+        if only_super:
+            return reqs
 
         reqs["models"] = [MLTraining.req(self, fold=f) for f in range(self.ml_model_inst.folds)]
 
