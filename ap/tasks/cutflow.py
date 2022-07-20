@@ -17,7 +17,6 @@ from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.production import Producer
 from ap.util import dev_sandbox, ensure_proxy, DotDict
-from ap.plotting.variables import plot_cutflow, plot_variables
 
 
 class MergeSelectionMasks(
