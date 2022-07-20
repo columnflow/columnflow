@@ -122,6 +122,7 @@ class CreateCutflowHistograms(
     DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
@@ -147,7 +148,8 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        return self.local_target("cutflow_hist.pickle")
+        print(self.variables)
+        return {var: self.local_target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
 
     @law.decorator.safe_output
     @law.decorator.localize
@@ -171,7 +173,7 @@ class CreateCutflowHistograms(
         # TODO: for the moment, this is just the lhe_weight and ht but it could be extended
         #       in the future and made configurable from the command line
         variable_insts = [self.config_inst.get_variable(v)
-            for v in ["lhe_weight", "ht"]]
+            for v in self.variables]
         # get the expression per variable and when it's a string, parse it to extract index lookups
         expressions = {}
         for variable_inst in variable_insts:
@@ -245,8 +247,9 @@ class CreateCutflowHistograms(
                         arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
                         histograms[var_name].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
-        # dump the histogram
-        self.output().dump(histograms, formatter="pickle")
+        # dump the histograms
+        for var_name in histograms.keys():
+            self.output()[var_name].dump(histograms[var_name], formatter="pickle")
 
 
 CreateCutflowHistogramsWrapper = wrapper_factory(
@@ -278,14 +281,14 @@ class PlotCutflow(
     def workflow_requires(self):
         reqs = super(PlotCutflow, self).workflow_requires()
         reqs["hists"] = [
-            CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            CreateCutflowHistograms.req(self, dataset=d, variables=("lhe_weight",), _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: CreateCutflowHistograms.req(self, dataset=d, variables=("lhe_weight",), branch=0)
             for d in self.datasets
         }
 
@@ -311,7 +314,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp.load(formatter="pickle")["lhe_weight"]
+                h_in = inp["lhe_weight"].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -444,7 +447,7 @@ class PlotCutflowVariables(
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp.load(formatter="pickle")[variable_inst.name]
+                h_in = inp[variable_inst.name].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
