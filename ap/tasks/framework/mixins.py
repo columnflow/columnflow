@@ -724,7 +724,7 @@ class PlotMixin(AnalysisTask):
         """
         # prepare names
         if "." not in func_name:
-            raise ValueError(f"invalid func_id format: {func_name}")
+            raise ValueError(f"invalid func_name format: {func_name}")
         module_id, name = func_name.rsplit(".", 1)
 
         # import the module
