@@ -1,4 +1,19 @@
+coverage:
+  status:
+    # main branch
+    project:
+      default:
+        target: auto
+        informational: true
+
+    # PRs
+    patch:
+      default:
+        target: auto
+        informational: true
+
 comment: false
+
 ignore:
   - "modules"
   - "docs"

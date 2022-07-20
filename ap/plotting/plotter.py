@@ -180,7 +180,6 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
 
     # legend
     legend_kwargs = {
-        "title": "Processes",
         "ncol": 1,
         "loc": "upper right",
     }

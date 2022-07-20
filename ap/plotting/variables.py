@@ -51,9 +51,9 @@ def plot_variables(
     }
 
     # dummy since not implemented yet
-    MC_lines = False
-    if MC_lines:
-        plot_config["MC_lines"] = {
+    mc_lines = False
+    if mc_lines:
+        plot_config["mc_lines"] = {
             "method": "draw_from_stack",
             # "hist": h_lines_stack,
             # "kwargs": {"label": lines_label, "color": lines_colors, "stack": False, "histtype": "step"},
