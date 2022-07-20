@@ -743,7 +743,7 @@ class PlotMixin(AnalysisTask):
     def call_plot_func(self, func_name: str, **kwargs) -> Any:
         """
         Gets the plot function referred to by *func_name* via :py:meth:`get_plot_func`, calls it
-        with all *kwargs* and returns its result. *kwargss* are updated through the
+        with all *kwargs* and returns its result. *kwargs* are updated through the
         :py:meth:`update_plot_kwargs` hook first.
         """
         return self.get_plot_func(func_name)(**(self.update_plot_kwargs(kwargs)))
