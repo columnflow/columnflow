@@ -272,6 +272,8 @@ class PlotCutflow(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
+    plot_function_name = "ap.plotting.variables.plot_cutflow"
+
     selector_steps_order_sensitive = True
 
     def create_branch_map(self):
@@ -363,8 +365,14 @@ class PlotCutflow(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            fig = plot_cutflow(hists, self.config_inst)
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+            )
 
+            # save the plot
             self.output().dump(fig, formatter="mpl")
 
 
@@ -395,6 +403,9 @@ class PlotCutflowVariables(
     )
 
     shifts = set(CreateCutflowHistograms.shifts)
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_variables"
 
     selector_steps_order_sensitive = True
 
@@ -489,6 +500,8 @@ class PlotCutflowVariables(
             # there should be hists to plot
             if not hists:
                 raise Exception("no histograms found to plot")
+
+            # produce plots for all steps
             if self.plot_steps:
                 steps = (["Initial"] + list(self.selector_steps))
             else:
@@ -500,6 +513,14 @@ class PlotCutflowVariables(
                     (process_inst, hists[process_inst][{"step": step}])
                     for process_inst in sorted(hists, key=process_insts.index)
                 )
-                fig = plot_variables(hists_step, self.config_inst, variable_inst)
 
+                # call the plot function
+                fig = self.call_plot_func(
+                    self.plot_funciton_name,
+                    hists=hists_step,
+                    config_inst=self.config_inst,
+                    variable_inst=variable_inst,
+                )
+
+                # save the plot
                 self.output()[step].dump(fig, formatter="mpl")
