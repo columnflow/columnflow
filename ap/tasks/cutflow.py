@@ -11,110 +11,13 @@ import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, SelectorStepsMixin, VariablesMixin, PlotMixin
+from ap.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
-from ap.tasks.selection import SelectEvents
-from ap.production import Producer
+from ap.tasks.selection import MergeSelectionMasks
 from ap.util import dev_sandbox, ensure_proxy, DotDict
-
-
-class MergeSelectionMasks(
-    DatasetTask,
-    SelectorMixin,
-    CalibratorsMixin,
-    law.tasks.ForestMerge,
-    HTCondorWorkflow,
-):
-
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(SelectEvents.shifts)
-
-    # recursively merge 8 files into one
-    merge_factor = 8
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # store the normalization weight producer
-        self.norm_weight_producer = Producer.get_cls("normalization_weights")(
-            inst_dict=self.get_producer_kwargs(self),
-        )
-
-    def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
-
-    def merge_workflow_requires(self):
-        return {
-            "selection": SelectEvents.req(self, _exclude={"branches"}),
-            "normalization": self.norm_weight_producer.run_requires(),
-        }
-
-    def merge_requires(self, start_branch, end_branch):
-        return {
-            "selection": [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
-            "normalization": self.norm_weight_producer.run_requires(),
-        }
-
-    def trace_merge_workflow_inputs(self, inputs):
-        return super().trace_merge_workflow_inputs(inputs["selection"])
-
-    def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["selection"])
-
-    def merge_output(self):
-        return self.local_target("masks.parquet")
-
-    def merge(self, inputs, output):
-        # in the lowest (leaf) stage, zip selection results with additional columns first
-        if self.is_leaf():
-            # create a temp dir for saving intermediate files
-            tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
-            tmp_dir.touch()
-            inputs = self.zip_results_and_columns(inputs, tmp_dir)
-
-        law.pyarrow.merge_parquet_task(self, inputs, output, local=True)
-
-    def zip_results_and_columns(self, inputs, tmp_dir):
-        import awkward as ak
-        from ap.columnar_util import RouteFilter, sorted_ak_to_parquet
-
-        chunks = []
-
-        # setup the normalization weights producer
-        self.norm_weight_producer.run_setup(self.input()["forest_merge"]["normalization"])
-
-        # get columns to keep
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
-        route_filter = RouteFilter(keep_columns)
-
-        for inp in inputs:
-            events = inp["columns"].load(formatter="awkward")
-            steps = inp["results"].load(formatter="awkward").steps
-
-            # add normalization weight
-            self.norm_weight_producer(events)
-
-            # remove columns
-            events = route_filter(events)
-
-            # zip them
-            out = ak.zip({"steps": steps, "events": events})
-
-            chunk = tmp_dir.child(f"tmp_{inp['results'].basename}", type="f")
-            chunks.append(chunk)
-            sorted_ak_to_parquet(out, chunk.path)
-
-        return chunks
-
-
-MergeSelectionMasksWrapper = wrapper_factory(
-    base_cls=AnalysisTask,
-    require_cls=MergeSelectionMasks,
-    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
-)
 
 
 class CreateCutflowHistograms(
