@@ -60,8 +60,11 @@ class PlotVariables(
             for var_name in sorted(self.variables)
         ]
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["merged_hists"] = self.requires_from_branch()
         return reqs
 
@@ -193,8 +196,11 @@ class PlotShiftedVariables(
             for source in sorted(self.shift_sources)
         ]
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["merged_hists"] = self.requires_from_branch()
         return reqs
 

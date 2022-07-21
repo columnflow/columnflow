@@ -135,8 +135,11 @@ class CreateCutflowHistograms(
         # dummy branch map
         return [None]
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super(CreateCutflowHistograms, self).workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["masks"] = MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
         return reqs
 
@@ -274,8 +277,11 @@ class PlotCutflow(
         # one category per branch
         return list(self.categories)
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super(PlotCutflow, self).workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["hists"] = [
             CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets

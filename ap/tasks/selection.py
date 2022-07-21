@@ -25,9 +25,12 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     shifts = set(CalibrateEvents.shifts)
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["lfns"] = GetDatasetLFNs.req(self)
         if not self.pilot:
             reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
