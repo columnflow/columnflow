@@ -548,6 +548,8 @@ class VariablesMixin(ConfigTask):
         "all variables of the config; empty default",
     )
 
+    default_variables = None
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -558,7 +560,12 @@ class VariablesMixin(ConfigTask):
 
         # resolve variables
         if "variables" in params:
+            # when empty and default variables are defined, use them instead
+            if not params["variables"] and cls.default_variables:
+                params["variables"] = tuple(cls.default_variables)
+
             if params["variables"]:
+                # resolve variable names
                 variables = cls.find_config_objects(
                     params["variables"],
                     config_inst,
@@ -566,6 +573,7 @@ class VariablesMixin(ConfigTask):
                     config_inst.x("variable_groups", {}),
                 )
             else:
+                # fallback to using all known variables
                 variables = config_inst.variables.names()
             params["variables"] = tuple(variables)
 
