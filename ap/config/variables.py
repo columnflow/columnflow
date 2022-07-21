@@ -107,7 +107,6 @@ def add_variables(config: od.Config) -> None:
         x_title=r"Jet 3 $\eta$",
     )
 
-
     # cutflow variables
     config.add_variable(
         name="cf_ht",
