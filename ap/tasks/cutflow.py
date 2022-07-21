@@ -35,6 +35,8 @@ class CreateCutflowHistograms(
 
     selector_steps_order_sensitive = True
 
+    default_variables = ("lhe_weight", "cf_*")
+
     def create_branch_map(self):
         # dummy branch map
         return [None]
@@ -167,7 +169,7 @@ class PlotCutflow(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(CreateCutflowHistograms.shifts)
 
@@ -182,14 +184,26 @@ class PlotCutflow(
     def workflow_requires(self):
         reqs = super(PlotCutflow, self).workflow_requires()
         reqs["hists"] = [
-            CreateCutflowHistograms.req(self, dataset=d, variables=("lhe_weight",), _exclude={"branches"})
+            CreateCutflowHistograms.req(
+                self,
+                dataset=d,
+                variables=("lhe_weight",),
+                _prefer_cli={"variables"},
+                _exclude={"branches"},
+            )
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(self, dataset=d, variables=("lhe_weight",), branch=0)
+            d: CreateCutflowHistograms.req(
+                self,
+                branch=0,
+                dataset=d,
+                variables=("lhe_weight",),
+                _prefer_cli={"variables"},
+            )
             for d in self.datasets
         }
 
@@ -292,7 +306,7 @@ class PlotCutflowVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     plot_steps = luigi.BoolParameter(
         default=True,
@@ -303,10 +317,13 @@ class PlotCutflowVariables(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
+    selector_steps_order_sensitive = True
+    initial_step = "Initial"
+
+    default_variables = ("cf_*",)
+
     # default plot function
     plot_function_name = "ap.plotting.variables.plot_variables"
-
-    selector_steps_order_sensitive = True
 
     def create_branch_map(self):
         return [
@@ -333,7 +350,7 @@ class PlotCutflowVariables(
         b = self.branch_data
         outputs = {
             step: self.local_target(f"plot__step_{step}__cat_{b.category}__var_{b.variable}.pdf")
-            for step in ["Initial"] + list(self.selector_steps)
+            for step in [self.initial_step] + list(self.selector_steps)
         }
         return outputs
 
@@ -402,7 +419,7 @@ class PlotCutflowVariables(
 
             # produce plots for all steps
             if self.plot_steps:
-                steps = (["Initial"] + list(self.selector_steps))
+                steps = ([self.initial_step] + list(self.selector_steps))
             else:
                 steps = [self.selector_steps[-1]]
             for step in steps:
