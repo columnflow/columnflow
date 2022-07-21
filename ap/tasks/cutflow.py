@@ -172,7 +172,7 @@ class PlotCutflow(
     HTCondorWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     shifts = set(CreateCutflowHistograms.shifts)
 
@@ -312,13 +312,12 @@ class PlotCutflowVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
-    plot_steps = luigi.BoolParameter(
-        default=True,
+    only_final_step = luigi.BoolParameter(
+        default=False,
         significant=False,
-        description="boolean; if False, plots are only produced after the final selector step;"
-        "default: True",
+        description="when True, only create plots for the final selector step; default: False",
     )
 
     shifts = set(CreateCutflowHistograms.shifts)
@@ -355,14 +354,16 @@ class PlotCutflowVariables(
     def output(self):
         b = self.branch_data
         outputs = {
-            step: self.local_target(f"plot__step_{step}__cat_{b.category}__var_{b.variable}.pdf")
-            for step in [self.initial_step] + list(self.selector_steps)
+            step: self.local_target(f"plot__step{i}_{step}__cat_{b.category}__var_{b.variable}.pdf")
+            for i, step in enumerate([self.initial_step] + list(self.selector_steps))
         }
         return outputs
 
     @PlotMixin.view_output_plots
     def run(self):
         import hist
+
+        outputs = self.output()
 
         # prepare config objects
         variable_inst = self.config_inst.get_variable(self.branch_data.variable)
@@ -424,12 +425,11 @@ class PlotCutflowVariables(
                 raise Exception("no histograms found to plot")
 
             # produce plots for all steps
-            if self.plot_steps:
-                steps = ([self.initial_step] + list(self.selector_steps))
-            else:
-                steps = [self.selector_steps[-1]]
-            for step in steps:
+            plot_steps = [self.initial_step] + list(self.selector_steps)
+            if self.only_final_step:
+                plot_steps = plot_steps[-1:]
 
+            for step in plot_steps:
                 # sort hists by process order
                 hists_step = OrderedDict(
                     (process_inst, hists[process_inst][{"step": step}])
@@ -442,7 +442,8 @@ class PlotCutflowVariables(
                     hists=hists_step,
                     config_inst=self.config_inst,
                     variable_inst=variable_inst,
+                    style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                 )
 
                 # save the plot
-                self.output()[step].dump(fig, formatter="mpl")
+                outputs[step].dump(fig, formatter="mpl")
