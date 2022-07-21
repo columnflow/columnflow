@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import (
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.util import DotDict
+from ap.util import DotDict, dev_sandbox
 
 
 class ProcessPlotBase(
@@ -46,7 +46,7 @@ class PlotVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(MergeHistograms.shifts)
 
@@ -178,7 +178,7 @@ class PlotShiftedVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     # default plot function
     plot_function_name = "ap.plotting.variables.plot_shifted_variables"
