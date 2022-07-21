@@ -7,120 +7,24 @@ Tasks to be implemented: MergeSelectionMasks, PlotCutflow
 import functools
 from collections import OrderedDict
 
+import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
-from ap.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, SelectorStepsMixin, PlotMixin
+from ap.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin,
+)
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
-from ap.tasks.selection import SelectEvents
-from ap.production import Producer
-from ap.util import dev_sandbox, ensure_proxy
-from ap.plotting.variables import plot_cutflow
-
-
-class MergeSelectionMasks(
-    DatasetTask,
-    SelectorMixin,
-    CalibratorsMixin,
-    law.tasks.ForestMerge,
-    HTCondorWorkflow,
-):
-
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(SelectEvents.shifts)
-
-    # recursively merge 8 files into one
-    merge_factor = 8
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # store the normalization weight producer
-        self.norm_weight_producer = Producer.get_cls("normalization_weights")(
-            inst_dict=self.get_producer_kwargs(self),
-        )
-
-    def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
-
-    def merge_workflow_requires(self):
-        return {
-            "selection": SelectEvents.req(self, _exclude={"branches"}),
-            "normalization": self.norm_weight_producer.run_requires(),
-        }
-
-    def merge_requires(self, start_branch, end_branch):
-        return {
-            "selection": [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
-            "normalization": self.norm_weight_producer.run_requires(),
-        }
-
-    def trace_merge_workflow_inputs(self, inputs):
-        return super().trace_merge_workflow_inputs(inputs["selection"])
-
-    def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["selection"])
-
-    def merge_output(self):
-        return self.local_target("masks.parquet")
-
-    def merge(self, inputs, output):
-        # in the lowest (leaf) stage, zip selection results with additional columns first
-        if self.is_leaf():
-            # create a temp dir for saving intermediate files
-            tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
-            tmp_dir.touch()
-            inputs = self.zip_results_and_columns(inputs, tmp_dir)
-
-        law.pyarrow.merge_parquet_task(self, inputs, output, local=True)
-
-    def zip_results_and_columns(self, inputs, tmp_dir):
-        import awkward as ak
-        from ap.columnar_util import RouteFilter, sorted_ak_to_parquet
-
-        chunks = []
-
-        # setup the normalization weights producer
-        self.norm_weight_producer.run_setup(self.input()["forest_merge"]["normalization"])
-
-        # get columns to keep
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
-        route_filter = RouteFilter(keep_columns)
-
-        for inp in inputs:
-            events = inp["columns"].load(formatter="awkward")
-            steps = inp["results"].load(formatter="awkward").steps
-
-            # add normalization weight
-            self.norm_weight_producer(events)
-
-            # remove columns
-            events = route_filter(events)
-
-            # zip them
-            out = ak.zip({"steps": steps, "events": events})
-
-            chunk = tmp_dir.child(f"tmp_{inp['results'].basename}", type="f")
-            chunks.append(chunk)
-            sorted_ak_to_parquet(out, chunk.path)
-
-        return chunks
-
-
-MergeSelectionMasksWrapper = wrapper_factory(
-    base_cls=AnalysisTask,
-    require_cls=MergeSelectionMasks,
-    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
-)
+from ap.tasks.selection import MergeSelectionMasks
+from ap.util import dev_sandbox, ensure_proxy, DotDict
 
 
 class CreateCutflowHistograms(
     DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     HTCondorWorkflow,
 ):
@@ -130,6 +34,8 @@ class CreateCutflowHistograms(
     shifts = set(MergeSelectionMasks.shifts)
 
     selector_steps_order_sensitive = True
+
+    default_variables = ("lhe_weight", "cf_*")
 
     def create_branch_map(self):
         # dummy branch map
@@ -149,7 +55,7 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        return self.local_target("cutflow_hist.pickle")
+        return {var: self.local_target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
 
     @law.decorator.safe_output
     @law.decorator.localize
@@ -170,9 +76,7 @@ class CreateCutflowHistograms(
         aliases = self.shift_inst.x("column_aliases", {})
 
         # define a list of variables to create the histograms for
-        # TODO: for the moment, this is just the lhe_weight but it could be extended in the future
-        #       and made configurable from the command line
-        variable_insts = [self.config_inst.get_variable("lhe_weight")]
+        variable_insts = [self.config_inst.get_variable(v) for v in self.variables]
 
         # get the expression per variable and when it's a string, parse it to extract index lookups
         expressions = {}
@@ -216,7 +120,6 @@ class CreateCutflowHistograms(
 
                 for variable_inst in variable_insts:
                     var_name = variable_inst.name
-
                     # helper to build the point for filling, except for the step which does
                     # not support broadcasting
                     def get_point(mask=Ellipsis):
@@ -235,6 +138,7 @@ class CreateCutflowHistograms(
 
                     # fill all other steps
                     steps = self.selector_steps or arr.steps.fields
+
                     mask = True
                     for step in steps:
                         if step not in arr.steps.fields:
@@ -247,8 +151,9 @@ class CreateCutflowHistograms(
                         arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
                         histograms[var_name].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
-        # dump the histogram
-        self.output().dump(histograms, formatter="pickle")
+        # dump the histograms
+        for var_name in histograms.keys():
+            self.output()[var_name].dump(histograms[var_name], formatter="pickle")
 
 
 CreateCutflowHistogramsWrapper = wrapper_factory(
@@ -271,6 +176,8 @@ class PlotCutflow(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
+    plot_function_name = "ap.plotting.variables.plot_cutflow"
+
     selector_steps_order_sensitive = True
 
     def create_branch_map(self):
@@ -283,14 +190,26 @@ class PlotCutflow(
             return reqs
 
         reqs["hists"] = [
-            CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            CreateCutflowHistograms.req(
+                self,
+                dataset=d,
+                variables=("lhe_weight",),
+                _prefer_cli={"variables"},
+                _exclude={"branches"},
+            )
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: CreateCutflowHistograms.req(
+                self,
+                branch=0,
+                dataset=d,
+                variables=("lhe_weight",),
+                _prefer_cli={"variables"},
+            )
             for d in self.datasets
         }
 
@@ -316,7 +235,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp.load(formatter="pickle")["lhe_weight"]
+                h_in = inp["lhe_weight"].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -365,8 +284,14 @@ class PlotCutflow(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            fig = plot_cutflow(hists, self.config_inst)
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+            )
 
+            # save the plot
             self.output().dump(fig, formatter="mpl")
 
 
@@ -375,3 +300,150 @@ PlotCutflowWrapper = wrapper_factory(
     require_cls=PlotCutflow,
     enable=["configs", "skip_configs", "shifts", "skip_shifts"],
 )
+
+
+class PlotCutflowVariables(
+    ShiftTask,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    VariablesMixin,
+    ProcessPlotBase,
+    law.LocalWorkflow,
+    HTCondorWorkflow,
+):
+
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+
+    only_final_step = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, only create plots for the final selector step; default: False",
+    )
+
+    shifts = set(CreateCutflowHistograms.shifts)
+
+    selector_steps_order_sensitive = True
+    initial_step = "Initial"
+
+    default_variables = ("cf_*",)
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_variables"
+
+    def create_branch_map(self):
+        return [
+            DotDict({"category": cat_name, "variable": var_name})
+            for cat_name in sorted(self.categories)
+            for var_name in sorted(self.variables)
+        ]
+
+    def workflow_requires(self):
+        reqs = super(PlotCutflowVariables, self).workflow_requires()
+        reqs["hists"] = [
+            CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            for d in self.datasets
+        ]
+        return reqs
+
+    def requires(self):
+        return {
+            d: CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            for d in self.datasets
+        }
+
+    def output(self):
+        b = self.branch_data
+        outputs = {
+            step: self.local_target(f"plot__step{i}_{step}__cat_{b.category}__var_{b.variable}.pdf")
+            for i, step in enumerate([self.initial_step] + list(self.selector_steps))
+        }
+        return outputs
+
+    @PlotMixin.view_output_plots
+    def run(self):
+        import hist
+
+        outputs = self.output()
+
+        # prepare config objects
+        variable_inst = self.config_inst.get_variable(self.branch_data.variable)
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        # histogram data per process
+        hists = {}
+
+        with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
+            for dataset, inp in self.input().items():
+                dataset_inst = self.config_inst.get_dataset(dataset)
+                h_in = inp[variable_inst.name].load(formatter="pickle")
+
+                # sanity checks
+                n_shifts = len(h_in.axes["shift"])
+                if n_shifts != 1:
+                    raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
+
+                # loop and extract one histogram per process
+                for process_inst in process_insts:
+                    # skip when the dataset is already known to not contain any sub process
+                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                        continue
+
+                    # work on a copy
+                    h = h_in.copy()
+
+                    # axis selections
+                    h = h[{
+                        "process": [
+                            hist.loc(p.id)
+                            for p in sub_process_insts[process_inst]
+                            if p.id in h.axes["process"]
+                        ],
+                        "category": [
+                            hist.loc(c.id)
+                            for c in leaf_category_insts
+                            if c.id in h.axes["category"]
+                        ],
+                    }]
+
+                    # axis reductions
+                    h = h[{"process": sum, "category": sum, "shift": sum}]
+
+                    # add the histogram
+                    if process_inst in hists:
+                        hists[process_inst] += h
+                    else:
+                        hists[process_inst] = h
+
+            # there should be hists to plot
+            if not hists:
+                raise Exception("no histograms found to plot")
+
+            # produce plots for all steps
+            plot_steps = [self.initial_step] + list(self.selector_steps)
+            if self.only_final_step:
+                plot_steps = plot_steps[-1:]
+
+            for step in plot_steps:
+                # sort hists by process order
+                hists_step = OrderedDict(
+                    (process_inst, hists[process_inst][{"step": step}])
+                    for process_inst in sorted(hists, key=process_insts.index)
+                )
+
+                # call the plot function
+                fig = self.call_plot_func(
+                    self.plot_function_name,
+                    hists=hists_step,
+                    config_inst=self.config_inst,
+                    variable_inst=variable_inst,
+                    style_config={"legend_cfg": {"title": f"Step '{step}'"}},
+                )
+
+                # save the plot
+                outputs[step].dump(fig, formatter="mpl")

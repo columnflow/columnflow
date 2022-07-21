@@ -5,7 +5,9 @@ Scripts to create plots using the plotter
 """
 
 from collections import OrderedDict
-from typing import Sequence
+from typing import Sequence, Optional
+
+import law
 
 from ap.util import maybe_import
 from ap.plotting.plotter import plot_all
@@ -20,6 +22,7 @@ def plot_variables(
     hists: OrderedDict,
     config_inst: od.config,
     variable_inst: od.variable,
+    style_config: Optional[dict] = None,
 ) -> plt.Figure:
 
     # create the stack and a fake data hist using the smeared sum
@@ -67,7 +70,7 @@ def plot_variables(
             "ratio_kwargs": {"norm": h_mc.values()},
         }
 
-    style_config = {
+    default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
@@ -82,7 +85,10 @@ def plot_variables(
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
     fig = plot_all(plot_config, style_config, ratio=True)
+
     return fig
 
 
@@ -91,6 +97,7 @@ def plot_shifted_variables(
     config_inst: od.config,
     process_inst: od.process,
     variable_inst: od.variable,
+    style_config: Optional[dict] = None,
 ) -> plt.Figure:
 
     # create the stack and the sum
@@ -110,7 +117,8 @@ def plot_shifted_variables(
             "ratio_kwargs": {"norm": norm, "color": ["black", "red", "blue"], "histtype": "step", "stack": False},
         },
     }
-    style_config = {
+
+    default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
@@ -128,13 +136,17 @@ def plot_shifted_variables(
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
     fig = plot_all(plot_config, style_config, ratio=True)
+
     return fig
 
 
 def plot_cutflow(
     hists: OrderedDict,
     config_inst: od.config,
+    style_config: Optional[dict] = None,
 ) -> plt.Figure:
 
     mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
@@ -160,7 +172,7 @@ def plot_cutflow(
             },
         },
     }
-    style_config = {
+    default_style_config = {
         "ax_cfg": {
             "ylabel": "Selection efficiency",
             "xlabel": "Selection steps",
@@ -172,5 +184,8 @@ def plot_cutflow(
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
     fig = plot_all(plot_config, style_config, ratio=False)
+
     return fig
