@@ -33,6 +33,10 @@ class BaseTask(law.Task):
 
 class AnalysisTask(BaseTask, law.SandboxTask):
 
+    analysis = luigi.Parameter(
+        default="analysis_st",
+        description="name of the analysis; default: 'analysis_st'",
+    )
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
     allow_empty_sandbox = True
@@ -40,9 +44,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     local_workflow_require_branches = False
     output_collection_cls = law.SiblingFileCollection
-
-    # hard-coded analysis name, could be changed to a parameter
-    analysis = "analysis_st"
 
     # defaults for targets
     default_store = "$AP_STORE_LOCAL"
@@ -54,7 +55,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         params = super().modify_param_values(params)
 
         # store a reference to the analysis inst
-        params["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
+        if "analysis" in params:
+            params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
 
         return params
 
@@ -120,7 +122,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def get_array_function_kwargs(cls, task=None, **params):
         return {
             "task": task,
-            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(cls.analysis),
+            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(params["analysis"]),
         }
 
     @classmethod
