@@ -17,7 +17,7 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import MergeSelectionMasks
-from ap.util import dev_sandbox, ensure_proxy, DotDict
+from ap.util import dev_sandbox, DotDict
 
 
 class CreateCutflowHistograms(
@@ -37,6 +37,9 @@ class CreateCutflowHistograms(
 
     default_variables = ("lhe_weight", "cf_*")
 
+    # default upstream dependency task classes
+    dep_MergeSelectionMasks = MergeSelectionMasks
+
     def create_branch_map(self):
         # dummy branch map
         return [None]
@@ -46,20 +49,19 @@ class CreateCutflowHistograms(
         if only_super:
             return reqs
 
-        reqs["masks"] = MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["masks"] = self.dep_MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
         return reqs
 
     def requires(self):
         return {
-            "masks": MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "masks": self.dep_MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
-        return {var: self.local_target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
+        return {var: self.target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
 
+    @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
-    @law.decorator.localize
-    @ensure_proxy
     def run(self):
         import hist
         import awkward as ak
@@ -180,6 +182,9 @@ class PlotCutflow(
 
     selector_steps_order_sensitive = True
 
+    # default upstream dependency task classes
+    dep_CreateCutflowHistograms = CreateCutflowHistograms
+
     def create_branch_map(self):
         # one category per branch
         return list(self.categories)
@@ -190,7 +195,7 @@ class PlotCutflow(
             return reqs
 
         reqs["hists"] = [
-            CreateCutflowHistograms.req(
+            self.dep_CreateCutflowHistograms.req(
                 self,
                 dataset=d,
                 variables=("lhe_weight",),
@@ -203,7 +208,7 @@ class PlotCutflow(
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(
+            d: self.dep_CreateCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
@@ -214,7 +219,7 @@ class PlotCutflow(
         }
 
     def output(self):
-        return self.local_target(f"cutflow__cat_{self.branch_data}.pdf")
+        return self.target(f"cutflow__cat_{self.branch_data}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
@@ -330,6 +335,9 @@ class PlotCutflowVariables(
     # default plot function
     plot_function_name = "ap.plotting.variables.plot_variables"
 
+    # default upstream dependency task classes
+    dep_CreateCutflowHistograms = CreateCutflowHistograms
+
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name})
@@ -340,14 +348,14 @@ class PlotCutflowVariables(
     def workflow_requires(self):
         reqs = super(PlotCutflowVariables, self).workflow_requires()
         reqs["hists"] = [
-            CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.dep_CreateCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 

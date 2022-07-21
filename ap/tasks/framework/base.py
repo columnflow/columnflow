@@ -5,6 +5,7 @@ Generic tools and base tasks that are defined along typical objects in an analys
 """
 
 import os
+import enum
 import itertools
 import inspect
 import functools
@@ -15,6 +16,21 @@ import law
 import order as od
 
 
+default_analysis = law.config.get_expanded("analysis", "default_analysis")
+default_config = law.config.get_expanded("analysis", "default_config")
+default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
+class OutputLocation(enum.Enum):
+    """
+    Output location flag.
+    """
+
+    config = "config"
+    local = "local"
+    wlcg = "wlcg"
+
+
 class BaseTask(law.Task):
 
     task_namespace = os.getenv("AP_TASK_NAMESPACE")
@@ -22,6 +38,10 @@ class BaseTask(law.Task):
 
 class AnalysisTask(BaseTask, law.SandboxTask):
 
+    analysis = luigi.Parameter(
+        default=default_analysis,
+        description=f"name of the analysis; default: '{default_analysis}'",
+    )
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
     allow_empty_sandbox = True
@@ -30,19 +50,18 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     local_workflow_require_branches = False
     output_collection_cls = law.SiblingFileCollection
 
-    # hard-coded analysis name, could be changed to a parameter
-    analysis = "analysis_st"
-
     # defaults for targets
     default_store = "$AP_STORE_LOCAL"
     default_wlcg_fs = "wlcg_fs"
+    default_output_location = "local"
 
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # store a reference to the analysis inst
-        params["analysis_inst"] = cls.get_analysis_inst(cls.analysis)
+        if "analysis" in params:
+            params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
 
         return params
 
@@ -108,7 +127,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def get_array_function_kwargs(cls, task=None, **params):
         return {
             "task": task,
-            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(cls.analysis),
+            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(params["analysis"]),
         }
 
     @classmethod
@@ -291,12 +310,46 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # create the target instance and return it
         return cls(path, **kwargs)
 
+    def target(self, *path, **kwargs):
+        """ target(*path, location=None, **kwargs)
+        """
+        # get the default location
+        location = kwargs.pop("location", self.default_output_location)
+
+        # parse it and obtain config values if necessary
+        if isinstance(location, str):
+            location = OutputLocation[location]
+        if location == OutputLocation.config:
+            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            if not location:
+                raise Exception(
+                    f"no option 'outputs.{self.task_family}' found in law.cfg to obtain target "
+                    "location",
+                )
+            location[0] = OutputLocation[location[0]]
+        location = law.util.make_list(location)
+
+        # forward to correct function
+        if location[0] == OutputLocation.local:
+            # get other options
+            (store,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("store", store)
+            return self.local_target(*path, **kwargs)
+
+        elif location[0] == OutputLocation.wlcg:
+            # get other options
+            (fs,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("fs", fs)
+            return self.wlcg_target(*path, **kwargs)
+
+        raise Exception(f"cannot determine output location based on '{location}'")
+
 
 class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
-        default="run2_pp_2018",
-        description="name of the analysis config to use; default: 'run2_pp_2018'",
+        default=default_config,
+        description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
     @classmethod
@@ -458,8 +511,8 @@ class ShiftTask(ConfigTask):
 class DatasetTask(ShiftTask):
 
     dataset = luigi.Parameter(
-        default="st_tchannel_t",
-        description="name of the dataset to process; default: 'st_tchannel_t'",
+        default=default_dataset,
+        description=f"name of the dataset to process; default: '{default_dataset}'",
     )
 
     file_merging = None

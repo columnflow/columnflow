@@ -22,12 +22,15 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
     shifts = set(GetDatasetLFNs.shifts)
 
+    # default upstream dependency task classes
+    dep_GetDatasetLFNs = GetDatasetLFNs
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["lfns"] = GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()
@@ -35,7 +38,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         return reqs
 
     def requires(self):
-        reqs = {"lfns": GetDatasetLFNs.req(self)}
+        reqs = {"lfns": self.dep_GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()
@@ -43,10 +46,11 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         return reqs
 
     def output(self):
-        return self.local_target(f"calib_{self.branch}.parquet")
+        return self.target(f"calib_{self.branch}.parquet")
 
-    @law.decorator.safe_output
     @ensure_proxy
+    @law.decorator.localize(input=False, output=True)
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,

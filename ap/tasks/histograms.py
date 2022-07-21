@@ -35,34 +35,51 @@ class CreateHistograms(
 
     shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
+    # default upstream dependency task classes
+    dep_MergeReducedEvents = MergeReducedEvents
+    dep_ProduceColumns = ProduceColumns
+    dep_MLEvaluation = MLEvaluation
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super(CreateHistograms, self).workflow_requires()
         if only_super:
             return reqs
 
-        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot:
             if self.producers:
-                reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+                reqs["producers"] = [
+                    self.dep_ProduceColumns.req(self, producer=p)
+                    for p in self.producers
+                ]
             if self.ml_models:
-                reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
+                reqs["ml"] = [
+                    self.dep_MLEvaluation.req(self, ml_model=m)
+                    for m in self.ml_models
+                ]
 
         return reqs
 
     def requires(self):
-        reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
+        reqs = {"events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [
+                self.dep_ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
         if self.ml_models:
-            reqs["ml"] = [MLEvaluation.req(self, ml_model=m) for m in self.ml_models]
+            reqs["ml"] = [
+                self.dep_MLEvaluation.req(self, ml_model=m)
+                for m in self.ml_models
+            ]
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
+        return self.target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
 
+    @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
-    @law.decorator.localize
     def run(self):
         import hist
         import numpy as np
@@ -181,6 +198,9 @@ class MergeHistograms(
     # in each step, merge 10 into 1
     merge_factor = 10
 
+    # default upstream dependency task classes
+    dep_CreateHistograms = CreateHistograms
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -193,7 +213,7 @@ class MergeHistograms(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        req = CreateHistograms.req(self, _exclude={"branches"})
+        req = self.dep_CreateHistograms.req(self, _exclude={"branches"})
 
         # if the merging stats exist, allow the forest to be cached
         self._cache_forest = req.merging_stats_exist
@@ -201,10 +221,13 @@ class MergeHistograms(
         return req
 
     def merge_requires(self, start_leaf, end_leaf):
-        return [CreateHistograms.req(self, branch=i) for i in range(start_leaf, end_leaf)]
+        return [
+            self.dep_CreateHistograms.req(self, branch=i)
+            for i in range(start_leaf, end_leaf)
+        ]
 
     def merge_output(self):
-        return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
+        return self.target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
         inputs_list = [inp.load(formatter="pickle") for inp in inputs]
@@ -248,6 +271,9 @@ class MergeShiftedHistograms(
     effective_shift = None
     allow_empty_shift = True
 
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
         if only_super:
@@ -255,7 +281,7 @@ class MergeShiftedHistograms(
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
-            reqs[shift] = MergeHistograms.req(
+            reqs[shift] = self.dep_MergeHistograms.req(
                 self,
                 shift=shift,
                 tree_index=0,
@@ -267,7 +293,7 @@ class MergeShiftedHistograms(
 
     def requires(self):
         return {
-            shift: MergeHistograms.req(
+            shift: self.dep_MergeHistograms.req(
                 self,
                 shift=shift,
                 branch=-1,
@@ -288,7 +314,7 @@ class MergeShiftedHistograms(
         return parts
 
     def output(self):
-        return self.local_target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
+        return self.target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
 
     def run(self):
         with self.publish_step(f"merging shift sources {', '.join(self.shift_sources)} ..."):

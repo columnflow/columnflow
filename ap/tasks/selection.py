@@ -24,7 +24,11 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(CalibrateEvents.shifts)
+    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts
+
+    # default upstream dependency task classes
+    dep_GetDatasetLFNs = GetDatasetLFNs
+    dep_CalibrateEvents = CalibrateEvents
 
     def workflow_requires(self, only_super: bool = False):
         # workflow super classes might already define requirements, so extend them
@@ -32,9 +36,12 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         if only_super:
             return reqs
 
-        reqs["lfns"] = GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+            reqs["calib"] = [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ]
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
@@ -43,8 +50,11 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     def requires(self):
         reqs = {
-            "lfns": GetDatasetLFNs.req(self),
-            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "calibrations": [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ],
         }
 
         # add selector dependent requirements
@@ -54,19 +64,19 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     def output(self):
         outputs = {
-            "results": self.local_target(f"results_{self.branch}.parquet"),
-            "stats": self.local_target(f"stats_{self.branch}.json"),
+            "results": self.target(f"results_{self.branch}.parquet"),
+            "stats": self.target(f"stats_{self.branch}.json"),
         }
 
         # add additional columns in case the selector produces some
         if self.selector_inst.produced_columns:
-            outputs["columns"] = self.local_target(f"columns_{self.branch}.parquet")
+            outputs["columns"] = self.target(f"columns_{self.branch}.parquet")
 
         return outputs
 
-    @law.decorator.safe_output
-    @law.decorator.localize
     @ensure_proxy
+    @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
@@ -180,18 +190,24 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
     # recursively merge 20 files into one
     merge_factor = 20
 
+    # default upstream dependency task classes
+    dep_SelectEvents = SelectEvents
+
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return SelectEvents.req(self, _exclude={"branches"})
+        return self.dep_SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+        return [
+            self.dep_SelectEvents.req(self, branch=b)
+            for b in range(start_branch, end_branch)
+        ]
 
     def merge_output(self):
-        return self.local_target("stats.json")
+        return self.target("stats.json")
 
     def merge(self, inputs, output):
         # merge input stats
@@ -238,8 +254,13 @@ class MergeSelectionMasks(
 
     shifts = set(SelectEvents.shifts)
 
+    workflow_run_decorators = [law.decorator.localize]
+
     # recursively merge 8 files into one
     merge_factor = 8
+
+    # default upstream dependency task classes
+    dep_SelectEvents = SelectEvents
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -255,13 +276,16 @@ class MergeSelectionMasks(
 
     def merge_workflow_requires(self):
         return {
-            "selection": SelectEvents.req(self, _exclude={"branches"}),
+            "selection": self.dep_SelectEvents.req(self, _exclude={"branches"}),
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "selection": [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
+            "selection": [
+                self.dep_SelectEvents.req(self, branch=b)
+                for b in range(start_branch, end_branch)
+            ],
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
@@ -272,7 +296,7 @@ class MergeSelectionMasks(
         return super().trace_merge_inputs(inputs["selection"])
 
     def merge_output(self):
-        return self.local_target("masks.parquet")
+        return self.target("masks.parquet")
 
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first

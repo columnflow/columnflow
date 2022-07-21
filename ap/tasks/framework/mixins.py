@@ -790,8 +790,12 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
                 continue
             if not getattr(output, "path", None):
                 continue
-            if output.path.endswith((".pdf", ".png")) and output.path not in view_paths:
-                view_paths.append(output.path)
+            if output.path.endswith((".pdf", ".png")):
+                if not isinstance(output, law.LocalTarget):
+                    task.logger.warning(f"cannot show non-local plot at '{output.path}'")
+                    continue
+                elif output.path not in view_paths:
+                    view_paths.append(output.path)
 
         # loop through paths and view them
         for path in view_paths:

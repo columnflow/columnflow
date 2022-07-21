@@ -29,6 +29,10 @@ class CreateDatacards(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+    dep_MergeShiftedHistograms = MergeShiftedHistograms
+
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
@@ -49,7 +53,7 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: MergeShiftedHistograms.req(
+                dataset: self.dep_MergeShiftedHistograms.req(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
@@ -67,7 +71,7 @@ class CreateDatacards(
         }
         if cat_obj.data_datasets:
             reqs["data"] = {
-                dataset: MergeHistograms.req(
+                dataset: self.dep_MergeHistograms.req(
                     self,
                     dataset=dataset,
                     variables=(cat_obj.variable,),
@@ -85,12 +89,12 @@ class CreateDatacards(
         basename = lambda name, ext: f"{name}__cat_{cat_obj.category}__var_{cat_obj.variable}.{ext}"
 
         return {
-            "card": self.local_target(basename("datacard", "txt")),
-            "shapes": self.local_target(basename("shapes", "root")),
+            "card": self.target(basename("datacard", "txt")),
+            "shapes": self.target(basename("shapes", "root")),
         }
 
+    @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
-    @law.decorator.localize(output=False)
     def run(self):
         import hist
         from ap.inference.datacard import DatacardWriter
