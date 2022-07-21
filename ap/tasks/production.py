@@ -26,8 +26,10 @@ class ProduceColumns(
 
     shifts = set(MergeReducedEvents.shifts)
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
         reqs["producer"] = self.producer_inst.run_requires()

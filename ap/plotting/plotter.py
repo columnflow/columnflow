@@ -4,7 +4,7 @@
 Generalized plotting functions to create plots from hist histograms
 """
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 from ap.util import maybe_import, test_float
 
@@ -14,31 +14,33 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 
 
-def draw_error_stairs(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
-    if kwargs is None:
-        kwargs = {}
-    norm = kwargs.pop("norm", 1)
-    values = h.values() / norm
-    error = np.sqrt(h.variances()) / norm
+def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+    # compute relative errors
+    rel_error = h.variances()**0.5 / h.values()
+    rel_error[np.isnan(rel_error)] = 0.0
+
+    # compute the baseline
+    # fill 1 in places where both numerator and denominator are 0, and 0 for remaining nan's
+    baseline = h.values() / norm
+    baseline[(h.values() == 0) & (norm == 0)] = 1.0
+    baseline[np.isnan(baseline)] = 0.0
+
     defaults = {
-        "edges": h.axes[0].edges,
-        "baseline": values - error,
-        "values": values + error,
+        "x": h.axes[0].centers,
+        "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
+        "height": baseline * 2 * rel_error,
+        "bottom": baseline * (1 - rel_error),
         "hatch": "///",
         "facecolor": "none",
         "linewidth": 0,
         "color": "black",
+        "alpha": 1.0,
     }
     defaults.update(kwargs)
-    ax.stairs(**defaults)
+    ax.bar(**defaults)
 
 
-def draw_from_stack(ax: plt.Axes, h: hist.Stack, kwargs: Optional[dict] = None) -> None:
-    if kwargs is None:
-        kwargs = {}
-
-    norm = kwargs.pop("norm", 1)
-
+def draw_from_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) -> None:
     # check if norm is a number
     if test_float(norm):
         h = hist.Stack(*[i / norm for i in h])
@@ -46,13 +48,13 @@ def draw_from_stack(ax: plt.Axes, h: hist.Stack, kwargs: Optional[dict] = None) 
         if not isinstance(norm, Sequence) and not isinstance(norm, np.ndarray):
             raise TypeError(f"norm must be either a number, sequence or np.ndarray, not a {type(norm)}")
         norm = np.array(norm)
-        # 1 normalization factor/array per histogram
         if len(norm) == len(h):
+            # 1 normalization factor/array per histogram
             h = hist.Stack(*[h[i] / norm[i] for i in range(len(h))])
-        # same normalization for each histogram
-        # edge case N_bins = N_histograms not considered :(
-        # solution: transform norm -> [norm]*len(h)
         else:
+            # same normalization for each histogram
+            # edge case N_bins = N_histograms not considered :(
+            # solution: transform norm -> [norm]*len(h)
             h = hist.Stack(*[i / norm for i in h])
 
     defaults = {
@@ -64,11 +66,7 @@ def draw_from_stack(ax: plt.Axes, h: hist.Stack, kwargs: Optional[dict] = None) 
     h.plot(**defaults)
 
 
-def draw_from_hist(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
-    if kwargs is None:
-        kwargs = {}
-
-    norm = kwargs.pop("norm", 1)
+def draw_from_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     h = h / norm
     defaults = {
         "ax": ax,
@@ -79,15 +77,11 @@ def draw_from_hist(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) ->
     h.plot1d(**defaults)
 
 
-def draw_errorbars(ax: plt.Axes, h: hist.Hist, kwargs: Optional[dict] = None) -> None:
-    if kwargs is None:
-        kwargs = {}
-
-    norm = kwargs.pop("norm", 1)
+def draw_errorbars(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     values = h.values() / norm
     variances = np.sqrt(h.variances()) / norm
     # compute asymmetric poisson errors for data
-    # TODO: passing the output of poisson_interval to as yerr to mpl.plothist leads to
+    # TODO: passing the output of poisson_interval as yerr to mpl.plothist leads to
     #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
     #       hist 2.4.0), so adjust the output to make up for that, but maybe update or
     #       remove the next lines if this is fixed to not correct it "twice"
@@ -127,7 +121,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
     # available plot methods mapped to their names
     plot_methods = {  # noqa
         func.__name__: func
-        for func in [draw_error_stairs, draw_from_stack, draw_from_hist, draw_errorbars]
+        for func in [draw_error_bands, draw_from_stack, draw_from_hist, draw_errorbars]
     }
 
     plt.style.use(mplhep.style.CMS)
@@ -148,12 +142,12 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
             raise ValueError("No histogram(s) given in plot_cfg entry {key}")
         hist = cfg["hist"]
         kwargs = cfg.get("kwargs", {})
-        plot_methods[method](ax, hist, kwargs)
+        plot_methods[method](ax, hist, **kwargs)
 
         if ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            plot_methods[method](rax, hist, cfg["ratio_kwargs"])
+            plot_methods[method](rax, hist, **cfg["ratio_kwargs"])
 
     # axis styling
     ax_kwargs = {
@@ -170,13 +164,14 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
         # hard-coded line at 1
         rax.axhline(y=1.0, linestyle="dashed", color="gray")
         rax_kwargs = {
-            "ylim": (0.75, 1.25),
+            "ylim": (0.72, 1.28),
             "ylabel": "Ratio",
             "xlabel": "Variable",
             "yscale": "linear",
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
         rax.set(**rax_kwargs)
+        fig.align_ylabels()
 
     # legend
     legend_kwargs = {
@@ -188,7 +183,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
 
     cms_label_kwargs = {
         "ax": ax,
-        "label": "Work in Progress",
+        "llabel": "Work in progress",
         "fontsize": 22,
     }
     cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))

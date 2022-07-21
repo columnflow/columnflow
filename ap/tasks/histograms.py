@@ -35,8 +35,10 @@ class CreateHistograms(
 
     shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super(CreateHistograms, self).workflow_requires()
+        if only_super:
+            return reqs
 
         reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot:
@@ -246,8 +248,10 @@ class MergeShiftedHistograms(
     effective_shift = None
     allow_empty_shift = True
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
+        if only_super:
+            return reqs
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
