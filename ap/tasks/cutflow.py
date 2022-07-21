@@ -234,6 +234,9 @@ class PlotCutflow(
             for proc in process_insts
         }
 
+        # get plot style parameters
+        plot_kwargs = self.get_plot_parameters()
+
         # histogram data per process
         hists = {}
 
@@ -294,6 +297,8 @@ class PlotCutflow(
                 self.plot_function_name,
                 hists=hists,
                 config_inst=self.config_inst,
+                **plot_kwargs,
+
             )
 
             # save the plot
@@ -383,6 +388,9 @@ class PlotCutflowVariables(
             for proc in process_insts
         }
 
+        # get plot style parameters
+        plot_kwargs = self.get_plot_parameters()
+
         # histogram data per process
         hists = {}
 
@@ -451,6 +459,7 @@ class PlotCutflowVariables(
                     config_inst=self.config_inst,
                     variable_inst=variable_inst,
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
+                    **plot_kwargs,
                 )
 
                 # save the plot

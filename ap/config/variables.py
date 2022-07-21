@@ -76,6 +76,7 @@ def add_variables(config: od.Config) -> None:
         binning=(40, 0., 400.),
         unit="GeV",
         x_title=r"Jet 2 $p_{T}$",
+        log_y=True,
     )
     config.add_variable(
         name="jet3_pt",

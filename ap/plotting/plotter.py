@@ -104,7 +104,15 @@ def draw_errorbars(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> N
     ax.errorbar(**defaults)
 
 
-def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.Figure:
+def plot_all(
+    plot_config: dict,
+    style_config: dict,
+    skip_ratio: bool = False,
+    shape_norm: bool = False,
+    skip_legend: bool = False,
+    skip_cms: bool = False,
+    **kwargs,
+) -> plt.Figure:
     """
     plot_config expects dictionaries with fields:
     "method": str, identical to the name of a function defined above,
@@ -127,7 +135,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
     plt.style.use(mplhep.style.CMS)
 
     rax = None
-    if ratio:
+    if not skip_ratio:
         fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
     else:
         fig, ax = plt.subplots()
@@ -144,7 +152,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
         kwargs = cfg.get("kwargs", {})
         plot_methods[method](ax, hist, **kwargs)
 
-        if ratio and "ratio_kwargs" in cfg:
+        if not skip_ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
             plot_methods[method](rax, hist, **cfg["ratio_kwargs"])
@@ -160,7 +168,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
         ax_kwargs["ylim"] = 0.000001
     ax.set(**ax_kwargs)
 
-    if ratio:
+    if not skip_ratio:
         # hard-coded line at 1
         rax.axhline(y=1.0, linestyle="dashed", color="gray")
         rax_kwargs = {
@@ -174,19 +182,23 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
         fig.align_ylabels()
 
     # legend
-    legend_kwargs = {
-        "ncol": 1,
-        "loc": "upper right",
-    }
-    legend_kwargs.update(style_config.get("legend_cfg", {}))
-    ax.legend(**legend_kwargs)
+    if not skip_legend:
+        legend_kwargs = {
+            "ncol": 1,
+            "loc": "upper right",
+        }
+        legend_kwargs.update(style_config.get("legend_cfg", {}))
+        ax.legend(**legend_kwargs)
 
     cms_label_kwargs = {
         "ax": ax,
+        "loc": 2,
         "llabel": "Work in progress",
         "fontsize": 22,
     }
     cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+    if skip_cms:
+        cms_label_kwargs.update({"data": True, "llabel": "", "exp": ""})
     mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()
