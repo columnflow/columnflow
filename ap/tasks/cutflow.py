@@ -17,7 +17,7 @@ from ap.tasks.framework.mixins import (
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import MergeSelectionMasks
-from ap.util import dev_sandbox, ensure_proxy, DotDict
+from ap.util import dev_sandbox, DotDict
 
 
 class CreateCutflowHistograms(
