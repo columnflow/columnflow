@@ -16,6 +16,11 @@ import law
 import order as od
 
 
+default_analysis = law.config.get_expanded("analysis", "default_analysis")
+default_config = law.config.get_expanded("analysis", "default_config")
+default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
 class OutputLocation(enum.Enum):
     """
     Output location flag.
@@ -34,8 +39,8 @@ class BaseTask(law.Task):
 class AnalysisTask(BaseTask, law.SandboxTask):
 
     analysis = luigi.Parameter(
-        default="analysis_st",
-        description="name of the analysis; default: 'analysis_st'",
+        default=default_analysis,
+        description=f"name of the analysis; default: '{default_analysis}'",
     )
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
@@ -326,13 +331,15 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # forward to correct function
         if location[0] == OutputLocation.local:
-            if len(location) > 1:
-                kwargs.setdefault("store", location[1])
+            # get other options
+            (store,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("store", store)
             return self.local_target(*path, **kwargs)
 
         elif location[0] == OutputLocation.wlcg:
-            if len(location) > 1:
-                kwargs.setdefault("fs", location[1])
+            # get other options
+            (fs,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("fs", fs)
             return self.wlcg_target(*path, **kwargs)
 
         raise Exception(f"cannot determine output location based on '{location}'")
@@ -341,8 +348,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
-        default="run2_pp_2018",
-        description="name of the analysis config to use; default: 'run2_pp_2018'",
+        default=default_config,
+        description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
     @classmethod
@@ -504,8 +511,8 @@ class ShiftTask(ConfigTask):
 class DatasetTask(ShiftTask):
 
     dataset = luigi.Parameter(
-        default="st_tchannel_t",
-        description="name of the dataset to process; default: 'st_tchannel_t'",
+        default=default_dataset,
+        description=f"name of the dataset to process; default: '{default_dataset}'",
     )
 
     file_merging = None
