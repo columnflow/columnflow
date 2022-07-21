@@ -34,6 +34,7 @@ def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) ->
         "facecolor": "none",
         "linewidth": 0,
         "color": "black",
+        "alpha": 1.0,
     }
     defaults.update(kwargs)
     ax.bar(**defaults)
