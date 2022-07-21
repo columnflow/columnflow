@@ -14,7 +14,7 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 
 
-def draw_error_stairs(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     # compute relative errors
     rel_error = h.variances()**0.5 / h.values()
     rel_error[np.isnan(rel_error)] = 0.0
@@ -120,7 +120,7 @@ def plot_all(plot_config: dict, style_config: dict, ratio: bool = True) -> plt.F
     # available plot methods mapped to their names
     plot_methods = {  # noqa
         func.__name__: func
-        for func in [draw_error_stairs, draw_from_stack, draw_from_hist, draw_errorbars]
+        for func in [draw_error_bands, draw_from_stack, draw_from_hist, draw_errorbars]
     }
 
     plt.style.use(mplhep.style.CMS)

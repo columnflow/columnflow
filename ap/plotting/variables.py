@@ -43,7 +43,7 @@ def plot_variables(
             "kwargs": {"norm": 1, "label": mc_labels, "color": mc_colors},
         },
         "mc_uncert": {
-            "method": "draw_error_stairs",
+            "method": "draw_error_bands",
             "hist": h_mc,
             "kwargs": {"label": "MC stat. unc."},
             "ratio_kwargs": {"norm": h_mc.values()},
