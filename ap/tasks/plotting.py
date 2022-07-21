@@ -15,8 +15,7 @@ from ap.tasks.framework.mixins import (
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.util import DotDict
-from ap.plotting.variables import plot_variables, plot_shifted_variables
+from ap.util import DotDict, dev_sandbox
 
 
 class ProcessPlotBase(
@@ -47,9 +46,15 @@ class PlotVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(MergeHistograms.shifts)
+
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_variables"
 
     def create_branch_map(self):
         return [
@@ -58,14 +63,18 @@ class PlotVariables(
             for var_name in sorted(self.variables)
         ]
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["merged_hists"] = self.requires_from_branch()
+
         return reqs
 
     def requires(self):
         return {
-            d: MergeHistograms.req(
+            d: self.dep_MergeHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -78,7 +87,7 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
@@ -148,8 +157,16 @@ class PlotVariables(
                 (process_inst, hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
-            fig = plot_variables(hists, self.config_inst, variable_inst)
 
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+                variable_inst=variable_inst,
+            )
+
+            # save the plot
             self.output().dump(fig, formatter="mpl")
 
 
@@ -165,7 +182,13 @@ class PlotShiftedVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+
+    # default upstream dependency task classes
+    dep_MergeShiftedHistograms = MergeShiftedHistograms
+
+    # default plot function
+    plot_function_name = "ap.plotting.variables.plot_shifted_variables"
 
     def store_parts(self):
         parts = super().store_parts()
@@ -180,14 +203,17 @@ class PlotShiftedVariables(
             for source in sorted(self.shift_sources)
         ]
 
-    def workflow_requires(self):
+    def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
         reqs["merged_hists"] = self.requires_from_branch()
         return reqs
 
     def requires(self):
         return {
-            d: MergeShiftedHistograms.req(
+            d: self.dep_MergeShiftedHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -199,7 +225,7 @@ class PlotShiftedVariables(
 
     def output(self):
         b = self.branch_data
-        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
@@ -214,8 +240,6 @@ class PlotShiftedVariables(
             proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
         }
-        # shift_inst_up = self.config_inst.get_shift(f"{self.branch_data.shift_source}_up")
-        # shift_inst_down = self.config_inst.get_shift(f"{self.branch_data.shift_source}_down")
 
         # histogram data per process
         hists = OrderedDict()
@@ -261,5 +285,14 @@ class PlotShiftedVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            fig = plot_shifted_variables(hists, self.config_inst, process_inst, variable_inst)
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_name,
+                hists=hists,
+                config_inst=self.config_inst,
+                process_inst=process_inst,
+                variable_inst=variable_inst,
+            )
+
+            # save the plot
             self.output().dump(fig, formatter="mpl")

@@ -26,26 +26,31 @@ class ProduceColumns(
 
     shifts = set(MergeReducedEvents.shifts)
 
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
+    # default upstream dependency task classes
+    dep_MergeReducedEvents = MergeReducedEvents
 
-        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+    def workflow_requires(self, only_super: bool = False):
+        reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
         reqs["producer"] = self.producer_inst.run_requires()
 
         return reqs
 
     def requires(self):
         return {
-            "events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
             "producer": self.producer_inst.run_requires(),
         }
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"columns_{self.branch}.parquet")
+        return self.target(f"columns_{self.branch}.parquet")
 
-    @law.decorator.safe_output
     @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,

@@ -74,7 +74,7 @@ for dataset_name in dataset_names:
 # default calibrator, selector, producer, ml model and inference model
 config_2018.set_aux("default_calibrator", "test")
 config_2018.set_aux("default_selector", "test")
-config_2018.set_aux("default_producer", "variables")
+config_2018.set_aux("default_producer", "features")
 config_2018.set_aux("default_ml_model", None)
 config_2018.set_aux("default_inference_model", "test")
 
@@ -314,7 +314,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "category_ids", "deterministic_seed",
     },
     "MergeSelectionMasks": {
-        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids",
+        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
 }))
 
