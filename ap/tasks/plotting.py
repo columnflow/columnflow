@@ -50,6 +50,9 @@ class PlotVariables(
 
     shifts = set(MergeHistograms.shifts)
 
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+
     # default plot function
     plot_function_name = "ap.plotting.variables.plot_variables"
 
@@ -66,11 +69,12 @@ class PlotVariables(
             return reqs
 
         reqs["merged_hists"] = self.requires_from_branch()
+
         return reqs
 
     def requires(self):
         return {
-            d: MergeHistograms.req(
+            d: self.dep_MergeHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -180,6 +184,9 @@ class PlotShiftedVariables(
 
     sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
+    # default upstream dependency task classes
+    dep_MergeShiftedHistograms = MergeShiftedHistograms
+
     # default plot function
     plot_function_name = "ap.plotting.variables.plot_shifted_variables"
 
@@ -206,7 +213,7 @@ class PlotShiftedVariables(
 
     def requires(self):
         return {
-            d: MergeShiftedHistograms.req(
+            d: self.dep_MergeShiftedHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,

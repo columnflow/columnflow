@@ -25,24 +25,35 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = CalibrateEvents.shifts | SelectEvents.shifts
+    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts | SelectEvents.shifts
+
+    # default upstream dependency task classes
+    dep_GetDatasetLFNs = GetDatasetLFNs
+    dep_CalibrateEvents = CalibrateEvents
+    dep_SelectEvents = SelectEvents
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["lfns"] = GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calibrations"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
-            reqs["selection"] = SelectEvents.req(self)
+            reqs["calibrations"] = [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ]
+            reqs["selection"] = self.dep_SelectEvents.req(self)
         return reqs
 
     def requires(self):
         return {
-            "lfns": GetDatasetLFNs.req(self),
-            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
-            "selection": SelectEvents.req(self),
+            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "calibrations": [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ],
+            "selection": self.dep_SelectEvents.req(self),
         }
 
     def output(self):
@@ -188,8 +199,11 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
     shifts = set(ReduceEvents.shifts)
 
+    # default upstream dependency task classes
+    dep_ReduceEvents = ReduceEvents
+
     def requires(self):
-        return ReduceEvents.req(self, branches=((0, self.n_inputs),))
+        return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
         return self.local_target(f"stats_n{self.n_inputs}.json")
@@ -265,6 +279,9 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 8 files into one
     merge_factor = 8
 
+    # default upstream dependency task classes
+    dep_MergeReductionStats = MergeReductionStats
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -285,7 +302,7 @@ class MergeReducedEventsUser(DatasetTask):
             self._forest_built = False
 
             # check of the merging stats is present and of so, set the cached file merging value
-            output = MergeReductionStats.req(self).output()
+            output = self.dep_MergeReductionStats.req(self).output()
             if output.exists():
                 self._cached_file_merging = output.load(formatter="json")["merge_factor"]
                 self._cache_branches = True
@@ -328,20 +345,27 @@ class MergeReducedEvents(
 
     shifts = ReduceEvents.shifts | MergeReductionStats.shifts
 
+    # default upstream dependency task classes
+    dep_MergeReductionStats = MergeReductionStats
+    dep_ReduceEvents = ReduceEvents
+
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
         return {
-            "stats": MergeReductionStats.req(self),
-            "events": ReduceEvents.req(self, _exclude={"branches"}),
+            "stats": self.dep_MergeReductionStats.req(self),
+            "events": self.dep_ReduceEvents.req(self, _exclude={"branches"}),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "stats": MergeReductionStats.req(self),
-            "events": [ReduceEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
+            "stats": self.dep_MergeReductionStats.req(self),
+            "events": [
+                self.dep_ReduceEvents.req(self, branch=b)
+                for b in range(start_branch, end_branch)
+            ],
         }
 
     def trace_merge_workflow_inputs(self, inputs):

@@ -254,8 +254,11 @@ class CreatePileupWeights(ConfigTask):
     )
     version = None
 
+    # default upstream dependency task classes
+    dep_BundleExternalFiles = BundleExternalFiles
+
     def requires(self):
-        return BundleExternalFiles.req(self)
+        return self.dep_BundleExternalFiles.req(self)
 
     def output(self):
         return self.local_target(f"weights_from_{self.data_mode}.json")

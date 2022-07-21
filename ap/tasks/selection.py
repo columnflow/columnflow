@@ -23,7 +23,11 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(CalibrateEvents.shifts)
+    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts
+
+    # default upstream dependency task classes
+    dep_GetDatasetLFNs = GetDatasetLFNs
+    dep_CalibrateEvents = CalibrateEvents
 
     def workflow_requires(self, only_super: bool = False):
         # workflow super classes might already define requirements, so extend them
@@ -31,9 +35,12 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
         if only_super:
             return reqs
 
-        reqs["lfns"] = GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
         if not self.pilot:
-            reqs["calib"] = [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators]
+            reqs["calib"] = [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ]
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
@@ -42,8 +49,11 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     def requires(self):
         reqs = {
-            "lfns": GetDatasetLFNs.req(self),
-            "calibrations": [CalibrateEvents.req(self, calibrator=c) for c in self.calibrators],
+            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "calibrations": [
+                self.dep_CalibrateEvents.req(self, calibrator=c)
+                for c in self.calibrators
+            ],
         }
 
         # add selector dependent requirements
@@ -179,15 +189,21 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
     # recursively merge 20 files into one
     merge_factor = 20
 
+    # default upstream dependency task classes
+    dep_SelectEvents = SelectEvents
+
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return SelectEvents.req(self, _exclude={"branches"})
+        return self.dep_SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)]
+        return [
+            self.dep_SelectEvents.req(self, branch=b)
+            for b in range(start_branch, end_branch)
+        ]
 
     def merge_output(self):
         return self.local_target("stats.json")

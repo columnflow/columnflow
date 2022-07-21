@@ -29,6 +29,10 @@ class PrepareMLEvents(
 
     shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
+    # default upstream dependency task classes
+    dep_MergeReducedEvents = MergeReducedEvents
+    dep_ProduceColumns = ProduceColumns
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -45,16 +49,22 @@ class PrepareMLEvents(
         if only_super:
             return reqs
 
-        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot and self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [
+                self.dep_ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
 
         return reqs
 
     def requires(self):
-        reqs = {"events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
+        reqs = {"events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [
+                self.dep_ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -174,6 +184,9 @@ class MergeMLEvents(
     # in each step, merge 10 into 1
     merge_factor = 10
 
+    # default upstream dependency task classes
+    dep_PrepareMLEvents = PrepareMLEvents
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -192,7 +205,7 @@ class MergeMLEvents(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        req = PrepareMLEvents.req(self, _exclude={"branches"})
+        req = self.dep_PrepareMLEvents.req(self, _exclude={"branches"})
 
         # if the merging stats exist, allow the forest to be cached
         self._cache_forest = req.merging_stats_exist
@@ -228,6 +241,9 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         "the number of folds defined in the ML model; default: 0",
     )
 
+    # default upstream dependency task classes
+    dep_MergeMLEvents = MergeMLEvents
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -246,7 +262,7 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
     def requires(self):
         return {
             dataset_inst.name: [
-                MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
+                self.dep_MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
                 for f in range(self.ml_model_inst.folds)
                 if f != self.fold
             ]
@@ -284,6 +300,11 @@ class MLEvaluation(
 
     shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
+    # default upstream dependency task classes
+    dep_MLTraining = MLTraining
+    dep_MergeReducedEvents = MergeReducedEvents
+    dep_ProduceColumns = ProduceColumns
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -295,20 +316,32 @@ class MLEvaluation(
         if only_super:
             return reqs
 
-        reqs["models"] = [MLTraining.req(self, fold=f) for f in range(self.ml_model_inst.folds)]
+        reqs["models"] = [
+            self.dep_MLTraining.req(self, fold=f)
+            for f in range(self.ml_model_inst.folds)
+        ]
 
-        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot and self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [
+                self.dep_ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
 
         return reqs
 
     def requires(self):
-        reqs = {"models": [MLTraining.req(self, fold=f) for f in range(self.ml_model_inst.folds)]}
+        reqs = {"models": [
+            self.dep_MLTraining.req(self, fold=f)
+            for f in range(self.ml_model_inst.folds)
+        ]}
 
-        reqs["events"] = MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})
         if self.producers:
-            reqs["producers"] = [ProduceColumns.req(self, producer=p) for p in self.producers]
+            reqs["producers"] = [
+                self.dep_ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
 
         return reqs
 

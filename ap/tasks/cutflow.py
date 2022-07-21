@@ -34,6 +34,9 @@ class MergeSelectionMasks(
     # recursively merge 8 files into one
     merge_factor = 8
 
+    # default upstream dependency task classes
+    dep_SelectEvents = SelectEvents
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -48,13 +51,16 @@ class MergeSelectionMasks(
 
     def merge_workflow_requires(self):
         return {
-            "selection": SelectEvents.req(self, _exclude={"branches"}),
+            "selection": self.dep_SelectEvents.req(self, _exclude={"branches"}),
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "selection": [SelectEvents.req(self, branch=b) for b in range(start_branch, end_branch)],
+            "selection": [
+                self.dep_SelectEvents.req(self, branch=b)
+                for b in range(start_branch, end_branch)
+            ],
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
@@ -131,6 +137,9 @@ class CreateCutflowHistograms(
 
     selector_steps_order_sensitive = True
 
+    # default upstream dependency task classes
+    dep_MergeSelectionMasks = MergeSelectionMasks
+
     def create_branch_map(self):
         # dummy branch map
         return [None]
@@ -140,12 +149,12 @@ class CreateCutflowHistograms(
         if only_super:
             return reqs
 
-        reqs["masks"] = MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["masks"] = self.dep_MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
         return reqs
 
     def requires(self):
         return {
-            "masks": MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "masks": self.dep_MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
@@ -273,6 +282,9 @@ class PlotCutflow(
 
     selector_steps_order_sensitive = True
 
+    # default upstream dependency task classes
+    dep_CreateCutflowHistograms = CreateCutflowHistograms
+
     def create_branch_map(self):
         # one category per branch
         return list(self.categories)
@@ -283,14 +295,14 @@ class PlotCutflow(
             return reqs
 
         reqs["hists"] = [
-            CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.dep_CreateCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 

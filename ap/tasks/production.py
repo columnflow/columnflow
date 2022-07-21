@@ -26,19 +26,22 @@ class ProduceColumns(
 
     shifts = set(MergeReducedEvents.shifts)
 
+    # default upstream dependency task classes
+    dep_MergeReducedEvents = MergeReducedEvents
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["events"] = MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
         reqs["producer"] = self.producer_inst.run_requires()
 
         return reqs
 
     def requires(self):
         return {
-            "events": MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
             "producer": self.producer_inst.run_requires(),
         }
 

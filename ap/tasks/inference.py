@@ -29,6 +29,10 @@ class CreateDatacards(
 
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+    dep_MergeShiftedHistograms = MergeShiftedHistograms
+
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
@@ -49,7 +53,7 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: MergeShiftedHistograms.req(
+                dataset: self.dep_MergeShiftedHistograms.req(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
@@ -67,7 +71,7 @@ class CreateDatacards(
         }
         if cat_obj.data_datasets:
             reqs["data"] = {
-                dataset: MergeHistograms.req(
+                dataset: self.dep_MergeHistograms.req(
                     self,
                     dataset=dataset,
                     variables=(cat_obj.variable,),
