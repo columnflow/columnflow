@@ -71,12 +71,12 @@ class PrepareMLEvents(
     def output(self):
         k = self.ml_model_inst.folds
         return law.SiblingFileCollection([
-            self.local_target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
+            self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
             for f in range(k)
         ])
 
-    @law.decorator.safe_output
     @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
@@ -213,14 +213,17 @@ class MergeMLEvents(
         return req
 
     def merge_requires(self, start_leaf, end_leaf):
-        return [PrepareMLEvents.req(self, branch=i) for i in range(start_leaf, end_leaf)]
+        return [
+            self.dep_PrepareMLEvents.req(self, branch=i)
+            for i in range(start_leaf, end_leaf)
+        ]
 
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs([inp[self.fold] for inp in inputs])
 
     def merge_output(self):
         k = self.ml_model_inst.folds
-        return self.local_target(f"mlevents_f{self.fold}of{k}.parquet")
+        return self.target(f"mlevents_f{self.fold}of{k}.parquet")
 
     def merge(self, inputs, output):
         law.pyarrow.merge_parquet_task(self, inputs, output)
@@ -271,12 +274,11 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
 
     def output(self):
         return law.util.map_struct(
-            (lambda func_args: func_args(self.local_target)),
+            (lambda func_args: func_args(self.target)),
             self.ml_model_inst.output(self),
         )
 
     @law.decorator.safe_output
-    @law.decorator.localize
     def run(self):
         # prepare inputs and outputs
         inputs = self.input()
@@ -347,10 +349,10 @@ class MLEvaluation(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"mlcols_{self.branch}.pickle")
+        return self.target(f"mlcols_{self.branch}.pickle")
 
-    @law.decorator.safe_output
     @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,

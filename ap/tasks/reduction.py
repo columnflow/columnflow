@@ -57,11 +57,11 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         }
 
     def output(self):
-        return self.local_target(f"events_{self.branch}.parquet")
+        return self.target(f"events_{self.branch}.parquet")
 
-    @law.decorator.safe_output
-    @law.decorator.localize
     @ensure_proxy
+    @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
@@ -206,7 +206,7 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
-        return self.local_target(f"stats_n{self.n_inputs}.json")
+        return self.target(f"stats_n{self.n_inputs}.json")
 
     @law.decorator.safe_output
     def run(self):
@@ -315,7 +315,7 @@ class MergeReducedEventsUser(DatasetTask):
 
     def reduced_dummy_output(self):
         # dummy output to be returned in case the merging stats are not present yet
-        return self.local_target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
+        return self.target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
 
     @classmethod
     def maybe_dummy(cls, func):
@@ -379,7 +379,7 @@ class MergeReducedEvents(
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))
         return law.SiblingFileCollection([
-            self.local_target(f"events_{i}.parquet")
+            self.target(f"events_{i}.parquet")
             for i in range(n_merged)
         ])
 

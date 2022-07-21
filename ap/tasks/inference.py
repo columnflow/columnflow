@@ -89,12 +89,12 @@ class CreateDatacards(
         basename = lambda name, ext: f"{name}__cat_{cat_obj.category}__var_{cat_obj.variable}.{ext}"
 
         return {
-            "card": self.local_target(basename("datacard", "txt")),
-            "shapes": self.local_target(basename("shapes", "root")),
+            "card": self.target(basename("datacard", "txt")),
+            "shapes": self.target(basename("shapes", "root")),
         }
 
+    @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
-    @law.decorator.localize(output=False)
     def run(self):
         import hist
         from ap.inference.datacard import DatacardWriter

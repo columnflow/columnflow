@@ -46,10 +46,11 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
         return reqs
 
     def output(self):
-        return self.local_target(f"calib_{self.branch}.parquet")
+        return self.target(f"calib_{self.branch}.parquet")
 
-    @law.decorator.safe_output
     @ensure_proxy
+    @law.decorator.localize(input=False, output=True)
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,

@@ -5,6 +5,7 @@ Generic tools and base tasks that are defined along typical objects in an analys
 """
 
 import os
+import enum
 import itertools
 import inspect
 import functools
@@ -13,6 +14,16 @@ from typing import Optional, Sequence, List, Union, Set, Dict
 import luigi
 import law
 import order as od
+
+
+class OutputLocation(enum.Enum):
+    """
+    Output location flag.
+    """
+
+    config = "config"
+    local = "local"
+    wlcg = "wlcg"
 
 
 class BaseTask(law.Task):
@@ -36,6 +47,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     # defaults for targets
     default_store = "$AP_STORE_LOCAL"
     default_wlcg_fs = "wlcg_fs"
+    default_output_location = "local"
 
     @classmethod
     def modify_param_values(cls, params):
@@ -290,6 +302,38 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # create the target instance and return it
         return cls(path, **kwargs)
+
+    def target(self, *path, **kwargs):
+        """ target(*path, location=None, **kwargs)
+        """
+        # get the default location
+        location = kwargs.pop("location", self.default_output_location)
+
+        # parse it and obtain config values if necessary
+        if isinstance(location, str):
+            location = OutputLocation[location]
+        if location == OutputLocation.config:
+            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            if not location:
+                raise Exception(
+                    f"no option 'outputs.{self.task_family}' found in law.cfg to obtain target "
+                    "location",
+                )
+            location[0] = OutputLocation[location[0]]
+        location = law.util.make_list(location)
+
+        # forward to correct function
+        if location[0] == OutputLocation.local:
+            if len(location) > 1:
+                kwargs.setdefault("store", location[1])
+            return self.local_target(*path, **kwargs)
+
+        elif location[0] == OutputLocation.wlcg:
+            if len(location) > 1:
+                kwargs.setdefault("fs", location[1])
+            return self.wlcg_target(*path, **kwargs)
+
+        raise Exception(f"cannot determine output location based on '{location}'")
 
 
 class ConfigTask(AnalysisTask):

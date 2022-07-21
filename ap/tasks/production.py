@@ -47,10 +47,10 @@ class ProduceColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"columns_{self.branch}.parquet")
+        return self.target(f"columns_{self.branch}.parquet")
 
-    @law.decorator.safe_output
     @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,

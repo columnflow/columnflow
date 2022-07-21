@@ -15,7 +15,7 @@ from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.plotting import ProcessPlotBase
 from ap.tasks.selection import SelectEvents
 from ap.production import Producer
-from ap.util import dev_sandbox, ensure_proxy
+from ap.util import dev_sandbox
 from ap.plotting.variables import plot_cutflow
 
 
@@ -30,6 +30,8 @@ class MergeSelectionMasks(
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(SelectEvents.shifts)
+
+    workflow_run_decorators = [law.decorator.localize]
 
     # recursively merge 8 files into one
     merge_factor = 8
@@ -71,7 +73,7 @@ class MergeSelectionMasks(
         return super().trace_merge_inputs(inputs["selection"])
 
     def merge_output(self):
-        return self.local_target("masks.parquet")
+        return self.target("masks.parquet")
 
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first
@@ -158,11 +160,10 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        return self.local_target("cutflow_hist.pickle")
+        return self.target("cutflow_hist.pickle")
 
+    @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
-    @law.decorator.localize
-    @ensure_proxy
     def run(self):
         import hist
         import awkward as ak
@@ -307,7 +308,7 @@ class PlotCutflow(
         }
 
     def output(self):
-        return self.local_target(f"cutflow__cat_{self.branch_data}.pdf")
+        return self.target(f"cutflow__cat_{self.branch_data}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):

@@ -76,10 +76,10 @@ class CreateHistograms(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.local_target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
+        return self.target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
 
+    @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
-    @law.decorator.localize
     def run(self):
         import hist
         import numpy as np
@@ -227,7 +227,7 @@ class MergeHistograms(
         ]
 
     def merge_output(self):
-        return self.local_target(f"histograms_vars_{self.variables_repr}.pickle")
+        return self.target(f"histograms_vars_{self.variables_repr}.pickle")
 
     def merge(self, inputs, output):
         inputs_list = [inp.load(formatter="pickle") for inp in inputs]
@@ -314,7 +314,7 @@ class MergeShiftedHistograms(
         return parts
 
     def output(self):
-        return self.local_target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
+        return self.target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
 
     def run(self):
         with self.publish_step(f"merging shift sources {', '.join(self.shift_sources)} ..."):

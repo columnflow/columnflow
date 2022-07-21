@@ -87,7 +87,7 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):
@@ -225,7 +225,7 @@ class PlotShiftedVariables(
 
     def output(self):
         b = self.branch_data
-        return self.local_target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
     @PlotMixin.view_output_plots
     def run(self):

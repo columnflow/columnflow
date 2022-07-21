@@ -63,19 +63,19 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
     def output(self):
         outputs = {
-            "results": self.local_target(f"results_{self.branch}.parquet"),
-            "stats": self.local_target(f"stats_{self.branch}.json"),
+            "results": self.target(f"results_{self.branch}.parquet"),
+            "stats": self.target(f"stats_{self.branch}.json"),
         }
 
         # add additional columns in case the selector produces some
         if self.selector_inst.produced_columns:
-            outputs["columns"] = self.local_target(f"columns_{self.branch}.parquet")
+            outputs["columns"] = self.target(f"columns_{self.branch}.parquet")
 
         return outputs
 
-    @law.decorator.safe_output
-    @law.decorator.localize
     @ensure_proxy
+    @law.decorator.localize
+    @law.decorator.safe_output
     def run(self):
         from ap.columnar_util import (
             Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
@@ -206,7 +206,7 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
         ]
 
     def merge_output(self):
-        return self.local_target("stats.json")
+        return self.target("stats.json")
 
     def merge(self, inputs, output):
         # merge input stats
