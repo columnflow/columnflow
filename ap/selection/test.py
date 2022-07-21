@@ -13,6 +13,8 @@ from ap.util import maybe_import
 from ap.columnar_util import set_ak_column, Route
 from ap.production.processes import process_ids
 
+from ap.columnar_util import EMPTY_FLOAT
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -94,13 +96,13 @@ def var_HT(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
 
 @selector(
     uses={var_nJet, var_HT, "Jet.pt"},
-    produces={"n_jet", "ht", "jet1_pt"},
+    produces={"cutflow.n_jet", "cutflow.ht", "cutflow.jet1_pt"},
     exposed=True,
 )
 def cutflow_features(self: Selector, events: ak.Array, **kwargs) -> None:
-    set_ak_column(events, "n_jet", self[var_nJet](events))
-    set_ak_column(events, "ht", self[var_HT](events))
-    set_ak_column(events, "jet1_pt", Route("Jet.pt[:,0]").apply(events, -999))
+    set_ak_column(events, "cutflow.n_jet", self[var_nJet](events))
+    set_ak_column(events, "cutflow.ht", self[var_HT](events))
+    set_ak_column(events, "cutflow.jet1_pt", Route("Jet.pt[:,0]").apply(events, EMPTY_FLOAT))
 
 
 # selection for the main categories

@@ -147,7 +147,6 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        print(self.variables)
         return {var: self.local_target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
 
     @law.decorator.safe_output
@@ -169,10 +168,8 @@ class CreateCutflowHistograms(
         aliases = self.shift_inst.x("column_aliases", {})
 
         # define a list of variables to create the histograms for
-        # TODO: for the moment, this is just the lhe_weight and ht but it could be extended
-        #       in the future and made configurable from the command line
-        variable_insts = [self.config_inst.get_variable(v)
-            for v in self.variables]
+        variable_insts = [self.config_inst.get_variable(v) for v in self.variables]
+
         # get the expression per variable and when it's a string, parse it to extract index lookups
         expressions = {}
         for variable_inst in variable_insts:
@@ -515,7 +512,7 @@ class PlotCutflowVariables(
 
                 # call the plot function
                 fig = self.call_plot_func(
-                    self.plot_funciton_name,
+                    self.plot_function_name,
                     hists=hists_step,
                     config_inst=self.config_inst,
                     variable_inst=variable_inst,

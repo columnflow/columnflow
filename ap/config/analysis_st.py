@@ -314,7 +314,7 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
         "category_ids", "deterministic_seed",
     },
     "MergeSelectionMasks": {
-        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids", "ht", "n_jet", "jet1_pt",
+        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
 }))
 
