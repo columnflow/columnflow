@@ -15,7 +15,7 @@ from ap.tasks.framework.mixins import (
 )
 from ap.tasks.framework.remote import HTCondorWorkflow
 from ap.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from ap.util import DotDict, dev_sandbox
+from ap.util import DotDict
 
 
 class ProcessPlotBase(
@@ -46,7 +46,7 @@ class PlotVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     shifts = set(MergeHistograms.shifts)
 
@@ -78,7 +78,6 @@ class PlotVariables(
                 self,
                 dataset=d,
                 branch=-1,
-                tree_index=0,
                 _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
@@ -109,7 +108,7 @@ class PlotVariables(
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
+                h_in = inp["collection"][0].targets[variable_inst.name].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -183,7 +182,7 @@ class PlotShiftedVariables(
     HTCondorWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
+    sandbox = "bash::$AP_BASE/sandboxes/cmssw_default.sh"
 
     # default upstream dependency task classes
     dep_MergeShiftedHistograms = MergeShiftedHistograms
@@ -248,7 +247,7 @@ class PlotShiftedVariables(
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
+                h_in = inp["collection"][0].targets[variable_inst.name].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
