@@ -78,7 +78,6 @@ class PlotVariables(
                 self,
                 dataset=d,
                 branch=-1,
-                tree_index=0,
                 _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
@@ -109,7 +108,7 @@ class PlotVariables(
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
+                h_in = inp["collection"][0].targets[variable_inst.name].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -247,7 +246,7 @@ class PlotShiftedVariables(
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].load(formatter="pickle")[variable_inst.name]
+                h_in = inp["collection"][0].targets[variable_inst.name].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:

@@ -76,7 +76,7 @@ class CreateHistograms(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"histograms_vars_{self.variables_repr}_{self.branch}.pickle")
+        return self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")
 
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
@@ -187,7 +187,7 @@ class MergeHistograms(
     SelectorStepsMixin,
     CalibratorsMixin,
     VariablesMixin,
-    law.tasks.ForestMerge,
+    law.LocalWorkflow,
     HTCondorWorkflow,
 ):
 
@@ -195,54 +195,51 @@ class MergeHistograms(
 
     shifts = set(CreateHistograms.shifts)
 
-    # in each step, merge 10 into 1
-    merge_factor = 10
-
     # default upstream dependency task classes
     dep_CreateHistograms = CreateHistograms
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # tell ForestMerge to not cache the internal merging structure by default,
-        # (this is enabled in merge_workflow_requires)
-        self._cache_forest = False
-
     def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
+        # create a dummy branch map so that this task could as a job
+        return {0: None}
 
-    def merge_workflow_requires(self):
-        req = self.dep_CreateHistograms.req(self, _exclude={"branches"})
+    def workflow_requires(self, only_super: bool = False):
+        reqs = super().workflow_requires()
+        if only_super:
+            return reqs
 
-        # if the merging stats exist, allow the forest to be cached
-        self._cache_forest = req.merging_stats_exist
+        reqs["hists"] = self.dep_CreateHistograms.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+            _prefer_cli={"variables"},
+        )
 
-        return req
+        return reqs
 
-    def merge_requires(self, start_leaf, end_leaf):
-        return [
-            self.dep_CreateHistograms.req(self, branch=i)
-            for i in range(start_leaf, end_leaf)
-        ]
+    def requires(self):
+        return self.dep_CreateHistograms.req(self, branch=-1, _prefer_cli={"variables"})
 
-    def merge_output(self):
-        return self.target(f"histograms_vars_{self.variables_repr}.pickle")
+    def output(self):
+        return law.SiblingFileCollection({
+            variable_name: self.target(f"hist__{variable_name}.pickle")
+            for variable_name in self.variables
+        })
 
-    def merge(self, inputs, output):
-        inputs_list = [inp.load(formatter="pickle") for inp in inputs]
-        inputs_dict = {
-            var_name: [hists[var_name] for hists in inputs_list]
-            for var_name in inputs_list[0]
-        }
+    def run(self):
+        # preare inputs and outputs
+        inputs = self.input()
+        outputs = self.output().targets
 
-        # do the merging
-        merged = {
-            var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
-            for var_name in inputs_dict
-        }
+        # load input histograms
+        hists = [inp.load(formatter="pickle") for inp in inputs["collection"].targets.values()]
 
-        output.dump(merged, formatter="pickle")
+        # create a separate file per output variable
+        for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
+            self.publish_message(f"merging histograms for '{variable_name}'")
+
+            variable_hists = [h[variable_name] for h in hists]
+            merged = sum(variable_hists[1:], variable_hists[0].copy())
+            outp.dump(merged, formatter="pickle")
 
 
 MergeHistogramsWrapper = wrapper_factory(
@@ -274,6 +271,10 @@ class MergeShiftedHistograms(
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms
 
+    def create_branch_map(self):
+        # create a dummy branch map so that this task could as a job
+        return {0: None}
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super(MergeShiftedHistograms, self).workflow_requires()
         if only_super:
@@ -281,32 +282,15 @@ class MergeShiftedHistograms(
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.dep_MergeHistograms.req(
-                self,
-                shift=shift,
-                tree_index=0,
-                _exclude={"branches"},
-                _prefer_cli={"variables"},
-            )
+            reqs[shift] = self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
     def requires(self):
         return {
-            shift: self.dep_MergeHistograms.req(
-                self,
-                shift=shift,
-                branch=-1,
-                tree_index=0,
-                _exclude={"branches"},
-                _prefer_cli={"variables"},
-            )
+            shift: self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
             for shift in ["nominal"] + self.shifts
         }
-
-    def create_branch_map(self):
-        # create a dummy branch map so that this task could as a job
-        return {0: None}
 
     def store_parts(self):
         parts = super(MergeShiftedHistograms, self).store_parts()
@@ -314,26 +298,28 @@ class MergeShiftedHistograms(
         return parts
 
     def output(self):
-        return self.target(f"shifted_histograms_vars_{self.variables_repr}.pickle")
+        return law.SiblingFileCollection({
+            variable_name: self.target(f"shifted_hist__{variable_name}.pickle")
+            for variable_name in self.variables
+        })
 
     def run(self):
-        with self.publish_step(f"merging shift sources {', '.join(self.shift_sources)} ..."):
-            inputs_list = [
-                inp["collection"][0].load(formatter="pickle")
-                for inp in self.input().values()
+        # preare inputs and outputs
+        inputs = self.input()
+        outputs = self.output().targets
+
+        for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
+            self.publish_message(f"merging histograms for '{variable_name}'")
+
+            # load hists
+            variable_hists = [
+                coll.targets[variable_name].load(formatter="pickle")
+                for coll in inputs.values()
             ]
-            inputs_dict = {
-                var_name: [hists[var_name] for hists in inputs_list]
-                for var_name in inputs_list[0]
-            }
 
-            # do the merging
-            merged = {
-                var_name: sum(inputs_dict[var_name][1:], inputs_dict[var_name][0])
-                for var_name in inputs_dict
-            }
-
-            self.output().dump(merged, formatter="pickle")
+            # merge and write the output
+            merged = sum(variable_hists[1:], variable_hists[0].copy())
+            outp.dump(merged, formatter="pickle")
 
 
 MergeShiftedHistogramsWrapper = wrapper_factory(
