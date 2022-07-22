@@ -23,6 +23,7 @@ def plot_variables(
     config_inst: od.config,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
+    **kwargs,
 ) -> plt.Figure:
 
     # create the stack and a fake data hist using the smeared sum
@@ -38,17 +39,25 @@ def plot_variables(
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
         h_mc_stack = hist.Stack(*mc_hists)
 
+    # get configs from kwargs
+    shape_norm = kwargs.get("shape_norm", False)
+
+    yscale = kwargs.get("yscale")
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
+
     # setup plotting configs
+    mc_norm = sum(h_mc.values()) if shape_norm else 1
     plot_config = {
         "mc_stack": {
             "method": "draw_from_stack",
             "hist": h_mc_stack,
-            "kwargs": {"norm": 1, "label": mc_labels, "color": mc_colors},
+            "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
         },
         "mc_uncert": {
             "method": "draw_error_bands",
             "hist": h_mc,
-            "kwargs": {"label": "MC stat. unc."},
+            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
             "ratio_kwargs": {"norm": h_mc.values()},
         },
     }
@@ -63,10 +72,11 @@ def plot_variables(
         }
 
     if data_hists:
+        data_norm = sum(h_data.values()) if shape_norm else 1
         plot_config["data"] = {
             "method": "draw_errorbars",
             "hist": h_data,
-            "kwargs": {"label": "Data"},
+            "kwargs": {"norm": data_norm, "label": "Data"},
             "ratio_kwargs": {"norm": h_mc.values()},
         }
 
@@ -75,6 +85,7 @@ def plot_variables(
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
+            "yscale": yscale,
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
@@ -86,10 +97,10 @@ def plot_variables(
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    if shape_norm:
+        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
-    fig = plot_all(plot_config, style_config, ratio=True)
-
-    return fig
+    return plot_all(plot_config, style_config, **kwargs)
 
 
 def plot_shifted_variables(
@@ -98,6 +109,7 @@ def plot_shifted_variables(
     process_inst: od.process,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
+    **kwargs,
 ) -> plt.Figure:
 
     # create the stack and the sum
@@ -109,11 +121,27 @@ def plot_shifted_variables(
     norm = np.concatenate(([-1], h_sum[{"shift": hist.loc(0)}].values(), [-1]))
     # norm = [norm] * 3  # 1 array per shift
 
+    # get configs from kwargs
+    shape_norm = kwargs.get("shape_norm", False)
+
+    yscale = kwargs.get("yscale")
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
+
+    # setup plotting configs
+    mc_norm = [sum(h_sum[{"shift": i}].values()) for i in range(3)]
+    # mc_norm = [sum(h_sum[{"shift": i}].values()) for i range(3)]
     plot_config = {
         "MC": {
             "method": "draw_from_stack",
             "hist": h_stack,
-            "kwargs": {"label": label, "color": ["black", "red", "blue"], "histtype": "step", "stack": False},
+            "kwargs": {
+                "norm": mc_norm,
+                "label": label,
+                "color": ["black", "red", "blue"],
+                "histtype": "step",
+                "stack": False,
+            },
             "ratio_kwargs": {"norm": norm, "color": ["black", "red", "blue"], "histtype": "step", "stack": False},
         },
     }
@@ -122,6 +150,7 @@ def plot_shifted_variables(
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
+            "yscale": yscale,
         },
         "rax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
@@ -137,16 +166,17 @@ def plot_shifted_variables(
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    if shape_norm:
+        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
-    fig = plot_all(plot_config, style_config, ratio=True)
-
-    return fig
+    return plot_all(plot_config, style_config, ratio=True)
 
 
 def plot_cutflow(
     hists: OrderedDict,
     config_inst: od.config,
     style_config: Optional[dict] = None,
+    **kwargs,
 ) -> plt.Figure:
 
     mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
@@ -157,6 +187,9 @@ def plot_cutflow(
     h_mc_stack = None
     if mc_hists:
         h_mc_stack = hist.Stack(*mc_hists)
+
+    # get configs from kwargs
+    yscale = kwargs.get("yscale", "linear")
 
     # setup plotting configs
     plot_config = {
@@ -172,10 +205,12 @@ def plot_cutflow(
             },
         },
     }
+
     default_style_config = {
         "ax_cfg": {
             "ylabel": "Selection efficiency",
             "xlabel": "Selection steps",
+            "yscale": yscale,
         },
         "legend_cfg": {
             "loc": "upper right",
@@ -186,6 +221,4 @@ def plot_cutflow(
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
-    fig = plot_all(plot_config, style_config, ratio=False)
-
-    return fig
+    return plot_all(plot_config, style_config, ratio=False)

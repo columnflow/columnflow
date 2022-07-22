@@ -294,6 +294,8 @@ class PlotCutflow(
                 self.plot_function_name,
                 hists=hists,
                 config_inst=self.config_inst,
+                **self.get_plot_parameters(),
+
             )
 
             # save the plot
@@ -451,6 +453,7 @@ class PlotCutflowVariables(
                     config_inst=self.config_inst,
                     variable_inst=variable_inst,
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
+                    **self.get_plot_parameters(),
                 )
 
                 # save the plot

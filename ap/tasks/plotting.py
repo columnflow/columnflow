@@ -164,6 +164,7 @@ class PlotVariables(
                 hists=hists,
                 config_inst=self.config_inst,
                 variable_inst=variable_inst,
+                **self.get_plot_parameters(),
             )
 
             # save the plot
@@ -292,6 +293,7 @@ class PlotShiftedVariables(
                 config_inst=self.config_inst,
                 process_inst=process_inst,
                 variable_inst=variable_inst,
+                **self.get_plot_parameters(),
             )
 
             # save the plot
