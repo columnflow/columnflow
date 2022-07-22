@@ -6,6 +6,7 @@ Task to produce and merge histograms.
 
 import functools
 
+import luigi
 import law
 
 from ap.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
@@ -191,6 +192,17 @@ class MergeHistograms(
     HTCondorWorkflow,
 ):
 
+    only_missing = luigi.BoolParameter(
+        default=False,
+        description="when True, identify missing variables first and only require histograms of "
+        "missing ones; default: False",
+    )
+    remove_previous = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, remove particlar input histograms after merging; default: False",
+    )
+
     sandbox = dev_sandbox("bash::$AP_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(CreateHistograms.shifts)
@@ -207,17 +219,26 @@ class MergeHistograms(
         if only_super:
             return reqs
 
-        reqs["hists"] = self.dep_CreateHistograms.req(
-            self,
-            branch=-1,
-            _exclude={"branches"},
-            _prefer_cli={"variables"},
-        )
+        reqs["hists"] = self.requires_from_branch()
 
         return reqs
 
     def requires(self):
-        return self.dep_CreateHistograms.req(self, branch=-1, _prefer_cli={"variables"})
+        # optional dynamic behavior: determine not yet created variables and require only those
+        variables = self.variables
+        if self.only_missing:
+            missing = self.output().count(existing=False, keys=True)[1]
+            variables = tuple(sorted(missing, key=variables.index))
+            if not variables:
+                return []
+
+        return self.dep_CreateHistograms.req(
+            self,
+            branch=-1,
+            variables=tuple(variables),
+            _exclude={"branches"},
+            _prefer_cli={"variables"},
+        )
 
     def output(self):
         return law.SiblingFileCollection({
@@ -227,19 +248,27 @@ class MergeHistograms(
 
     def run(self):
         # preare inputs and outputs
-        inputs = self.input()
-        outputs = self.output().targets
+        inputs = self.input()["collection"]
+        outputs = self.output()
 
         # load input histograms
-        hists = [inp.load(formatter="pickle") for inp in inputs["collection"].targets.values()]
+        hists = [
+            inp.load(formatter="pickle")
+            for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
+        ]
 
         # create a separate file per output variable
-        for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
+        variable_names = list(hists[0].keys())
+        for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
             self.publish_message(f"merging histograms for '{variable_name}'")
 
             variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outp.dump(merged, formatter="pickle")
+            outputs[variable_name].dump(merged, formatter="pickle")
+
+        # optionally remove inputs
+        if self.remove_previous:
+            inputs.remove()
 
 
 MergeHistogramsWrapper = wrapper_factory(
