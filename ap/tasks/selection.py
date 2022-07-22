@@ -254,7 +254,7 @@ class MergeSelectionMasks(
 
     shifts = set(SelectEvents.shifts)
 
-    workflow_run_decorators = [law.decorator.localize]
+    run_decorators = [law.decorator.localize]
 
     # recursively merge 8 files into one
     merge_factor = 8
