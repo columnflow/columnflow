@@ -163,9 +163,16 @@ def plot_all(
         "xlabel": "variable",
         "yscale": "linear",
     }
+
+    # some default ylim settings based on yscale
+    log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
+    ax_ymax = ax.get_ylim()[1]
+    ax_ylim = (ax_ymax / 10**4, ax_ymax * 40) if log_y else (0.00001, ax_ymax * 1.2)
+    ax_kwargs.update({"ylim": ax_ylim})
+
+    # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
-    if ax_kwargs["yscale"] == "linear":
-        ax_kwargs["ylim"] = 0.000001
+
     ax.set(**ax_kwargs)
 
     if not skip_ratio:
@@ -189,16 +196,18 @@ def plot_all(
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
         ax.legend(**legend_kwargs)
-
+    print(mplhep.__version__)
     cms_label_kwargs = {
         "ax": ax,
         "loc": 2,
         "llabel": "Work in progress",
         "fontsize": 22,
     }
+    # TODO: set "data": False when there are no data histograms (adds 'Simulation' to CMS label)
     cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
     if skip_cms:
-        cms_label_kwargs.update({"data": True, "llabel": "", "exp": ""})
+        # TODO: "exp": "" does not work with this mplhep version (0.3.12), but works with 0.3.23
+        cms_label_kwargs.update({"data": True, "llabel": ""})
     mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()
