@@ -718,55 +718,51 @@ class ShiftSourcesMixin(ConfigTask):
 
 class PlotMixin(AnalysisTask):
 
-    skip_ratio = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="boolean; when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel"
-        "default: False",
-    )
-
-    shape_norm = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="boolean; when True, each process is normalized on it's integral in the upper panel"
-        "default: False",
-    )
-    skip_legend = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="boolean; when True, no legend is drawn; default: False",
-    )
-    skip_cms = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="boolean; when True, no CMS logo is drawn; default: False",
-    )
-    # when no default is set, the choice should be made by the variable.y_log to decide between
-    # "linear" and "log"; for now, this is done in each plotting function individually
-    # Also: restrict this parameter to all possible choices? law.NO_STR, "log", "linear", ("symlog", "logit")
-    yscale = luigi.Parameter(
-        default=law.NO_STR,
-        significant=False,
-        description="string parameter to define the y scale (e.g. 'linear' or 'log') of the plot "
-        "in the upper panel; no default",
-    )
-
-    def get_plot_parameters(self):
-        kwargs = {
-            "skip_ratio": self.skip_ratio,
-            "shape_norm": self.shape_norm,
-            "skip_legend": self.skip_legend,
-            "skip_cms": self.skip_cms,
-            "yscale": self.yscale,
-        }
-        return kwargs
-
     view_cmd = luigi.Parameter(
         default=law.NO_STR,
         significant=False,
         description="a command to execute after the task has run to visualize plots right in the "
         "terminal; no default",
     )
+    skip_ratio = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel; "
+        "default: False",
+    )
+    shape_norm = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, each process is normalized on it's integral in the upper panel; "
+        "default: False",
+    )
+    skip_legend = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, no legend is drawn; default: False",
+    )
+    skip_cms = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, no CMS logo is drawn; default: False",
+    )
+    y_scale = luigi.ChoiceParameter(
+        choices=(law.NO_STR, "linear", "log"),
+        default=law.NO_STR,
+        significant=False,
+        description="string parameter to define the y-axis scale of the plot in the upper panel; "
+        "choices: NO_STR,linear,log; no default",
+    )
+
+    def get_plot_parameters(self):
+        # convert parameters to usable values during plotting
+        return {
+            "skip_ratio": self.skip_ratio,
+            "shape_norm": self.shape_norm,
+            "skip_legend": self.skip_legend,
+            "skip_cms": self.skip_cms,
+            "yscale": None if self.y_scale == law.NO_STR else self.y_scale,
+        }
 
     def get_plot_func(self, func_name: str) -> Callable:
         """
