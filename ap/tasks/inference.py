@@ -93,6 +93,7 @@ class CreateDatacards(
             "shapes": self.target(basename("shapes", "root")),
         }
 
+    @law.decorator.log
     @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
     def run(self):

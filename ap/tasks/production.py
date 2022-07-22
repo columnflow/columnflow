@@ -49,6 +49,7 @@ class ProduceColumns(
     def output(self):
         return self.target(f"columns_{self.branch}.parquet")
 
+    @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
     def run(self):

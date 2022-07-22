@@ -48,6 +48,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
     def output(self):
         return self.target(f"calib_{self.branch}.parquet")
 
+    @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output

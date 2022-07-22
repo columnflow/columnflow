@@ -60,6 +60,7 @@ class CreateCutflowHistograms(
     def output(self):
         return {var: self.target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
 
+    @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
@@ -221,6 +222,7 @@ class PlotCutflow(
     def output(self):
         return self.target(f"cutflow__cat_{self.branch_data}.pdf")
 
+    @law.decorator.log
     @PlotMixin.view_output_plots
     def run(self):
         import hist
@@ -369,6 +371,7 @@ class PlotCutflowVariables(
         }
         return outputs
 
+    @law.decorator.log
     @PlotMixin.view_output_plots
     def run(self):
         import hist

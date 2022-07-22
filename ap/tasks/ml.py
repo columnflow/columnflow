@@ -75,6 +75,7 @@ class PrepareMLEvents(
             for f in range(k)
         ])
 
+    @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
     def run(self):
@@ -181,6 +182,8 @@ class MergeMLEvents(
     effective_shift = None
     allow_empty_shift = True
 
+    run_decorators = [law.decorator.log]
+
     # in each step, merge 10 into 1
     merge_factor = 10
 
@@ -278,6 +281,7 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
             self.ml_model_inst.output(self),
         )
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # prepare inputs and outputs
@@ -351,6 +355,7 @@ class MLEvaluation(
     def output(self):
         return self.target(f"mlcols_{self.branch}.pickle")
 
+    @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
     def run(self):

@@ -40,6 +40,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.target(f"lfns_{h}.json")
 
+    @law.decorator.log
     @ensure_proxy
     @law.decorator.safe_output
     def run(self):
@@ -202,6 +203,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # create a tmp dir to work in
@@ -263,6 +265,7 @@ class CreatePileupWeights(ConfigTask):
     def output(self):
         return self.target(f"weights_from_{self.data_mode}.json")
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # prepare the external files and the output weights

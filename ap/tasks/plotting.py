@@ -88,6 +88,7 @@ class PlotVariables(
         b = self.branch_data
         return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
+    @law.decorator.log
     @PlotMixin.view_output_plots
     def run(self):
         import hist
@@ -227,6 +228,7 @@ class PlotShiftedVariables(
         b = self.branch_data
         return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
 
+    @law.decorator.log
     @PlotMixin.view_output_plots
     def run(self):
         import hist

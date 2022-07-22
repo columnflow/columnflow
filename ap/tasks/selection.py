@@ -74,6 +74,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
 
         return outputs
 
+    @law.decorator.log
     @ensure_proxy
     @law.decorator.localize
     @law.decorator.safe_output
@@ -187,6 +188,8 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
 
     shifts = set(SelectEvents.shifts)
 
+    run_decorators = [law.decorator.log]
+
     # recursively merge 20 files into one
     merge_factor = 20
 
@@ -254,7 +257,7 @@ class MergeSelectionMasks(
 
     shifts = set(SelectEvents.shifts)
 
-    run_decorators = [law.decorator.localize]
+    run_decorators = [law.decorator.log, law.decorator.localize]
 
     # recursively merge 8 files into one
     merge_factor = 8

@@ -180,6 +180,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # create the bundle
@@ -241,6 +242,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         software_path = os.environ["AP_SOFTWARE"]
@@ -313,6 +315,7 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.log
     def run(self):
         # create the bundle
         bundle = law.LocalFileTarget(is_tmp="tgz")
