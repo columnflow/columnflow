@@ -196,7 +196,8 @@ def plot_all(
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
         ax.legend(**legend_kwargs)
-    print(mplhep.__version__)
+
+    # cms label
     cms_label_kwargs = {
         "ax": ax,
         "loc": 2,
@@ -206,8 +207,7 @@ def plot_all(
     # TODO: set "data": False when there are no data histograms (adds 'Simulation' to CMS label)
     cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
     if skip_cms:
-        # TODO: "exp": "" does not work with this mplhep version (0.3.12), but works with 0.3.23
-        cms_label_kwargs.update({"data": True, "llabel": ""})
+        cms_label_kwargs.update({"data": True, "label": ""})
     mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()

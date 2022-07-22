@@ -103,9 +103,6 @@ class PlotVariables(
             for proc in process_insts
         }
 
-        # get plot style parameters
-        plot_kwargs = self.get_plot_parameters()
-
         # histogram data per process
         hists = {}
 
@@ -167,7 +164,7 @@ class PlotVariables(
                 hists=hists,
                 config_inst=self.config_inst,
                 variable_inst=variable_inst,
-                **plot_kwargs,
+                **self.get_plot_parameters(),
             )
 
             # save the plot
@@ -245,9 +242,6 @@ class PlotShiftedVariables(
             for proc in process_insts
         }
 
-        # get plot style parameters
-        plot_kwargs = self.get_plot_parameters()
-
         # histogram data per process
         hists = OrderedDict()
 
@@ -299,7 +293,7 @@ class PlotShiftedVariables(
                 config_inst=self.config_inst,
                 process_inst=process_inst,
                 variable_inst=variable_inst,
-                **plot_kwargs,
+                **self.get_plot_parameters(),
             )
 
             # save the plot

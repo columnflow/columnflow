@@ -4,8 +4,6 @@
 Scripts to create plots using the plotter
 """
 
-from law import NO_STR
-
 from collections import OrderedDict
 from typing import Sequence, Optional
 
@@ -44,8 +42,8 @@ def plot_variables(
     # get configs from kwargs
     shape_norm = kwargs.get("shape_norm", False)
 
-    yscale = kwargs.get("yscale", "linear")
-    if yscale == NO_STR:
+    yscale = kwargs.get("yscale")
+    if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
     # setup plotting configs
@@ -102,8 +100,7 @@ def plot_variables(
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
-    fig = plot_all(plot_config, style_config, **kwargs)
-    return fig
+    return plot_all(plot_config, style_config, **kwargs)
 
 
 def plot_shifted_variables(
@@ -127,8 +124,8 @@ def plot_shifted_variables(
     # get configs from kwargs
     shape_norm = kwargs.get("shape_norm", False)
 
-    yscale = kwargs.get("yscale", "linear")
-    if yscale == NO_STR:
+    yscale = kwargs.get("yscale")
+    if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
     # setup plotting configs
@@ -172,8 +169,7 @@ def plot_shifted_variables(
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
-    fig = plot_all(plot_config, style_config, ratio=True)
-    return fig
+    return plot_all(plot_config, style_config, ratio=True)
 
 
 def plot_cutflow(
@@ -225,5 +221,4 @@ def plot_cutflow(
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
-    fig = plot_all(plot_config, style_config, ratio=False)
-    return fig
+    return plot_all(plot_config, style_config, ratio=False)
