@@ -182,8 +182,6 @@ class MergeMLEvents(
     effective_shift = None
     allow_empty_shift = True
 
-    run_decorators = [law.decorator.log]
-
     # in each step, merge 10 into 1
     merge_factor = 10
 
@@ -227,6 +225,10 @@ class MergeMLEvents(
     def merge_output(self):
         k = self.ml_model_inst.folds
         return self.target(f"mlevents_f{self.fold}of{k}.parquet")
+
+    @law.decorator.log
+    def run(self):
+        return super().run()
 
     def merge(self, inputs, output):
         law.pyarrow.merge_parquet_task(self, inputs, output)

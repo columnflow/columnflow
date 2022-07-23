@@ -188,8 +188,6 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
 
     shifts = set(SelectEvents.shifts)
 
-    run_decorators = [law.decorator.log]
-
     # recursively merge 20 files into one
     merge_factor = 20
 
@@ -211,6 +209,10 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
 
     def merge_output(self):
         return self.target("stats.json")
+
+    @law.decorator.log
+    def run(self):
+        return super().run()
 
     def merge(self, inputs, output):
         # merge input stats
@@ -257,8 +259,6 @@ class MergeSelectionMasks(
 
     shifts = set(SelectEvents.shifts)
 
-    run_decorators = [law.decorator.log, law.decorator.localize]
-
     # recursively merge 8 files into one
     merge_factor = 8
 
@@ -300,6 +300,11 @@ class MergeSelectionMasks(
 
     def merge_output(self):
         return self.target("masks.parquet")
+
+    @law.decorator.log
+    @law.decorator.localize
+    def run(self):
+        return super().run()
 
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first
