@@ -26,10 +26,10 @@ law.contrib.load(
 )
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
-if law.config.has_option("target", "wlcg_file_systems"):
+if law.config.has_option("outputs", "wlcg_file_systems"):
     wlcg_file_systems = [
         law.wlcg.WLCGFileSystem(fs.strip())
-        for fs in law.config.get_expanded("target", "wlcg_file_systems", split_csv=True)
+        for fs in law.config.get_expanded("outputs", "wlcg_file_systems", split_csv=True)
     ]
 
 
