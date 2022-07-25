@@ -40,7 +40,7 @@ def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) ->
     ax.bar(**defaults)
 
 
-def draw_from_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) -> None:
+def draw_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) -> None:
     # check if norm is a number
     if test_float(norm):
         h = hist.Stack(*[i / norm for i in h])
@@ -66,7 +66,7 @@ def draw_from_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) ->
     h.plot(**defaults)
 
 
-def draw_from_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+def draw_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     h = h / norm
     defaults = {
         "ax": ax,
@@ -129,7 +129,7 @@ def plot_all(
     # available plot methods mapped to their names
     plot_methods = {  # noqa
         func.__name__: func
-        for func in [draw_error_bands, draw_from_stack, draw_from_hist, draw_errorbars]
+        for func in [draw_error_bands, draw_stack, draw_hist, draw_errorbars]
     }
 
     plt.style.use(mplhep.style.CMS)
@@ -200,7 +200,6 @@ def plot_all(
     # cms label
     cms_label_kwargs = {
         "ax": ax,
-        "loc": 2,
         "llabel": "Work in progress",
         "fontsize": 22,
     }

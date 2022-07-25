@@ -18,7 +18,7 @@ plt = maybe_import("matplotlib.pyplot")
 od = maybe_import("order")
 
 
-def plot_variables(
+def plot_variable_per_process(
     hists: OrderedDict,
     config_inst: od.config,
     variable_inst: od.variable,
@@ -50,7 +50,7 @@ def plot_variables(
     mc_norm = sum(h_mc.values()) if shape_norm else 1
     plot_config = {
         "mc_stack": {
-            "method": "draw_from_stack",
+            "method": "draw_stack",
             "hist": h_mc_stack,
             "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
         },
@@ -66,7 +66,7 @@ def plot_variables(
     mc_lines = False
     if mc_lines:
         plot_config["mc_lines"] = {
-            "method": "draw_from_stack",
+            "method": "draw_stack",
             # "hist": h_lines_stack,
             # "kwargs": {"label": lines_label, "color": lines_colors, "stack": False, "histtype": "step"},
         }
@@ -103,7 +103,50 @@ def plot_variables(
     return plot_all(plot_config, style_config, **kwargs)
 
 
-def plot_shifted_variables(
+def plot_variable_variants(
+    hists: OrderedDict,
+    config_inst: od.config,
+    variable_inst: od.variable,
+    style_config: Optional[dict] = None,
+    **kwargs,
+) -> plt.Figure:
+    plot_config = OrderedDict()
+
+    # get configs from kwargs
+    shape_norm = kwargs.get("shape_norm", False)
+
+    yscale = kwargs.get("yscale")
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
+
+    # add hists
+    for label, h in hists.items():
+        plot_config[f"hist_{label}"] = {
+            "method": "draw_hist",
+            "hist": h,
+            "kwargs": {"label": label},
+        }
+
+    default_style_config = {
+        "ax_cfg": {
+            "xlim": (variable_inst.x_min, variable_inst.x_max),
+            "ylabel": variable_inst.get_full_y_title(),
+            "xlabel": variable_inst.get_full_x_title(),
+            "yscale": yscale,
+        },
+        "legend_cfg": {},
+        "cms_label_cfg": {
+            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+        },
+    }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    if shape_norm:
+        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
+
+    return plot_all(plot_config, style_config, **kwargs)
+
+
+def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
     process_inst: od.process,
@@ -119,7 +162,6 @@ def plot_shifted_variables(
 
     # get the normalization factors into the correct shape (over/underflow bins)
     norm = np.concatenate(([-1], h_sum[{"shift": hist.loc(0)}].values(), [-1]))
-    # norm = [norm] * 3  # 1 array per shift
 
     # get configs from kwargs
     shape_norm = kwargs.get("shape_norm", False)
@@ -130,10 +172,9 @@ def plot_shifted_variables(
 
     # setup plotting configs
     mc_norm = [sum(h_sum[{"shift": i}].values()) for i in range(3)]
-    # mc_norm = [sum(h_sum[{"shift": i}].values()) for i range(3)]
     plot_config = {
         "MC": {
-            "method": "draw_from_stack",
+            "method": "draw_stack",
             "hist": h_stack,
             "kwargs": {
                 "norm": mc_norm,
@@ -194,7 +235,7 @@ def plot_cutflow(
     # setup plotting configs
     plot_config = {
         "procs": {
-            "method": "draw_from_stack",
+            "method": "draw_stack",
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": [h[{"step": "Initial"}].value for h in mc_hists],
