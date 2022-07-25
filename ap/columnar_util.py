@@ -400,9 +400,9 @@ class Route(object):
         null_value: Any = UNSET,
     ) -> ak.Array:
         """
-        Returns a selection of *ak_array* using the fields in this route. When *null_value* is set,
-        it is used to fill up missing elements in the selection corresponding to this route.
-        Example:
+        Returns a selection of *ak_array* using the fields in this route. When the route is empty,
+        *ak_array* is returned unchanged. When *null_value* is set, it is used to fill up missing
+        elements in the selection corresponding to this route. Example:
 
         .. code-block:: python
 
@@ -419,6 +419,9 @@ class Route(object):
             #     ...
             # ]
         """
+        if not self:
+            return ak_array
+
         pad = null_value is not UNSET
 
         # traverse fields and perform the lookup iteratively
@@ -613,6 +616,10 @@ def remove_ak_column(
     """
     # verify that the route exists
     route = Route.check(route)
+    if not route:
+        if silent:
+            return ak_array
+        raise ValueError("route must not be empty")
     if not has_ak_column(ak_array, route):
         if silent:
             return ak_array
