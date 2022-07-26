@@ -10,7 +10,7 @@ import law
 import order as od
 
 from ap.ml import MLModel
-from ap.util import maybe_import, dev_sandbox, FunctionArgs
+from ap.util import maybe_import, dev_sandbox
 from ap.columnar_util import Route, set_ak_column
 
 ak = maybe_import("awkward")
@@ -56,8 +56,8 @@ class TestModel(MLModel):
     def produces(self) -> Set[Union[Route, str]]:
         return {f"{self.cls_name}.n_muon", f"{self.cls_name}.n_electron"}
 
-    def output(self, task: law.Task) -> FunctionArgs:
-        return FunctionArgs(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
+    def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
+        return task.target(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
 
     def open_model(self, target: law.LocalDirectoryTarget) -> tf.keras.models.Model:
         return tf.keras.models.load_model(target.path)
