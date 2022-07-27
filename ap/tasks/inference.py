@@ -76,7 +76,6 @@ class CreateDatacards(
                     dataset=dataset,
                     variables=(cat_obj.variable,),
                     branch=-1,
-                    tree_index=0,
                     _exclude={"branches"},
                 )
                 for dataset in cat_obj.data_datasets
@@ -136,7 +135,7 @@ class CreateDatacards(
                         continue
 
                     # open the histogram and work on a copy
-                    h = _inp["collection"][0].load(formatter="pickle")[variable_inst.name].copy()
+                    h = _inp["collection"][0][variable_inst.name].load(formatter="pickle").copy()
 
                     # axis selections
                     h = h[{

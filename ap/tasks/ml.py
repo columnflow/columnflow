@@ -278,10 +278,7 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         }
 
     def output(self):
-        return law.util.map_struct(
-            (lambda func_args: func_args(self.target)),
-            self.ml_model_inst.output(self),
-        )
+        return self.ml_model_inst.output(self)
 
     @law.decorator.log
     @law.decorator.safe_output
