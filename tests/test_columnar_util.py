@@ -426,7 +426,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.ak_array = ak.Array([array_content])
         self.empty_ak_array = ak.Array([])
 
-    def get_ak_routes(self):
+    def test_get_ak_routes(self):
         self.assertIsInstance(get_ak_routes(self.empty_ak_array), List, msg="the output is not a list")
         self.assertEqual(get_ak_routes(self.empty_ak_array), [], msg="empty array does not give an empty list")
         self.assertEqual(get_ak_routes(self.empty_ak_array, 1), [], msg="allowing a depth of 1 changes an empty list")
@@ -737,6 +737,11 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         ak_array2 = ak.Array(array2_content)
         ak_array3 = ak.Array(array3_content)
         ak_array4 = ak.Array(array4_content)
+
+        # test an update without any updating array
+        not_updated_array = update_ak_array(ak_array1)
+        self.assertEqual(not_updated_array.fields, ["a", "c_1"],
+                         msg="an update without updating array did change the original array")
 
         # test an update with only purely new columns
         updated_array1 = update_ak_array(ak_array1, ak_array2)
