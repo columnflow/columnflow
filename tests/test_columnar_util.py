@@ -569,25 +569,25 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
 
         # test if removal works for different input types of routes
         ak_array2_str = remove_ak_column(self.ak_array, "d.d_1")
-        self.assertEqual(ak_array2_str.fields, ['a', 'c_1', 'b'],
+        self.assertEqual(ak_array2_str.fields, ["a", "c_1", "b"],
                          msg="the removal of a column indicated by a string in dot format did not work")
         ak_array2_tuple = remove_ak_column(self.ak_array, ("d", "d_1"))
-        self.assertEqual(ak_array2_tuple.fields, ['a', 'c_1', 'b'],
+        self.assertEqual(ak_array2_tuple.fields, ["a", "c_1", "b"],
                          msg="the removal of a column indicated by a tuple did not work")
         ak_array2_list = remove_ak_column(self.ak_array, ["d", "d_1"])
-        self.assertEqual(ak_array2_list.fields, ['a', 'c_1', 'b'],
+        self.assertEqual(ak_array2_list.fields, ["a", "c_1", "b"],
                          msg="the removal of a column indicated by a list did not work")
         ak_array2_route = remove_ak_column(self.ak_array, Route("d.d_1"))
-        self.assertEqual(ak_array2_route.fields, ['a', 'c_1', 'b'],
+        self.assertEqual(ak_array2_route.fields, ["a", "c_1", "b"],
                          msg="the removal of a column indicated by a Route object did not work")
 
         # test if removal works for subroutes, top level or nested
         ak_array3 = remove_ak_column(self.ak_array, "b")
-        self.assertEqual(ak_array3.fields, ['a', 'c_1', 'd'],
+        self.assertEqual(ak_array3.fields, ["a", "c_1", "d"],
                          msg="removing a complete column with nested fields by inputing only the top level field " +
                          "did not work")
         ak_array4 = remove_ak_column(self.ak_array, "b.bb2.bbb2")
-        self.assertEqual(ak_array4[('b', 'bb2')].fields, ['bbb1'],
+        self.assertEqual(ak_array4[("b", "bb2")].fields, ["bbb1"],
                          msg="the removal of several columns using a single common subroute did not work")
 
         # due to inconsistency in the in-place behaviour of the function, the array must be reset (open issue on github)
@@ -599,7 +599,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
 
         # removal of a single nested route
         ak_array5 = remove_ak_column(self.ak_array, "b.bb2.bbb2.b_bbb1.bbbbb2")
-        self.assertEqual(ak_array5[("b", "bb2", "bbb2", "b_bbb1")].fields, ['b_bbbb1'],
+        self.assertEqual(ak_array5[("b", "bb2", "bbb2", "b_bbb1")].fields, ["b_bbbb1"],
                          msg="the removal of a single nested column did not work")
         self.ak_array = ak.Array([array_content])
 
@@ -607,7 +607,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertRaises(ValueError, remove_ak_column, self.ak_array, "e")
         self.ak_array = ak.Array([array_content])
         ak_array6 = remove_ak_column(self.ak_array, "e", silent=True)
-        self.assertEqual(ak_array6.fields, ['a', 'c_1', 'b', 'd'],
+        self.assertEqual(ak_array6.fields, ["a", "c_1", "b", "d"],
                          msg="the removal of a non-existing column with the silent argument " +
                          "did not return the whole array")
 
@@ -615,7 +615,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertRaises(ValueError, remove_ak_column, self.ak_array, Route())
         self.ak_array = ak.Array([array_content])
         ak_array7 = remove_ak_column(self.ak_array, Route(), silent=True)
-        self.assertEqual(ak_array7.fields, ['a', 'c_1', 'b', 'd'],
+        self.assertEqual(ak_array7.fields, ["a", "c_1", "b", "d"],
                          msg="the removal of an empty route with the silent argument did not return the whole array")
         # tests on the in-place behaviour of the remove_ak_column function are missing
         # once the github issue has been resolved
@@ -640,16 +640,16 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         ak_array_aliasremovedf = add_ak_alias(ak_array_aliasbbb2bbb1, "f", "e", remove_src=True)
         self.assertEqual(ak_array_aliasremovedf["e"][0], 2,
                          msg="adding the option for the removal of the source did not update the alias")
-        self.assertEqual(ak_array_aliasremovedf.fields, ['a', 'c_1', 'b', 'd', 'e'],
+        self.assertEqual(ak_array_aliasremovedf.fields, ["a", "c_1", "b", "d", "e"],
                          msg="the removal of the source route did not work as intended")
         # # test if in place
         # # this test depends on the in-place behaviour of remove_ak_column (issue github)
-        # self.assertEqual(self.ak_array.fields, ['a', 'c_1', 'b', 'd', 'e'],
+        # self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d", "e"],
         # msg="the removal of the source route did not work in place")
         # # same in place rules as remove_ak_column, so here not removed in place, but ordering changed
 
         ak_array_alias_e_to_subcolumn = add_ak_alias(ak_array_aliasremovedf, "b.bb2.bbb2.b_bbb1", "e")
-        self.assertEqual(ak_array_alias_e_to_subcolumn.fields, ['a', 'c_1', 'b', 'd', 'e'],
+        self.assertEqual(ak_array_alias_e_to_subcolumn.fields, ["a", "c_1", "b", "d", "e"],
                          msg="adding an alias for a subroute of several columns did not work")
         self.assertEqual(ak_array_alias_e_to_subcolumn["e"].fields,
                          ak_array_alias_e_to_subcolumn[("b", "bb2", "bbb2", "b_bbb1")].fields,
@@ -668,13 +668,13 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
 
         # test adding a single alias
         ak_array2 = add_ak_aliases(self.ak_array, dictionary)
-        self.assertEqual(ak_array2.fields, ['a', 'c_1', 'b', 'd', 'f'],
+        self.assertEqual(ak_array2.fields, ["a", "c_1", "b", "d", "f"],
                          msg="adding an alias for a subroute of several columns did not work")
         self.assertEqual(ak_array2["f"].fields, ak_array2[("b", "bb2", "bbb2", "b_bbb1")].fields,
                          msg="the alias does not contain the expected sufields")
         self.assertEqual(ak_array2[("f", "bbbbb2")], ak_array2[("b", "bb2", "bbb2", "b_bbb1", "bbbbb2")],
                          msg="a subfield of the alias do not contain the same value as the original column")
-        self.assertEqual(self.ak_array.fields, ['a', 'c_1', 'b', 'd', 'f'],
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d", "f"],
                          msg="adding an alias for a subroute of several columns did not work in-place")
         self.assertEqual(self.ak_array["f"].fields, self.ak_array[("b", "bb2", "bbb2", "b_bbb1")].fields,
                          msg="the alias does not contain the expected sufields in-place")
@@ -689,30 +689,30 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.ak_array = ak.Array([array_content])
         # test with removal of the source column
         ak_array3 = add_ak_aliases(self.ak_array, dictionary, remove_src=True)
-        self.assertEqual(ak_array3.fields, ['a', 'c_1', 'd', 'f', 'b'],
+        self.assertEqual(ak_array3.fields, ["a", "c_1", "d", "f", "b"],
                          msg="when removing the source sub-column after creating the alias, " +
                          "the returned array did not correspond to the expectation")
-        self.assertEqual(ak_array3[("b", "bb2", "bbb2")].fields, ['bbbb2'],
+        self.assertEqual(ak_array3[("b", "bb2", "bbb2")].fields, ["bbbb2"],
                          msg="the sub-column 'b_bbb1' was not removed in the returned array")
 
         # test adding aliases for several columns
         self.ak_array = ak.Array([array_content])
         ak_array4 = add_ak_aliases(self.ak_array, dictionary2)
-        self.assertEqual(ak_array4.fields, ['a', 'c_1', 'b', 'd', 'e', 'f'],
+        self.assertEqual(ak_array4.fields, ["a", "c_1", "b", "d", "e", "f"],
                          msg="adding several aliases at once did not work")
         self.assertEqual(ak_array4["e"], ak_array4[("d", "d_1")],
                          msg="the content of the column created with an alias do not correspond " +
                          "to the one from the original route when several aliases are created at once")
-        self.assertEqual(self.ak_array.fields, ['a', 'c_1', 'b', 'd', 'e', 'f'],
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d", "e", "f"],
                          msg="when several aliases are created at once, the change does not happen in-place")
 
         # test removing several source columns
         self.ak_array = ak.Array([array_content])
         ak_array5 = add_ak_aliases(self.ak_array, dictionary2, remove_src=True)
-        self.assertEqual(ak_array5.fields, ['a', 'c_1', 'e', 'f', 'b'],
+        self.assertEqual(ak_array5.fields, ["a", "c_1", "e", "f", "b"],
                          msg="when removing the source columns after creating several aliases at once, " +
                          "the returned array did not correspond to the expectation")
-        self.assertEqual(ak_array5[("b", "bb2", "bbb2")].fields, ['bbbb2'],
+        self.assertEqual(ak_array5[("b", "bb2", "bbb2")].fields, ["bbbb2"],
                          msg="the sub-column 'b_bbb1' was not removed in the returned array " +
                          "when the dictionary contains several aliases")
 
@@ -740,13 +740,13 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
 
         # test an update with only purely new columns
         updated_array1 = update_ak_array(ak_array1, ak_array2)
-        self.assertEqual(updated_array1.fields, ['a', 'c_1', 'd', 'b'], msg="fields with no overlap were not added")
+        self.assertEqual(updated_array1.fields, ["a", "c_1", "d", "b"], msg="fields with no overlap were not added")
         self.assertEqual(updated_array1["a"][0], 0, msg="content of original array changed")
         self.assertEqual(updated_array1[("d", "d_1")][0], 2, msg="added fields did not conserve the original value")
         self.assertEqual(updated_array1[("b", "bb1")][0], 3, msg="added fields did not conserve the original value")
         # test if in place
-        self.assertEqual(ak_array1.fields, ['a', 'c_1', 'd', 'b'], msg="fields were not added in place")
-        self.assertEqual(ak_array2.fields, ['d', 'b'], msg="the array which was added got changed")
+        self.assertEqual(ak_array1.fields, ["a", "c_1", "d", "b"], msg="fields were not added in place")
+        self.assertEqual(ak_array2.fields, ["d", "b"], msg="the array which was added got changed")
         self.assertEqual(ak_array1[("b", "bb1")][0], 3, msg="content of fields was not added in place")
 
         # test an update with some columns with fields in common
@@ -868,7 +868,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         # test empty array as updating array or as array to be updated
         ak_array1 = ak.Array([array1_content])
         updated_array12 = update_ak_array(ak_array1, self.empty_ak_array)
-        self.assertEqual(updated_array12.fields, ['a', 'c_1'], msg="updating with an empty array did change the fields")
+        self.assertEqual(updated_array12.fields, ["a", "c_1"], msg="updating with an empty array did change the fields")
 
         # ValueError because of impossibility to add a new field in an empty akward array
         ak_array1 = ak.Array([array1_content])
@@ -888,7 +888,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(list(flattened_array.keys()), ak_array2.fields,
                          msg="flattening an array with only top level fields did not return the same dictionary")
         flattened_array2 = flatten_ak_array(ak_array3)
-        self.assertEqual(list(flattened_array2.keys()), ['d.d_1', 'b.bb1'],
+        self.assertEqual(list(flattened_array2.keys()), ["d.d_1", "b.bb1"],
                          msg="flattening an array with nested fields did not return the expected dictionary")
 
         # with routes argument to choose which routes should be saved
@@ -961,7 +961,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
             return some_string[::-1]
 
         ak_array4 = sort_ak_fields(ak_array2, sort_fn=sorting_function)
-        self.assertEqual(ak_array4["I"].fields, ['asthma', 'like', 'dontlike', 'zorro'],
+        self.assertEqual(ak_array4["I"].fields, ["asthma", "like", "dontlike", "zorro"],
                          msg="the outputed list of fields was not correctly ordered" +
                          "when using the sorting function to invert the field names")
 
@@ -971,10 +971,10 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
             return position
 
         ak_array5 = sort_ak_fields(ak_array2, sort_fn=sorting_function_to_int)
-        self.assertEqual(ak_array5.fields, ['I', '42'],
+        self.assertEqual(ak_array5.fields, ["I", "42"],
                          msg="the outputed list of top level fields was not correctly ordered " +
                          "when using the sorting function to calculate the length of the the field names")
-        self.assertEqual(ak_array5["I"].fields, ['like', 'zorro', 'asthma', 'dontlike'],
+        self.assertEqual(ak_array5["I"].fields, ["like", "zorro", "asthma", "dontlike"],
                          msg="the outputed list of nested fields was not correctly ordered " +
                          "when using the sorting function to calculate the length of the field names")
 
@@ -982,10 +982,10 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         array_content_with_names_of_same_length = {"ccccc": 1, "aaaaa": 3, "bbbbb": 2}
         ak_array_same_length = ak.Array([array_content_with_names_of_same_length])
         ak_array_same_length_sorted = sort_ak_fields(ak_array_same_length)
-        self.assertEqual(ak_array_same_length_sorted.fields, ['aaaaa', 'bbbbb', 'ccccc'],
+        self.assertEqual(ak_array_same_length_sorted.fields, ["aaaaa", "bbbbb", "ccccc"],
                          msg="simple top level sorting did not work")
         ak_array_same_length_intsorted = sort_ak_fields(ak_array_same_length_sorted, sort_fn=sorting_function_to_int)
-        self.assertEqual(ak_array_same_length_intsorted.fields, ['aaaaa', 'bbbbb', 'ccccc'],
+        self.assertEqual(ak_array_same_length_intsorted.fields, ["aaaaa", "bbbbb", "ccccc"],
                          msg="the sorting algorithm is not stable")
 
         # check that there is no problem with the empty array
