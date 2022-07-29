@@ -93,7 +93,6 @@ class CreateDatacards(
         }
 
     @law.decorator.log
-    @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
     def run(self):
         import hist
@@ -188,7 +187,8 @@ class CreateDatacards(
             # forward objects to the datacard writer
             outputs = self.output()
             writer = DatacardWriter(self.inference_model_inst, {cat_obj.name: hists})
-            writer.write(outputs["card"].path, outputs["shapes"].path)
+            with outputs["card"].localize("w") as tmp_card, outputs["shapes"].localize("w") as tmp_shapes:
+                writer.write(tmp_card.path, tmp_shapes.path, shapes_path_ref=outputs["shapes"].basename)
 
 
 CreateDatacardsWrapper = wrapper_factory(

@@ -53,6 +53,13 @@ The task that you are about to start requires a valid voms proxy.
         --variables ht \
         --workers 3
 
+    # create a (test) datacard
+    law run CreateDatacards \
+        --version v1 \
+        --producers features \
+        --inference-model test \
+        --workers 3
+
 
 Development
 -----------
