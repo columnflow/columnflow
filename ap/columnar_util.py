@@ -706,6 +706,8 @@ def update_ak_array(
     overwrite_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = True,
     add_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
     concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
+    axis: int = -1,
+    create_new_dim: bool = True,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
@@ -755,11 +757,19 @@ def update_ak_array(
             if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
-                    set_ak_column(
-                        ak_array,
-                        route,
-                        ak.concatenate((ak_array[route.fields], other[route.fields]), axis=1),
-                    )
+                    if create_new_dim:
+                        set_ak_column(
+                            ak_array,
+                            route,
+                            ak.concatenate((route.apply(ak_array)[..., None],
+                                            route.apply(other)[..., None]), axis=axis),
+                        )
+                    else:
+                        set_ak_column(
+                            ak_array,
+                            route,
+                            ak.concatenate((ak_array[route.fields], other[route.fields]), axis=axis),
+                        )
                 elif do_add(route):
                     # add and reassign
                     set_ak_column(ak_array, route, ak_array[route.fields] + other[route.fields])
@@ -817,13 +827,20 @@ def sort_ak_fields(
     Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
     *sort_fn* is set, it is used internally for sorting field names.
     """
-    # sort the top level fields
-    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
 
     # identify fields with nested structure, then sort and reassign them
     nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
     for field in nested_fields:
-        setattr(ak_array, field, sort_ak_fields(ak_array[field], sort_fn=sort_fn))
+        ak_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+        # setattr(ak_array, field, sort_ak_fields(ak_array[field], sort_fn=sort_fn))
+        # global COUNT
+        # if COUNT==0:
+        #     from IPython import embed
+
+        #     embed()
+        #     COUNT=COUNT+1
+    # sort the top level fields
+    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
 
     return ak_array
 
