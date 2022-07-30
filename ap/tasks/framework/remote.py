@@ -215,7 +215,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     def checksum(self):
         if not self._checksum:
             # get a list of all software flag files
-            flag_files = os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split()
+            flag_files = []
             for venv_name in os.listdir(os.environ["AP_VENV_PATH"]):
                 # skip all dev envs
                 if venv_name.endswith("_dev"):
