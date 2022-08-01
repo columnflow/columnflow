@@ -71,15 +71,18 @@ action() {
     # split $AP_VENV_REQUIREMENTS into an array
     local i
     local requirement_files
+    local requirement_files_contains_prod="false"
     IFS="," read -r -a requirement_files <<< "$AP_VENV_REQUIREMENTS"
     for i in "${!requirement_files[@]}"; do
         if [ ! -f "${requirement_files[i]}" ]; then
             >&2 echo "requirement file $i at ${requirement_files[i]} does not exist"
             return "5"
         fi
+        if [ "${requirement_files[i]}" = "$AP_BASE/requirements_prod.txt" ]; then
+            requirement_files_contains_prod="true"
+        fi
     done
     local first_requirement_file="${requirement_files[0]}"
-
 
     #
     # start the setup
@@ -144,15 +147,23 @@ action() {
         # activate it
         source "$install_path/bin/activate" "" || ( rm -f "$pending_flag_file" && return "10" )
 
-        # install requirements
+        # update pip
+        echo -e "\n\x1b[0;49;35mupdating pip\x1b[0m"
         python3 -m pip install -U pip || ( rm -f "$pending_flag_file" && return "11" )
-        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || ( rm -f "$pending_flag_file" && return "12" )
 
+        # install basic production requirements
+        if ! $requirement_files_contains_prod; then
+            echo -e "\n\x1b[0;49;35minstalling requirement file $AP_BASE/requirements_prod.txt\x1b[0m"
+            python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || ( rm -f "$pending_flag_file" && return "12" )
+        fi
+
+        # install requirement files
         for i in "${!requirement_files[@]}"; do
             echo -e "\n\x1b[0;49;35minstalling requirement file $i at ${requirement_files[i]}\x1b[0m"
             python3 -m pip install -r "${requirement_files[i]}" || ( rm -f "$pending_flag_file" && return "13" )
         done
 
+        # ensure that the venv is relocateable
         ap_make_venv_relocateable "$AP_VENV_NAME" || ( rm -f "$pending_flag_file" && return "14" )
 
         # write the version and a timestamp into the flag file

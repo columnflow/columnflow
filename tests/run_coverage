@@ -8,7 +8,7 @@ action() {
     local ap_dir="$( dirname "$this_dir" )"
 
     # dev flag for sandboxes
-    local dev="$( $AP_DEV && echo "_dev" || echo "" )"
+    local dev="$( [ "$AP_DEV" = "1" ] && echo "_dev" || echo "" )"
 
     # helper to run a coverage test
     run_coverage() {
