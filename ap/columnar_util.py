@@ -825,15 +825,10 @@ def sort_ak_fields(
     Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
     *sort_fn* is set, it is used internally for sorting field names.
     """
-    # sort the top level fields
-    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
-
-    # identify fields with nested structure, then sort and reassign them
-    nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
-    for field in nested_fields:
-        setattr(ak_array, field, sort_ak_fields(ak_array[field], sort_fn=sort_fn))
-
-    return ak_array
+    return ak_array[[
+        sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+        for field in sorted(ak_array.fields, key=sort_fn)
+    ]]
 
 
 def sorted_ak_to_parquet(
