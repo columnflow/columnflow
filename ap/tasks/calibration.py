@@ -72,7 +72,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
-        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
+        load_columns_nano = [Route(column).nano_column for column in load_columns]
 
         # define columns that will be saved
         keep_columns = self.calibrator_inst.produced_columns

@@ -84,7 +84,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
         # define nano columns that should be kept, and that need to be loaded
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
         load_columns = keep_columns | set(mandatory_coffea_columns)
-        load_columns_nano = [Route.check(column).nano_column for column in load_columns]
+        load_columns_nano = [Route(column).nano_column for column in load_columns]
         route_filter = RouteFilter(keep_columns)
 
         # event counters

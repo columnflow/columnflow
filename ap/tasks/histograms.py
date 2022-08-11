@@ -144,7 +144,7 @@ class CreateHistograms(
                     # get the expression and when it's a string, parse it to extract index lookups
                     expr = variable_inst.expression
                     if isinstance(expr, str):
-                        route = Route.check(expr)
+                        route = Route(expr)
                         expr = functools.partial(route.apply, null_value=variable_inst.null_value)
 
                     if var_name not in histograms:
