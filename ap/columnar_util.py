@@ -613,8 +613,12 @@ def remove_ak_column(
     silent: bool = False,
 ) -> ak.Array:
     """
-    Removes a *route* from an awkward array *ak_array* and returns a new view with the corresponding
-    column missing. *route* can be a :py:class:`Route` instance, a tuple of strings where each
+    Removes a *route* from an awkward array *ak_array* and returns the array. The (sub)array in
+    which the column is to be removed is replaced by a view which misses the corresponding column.
+    Therefore, if the column to be removed is found in a top-level field, the returned array itself
+    is a view. Otherwise, one of its subarrays will be a view.
+
+    Note that only *route* can be a :py:class:`Route` instance, a tuple of strings where each
     string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
     ``"Jet.pt"``). Unless *silent* is *True*, a *ValueError* is raised when the route does not
     exist.
