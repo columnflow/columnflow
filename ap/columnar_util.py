@@ -331,7 +331,7 @@ class Route(object, metaclass=RouteMeta):
         self,
         other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
     ) -> "Route":
-        route = self.__class__(self)
+        route = self.copy()
         route.add(other)
         return route
 
@@ -397,7 +397,7 @@ class Route(object, metaclass=RouteMeta):
         """
         Returns a copy if this instance.
         """
-        return self.__class__(self)
+        return self.__class__(self._fields)
 
     def apply(
         self,
