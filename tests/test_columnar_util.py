@@ -5,12 +5,14 @@ __all__ = ["TestRoute", "TestArrayFunction"]
 
 
 import unittest
+from typing import List
 
 from ap.util import maybe_import
-from ap.columnar_util import Route, ArrayFunction, get_ak_routes, has_ak_column, set_ak_column, remove_ak_column
-from ap.columnar_util import add_ak_alias, add_ak_aliases, update_ak_array, flatten_ak_array, sort_ak_fields
-from ap.columnar_util import sorted_ak_to_parquet
-from typing import List
+from ap.columnar_util import (
+    Route, ArrayFunction, get_ak_routes, has_ak_column, set_ak_column, remove_ak_column,
+    add_ak_alias, add_ak_aliases, update_ak_array, flatten_ak_array, sort_ak_fields,
+    sorted_ak_to_parquet,
+)
 
 ak = maybe_import("awkward")
 
@@ -71,19 +73,19 @@ class TestRoute(unittest.TestCase):
         # all values in the split are instance of str
         self.assertTrue(all(isinstance(value, str) for value in split_result))
 
-    def test_check(self):
+    def test_cached_init(self):
         # SHOULD: Returns input, if it is a Route instance,
         # otherwise uses Route constructor with input
 
         # RouteInstance --> returns same object
-        self.assertIs(Route.check(self.route), self.route)
+        self.assertIs(Route(self.route), self.route)
 
         # if result of *check* with same fields as self.route, is equal to self.route
         # Sequence[str] --> RouteInstance
-        route_from_sequence = Route.check(("i", "like", "trains"))
+        route_from_sequence = Route(("i", "like", "trains"))
         self.assertEqual(route_from_sequence, self.route)
         # str --> RouteInstance
-        route_from_str = Route.check(("i", "like", "trains"))
+        route_from_str = Route(("i", "like", "trains"))
         self.assertEqual(route_from_str, self.route)
 
     def test_apply(self):
@@ -184,25 +186,22 @@ class TestRoute(unittest.TestCase):
 
     def test__add__(self):
         # SHOULD return same as *add*
-        self.assertEqual(self.empty_route + self.route,
-                         ("i", "like", "trains"))
-        self.assertEqual(self.empty_route + "i.like.trains",
-                         ("i", "like", "trains"))
-        self.assertEqual(self.empty_route +
-                         ["i", "like", "trains"], ("i", "like", "trains"))
+        self.assertEqual(self.empty_route + self.route, ("i", "like", "trains"))
+        self.assertEqual(self.empty_route + "i.like.trains", ("i", "like", "trains"))
+        self.assertEqual(self.empty_route + ["i", "like", "trains"], ("i", "like", "trains"))
 
         # this __add__ should be not inplace
         self.assertFalse(self.empty_route)
 
     def test__radd__(self):
         # SHOULD: Add is same for left and right, if left argument add's fails
-        self.assertEqual("test_string" + self.route,
-                         ("i", "like", "trains", "test_string"))
+        self.assertEqual("test_string" + self.route, ("i", "like", "trains", "test_string"))
 
     def test__iadd__(self):
         # +=
-        self.route += self.route
-        self.assertEqual(self.route, ("i", "like", "trains") * 2)
+        route = Route(self.route.fields)
+        route += self.route
+        self.assertEqual(route, ("i", "like", "trains") * 2)
 
     def test__getitem__(self):
         # Should return value of self._fields at index

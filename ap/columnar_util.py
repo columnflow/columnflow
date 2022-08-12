@@ -73,7 +73,20 @@ class ItemEval(object):
 eval_item = ItemEval()
 
 
-class Route(object):
+class RouteMeta(type):
+    """
+    Meta class for :py:class:`Route` that prevents instances from being copied when passed to the
+    constructor.
+    """
+
+    def __call__(cls, route: Optional[Union["Route", Any]] = None):
+        if isinstance(route, cls):
+            return route
+
+        return super().__call__(route=route)
+
+
+class Route(object, metaclass=RouteMeta):
     """
     Route objects describe the location of columns in nested arrays and are basically wrapper around
     a sequence of nested fields. Additionally, they provide convenience methods for conversions into
@@ -203,7 +216,7 @@ class Route(object):
         slice and advanced indexing expressions.
         """
         # first extract and replace possibly nested slices
-        # TODO: a regexp would be far cleaner, but there are edge cases which possibly require
+        # note: a regexp would be far cleaner, but there are edge cases which possibly require
         #       sequential regexp evaluations which might be less maintainable
         slices = []
         repl = lambda i: f"__slice_{i}__"
@@ -265,14 +278,6 @@ class Route(object):
         """
         return cls._split(cls.NANO_SEP, column)
 
-    @classmethod
-    def check(cls, route: Union["Route", Sequence[str], str]):
-        """
-        Returns *route* if it is already a :py:class:`Route` instance, and otherwise uses its
-        constructor to convert it into one.
-        """
-        return route if isinstance(route, cls) else cls(route)
-
     def __init__(self, route=None):
         super().__init__()
 
@@ -326,7 +331,7 @@ class Route(object):
         self,
         other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
     ) -> "Route":
-        route = self.__class__(self)
+        route = self.copy()
         route.add(other)
         return route
 
@@ -392,7 +397,7 @@ class Route(object):
         """
         Returns a copy if this instance.
         """
-        return self.__class__(self)
+        return self.__class__(self._fields)
 
     def apply(
         self,
@@ -535,10 +540,10 @@ def has_ak_column(
     route can be a :py:class:`Route` instance, a tuple of strings where each string refers to a
     subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``).
     """
-    route = Route.check(route)
+    route = Route(route)
 
     try:
-        ak_array[route.fields]
+        route.apply(ak_array)
     except ValueError:
         return False
 
@@ -571,7 +576,7 @@ def set_ak_column(
         first with :py:func:`remove_ak_column`. As this one might return a new view, it is not
         automatically handled in *this* function which is meant to perform an in-place operation.
     """
-    route = Route.check(route)
+    route = Route(route)
 
     # trivial case
     if len(route) == 1:
@@ -608,14 +613,18 @@ def remove_ak_column(
     silent: bool = False,
 ) -> ak.Array:
     """
-    Removes a *route* from an awkward array *ak_array* and returns a new view with the corresponding
-    column missing. *route* can be a :py:class:`Route` instance, a tuple of strings where each
+    Removes a *route* from an awkward array *ak_array* and returns the array. The (sub)array in
+    which the column is to be removed is replaced by a view which misses the corresponding column.
+    Therefore, if the column to be removed is found in a top-level field, the returned array itself
+    is a view. Otherwise, one of its subarrays will be a view.
+
+    Note that only *route* can be a :py:class:`Route` instance, a tuple of strings where each
     string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
     ``"Jet.pt"``). Unless *silent* is *True*, a *ValueError* is raised when the route does not
     exist.
     """
     # verify that the route exists
-    route = Route.check(route)
+    route = Route(route)
     if not route:
         if silent:
             return ak_array
@@ -661,15 +670,15 @@ def add_ak_alias(
     *True*, a view of the input array is returned with the column referred to by *src_route*
     missing. Otherwise, the input array is returned with all columns.
     """
-    src_route = Route.check(src_route)
-    dst_route = Route.check(dst_route)
+    src_route = Route(src_route)
+    dst_route = Route(dst_route)
 
     # check that the src exists
     if not has_ak_column(ak_array, src_route):
         raise ValueError(f"no column found in array for route '{src_route}'")
 
     # add the alias, potentially overwriting existing columns
-    ak_array = set_ak_column(ak_array, dst_route, ak_array[src_route.fields])
+    ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
 
     # create a view without the source if requested
     if remove_src:
@@ -706,8 +715,6 @@ def update_ak_array(
     overwrite_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = True,
     add_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
     concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
-    axis: int = -1,
-    create_new_dim: bool = True,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
@@ -734,7 +741,7 @@ def update_ak_array(
         return ak_array
 
     # helpers to cache calls to has_ak_column for ak_array
-    _has_column_cache = {Route.check(route): True for route in get_ak_routes(ak_array)}
+    _has_column_cache = {Route(route): True for route in get_ak_routes(ak_array)}
 
     def has_ak_column_cached(route):
         if route not in _has_column_cache:
@@ -757,31 +764,26 @@ def update_ak_array(
             if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
-                    if create_new_dim:
-                        set_ak_column(
-                            ak_array,
-                            route,
-                            ak.concatenate((route.apply(ak_array)[..., None],
-                                            route.apply(other)[..., None]), axis=axis),
-                        )
-                    else:
-                        set_ak_column(
-                            ak_array,
-                            route,
-                            ak.concatenate((ak_array[route.fields], other[route.fields]), axis=axis),
-                        )
+                    set_ak_column(
+                        ak_array,
+                        route,
+                        ak.concatenate((
+                            route.appy(ak_array)[..., None],
+                            route.appy(other)[..., None],
+                        ), axis=-1),
+                    )
                 elif do_add(route):
                     # add and reassign
-                    set_ak_column(ak_array, route, ak_array[route.fields] + other[route.fields])
+                    set_ak_column(ak_array, route, route.apply(ak_array) + route.apply(other))
                 elif do_overwrite(route):
                     # delete the column first for type safety and then re-add it
                     ak_array = remove_ak_column(ak_array, route)
-                    set_ak_column(ak_array, route, other[route.fields])
+                    set_ak_column(ak_array, route, route.apply(other))
                 else:
                     raise Exception(f"cannot update already existing array column '{route}'")
             else:
                 # the route is new, so add it and manually tell the cache
-                set_ak_column(ak_array, route, other[route.fields])
+                set_ak_column(ak_array, route, route.apply(other))
                 _has_column_cache[route] = True
 
     return ak_array
@@ -814,7 +816,7 @@ def flatten_ak_array(
     # go through routes, create new names and store arrays
     for route in get_ak_routes(ak_array):
         if keep_route(route.column):
-            flat_array[route.column] = ak_array[route.fields]
+            flat_array[route.column] = route.apply(ak_array)
 
     return flat_array
 
@@ -827,22 +829,10 @@ def sort_ak_fields(
     Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
     *sort_fn* is set, it is used internally for sorting field names.
     """
-
-    # identify fields with nested structure, then sort and reassign them
-    nested_fields = [field for field in ak_array.fields if ak_array[field].fields]
-    for field in nested_fields:
-        ak_array[field] = sort_ak_fields(ak_array[field], sort_fn=sort_fn)
-        # setattr(ak_array, field, sort_ak_fields(ak_array[field], sort_fn=sort_fn))
-        # global COUNT
-        # if COUNT==0:
-        #     from IPython import embed
-
-        #     embed()
-        #     COUNT=COUNT+1
-    # sort the top level fields
-    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
-
-    return ak_array
+    return ak_array[[
+        sort_ak_fields(ak_array[field], sort_fn=sort_fn)
+        for field in sorted(ak_array.fields, key=sort_fn)
+    ]]
 
 
 def sorted_ak_to_parquet(
@@ -905,7 +895,7 @@ class RouteFilter(object):
         # manually remove colums that should not be kept
         if self.remove_routes is None:
             # convert routes to keep into string columns for pattern checks
-            keep_columns = [Route.check(route).column for route in self.keep_routes]
+            keep_columns = [Route(route).column for route in self.keep_routes]
 
             # determine routes to remove
             self.remove_routes = {

@@ -1,6 +1,6 @@
-# version 5
+# version 6
 
 luigi==3.0.*
-scinum>=1.4.2
+scinum>=1.4.3
 six==1.16.*
 pyyaml==6.*
