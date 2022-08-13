@@ -2,7 +2,7 @@
 
 setup() {
     # Runs the entire project setup, leading to a collection of environment variables starting with
-    # "AP_", the installation of the software stack via virtual environments, and optionally an
+    # "CF_", the installation of the software stack via virtual environments, and optionally an
     # interactive setup where the user can configure certain variables.
     #
     # Arguments:
@@ -11,11 +11,11 @@ setup() {
     #      a custom setup file. See "interactive_setup" for more info.
     #
     # Optinally preconfigured environment variables:
-    #   AP_REINSTALL_SOFTWARE : If "1", any existing software stack is removed and freshly
+    #   CF_REINSTALL_SOFTWARE : If "1", any existing software stack is removed and freshly
     #                           installed.
-    #   AP_REMOTE_JOB         : If "1", applies configurations for remote job. Remote jobs will set
+    #   CF_REMOTE_JOB         : If "1", applies configurations for remote job. Remote jobs will set
     #                           this value if needed and there is no need to set this by hand.
-    #   AP_LCG_SETUP          : The location of a custom LCG software setup file.
+    #   CF_LCG_SETUP          : The location of a custom LCG software setup file.
     #   X509_USER_PROXY       : A custom globus user proxy location.
     #   LANGUAGE, LANG, LC_ALL: Custom language flags.
 
@@ -33,7 +33,7 @@ setup() {
 
     #
     # global variables
-    # (AP = Analysis Playground)
+    # (CF = columnflow)
     #
 
     # lang defaults
@@ -44,28 +44,28 @@ setup() {
     # proxy
     [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
 
-    export AP_BASE="$this_dir"
+    export CF_BASE="$this_dir"
     interactive_setup "$setup_name" || return "$?"
-    export AP_SETUP_NAME="$setup_name"
-    export AP_STORE_REPO="$AP_BASE/data/store"
-    export AP_VENV_PATH="${AP_SOFTWARE}/venvs"
-    export AP_ORIG_PATH="$PATH"
-    export AP_ORIG_PYTHONPATH="$PYTHONPATH"
-    export AP_ORIG_PYTHON3PATH="$PYTHON3PATH"
-    export AP_ORIG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
-    export AP_CI_JOB="$( [ "$GITHUB_ACTIONS" = "true" ] && echo 1 || echo 0 )"
+    export CF_SETUP_NAME="$setup_name"
+    export CF_STORE_REPO="$CF_BASE/data/store"
+    export CF_VENV_PATH="${CF_SOFTWARE}/venvs"
+    export CF_ORIG_PATH="$PATH"
+    export CF_ORIG_PYTHONPATH="$PYTHONPATH"
+    export CF_ORIG_PYTHON3PATH="$PYTHON3PATH"
+    export CF_ORIG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
+    export CF_CI_JOB="$( [ "$GITHUB_ACTIONS" = "true" ] && echo 1 || echo 0 )"
 
     # overwrite some variables in remote and ci jobs
-    if [ "$AP_REMOTE_JOB" = "1" ]; then
-        export AP_WLCG_USE_CACHE="true"
-        export AP_WLCG_CACHE_CLEANUP="true"
-        export AP_WORKER_KEEP_ALIVE="false"
-    elif [ "$AP_CI_JOB" = "1" ]; then
-        export AP_WORKER_KEEP_ALIVE="false"
+    if [ "$CF_REMOTE_JOB" = "1" ]; then
+        export CF_WLCG_USE_CACHE="true"
+        export CF_WLCG_CACHE_CLEANUP="true"
+        export CF_WORKER_KEEP_ALIVE="false"
+    elif [ "$CF_CI_JOB" = "1" ]; then
+        export CF_WORKER_KEEP_ALIVE="false"
     fi
 
     # some variable defaults
-    [ -z "$AP_WORKER_KEEP_ALIVE" ] && export AP_WORKER_KEEP_ALIVE="false"
+    [ -z "$CF_WORKER_KEEP_ALIVE" ] && export CF_WORKER_KEEP_ALIVE="false"
 
 
     #
@@ -73,53 +73,53 @@ setup() {
     #
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
-    if [ -f "$AP_LCG_SETUP" ]; then
-        source "$AP_LCG_SETUP" ""
-    elif [ "$AP_CI_JOB" = "1" ]; then
-        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing in CI env, skipping"
+    [ -z "$CF_LCG_SETUP" ] && export CF_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
+    if [ -f "$CF_LCG_SETUP" ]; then
+        source "$CF_LCG_SETUP" ""
+    elif [ "$CF_CI_JOB" = "1" ]; then
+        2>&1 echo "LCG setup file $CF_LCG_SETUP not existing in CI env, skipping"
     else
-        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing"
+        2>&1 echo "LCG setup file $CF_LCG_SETUP not existing"
         return "1"
     fi
 
     # update paths and flags
     local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
-    export PATH="$AP_BASE/bin:$AP_BASE/ap/scripts:$AP_BASE/modules/law/bin:$AP_SOFTWARE/bin:$PATH"
-    export PYTHONPATH="$AP_BASE/modules/law:$AP_BASE/modules/order:$PYTHONPATH"
-    export PYTHONPATH="$AP_BASE:$PYTHONPATH"
+    export PATH="$CF_BASE/bin:$CF_BASE/cf/scripts:$CF_BASE/modules/law/bin:$CF_SOFTWARE/bin:$PATH"
+    export PYTHONPATH="$CF_BASE/modules/law:$CF_BASE/modules/order:$PYTHONPATH"
+    export PYTHONPATH="$CF_BASE:$PYTHONPATH"
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
     ulimit -s unlimited
 
     # local python stack in two virtual envs:
-    # - "ap_prod": contains the minimal stack to run tasks and is sent alongside jobs
-    # - "ap_dev" : "prod" + additional python tools for local development (e.g. ipython)
-    if [ "$AP_REMOTE_JOB" != "1" ]; then
-        if [ "$AP_REINSTALL_SOFTWARE" = "1" ]; then
-            echo "removing software stack at ${AP_VENV_PATH}"
-            rm -rf "${AP_VENV_PATH}"/ap_{prod,dev}
+    # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
+    # - "cf_dev" : "prod" + additional python tools for local development (e.g. ipython)
+    if [ "$CF_REMOTE_JOB" != "1" ]; then
+        if [ "$CF_REINSTALL_SOFTWARE" = "1" ]; then
+            echo "removing software stack at ${CF_VENV_PATH}"
+            rm -rf "${CF_VENV_PATH}"/cf_{prod,dev}
         fi
 
         show_version_warning() {
             2>&1 echo ""
             2>&1 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
-            2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
+            2>&1 echo "         > CF_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
             2>&1 echo ""
         }
 
         # source the prod and dev sandboxes
-        source "${AP_BASE}/sandboxes/ap_prod.sh" "" "1"
+        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "1"
         local ret_prod="$?"
-        source "${AP_BASE}/sandboxes/ap_dev.sh" "" "1"
+        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "1"
         local ret_dev="$?"
 
         # show version warnings
-        [ "$ret_prod" = "21" ] && show_version_warning "ap_prod"
-        [ "$ret_dev" = "21" ] && show_version_warning "ap_dev"
+        [ "$ret_prod" = "21" ] && show_version_warning "cf_prod"
+        [ "$ret_dev" = "21" ] && show_version_warning "cf_dev"
     else
         # source the prod sandbox
-        source "${AP_BASE}/sandboxes/ap_prod.sh" ""
+        source "${CF_BASE}/sandboxes/cf_prod.sh" ""
     fi
 
 
@@ -127,9 +127,9 @@ setup() {
     # initialze submodules
     #
 
-    if [ -d "$AP_BASE/.git" ]; then
+    if [ -d "$CF_BASE/.git" ]; then
         for m in law order; do
-            local mpath="$AP_BASE/modules/$m"
+            local mpath="$CF_BASE/modules/$m"
             # initialize the submodule when the directory is empty
             if [ "$( ls -1q "$mpath" | wc -l )" = "0" ]; then
                 git submodule update --init --recursive "$mpath"
@@ -149,8 +149,8 @@ setup() {
     # law setup
     #
 
-    export LAW_HOME="$AP_BASE/.law"
-    export LAW_CONFIG_FILE="$AP_BASE/law.cfg"
+    export LAW_HOME="$CF_BASE/.law"
+    export LAW_CONFIG_FILE="$CF_BASE/law.cfg"
 
     if which law &> /dev/null; then
         # source law's bash completion scipt
@@ -164,20 +164,20 @@ setup() {
 interactive_setup() {
     # Starts the interactive part of the setup by querying for values of certain environment
     # variables with useful defaults. When a custom, named setup is triggered, the values of all
-    # queried environment variables are stored in a file in $AP_BASE/.setups.
+    # queried environment variables are stored in a file in $CF_BASE/.setups.
     #
     # Arguments:
     #   1. The name of the setup. "default" (which is itself the default when no name is set)
     #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
     #      a custom setup file.
     #   2. The location of the setup file when a custom, named setup was triggered. Defaults to
-    #      "$AP_BASE/.setups/$setup_name.sh"
+    #      "$CF_BASE/.setups/$setup_name.sh"
     #
     # Required environment variables:
-    #   AP_BASE: The base path of the AP project.
+    #   CF_BASE: The base path of the CF project.
 
     local setup_name="${1:-default}"
-    local env_file="${2:-$AP_BASE/.setups/$setup_name.sh}"
+    local env_file="${2:-$CF_BASE/.setups/$setup_name.sh}"
     local env_file_tmp="$env_file.tmp"
 
     # check if the setup is the default one
@@ -251,28 +251,28 @@ interactive_setup() {
     fi
 
     # start querying for variables
-    query AP_CERN_USER "CERN username" "$( whoami )"
-    export_and_save AP_CERN_USER_FIRSTCHAR "\${AP_CERN_USER:0:1}"
-    query AP_DESY_USER "DESY username (if any)" "$( whoami )"
-    export_and_save AP_DESY_USER_FIRSTCHAR "\${AP_DESY_USER:0:1}"
-    query AP_DATA "Local data directory" "\$AP_BASE/data" "./data"
-    query AP_STORE_NAME "Relative path used in store paths (see next queries)" "ap_store"
-    query AP_STORE_LOCAL "Default local output store" "\$AP_DATA/\$AP_STORE_NAME"
-    query AP_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
-    export_and_save AP_WLCG_USE_CACHE "$( [ -z "$AP_WLCG_CACHE_ROOT" ] && echo false || echo true )"
-    export_and_save AP_WLCG_CACHE_CLEANUP "${AP_WLCG_CACHE_CLEANUP:-false}"
-    query AP_SOFTWARE "Local directory for installing software" "\$AP_DATA/software"
-    query AP_CMSSW_BASE "Local directory for installing CMSSW" "\$AP_DATA/cmssw"
-    query AP_JOB_BASE "Local directory for storing job files" "\$AP_DATA/jobs"
-    query AP_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
-    if [ "$AP_LOCAL_SCHEDULER" != "True" ]; then
-        query AP_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
-        query AP_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
+    query CF_CERN_USER "CERN username" "$( whoami )"
+    export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
+    query CF_DESY_USER "DESY username (if any)" "$( whoami )"
+    export_and_save CF_DESY_USER_FIRSTCHAR "\${CF_DESY_USER:0:1}"
+    query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
+    query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
+    query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
+    query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
+    export_and_save CF_WLCG_USE_CACHE "$( [ -z "$CF_WLCG_CACHE_ROOT" ] && echo false || echo true )"
+    export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
+    query CF_SOFTWARE "Local directory for installing software" "\$CF_DATA/software"
+    query CF_CMSSW_BASE "Local directory for installing CMSSW" "\$CF_DATA/cmssw"
+    query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
+    query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
+    if [ "$CF_LOCAL_SCHEDULER" != "True" ]; then
+        query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
+        query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
     else
-        export_and_save AP_SCHEDULER_HOST "naf-cms14.desy.de"
-        export_and_save AP_SCHEDULER_PORT "8082"
+        export_and_save CF_SCHEDULER_HOST "naf-cms14.desy.de"
+        export_and_save CF_SCHEDULER_PORT "8082"
     fi
-    query AP_VOMS "Virtual-organization" "cms:/cms/dcms"
+    query CF_VOMS "Virtual-organization" "cms:/cms/dcms"
 
     # move the env file to the correct location for later use
     if ! $setup_is_default; then
@@ -285,7 +285,7 @@ action() {
     # Invokes the main action of this script, catches possible error codes and prints a message.
 
     if setup "$@"; then
-        echo -e "\x1b[0;49;35manalysis playground successfully setup\x1b[0m"
+        echo -e "\x1b[0;49;35mcolumnflow successfully setup\x1b[0m"
         return "0"
     else
         local code="$?"

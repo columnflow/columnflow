@@ -8,20 +8,20 @@
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
-    local ap_dir="$( dirname "$this_dir" )"
+    local cf_dir="$( dirname "$this_dir" )"
 
     # get arguments
     local mode=${1}
 
     # clean first if requested
     if [ "$mode" = "clean" ]; then
-        ( cd "$ap_dir/docs" && make clean ) || return "$?"
+        ( cd "$cf_dir/docs" && make clean ) || return "$?"
     fi
 
     # build
     (
-        source "$ap_dir/sandboxes/venv_docs_dev.sh" "" && \
-        cd "$ap_dir/docs" && \
+        source "$cf_dir/sandboxes/venv_docs_dev.sh" "" && \
+        cd "$cf_dir/docs" && \
         make html
     ) || return "$?"
 }
