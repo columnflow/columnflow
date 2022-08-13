@@ -768,8 +768,8 @@ def update_ak_array(
                         ak_array,
                         route,
                         ak.concatenate((
-                            route.appy(ak_array)[..., None],
-                            route.appy(other)[..., None],
+                            route.apply(ak_array)[..., None],
+                            route.apply(other)[..., None],
                         ), axis=-1),
                     )
                 elif do_add(route):
@@ -829,10 +829,25 @@ def sort_ak_fields(
     Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
     *sort_fn* is set, it is used internally for sorting field names.
     """
-    return ak_array[[
-        sort_ak_fields(ak_array[field], sort_fn=sort_fn)
-        for field in sorted(ak_array.fields, key=sort_fn)
-    ]]
+    # first identify all sub fields that need to be sorted (i.e. those that have fields themselves)
+    fields_to_sort = []
+    lookup = [(field,) for field in ak_array.fields]
+    while lookup:
+        fields = lookup.pop(0)
+        arr = ak_array[fields]
+        if arr.fields:
+            fields_to_sort.append(fields)
+            lookup.extend([fields + (field,) for field in arr.fields])
+
+    # sort them, starting at highest depth
+    for fields in reversed(fields_to_sort):
+        arr = ak_array[fields]
+        ak_array[fields] = arr[sorted(arr.fields, key=sort_fn)]
+
+    # sort the top level fields
+    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
+
+    return ak_array
 
 
 def sorted_ak_to_parquet(
@@ -841,7 +856,7 @@ def sorted_ak_to_parquet(
     **kwargs,
 ) -> None:
     """
-    Sorts the fields in an awkward array *ak_array* resurvively with :py:func:`sort_nano_fields` and
+    Sorts the fields in an awkward array *ak_array* recursively with :py:func:`sort_ak_fields` and
     saves it as a parquet file using ``awkward.to_parquet`` which receives all additional *args* and
     *kwargs*.
 
@@ -849,7 +864,7 @@ def sorted_ak_to_parquet(
 
         Since the order of fields in awkward arrays resulting from reading nano files might be
         arbitrary (depending on streamer info in the original root files), but formats such as
-        parquet highly depend on the order for building internal table schemes, one should always
+        parquet highly depend on the order for building internal table schemas, one should always
         make use of this function! Otherwise, operations like file merging might fail due to
         differently ordered schemas.
     """
