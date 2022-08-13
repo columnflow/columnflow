@@ -8,98 +8,53 @@ from typing import Optional, Union, Callable
 
 import law
 
-from ap.util import maybe_import, DotDict
-from ap.columnar_util import ArrayFunction
+from ap.util import maybe_import, DotDict, DerivableMeta
+from ap.columnar_util import TaskArrayFunction
 
 ak = maybe_import("awkward")
 
 
-_selector_doc = """
-    Wrapper class for functions performing object and event calibration on (most likely) coffea nano
-    event arrays. The main purpose of wrappers is to store information about required columns next
-    to the implementation. In addition, they have a unique name which allows for using it in a
-    config file.
+class Selector(TaskArrayFunction):
 
-    The use of the :py:func:`selector` decorator function is recommended to create selector
-    instances. Example:
+    exposed = False
 
-    .. code-block:: python
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        @selector(uses={"nJet", "Jet_pt"})
-        def my_jet_selection(events):
-            jet_mask = events.Jet.pt > 30
-            jet_sel = ak.sum(jet_mask, axis=1) >= 4
-
-            return SelectionResult(steps={"jet": jet_sel}, objects={"jet": jet_mask})
-
-    This will register and return an instance named "my_jet_selection" that *uses* the "nJet" and
-    "Jet_pt" columns of the array structure.
-
-    The name defaults to the name of the function itself and can be altered by passing a custom
-    *name*. It is used internally to store the instance in a cache from which it can be retrieved
-    through the :py:meth:`get` class method.
-
-    Knowledge of the columns to load is especially useful when opening files and selecting the
-    content to deserialize. *uses* accepts not only strings but also previously registered instances
-    to denote in inner dependence. Column names should always be given in the flat nano nomenclature
-    (using underscores). The :py:attr:`used_columns` property will resolve this information and
-    return a set of column names. Example:
-
-    .. code-block:: python
-
-        @selector(uses={my_jet_selection})
-        def my_event_selection(events):
-            result = my_jet_selection(events)
-            return result
-
-        print(my_event_selection.used_columns)
-        # -> {"nJet", "Jet_pt"}
-
-    .. py:attribute:: func
-       type: callable
-
-       The wrapped function.
-
-    .. py:attribute:: name
-       type: str
-
-       The name of the selector in the instance cache.
-
-    .. py:attribute:: uses
-       type: set
-
-       The set of column names or other selector instances to recursively resolve the names of
-       required columns.
-
-    .. py::attribute:: used_columns
-       type: set
-       read-only
-
-       The resolved, flat set of used column names.
-    """
-
-
-Selector = ArrayFunction.create_subclass("Selector", {"__doc__": _selector_doc})
+        # when not exposed and call_force is not specified,
+        # set it to True which prevents calls from being cached
+        if self.call_force is None and not self.exposed:
+            self.call_force = True
 
 
 def selector(
     func: Optional[Callable] = None,
+    bases=(),
     **kwargs,
-) -> Union[Selector, Callable]:
+) -> Union[DerivableMeta, Callable]:
     """
-    Decorator for registering new selector functions. See :py:class:`Selector` for documentation.
+    Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases* and
+    attaching the decorated function to it as ``call_func``. All additional *kwargs* are added as
+    class members of the new subclasses.
     """
-    def decorator(func):
-        return Selector.new(func, **kwargs)
+    def decorator(func: Callable) -> DerivableMeta:
+        # create the class dict
+        cls_dict = {"call_func": func}
+        cls_dict.update(kwargs)
+
+        # create the subclass
+        subclass = Selector.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+
+        return subclass
 
     return decorator(func) if func else decorator
 
 
 class SelectionResult(object):
     """
-    Lightweight class that wraps selection decisions (e.g. masks and new columns) and provides
-    convenience methods to merge them or to dump them into an awkward array. The resulting structure
-    looks like the example following:
+    Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
+    provides convenience methods to merge them or to dump them into an awkward array. The resulting
+    structure looks like the following example:
 
     .. code-block:: python
 
@@ -120,17 +75,10 @@ class SelectionResult(object):
                 "muon": array,
                 ...
             },
-
-            "columns": {
-                # any structure of new columns to be added
-                "my_new_column_a": array,
-                "my_new_column_b": array,
-                ...
-            }
         }
 
-    The fields can be configured through the *main*, *steps*, *objects* and *columns* keyword
-    arguments. The following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
+    following example creates the structure above.
 
     .. code-block:: python
 
@@ -138,7 +86,6 @@ class SelectionResult(object):
             main={...},
             steps={"jet": array, "muon": array, ...}
             objects={"jet": array, "muon": array, ...}
-            columns={"my_new_column_a": array, "my_new_column_b": array, ...}
         )
         res.to_ak()
     """
@@ -148,39 +95,50 @@ class SelectionResult(object):
         main: Optional[Union[DotDict, dict]] = None,
         steps: Optional[Union[DotDict, dict]] = None,
         objects: Optional[Union[DotDict, dict]] = None,
-        columns: Optional[Union[DotDict, dict]] = None,
     ):
         super().__init__()
 
         # store fields
-        self.main = DotDict(main or {})
-        self.steps = DotDict(steps or {})
-        self.objects = DotDict(objects or {})
-        self.columns = DotDict(columns or {})
+        self.main = DotDict.wrap(main or {})
+        self.steps = DotDict.wrap(steps or {})
+        self.objects = DotDict.wrap(objects or {})
 
-    def __iadd__(self, other: "SelectionResult") -> "SelectionResult":
+    def __iadd__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """
-        Adds the field of a *other* instance in-place.
+        Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
+        unchanged.
         """
+        # do nothing if the other instance is none
+        if other is None:
+            return self
+
+        # type check
         if not isinstance(other, SelectionResult):
             raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
 
         # update fields in-place
         self.main.update(other.main)
         self.steps.update(other.steps)
-        self.objects.update(other.objects)
-        self.columns.update(other.columns)
+        # use deep merging for objects
+        law.util.merge_dicts(self.objects, other.objects, inplace=True, deep=True)
 
         return self
 
-    def __add__(self, other: "SelectionResult") -> "SelectionResult":
+    def __add__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """
-        Returns a new instance with all fields of *this* and an *other* instance merged.
+        Returns a new instance with all fields of *this* and an *other* instance merged. When
+        *None*, a copy of *this* instance is returned.
         """
         inst = self.__class__()
 
+        # add this instance
         inst += self
-        inst += other
+
+        # add the other instance if not none
+        if other is not None:
+            if not isinstance(other, SelectionResult):
+                raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
+            inst += other
 
         return inst
 
@@ -188,17 +146,13 @@ class SelectionResult(object):
         """
         Converts the contained fields into a nested awkward array and returns it.
         """
-        return ak.zip(law.util.merge_dicts(
-            self.main,
-            {
-                "steps": ak.zip(self.steps),
-                "objects": ak.zip(self.objects, depth_limit=1),  # limit due to ragged axis 1
-                "columns": ak.zip(self.columns),
-            },
-        ))
+        to_merge = {}
+        if self.steps:
+            to_merge["steps"] = ak.zip(self.steps)
+        if self.objects:
+            to_merge["objects"] = ak.zip({
+                src_name: ak.zip(dst_dict, depth_limit=1)  # limit due to ragged axis 1
+                for src_name, dst_dict in self.objects.items()
+            })
 
-
-# import all selection modules
-if law.config.has_option("analysis", "selection_modules"):
-    for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
-        maybe_import(mod.strip())
+        return ak.zip({**self.main, **to_merge})

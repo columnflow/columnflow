@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Script that runs coverage tests.
+
+action() {
+    local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
+    local ap_dir="$( dirname "$this_dir" )"
+
+    # dev flag for sandboxes
+    local dev="$( [ "$AP_DEV" = "1" ] && echo "_dev" || echo "" )"
+
+    # helper to run a coverage test
+    run_coverage() {
+        local mod="$1"
+        local sandbox="$2"
+
+        if [ -z "${sandbox}" ]; then
+            echo "testing ${mod} ..."
+            ( cd "$ap_dir"; pytest --cov=ap --cov-report xml:coverage_${mod}.xml "tests/${mod}.py" )
+        else
+            echo "testing ${mod} in sandbox ${sandbox} ..."
+            ( cd "$ap_dir"; bash -c "source sandboxes/${sandbox} && pytest --cov=ap --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
+        fi
+    }
+
+    # start tests and keep track of immediate and global return values
+    local gret="0"
+    local ret
+
+    # test_util
+    run_coverage test_util
+    ret="$?"
+    [ "$gret" = "0" ] && gret="$ret"
+
+    # test_columnar_util
+    echo
+    run_coverage test_columnar_util "venv_columnar${dev}.sh"
+    ret="$?"
+    [ "$gret" = "0" ] && gret="$ret"
+
+    return "$gret"
+}
+action "$@"

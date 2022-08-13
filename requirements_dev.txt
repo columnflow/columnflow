@@ -1,6 +1,9 @@
-# version 2
-# packages are installed in addition to those in requirements_prod.txt
+# version 4
+# packages might be installed in addition to other requirements
 
 ipython==7.16.*
+pytest==7.0.*
+pytest-cov==3.0.*
 flake8==4.0.*
 flake8-commas==2.1.*
+flake8-quotes==3.3.*

@@ -163,6 +163,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     task_namespace = None
 
     default_wlcg_fs = "wlcg_fs_software"
+    default_output_location = "wlcg"
 
     def get_repo_path(self):
         # required by BundleGitRepository
@@ -170,7 +171,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     def single_output(self):
         repo_base = os.path.basename(self.get_repo_path())
-        return self.wlcg_target(f"{repo_base}.{self.checksum}.tgz")
+        return self.target(f"{repo_base}.{self.checksum}.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -179,6 +180,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # create the bundle
@@ -202,6 +204,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     version = None
 
     default_wlcg_fs = "wlcg_fs_software"
+    default_output_location = "wlcg"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -212,7 +215,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     def checksum(self):
         if not self._checksum:
             # get a list of all software flag files
-            flag_files = os.environ["AP_SOFTWARE_FLAG_FILES"].strip().split()
+            flag_files = []
             for venv_name in os.listdir(os.environ["AP_VENV_PATH"]):
                 # skip all dev envs
                 if venv_name.endswith("_dev"):
@@ -233,12 +236,13 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         return self._checksum
 
     def single_output(self):
-        return self.wlcg_target(f"software.{self.checksum}.tgz")
+        return self.target(f"software.{self.checksum}.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
 
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         software_path = os.environ["AP_SOFTWARE"]
@@ -281,6 +285,7 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
     task_namespace = None
     exclude = "^src/tmp"
     default_wlcg_fs = "wlcg_fs_software"
+    default_output_location = "wlcg"
 
     def __init__(self, *args, **kwargs):
         # cached bash sandbox that wraps the cmssw environment
@@ -305,11 +310,12 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
 
     def single_output(self):
         cmssw_path = os.path.basename(self.get_cmssw_path())
-        return self.wlcg_target(f"{cmssw_path}.{self.checksum}.tgz")
+        return self.target(f"{cmssw_path}.{self.checksum}.tgz")
 
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.log
     def run(self):
         # create the bundle
         bundle = law.LocalFileTarget(is_tmp="tgz")

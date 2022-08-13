@@ -52,6 +52,20 @@ action() {
 
     echo
 
+    # coverage
+    cecho 35 "check coverage ..."
+    bash "$this_dir/run_coverage"
+    ret="$?"
+    if [ "$ret" != "0" ]; then
+        2>&1 cecho 31 "run_coverage failed with exit code $ret"
+        [ "$mode" = "force" ] || return "$ret"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
+
+    echo
+
     # docs
     cecho 35 "check docs ..."
     bash "$this_dir/run_docs"

@@ -21,6 +21,13 @@ process_data = Process(
     label="data",
 )
 
+process_data_mu = process_data.add_process(
+    name="data_mu",
+    id=10,
+    is_data=True,
+    label=r"Data $\mu$",
+)
+
 
 #
 # single-top
@@ -173,6 +180,7 @@ process_tt = Process(
     name="tt",
     id=2000,
     label=r"$t\bar{t}$ + Jets",
+    color=(205, 0, 9),
     xsecs={
         13: Number(831.76, {
             "scale": (19.77, 29.20),

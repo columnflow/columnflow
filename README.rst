@@ -5,6 +5,10 @@ Analysis playground
    :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
+.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=33FLINPXFP
+   :target: https://codecov.io/gh/uhh-cms/analysis_playground
+   :alt: Code coverge
+
 .. image:: https://readthedocs.org/projects/analysis_playground/badge
    :target: http://analysis_playground.readthedocs.io
    :alt: Documentation status
@@ -40,6 +44,21 @@ The task that you are about to start requires a valid voms proxy.
 
     # run your first task
     law run ReduceEvents --version v1 --dataset st_tchannel_t --branch 0
+
+    # create plots
+    law run PlotVariables \
+        --version v1 \
+        --datasets "st_tchannel_t,tt_sl" \
+        --producers features \
+        --variables ht \
+        --workers 3
+
+    # create a (test) datacard
+    law run CreateDatacards \
+        --version v1 \
+        --producers features \
+        --inference-model test \
+        --workers 3
 
 
 Development

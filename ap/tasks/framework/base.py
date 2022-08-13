@@ -5,27 +5,73 @@ Generic tools and base tasks that are defined along typical objects in an analys
 """
 
 import os
+import enum
 import itertools
 import inspect
-from typing import Optional, Sequence
+import functools
+from typing import Optional, Sequence, List, Union, Set, Dict
 
 import luigi
 import law
-import six
+import order as od
+
+
+default_analysis = law.config.get_expanded("analysis", "default_analysis")
+default_config = law.config.get_expanded("analysis", "default_config")
+default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
+class OutputLocation(enum.Enum):
+    """
+    Output location flag.
+    """
+
+    config = "config"
+    local = "local"
+    wlcg = "wlcg"
 
 
 class BaseTask(law.Task):
 
+    task_namespace = os.getenv("AP_TASK_NAMESPACE")
+
+
+class AnalysisTask(BaseTask, law.SandboxTask):
+
+    analysis = luigi.Parameter(
+        default=default_analysis,
+        description=f"name of the analysis; default: '{default_analysis}'",
+    )
     version = luigi.Parameter(description="mandatory version that is encoded into output paths")
 
-    task_namespace = os.getenv("AP_TASK_NAMESPACE")
+    allow_empty_sandbox = True
+    sandbox = None
+
+    local_workflow_require_branches = False
+    output_collection_cls = law.SiblingFileCollection
+
+    # defaults for targets
+    default_store = "$AP_STORE_LOCAL"
+    default_wlcg_fs = "wlcg_fs"
+    default_output_location = "local"
 
     @classmethod
     def modify_param_values(cls, params):
-        """
-        Hook to modify command line arguments before instances of this class are created.
-        """
+        params = super().modify_param_values(params)
+
+        # store a reference to the analysis inst
+        if "analysis" in params:
+            params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
+
         return params
+
+    @classmethod
+    def get_analysis_inst(cls, analysis):
+        if analysis == "analysis_st":
+            from ap.config.analysis_st import analysis_st
+            return analysis_st
+
+        raise ValueError(f"unknown analysis {analysis}")
 
     @classmethod
     def req_params(cls, inst, **kwargs):
@@ -38,45 +84,146 @@ class BaseTask(law.Task):
         _prefer_cli.add("version")
         kwargs["_prefer_cli"] = _prefer_cli
 
-        # default to the version of the requested task class in the version map accessible through
-        # the task instance
+        # when cls accepts a version, but non was actively requested, use the version map to assign it
+        version_map = None
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
             version_map = cls.get_version_map(inst)
-            if version_map is not NotImplemented and cls.__name__ in version_map:
-                kwargs["version"] = version_map[cls.__name__]
 
-        return super().req_params(inst, **kwargs)
+        # build the params
+        params = super().req_params(inst, **kwargs)
 
-    @classmethod
-    def get_version_map(cls, task):
-        return NotImplemented
+        # when the version map is set, lookup the key with which to find a version in the map and overwrite it
+        if version_map and cls.task_family in version_map:
+            version_params = list(cls.get_version_params())
+            version = version_map[cls.task_family]
+            while isinstance(version, dict) and version_params:
+                param = version_params.pop(0)
+                if param not in params:
+                    break
+                value = params[param]
+                if value not in version:
+                    if None not in version:
+                        break
+                    value = None
+                version = version[value]
+            params["version"] = version
 
-
-class AnalysisTask(BaseTask, law.SandboxTask):
-
-    allow_empty_sandbox = True
-    sandbox = None
-
-    output_collection_cls = law.SiblingFileCollection
-
-    # hard-coded analysis name, could be changed to a parameter
-    analysis = "analysis_st"
-
-    # defaults for targets
-    default_store = "$AP_STORE_LOCAL"
-    default_wlcg_fs = "wlcg_fs"
-
-    @classmethod
-    def get_analysis_inst(cls, analysis):
-        if analysis == "analysis_st":
-            from ap.config.analysis_st import analysis_st
-            return analysis_st
-        else:
-            raise ValueError(f"unknown analysis {analysis}")
+        return params
 
     @classmethod
     def get_version_map(cls, task):
         return task.analysis_inst.get_aux("versions", {})
+
+    @classmethod
+    def get_version_params(cls):
+        return ()
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        # implemented only for simplified mro control
+        return set()
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        return {
+            "task": task,
+            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(params["analysis"]),
+        }
+
+    @classmethod
+    def get_calibrator_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def get_selector_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def get_producer_kwargs(cls, task=None, **params):
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(task=task, **params)
+
+    @classmethod
+    def find_config_objects(
+        cls,
+        names: Union[str, Sequence[str], Set[str]],
+        container: od.UniqueObject,
+        object_cls: od.UniqueObjectMeta,
+        object_groups: Optional[Dict[str, list]] = None,
+        accept_patterns: bool = True,
+        deep: bool = False,
+        context: Optional[str] = None,
+    ) -> List[str]:
+        """
+        Returns all names of objects of type *object_cls* known to a *container* (e.g.
+        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
+        pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
+        *object_group* that matches group names to object names. When *deep* is *True* the lookup of
+        objects in the *container* is recursive. *context* is forwarded to all container lookup
+        methods. Example:
+
+        .. code-block:: python
+
+            find_config_objects(["st_tchannel_*"], config_inst, od.Dataset)
+            # -> ["st_tchannel_t", "st_tchannel_tbar"]
+        """
+        singular = object_cls.cls_name_singular
+        plural = object_cls.cls_name_plural
+        _cache = {}
+
+        def get_all_object_names():
+            if "all_object_names" not in _cache:
+                if deep:
+                    _cache["all_object_names"] = {
+                        obj.name
+                        for obj, _, _ in
+                        getattr(container, "walk_{}".format(plural))(context=context)
+                    }
+                else:
+                    _cache["all_object_names"] = set(getattr(container, plural).names(context=context))
+            return _cache["all_object_names"]
+
+        def has_obj(name):
+            if "has_obj_func" not in _cache:
+                kwargs = {"context": context}
+                if object_cls in container._deep_child_classes:
+                    kwargs["deep"] = deep
+                _cache["has_obj_func"] = functools.partial(
+                    getattr(container, "has_{}".format(singular)),
+                    **kwargs,
+                )
+            return _cache["has_obj_func"](name)
+
+        object_names = []
+        patterns = []
+        lookup = list(names)
+        while lookup:
+            name = lookup.pop(0)
+            if has_obj(name):
+                # known object
+                object_names.append(name)
+            elif object_groups and name in object_groups:
+                # a key in the object group dict
+                lookup.extend(list(object_groups[name]))
+            elif accept_patterns:
+                # must eventually be a pattern, store it for object traversal
+                # special case
+                if name == "*":
+                    object_names = list(get_all_object_names())
+                    del patterns[:]
+                    break
+                patterns.append(name)
+
+        # if patterns are found, loop through them to preserve the order of patterns
+        # and compare to all existing names
+        for pattern in patterns:
+            for name in get_all_object_names():
+                if law.util.multi_match(name, pattern):
+                    object_names.append(name)
+
+        return law.util.make_unique(object_names)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -96,7 +243,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         parts["analysis"] = self.analysis_inst.name
 
         # in this base class, just add the task class name
-        parts["task_class"] = self.task_family
+        parts["task_family"] = self.task_family
 
         # add the version when set
         if self.version is not None:
@@ -163,13 +310,57 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # create the target instance and return it
         return cls(path, **kwargs)
 
+    def target(self, *path, **kwargs):
+        """ target(*path, location=None, **kwargs)
+        """
+        # get the default location
+        location = kwargs.pop("location", self.default_output_location)
+
+        # parse it and obtain config values if necessary
+        if isinstance(location, str):
+            location = OutputLocation[location]
+        if location == OutputLocation.config:
+            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            if not location:
+                raise Exception(
+                    f"no option 'outputs.{self.task_family}' found in law.cfg to obtain target "
+                    "location",
+                )
+            location[0] = OutputLocation[location[0]]
+        location = law.util.make_list(location)
+
+        # forward to correct function
+        if location[0] == OutputLocation.local:
+            # get other options
+            (store,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("store", store)
+            return self.local_target(*path, **kwargs)
+
+        elif location[0] == OutputLocation.wlcg:
+            # get other options
+            (fs,) = (location[1:] + [None])[:1]
+            kwargs.setdefault("fs", fs)
+            return self.wlcg_target(*path, **kwargs)
+
+        raise Exception(f"cannot determine output location based on '{location}'")
+
 
 class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
-        default="run2_pp_2018",
-        description="name of the analysis config to use; default: 'run2_pp_2018'",
+        default=default_config,
+        description=f"name of the analysis config to use; default: '{default_config}'",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # store a reference to the config inst
+        if "analysis_inst" in params and "config" in params:
+            params["config_inst"] = params["analysis_inst"].get_config(params["config"])
+
+        return params
 
     @classmethod
     def get_version_map(cls, task):
@@ -177,6 +368,15 @@ class ConfigTask(AnalysisTask):
             return task.config_inst.get_aux("versions", {})
 
         return super().get_version_map(task)
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            kwargs["config_inst"] = task.config_inst
+        elif "config" in params and "analysis_inst" in kwargs:
+            kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
+        return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -188,7 +388,7 @@ class ConfigTask(AnalysisTask):
         parts = super().store_parts()
 
         # add the config name
-        parts.insert_after("task_class", "config", self.config_inst.name)
+        parts.insert_after("task_family", "config", self.config_inst.name)
 
         return parts
 
@@ -197,7 +397,6 @@ class ShiftTask(ConfigTask):
 
     shift = luigi.Parameter(
         default="nominal",
-        significant=False,
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
         "default: 'nominal'",
     )
@@ -214,6 +413,13 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
+    def get_version_params(cls):
+        params = super().get_version_params()
+        if cls.shift:
+            params += ("shift",)
+        return params
+
+    @classmethod
     def modify_param_values(cls, params):
         """
         When "config" and "shift" are set, this method evaluates them to set the effecitve shift.
@@ -226,7 +432,7 @@ class ShiftTask(ConfigTask):
             params = super_func(params)
 
         # get params
-        requested_config = params.get("config")
+        config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
         requested_effective_shift = params.get("effective_shift")
 
@@ -236,7 +442,7 @@ class ShiftTask(ConfigTask):
             params["effective_shift"] = "nominal"
 
         # do nothing when the effective shift is already set and no config is defined
-        if requested_effective_shift not in no_values or requested_config in no_values:
+        if requested_effective_shift not in no_values or config_inst in no_values:
             return params
 
         # shift must be set
@@ -244,9 +450,6 @@ class ShiftTask(ConfigTask):
             if cls.allow_empty_shift:
                 return params
             raise Exception(f"no shift found in params: {params}")
-
-        # get the config instance
-        config_inst = cls.get_analysis_inst(cls.analysis).get_config(requested_config)
 
         # complain when the requested shift is not known
         if requested_shift not in config_inst.shifts:
@@ -259,12 +462,33 @@ class ShiftTask(ConfigTask):
         if requested_shift in allowed_shifts:
             params["effective_shift"] = requested_shift
 
+        # store references
+        params["shift_inst"] = config_inst.get_shift(requested_shift)
+        params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
+
         return params
 
     @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
         # for the basic shift task, only the shifts implemented by this task class are allowed
-        return set(cls.shifts)
+        # still call super for simplified mro control
+        shifts = super().determine_allowed_shifts(config_inst, params)
+
+        # add class level shifts
+        shifts |= cls.shifts
+
+        return shifts
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            if task.shift_inst:
+                kwargs["shift_inst"] = task.shift_inst
+        elif "effective_shift" in params and "config_inst" in kwargs:
+            if params["effective_shift"] != law.NO_STR:
+                kwargs["shift_inst"] = kwargs["config_inst"].get_shift(params["effective_shift"])
+        return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -287,11 +511,30 @@ class ShiftTask(ConfigTask):
 class DatasetTask(ShiftTask):
 
     dataset = luigi.Parameter(
-        default="st_tchannel_t",
-        description="name of the dataset to process; default: 'st_tchannel_t'",
+        default=default_dataset,
+        description=f"name of the dataset to process; default: '{default_dataset}'",
     )
 
     file_merging = None
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # store a reference to the dataset inst
+        if "config_inst" in params and "dataset" in params:
+            params["dataset_inst"] = params["config_inst"].get_dataset(params["dataset"])
+
+        return params
+
+    @classmethod
+    def get_version_params(cls):
+        params = super().get_version_params()
+        if cls.shift:
+            params = params[:-1] + ("dataset", "shift")
+        else:
+            params += ("dataset",)
+        return params
 
     @classmethod
     def determine_allowed_shifts(cls, config_inst, params):
@@ -303,9 +546,22 @@ class DatasetTask(ShiftTask):
             requested_dataset = params.get("dataset")
             if requested_dataset not in (None, law.NO_STR):
                 dataset_inst = config_inst.get_dataset(requested_dataset)
-                allowed_shifts |= set(dataset_inst.info.keys())
+                # clear shifts for data and extend with dataset variations for mc
+                if dataset_inst.is_data:
+                    allowed_shifts.clear()
+                else:
+                    allowed_shifts |= set(dataset_inst.info.keys())
 
         return allowed_shifts
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+        if task:
+            kwargs["dataset_inst"] = task.dataset_inst
+        elif "dataset" in params and "config_inst" in kwargs:
+            kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])
+        return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -331,38 +587,12 @@ class DatasetTask(ShiftTask):
         Returns the number of files that are handled in one branch. Consecutive merging steps are
         not handled yet.
         """
-        merging_info = self.config_inst.get_aux("file_merging")
         n_files = self.dataset_info_inst.n_files
 
-        if isinstance(self.file_merging, six.integer_types):
+        if isinstance(self.file_merging, int):
             # interpret the file_merging attribute as the merging factor itself
             # non-positive numbers mean "merge all in one"
             n_merge = self.file_merging if self.file_merging > 0 else n_files
-        elif self.file_merging in merging_info:
-            # file_merging refers to an entry in merging_info which can be nested as
-            # dataset -> shift -> version
-            n_merge = merging_info[self.file_merging]
-
-            # mapped to dataset?
-            if isinstance(n_merge, dict):
-                n_merge = n_merge.get(self.dataset_inst.name, n_files)
-
-            # mapped to shift?
-            if self.shift_inst and isinstance(n_merge, dict):
-                n_merge = n_merge.get(self.shift_inst.name, n_merge.get("nominal", n_files))
-
-            # mapped to version?
-            if self.version and isinstance(n_merge, dict):
-                n_merge = n_merge.get(self.version, n_files)
-
-            if not isinstance(n_merge, int):
-                raise TypeError(
-                    "the merging factor in the file_merging config must be an integer, but got "
-                    f"'{n_merge}' for dataset {self.dataset_inst}, shift {self.shift_inst} and "
-                    f"version {self.version}",
-                )
-
-            n_merge = n_merge or n_files
         else:
             # no merging at all
             n_merge = 1
@@ -612,36 +842,6 @@ def wrapper_factory(
     if has_datasets:
         check_class_compatibility("datasets", DatasetTask, ShiftTask)
 
-    # generic helper to find objects on unique object indices or mappings
-    def find_objects(names, object_index, object_group, accept_patterns=True):
-        object_names = set()
-        patterns = set()
-        lookup = list(names)
-        while lookup:
-            name = lookup.pop(0)
-            if accept_patterns and name == "*":
-                # special case
-                object_names |= set(object_index.names())
-                patterns = None
-                break
-            elif name in object_index:
-                # known object
-                object_names.add(name)
-            elif object_group and name in object_group:
-                # a key in the object group dict
-                lookup.extend(list(object_group[name]))
-            elif accept_patterns:
-                # must eventually be a pattern, store it for object traversal
-                patterns.add(name)
-
-        # if patterns are found, loop through existing objects instead and compare
-        if patterns:
-            for name in object_index.names():
-                if law.util.multi_match(name, patterns):
-                    object_names.add(name)
-
-        return object_names
-
     # create the class
     class Wrapper(base_cls, law.WrapperTask):
 
@@ -715,9 +915,10 @@ def wrapper_factory(
 
             # get the target config instances
             if self.wrapper_has_configs:
-                configs = find_objects(
+                configs = self.find_config_objects(
                     self.configs,
-                    self.analysis_inst.configs,
+                    self.analysis_inst,
+                    od.Config,
                     self.analysis_inst.x("config_groups", {}),
                 )
                 if not configs:
@@ -725,17 +926,19 @@ def wrapper_factory(
                         f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
                     )
                 if self.wrapper_has_skip_configs:
-                    configs -= find_objects(
+                    skip_configs = self.find_config_objects(
                         self.skip_configs,
-                        self.analysis_inst.configs,
+                        self.analysis_inst,
+                        od.Config,
                         self.analysis_inst.x("config_groups", {}),
                     )
+                    configs = [c for c in configs if c not in skip_configs]
                     if not configs:
                         raise ValueError(
                             f"no configs found in analysis {self.analysis_inst} after skipping "
                             f"{self.skip_configs}",
                         )
-                config_insts = list(map(self.analysis_inst.get_config, configs))
+                config_insts = list(map(self.analysis_inst.get_config, sorted(configs)))
             else:
                 config_insts = [self.config_inst]
 
@@ -748,9 +951,10 @@ def wrapper_factory(
 
                 # find all shifts
                 if self.wrapper_has_shifts:
-                    shifts = find_objects(
+                    shifts = self.find_config_objects(
                         self.shifts,
-                        config_inst.shifts,
+                        config_inst,
+                        od.Shift,
                         config_inst.x("shift_groups", {}),
                     )
                     if not shifts:
@@ -758,27 +962,30 @@ def wrapper_factory(
                             f"no shifts found in config {config_inst} matching {self.shifts}",
                         )
                     if self.wrapper_has_skip_shifts:
-                        shifts -= find_objects(
+                        skip_shifts = self.find_config_objects(
                             self.skip_shifts,
-                            config_inst.shifts,
+                            config_inst,
+                            od.Shift,
                             config_inst.x("shift_groups", {}),
                         )
+                        shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
                         raise ValueError(
                             f"no shifts found in config {config_inst} after skipping "
                             f"{self.skip_shifts}",
                         )
-                    shifts = sorted(shifts)
                     # move "nominal" to the front if present
+                    shifts = sorted(shifts)
                     if "nominal" in shifts:
                         shifts.insert(0, shifts.pop(shifts.index("nominal")))
                     prod_sequences.append(shifts)
 
                 # find all datasets
                 if self.wrapper_has_datasets:
-                    datasets = find_objects(
+                    datasets = self.find_config_objects(
                         self.datasets,
-                        config_inst.datasets,
+                        config_inst,
+                        od.Dataset,
                         config_inst.x("dataset_groups", {}),
                     )
                     if not datasets:
@@ -787,11 +994,13 @@ def wrapper_factory(
                             f"{self.datasets}",
                         )
                     if self.wrapper_has_skip_datasets:
-                        datasets -= find_objects(
+                        skip_datasets = self.find_config_objects(
                             self.skip_datasets,
-                            config_inst.datasets,
+                            config_inst,
+                            od.Dataset,
                             config_inst.x("dataset_groups", {}),
                         )
+                        datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
                             raise ValueError(
                                 f"no datasets found in config {self.config_inst} after skipping "

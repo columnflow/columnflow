@@ -36,6 +36,14 @@ setup() {
     # (AP = Analysis Playground)
     #
 
+    # lang defaults
+    [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
+    [ -z "$LANG" ] && export LANG="en_US.UTF-8"
+    [ -z "$LC_ALL" ] && export LC_ALL="en_US.UTF-8"
+
+    # proxy
+    [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
+
     export AP_BASE="$this_dir"
     interactive_setup "$setup_name" || return "$?"
     export AP_SETUP_NAME="$setup_name"
@@ -47,13 +55,17 @@ setup() {
     export AP_ORIG_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
     export AP_CI_JOB="$( [ "$GITHUB_ACTIONS" = "true" ] && echo 1 || echo 0 )"
 
-    # lang defaults
-    [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
-    [ -z "$LANG" ] && export LANG="en_US.UTF-8"
-    [ -z "$LC_ALL" ] && export LC_ALL="en_US.UTF-8"
+    # overwrite some variables in remote and ci jobs
+    if [ "$AP_REMOTE_JOB" = "1" ]; then
+        export AP_WLCG_USE_CACHE="true"
+        export AP_WLCG_CACHE_CLEANUP="true"
+        export AP_WORKER_KEEP_ALIVE="false"
+    elif [ "$AP_CI_JOB" = "1" ]; then
+        export AP_WORKER_KEEP_ALIVE="false"
+    fi
 
-    # proxy
-    [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
+    # some variable defaults
+    [ -z "$AP_WORKER_KEEP_ALIVE" ] && export AP_WORKER_KEEP_ALIVE="false"
 
 
     #
@@ -61,13 +73,13 @@ setup() {
     #
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh"
+    [ -z "$AP_LCG_SETUP" ] && export AP_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
     if [ -f "$AP_LCG_SETUP" ]; then
         source "$AP_LCG_SETUP" ""
     elif [ "$AP_CI_JOB" = "1" ]; then
-        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing in CI env, skipping"
+        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing in CI env, skipping"
     else
-        2>&1 echo "LCG seutp file $AP_LCG_SETUP not existing"
+        2>&1 echo "LCG setup file $AP_LCG_SETUP not existing"
         return "1"
     fi
 
@@ -83,65 +95,32 @@ setup() {
     # local python stack in two virtual envs:
     # - "ap_prod": contains the minimal stack to run tasks and is sent alongside jobs
     # - "ap_dev" : "prod" + additional python tools for local development (e.g. ipython)
-    local sw_version_prod="$( cat "${AP_BASE}/requirements_prod.txt" | grep -Po "# version \K\d+.*" )"
-    local sw_version_dev="$( cat "${AP_BASE}/requirements_dev.txt" | grep -Po "# version \K\d+.*" )"
-    local flag_file_sw="${AP_SOFTWARE}/.sw_good"
-    [ "$AP_REINSTALL_SOFTWARE" = "1" ] && rm -f "$flag_file_sw"
-    if [ ! -f "$flag_file_sw" ]; then
-        if [ "$AP_REMOTE_JOB" = "1" ]; then
-            2>&1 echo "software stack cannot be setup from scratch on remote job nodes"
-            return "1"
+    if [ "$AP_REMOTE_JOB" != "1" ]; then
+        if [ "$AP_REINSTALL_SOFTWARE" = "1" ]; then
+            echo "removing software stack at ${AP_VENV_PATH}"
+            rm -rf "${AP_VENV_PATH}"/ap_{prod,dev}
         fi
 
-        echo "installing software stack at ${AP_SOFTWARE}"
-        rm -rf "${AP_VENV_PATH}"
-
-        # setup the prod venv
-        ap_create_venv ap_prod || return "$?"
-        source "${AP_VENV_PATH}/ap_prod/bin/activate" ""
-        python3 -m pip install -U pip
-        python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-        ap_make_venv_relocateable ap_prod
-
-        # setup the local dev env when not running the ci
-        if [ "$AP_CI_JOB" != "1" ]; then
-            ap_create_venv ap_dev || return "$?"
-            source "${AP_VENV_PATH}/ap_dev/bin/activate" ""
-            python3 -m pip install -U pip
-            python3 -m pip install -r "$AP_BASE/requirements_prod.txt" || return "$?"
-            python3 -m pip install -r "$AP_BASE/requirements_dev.txt" || return "$?"
-            if [ -f "$AP_BASE/requirements_user.txt" ]; then
-                python3 -m pip install -r "$AP_BASE/requirements_user.txt" || return "$?"
-            fi
-            ap_make_venv_relocateable ap_dev
-        fi
-
-        date "timestamp +%s" > "$flag_file_sw"
-        echo "version prod $sw_version_prod" >> "$flag_file_sw"
-        echo "version dev $sw_version_dev" >> "$flag_file_sw"
-    else
-        if [ "$AP_REMOTE_JOB" = "1" ] || [ "$AP_CI_JOB" = "1" ]; then
-            source "${AP_VENV_PATH}/ap_prod/bin/activate" "" || return "$?"
-            export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_prod"
-        else
-            source "${AP_VENV_PATH}/ap_dev/bin/activate" "" || return "$?"
-            export LAW_SANDBOX="venv::\$AP_VENV_PATH/ap_dev,venv::\$AP_VENV_PATH/ap_prod"
-        fi
-    fi
-    export AP_SOFTWARE_FLAG_FILES="$flag_file_sw"
-
-    # check the versions in the sw flag file and show a warning when there was an update
-    local kind
-    local sw_version
-    for kind in prod dev; do
-        eval "sw_version=\${sw_version_${kind}}"
-        if [ "$( cat "$flag_file_sw" | grep -Po "version $kind \K\d+.*" )" != "$sw_version" ]; then
+        show_version_warning() {
             2>&1 echo ""
-            2>&1 echo "WARNING: your venv 'ap_${kind}' is not up to date, please consider updating it in a new shell with"
+            2>&1 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
             2>&1 echo "         > AP_REINSTALL_SOFTWARE=1 source setup.sh $( $setup_is_default || echo "$setup_name" )"
             2>&1 echo ""
-        fi
-    done
+        }
+
+        # source the prod and dev sandboxes
+        source "${AP_BASE}/sandboxes/ap_prod.sh" "" "1"
+        local ret_prod="$?"
+        source "${AP_BASE}/sandboxes/ap_dev.sh" "" "1"
+        local ret_dev="$?"
+
+        # show version warnings
+        [ "$ret_prod" = "21" ] && show_version_warning "ap_prod"
+        [ "$ret_dev" = "21" ] && show_version_warning "ap_dev"
+    else
+        # source the prod sandbox
+        source "${AP_BASE}/sandboxes/ap_prod.sh" ""
+    fi
 
 
     #
@@ -183,7 +162,7 @@ setup() {
 }
 
 interactive_setup() {
-    # Starts the interactive part of the setup by querying for values for certain environment
+    # Starts the interactive part of the setup by querying for values of certain environment
     # variables with useful defaults. When a custom, named setup is triggered, the values of all
     # queried environment variables are stored in a file in $AP_BASE/.setups.
     #
