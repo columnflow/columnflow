@@ -767,7 +767,7 @@ def update_ak_array(
             if has_ak_column_cached(route):
                 if do_concat(route):
                     # concat and reassign
-                    set_ak_column(
+                    ak_array = set_ak_column(
                         ak_array,
                         route,
                         ak.concatenate((
@@ -777,16 +777,20 @@ def update_ak_array(
                     )
                 elif do_add(route):
                     # add and reassign
-                    set_ak_column(ak_array, route, route.apply(ak_array) + route.apply(other))
+                    ak_array = set_ak_column(
+                        ak_array,
+                        route,
+                        route.apply(ak_array) + route.apply(other),
+                    )
                 elif do_overwrite(route):
                     # delete the column first for type safety and then re-add it
                     ak_array = remove_ak_column(ak_array, route)
-                    set_ak_column(ak_array, route, route.apply(other))
+                    ak_array = set_ak_column(ak_array, route, route.apply(other))
                 else:
                     raise Exception(f"cannot update already existing array column '{route}'")
             else:
                 # the route is new, so add it and manually tell the cache
-                set_ak_column(ak_array, route, route.apply(other))
+                ak_array = set_ak_column(ak_array, route, route.apply(other))
                 _has_column_cache[route] = True
 
     return ak_array
@@ -847,7 +851,7 @@ def sort_ak_fields(
         arr = ak_array[fields]
         sorted_fields = sorted(arr.fields, key=sort_fn)
         if tuple(arr.fields) != tuple(sorted_fields):
-            set_ak_column(ak_array, fields, arr[sorted_fields])
+            ak_array = set_ak_column(ak_array, fields, arr[sorted_fields])
 
     # sort the top level fields
     if len(ak_array.fields) > 1:
