@@ -12,7 +12,6 @@ from columnflow.util import maybe_import
 from columnflow.columnar_util import (
     Route, ArrayFunction, get_ak_routes, has_ak_column, set_ak_column, remove_ak_column,
     add_ak_alias, add_ak_aliases, update_ak_array, flatten_ak_array, sort_ak_fields,
-    sorted_ak_to_parquet,
 )
 
 ak = maybe_import("awkward")
