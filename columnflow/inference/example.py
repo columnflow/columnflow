@@ -1,28 +1,51 @@
 # coding: utf-8
 
 """
-Dummy inference model.
+Exemplary inference model.
 """
 
 from columnflow.inference import inference_model, ParameterType, ParameterTransformation
 
 
 @inference_model
-def test(self):
+def example(self):
 
     #
     # categories
     #
 
-    self.add_category("cat1", category="1e", variable="ht", mc_stats=True, data_datasets=["data_mu_a"])
-    self.add_category("cat2", category="1mu", variable="muon1_pt", mc_stats=True, data_datasets=["data_mu_a"])
+    self.add_category(
+        "cat1",
+        category="1e",
+        variable="ht",
+        mc_stats=True,
+        data_datasets=["data_mu_a"],
+    )
+    self.add_category(
+        "cat2",
+        category="1mu",
+        variable="muon1_pt",
+        mc_stats=True,
+        data_datasets=["data_mu_a"],
+    )
+
 
     #
     # processes
     #
 
-    self.add_process("ST", process="st_tchannel", signal=True, mc_datasets=["st_tchannel_t", "st_tchannel_tbar"])
-    self.add_process("TT", process="tt_sl", mc_datasets=["tt_sl"])
+    self.add_process(
+        "ST",
+        process="st_tchannel",
+        signal=True,
+        mc_datasets=["st_tchannel_t", "st_tchannel_tbar"],
+    )
+    self.add_process(
+        "TT",
+        process="tt_sl",
+        mc_datasets=["tt_sl"],
+
+    )
 
     #
     # parameters
@@ -69,8 +92,19 @@ def test(self):
     )
 
     # test
-    self.add_parameter("QCDscale_ttbar", category="cat1", process="TT", type=ParameterType.rate_uniform)
-    self.add_parameter("QCDscale_ttbar_norm", category="cat1", process="TT", type=ParameterType.rate_unconstrained)
+    self.add_parameter(
+        "QCDscale_ttbar",
+        category="cat1",
+        process="TT",
+        type=ParameterType.rate_uniform,
+    )
+    self.add_parameter(
+        "QCDscale_ttbar_norm",
+        category="cat1",
+        process="TT",
+        type=ParameterType.rate_unconstrained,
+    )
+
 
     #
     # post-processing

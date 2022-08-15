@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(projdir, "modules", "order"))
 sys.path.insert(0, projdir)
 os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
 
-import cf
+import columnflow as cf
 
 project = "columnflow"
 author = cf.__author__
@@ -32,7 +32,8 @@ pygments_style = "sphinx"
 add_module_names = False
 
 html_title = project + " Documentation"
-# html_logo = "../logo.png"
+html_logo = "../assets/logo_bright.png"
+html_favicon = "../assets/fav_bright.png"
 html_sidebars = {"**": [
     "about.html",
     "localtoc.html",

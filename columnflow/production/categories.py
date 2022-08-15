@@ -50,7 +50,15 @@ def category_ids_init(self: Producer) -> None:
     # add all selectors obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
         sel = cat_inst.selection
-        selector = sel if Selector.derived_by(sel) else Selector.get_cls(sel)
+        if Selector.derived_by(sel):
+            selector = sel
+        elif Selector.has_cls(sel):
+            selector = Selector.get_cls(sel)
+        else:
+            raise Exception(
+                f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to a existing "
+                "Selector object",
+            )
 
         # variables should refer to unexposed selectors as they should usually not
         # return SelectionResult's but a flat per-event mask

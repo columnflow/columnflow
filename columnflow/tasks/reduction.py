@@ -185,10 +185,10 @@ ReduceEventsWrapper = wrapper_factory(
 class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
     n_inputs = luigi.IntParameter(
-        default=2,
+        default=20,
         significant=True,
         description="minimal number of input files for sufficient statistics to infer merging "
-        "factors; default: 2",  # TODO: update once going to production
+        "factors; default: 20",
     )
     merged_size = law.BytesParameter(
         default=1024.0,

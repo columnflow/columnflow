@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Dummy training script.
+Exemplary ML model.
 """
 
 from typing import List, Any, Set, Union, Optional
@@ -17,7 +17,7 @@ ak = maybe_import("awkward")
 tf = maybe_import("tensorflow")
 
 
-class TestModel(MLModel):
+class ExampleModel(MLModel):
 
     def __init__(self, *args, folds: Optional[int] = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,4 +92,4 @@ class TestModel(MLModel):
 
 
 # usable derivations
-test_model = TestModel.derive("test_model", cls_dict={"folds": 3})
+example = ExampleModel.derive("example", cls_dict={"folds": 3})

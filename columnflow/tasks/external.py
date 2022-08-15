@@ -10,7 +10,7 @@ __all__ = []
 import os
 import shutil
 import subprocess
-from typing import Union, Tuple, List, Sequence
+from typing import Union, Tuple, List, Sequence, Optional
 
 import luigi
 import law
@@ -67,11 +67,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     def iter_nano_files(
         self,
         branch_task: DatasetTask,
-        remote_fs: Union[str, List[str], Tuple[str]] = (
-            "wlcg_fs_desy_store",
-            "wlcg_fs_infn_redirector",
-            "wlcg_fs_global_redirector",
-        ),
+        remote_fs: Optional[Union[str, List[str], Tuple[str]]] = None,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
@@ -86,6 +82,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             raise TypeError(f"branch_task must be a workflow branch, but got {branch_task}")
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
+        if not remote_fs:
+            remote_fs = law.config.get_expanded("outputs", "wlcg_lfn_sources", split_csv=True)
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns

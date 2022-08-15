@@ -6,6 +6,7 @@ Generic tools and base tasks that are defined along typical objects in an analys
 
 import os
 import enum
+import importlib
 import itertools
 import inspect
 import functools
@@ -67,11 +68,23 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     @classmethod
     def get_analysis_inst(cls, analysis):
-        if analysis == "analysis_st":
-            from columnflow.config.analysis_st import analysis_st
-            return analysis_st
+        # prepare names
+        if "." not in analysis:
+            raise ValueError(f"invalid analysis format: {analysis}")
+        module_id, name = analysis.rsplit(".", 1)
 
-        raise ValueError(f"unknown analysis {analysis}")
+        # import the module
+        try:
+            mod = importlib.import_module(module_id)
+        except ImportError as e:
+            raise ImportError(f"cannot import analysis module {module_id}: {e}")
+
+        # get the analysis instance
+        analysis_inst = getattr(mod, name, None)
+        if analysis_inst is None:
+            raise Exception(f"module {module_id} does not contain analysis instance {name}")
+
+        return analysis_inst
 
     @classmethod
     def req_params(cls, inst, **kwargs):

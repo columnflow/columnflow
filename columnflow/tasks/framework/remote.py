@@ -72,7 +72,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     def htcondor_bootstrap_file(self):
         # each job can define a bootstrap file that is executed prior to the actual job
         # in order to setup software and environment variables
-        return os.path.expandvars("$CF_BASE/ap/tasks/framework/remote_bootstrap.sh")
+        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
 
     def htcondor_job_config(self, config, job_num, branches):
         # include the voms proxy

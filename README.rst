@@ -1,4 +1,5 @@
-.. figure:: https://raw.githubusercontent.com/uhh-cms/columnflow/dev/logo.png
+.. figure:: https://raw.githubusercontent.com/uhh-cms/columnflow/dev/assets/logo_dark.png
+   :width: 480
    :target: https://github.com/uhh-cms/columnflow
    :align: center
    :alt: columnflow logo
