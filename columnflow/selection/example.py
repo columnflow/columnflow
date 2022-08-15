@@ -73,9 +73,11 @@ def jet_selection_test(
     set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
 
     # build and return selection results plus new columns
+    # "objects" maps source columns to new columns and selections to be applied on the old columns
+    # to create them, e.g. {"Jet": {"MyCustomJetCollection": indices_applied_to_Jet}}
     return SelectionResult(
         steps={"Jet": jet_sel},
-        objects={"Jet": {"Jet": jet_indices}},
+        objects={"Jet": {"Jet1": jet_indices, "Jet2": jet_indices}},
     )
 
 

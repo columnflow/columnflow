@@ -54,7 +54,7 @@ class PlotVariables(
     dep_MergeHistograms = MergeHistograms
 
     # default plot function
-    plot_function_name = "columnflow.plotting.variables.plot_variable_per_process"
+    plot_function_name = "columnflow.plotting.example.plot_variable_per_process"
 
     def create_branch_map(self):
         return [
@@ -189,7 +189,7 @@ class PlotShiftedVariables(
     dep_MergeShiftedHistograms = MergeShiftedHistograms
 
     # default plot function
-    plot_function_name = "columnflow.plotting.variables.plot_shifted_variable"
+    plot_function_name = "columnflow.plotting.example.plot_shifted_variable"
 
     def store_parts(self):
         parts = super().store_parts()

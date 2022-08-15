@@ -273,6 +273,7 @@ interactive_setup() {
         export_and_save CF_SCHEDULER_PORT "8082"
     fi
     query CF_VOMS "Virtual-organization" "cms:/cms/dcms"
+    export_and_save CF_TASK_NAMESPACE "cf"
 
     # move the env file to the correct location for later use
     if ! $setup_is_default; then
@@ -289,7 +290,7 @@ action() {
         return "0"
     else
         local code="$?"
-        echo -e "\x1b[0;49;31msetup failed with code $code\x1b[0m"
+        echo -e "\x1b[0;49;31mcolumnflow setup failed with code $code\x1b[0m"
         return "$code"
     fi
 }

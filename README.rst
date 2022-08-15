@@ -33,6 +33,10 @@ Modules, exported shell functions and environment variables might have a prefix 
 
 For examples using colunflow, pease visit the `analysis playground <https://github.com/uhh-cms/analysis_playground>`__.
 
+.. note::
+
+   A dedicated documentation will appear here soon.
+
 
 Development
 -----------

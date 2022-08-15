@@ -179,7 +179,7 @@ class PlotCutflow(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
-    plot_function_name = "columnflow.plotting.variables.plot_cutflow"
+    plot_function_name = "columnflow.plotting.example.plot_cutflow"
 
     selector_steps_order_sensitive = True
 
@@ -188,6 +188,12 @@ class PlotCutflow(
 
     def create_branch_map(self):
         # one category per branch
+        if not self.categories:
+            raise Exception(
+                f"{self.__class__.__name__} task cannot build branch map when no categories are "
+                "set",
+            )
+
         return list(self.categories)
 
     def workflow_requires(self, only_super: bool = False):
@@ -344,8 +350,8 @@ class PlotCutflowVariables(
     default_variables = ("cf_*",)
 
     # default plot functions
-    plot_function_name_per_process = "columnflow.plotting.variables.plot_variable_per_process"
-    plot_function_name_per_step = "columnflow.plotting.variables.plot_variable_variants"
+    plot_function_name_per_process = "columnflow.plotting.example.plot_variable_per_process"
+    plot_function_name_per_step = "columnflow.plotting.example.plot_variable_variants"
 
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
@@ -359,6 +365,17 @@ class PlotCutflowVariables(
             del self.chosen_steps[:-1]
 
     def create_branch_map(self):
+        if not self.categories:
+            raise Exception(
+                f"{self.__class__.__name__} task cannot build branch map when no categories are "
+                "set",
+            )
+        if not self.variables:
+            raise Exception(
+                f"{self.__class__.__name__} task cannot build branch map when no variables are"
+                "set",
+            )
+
         return [
             DotDict({"category": cat_name, "variable": var_name})
             for cat_name in sorted(self.categories)

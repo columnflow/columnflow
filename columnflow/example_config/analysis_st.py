@@ -86,7 +86,7 @@ config_2018.set_aux("shift_groups", {})
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 config_2018.set_aux("selector_step_groups", {
-    "test": ["Jet"],
+    "example": ["Jet"],
 })
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
@@ -145,14 +145,14 @@ config_2018.set_aux("external_files", DotDict.wrap({
 
 # columns to keep after certain steps
 config_2018.set_aux("keep_columns", DotDict.wrap({
-    "ReduceEvents": {
+    "cf.ReduceEvents": {
         "run", "luminosityBlock", "event",
         "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
         "LHEWeight.originalXWGTUP",
         "PV.npvs",
         "category_ids", "deterministic_seed",
     },
-    "MergeSelectionMasks": {
+    "cf.MergeSelectionMasks": {
         "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
 }))
@@ -201,7 +201,9 @@ config_2018.add_variable(
     x_title=r"Jet 1 $p_{T}$",
 )
 
-# cutflow variables
+# dedicated cutflow variables
+# (added explicitly in e.g. a producer in order to drop everything that is not needed,
+#  which could otherwise be very expensive to store)
 config_2018.add_variable(
     name="cf_jet1_pt",
     expression="cutflow.jet1_pt",

@@ -578,9 +578,12 @@ def set_ak_column(
     """
     route = Route(route)
 
+    # try to remove the route first so that existing columns are not overwritten but replaces
+    ak_array = remove_ak_column(ak_array, route, silent=True)
+
     # trivial case
     if len(route) == 1:
-        ak_array.__setitem__(route[0], value)
+        ak_array[route.fields] = value
         return ak_array
 
     # identify the existing part of the subroute
@@ -602,7 +605,7 @@ def set_ak_column(
         value = ak.zip({missing_sub_route.pop(): value})
 
     # insert the value
-    ak_array.__setitem__(sub_route.fields, value)
+    ak_array[sub_route.fields] = value
 
     return ak_array
 
@@ -648,7 +651,7 @@ def remove_ak_column(
         if not remaining_fields:
             return remove_ak_column(ak_array, route[:-1])
         # set the reduced view
-        ak_array.__setitem__(sub_route.fields, sub_array[remaining_fields])
+        ak_array[sub_route.fields] = sub_array[remaining_fields]
 
     return ak_array
 
@@ -842,10 +845,15 @@ def sort_ak_fields(
     # sort them, starting at highest depth
     for fields in reversed(fields_to_sort):
         arr = ak_array[fields]
-        ak_array[fields] = arr[sorted(arr.fields, key=sort_fn)]
+        sorted_fields = sorted(arr.fields, key=sort_fn)
+        if tuple(arr.fields) != tuple(sorted_fields):
+            set_ak_column(ak_array, fields, arr[sorted_fields])
 
     # sort the top level fields
-    ak_array = ak_array[sorted(ak_array.fields, key=sort_fn)]
+    if len(ak_array.fields) > 1:
+        sorted_fields = sorted(ak_array.fields, key=sort_fn)
+        if tuple(ak_array.fields) != tuple(sorted_fields):
+            ak_array = ak_array[sorted_fields]
 
     return ak_array
 
