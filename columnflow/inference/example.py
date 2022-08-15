@@ -29,7 +29,6 @@ def example(self):
         data_datasets=["data_mu_a"],
     )
 
-
     #
     # processes
     #
@@ -104,7 +103,6 @@ def example(self):
         process="TT",
         type=ParameterType.rate_unconstrained,
     )
-
 
     #
     # post-processing
