@@ -32,8 +32,8 @@ pygments_style = "sphinx"
 add_module_names = False
 
 html_title = project + " Documentation"
-html_logo = "../assets/logo_bright.png"
-html_favicon = "../assets/fav_bright.png"
+html_logo = "https://media.githubusercontent.com/media/uhh-cms/columnflow/dev/assets/logo_bright.png"
+html_favicon = "https://media.githubusercontent.com/media/uhh-cms/columnflow/dev/assets/fav_bright.png"
 html_sidebars = {"**": [
     "about.html",
     "localtoc.html",
