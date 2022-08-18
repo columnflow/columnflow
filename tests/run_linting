@@ -5,11 +5,11 @@
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
-    local ap_dir="$( dirname "$this_dir" )"
+    local cf_dir="$( dirname "$this_dir" )"
 
     (
-        cd "$ap_dir" && \
-        flake8 ap tests docs
+        cd "$cf_dir" && \
+        flake8 columnflow tests docs setup.py
     )
 }
 action "$@"

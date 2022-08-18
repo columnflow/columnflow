@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+cf_create_venv() {
+    # Creates a new virtual environment inside $CF_VENV_BASE, exchanges all absolute paths in the
+    # activation script with relative ones, and makes the environment relocatable.
+    #
+    #
+    # Arguments:
+    #   1. name
+    #       The name of the virtual env inside $CF_VENV_BASE.
+    #
+    #
+    # Required environment variables:
+    #   CF_VENV_BASE:
+    #       The base path where CF virtual environments are stored.
+    #
+    #
+    # Optional environments variables:
+    #   CF_CI_JOB
+    #       When "1", the virtual environment is created the normal way without copies and
+    #       relocation.
+
+    # check arguments
+    local name="$1"
+    if [ -z "${name}" ]; then
+        2>&1 echo "argument 0 (venv name) must not be empty"
+        return "1"
+    fi
+
+    # check environment variables
+    if [ -z "${CF_VENV_BASE}" ]; then
+        2>&1 echo "environment variable CF_VENV_BASE must not be empty"
+        return "2"
+    fi
+
+    # in CI jobs, just create the venv as is and finish
+    if [ "${CF_CI_JOB}" = "1" ]; then
+        python3 -m venv "${CF_VENV_BASE}/${name}"
+        return "$?"
+    fi
+
+    # create the venv the usual way
+    python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
+
+    # remove csh and fish support
+    rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}
+
+    # replace absolute paths in the activation file to make it relocateable for bash and zsh
+    sed -i -r \
+        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+        "${CF_VENV_BASE}/${name}/bin/activate"
+
+    cf_make_venv_relocateable "${name}"
+}
+
+cf_create_venv "$@"

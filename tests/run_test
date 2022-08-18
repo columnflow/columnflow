@@ -5,7 +5,7 @@
 action() {
     local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
-    local ap_dir="$( dirname "$this_dir" )"
+    local cf_dir="$( dirname "$this_dir" )"
 
     # get and check arguments
     local mod="$1"
@@ -19,13 +19,13 @@ action() {
     if [ -z "${sandbox}" ]; then
         echo "testing ${mod} ..."
         (
-            cd "${ap_dir}" && \
+            cd "${cf_dir}" && \
             python -m unittest "tests.${mod}"
         )
     else
         echo "testing ${mod} in sandbox ${sandbox} ..."
         (
-            cd "${ap_dir}" && \
+            cd "${cf_dir}" && \
             bash -c "source sandboxes/${sandbox} && python -m unittest tests.${mod}"
         )
     fi

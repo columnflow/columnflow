@@ -13,14 +13,14 @@ sys.path.insert(0, os.path.join(projdir, "modules", "order"))
 sys.path.insert(0, projdir)
 os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
 
-import ap
+import columnflow as cf
 
-project = "analysis_playground"
-author = ap.__author__
-copyright = ap.__copyright__
+project = "columnflow"
+author = cf.__author__
+copyright = cf.__copyright__
 copyright = copyright[10:] if copyright.startswith("Copyright ") else copyright
-version = ap.__version__[:ap.__version__.index(".", 2)]
-release = ap.__version__
+version = cf.__version__[:cf.__version__.index(".", 2)]
+release = cf.__version__
 language = "en"
 
 templates_path = ["_templates"]
@@ -32,7 +32,8 @@ pygments_style = "sphinx"
 add_module_names = False
 
 html_title = project + " Documentation"
-# html_logo = "../logo.png"
+html_logo = "../assets/logo_bright.png"
+html_favicon = "../assets/fav_bright.png"
 html_sidebars = {"**": [
     "about.html",
     "localtoc.html",

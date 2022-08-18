@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+cf_make_venv_relocateable() {
+    # Traverses all executables in a virtual environment directory located in $CF_VENV_BASE and
+    # replaces absolute shebangs with relative ones using /use/bin/env.
+    #
+    #
+    # Arguments:
+    #   1. The name of the virtual env inside $CF_VENV_BASE.
+    #
+    #
+    # Required environment variables:
+    #   CF_VENV_BASE
+    #       The base path where AP virtual environments are stored.
+    #
+    #
+    # Optional environments variables:
+    #   CF_CI_JOB
+    #       When "1", this scripts does nothing
+
+    # check arguments
+    local name="$1"
+    if [ -z "${name}" ]; then
+        2>&1 echo "argument 0 (venv name) must not be empty"
+        return "1"
+    fi
+
+    # check environment variables
+    if [ -z "${CF_VENV_BASE}" ]; then
+        2>&1 echo "environment variable CF_VENV_BASE must not be empty"
+        return "2"
+    fi
+
+    # do nothing when in a CI job
+    if [ "${CF_CI_JOB}" = "1" ]; then
+        return "0"
+    fi
+
+    # use /usr/bin/env in shebang's of bin scripts
+    for f in $( find "${CF_VENV_BASE}/${name}/bin" -type f ); do
+        # must be readable and executable
+        if [ -r "${f}" ] && [ -x "${f}" ]; then
+            sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
+        fi
+    done
+}
+
+cf_make_venv_relocateable "$@"

@@ -2,19 +2,19 @@
 
 # Script that installs, removes and / or sources a CMSSW environment. Distinctions are made
 # depending on whether the installation is already present, and whether the script is called as part
-# of a remote (law) job (AP_REMOTE_JOB=1).
+# of a remote (law) job (CF_REMOTE_JOB=1).
 #
 # Five environment variables are expected to be set before this script is called:
-#   - AP_SCRAM_ARCH:
+#   - CF_SCRAM_ARCH:
 #       The scram architecture string.
-#   - AP_CMSSW_VERSION:
+#   - CF_CMSSW_VERSION:
 #       The desired CMSSW version to setup.
-#   - AP_CMSSW_BASE:
+#   - CF_CMSSW_BASE:
 #       The location where the CMSSW environment should be installed.
-#   - AP_CMSSW_ENV_NAME:
+#   - CF_CMSSW_ENV_NAME:
 #       The name of the environment to prevent collisions between multiple environments using the
 #       same CMSSW version.
-#   - AP_CMSSW_FLAG:
+#   - CF_CMSSW_FLAG:
 #       An incremental integer value stored in the installed CMSSW environment to detect whether it
 #       needs to be updated.
 #
@@ -26,7 +26,7 @@
 #   - install_only: The CMSSW environment is installed when not existing yet but not sourced.
 #
 # Note on remote jobs:
-# When the AP_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
+# When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
 # no mode is supported and an error is printed when it is set to a non-empty value. In any case, no
 # installation will happen but the desired CMSSW setup is reused from a pre-compiled CMSSW bundle
 # that is fetched from a local or remote location and unpacked.
@@ -46,7 +46,7 @@ action() {
         >&2 echo "unknown CMSSW source mode '$mode'"
         return "1"
     fi
-    if [ "$AP_REMOTE_JOB" = "1" ] && [ ! -z "$mode" ]; then
+    if [ "$CF_REMOTE_JOB" = "1" ] && [ ! -z "$mode" ]; then
         >&2 echo "the CMSSW source mode must be empty in remote jobs, but got '$mode'"
         return "2"
     fi
@@ -56,24 +56,24 @@ action() {
     # check required global variables
     #
 
-    if [ -z "$AP_SCRAM_ARCH" ]; then
-        >&2 echo "AP_SCRAM_ARCH is not set but required by $this_file to setup CMSSW"
+    if [ -z "$CF_SCRAM_ARCH" ]; then
+        >&2 echo "CF_SCRAM_ARCH is not set but required by $this_file to setup CMSSW"
         return "3"
     fi
-    if [ -z "$AP_CMSSW_VERSION" ]; then
-        >&2 echo "AP_CMSSW_VERSION is not set but required by $this_file to setup CMSSW"
+    if [ -z "$CF_CMSSW_VERSION" ]; then
+        >&2 echo "CF_CMSSW_VERSION is not set but required by $this_file to setup CMSSW"
         return "4"
     fi
-    if [ -z "$AP_CMSSW_BASE" ]; then
-        >&2 echo "AP_CMSSW_BASE is not set but required by $this_file to setup CMSSW"
+    if [ -z "$CF_CMSSW_BASE" ]; then
+        >&2 echo "CF_CMSSW_BASE is not set but required by $this_file to setup CMSSW"
         return "5"
     fi
-    if [ -z "$AP_CMSSW_ENV_NAME" ]; then
-        >&2 echo "AP_CMSSW_ENV_NAME is not set but required by $this_file to setup CMSSW"
+    if [ -z "$CF_CMSSW_ENV_NAME" ]; then
+        >&2 echo "CF_CMSSW_ENV_NAME is not set but required by $this_file to setup CMSSW"
         return "6"
     fi
-    if [ -z "$AP_CMSSW_FLAG" ]; then
-        >&2 echo "AP_CMSSW_FLAG is not set but required by $this_file to setup CMSSW"
+    if [ -z "$CF_CMSSW_FLAG" ]; then
+        >&2 echo "CF_CMSSW_FLAG is not set but required by $this_file to setup CMSSW"
         return "7"
     fi
 
@@ -83,13 +83,13 @@ action() {
     #
 
     [ -z "$GFAL_PLUGIN_DIR_ORIG" ] && export GFAL_PLUGIN_DIR_ORIG="$GFAL_PLUGIN_DIR"
-    local install_base="$AP_CMSSW_BASE/$AP_CMSSW_ENV_NAME"
-    local install_path="$install_base/$AP_CMSSW_VERSION"
-    local flag_file="$install_path/ap_flag"
-    local pending_flag_file="$AP_CMSSW_BASE/pending_${AP_CMSSW_ENV_NAME}_${AP_CMSSW_VERSION}"
+    local install_base="$CF_CMSSW_BASE/$CF_CMSSW_ENV_NAME"
+    local install_path="$install_base/$CF_CMSSW_VERSION"
+    local flag_file="$install_path/cf_flag"
+    local pending_flag_file="$CF_CMSSW_BASE/pending_${CF_CMSSW_ENV_NAME}_${CF_CMSSW_VERSION}"
 
-    # ensure AP_CMSSW_BASE exists
-    mkdir -p "$AP_CMSSW_BASE"
+    # ensure CF_CMSSW_BASE exists
+    mkdir -p "$CF_CMSSW_BASE"
 
     # remove the current installation
     if [ "$mode" = "clear" ] || [ "$mode" = "reinstall" ]; then
@@ -100,11 +100,11 @@ action() {
         [ "$mode" = "clear" ] && return "0"
     fi
 
-    if [ "$AP_REMOTE_JOB" == "1" ]; then
+    if [ "$CF_REMOTE_JOB" == "1" ]; then
         # in remote jobs, fetch and setup the bundle
         if [ ! -d "$install_path" ]; then
             # determine the bundle to unpack
-            local bundle="$AP_SOFTWARE/cmssw_sandboxes/$AP_CMSSW_ENV_NAME.tgz"
+            local bundle="$CF_SOFTWARE/cmssw_sandboxes/$CF_CMSSW_ENV_NAME.tgz"
             if [ ! -f "$bundle" ]; then
                 >&2 echo "prefetched bundle expected at $bundle not does not exist"
                 return "8"
@@ -116,9 +116,9 @@ action() {
                 mkdir -p "$install_base" || return "$?"
                 cd "$install_base"
                 source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || return "$?"
-                export SCRAM_ARCH="$AP_SCRAM_ARCH"
-                scramv1 project CMSSW "$AP_CMSSW_VERSION" || return "$?"
-                cd "$AP_CMSSW_VERSION"
+                export SCRAM_ARCH="$CF_SCRAM_ARCH"
+                scramv1 project CMSSW "$CF_CMSSW_VERSION" || return "$?"
+                cd "$CF_CMSSW_VERSION"
                 cp "$bundle" .
                 tar -xzf "$( basename "$bundle" )" || return "$?"
                 cd "src" || return "$?"
@@ -127,7 +127,7 @@ action() {
             ) || return "$?"
 
             # write the flag into a file
-            echo "version $AP_CMSSW_FLAG" > "$flag_file"
+            echo "version $CF_CMSSW_FLAG" > "$flag_file"
         fi
     else
         # in local environments, install from scratch
@@ -142,10 +142,10 @@ action() {
                 # wait at most 10 minutes
                 sleep_counter="$(( $sleep_counter + 1 ))"
                 if [ "$sleep_counter" -ge 120 ]; then
-                    2>&1 echo "cmssw $AP_CMSSW_VERSION is setup in different process, but number of sleeps exceeded"
+                    2>&1 echo "cmssw $CF_CMSSW_VERSION is setup in different process, but number of sleeps exceeded"
                     return "8"
                 fi
-                echo -e "\x1b[0;49;36mcmssw $AP_CMSSW_VERSION already being setup in different process, sleep $sleep_counter / 120\x1b[0m"
+                echo -e "\x1b[0;49;36mcmssw $CF_CMSSW_VERSION already being setup in different process, sleep $sleep_counter / 120\x1b[0m"
                 sleep 5
             done
         fi
@@ -153,15 +153,15 @@ action() {
         if [ ! -d "$install_path" ]; then
             local ret
             touch "$pending_flag_file"
-            echo "installing $AP_CMSSW_VERSION in $install_base"
+            echo "installing $CF_CMSSW_VERSION in $install_base"
 
             (
                 mkdir -p "$install_base" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
                 cd "$install_base"
                 source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
-                export SCRAM_ARCH="$AP_SCRAM_ARCH"
-                scramv1 project CMSSW "$AP_CMSSW_VERSION" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
-                cd "$AP_CMSSW_VERSION/src"
+                export SCRAM_ARCH="$CF_SCRAM_ARCH"
+                scramv1 project CMSSW "$CF_CMSSW_VERSION" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
+                cd "$CF_CMSSW_VERSION/src"
                 eval "$( scramv1 runtime -sh )" || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
                 scram b || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
 
@@ -175,7 +175,7 @@ action() {
                 )
 
                 # write the flag into a file
-                echo "version $AP_CMSSW_FLAG" > "$flag_file"
+                echo "version $CF_CMSSW_FLAG" > "$flag_file"
                 rm -f "$pending_flag_file"
             ) || ( ret="$?" && rm -f "$pending_flag_file" && return "$ret" )
         fi
@@ -188,9 +188,9 @@ action() {
     fi
 
     # check the flag and show a warning when there was an update
-    if [ "$( cat "$flag_file" | grep -Po "version \K\d+.*" )" != "$AP_CMSSW_FLAG" ]; then
+    if [ "$( cat "$flag_file" | grep -Po "version \K\d+.*" )" != "$CF_CMSSW_FLAG" ]; then
         >&2 echo ""
-        >&2 echo "WARNING: the CMSSW software environment $AP_CMSSW_ENV_NAME seems to be outdated"
+        >&2 echo "WARNING: the CMSSW software environment $CF_CMSSW_ENV_NAME seems to be outdated"
         >&2 echo "WARNING: please consider removing (mode 'clear') or updating it (mode 'reinstall')"
         >&2 echo ""
     fi
@@ -200,14 +200,14 @@ action() {
 
     # source it
     source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || return "$?"
-    export SCRAM_ARCH="$AP_SCRAM_ARCH"
-    export CMSSW_VERSION="$AP_CMSSW_VERSION"
+    export SCRAM_ARCH="$CF_SCRAM_ARCH"
+    export CMSSW_VERSION="$CF_CMSSW_VERSION"
     export GFAL_PLUGIN_DIR="$install_path/lib/gfal2"
     cd "$install_path/src"
     eval "$( scramv1 runtime -sh )"
     cd "$orig_dir"
 
     # mark this as a bash sandbox for law
-    export LAW_SANDBOX="bash::\$AP_BASE/sandboxes/$AP_CMSSW_ENV_NAME.sh"
+    export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/$CF_CMSSW_ENV_NAME.sh"
 }
 action "$@"
