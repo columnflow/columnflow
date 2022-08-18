@@ -12,7 +12,7 @@
    :target: https://pypi.python.org/pypi/columnflow
    :alt: Package version
 
-.. image:: https://readthedocs.org/projects/columnflow/badge
+.. image:: https://readthedocs.org/projects/columnflow/badge/?version=master
    :target: http://columnflow.readthedocs.io
    :alt: Documentation status
 
