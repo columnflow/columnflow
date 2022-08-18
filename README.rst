@@ -1,4 +1,4 @@
-.. figure:: https://raw.githubusercontent.com/uhh-cms/columnflow/dev/assets/logo_dark.png
+.. figure:: https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png
    :width: 480
    :target: https://github.com/uhh-cms/columnflow
    :align: center
@@ -8,13 +8,17 @@
    :target: https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
-.. image:: https://codecov.io/gh/uhh-cms/columnflow/branch/dev/graph/badge.svg?token=33FLINPXFP
-   :target: https://codecov.io/gh/uhh-cms/columnflow
-   :alt: Code coverge
+.. image:: https://img.shields.io/pypi/v/columnflow.svg?style=flat
+   :target: https://pypi.python.org/pypi/columnflow
+   :alt: Package version
 
 .. image:: https://readthedocs.org/projects/columnflow/badge
    :target: http://columnflow.readthedocs.io
    :alt: Documentation status
+
+.. image:: https://codecov.io/gh/uhh-cms/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP
+   :target: https://codecov.io/gh/uhh-cms/columnflow
+   :alt: Code coverge
 
 .. image:: https://img.shields.io/github/license/uhh-cms/columnflow.svg
    :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
