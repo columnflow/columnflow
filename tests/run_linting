@@ -9,7 +9,7 @@ action() {
 
     (
         cd "$cf_dir" && \
-        flake8 columnflow tests docs
+        flake8 columnflow tests docs setup.py
     )
 }
 action "$@"
