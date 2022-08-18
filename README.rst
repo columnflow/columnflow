@@ -1,23 +1,26 @@
-Analysis playground
-===================
+.. figure:: https://raw.githubusercontent.com/uhh-cms/columnflow/dev/assets/logo_dark.png
+   :width: 480
+   :target: https://github.com/uhh-cms/columnflow
+   :align: center
+   :alt: columnflow logo
 
-.. image:: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml/badge.svg
-   :target: https://github.com/uhh-cms/analysis_playground/actions/workflows/lint_and_test.yaml
+.. image:: https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg
+   :target: https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml
    :alt: Build status
 
-.. image:: https://codecov.io/gh/uhh-cms/analysis_playground/branch/dev/graph/badge.svg?token=33FLINPXFP
-   :target: https://codecov.io/gh/uhh-cms/analysis_playground
+.. image:: https://codecov.io/gh/uhh-cms/columnflow/branch/dev/graph/badge.svg?token=33FLINPXFP
+   :target: https://codecov.io/gh/uhh-cms/columnflow
    :alt: Code coverge
 
-.. image:: https://readthedocs.org/projects/analysis_playground/badge
-   :target: http://analysis_playground.readthedocs.io
+.. image:: https://readthedocs.org/projects/columnflow/badge
+   :target: http://columnflow.readthedocs.io
    :alt: Documentation status
 
-.. image:: https://img.shields.io/github/license/uhh-cms/analysis_playground.svg
-   :target: https://github.com/uhh-cms/analysis_playground/blob/master/LICENSE
+.. image:: https://img.shields.io/github/license/uhh-cms/columnflow.svg
+   :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
    :alt: License
 
-Demonstrator for a Python-based, vectorized analysis with a bunch of public HEP tools.
+Backend for vectorized, columnar HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
 
 
 .. marker-after-header
@@ -26,15 +29,17 @@ Demonstrator for a Python-based, vectorized analysis with a bunch of public HEP 
 Quickstart
 ----------
 
-Modules, exported shell functions and environment variables might have a prefix ``AP`` or ``ap`` to express their connection to this project.
+Modules, exported shell functions and environment variables might have a prefix ``CF`` or ``cf`` to express their connection to this project.
 
-The task that you are about to start requires a valid voms proxy.
+A couple test tasks are listed below.
+They might require a **valid voms proxy** for accessing input data.
+
 
 .. code-block:: bash
 
     # clone the project
-    git clone --recursive git@github.com:uhh-cms/analysis_playground.git
-    cd analysis_playground
+    git clone --recursive git@github.com:uhh-cms/columnflow.git
+    cd columnflow
 
     # source the setup and store decisions in .setups/dev.sh (arbitrary name)
     source setup.sh dev
@@ -43,29 +48,40 @@ The task that you are about to start requires a valid voms proxy.
     law index --verbose
 
     # run your first task
-    law run ReduceEvents --version v1 --dataset st_tchannel_t --branch 0
-
-    # create plots
-    law run PlotVariables \
+    law run cf.ReduceEvents \
         --version v1 \
-        --datasets "st_tchannel_t,tt_sl" \
-        --producers features \
-        --variables ht \
+        --dataset st_tchannel_t \
+        --branch 0
+
+    # create a plot
+    law run cf.PlotVariables \
+        --version v1 \
+        --datasets st_tchannel_t \
+        --producers example \
+        --variables jet1_pt \
+        --categories 1e \
+        --branch 0
+
+    # create a (test) datacard (CMS-style)
+    law run cf.CreateDatacards \
+        --version v1 \
+        --producers example \
+        --inference-model example \
         --workers 3
 
-    # create a (test) datacard
-    law run CreateDatacards \
-        --version v1 \
-        --producers features \
-        --inference-model test \
-        --workers 3
+
+Projects using columnflow
+-------------------------
+
+- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
+- tba
 
 
 Development
 -----------
 
-- Source hosted at `GitHub <https://github.com/uhh-cms/analysis_playground>`__
-- Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/analysis_playground/issues>`__
+- Source hosted at `GitHub <https://github.com/uhh-cms/columnflow>`__
+- Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/columnflow/issues>`__
 
 
 .. marker-after-body

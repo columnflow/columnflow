@@ -6,7 +6,7 @@ __all__ = ["UtilTest"]
 
 import unittest
 
-from ap.util import create_random_name
+from columnflow.util import create_random_name
 
 
 class UtilTest(unittest.TestCase):

@@ -8,11 +8,10 @@ import unittest
 from collections import OrderedDict
 from typing import List
 
-from ap.util import maybe_import
-from ap.columnar_util import (
+from columnflow.util import maybe_import
+from columnflow.columnar_util import (
     Route, ArrayFunction, get_ak_routes, has_ak_column, set_ak_column, remove_ak_column,
     add_ak_alias, add_ak_aliases, update_ak_array, flatten_ak_array, sort_ak_fields,
-    sorted_ak_to_parquet,
 )
 
 ak = maybe_import("awkward")
@@ -511,7 +510,6 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(ak_array2[("c", "e")][1], 9)
 
     def test_remove_ak_column(self):
-
         # test if removal works for different input types of routes
         ak_array2_str = remove_ak_column(self.ak_array, "d.d_1")
         self.assertEqual(ak_array2_str.fields, ["a", "c_1", "b"])
@@ -625,7 +623,6 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         ak_array7 = add_ak_aliases(ak_array6, dictionary3)
         self.assertEqual(ak_array7["e"], ak_array7[Route("d.d_1").fields])
         self.assertEqual(ak_array7["f"], ak_array7[Route("b.bb2.bbb2.b_bbb1.bbbbb2").fields])
-        self.assertEqual(self.ak_array["f"], ak_array7[Route("b.bb2.bbb2.b_bbb1.bbbbb2").fields])
 
     def test_update_ak_array(self):
         array1_content = {"a": [0, 1], "c_1": [1, 2]}
@@ -821,18 +818,18 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
 
         ak_array3 = sort_ak_fields(ak_array2)
         # check if numbers are sorted before letters
-        self.assertEqual(ak_array3.fields, ordered_ak_array2.fields)
+        self.assertEqual(tuple(ak_array3.fields), tuple(ordered_ak_array2.fields))
         # check if nested structure gets ordered
-        self.assertEqual(ak_array3["I"].fields, ordered_ak_array2["I"].fields)
+        self.assertEqual(tuple(ak_array3["I"].fields), tuple(ordered_ak_array2["I"].fields))
         # check if deeper nested structure with same first letter gets ordered
-        self.assertEqual(ak_array3[("I", "like")].fields, ordered_ak_array2[("I", "like")].fields)
+        self.assertEqual(tuple(ak_array3[("I", "like")].fields), tuple(ordered_ak_array2[("I", "like")].fields))
 
         # add sort_fn to invert the name of the fields before ordering them (this sort_fn outputs a string!)
         def sorting_function(some_string):
             return some_string[::-1]
 
         ak_array4 = sort_ak_fields(ak_array2, sort_fn=sorting_function)
-        self.assertEqual(ak_array4["I"].fields, ["asthma", "like", "dontlike", "zorro"])
+        self.assertEqual(tuple(ak_array4["I"].fields), ("asthma", "like", "dontlike", "zorro"))
 
         # add sort_fn with an int as output: this function outputs the length of the field names for the ordering
         def sorting_function_to_int(some_string):
@@ -840,36 +837,19 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
             return position
 
         ak_array5 = sort_ak_fields(ak_array2, sort_fn=sorting_function_to_int)
-        self.assertEqual(ak_array5.fields, ["I", "42"])
-        self.assertEqual(ak_array5["I"].fields, ["like", "zorro", "asthma", "dontlike"])
+        self.assertEqual(tuple(ak_array5.fields), ("I", "42"))
+        self.assertEqual(tuple(ak_array5["I"].fields), ("like", "zorro", "asthma", "dontlike"))
 
         # check that the sorting algorithm is stable
         array_content_with_names_of_same_length = {"ccccc": 1, "aaaaa": 3, "bbbbb": 2}
         ak_array_same_length = ak.Array([array_content_with_names_of_same_length])
         ak_array_same_length_sorted = sort_ak_fields(ak_array_same_length)
-        self.assertEqual(ak_array_same_length_sorted.fields, ["aaaaa", "bbbbb", "ccccc"])
+        self.assertEqual(tuple(ak_array_same_length_sorted.fields), ("aaaaa", "bbbbb", "ccccc"))
         ak_array_same_length_intsorted = sort_ak_fields(ak_array_same_length_sorted, sort_fn=sorting_function_to_int)
-        self.assertEqual(ak_array_same_length_intsorted.fields, ["aaaaa", "bbbbb", "ccccc"])
+        self.assertEqual(tuple(ak_array_same_length_intsorted.fields), ("aaaaa", "bbbbb", "ccccc"))
 
         # check that there is no problem with the empty array
         empty_ak_array_sorted = sort_ak_fields(self.empty_ak_array)
-        self.assertEqual(empty_ak_array_sorted.fields, [])
+        self.assertFalse(empty_ak_array_sorted.fields)
         empty_ak_array_intsorted = sort_ak_fields(self.empty_ak_array, sort_fn=sorting_function)
-        self.assertEqual(empty_ak_array_intsorted.fields, [])
-
-        # add type check on field names for the function?
-
-    def test_sorted_ak_to_parquet(self):
-        array_content = {"I": {"dontlike": 1, "like": {"trains": 2, "the": 3}, "zorro": 5, "asthma": 6},
-                         "42": {"24": 1}}
-        ordered_ak_array_content = {"42": {"24": 1},
-                                    "I": {"asthma": 6, "dontlike": 1, "like": {"the": 3, "trains": 2}, "zorro": 5}}
-        ordered_ak_array = ak.Array([ordered_ak_array_content])
-        ak_array_to_save = ak.Array([array_content])
-        sorted_ak_to_parquet(ak_array_to_save, "array_test.parquet")
-
-        ak_array = ak.from_parquet("array_test.parquet")
-        self.assertEqual(ak_array[("42", "24")][0], 1)
-        self.assertEqual(ak_array.fields, ordered_ak_array.fields)
-        self.assertEqual(ak_array["I"].fields, ordered_ak_array["I"].fields)
-        self.assertEqual(ak_array[("I", "like")].fields, ordered_ak_array[("I", "like")].fields)
+        self.assertFalse(empty_ak_array_intsorted.fields)

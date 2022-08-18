@@ -41,4 +41,4 @@ def setup(app):
     domain.object_types["classattribute"] = ObjType(_("classattribute"), "attr", "obj")
     domain.directives["classattribute"] = PyClassAttribute
 
-    return {"version": "ap_patch"}
+    return {"version": "cf_patch"}

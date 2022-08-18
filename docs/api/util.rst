@@ -1,6 +1,6 @@
-ap.util
-=======
+columnflow.util
+===============
 
-.. automodule:: ap.util
+.. automodule:: columnflow.util
    :autosummary:
    :members:
