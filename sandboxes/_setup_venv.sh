@@ -4,26 +4,27 @@
 # the venv is already present, and whether the script is called as part of a remote (law) job
 # (CF_REMOTE_JOB=1).
 #
-# Two environment variables are expected to be set before this script is called:
-#   - CF_VENV_NAME:
-#       The name of the virtual environment. It will be installed into $CF_VENV_PATH/$CF_VENV_NAME.
-#   - CF_VENV_REQUIREMENTS:
+# Three environment variables are expected to be set before this script is called:
+#   CF_VENV_BASE
+#       The base directory where virtual environments will be installed. Set by the main setup.sh.
+#   CF_VENV_NAME
+#       The name of the virtual environment. It will be installed into $CF_VENV_BASE/$CF_VENV_NAME.
+#   CF_VENV_REQUIREMENTS
 #       The requirements file containing packages that are installed on top of
 #       $CF_BASE/requirements_prod.txt.
 #
-# Upon venv activation, two environment variables are set in addition to those exported by the venv
-# itself:
-#   - CF_DEV:
+# Upon venv activation, two environment variables are set in addition to those exported by the venv:
+#   CF_DEV
 #       Set to "1" when CF_VENV_NAME ends with "_dev", and "0" otherwise.
-#   - LAW_SANDBOX:
+#   LAW_SANDBOX
 #       Set to the name of the sandbox to be correctly interpreted later on by law.
 #
 # Optional arguments:
-# 1. mode:
+# 1. mode
 #      The setup mode. Different values are accepted:
 #        - '' (default): The virtual environment is installed when not existing yet and sourced.
 #        - reinstall:    The virtual environment is removed first, then reinstalled and sourced.
-# 2. nocheck:
+# 2. nocheck
 #      When "1", the version check at the end of the setup is silenced. However, the exit code of
 #      _this_ script might still reflect whether the check was successful or not.
 #
@@ -88,9 +89,9 @@ action() {
     # start the setup
     #
 
-    local install_path="$CF_VENV_PATH/$CF_VENV_NAME"
+    local install_path="$CF_VENV_BASE/$CF_VENV_NAME"
     local flag_file="$install_path/cf_flag"
-    local pending_flag_file="$CF_VENV_PATH/pending_${CF_VENV_NAME}"
+    local pending_flag_file="$CF_VENV_BASE/pending_${CF_VENV_NAME}"
     local venv_version="$( cat "$first_requirement_file" | grep -Po "# version \K\d+.*" )"
 
     # the venv version must be set
@@ -99,8 +100,8 @@ action() {
         return "6"
     fi
 
-    # ensure the CF_VENV_PATH exists
-    mkdir -p "$CF_VENV_PATH"
+    # ensure the CF_VENV_BASE exists
+    mkdir -p "$CF_VENV_BASE"
 
     # remove the current installation
     if [ "$mode" = "reinstall" ]; then

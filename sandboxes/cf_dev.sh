@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Script that sets up a virtual env in $CF_VENV_PATH.
+# Script that sets up a virtual env in $CF_VENV_BASE.
 # For more info on functionality and parameters, see the generic setup script _setup_venv.sh.
 
 action() {
