@@ -10,7 +10,7 @@ from scinum import Number, REL
 from order import Analysis, Shift
 
 from columnflow.example_config.campaign_2018 import (
-    campaign_2018, process_data_mu, process_st_tchannel_t, process_tt_sl,
+    campaign_2018, process_data, process_st_tchannel_t, process_tt_sl,
 )
 from columnflow.util import DotDict
 
@@ -46,7 +46,7 @@ analysis_st.set_aux("config_groups", {})
 config_2018 = analysis_st.add_config(campaign_2018)
 
 # add processes we are interested in
-config_2018.add_process(process_data_mu)
+config_2018.add_process(process_data)
 config_2018.add_process(process_st_tchannel_t)
 config_2018.add_process(process_tt_sl)
 
