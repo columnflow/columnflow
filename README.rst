@@ -54,7 +54,7 @@ They might require a **valid voms proxy** for accessing input data.
         --branch 0
 
     # create a plot
-    law run cf.PlotVariables
+    law run cf.PlotVariables \
         --version v1 \
         --datasets st_tchannel_t \
         --producers example \
