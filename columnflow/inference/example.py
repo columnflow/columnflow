@@ -23,8 +23,8 @@ def example(self):
     )
     self.add_category(
         "cat2",
-        category="1mu",
-        variable="muon1_pt",
+        category="1e",  # note: same category as above == double counting
+        variable="jet1_pt",
         mc_stats=True,
         data_datasets=["data_mu_a"],
     )
@@ -35,9 +35,9 @@ def example(self):
 
     self.add_process(
         "ST",
-        process="st_tchannel",
+        process="st_tchannel_t",
         signal=True,
-        mc_datasets=["st_tchannel_t", "st_tchannel_tbar"],
+        mc_datasets=["st_tchannel_t"],
     )
     self.add_process(
         "TT",

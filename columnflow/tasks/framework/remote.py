@@ -67,7 +67,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
     def htcondor_output_directory(self):
         # the directory where submission meta data and logs should be stored
-        return self.local_target(store="$CF_STORE_LOCAL", dir=True)
+        return self.local_target(dir=True)
 
     def htcondor_bootstrap_file(self):
         # each job can define a bootstrap file that is executed prior to the actual job
@@ -136,7 +136,6 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables["cf_lcg_setup"] = os.environ["CF_LCG_SETUP"]
         config.render_variables["cf_base"] = os.environ["CF_BASE"]
-        config.render_variables["cf_desy_user"] = os.environ["CF_DESY_USER"]
         config.render_variables["cf_cern_user"] = os.environ["CF_CERN_USER"]
         config.render_variables["cf_store_name"] = os.environ["CF_STORE_NAME"]
         config.render_variables["cf_store_local"] = os.environ["CF_STORE_LOCAL"]
@@ -161,9 +160,6 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     exclude_files = ["docs", "test", "data", ".law", ".setups", ".data"]
 
     task_namespace = None
-
-    default_wlcg_fs = "wlcg_fs_software"
-    default_output_location = "wlcg"
 
     def get_repo_path(self):
         # required by BundleGitRepository
@@ -203,9 +199,6 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     )
     version = None
 
-    default_wlcg_fs = "wlcg_fs_software"
-    default_output_location = "wlcg"
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -216,11 +209,11 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         if not self._checksum:
             # get a list of all software flag files
             flag_files = []
-            for venv_name in os.listdir(os.environ["CF_VENV_PATH"]):
+            for venv_name in os.listdir(os.environ["CF_VENV_BASE"]):
                 # skip all dev envs
                 if venv_name.endswith("_dev"):
                     continue
-                venv_flag = os.path.join(os.environ["CF_VENV_PATH"], venv_name, "cf_flag")
+                venv_flag = os.path.join(os.environ["CF_VENV_BASE"], venv_name, "cf_flag")
                 flag_files.append(venv_flag)
             flag_files = sorted(set(map(os.path.realpath, flag_files)))
 
@@ -284,8 +277,6 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
 
     task_namespace = None
     exclude = "^src/tmp"
-    default_wlcg_fs = "wlcg_fs_software"
-    default_output_location = "wlcg"
 
     def __init__(self, *args, **kwargs):
         # cached bash sandbox that wraps the cmssw environment

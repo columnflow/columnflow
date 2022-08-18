@@ -31,11 +31,50 @@ Quickstart
 
 Modules, exported shell functions and environment variables might have a prefix ``CF`` or ``cf`` to express their connection to this project.
 
-For examples using colunflow, pease visit the `analysis playground <https://github.com/uhh-cms/analysis_playground>`__.
+A couple test tasks are listed below.
+They might require a **valid voms proxy** for accessing input data.
 
-.. note::
 
-   A dedicated documentation will appear here soon.
+.. code-block:: bash
+
+    # clone the project
+    git clone --recursive git@github.com:uhh-cms/columnflow.git
+    cd columnflow
+
+    # source the setup and store decisions in .setups/dev.sh (arbitrary name)
+    source setup.sh dev
+
+    # index existing tasks once to enable auto-completion for "law run"
+    law index --verbose
+
+    # run your first task
+    law run cf.ReduceEvents \
+        --version v1 \
+        --dataset st_tchannel_t \
+        --branch 0
+
+    # create a plot
+    law run cf.PlotVariables
+        --version v1 \
+        --datasets st_tchannel_t \
+        --producers example \
+        --variables jet1_pt \
+        --categories 1e \
+        --branch 0
+
+    # create a (test) datacard (CMS-style)
+    law run cf.CreateDatacards \
+        --version v1 \
+        --producers example \
+        --inference-model example \
+        --workers 3
+
+
+Projects using columnflow
+-------------------------
+
+- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
+- tba
 
 
 Development

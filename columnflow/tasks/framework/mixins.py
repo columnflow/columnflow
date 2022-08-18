@@ -510,6 +510,8 @@ class CategoriesMixin(ConfigTask):
         "a mapping defined in 'category_groups' auxiliary data of the config; default: ('1mu',)",
     )
 
+    allow_empty_categories = False
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -527,6 +529,11 @@ class CategoriesMixin(ConfigTask):
                 config_inst.x("category_groups", {}),
                 deep=True,
             )
+
+            # complain when no categories were found
+            if not categories and not cls.allow_empty_categories:
+                raise ValueError(f"no categories found matching '{params['categories']}'")
+
             params["categories"] = tuple(categories)
 
         return params
@@ -549,6 +556,7 @@ class VariablesMixin(ConfigTask):
     )
 
     default_variables = None
+    allow_empty_variables = False
 
     @classmethod
     def modify_param_values(cls, params):
@@ -575,6 +583,11 @@ class VariablesMixin(ConfigTask):
             else:
                 # fallback to using all known variables
                 variables = config_inst.variables.names()
+
+            # complain when no variables were found
+            if not variables and not cls.allow_empty_variables:
+                raise ValueError(f"no variables found matching '{params['variables']}'")
+
             params["variables"] = tuple(variables)
 
         return params
@@ -603,6 +616,9 @@ class DatasetsProcessesMixin(ConfigTask):
         "uses all processes of the config when empty; empty default",
     )
 
+    allow_empty_datasets = False
+    allow_empty_processes = False
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -623,6 +639,11 @@ class DatasetsProcessesMixin(ConfigTask):
                 )
             else:
                 processes = config_inst.processes.names()
+
+            # complain when no processes were found
+            if not processes and not cls.allow_empty_processes:
+                raise ValueError(f"no processes found matching '{params['processes']}'")
+
             params["processes"] = tuple(processes)
 
         # resolve datasets
@@ -645,6 +666,11 @@ class DatasetsProcessesMixin(ConfigTask):
                     for dataset_inst in config_inst.datasets
                     if any(map(dataset_inst.has_process, sub_process_insts))
                 )
+
+            # complain when no datasets were found
+            if not datasets and not cls.allow_empty_datasets:
+                raise ValueError(f"no datasets found matching '{params['datasets']}'")
+
             params["datasets"] = tuple(datasets)
 
         return params
@@ -673,6 +699,8 @@ class ShiftSourcesMixin(ConfigTask):
         "config; default: ()",
     )
 
+    allow_empty_shift_sources = False
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
@@ -690,6 +718,11 @@ class ShiftSourcesMixin(ConfigTask):
                 od.Shift,
                 config_inst.x("shift_groups", {}),
             )
+
+            # complain when no shifts were found
+            if not shifts and not cls.allow_empty_shift_sources:
+                raise ValueError(f"no shifts found matching '{params['shift_sources']}'")
+
             # convert back to sources
             params["shift_sources"] = tuple(cls.reduce_shifts(shifts))
 

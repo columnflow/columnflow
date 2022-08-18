@@ -8,7 +8,7 @@ __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
     "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
-    "test_float", "is_pattern", "is_regex", "pattern_matcher",
+    "test_float", "is_pattern", "is_regex", "pattern_matcher", "get_root_processes_from_campaign",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
@@ -31,7 +31,7 @@ from typing import Tuple, Callable, Any, Optional, Union, Sequence
 from types import ModuleType
 
 import law
-
+import order as od
 
 #: Placeholder for an unset value.
 UNSET = object()
@@ -433,6 +433,26 @@ def pattern_matcher(pattern: Union[Sequence[str], str], mode=any) -> Callable[[s
 
     # fallback to string comparison
     return lambda s: s == pattern
+
+
+def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
+    """
+    Extracts all root process objects from datasets contained in an order campaign and returns them
+    in a unique object index.
+    """
+    # get all dataset processes
+    processes = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
+
+    # get their root processes
+    root_processes = set.union(*map(set, (process.get_root_processes() for process in processes)))
+
+    # create an empty index and fill subprocesses via walking
+    index = od.UniqueObjectIndex(cls=od.Process)
+    for root_process in root_processes:
+        for process, _, _ in root_process.walk_processes(include_self=True):
+            index.add(process, overwrite=True)
+
+    return index
 
 
 class DotDict(OrderedDict):

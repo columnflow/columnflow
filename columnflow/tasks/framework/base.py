@@ -167,15 +167,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         object_groups: Optional[Dict[str, list]] = None,
         accept_patterns: bool = True,
         deep: bool = False,
-        context: Optional[str] = None,
     ) -> List[str]:
         """
         Returns all names of objects of type *object_cls* known to a *container* (e.g.
         :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
         pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
         *object_group* that matches group names to object names. When *deep* is *True* the lookup of
-        objects in the *container* is recursive. *context* is forwarded to all container lookup
-        methods. Example:
+        objects in the *container* is recursive. Example:
 
         .. code-block:: python
 
@@ -192,15 +190,15 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     _cache["all_object_names"] = {
                         obj.name
                         for obj, _, _ in
-                        getattr(container, "walk_{}".format(plural))(context=context)
+                        getattr(container, "walk_{}".format(plural))()
                     }
                 else:
-                    _cache["all_object_names"] = set(getattr(container, plural).names(context=context))
+                    _cache["all_object_names"] = set(getattr(container, plural).names())
             return _cache["all_object_names"]
 
         def has_obj(name):
             if "has_obj_func" not in _cache:
-                kwargs = {"context": context}
+                kwargs = {}
                 if object_cls in container._deep_child_classes:
                     kwargs["deep"] = deep
                 _cache["has_obj_func"] = functools.partial(
@@ -335,10 +333,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if location == OutputLocation.config:
             location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
             if not location:
-                raise Exception(
+                self.logger.info(
                     f"no option 'outputs.{self.task_family}' found in law.cfg to obtain target "
-                    "location",
+                    "location, falling back to 'local'",
                 )
+                location = ["local"]
             location[0] = OutputLocation[location[0]]
         location = law.util.make_list(location)
 
