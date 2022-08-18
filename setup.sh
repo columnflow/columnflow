@@ -309,7 +309,7 @@ cf_setup_interactive() {
     fi
 
     # query for variables
-    cf_interactive_setup_body || return "$?"
+    cf_setup_interactive_body || return "$?"
 
     # move the env file to the correct location for later use
     if ! ${setup_is_default}; then
