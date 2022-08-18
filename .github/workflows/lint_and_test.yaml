@@ -68,6 +68,31 @@ jobs:
           cd ..
           rm -rf "${CF_JOB_ID}"
 
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ⬇️
+        uses: actions/checkout@master
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Setup python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies ☕️
+        run: |
+          pip install -U pip
+          pip install twine
+
+      - name: Check bundling 📦
+        run: python setup.py sdist
+
+      - name: Check setup 🚦
+        run: twine check "dist/$( python setup.py --fullname ).tar.gz"
+
   coverage:
     needs: test
     runs-on: [self-hosted]
