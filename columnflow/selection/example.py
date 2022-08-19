@@ -26,7 +26,7 @@ ak = maybe_import("awkward")
 @selector(uses={"Jet.pt", "Jet.eta"})
 def req_jet(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     mask = (events.Jet.pt > 30) & (abs(events.Jet.eta) < 2.4)
-    return ak.argsort(events.Jet.pt, axis=-1, ascending=False)[mask]
+    return mask
 
 
 #
@@ -66,18 +66,21 @@ def jet_selection_test(
     # example columns:
     # - high jet multiplicity region (>=6 selected jets)
 
-    jet_indices = self[req_jet](events)
-    jet_sel = ak.num(jet_indices, axis=1) >= 4
+    jet_mask = self[req_jet](events)
+    jet_sel = ak.num(jet_mask, axis=1) >= 4
 
-    jet_high_multiplicity = ak.num(jet_indices, axis=1) >= 6
+    jet_high_multiplicity = ak.num(jet_mask, axis=1) >= 6
     set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
+
+    jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)
+    masked_jet_indices = jet_indices[jet_mask[jet_indices]]
 
     # build and return selection results plus new columns
     # "objects" maps source columns to new columns and selections to be applied on the old columns
     # to create them, e.g. {"Jet": {"MyCustomJetCollection": indices_applied_to_Jet}}
     return SelectionResult(
         steps={"Jet": jet_sel},
-        objects={"Jet": {"Jet1": jet_indices, "Jet2": jet_indices}},
+        objects={"Jet": {"Jet1": masked_jet_indices, "Jet2": masked_jet_indices}},
     )
 
 
