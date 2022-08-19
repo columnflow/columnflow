@@ -61,7 +61,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
-        tmp.dump(lfns, formatter="json")
+        tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
 
     def iter_nano_files(

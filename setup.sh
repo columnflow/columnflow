@@ -120,7 +120,8 @@ setup_columnflow() {
     # prepare local variables
     #
 
-    local this_file="$( [ ! -z "${ZSH_VERSION}" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
+    local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig="${PWD}"
     local setup_name="${1:-default}"
@@ -134,12 +135,12 @@ setup_columnflow() {
     #
 
     # lang defaults
-    [ -z "$LANGUAGE" ] && export LANGUAGE="en_US.UTF-8"
-    [ -z "$LANG" ] && export LANG="en_US.UTF-8"
-    [ -z "$LC_ALL" ] && export LC_ALL="en_US.UTF-8"
+    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
+    export LANG="${LANG:-en_US.UTF-8}"
+    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
     # proxy
-    [ -z "$X509_USER_PROXY" ] && export X509_USER_PROXY="/tmp/x509up_u$( id -u )"
+    export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
 
     # start exporting variables
     export CF_BASE="${this_dir}"
@@ -167,7 +168,7 @@ setup_columnflow() {
             export_and_save CF_SCHEDULER_HOST "127.0.0.1"
             export_and_save CF_SCHEDULER_PORT "8082"
         fi
-        query CF_VOMS "Virtual-organization" "cms:/cms/dcms"
+        query CF_VOMS "Virtual-organization" "cms"
         export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
     }
     cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
@@ -245,7 +246,7 @@ cf_setup_interactive() {
             source "${env_file}" ""
             return "$?"
         elif [ -z "${env_file}" ]; then
-            2>&1 echo "no env file passed as 2nd argument to cf_interactive_setup"
+            >&2 echo "no env file passed as 2nd argument to cf_interactive_setup"
             return "1"
         else
             echo -e "no setup file ${env_file} found for setup '\x1b[0;49;35m${setup_name}\x1b[0m'"
@@ -350,9 +351,9 @@ cf_setup_software_stack() {
     if [ -f "${CF_LCG_SETUP}" ]; then
         source "${CF_LCG_SETUP}" ""
     elif [ "${CF_CI_JOB}" = "1" ]; then
-        2>&1 echo "LCG setup file ${CF_LCG_SETUP} not existing in CI env, skipping"
+        >&2 echo "LCG setup file ${CF_LCG_SETUP} not existing in CI env, skipping"
     else
-        2>&1 echo "LCG setup file ${CF_LCG_SETUP} not existing"
+        >&2 echo "LCG setup file ${CF_LCG_SETUP} not existing"
         return "1"
     fi
 
@@ -362,7 +363,7 @@ cf_setup_software_stack() {
     export PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order:${PYTHONPATH}"
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
-    [ -z "${VIRTUAL_ENV_DISABLE_PROMPT}" ] && export VIRTUAL_ENV_DISABLE_PROMPT="1"
+    export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
     ulimit -s unlimited
 
     # local python stack in two virtual envs:
@@ -375,10 +376,10 @@ cf_setup_software_stack() {
         fi
 
         show_version_warning() {
-            2>&1 echo ""
-            2>&1 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
-            2>&1 echo "         > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
-            2>&1 echo ""
+            >&2 echo ""
+            >&2 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
+            >&2 echo "         > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
+            >&2 echo ""
         }
 
         # source the prod and dev sandboxes
@@ -408,24 +409,24 @@ cf_init_submodule() {
     #
     #
     # Arguments:
-    #   1. path
+    #   1. mpath
     #       The absolute path to the submodule.
 
     # local variables
-    local path="${1}"
+    local mpath="${1}"
 
     # do nothing when the path does not exist
-    [ ! -d "${path}" ] && return "0"
+    [ ! -d "${mpath}" ] && return "0"
 
     # initialize the submodule when the directory is empty
-    if [ "$( ls -1q "${path}" | wc -l )" = "0" ]; then
-        git submodule update --init --recursive "${path}"
+    if [ "$( ls -1q "${mpath}" | wc -l )" = "0" ]; then
+        git submodule update --init --recursive "${mpath}"
     else
         # update when not on a working branch and there are no changes
-        local detached_head="$( ( cd "${path}"; git symbolic-ref -q HEAD &> /dev/null ) && echo true || echo false )"
-        local changed_files="$( cd "${path}"; git status --porcelain=v1 2> /dev/null | wc -l )"
+        local detached_head="$( ( cd "${mpath}"; git symbolic-ref -q HEAD &> /dev/null ) && echo "true" || echo "false" )"
+        local changed_files="$( cd "${mpath}"; git status --porcelain=v1 2> /dev/null | wc -l )"
         if ! ${detached_head} && [ "${changed_files}" = "0" ]; then
-            git submodule update --init --recursive "${path}"
+            git submodule update --init --recursive "${mpath}"
         fi
     fi
 }
@@ -439,12 +440,12 @@ main() {
         return "0"
     else
         local code="$?"
-        echo -e "\x1b[0;49;31mcolumnflow setup failed with code $code\x1b[0m"
-        return "$code"
+        echo -e "\x1b[0;49;31mcolumnflow setup failed with code ${code}\x1b[0m"
+        return "${code}"
     fi
 }
 
 # entry point
-if [ "$CF_SKIP_SETUP" != "1" ]; then
+if [ "${CF_SKIP_SETUP}" != "1" ]; then
     main "$@"
 fi
