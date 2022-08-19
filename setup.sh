@@ -409,24 +409,24 @@ cf_init_submodule() {
     #
     #
     # Arguments:
-    #   1. path
+    #   1. mpath
     #       The absolute path to the submodule.
 
     # local variables
-    local path="${1}"
+    local mpath="${1}"
 
     # do nothing when the path does not exist
-    [ ! -d "${path}" ] && return "0"
+    [ ! -d "${mpath}" ] && return "0"
 
     # initialize the submodule when the directory is empty
-    if [ "$( ls -1q "${path}" | wc -l )" = "0" ]; then
-        git submodule update --init --recursive "${path}"
+    if [ "$( ls -1q "${mpath}" | wc -l )" = "0" ]; then
+        git submodule update --init --recursive "${mpath}"
     else
         # update when not on a working branch and there are no changes
-        local detached_head="$( ( cd "${path}"; git symbolic-ref -q HEAD &> /dev/null ) && echo true || echo false )"
-        local changed_files="$( cd "${path}"; git status --porcelain=v1 2> /dev/null | wc -l )"
+        local detached_head="$( ( cd "${mpath}"; git symbolic-ref -q HEAD &> /dev/null ) && echo "true" || echo "false" )"
+        local changed_files="$( cd "${mpath}"; git status --porcelain=v1 2> /dev/null | wc -l )"
         if ! ${detached_head} && [ "${changed_files}" = "0" ]; then
-            git submodule update --init --recursive "${path}"
+            git submodule update --init --recursive "${mpath}"
         fi
     fi
 }
