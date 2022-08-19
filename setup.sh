@@ -168,7 +168,7 @@ setup_columnflow() {
             export_and_save CF_SCHEDULER_HOST "127.0.0.1"
             export_and_save CF_SCHEDULER_PORT "8082"
         fi
-        query CF_VOMS "Virtual-organization" "cms:/cms/dcms"
+        query CF_VOMS "Virtual-organization" "cms"
         export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
     }
     cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
