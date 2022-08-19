@@ -363,7 +363,7 @@ cf_setup_software_stack() {
     export PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order:${PYTHONPATH}"
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
-    [ -z "${VIRTUAL_ENV_DISABLE_PROMPT}" ] && export VIRTUAL_ENV_DISABLE_PROMPT="1"
+    export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
     ulimit -s unlimited
 
     # local python stack in two virtual envs:
