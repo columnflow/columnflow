@@ -3,7 +3,9 @@ name: Lint and test
 on:
   workflow_dispatch:
   push:
-  pull_request:
+    branches:
+      - master
+      - dev
 
 jobs:
   lint:
