@@ -786,6 +786,12 @@ class PlotMixin(AnalysisTask):
         description="string parameter to define the y-axis scale of the plot in the upper panel; "
         "choices: NO_STR,linear,log; no default",
     )
+    process_lines = law.CSVParameter(
+        default=(),
+        description="comma-separated process names or patterns to plot as individual lines; "
+        "can also be the key of a mapping defined in the 'process_groups' auxiliary data of "
+        "the config; uses no process when empty; empty default",
+    )
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
@@ -795,6 +801,7 @@ class PlotMixin(AnalysisTask):
             "skip_legend": self.skip_legend,
             "skip_cms": self.skip_cms,
             "yscale": None if self.y_scale == law.NO_STR else self.y_scale,
+            "process_lines": self.process_lines,
         }
 
     def get_plot_func(self, func_name: str) -> Callable:

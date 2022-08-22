@@ -226,18 +226,31 @@ def plot_variable_per_process(
     **kwargs,
 ) -> plt.Figure:
 
-    # create the stack and a fake data hist using the smeared sum
-    data_hists = [h for process_inst, h in hists.items() if process_inst.is_data]
-    mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
-    mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
-    mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
+    # separate histograms into stack, lines and data hists
+    process_lines = kwargs.get("process_lines", ())
+    data_hists, mc_hists, mc_colors, mc_labels = [], [], [], []
+    line_hists, line_colors, line_labels = [], [], []
+    for process_inst, h in hists.items():
+        if process_inst.is_data:
+            data_hists.append(h)
+        elif process_inst.is_mc:
+            if process_inst.name in process_lines:
+                line_hists.append(h)
+                line_colors.append(process_inst.color)
+                line_labels.append(process_inst.label)
+            else:
+                mc_hists.append(h)
+                mc_colors.append(process_inst.color)
+                mc_labels.append(process_inst.label)
 
-    h_data, h_mc, h_mc_stack = None, None, None
+    h_data, h_mc, h_mc_stack, h_lines_stack = None, None, None, None
     if data_hists:
         h_data = sum(data_hists[1:], data_hists[0].copy())
     if mc_hists:
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
         h_mc_stack = hist.Stack(*mc_hists)
+    if line_hists:
+        h_lines_stack = hist.Stack(*line_hists)
 
     # get configs from kwargs
     shape_norm = kwargs.get("shape_norm", False)
@@ -262,13 +275,11 @@ def plot_variable_per_process(
         },
     }
 
-    # dummy since not implemented yet
-    mc_lines = False
-    if mc_lines:
+    if h_lines_stack:
         plot_config["mc_lines"] = {
             "method": "draw_stack",
-            # "hist": h_lines_stack,
-            # "kwargs": {"label": lines_label, "color": lines_colors, "stack": False, "histtype": "step"},
+            "hist": h_lines_stack,
+            "kwargs": {"label": line_labels, "color": line_colors, "stack": False, "histtype": "step"},
         }
 
     if data_hists:
