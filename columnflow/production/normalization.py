@@ -26,7 +26,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
     # add process ids
-    self[process_ids](events, **kwargs)
+    events = self[process_ids](events, **kwargs)
 
     # stop here for data
     if self.dataset_inst.is_data:

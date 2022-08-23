@@ -91,7 +91,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
             source_type="coffea_root",
             read_options={"iteritems_options": {"filter_name": load_columns_nano}},
         ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
                 # would result in the coffea behavior being partially lost after new columns are
@@ -99,7 +99,7 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorW
                 events = ak.copy(events)
 
                 # just invoke the calibration function
-                self.calibrator_inst(events)
+                events = self.calibrator_inst(events)
 
                 # remove columns
                 events = route_filter(events)

@@ -83,10 +83,10 @@ class ProduceColumns(
             # TODO: not working yet since parquet columns are nested
             # open_options={"columns": load_columns},
         ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # invoke the producer
-                self.producer_inst(events)
+                events = self.producer_inst(events)
 
                 # remove columns
                 events = route_filter(events)

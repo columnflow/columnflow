@@ -58,7 +58,7 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
 
     # create and store them
     seed = ak.Array(self.create_seed(seed))
-    set_ak_column(events, "deterministic_seed", seed)
+    events = set_ak_column(events, "deterministic_seed", seed)
 
     # uniqueness test across the chunk for debugging
     # n_events = len(seed)
@@ -95,7 +95,7 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     identical.
     """
     # create the event seeds
-    self[deterministic_event_seeds](events, **kwargs)
+    events = self[deterministic_event_seeds](events, **kwargs)
 
     # create the per jet seeds
     prime_offset = 18
@@ -106,7 +106,7 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     np_jet_seed[:] = self[deterministic_event_seeds].create_seed(np_jet_seed)
 
     # store them
-    set_ak_column(events, "Jet.deterministic_seed", jet_seed)
+    events = set_ak_column(events, "Jet.deterministic_seed", jet_seed)
 
     # uniqueness test across all jets in the chunk for debugging
     # n_jets = ak.sum(ak.num(events.Jet, axis=1))
@@ -127,9 +127,9 @@ def deterministic_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds
-    self[deterministic_event_seeds](events, **kwargs)
+    events = self[deterministic_event_seeds](events, **kwargs)
 
     # create the jet seeds
-    self[deterministic_jet_seeds](events, **kwargs)
+    events = self[deterministic_jet_seeds](events, **kwargs)
 
     return events

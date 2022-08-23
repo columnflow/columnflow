@@ -70,7 +70,7 @@ def jet_selection_test(
     jet_sel = ak.num(jet_mask, axis=1) >= 4
 
     jet_high_multiplicity = ak.num(jet_mask, axis=1) >= 6
-    set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
+    events = set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
 
     jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)
     masked_jet_indices = jet_indices[jet_mask[jet_indices]]
@@ -78,7 +78,7 @@ def jet_selection_test(
     # build and return selection results plus new columns
     # "objects" maps source columns to new columns and selections to be applied on the old columns
     # to create them, e.g. {"Jet": {"MyCustomJetCollection": indices_applied_to_Jet}}
-    return SelectionResult(
+    return events, SelectionResult(
         steps={"Jet": jet_sel},
         objects={"Jet": {"Jet1": masked_jet_indices, "Jet2": masked_jet_indices}},
     )
@@ -155,7 +155,7 @@ def example(
     results = SelectionResult()
 
     # jet selection
-    jet_results = self[jet_selection_test](events, stats, **kwargs)
+    events, jet_results = self[jet_selection_test](events, stats, **kwargs)
     results += jet_results
 
     # combined event selection after all steps
@@ -166,15 +166,15 @@ def example(
     results.main["event"] = event_sel
 
     # build categories
-    self[category_ids](events, **kwargs)
+    events = self[category_ids](events, **kwargs)
 
     # create process ids
-    self[process_ids](events, **kwargs)
+    events = self[process_ids](events, **kwargs)
 
     # include cutflow variables
-    self[cutflow_features](events, **kwargs)
+    events = self[cutflow_features](events, **kwargs)
 
     # increment stats
-    self[increment_stats](events, event_sel, stats, **kwargs)
+    events = self[increment_stats](events, event_sel, stats, **kwargs)
 
-    return results
+    return events, results
