@@ -35,7 +35,7 @@ class CreateCutflowHistograms(
 
     selector_steps_order_sensitive = True
 
-    default_variables = ("lhe_weight", "cf_*")
+    default_variables = ("mc_weight", "cf_*")
 
     # default upstream dependency task classes
     dep_MergeSelectionMasks = MergeSelectionMasks
@@ -205,7 +205,7 @@ class PlotCutflow(
             self.dep_CreateCutflowHistograms.req(
                 self,
                 dataset=d,
-                variables=("lhe_weight",),
+                variables=("mc_weight",),
                 _prefer_cli={"variables"},
                 _exclude={"branches"},
             )
@@ -219,7 +219,7 @@ class PlotCutflow(
                 self,
                 branch=0,
                 dataset=d,
-                variables=("lhe_weight",),
+                variables=("mc_weight",),
                 _prefer_cli={"variables"},
             )
             for d in self.datasets
@@ -248,7 +248,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["lhe_weight"].load(formatter="pickle")
+                h_in = inp["mc_weight"].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -279,7 +279,7 @@ class PlotCutflow(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "shift": sum, "lhe_weight": sum}]
+                    h = h[{"process": sum, "category": sum, "shift": sum, "mc_weight": sum}]
 
                     # add the histogram
                     if process_inst in hists:

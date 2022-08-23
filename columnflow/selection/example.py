@@ -88,7 +88,7 @@ def jet_selection_test(
 # combined selectors
 #
 
-@selector(uses={"LHEWeight.originalXWGTUP"})
+@selector(uses={"mc_weight"})
 def increment_stats(
     self: Selector,
     events: ak.Array,
@@ -109,7 +109,7 @@ def increment_stats(
 
     # store sum of event weights for mc events
     if self.dataset_inst.is_mc:
-        weights = events.LHEWeight.originalXWGTUP
+        weights = events.mc_weight
 
         # sum for all processes
         stats["sum_mc_weight"] += ak.sum(weights)
@@ -130,11 +130,9 @@ def increment_stats(
 @selector(
     uses={
         category_ids, jet_selection_test, process_ids, increment_stats, cutflow_features,
-        "LHEWeight.originalXWGTUP",
     },
     produces={
         category_ids, jet_selection_test, process_ids, increment_stats, cutflow_features,
-        "LHEWeight.originalXWGTUP",
     },
     exposed=True,
 )
