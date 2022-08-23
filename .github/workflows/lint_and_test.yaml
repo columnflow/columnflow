@@ -3,11 +3,27 @@ name: Lint and test
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-      - dev
+  pull_request:
 
 jobs:
+  lint_central:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ⬇️
+        uses: actions/checkout@master
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install dependencies ☕️
+        run: |
+          source setup.sh ""
+
+      - name: Lint 🔍
+        run: |
+          source setup.sh ""
+          ./tests/run_linting
+
   lint:
     runs-on: [self-hosted]
     env:
