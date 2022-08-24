@@ -145,8 +145,8 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
 
     # calculate uncorrected pt, mass
-    set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
-    set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
+    events = set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
+    events = set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
     # build/retrieve lookup providers for JECs and uncertainties
     # NOTE: could also be moved to `jec_setup`, but keep here in case the provider ever needs
@@ -174,9 +174,9 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     )
 
     # store corrected pt, mass and recalculate rawFactor
-    set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
-    set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
-    set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
+    events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
 
     # look up JEC uncertainties
     if self.junc_names:
@@ -186,12 +186,12 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         )
         for name, jec_unc_factors in jec_uncertainties:
             # jec_unc_factors[I_EVT][I_JET][I_VAR]
-            set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
-            set_ak_column(events, f"Jet.pt_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
-            set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
-            set_ak_column(events, f"Jet.mass_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
+            events = set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.pt_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
+            events = set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.mass_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
-        return events
+    return events
 
 
 @jec.init
@@ -300,8 +300,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
 
     # save the unsmeared properties in case they are needed later
-    set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
-    set_ak_column(events, "Jet.mass_unsmeared", events.Jet.mass)
+    events = set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
+    events = set_ak_column(events, "Jet.mass_unsmeared", events.Jet.mass)
 
     # use event numbers in chunk to seed random number generator
     # TODO: use seeds!
@@ -393,8 +393,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # applu the final smearing factors to the pt and mass
     for idx, suffix in enumerate(("", "_jer_up", "_jer_down")):
-        set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
-        set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
+        events = set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
+        events = set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
 
     return events
 
@@ -455,10 +455,10 @@ def jer_setup(self: Calibrator, inputs: dict) -> None:
 @calibrator(uses={jec, jer}, produces={jec, jer})
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
-    self[jec](events, **kwargs)
+    events = self[jec](events, **kwargs)
 
     # apply jer smearing on MC only
     if self.dataset_inst.is_mc:
-        self[jer](events, **kwargs)
+        events = self[jer](events, **kwargs)
 
     return events

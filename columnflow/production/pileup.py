@@ -31,9 +31,9 @@ def pu_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     indices[indices > max_bin] = max_bin
 
     # save the weights
-    set_ak_column(events, "pu_weight", self.pu_weights.nominal[indices])
-    set_ak_column(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
-    set_ak_column(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
+    events = set_ak_column(events, "pu_weight", self.pu_weights.nominal[indices])
+    events = set_ak_column(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
+    events = set_ak_column(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
 
     return events
 

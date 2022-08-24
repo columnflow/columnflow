@@ -109,7 +109,7 @@ class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalW
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
         ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
                 # would result in the coffea behavior being partially lost after new columns are

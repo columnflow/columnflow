@@ -472,9 +472,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(ak_array3["b"][1], 3)
         self.assertEqual(ak_array3["a"][0], 0)
         self.assertEqual(ak_array3["a"][1], 1)
-        self.assertEqual(ak_array2.fields, ["a", "b"])
-        self.assertEqual(ak_array2["b"][0], 2)
-        self.assertEqual(ak_array2["b"][1], 3)
+        self.assertEqual(ak_array2.fields, ["a"])
 
         # test adding a nested column
         value = [4, 5]
@@ -485,9 +483,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(ak_array4[("c", "d")][1], 5)
         self.assertEqual(ak_array4["a"][0], 0)
         self.assertEqual(ak_array4["a"][1], 1)
-        self.assertEqual(ak_array2.fields, ["a", "b", "c"])
-        self.assertEqual(ak_array2[("c", "d")][0], 4)
-        self.assertEqual(ak_array2[("c", "d")][1], 5)
+        self.assertEqual(ak_array2.fields, ["a"])
 
         # test adding an embranchment to an existing nested column
         value = [6, 7]
@@ -497,17 +493,14 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(ak_array5[("c", "e")][1], 7)
         self.assertEqual(ak_array5["c", "d"][0], 4)
         self.assertEqual(ak_array5["c", "d"][1], 5)
-        self.assertEqual(ak_array2["c"].fields, ["d", "e"])
-        self.assertEqual(ak_array2[("c", "e")][0], 6)
-        self.assertEqual(ak_array2[("c", "e")][1], 7)
+        self.assertEqual(ak_array2.fields, ["a"])
 
         # test overwriting an existing column
         value = [8, 9]
         ak_array6 = set_ak_column(ak_array5, Route("c.e"), value)
         self.assertEqual(ak_array6[("c", "e")][0], 8)
         self.assertEqual(ak_array6[("c", "e")][1], 9)
-        self.assertEqual(ak_array2[("c", "e")][0], 8)
-        self.assertEqual(ak_array2[("c", "e")][1], 9)
+        self.assertEqual(ak_array2.fields, ["a"])
 
     def test_remove_ak_column(self):
         # test if removal works for different input types of routes
@@ -553,8 +546,8 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
     def test_add_ak_alias(self):
         ak_array_aliasdd1 = add_ak_alias(self.ak_array, "d.d_1", "e")
         self.assertEqual(ak_array_aliasdd1["e"][0], 1)
-        # test that it is an in place operation
-        self.assertEqual(self.ak_array["e"][0], 1)
+        # test that it is not in place operation
+        self.assertFalse("e" in self.ak_array.fields)
 
         # test adding an other alias for the same route
         ak_array_aliasdd1 = add_ak_alias(self.ak_array, "d.d_1", "f")
@@ -589,9 +582,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(ak_array2.fields, ["a", "c_1", "b", "d", "f"])
         self.assertEqual(ak_array2["f"].fields, ak_array2[("b", "bb2", "bbb2", "b_bbb1")].fields)
         self.assertEqual(ak_array2[("f", "bbbbb2")], ak_array2[("b", "bb2", "bbb2", "b_bbb1", "bbbbb2")])
-        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d", "f"])
-        self.assertEqual(self.ak_array["f"].fields, self.ak_array[("b", "bb2", "bbb2", "b_bbb1")].fields)
-        self.assertEqual(self.ak_array[("f", "bbbbb2")], self.ak_array[("b", "bb2", "bbb2", "b_bbb1", "bbbbb2")])
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
 
         # reset the test array
         array_content = {"a": 0, "c_1": 1,
@@ -609,7 +600,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         ak_array4 = add_ak_aliases(self.ak_array, dictionary2)
         self.assertEqual(ak_array4.fields, ["a", "c_1", "b", "d", "e", "f"])
         self.assertEqual(ak_array4["e"], ak_array4[("d", "d_1")])
-        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d", "e", "f"])
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
 
         # test removing several source columns
         self.ak_array = ak.Array([array_content])
@@ -644,21 +635,20 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.assertEqual(updated_array1["a"][0], 0)
         self.assertEqual(updated_array1[("d", "d_1")][0], 2)
         self.assertEqual(updated_array1[("b", "bb1")][0], 3)
-        # test if in place
-        self.assertEqual(ak_array1.fields, ["a", "c_1", "d", "b"])
+        # test if in not place
+        self.assertEqual(ak_array1.fields, ["a", "c_1"])
         self.assertEqual(ak_array2.fields, ["d", "b"])
-        self.assertEqual(ak_array1[("b", "bb1")][0], 3)
 
         # test an update with some columns with fields in common
         updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
         self.assertEqual(updated_array2[("b", "bb2", "bbb1")][0], 4)
         self.assertEqual(updated_array2[("b", "bb1")][0], 3)
-        # test if in place
-        self.assertEqual(ak_array1[("b", "bb1")][0], 3)
+        # test if not in place
+        self.assertEqual(ak_array1.fields, ["a", "c_1"])
 
         # test an update with same columns, should overwrite value per default
         updated_array3 = update_ak_array(updated_array2, ak_array4)
-        self.assertEqual(updated_array2[("b", "bb2", "bbb1")][0], 5)
+        self.assertEqual(updated_array3[("b", "bb2", "bbb1")][0], 5)
 
         # test updates with concatenation
         updated_array4 = update_ak_array(updated_array3, ak_array4, concat_routes=True)

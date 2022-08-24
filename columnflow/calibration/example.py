@@ -36,9 +36,9 @@ def example(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     n_jet_mass[~a_mask] *= 0.9
 
     # b)
-    set_ak_column(events, "Jet.pt_jec_up", events.Jet.pt * 1.05)
-    set_ak_column(events, "Jet.mass_jec_up", events.Jet.mass * 1.05)
-    set_ak_column(events, "Jet.pt_jec_down", events.Jet.pt * 0.95)
-    set_ak_column(events, "Jet.mass_jec_down", events.Jet.mass * 0.95)
+    events = set_ak_column(events, "Jet.pt_jec_up", events.Jet.pt * 1.05)
+    events = set_ak_column(events, "Jet.mass_jec_up", events.Jet.mass * 1.05)
+    events = set_ak_column(events, "Jet.pt_jec_down", events.Jet.pt * 0.95)
+    events = set_ak_column(events, "Jet.mass_jec_down", events.Jet.mass * 0.95)
 
     return events
