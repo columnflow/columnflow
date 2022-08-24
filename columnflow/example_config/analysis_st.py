@@ -148,12 +148,10 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
     "cf.ReduceEvents": {
         "run", "luminosityBlock", "event",
         "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
-        "LHEWeight.originalXWGTUP",
-        "PV.npvs",
-        "category_ids", "deterministic_seed",
+        "mc_weight", "PV.npvs", "category_ids", "deterministic_seed",
     },
     "cf.MergeSelectionMasks": {
-        "LHEWeight.originalXWGTUP", "normalization_weight", "process_id", "category_ids", "cutflow.*",
+        "mc_weight", "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
 }))
 
@@ -181,10 +179,10 @@ cat_e = config_2018.add_category(
 
 # add variables
 config_2018.add_variable(
-    name="lhe_weight",
-    expression="LHEWeight.originalXWGTUP",
+    name="mc_weight",
+    expression="mc_weight",
     binning=(200, -10, 10),
-    x_title="LHE weight",
+    x_title="MC weight",
 )
 config_2018.add_variable(
     name="ht",
