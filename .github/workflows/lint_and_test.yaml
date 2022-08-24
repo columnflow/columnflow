@@ -7,20 +7,18 @@ on:
 
 jobs:
   lint:
-    runs-on: [self-hosted]
-    env:
-      CF_JOB_ID: ${{ github.run_number }}_${{ github.run_id }}_${{ github.run_attempt }}_lint
-    defaults:
-      run:
-        shell: bash
-        working-directory: ${{ env.CF_JOB_ID }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
         with:
           persist-credentials: false
           submodules: recursive
-          path: ${{ env.CF_JOB_ID }}
+
+      - name: Setup python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
 
       - name: Install dependencies ☕️
         run: |
@@ -31,27 +29,19 @@ jobs:
           source setup.sh ""
           ./tests/run_linting
 
-      - name: Cleanup 🧹
-        if: always()
-        run: |
-          cd ..
-          rm -rf "${CF_JOB_ID}"
-
   test:
-    runs-on: [self-hosted]
-    env:
-      CF_JOB_ID: ${{ github.run_number }}_${{ github.run_id }}_${{ github.run_attempt }}_test
-    defaults:
-      run:
-        shell: bash
-        working-directory: ${{ env.CF_JOB_ID }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
         with:
           persist-credentials: false
           submodules: recursive
-          path: ${{ env.CF_JOB_ID }}
+
+      - name: Setup python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
 
       - name: Install dependencies ☕️
         run: |
@@ -61,12 +51,6 @@ jobs:
         run: |
           source setup.sh ""
           ./tests/run_tests
-
-      - name: Cleanup 🧹
-        if: always()
-        run: |
-          cd ..
-          rm -rf "${CF_JOB_ID}"
 
   pypi:
     runs-on: ubuntu-latest
@@ -95,21 +79,20 @@ jobs:
 
   coverage:
     needs: test
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     env:
-      CF_JOB_ID: ${{ github.run_number }}_${{ github.run_id }}_${{ github.run_attempt }}_coverage
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    defaults:
-      run:
-        shell: bash
-        working-directory: ${{ env.CF_JOB_ID }}
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
         with:
           persist-credentials: false
           submodules: recursive
-          path: ${{ env.CF_JOB_ID }}
+
+      - name: Setup python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.6
 
       - name: Install dependencies ☕️
         run: |
@@ -125,12 +108,5 @@ jobs:
         uses: codecov/codecov-action@v2
         with:
           flags: unittests
-          working-directory: ${{ env.CF_JOB_ID }}
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
           verbose: true
-
-      - name: Cleanup 🧹
-        if: always()
-        run: |
-          cd ..
-          rm -rf "${CF_JOB_ID}"

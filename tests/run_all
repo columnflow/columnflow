@@ -8,8 +8,9 @@
 #      previous scripts.
 
 action() {
-    local this_file="$( [ ! -z "$ZSH_VERSION" ] && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
-    local this_dir="$( cd "$( dirname "$this_file" )" && pwd )"
+    local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
+    local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
 
     # get arguments
     local mode="${1}"
@@ -28,6 +29,7 @@ action() {
     # linting
     cecho 35 "check linting ..."
     bash "$this_dir/run_linting"
+    ret="$?"
     if [ "$ret" != "0" ]; then
         2>&1 cecho 31 "run_linting failed with exit code $ret"
         [ "$mode" = "force" ] || return "$ret"

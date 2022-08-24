@@ -115,7 +115,7 @@ class CreateHistograms(
             # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
         ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # add additional columns
                 events = update_ak_array(events, *columns)

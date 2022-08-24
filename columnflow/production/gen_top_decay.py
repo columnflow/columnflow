@@ -160,7 +160,7 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
     )
 
     # save the column
-    set_ak_column(events, "gen_top_decay", groups)
+    events = set_ak_column(events, "gen_top_decay", groups)
 
     return events
 

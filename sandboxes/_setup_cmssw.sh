@@ -31,7 +31,7 @@
 # installation will happen but the desired CMSSW setup is reused from a pre-compiled CMSSW bundle
 # that is fetched from a local or remote location and unpacked.
 
-action() {
+setup_cmssw() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
@@ -139,6 +139,13 @@ action() {
             # simultaneously starting processes getting here at the same time
             local sleep_counter="0"
             sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+            # when the file is older than 30 minutes, consider it a dangling leftover from a
+            # previously failed installation attempt and delete it.
+            if [ -f "${pending_flag_file}" ]; then
+                local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
+                [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
+            fi
+            # start the sleep loop
             while [ -f "${pending_flag_file}" ]; do
                 # wait at most 10 minutes
                 sleep_counter="$(( $sleep_counter + 1 ))"
@@ -211,4 +218,4 @@ action() {
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_CMSSW_ENV_NAME}.sh"
 }
-action "$@"
+setup_cmssw "$@"

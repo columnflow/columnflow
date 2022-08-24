@@ -71,7 +71,10 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
         if unknown_names:
             unknown_names = ", ".join(sorted(list(unknown_names)))
             available = ", ".join(sorted(list(all_names)))
-            raise ValueError(f"No weight tables found for the following names: {unknown_names}. Available: {available}")
+            raise ValueError(
+                f"no weight tables found for the following names: {unknown_names}, "
+                f"available: {available}",
+            )
     else:
         names = [(n, n) for n in all_names]
 
@@ -133,6 +136,8 @@ def ak_random(*args, rand_func):
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
+    # custom uncertainty sources, defaults to config when empty
+    uncertainty_sources=None,
 )
 def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -140,8 +145,8 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
 
     # calculate uncorrected pt, mass
-    set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
-    set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
+    events = set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
+    events = set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
     # build/retrieve lookup providers for JECs and uncertainties
     # NOTE: could also be moved to `jec_setup`, but keep here in case the provider ever needs
@@ -152,12 +157,13 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         coffea_jetmet_tools.FactorizedJetCorrector,
         names=self.jec_names,
     )
-    junc_provider = get_lookup_provider(
-        self.junc_files,
-        coffea_txt_converters.convert_junc_txt_file,
-        coffea_jetmet_tools.JetCorrectionUncertainty,
-        names=self.junc_names,
-    )
+    if self.junc_names:
+        junc_provider = get_lookup_provider(
+            self.junc_files,
+            coffea_txt_converters.convert_junc_txt_file,
+            coffea_jetmet_tools.JetCorrectionUncertainty,
+            names=self.junc_names,
+        )
 
     # look up JEC correction factors
     jec_factors = jec_provider.getCorrection(
@@ -168,21 +174,22 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     )
 
     # store corrected pt, mass and recalculate rawFactor
-    set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
-    set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
-    set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
+    events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
 
     # look up JEC uncertainties
-    jec_uncertainties = junc_provider.getUncertainty(
-        JetEta=events.Jet.eta,
-        JetPt=events.Jet.pt_raw,
-    )
-    for name, jec_unc_factors in jec_uncertainties:
-        # jec_unc_factors[I_EVT][I_JET][I_VAR]
-        set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
-        set_ak_column(events, f"Jet.pt_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
-        set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
-        set_ak_column(events, f"Jet.mass_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
+    if self.junc_names:
+        jec_uncertainties = junc_provider.getUncertainty(
+            JetEta=events.Jet.eta,
+            JetPt=events.Jet.pt_raw,
+        )
+        for name, jec_unc_factors in jec_uncertainties:
+            # jec_unc_factors[I_EVT][I_JET][I_VAR]
+            events = set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.pt_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
+            events = set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.mass_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
     return events
 
@@ -192,10 +199,14 @@ def jec_init(self: Calibrator) -> None:
     """
     Add JEC uncertainty shifts to the list of produced columns.
     """
+    sources = self.uncertainty_sources
+    if sources is None:
+        sources = self.config_inst.x.jec.uncertainty_sources
+
     self.produces |= {
         f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
-        for junc_name in self.config_inst.x.jec.uncertainty_sources
+        for junc_name in sources
         for junc_dir in ("up", "down")
     }
 
@@ -252,11 +263,15 @@ def jec_setup(self: Calibrator, inputs: dict) -> None:
             f"expected exactly one 'UncertaintySources' file, got {len(self.junc_names)}",
         )
 
+    sources = self.uncertainty_sources
+    if sources is None:
+        sources = self.config_inst.x.jec.uncertainty_sources
+
     # update the weight names to include the uncertainty sources specified in the config
     self.junc_names = [
         (f"{basename}_{src}", f"{orig_basename}_{src}")
         for basename, orig_basename in self.junc_names
-        for src in self.config_inst.x.jec["uncertainty_sources"]
+        for src in sources
     ]
 
 
@@ -276,7 +291,6 @@ def jec_setup(self: Calibrator, inputs: dict) -> None:
         f"Jet.{shifted_var}_JERSF_{jersf_dir}"
         for shifted_var in ("pt", "mass")
         for jersf_dir in ("up", "down")
-
     },
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
@@ -286,8 +300,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
 
     # save the unsmeared properties in case they are needed later
-    set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
-    set_ak_column(events, "Jet.mass_unsmeared", events.Jet.mass)
+    events = set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
+    events = set_ak_column(events, "Jet.mass_unsmeared", events.Jet.mass)
 
     # use event numbers in chunk to seed random number generator
     # TODO: use seeds!
@@ -379,8 +393,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # applu the final smearing factors to the pt and mass
     for idx, suffix in enumerate(("", "_jer_up", "_jer_down")):
-        set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
-        set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
+        events = set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
+        events = set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
 
     return events
 
@@ -441,10 +455,10 @@ def jer_setup(self: Calibrator, inputs: dict) -> None:
 @calibrator(uses={jec, jer}, produces={jec, jer})
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
-    self[jec](events, **kwargs)
+    events = self[jec](events, **kwargs)
 
     # apply jer smearing on MC only
     if self.dataset_inst.is_mc:
-        self[jer](events, **kwargs)
+        events = self[jer](events, **kwargs)
 
     return events

@@ -16,7 +16,7 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={process_ids, "LHEWeight.originalXWGTUP"},
+    uses={process_ids, "mc_weight"},
     produces={process_ids, "normalization_weight"},
 )
 def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
@@ -26,7 +26,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
     # add process ids
-    self[process_ids](events, **kwargs)
+    events = self[process_ids](events, **kwargs)
 
     # stop here for data
     if self.dataset_inst.is_data:
@@ -43,8 +43,8 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     sum_weights = np.array(self.sum_weights_table[0, process_id].todense())[0]
 
     # compute the weight and store it
-    norm_weight = events.LHEWeight.originalXWGTUP * lumi * xs / sum_weights
-    set_ak_column(events, "normalization_weight", norm_weight)
+    norm_weight = events.mc_weight * lumi * xs / sum_weights
+    events = set_ak_column(events, "normalization_weight", norm_weight)
 
     return events
 

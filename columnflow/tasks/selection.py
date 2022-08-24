@@ -124,7 +124,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
                 # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
                 # would result in the coffea behavior being partially lost after new columns are
@@ -138,7 +138,7 @@ class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkfl
                 events = add_ak_aliases(events, aliases)
 
                 # invoke the selection function
-                results = self.selector_inst(events, stats)
+                events, results = self.selector_inst(events, stats)
 
                 # save results as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")

@@ -37,7 +37,7 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         category_ids.append(cat_ids)
 
     category_ids = ak.concatenate(category_ids, axis=1)
-    set_ak_column(events, "category_ids", category_ids)
+    events = set_ak_column(events, "category_ids", category_ids)
 
     return events
 

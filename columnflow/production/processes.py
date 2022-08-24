@@ -29,6 +29,6 @@ def process_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     process_id = self.dataset_inst.processes.get_first().id
 
     # store the column
-    set_ak_column(events, "process_id", len(events) * [process_id])
+    events = set_ak_column(events, "process_id", len(events) * [process_id])
 
     return events

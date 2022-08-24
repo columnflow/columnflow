@@ -78,7 +78,8 @@ Projects using columnflow
 -------------------------
 
 - `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
-- tba
+- `hh2bbtautau <https://github.com/uhh-cms/hh2bbtautau>`__: HH → bb𝜏𝜏 analysis with CMS.
+- `hh2bbww <https://github.com/uhh-cms/hh2bbww>`__: HH → bbWW analysis with CMS.
 
 
 Development

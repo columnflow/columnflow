@@ -556,11 +556,15 @@ def set_ak_column(
     value: ak.Array,
 ) -> ak.Array:
     """
-    Inserts a new column into awkward array *ak_array* in-place and returns it. The column can be
-    defined through a route, i.e., a :py:class:`Route` instance, a tuple of strings where each
-    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
-    ``"Jet.pt"``), and the column *value* itself. Intermediate, non-existing fields are
-    automatically created. Example:
+    Inserts a new column into awkward array *ak_array* and returns a new view with the column added
+    or overwritten.
+
+    The column can be defined through a route, i.e., a :py:class:`Route` instance, a tuple of
+    strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot
+    format (e.g. ``"Jet.pt"``), and the column *value* itself. Intermediate, non-existing fields are
+    automatically created.
+
+    Example:
 
     .. code-block:: python
 
@@ -572,13 +576,15 @@ def set_ak_column(
     .. note::
 
         Issues can arise in cases where the route to add already exists and has a different type
-        than the newly added *value*. If this is the case, you should consider remove the column
-        first with :py:func:`remove_ak_column`. As this one might return a new view, it is not
-        automatically handled in *this* function which is meant to perform an in-place operation.
+        than the newly added *value*. For this reason, existing columns are removed first, creating
+        a view to operate on.
     """
     route = Route(route)
 
-    # try to remove the route first so that existing columns are not overwritten but replaces
+    # force creating a view for consistent behavior
+    ak_array = ak_array[ak_array.fields]
+
+    # try to remove the route first so that existing columns are not overwritten but replaced
     ak_array = remove_ak_column(ak_array, route, silent=True)
 
     # trivial case
@@ -616,16 +622,17 @@ def remove_ak_column(
     silent: bool = False,
 ) -> ak.Array:
     """
-    Removes a *route* from an awkward array *ak_array* and returns the array. The (sub)array in
-    which the column is to be removed is replaced by a view which misses the corresponding column.
-    Therefore, if the column to be removed is found in a top-level field, the returned array itself
-    is a view. Otherwise, one of its subarrays will be a view.
+    Removes a *route* from an awkward array *ak_array* and returns a new view with the corresponding
+    column removed.
 
     Note that only *route* can be a :py:class:`Route` instance, a tuple of strings where each
     string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
     ``"Jet.pt"``). Unless *silent* is *True*, a *ValueError* is raised when the route does not
     exist.
     """
+    # force creating a view for consistent behavior
+    ak_array = ak_array[ak_array.fields]
+
     # verify that the route exists
     route = Route(route)
     if not route:
@@ -663,15 +670,16 @@ def add_ak_alias(
     remove_src: bool = False,
 ) -> ak.Array:
     """
-    Adds an alias to an awkward array *ak_array* in-place (depending on *remove_src*, see below),
-    pointing the array at *src_route* to *dst_route*. Both routes can be a :py:class:`Route`
-    instance, a tuple of strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or
-    a string with dot format (e.g. ``"Jet.pt"``). A *ValueError* is raised when *src_route* does not
-    exist.
+    Adds an alias to an awkward array *ak_array* pointing the array at *src_route* to *dst_route*
+    and returns a new view with the alias applied.
 
     Note that existing columns referred to by *dst_route* might be overwritten. When *remove_src* is
     *True*, a view of the input array is returned with the column referred to by *src_route*
-    missing. Otherwise, the input array is returned with all columns.
+    missing.
+
+    Both routes can be a :py:class:`Route` instance, a tuple of strings where each string refers to
+    a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``). A
+    *ValueError* is raised when *src_route* does not exist.
     """
     src_route = Route(src_route)
     dst_route = Route(dst_route)
@@ -697,13 +705,14 @@ def add_ak_aliases(
 ) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
-    an awkward array *ak_array* in-place (depending on *remove_src*, see below). Each column in this
-    dictionary can be referred to by a :py:class:`Route` instance, a tuple of strings where each
-    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
-    ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
+    an awkward array *ak_array* and returns a new view with the aliases applied.
 
     When *remove_src* is *True*, a view of the input array is returned with all source columns
-    missing. Otherwise, the input array is returned with all columns.
+    missing.
+
+    Each column in this dictionary can be referred to by a :py:class:`Route` instance, a tuple of
+    strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot
+    format (e.g. ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
     """
     # add all aliases
     for dst_route, src_route in aliases.items():
@@ -722,8 +731,7 @@ def update_ak_array(
     """
     Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
     potentially (see below) returns a new view. Internally, :py:func:`get_ak_routes` is used to
-    obtain the list of all routes pointing to potentially deeply nested arrays. The input array is
-    also returned.
+    obtain the list of all routes pointing to potentially deeply nested arrays.
 
     If two columns overlap during this update process, four different cases can be configured to
     occur:
@@ -739,6 +747,9 @@ def update_ak_array(
            existing ones. A new view is returned in case this case occurs at least once.
         4. If none of the cases above apply, an exception is raised.
     """
+    # force creating a view for consistent behavior
+    ak_array = ak_array[ak_array.fields]
+
     # trivial case
     if not others:
         return ak_array
@@ -964,7 +975,7 @@ class ArrayFunction(Derivable):
 
             def call_func(self, events):
                 # call the correct my_func instance
-                self[my_func](events)
+                events = self[my_func](events)
 
                 events["Jet", "pt4"] = events.Jet.pt2 ** 2
 
@@ -1572,6 +1583,7 @@ class TaskArrayFunction(ArrayFunction):
         *args,
         call_cache: Optional[Union[bool, defaultdict]] = None,
         call_force: Optional[bool] = None,
+        n_return: int = 1,
         **kwargs,
     ) -> Any:
         """
@@ -1579,9 +1591,9 @@ class TaskArrayFunction(ArrayFunction):
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
         Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before, it is not called again but *None* is returned. This check
-        is bypassed when either *call_force* is *True*, or when it is *None* and the
-        :py:attr:`call_force` attribute of this instance is *True*.
+        this instance was called before, it is not called again but the first *n_return* elements of
+        *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
+        when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
         """
         # call caching
         if call_cache is not False:
@@ -1593,7 +1605,7 @@ class TaskArrayFunction(ArrayFunction):
             if call_force is None:
                 call_force = self.call_force
             if call_cache[self] > 0 and not call_force:
-                return
+                return args[0] if n_return == 1 else args[:n_return]
 
             # increase the count and set kwargs for the call downstream
             call_cache[self] += 1

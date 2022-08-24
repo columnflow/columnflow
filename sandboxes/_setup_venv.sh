@@ -34,7 +34,7 @@
 # installation will happen but the setup is reused from a pre-compiled software bundle that is
 # fetched from a local or remote location and unpacked.
 
-action() {
+setup_venv() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
@@ -78,7 +78,7 @@ action() {
     else
         IFS="," read -r -a requirement_files <<< "${CF_VENV_REQUIREMENTS}"
     fi
-    for f in ${parts[@]}; do
+    for f in ${requirement_files[@]}; do
         if [ ! -f "${f}" ]; then
             >&2 echo "requirement file '${f}' does not exist"
             return "5"
@@ -89,6 +89,7 @@ action() {
     done
     local i0="$( ${shell_is_zsh} && echo "1" || echo "0" )"
     local first_requirement_file="${requirement_files[$i0]}"
+
 
     #
     # start the setup
@@ -127,6 +128,13 @@ action() {
     if [ ! -f "${flag_file}" ]; then
         local sleep_counter="0"
         sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+        # when the file is older than 30 minutes, consider it a dangling leftover from a
+        # previously failed installation attempt and delete it.
+        if [ -f "${pending_flag_file}" ]; then
+            local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
+            [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
+        fi
+        # start the sleep loop
         while [ -f "${pending_flag_file}" ]; do
             # wait at most 15 minutes
             sleep_counter="$(( $sleep_counter + 1 ))"
@@ -158,15 +166,16 @@ action() {
         python3 -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "11" )
 
         # install basic production requirements
-        if ! $requirement_files_contains_prod; then
+        if ! ${requirement_files_contains_prod}; then
             echo -e "\n\x1b[0;49;35minstalling requirement file ${CF_BASE}/requirements_prod.txt\x1b[0m"
             python3 -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "12" )
         fi
 
         # install requirement files
-        for i in "${!requirement_files[@]}"; do
-            echo -e "\n\x1b[0;49;35minstalling requirement file $i at ${requirement_files[i]}\x1b[0m"
-            python3 -m pip install -r "${requirement_files[i]}" || ( rm -f "${pending_flag_file}" && return "13" )
+        for f in ${requirement_files[@]}; do
+            echo -e "\n\x1b[0;49;35minstalling requirement file ${f}\x1b[0m"
+            python3 -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "13" )
+            echo
         done
 
         # ensure that the venv is relocateable
@@ -209,4 +218,4 @@ action() {
 
     return "${ret}"
 }
-action "$@"
+setup_venv "$@"

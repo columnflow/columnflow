@@ -85,10 +85,12 @@ class ExampleModel(MLModel):
         models: List[Any],
         fold_indices: ak.Array,
         events_used_in_training: bool = False,
-    ) -> None:
+    ) -> ak.Array:
         # fake evaluation
-        set_ak_column(events, f"{self.cls_name}.n_muon", 1)
-        set_ak_column(events, f"{self.cls_name}.n_electron", 1)
+        events = set_ak_column(events, f"{self.cls_name}.n_muon", 1)
+        events = set_ak_column(events, f"{self.cls_name}.n_electron", 1)
+
+        return events
 
 
 # usable derivations
