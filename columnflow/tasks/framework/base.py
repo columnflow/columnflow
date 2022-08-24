@@ -54,7 +54,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     # defaults for targets
     default_store = "$CF_STORE_LOCAL"
     default_wlcg_fs = "wlcg_fs"
-    default_output_location = "local"
+    default_output_location = "config"
 
     @classmethod
     def modify_param_values(cls, params):

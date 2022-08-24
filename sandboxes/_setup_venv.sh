@@ -117,7 +117,7 @@ setup_venv() {
 
     # complain in remote jobs when the env is not installed
     if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -f "${flag_file}" ]; then
-        >&2 echo "the venv ${CF_VENV_NAME} is not installed"
+        >&2 echo "the venv ${CF_VENV_NAME} is not installed but should be provided externally for remote jobs"
         return "7"
     fi
 

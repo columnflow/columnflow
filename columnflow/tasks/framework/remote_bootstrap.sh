@@ -15,7 +15,7 @@ bootstrap_htcondor_standalone() {
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
-    export CF_SOFTWARE="${CF_DATA}/software"
+    export CF_SOFTWARE_BASE="${CF_DATA}/software"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
@@ -32,8 +32,8 @@ bootstrap_htcondor_standalone() {
 
     # load the software bundle
     (
-        mkdir -p "${CF_SOFTWARE}"
-        cd "${CF_SOFTWARE}"
+        mkdir -p "${CF_SOFTWARE_BASE}"
+        cd "${CF_SOFTWARE_BASE}"
         law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" || return "$?"
         tar -xzf "software.tgz" || return "$?"
         rm "software.tgz"
@@ -53,7 +53,7 @@ bootstrap_htcondor_standalone() {
     local cmssw_sandbox_patterns={{cf_cmssw_sandbox_patterns}}
     local cmssw_sandbox_names={{cf_cmssw_sandbox_names}}
     for (( i=0; i<${#cmssw_sandbox_uris[@]}; i+=1 )); do
-        law_wlcg_get_file "${cmssw_sandbox_uris[i]}" "${cmssw_sandbox_patterns[i]}" "$CF_SOFTWARE/cmssw_sandboxes/${cmssw_sandbox_names[i]}.tgz" || return "$?"
+        law_wlcg_get_file "${cmssw_sandbox_uris[i]}" "${cmssw_sandbox_patterns[i]}" "${CF_SOFTWARE_BASE}/cmssw_sandboxes/${cmssw_sandbox_names[i]}.tgz" || return "$?"
     done
 
     # source the default repo setup

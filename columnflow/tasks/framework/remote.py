@@ -15,140 +15,6 @@ from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.util import real_path
 
 
-class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
-
-    transfer_logs = luigi.BoolParameter(
-        default=True,
-        significant=False,
-        description="transfer job logs to the output directory; default: True",
-    )
-    max_runtime = law.DurationParameter(
-        default=2.0,
-        unit="h",
-        significant=False,
-        description="maximum runtime; default unit is hours; default: 2",
-    )
-    htcondor_cpus = luigi.IntParameter(
-        default=law.NO_INT,
-        significant=False,
-        description="number of CPUs to request; empty value leads to the cluster default setting; "
-        "empty default",
-    )
-    htcondor_flavor = luigi.ChoiceParameter(
-        default=os.getenv("CF_HTCONDOR_FLAVOR", "naf"),
-        choices=("naf", "naf"),
-        significant=False,
-        description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        "naf,cern; default: '{}'".format(os.getenv("CF_HTCONDOR_FLAVOR", "naf")),
-    )
-
-    exclude_params_branch = {"max_runtime", "htcondor_cpus", "htcondor_flavor"}
-
-    def htcondor_workflow_requires(self):
-        reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
-
-        # add bundles for repo, software and optionally cmssw sandboxes
-        reqs["repo"] = BundleRepo.req(self, replicas=3)
-        reqs["software"] = BundleSoftware.req(self, replicas=3)
-
-        # get names of cmssw environments to bundle
-        cmssw_sandboxes = None
-        if getattr(self, "analysis_inst", None):
-            cmssw_sandboxes = self.analysis_inst.get_aux("cmssw_sandboxes")
-        if getattr(self, "config_inst", None):
-            cmssw_sandboxes = self.config_inst.get_aux("cmssw_sandboxes", cmssw_sandboxes)
-        if cmssw_sandboxes:
-            reqs["cmssw"] = [
-                BundleCMSSW.req(self, replicas=3, sandbox_file=f)
-                for f in cmssw_sandboxes
-            ]
-
-        return reqs
-
-    def htcondor_output_directory(self):
-        # the directory where submission meta data and logs should be stored
-        return self.local_target(dir=True)
-
-    def htcondor_bootstrap_file(self):
-        # each job can define a bootstrap file that is executed prior to the actual job
-        # in order to setup software and environment variables
-        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
-
-    def htcondor_job_config(self, config, job_num, branches):
-        # include the voms proxy
-        proxy_file = law.wlcg.get_voms_proxy_file()
-        if not law.wlcg.check_voms_proxy_validity(proxy_file=proxy_file):
-            raise Exception("voms proxy not valid, submission aborted")
-        config.input_files["proxy_file"] = proxy_file
-
-        # include the wlcg specific tools script in the input sandbox
-        config.input_files["wlcg_tools"] = law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh")
-
-        # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
-        if self.htcondor_flavor == "cern":
-            config.custom_content.append(("requirements", '(OpSysAndVer =?= "CentOS7")'))
-
-        # some htcondor setups requires a "log" config, but we can safely set it to /dev/null
-        # if you are interested in the logs of the batch system itself, set a meaningful value here
-        config.custom_content.append(("log", "/dev/null"))
-
-        # max runtime
-        config.custom_content.append(("+MaxRuntime", int(math.floor(self.max_runtime * 3600)) - 1))
-
-        # request cpus
-        if self.htcondor_cpus > 0:
-            config.custom_content.append(("RequestCpus", self.htcondor_cpus))
-
-        # helper to return uris and a file pattern for replicated bundles
-        reqs = self.htcondor_workflow_requires()
-        def get_bundle_info(task):
-            uris = task.output().dir.uri(cmd="filecopy", return_all=True)
-            pattern = os.path.basename(task.get_file_pattern())
-            return ",".join(uris), pattern
-
-        # add software variables
-        uris, pattern = get_bundle_info(reqs["software"])
-        config.render_variables["cf_software_uris"] = uris
-        config.render_variables["cf_software_pattern"] = pattern
-
-        # add repo variables
-        uris, pattern = get_bundle_info(reqs["repo"])
-        config.render_variables["cf_repo_uris"] = uris
-        config.render_variables["cf_repo_pattern"] = pattern
-
-        # add cmssw sandbox variables
-        config.render_variables["cf_cmssw_sandbox_uris"] = "()"
-        config.render_variables["cf_cmssw_sandbox_patterns"] = "()"
-        config.render_variables["cf_cmssw_sandbox_names"] = "()"
-        if "cmssw" in reqs:
-            info = [get_bundle_info(t) for t in reqs["cmssw"]]
-            uris = [tpl[0] for tpl in info]
-            patterns = [tpl[1] for tpl in info]
-            names = [os.path.basename(t.sandbox_file)[:-3] for t in reqs["cmssw"]]
-            config.render_variables["cf_cmssw_sandbox_uris"] = "({})".format(
-                " ".join(map('"{}"'.format, uris)))
-            config.render_variables["cf_cmssw_sandbox_patterns"] = "({})".format(
-                " ".join(map('"{}"'.format, patterns)))
-            config.render_variables["cf_cmssw_sandbox_names"] = "({})".format(
-                " ".join(map('"{}"'.format, names)))
-
-        config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
-        config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
-        config.render_variables["cf_lcg_setup"] = os.environ["CF_LCG_SETUP"]
-        config.render_variables["cf_base"] = os.environ["CF_BASE"]
-        config.render_variables["cf_cern_user"] = os.environ["CF_CERN_USER"]
-        config.render_variables["cf_store_name"] = os.environ["CF_STORE_NAME"]
-        config.render_variables["cf_store_local"] = os.environ["CF_STORE_LOCAL"]
-        config.render_variables["cf_local_scheduler"] = os.environ["CF_LOCAL_SCHEDULER"]
-        config.render_variables["cf_store_local"] = os.environ["CF_STORE_LOCAL"]
-
-        return config
-
-    def htcondor_use_local_scheduler(self):
-        # remote jobs should not communicate with ther central scheduler but with a local one
-        return True
-
-
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
@@ -157,9 +23,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     )
     version = None
 
-    exclude_files = ["docs", "test", "data", ".law", ".setups", ".data"]
-
-    task_namespace = None
+    exclude_files = ["docs", "tests", "data", "assets", ".law", ".setups", ".data", ".github"]
 
     def get_repo_path(self):
         # required by BundleGitRepository
@@ -238,7 +102,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
-        software_path = os.environ["CF_SOFTWARE"]
+        software_path = os.environ["CF_SOFTWARE_BASE"]
 
         # create the local bundle
         bundle = law.LocalFileTarget(software_path + ".tgz", is_tmp=True)
@@ -247,8 +111,8 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
             # skip hidden dev files
             if re.search(r"(\.pyc|\/\.git|\.tgz|__pycache__)$", tarinfo.name):
                 return None
-            # skip certain things manually
-            if re.search(r"^\./venvs/cf_dev(|/.*)$", tarinfo.name):
+            # skip all venvs ending with _dev
+            if re.search(r"^\./venvs/.*_dev(|/.*)$", tarinfo.name):
                 return None
             return tarinfo
 
@@ -275,7 +139,6 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
     )
     version = None
 
-    task_namespace = None
     exclude = "^src/tmp"
 
     def __init__(self, *args, **kwargs):
@@ -318,3 +181,154 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
+
+
+class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
+
+    transfer_logs = luigi.BoolParameter(
+        default=True,
+        significant=False,
+        description="transfer job logs to the output directory; default: True",
+    )
+    max_runtime = law.DurationParameter(
+        default=2.0,
+        unit="h",
+        significant=False,
+        description="maximum runtime; default unit is hours; default: 2",
+    )
+    htcondor_cpus = luigi.IntParameter(
+        default=law.NO_INT,
+        significant=False,
+        description="number of CPUs to request; empty value leads to the cluster default setting; "
+        "empty default",
+    )
+    htcondor_flavor = luigi.ChoiceParameter(
+        default=os.getenv("CF_HTCONDOR_FLAVOR", "naf"),
+        choices=("naf", "naf"),
+        significant=False,
+        description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
+        "naf,cern; default: '{}'".format(os.getenv("CF_HTCONDOR_FLAVOR", "naf")),
+    )
+
+    exclude_params_branch = {"max_runtime", "htcondor_cpus", "htcondor_flavor"}
+
+    # mapping of environment variables to render variables that are forwarded
+    forward_env_variables = {
+        "CF_LCG_SETUP": "cf_lcg_setup",
+        "CF_BASE": "cf_base",
+        "CF_CERN_USER": "cf_cern_user",
+        "CF_STORE_NAME": "cf_store_name",
+        "CF_STORE_LOCAL": "cf_store_local",
+        "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+        "CF_STORE_LOCAL": "cf_store_local",
+    }
+
+    # default upstream dependency task classes
+    dep_BundleRepo = BundleRepo
+    dep_BundleSoftware = BundleSoftware
+    dep_BundleCMSSW = BundleCMSSW
+
+    def htcondor_workflow_requires(self):
+        reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
+
+        # add bundles for repo, software and optionally cmssw sandboxes
+        reqs["repo"] = self.dep_BundleRepo.req(self, replicas=3)
+        reqs["software"] = self.dep_BundleSoftware.req(self, replicas=3)
+
+        # get names of cmssw environments to bundle
+        cmssw_sandboxes = None
+        if getattr(self, "analysis_inst", None):
+            cmssw_sandboxes = self.analysis_inst.get_aux("cmssw_sandboxes")
+        if getattr(self, "config_inst", None):
+            cmssw_sandboxes = self.config_inst.get_aux("cmssw_sandboxes", cmssw_sandboxes)
+        if cmssw_sandboxes:
+            reqs["cmssw"] = [
+                self.dep_BundleCMSSW.req(self, replicas=3, sandbox_file=f)
+                for f in cmssw_sandboxes
+            ]
+
+        return reqs
+
+    def htcondor_output_directory(self):
+        # the directory where submission meta data and logs should be stored
+        return self.local_target(dir=True)
+
+    def htcondor_bootstrap_file(self):
+        # each job can define a bootstrap file that is executed prior to the actual job
+        # in order to setup software and environment variables
+        if "CF_REMOTE_BOOTSTRAP_FILE" in os.environ:
+            return os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
+
+        # default
+        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
+
+    def htcondor_job_config(self, config, job_num, branches):
+        # include the voms proxy
+        proxy_file = law.wlcg.get_voms_proxy_file()
+        if not law.wlcg.check_voms_proxy_validity(proxy_file=proxy_file):
+            raise Exception("voms proxy not valid, submission aborted")
+        config.input_files["proxy_file"] = proxy_file
+
+        # include the wlcg specific tools script in the input sandbox
+        config.input_files["wlcg_tools"] = law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh")
+
+        # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
+        if self.htcondor_flavor == "cern":
+            config.custom_content.append(("requirements", '(OpSysAndVer =?= "CentOS7")'))
+
+        # some htcondor setups requires a "log" config, but we can safely set it to /dev/null
+        # if you are interested in the logs of the batch system itself, set a meaningful value here
+        config.custom_content.append(("log", "/dev/null"))
+
+        # max runtime
+        config.custom_content.append(("+MaxRuntime", int(math.floor(self.max_runtime * 3600)) - 1))
+
+        # request cpus
+        if self.htcondor_cpus > 0:
+            config.custom_content.append(("RequestCpus", self.htcondor_cpus))
+
+        # helper to return uris and a file pattern for replicated bundles
+        reqs = self.htcondor_workflow_requires()
+        def get_bundle_info(task):
+            uris = task.output().dir.uri(cmd="filecopy", return_all=True)
+            pattern = os.path.basename(task.get_file_pattern())
+            return ",".join(uris), pattern
+
+        # add software variables
+        uris, pattern = get_bundle_info(reqs["software"])
+        config.render_variables["cf_software_uris"] = uris
+        config.render_variables["cf_software_pattern"] = pattern
+
+        # add repo variables
+        uris, pattern = get_bundle_info(reqs["repo"])
+        config.render_variables["cf_repo_uris"] = uris
+        config.render_variables["cf_repo_pattern"] = pattern
+
+        # add cmssw sandbox variables
+        config.render_variables["cf_cmssw_sandbox_uris"] = "()"
+        config.render_variables["cf_cmssw_sandbox_patterns"] = "()"
+        config.render_variables["cf_cmssw_sandbox_names"] = "()"
+        if "cmssw" in reqs:
+            info = [get_bundle_info(t) for t in reqs["cmssw"]]
+            uris = [tpl[0] for tpl in info]
+            patterns = [tpl[1] for tpl in info]
+            names = [os.path.basename(t.sandbox_file)[:-3] for t in reqs["cmssw"]]
+            config.render_variables["cf_cmssw_sandbox_uris"] = "({})".format(
+                " ".join(map('"{}"'.format, uris)))
+            config.render_variables["cf_cmssw_sandbox_patterns"] = "({})".format(
+                " ".join(map('"{}"'.format, patterns)))
+            config.render_variables["cf_cmssw_sandbox_names"] = "({})".format(
+                " ".join(map('"{}"'.format, names)))
+
+        config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
+        config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
+
+        # forward env variables
+        for ev, rv in self.forward_env_variables.items():
+            config.render_variables[rv] = os.environ[ev]
+
+        return config
+
+    def htcondor_use_local_scheduler(self):
+        # remote jobs should not communicate with ther central scheduler but with a local one
+        return True

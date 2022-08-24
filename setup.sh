@@ -175,11 +175,11 @@ setup_columnflow() {
 
     # continue the fixed setup
     export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
+    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
-    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
 
     # overwrite some variables in remote and ci jobs
     if [ "${CF_REMOTE_JOB}" = "1" ]; then
