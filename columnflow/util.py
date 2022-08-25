@@ -67,8 +67,10 @@ def maybe_import(
     """
     try:
         return importlib.import_module(name, package)
-    except ImportError:
-        if force:
+    except ImportError as e:
+        # raise in case force is set, or an other package than the requested one was not found
+        m = re.match(r"^No\smodule\snamed\s\'(.+)\'$", str(e))
+        if force or not m or not name.startswith(m.group(1)):
             raise
         if package:
             name = package + name
