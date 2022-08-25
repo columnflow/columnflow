@@ -419,8 +419,13 @@ cf_init_submodule() {
     # local variables
     local mpath="${1}"
 
-    # do nothing when the path does not exist
-    [ ! -d "${mpath}" ] && return "0"
+    # do nothing in remote jobs
+    [ "$CF_REMOTE_JOB" = "1" ] && return "0"
+
+    # do nothing when the path does not exist or it is not a submodule
+    if [ ! -d "${mpath}" ] || [ ! -f "${mpath}/.git" ] ; then
+        return "0"
+    fi
 
     # initialize the submodule when the directory is empty
     if [ "$( ls -1q "${mpath}" | wc -l )" = "0" ]; then
