@@ -27,7 +27,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     def get_repo_path(self):
         # required by BundleGitRepository
-        return os.environ["CF_BASE"]
+        return os.environ["CF_REPO_BASE"]
 
     def single_output(self):
         repo_base = os.path.basename(self.get_repo_path())

@@ -42,6 +42,9 @@ setup_columnflow() {
     #   CF_CMSSW_BASE
     #       The directory where CMSSW releases are installed. Might point to $CF_DATA/cmssw. Queried
     #       during the interactive setup.
+    #   CF_REPO_BASE
+    #       The base path of the main repository invoking tasks or scripts. Used by columnflow tasks
+    #       to identify the repository for e.g. bundling. Set to $CF_BASE when not defined already.
     #   CF_VENV_BASE
     #       The directory where virtual envs are installed. Might point to $CF_SOFTWARE_BASE/venvs.
     #       Queried during the interactive setup.
@@ -162,7 +165,7 @@ setup_columnflow() {
         query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
         query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
         if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
-            query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
+            query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
             query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
         else
             export_and_save CF_SCHEDULER_HOST "127.0.0.1"
@@ -174,6 +177,7 @@ setup_columnflow() {
     cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
 
     # continue the fixed setup
+    export CF_REPO_BASE="${CF_REPO_BASE:-$CF_BASE}"
     export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
     export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
