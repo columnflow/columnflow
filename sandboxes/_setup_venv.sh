@@ -39,6 +39,7 @@ setup_venv() {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="${PWD}"
+    local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
 
 
     #
@@ -212,6 +213,7 @@ setup_venv() {
     # export variables
     export CF_VENV_NAME="${CF_VENV_NAME}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "1" || echo "0" )"
+    export CF_VENV_PYTHONPATH="${install_path}/lib/python${pyv}/site-packages"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_VENV_NAME}.sh"

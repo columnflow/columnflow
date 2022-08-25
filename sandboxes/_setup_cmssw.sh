@@ -215,6 +215,9 @@ setup_cmssw() {
     eval "$( scramv1 runtime -sh )"
     cd "${orig_dir}"
 
+    # prepend the python path of the surrounding venv so that local packages are priotized
+    export PYTHONPATH="${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
+
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_CMSSW_ENV_NAME}.sh"
 }
