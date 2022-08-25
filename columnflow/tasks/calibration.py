@@ -8,7 +8,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorMixin
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 
@@ -16,7 +16,7 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 ak = maybe_import("awkward")
 
 
-class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, HTCondorWorkflow):
+class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, RemoteWorkflow):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 

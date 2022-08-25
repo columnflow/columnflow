@@ -11,7 +11,7 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_f
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin,
 )
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div
@@ -24,7 +24,7 @@ class PrepareMLEvents(
     SelectorMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
@@ -168,7 +168,7 @@ class MergeMLEvents(
     SelectorMixin,
     CalibratorsMixin,
     law.tasks.ForestMerge,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     fold = luigi.IntParameter(
@@ -300,7 +300,7 @@ class MLEvaluation(
     SelectorMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = None

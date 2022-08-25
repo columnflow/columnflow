@@ -12,7 +12,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
@@ -21,7 +21,13 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 ak = maybe_import("awkward")
 
 
-class ReduceEvents(DatasetTask, SelectorStepsMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
+class ReduceEvents(
+    DatasetTask,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
@@ -338,7 +344,7 @@ class MergeReducedEvents(
     SelectorStepsMixin,
     CalibratorsMixin,
     law.tasks.ForestMerge,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")

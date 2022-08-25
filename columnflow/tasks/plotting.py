@@ -13,7 +13,7 @@ from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin, CategoriesMixin,
     VariablesMixin, DatasetsProcessesMixin, ShiftSourcesMixin,
 )
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict
 
@@ -43,7 +43,7 @@ class PlotVariables(
     VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
@@ -180,7 +180,7 @@ class PlotShiftedVariables(
     ProcessPlotBase,
     ShiftSourcesMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"

@@ -8,7 +8,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin, ProducerMixin
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.util import dev_sandbox
 
@@ -19,7 +19,7 @@ class ProduceColumns(
     SelectorStepsMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
