@@ -10,7 +10,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.production import Producer
@@ -20,7 +20,13 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 ak = maybe_import("awkward")
 
 
-class SelectEvents(DatasetTask, SelectorMixin, CalibratorsMixin, law.LocalWorkflow, HTCondorWorkflow):
+class SelectEvents(
+    DatasetTask,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
@@ -252,7 +258,7 @@ class MergeSelectionMasks(
     SelectorMixin,
     CalibratorsMixin,
     law.tasks.ForestMerge,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")

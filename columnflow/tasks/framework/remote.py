@@ -27,7 +27,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     def get_repo_path(self):
         # required by BundleGitRepository
-        return os.environ["CF_BASE"]
+        return os.environ["CF_REPO_BASE"]
 
     def single_output(self):
         repo_base = os.path.basename(self.get_repo_path())
@@ -48,8 +48,10 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         self.bundle(bundle)
 
         # log the size
-        self.publish_message("bundled repository archive, size is {:.2f} {}".format(
-            *law.util.human_bytes(bundle.stat().st_size)))
+        self.publish_message(
+            "bundled repository archive, size is {:.2f} {}".format(
+                *law.util.human_bytes(bundle.stat().st_size)),
+        )
 
         # transfer the bundle
         self.transfer(bundle)
@@ -120,8 +122,10 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         bundle.dump(software_path, filter=_filter, formatter="tar")
 
         # log the size
-        self.publish_message("bundled software archive, size is {:.2f} {}".format(
-            *law.util.human_bytes(bundle.stat().st_size)))
+        self.publish_message(
+            "bundled software archive, size is {:.2f} {}".format(
+                *law.util.human_bytes(bundle.stat().st_size)),
+        )
 
         # transfer the bundle
         self.transfer(bundle)
@@ -176,11 +180,16 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
         self.bundle(bundle)
 
         # log the size
-        self.publish_message("bundled CMSSW archive, size is {:.2f} {}".format(
-            *law.util.human_bytes(bundle.stat().st_size)))
+        self.publish_message(
+            "bundled CMSSW archive, size is {:.2f} {}".format(
+                *law.util.human_bytes(bundle.stat().st_size)),
+        )
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
+
+
+_default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
 
 
 class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
@@ -203,24 +212,24 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         "empty default",
     )
     htcondor_flavor = luigi.ChoiceParameter(
-        default=os.getenv("CF_HTCONDOR_FLAVOR", "naf"),
-        choices=("naf", "naf"),
+        default=_default_htcondor_flavor,
+        choices=("naf", "cern"),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        "naf,cern; default: '{}'".format(os.getenv("CF_HTCONDOR_FLAVOR", "naf")),
+        f"naf,cern; default: '{_default_htcondor_flavor}'",
     )
 
     exclude_params_branch = {"max_runtime", "htcondor_cpus", "htcondor_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
-    forward_env_variables = {
-        "CF_LCG_SETUP": "cf_lcg_setup",
+    htcondor_forward_env_variables = {
         "CF_BASE": "cf_base",
+        "CF_REPO_BASE": "cf_repo_base",
+        "CF_LCG_SETUP": "cf_lcg_setup",
         "CF_CERN_USER": "cf_cern_user",
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
-        "CF_STORE_LOCAL": "cf_store_local",
     }
 
     # default upstream dependency task classes
@@ -264,10 +273,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
     def htcondor_job_config(self, config, job_num, branches):
         # include the voms proxy
-        proxy_file = law.wlcg.get_voms_proxy_file()
-        if not law.wlcg.check_voms_proxy_validity(proxy_file=proxy_file):
+        voms_proxy_file = law.wlcg.get_voms_proxy_file()
+        if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
             raise Exception("voms proxy not valid, submission aborted")
-        config.input_files["proxy_file"] = proxy_file
+        config.input_files["voms_proxy_file"] = voms_proxy_file
 
         # include the wlcg specific tools script in the input sandbox
         config.input_files["wlcg_tools"] = law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh")
@@ -320,11 +329,14 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             config.render_variables["cf_cmssw_sandbox_names"] = "({})".format(
                 " ".join(map('"{}"'.format, names)))
 
+        # other render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
         config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
+        config.render_variables.setdefault("cf_pre_setup_command", "")
+        config.render_variables.setdefault("cf_post_setup_command", "")
 
         # forward env variables
-        for ev, rv in self.forward_env_variables.items():
+        for ev, rv in self.htcondor_forward_env_variables.items():
             config.render_variables[rv] = os.environ[ev]
 
         return config
@@ -332,3 +344,102 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     def htcondor_use_local_scheduler(self):
         # remote jobs should not communicate with ther central scheduler but with a local one
         return True
+
+
+_default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
+_default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "naf")
+
+
+class SlurmWorkflow(law.slurm.SlurmWorkflow):
+
+    transfer_logs = luigi.BoolParameter(
+        default=True,
+        significant=False,
+        description="transfer job logs to the output directory; default: True",
+    )
+    max_runtime = law.DurationParameter(
+        default=2.0,
+        unit="h",
+        significant=False,
+        description="maximum runtime; default unit is hours; default: 2",
+    )
+    slurm_partition = luigi.Parameter(
+        default=_default_slurm_partition,
+        significant=False,
+        description=f"target queue partition; default: {_default_slurm_partition}",
+    )
+    slurm_flavor = luigi.ChoiceParameter(
+        default=_default_slurm_flavor,
+        choices=("naf", "cern"),
+        significant=False,
+        description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
+        f"naf; default: '{_default_slurm_flavor}'",
+    )
+
+    exclude_params_branch = {"max_runtime"}
+
+    # mapping of environment variables to render variables that are forwarded
+    slurm_forward_env_variables = {
+        "CF_BASE": "cf_base",
+        "CF_REPO_BASE": "cf_repo_base",
+        "CF_LCG_SETUP": "cf_lcg_setup",
+        "CF_CERN_USER": "cf_cern_user",
+        "CF_STORE_NAME": "cf_store_name",
+        "CF_STORE_LOCAL": "cf_store_local",
+        "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+    }
+
+    def slurm_output_directory(self):
+        # the directory where submission meta data and logs should be stored
+        return self.local_target(dir=True)
+
+    def slurm_bootstrap_file(self):
+        # each job can define a bootstrap file that is executed prior to the actual job
+        # in order to setup software and environment variables
+        if "CF_REMOTE_BOOTSTRAP_FILE" in os.environ:
+            return os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
+
+        # default
+        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
+
+    def slurm_job_config(self, config, job_num, branches):
+        # include the voms proxy
+        voms_proxy_file = law.wlcg.get_voms_proxy_file()
+        if os.path.exists(voms_proxy_file):
+            config.input_files["voms_proxy_file"] = voms_proxy_file
+
+        # include the kerberos ticket when existing
+        if "KRB5CCNAME" in os.environ:
+            kfile = os.environ["KRB5CCNAME"]
+            kerberos_proxy_file = os.sep + kfile.split(os.sep, 1)[-1]
+            if os.path.exists(kerberos_proxy_file):
+                config.input_files["kerberos_proxy_file"] = kerberos_proxy_file
+
+        # set job time and nodes
+        job_time = law.util.human_duration(
+            seconds=law.util.parse_duration(self.max_runtime, input_unit="h") - 1,
+            colon_format=True,
+        )
+        config.custom_content.append(("time", job_time))
+        config.custom_content.append(("nodes", 1))
+
+        # custom, flavor dependent settings
+        if self.slurm_flavor == "naf":
+            # extend kerberos privileges to afs on NAF
+            if "kerberos_proxy_file" in config.input_files:
+                config.render_variables["cf_pre_setup_command"] = "aklog"
+
+        # render variales
+        config.render_variables["cf_bootstrap_name"] = "slurm"
+        config.render_variables.setdefault("cf_pre_setup_command", "")
+        config.render_variables.setdefault("cf_post_setup_command", "")
+
+        # forward env variables
+        for ev, rv in self.slurm_forward_env_variables.items():
+            config.render_variables[rv] = os.environ[ev]
+
+        return config
+
+
+class RemoteWorkflow(HTCondorWorkflow, SlurmWorkflow):
+    pass

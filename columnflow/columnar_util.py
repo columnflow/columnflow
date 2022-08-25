@@ -1128,7 +1128,8 @@ class ArrayFunction(Derivable):
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally extended by sets passed in keyword arguments
         for attr in self.dependency_sets:
-            deps = getattr(self.__class__, attr) | set(law.util.make_list(kwargs.get(attr) or []))
+            deps = set(law.util.make_list(getattr(self.__class__, attr)))
+            deps |= set(law.util.make_list(kwargs.get(attr) or []))
             setattr(self, attr, deps)
 
         # dictionary of dependency class to instance, set in create_dependencies

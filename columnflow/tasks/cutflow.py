@@ -14,7 +14,7 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin,
 )
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.plotting import ProcessPlotBase
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -26,7 +26,7 @@ class CreateCutflowHistograms(
     CalibratorsMixin,
     VariablesMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
@@ -172,7 +172,7 @@ class PlotCutflow(
     CalibratorsMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
@@ -324,7 +324,7 @@ class PlotCutflowVariables(
     VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     per_plot = luigi.ChoiceParameter(

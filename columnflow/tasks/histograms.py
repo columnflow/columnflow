@@ -14,7 +14,7 @@ from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
     ShiftSourcesMixin,
 )
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
@@ -29,7 +29,7 @@ class CreateHistograms(
     CalibratorsMixin,
     VariablesMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
@@ -190,7 +190,7 @@ class MergeHistograms(
     CalibratorsMixin,
     VariablesMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     only_missing = luigi.BoolParameter(
@@ -291,7 +291,7 @@ class MergeShiftedHistograms(
     VariablesMixin,
     ShiftSourcesMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")

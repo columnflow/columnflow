@@ -12,7 +12,7 @@ from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
 )
-from columnflow.tasks.framework.remote import HTCondorWorkflow
+from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox
 
@@ -24,7 +24,7 @@ class CreateDatacards(
     SelectorStepsMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
-    HTCondorWorkflow,
+    RemoteWorkflow,
 ):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
