@@ -150,31 +150,33 @@ setup_columnflow() {
     export CF_SETUP_NAME="${setup_name}"
 
     # interactive setup
-    cf_setup_interactive_body() {
-        # start querying for variables
-        query CF_CERN_USER "CERN username" "$( whoami )"
-        export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
-        query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
-        query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
-        query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
-        query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
-        export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
-        export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
-        query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
-        query CF_CMSSW_BASE "Local directory for installing CMSSW" "\$CF_DATA/cmssw"
-        query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
-        query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
-        if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
-            query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
-            query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
-        else
-            export_and_save CF_SCHEDULER_HOST "127.0.0.1"
-            export_and_save CF_SCHEDULER_PORT "8082"
-        fi
-        query CF_VOMS "Virtual-organization" "cms"
-        export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
-    }
-    cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
+    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+        cf_setup_interactive_body() {
+            # start querying for variables
+            query CF_CERN_USER "CERN username" "$( whoami )"
+            export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
+            query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
+            query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
+            query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
+            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
+            export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
+            export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
+            query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
+            query CF_CMSSW_BASE "Local directory for installing CMSSW" "\$CF_DATA/cmssw"
+            query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
+            query CF_VOMS "Virtual-organization" "cms"
+            export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
+            query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
+            if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
+                query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
+                query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
+            else
+                export_and_save CF_SCHEDULER_HOST "127.0.0.1"
+                export_and_save CF_SCHEDULER_PORT "8082"
+            fi
+        }
+        cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
+    fi
 
     # continue the fixed setup
     export CF_REPO_BASE="${CF_REPO_BASE:-$CF_BASE}"
@@ -195,7 +197,9 @@ setup_columnflow() {
     fi
 
     # some variable defaults
-    [ -z "${CF_WORKER_KEEP_ALIVE}" ] && export CF_WORKER_KEEP_ALIVE="false"
+    export CF_WORKER_KEEP_ALIVE="${CF_WORKER_KEEP_ALIVE:-false}"
+    export CF_SCHEDULER_HOST="${CF_SCHEDULER_HOST:-127.0.0.1}"
+    export CF_SCHEDULER_PORT="${CF_SCHEDULER_PORT:-8082}"
 
 
     #
@@ -351,7 +355,7 @@ cf_setup_software_stack() {
     [ "${setup_name}" = "default" ] && setup_is_default="true"
 
     # use the latest centos7 ui from the grid setup on cvmfs
-    [ -z "${CF_LCG_SETUP}" ] && export CF_LCG_SETUP="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
+    export CF_LCG_SETUP="${CF_LCG_SETUP:-/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh}"
     if [ -f "${CF_LCG_SETUP}" ]; then
         source "${CF_LCG_SETUP}" ""
     elif [ "${CF_CI_JOB}" = "1" ]; then

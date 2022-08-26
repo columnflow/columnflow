@@ -13,9 +13,13 @@ bootstrap_htcondor_standalone() {
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    export CF_CMSSW_BASE="${CF_DATA}/cmssw"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
+    export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
+    export CF_VOMS="{{cf_voms}}"
+    export CF_TASK_NAMESPACE="{{cf_task_namespace}}"
     export CF_LCG_SETUP="{{cf_lcg_setup}}"
     export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
@@ -29,19 +33,19 @@ bootstrap_htcondor_standalone() {
 
     # load the software bundle
     (
-        mkdir -p "${CF_SOFTWARE_BASE}"
-        cd "${CF_SOFTWARE_BASE}"
-        law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" || return "$?"
-        tar -xzf "software.tgz" || return "$?"
+        mkdir -p "${CF_SOFTWARE_BASE}" && \
+        cd "${CF_SOFTWARE_BASE}" && \
+        law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" && \
+        tar -xzf "software.tgz" && \
         rm "software.tgz"
     ) || return "$?"
 
     # load the repo bundle
     (
-        mkdir -p "${CF_REPO_BASE}"
-        cd "${CF_REPO_BASE}"
-        law_wlcg_get_file "{{cf_repo_uris}}" "{{cf_repo_pattern}}" "repo.tgz" || return "$?"
-        tar -xzf "repo.tgz" || return "$?"
+        mkdir -p "${CF_REPO_BASE}" && \
+        cd "${CF_REPO_BASE}" && \
+        law_wlcg_get_file "{{cf_repo_uris}}" "{{cf_repo_pattern}}" "repo.tgz" && \
+        tar -xzf "repo.tgz" && \
         rm "repo.tgz"
     ) || return "$?"
 
@@ -72,6 +76,7 @@ bootstrap_slurm() {
     export CF_ON_SLURM="1"
     export CF_REMOTE_JOB="1"
     export CF_REPO_BASE="{{cf_repo_base}}"
+    export CF_WLCG_CACHE_ROOT="${CF_WLCG_CACHE_ROOT:-${LAW_JOB_HOME}/cf_wlcg_cache}"
     export X509_USER_PROXY="{{voms_proxy_file}}"
     export KRB5CCNAME="FILE:{{kerberos_proxy_file}}"
 
