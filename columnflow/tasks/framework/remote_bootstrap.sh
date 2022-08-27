@@ -76,7 +76,7 @@ bootstrap_slurm() {
     export CF_ON_SLURM="1"
     export CF_REMOTE_JOB="1"
     export CF_REPO_BASE="{{cf_repo_base}}"
-    export CF_WLCG_CACHE_ROOT="${CF_WLCG_CACHE_ROOT:-${LAW_JOB_HOME}/cf_wlcg_cache}"
+    export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export X509_USER_PROXY="{{voms_proxy_file}}"
     export KRB5CCNAME="FILE:{{kerberos_proxy_file}}"
 
