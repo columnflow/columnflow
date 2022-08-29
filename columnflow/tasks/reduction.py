@@ -191,22 +191,36 @@ ReduceEventsWrapper = wrapper_factory(
 class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
     n_inputs = luigi.IntParameter(
-        default=20,
+        default=10,
         significant=True,
         description="minimal number of input files for sufficient statistics to infer merging "
-        "factors; default: 20",
+        "factors; default: 10",
     )
     merged_size = law.BytesParameter(
-        default=1024.0,
+        default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; default: '1024MB'",
+        description="the maximum file size of merged files; default unit is MB; default: config "
+        "value 'reduced_file_size' or 512MB'",
     )
 
     shifts = set(ReduceEvents.shifts)
 
     # default upstream dependency task classes
     dep_ReduceEvents = ReduceEvents
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # check for the default merged size
+        if "merged_size" in params and params["merged_size"] == law.NO_FLOAT:
+            merged_size = 512.0
+            if "config_inst" in params:
+                merged_size = params["config_inst"].x("reduced_file_size", merged_size)
+            params["merged_size"] = float(merged_size)
+
+        return params
 
     def requires(self):
         return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
