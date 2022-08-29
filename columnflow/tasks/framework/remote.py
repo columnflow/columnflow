@@ -278,10 +278,17 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         voms_proxy_file = law.wlcg.get_voms_proxy_file()
         if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
             raise Exception("voms proxy not valid, submission aborted")
-        config.input_files["voms_proxy_file"] = voms_proxy_file
+        config.input_files["voms_proxy_file"] = law.JobInputFile(
+            voms_proxy_file,
+            postfix=False,
+            render=False,
+        )
 
         # include the wlcg specific tools script in the input sandbox
-        config.input_files["wlcg_tools"] = law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh")
+        config.input_files["wlcg_tools"] = law.JobInputFile(
+            law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
+            copy=False,
+        )
 
         # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
         if self.htcondor_flavor == "cern":
@@ -408,14 +415,22 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         # include the voms proxy
         voms_proxy_file = law.wlcg.get_voms_proxy_file()
         if os.path.exists(voms_proxy_file):
-            config.input_files["voms_proxy_file"] = voms_proxy_file
+            config.input_files["voms_proxy_file"] = law.JobInputFile(
+                voms_proxy_file,
+                postfix=False,
+                render=False,
+            )
 
         # include the kerberos ticket when existing
         if "KRB5CCNAME" in os.environ:
             kfile = os.environ["KRB5CCNAME"]
             kerberos_proxy_file = os.sep + kfile.split(os.sep, 1)[-1]
             if os.path.exists(kerberos_proxy_file):
-                config.input_files["kerberos_proxy_file"] = kerberos_proxy_file
+                config.input_files["kerberos_proxy_file"] = law.JobInputFile(
+                    kerberos_proxy_file,
+                    postfix=False,
+                    render=False,
+                )
 
         # set job time and nodes
         job_time = law.util.human_duration(
