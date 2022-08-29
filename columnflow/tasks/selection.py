@@ -208,13 +208,20 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
         return self.dep_SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return [
-            self.dep_SelectEvents.req(self, branch=b)
-            for b in range(start_branch, end_branch)
-        ]
+        return self.dep_SelectEvents.req(
+            self,
+            branches=((start_branch, end_branch),),
+            workflow="local",
+            _exclude={"branch"},
+        )
 
     def merge_output(self):
         return self.target("stats.json")
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs(
+            inp["stats"] for inp in inputs["collection"].targets.values()
+        )
 
     @law.decorator.log
     def run(self):
@@ -224,11 +231,11 @@ class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.task
         # merge input stats
         merged_stats = defaultdict(float)
         for inp in inputs:
-            stats = inp["stats"].load(formatter="json")
+            stats = inp.load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
         # write the output
-        output.dump(merged_stats, indent=4, formatter="json")
+        output.dump(merged_stats, indent=4, formatter="json", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:

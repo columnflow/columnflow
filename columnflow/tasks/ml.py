@@ -51,7 +51,9 @@ class PrepareMLEvents(
         if only_super:
             return reqs
 
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
+        # require the full merge forest
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+
         if not self.pilot and self.producers:
             reqs["producers"] = [
                 self.dep_ProduceColumns.req(self, producer=p)

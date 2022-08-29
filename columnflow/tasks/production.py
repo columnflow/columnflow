@@ -34,7 +34,10 @@ class ProduceColumns(
         if only_super:
             return reqs
 
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
+        # require the full merge forest
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+
+        # add producer dependent requirements
         reqs["producer"] = self.producer_inst.run_requires()
 
         return reqs

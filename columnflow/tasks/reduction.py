@@ -282,8 +282,8 @@ MergeReductionStatsWrapper = wrapper_factory(
 
 class MergeReducedEventsUser(DatasetTask):
 
-    # recursively merge 8 files into one
-    merge_factor = 8
+    # recursively merge 20 files into one
+    merge_factor = 20
 
     # default upstream dependency task classes
     dep_MergeReductionStats = MergeReductionStats
@@ -304,9 +304,6 @@ class MergeReducedEventsUser(DatasetTask):
         Needed by DatasetTask to define the default branch map.
         """
         if self._cached_file_merging < 0:
-            # reset the forest in case this is a forest ForestMerge task
-            self._forest_built = False
-
             # check of the merging stats is present and of so, set the cached file merging value
             output = self.dep_MergeReductionStats.req(self).output()
             if output.exists():
@@ -368,17 +365,25 @@ class MergeReducedEvents(
     def merge_requires(self, start_branch, end_branch):
         return {
             "stats": self.dep_MergeReductionStats.req(self),
-            "events": [
-                self.dep_ReduceEvents.req(self, branch=b)
-                for b in range(start_branch, end_branch)
-            ],
+            "events": self.dep_ReduceEvents.req(
+                self,
+                branches=((start_branch, end_branch),),
+                workflow="local",
+                _exclude={"branch"},
+            ),
         }
 
     def trace_merge_workflow_inputs(self, inputs):
         return super().trace_merge_workflow_inputs(inputs["events"])
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["events"])
+        return super().trace_merge_inputs(inputs["events"]["collection"].targets.values())
+
+    def reduced_dummy_output(self):
+        # mark the dummy output as a placeholder for the ForestMerge task
+        dummy = super().reduced_dummy_output()
+        self._mark_merge_output_placeholder(dummy)
+        return dummy
 
     @MergeReducedEventsUser.maybe_dummy
     def merge_output(self):

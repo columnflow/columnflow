@@ -46,7 +46,9 @@ class CreateHistograms(
         if only_super:
             return reqs
 
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
+        # require the full merge forest
+        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
