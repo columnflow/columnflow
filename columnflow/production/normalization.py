@@ -63,7 +63,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
         return reqs
 
     from columnflow.tasks.selection import MergeSelectionStats
-    reqs["selection_stats"] = MergeSelectionStats.req(self.task, tree_index=0)
+    reqs["selection_stats"] = MergeSelectionStats.req(self.task, tree_index=0, branch=-1)
 
 
 @normalization_weights.setup
@@ -85,7 +85,7 @@ def normalization_weights_setup(self: Producer, inputs: dict) -> None:
         return
 
     # load the selection stats
-    self.selection_stats = inputs["selection_stats"].load(formatter="json")
+    self.selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
 
     # for the lookup tables below, determine the maximum process id
     process_insts = [
