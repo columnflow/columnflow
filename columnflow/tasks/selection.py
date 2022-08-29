@@ -347,7 +347,7 @@ class MergeSelectionMasks(
             steps = inp["results"].load(formatter="awkward").steps
 
             # add normalization weight
-            self.norm_weight_producer(events)
+            events = self.norm_weight_producer(events)
 
             # remove columns
             events = route_filter(events)
