@@ -10,7 +10,7 @@ __all__ = [
     "PreloadedNanoEventsFactory",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet",
+    "sorted_ak_to_parquet", "flat_np_view",
 ]
 
 
@@ -892,6 +892,15 @@ def sorted_ak_to_parquet(
         differently ordered schemas.
     """
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
+
+
+def flat_np_view(ak_array: ak.Array, axis: Optional[int] = None) -> np.array:
+    """
+    Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
+    *axis*. See *ak.flatten* for more info. Changes applied in-place to that view are transferred to
+    the original *ak_array*.
+    """
+    return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
 class RouteFilter(object):
