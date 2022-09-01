@@ -863,6 +863,7 @@ def wrapper_factory(
                 description="names or name patterns of configs to use; can also be the key of a "
                 "mapping defined in the 'config_groups' auxiliary data of the analysis; default: "
                 "('*',)",
+                brace_expand=True,
             )
         if has_skip_configs:
             skip_configs = law.CSVParameter(
@@ -870,6 +871,7 @@ def wrapper_factory(
                 description="names or name patterns of configs to skip after evaluating --configs; "
                 "can also be the key of a mapping defined in the 'config_groups' auxiliary data "
                 "of the analysis; empty default",
+                brace_expand=True,
             )
         if has_datasets:
             datasets = law.CSVParameter(
@@ -877,6 +879,7 @@ def wrapper_factory(
                 description="names or name patterns of datasets to use; can also be the key of a "
                 "mapping defined in the 'dataset_groups' auxiliary data of the corresponding "
                 "config; default: ('*',)",
+                brace_expand=True,
             )
         if has_skip_datasets:
             skip_datasets = law.CSVParameter(
@@ -884,6 +887,7 @@ def wrapper_factory(
                 description="names or name patterns of datasets to skip after evaluating "
                 "--datasets; can also be the key of a mapping defined in the 'dataset_groups' "
                 "auxiliary data of the corresponding config; empty default",
+                brace_expand=True,
             )
         if has_shifts:
             shifts = law.CSVParameter(
@@ -891,6 +895,7 @@ def wrapper_factory(
                 description="names or name patterns of shifts to use; can also be the key of a "
                 "mapping defined in the 'shift_groups' auxiliary data of the corresponding "
                 "config; default: ('nominal',)",
+                brace_expand=True,
             )
         if has_skip_shifts:
             skip_shifts = law.CSVParameter(
@@ -898,6 +903,7 @@ def wrapper_factory(
                 description="names or name patterns of shifts to skip after evaluating --shifts; "
                 "can also be the key of a mapping defined in the 'shift_groups' auxiliary data "
                 "of the corresponding config; empty default",
+                brace_expand=True,
             )
 
         def __init__(self, *args, **kwargs):
@@ -1002,7 +1008,7 @@ def wrapper_factory(
                     )
                     if not datasets:
                         raise ValueError(
-                            f"no datasets found in config {self.config_inst} matching "
+                            f"no datasets found in config {config_inst} matching "
                             f"{self.datasets}",
                         )
                     if self.wrapper_has_skip_datasets:
@@ -1015,7 +1021,7 @@ def wrapper_factory(
                         datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
                             raise ValueError(
-                                f"no datasets found in config {self.config_inst} after skipping "
+                                f"no datasets found in config {config_inst} after skipping "
                                 f"{self.skip_datasets}",
                             )
                     prod_sequences.append(sorted(datasets))

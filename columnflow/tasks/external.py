@@ -66,20 +66,27 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     def iter_nano_files(
         self,
-        branch_task: DatasetTask,
+        task: Union[AnalysisTask, DatasetTask],
         remote_fs: Optional[Union[str, List[str], Tuple[str]]] = None,
+        lfn_indices: Optional[List[int]] = None,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
-        the branch data of a law *branch_task*, given the lfns obtained by *this* task which needs
-        to be complete for this function to succeed. Iterating yields a 2-tuple (file index,
-        input file) where the latter is a :py:class:`law.wlcg.WLCGFileTarget` with its fs set to
-        *remote_fs*. When a sequence is passed, the fs names are evaluated in that order and the
-        first existing one is used.
+        *lfn_indices*  given the lfns obtained by *this* task which needs to be complete for this
+        function to succeed.
+
+        When *lfn_indices* are not given, *task* must be a branch of :py:class:`DatasetTask`
+        workflow whose branch value is used instead.
+
+        Iterating yields a 2-tuple (file index, input file) where the latter is a
+        :py:class:`law.wlcg.WLCGFileTarget` with its fs set to *remote_fs*. When a sequence is
+        passed, the fs names are evaluated in that order and the first existing one is used.
         """
         # input checks
-        if not branch_task.is_branch():
-            raise TypeError(f"branch_task must be a workflow branch, but got {branch_task}")
+        if not lfn_indices:
+            if not isinstance(task, law.BaseWorkflow) or not task.is_branch():
+                raise TypeError(f"task must be a workflow branch, but got {task}")
+            lfn_indices = task.branch_data
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
         if not remote_fs:
@@ -92,8 +99,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = target.load(formatter="json")
 
         # loop
-        for lfn_index in branch_task.branch_data:
-            branch_task.publish_message(f"handling file {lfn_index}")
+        for lfn_index in lfn_indices:
+            task.publish_message(f"handling file {lfn_index}")
 
             # get the lfn of the file referenced by this file index
             lfn = str(lfns[lfn_index])
@@ -103,14 +110,14 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_file = law.wlcg.WLCGFileTarget(lfn, fs=fs)
                 input_stat = input_file.exists(stat=True)
                 if input_stat:
-                    branch_task.publish_message(f"using fs {fs}")
+                    task.publish_message(f"using fs {fs}")
                     break
             else:
                 raise Exception(f"LFN {lfn} not found at any remote fs {remote_fs}")
 
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
-            branch_task.publish_message(f"lfn {lfn}, size is {input_size}")
+            task.publish_message(f"lfn {lfn}, size is {input_size}")
 
             yield (lfn_index, input_file)
 

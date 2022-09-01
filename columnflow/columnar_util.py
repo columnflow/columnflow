@@ -88,9 +88,9 @@ class RouteMeta(type):
 
 class Route(object, metaclass=RouteMeta):
     """
-    Route objects describe the location of columns in nested arrays and are basically wrapper around
-    a sequence of nested fields. Additionally, they provide convenience methods for conversions into
-    column names, either in dot or nano-style underscore format.
+    Route objects describe the location of columns in nested arrays and are basically wrappers
+    around a sequence of nested fields. Additionally, they provide convenience methods for
+    conversion into column names, either in dot or nano-style underscore format.
 
     The constructor takes another *route* instance, a sequence of strings, or a string in dot format
     to initialize the fields. Most operators are overwritten to work with routes in a tuple-like
@@ -584,7 +584,7 @@ def set_ak_column(
     # force creating a view for consistent behavior
     ak_array = ak_array[ak_array.fields]
 
-    # try to remove the route first so that existing columns are not overwritten but replaced
+    # try to remove the route first so that existing columns are not overwritten but re-inserted
     ak_array = remove_ak_column(ak_array, route, silent=True)
 
     # trivial case
@@ -1687,7 +1687,7 @@ class ChunkedReader(object):
         ) as reader:
             for (chunk, masks), position in reader:
                 # chunk is a NanoAODEventsArray as returned by read_coffea_root
-                # masks is a awkward array as returned by read_awkward_parquet
+                # masks is an awkward array as returned by read_awkward_parquet
                 selected_jet_pts = chunk[masks].Jet.pt
                 print(f"selected jet pts of chunk {chunk.index}: {selected_jet_pts}")
 
