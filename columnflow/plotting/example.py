@@ -222,8 +222,9 @@ def plot_variable_per_process(
     config_inst: od.config,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
-    shape_norm: bool = False,
-    y_scale: str = "",
+    shape_norm: Optional[bool] = False,
+    y_scale: Optional[str] = "",
+    scale_process: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
 
@@ -231,7 +232,13 @@ def plot_variable_per_process(
     process_lines = kwargs.get("process_lines", ())
     data_hists, mc_hists, mc_colors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels = [], [], []
+    print(scale_process)
     for process_inst, h in hists.items():
+        if scale_process and process_inst.name in scale_process.keys():
+            print("test", h.values())
+            h = h * float(scale_process[process_inst.name])
+            print(h.values())
+            process_inst.label = process_inst.label + " x" + scale_process[process_inst.name]
         if process_inst.is_data:
             data_hists.append(h)
         elif process_inst.is_mc:
@@ -244,14 +251,12 @@ def plot_variable_per_process(
                 mc_colors.append(process_inst.color)
                 mc_labels.append(process_inst.label)
 
-    h_data, h_mc, h_mc_stack, h_lines_stack = None, None, None, None
+    h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
         h_data = sum(data_hists[1:], data_hists[0].copy())
     if mc_hists:
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
         h_mc_stack = hist.Stack(*mc_hists)
-    if line_hists:
-        h_lines_stack = hist.Stack(*line_hists)
 
     # setup plotting configs
     plot_config = {}
@@ -260,28 +265,28 @@ def plot_variable_per_process(
     if h_mc_stack:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
         plot_config["mc_stack"] = {
-                "method": "draw_stack",
-                "hist": h_mc_stack,
-                "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
+            "method": "draw_stack",
+            "hist": h_mc_stack,
+            "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
         }
         plot_config["mc_uncert"] = {
-                "method": "draw_error_bands",
-                "hist": h_mc,
-                "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-                "ratio_kwargs": {"norm": h_mc.values()}
+            "method": "draw_error_bands",
+            "hist": h_mc,
+            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+            "ratio_kwargs": {"norm": h_mc.values()},
         }
-    
+
     # draw lines
     for i, h in enumerate(line_hists):
         label = line_labels[i]
         line_norm = sum(h.values()) if shape_norm else 1
         plot_config[f"line_{label}"] = {
-            "method" : "draw_hist",
+            "method": "draw_hist",
             "hist": h,
             "kwargs": {"norm": line_norm, "label": label, "color": line_colors[i]},
-            "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
+            # "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
         }
-    
+
     # draw data
     if data_hists:
         data_norm = sum(h_data.values()) if shape_norm else 1

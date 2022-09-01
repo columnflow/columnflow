@@ -99,7 +99,7 @@ class ProcessPlotBase(
         params = super().get_plot_parameters()
 
         params["process_lines"] = self.process_lines
-        params["scale_process"] = [s.split(":") for s in self.scale_process]
+        params["scale_process"] = {i[0]: i[1] for i in [s.split(":") for s in self.scale_process]}
 
         return params
 
