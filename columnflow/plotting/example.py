@@ -222,6 +222,8 @@ def plot_variable_per_process(
     config_inst: od.config,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
+    shape_norm: bool = False,
+    y_scale: str = "",
     **kwargs,
 ) -> plt.Figure:
 
@@ -251,36 +253,36 @@ def plot_variable_per_process(
     if line_hists:
         h_lines_stack = hist.Stack(*line_hists)
 
-    # get configs from kwargs
-    shape_norm = kwargs.get("shape_norm", False)
-
-    yscale = kwargs.get("yscale")
-    if not yscale:
-        yscale = "log" if variable_inst.log_y else "linear"
-
     # setup plotting configs
-    mc_norm = sum(h_mc.values()) if shape_norm else 1
-    plot_config = {
-        "mc_stack": {
-            "method": "draw_stack",
-            "hist": h_mc_stack,
-            "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
-        },
-        "mc_uncert": {
-            "method": "draw_error_bands",
-            "hist": h_mc,
-            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-            "ratio_kwargs": {"norm": h_mc.values()},
-        },
-    }
+    plot_config = {}
 
-    if h_lines_stack:
-        plot_config["mc_lines"] = {
-            "method": "draw_stack",
-            "hist": h_lines_stack,
-            "kwargs": {"label": line_labels, "color": line_colors, "stack": False, "histtype": "step"},
+    # draw stack + error bands
+    if h_mc_stack:
+        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        plot_config["mc_stack"] = {
+                "method": "draw_stack",
+                "hist": h_mc_stack,
+                "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
         }
-
+        plot_config["mc_uncert"] = {
+                "method": "draw_error_bands",
+                "hist": h_mc,
+                "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+                "ratio_kwargs": {"norm": h_mc.values()}
+        }
+    
+    # draw lines
+    for i, h in enumerate(line_hists):
+        label = line_labels[i]
+        line_norm = sum(h.values()) if shape_norm else 1
+        plot_config[f"line_{label}"] = {
+            "method" : "draw_hist",
+            "hist": h,
+            "kwargs": {"norm": line_norm, "label": label, "color": line_colors[i]},
+            "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
+        }
+    
+    # draw data
     if data_hists:
         data_norm = sum(h_data.values()) if shape_norm else 1
         plot_config["data"] = {
@@ -290,12 +292,16 @@ def plot_variable_per_process(
             "ratio_kwargs": {"norm": h_mc.values()},
         }
 
+    # setup style config
+    if not y_scale:
+        y_scale = "log" if variable_inst.log_y else "linear"
+
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
-            "yscale": yscale,
+            "yscale": y_scale,
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
@@ -318,31 +324,38 @@ def plot_variable_variants(
     config_inst: od.config,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
+    shape_norm: bool = False,
+    y_scale: str = "",
     **kwargs,
 ) -> plt.Figure:
     plot_config = OrderedDict()
 
-    # get configs from kwargs
-    shape_norm = kwargs.get("shape_norm", False)
-
-    yscale = kwargs.get("yscale")
-    if not yscale:
-        yscale = "log" if variable_inst.log_y else "linear"
-
     # add hists
     for label, h in hists.items():
+        norm = sum(h.values()) if shape_norm else 1
         plot_config[f"hist_{label}"] = {
             "method": "draw_hist",
             "hist": h,
-            "kwargs": {"label": label},
+            "kwargs": {"norm": norm, "label": label},
+            "ratio_kwargs": {"norm": hists["Initial"].values()},
         }
+
+    # setup style config
+    if not y_scale:
+        y_scale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
-            "yscale": yscale,
+            "yscale": y_scale,
+        },
+        "rax_cfg": {
+            "xlim": (variable_inst.x_min, variable_inst.x_max),
+            "ylim": (0., 1.1),
+            "ylabel": "Step / Initial",
+            "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
         "cms_label_cfg": {
@@ -362,6 +375,8 @@ def plot_shifted_variable(
     process_inst: od.process,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
+    shape_norm: bool = False,
+    y_scale: str = "",
     **kwargs,
 ) -> plt.Figure:
 
@@ -372,13 +387,6 @@ def plot_shifted_variable(
 
     # get the normalization factors into the correct shape (over/underflow bins)
     norm = np.concatenate(([-1], h_sum[{"shift": hist.loc(0)}].values(), [-1]))
-
-    # get configs from kwargs
-    shape_norm = kwargs.get("shape_norm", False)
-
-    yscale = kwargs.get("yscale")
-    if not yscale:
-        yscale = "log" if variable_inst.log_y else "linear"
 
     # setup plotting configs
     mc_norm = [sum(h_sum[{"shift": i}].values()) for i in range(3)]
@@ -397,11 +405,15 @@ def plot_shifted_variable(
         },
     }
 
+    # setup style config
+    if not y_scale:
+        y_scale = "log" if variable_inst.log_y else "linear"
+
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
-            "yscale": yscale,
+            "yscale": y_scale,
         },
         "rax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
@@ -440,7 +452,7 @@ def plot_cutflow(
         h_mc_stack = hist.Stack(*mc_hists)
 
     # get configs from kwargs
-    yscale = kwargs.get("yscale") or "linear"
+    y_scale = kwargs.get("y_scale") or "linear"
 
     # setup plotting configs
     plot_config = {
