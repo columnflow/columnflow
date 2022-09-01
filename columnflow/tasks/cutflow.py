@@ -14,8 +14,8 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin, ChunkedReaderMixin,
 )
+from columnflow.tasks.framework.plotting import ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.plotting import ProcessPlotBase
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
 

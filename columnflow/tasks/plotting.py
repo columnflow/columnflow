@@ -10,28 +10,13 @@ import law
 
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin, CategoriesMixin,
-    VariablesMixin, DatasetsProcessesMixin, ShiftSourcesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin,
+    VariablesMixin, ShiftSourcesMixin,
 )
+from columnflow.tasks.framework.plotting import ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict
-
-
-class ProcessPlotBase(
-    CategoriesMixin,
-    DatasetsProcessesMixin,
-    PlotMixin,
-):
-    """
-    Base class for tasks creating plots where contributions of different processes are shown.
-    """
-
-    def store_parts(self):
-        parts = super().store_parts()
-        part = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
-        parts.insert_before("version", "plot", part)
-        return parts
 
 
 class PlotVariables(
