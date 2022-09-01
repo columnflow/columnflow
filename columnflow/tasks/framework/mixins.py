@@ -512,7 +512,7 @@ class CategoriesMixin(ConfigTask):
         default=("1mu",),
         description="comma-separated category names or patterns to select; can also be the key of "
         "a mapping defined in 'category_groups' auxiliary data of the config; default: ('1mu',)",
-        brace_expand=True
+        brace_expand=True,
     )
 
     allow_empty_categories = False
@@ -558,7 +558,7 @@ class VariablesMixin(ConfigTask):
         description="comma-separated variable names or patterns to select; can also be the key of "
         "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
-        brace_expand=True
+        brace_expand=True,
     )
 
     default_variables = None
