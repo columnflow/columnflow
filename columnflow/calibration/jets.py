@@ -235,9 +235,7 @@ def jec_setup(self: Calibrator, inputs: dict) -> None:
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
-        raise NotImplementedError("JEC for data has not been implemented yet")
-        era = "RunA"  # task.dataset_inst.x.era  # TODO: implement data eras
-        resolve_sample = lambda x: x.data[era]
+        resolve_sample = lambda x: x.data[self.dataset_inst.x.jec_era]
     else:
         resolve_sample = lambda x: x.mc
 
