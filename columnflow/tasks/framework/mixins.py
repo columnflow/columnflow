@@ -85,6 +85,7 @@ class CalibratorsMixin(ConfigTask):
         default=(),
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
+        brace_expand=True,
     )
 
     @classmethod
@@ -214,6 +215,7 @@ class SelectorStepsMixin(SelectorMixin):
         default=(),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
         "empty default",
+        brace_expand=True,
     )
 
     selector_steps_order_sensitive = False
@@ -313,6 +315,7 @@ class ProducersMixin(ConfigTask):
     producers = law.CSVParameter(
         default=(),
         description="comma-separated names of producers to be applied; empty default",
+        brace_expand=True,
     )
 
     @classmethod
@@ -415,7 +418,7 @@ class MLModelMixin(ConfigTask):
         # shall be used in the training
         return (
             dataset_inst in self.ml_model_inst.used_datasets and
-            not shift_inst.x("disjoint_from_nominal", False)
+            not shift_inst.has_tag("disjoint_from_nominal")
         )
 
     def store_parts(self) -> law.util.InsertableDict:
@@ -430,6 +433,7 @@ class MLModelsMixin(ConfigTask):
     ml_models = law.CSVParameter(
         default=(),
         description="comma-separated names of ML models to be applied; empty default",
+        brace_expand=True,
     )
 
     @classmethod
@@ -508,6 +512,7 @@ class CategoriesMixin(ConfigTask):
         default=("1mu",),
         description="comma-separated category names or patterns to select; can also be the key of "
         "a mapping defined in 'category_groups' auxiliary data of the config; default: ('1mu',)",
+        brace_expand=True,
     )
 
     allow_empty_categories = False
@@ -553,6 +558,7 @@ class VariablesMixin(ConfigTask):
         description="comma-separated variable names or patterns to select; can also be the key of "
         "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
+        brace_expand=True,
     )
 
     default_variables = None
@@ -608,12 +614,14 @@ class DatasetsProcessesMixin(ConfigTask):
         "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
         "all datasets registered in the config that contain any of the selected --processes; empty "
         "default",
+        brace_expand=True,
     )
     processes = law.CSVParameter(
         default=(),
         description="comma-separated process names or patterns for filtering processes; can also "
         "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
         "uses all processes of the config when empty; empty default",
+        brace_expand=True,
     )
 
     allow_empty_datasets = False

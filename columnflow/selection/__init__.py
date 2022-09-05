@@ -88,6 +88,9 @@ class SelectionResult(object):
             objects={"jet": array, "muon": array, ...}
         )
         res.to_ak()
+
+    Arbitrary, auxiliary information (additional arrays, or other objects) that should not be stored
+    in dumped akward arrays can be placed in the *aux* dictionary.
     """
 
     def __init__(
@@ -95,6 +98,7 @@ class SelectionResult(object):
         main: Optional[Union[DotDict, dict]] = None,
         steps: Optional[Union[DotDict, dict]] = None,
         objects: Optional[Union[DotDict, dict]] = None,
+        aux: Optional[Union[DotDict, dict]] = None,
     ):
         super().__init__()
 
@@ -102,6 +106,7 @@ class SelectionResult(object):
         self.main = DotDict.wrap(main or {})
         self.steps = DotDict.wrap(steps or {})
         self.objects = DotDict.wrap(objects or {})
+        self.aux = DotDict.wrap(aux or {})
 
     def __iadd__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """
@@ -121,6 +126,8 @@ class SelectionResult(object):
         self.steps.update(other.steps)
         # use deep merging for objects
         law.util.merge_dicts(self.objects, other.objects, inplace=True, deep=True)
+        # shallow update for aux
+        self.aux.update(other.aux)
 
         return self
 

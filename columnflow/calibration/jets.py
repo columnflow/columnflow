@@ -235,7 +235,7 @@ def jec_setup(self: Calibrator, inputs: dict) -> None:
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
-        raise NotImplementedError("JEC for data has not been implemented yet.")
+        raise NotImplementedError("JEC for data has not been implemented yet")
         era = "RunA"  # task.dataset_inst.x.era  # TODO: implement data eras
         resolve_sample = lambda x: x.data[era]
     else:
@@ -298,6 +298,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
     """
+
+    # complain when running on data
+    if self.dataset_inst.is_data:
+        raise ValueError("attempt to apply jet energy resolution smearing in data")
 
     # save the unsmeared properties in case they are needed later
     events = set_ak_column(events, "Jet.pt_unsmeared", events.Jet.pt)
@@ -423,7 +427,7 @@ def jer_setup(self: Calibrator, inputs: dict) -> None:
 
     # make selector for JEC text files based on sample type
     if self.dataset_inst.is_data:
-        raise ValueError("Attempt to apply jet energy resolution smearing in data!")
+        raise ValueError("attempt to setup jet energy resolution smearing in data")
     resolve_sample = lambda x: x.mc
 
     # pass text files to calibrator method
@@ -462,3 +466,10 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events = self[jer](events, **kwargs)
 
     return events
+
+
+@jets.init
+def jets_init(self: Calibrator) -> None:
+    if self.dataset_inst.is_mc:
+        self.uses |= {jer}
+        self.produces |= {jer}

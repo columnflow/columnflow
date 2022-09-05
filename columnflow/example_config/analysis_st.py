@@ -115,10 +115,10 @@ def add_aliases(shift_source, aliases):
 
 # register shifts
 config_2018.add_shift(name="nominal", id=0)
-config_2018.add_shift(name="tune_up", id=1, type="shape", aux={"disjoint_from_nominal": True})
-config_2018.add_shift(name="tune_down", id=2, type="shape", aux={"disjoint_from_nominal": True})
-config_2018.add_shift(name="hdamp_up", id=3, type="shape", aux={"disjoint_from_nominal": True})
-config_2018.add_shift(name="hdamp_down", id=4, type="shape", aux={"disjoint_from_nominal": True})
+config_2018.add_shift(name="tune_up", id=1, type="shape", tags={"disjoint_from_nominal"})
+config_2018.add_shift(name="tune_down", id=2, type="shape", tags={"disjoint_from_nominal"})
+config_2018.add_shift(name="hdamp_up", id=3, type="shape", tags={"disjoint_from_nominal"})
+config_2018.add_shift(name="hdamp_down", id=4, type="shape", tags={"disjoint_from_nominal"})
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})

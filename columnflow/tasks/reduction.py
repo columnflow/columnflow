@@ -161,7 +161,7 @@ class ReduceEvents(
                     for dst_name in dst_names:
                         object_mask = sel.objects[src_name, dst_name][event_mask]
                         dst_collection = events[src_name][object_mask]
-                        set_ak_column(events, dst_name, dst_collection)
+                        events = set_ak_column(events, dst_name, dst_collection)
 
                 # remove columns
                 events = route_filter(events)
