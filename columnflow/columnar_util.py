@@ -907,11 +907,15 @@ def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
     behavior: Optional[dict] = None,
+    skip_fields: Optional[Sequence[str]] = None,
 ) -> ak.Array:
     """
     Attaches behavior of type *type_name* to an awkward array *ak_array* and returns it. *type_name*
     must be a key of a *behavior* dictionary which defaults to the "behavior" attribute of
     *ak_array* when present. Otherwise, a *ValueError* is raised.
+
+    By default, all subfields of *ak_array* are kept. For further control, *skip_fields* can contain
+    names or name patterns of fields that are filtered.
     """
     if behavior is None:
         behavior = getattr(ak_array, "behavior", None)
@@ -920,8 +924,18 @@ def attach_behavior(
                 f"behavior for type '{type_name}' is not set and not existing in input array",
             )
 
+    # prepare field skipping
+    keep_field = lambda field: True
+    if skip_fields:
+        skip_fields = law.util.make_list(skip_fields)
+        skip_fields = {
+            field for field in ak_array.fields
+            if law.util.multi_match(field, skip_fields)
+        }
+        keep_field = lambda field: field not in skip_fields
+
     return ak.zip(
-        {field: ak_array[field] for field in ak_array.fields},
+        {field: ak_array[field] for field in ak_array.fields if keep_field(field)},
         with_name=type_name,
         behavior=behavior,
     )
