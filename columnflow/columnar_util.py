@@ -10,7 +10,7 @@ __all__ = [
     "PreloadedNanoEventsFactory",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet", "flat_np_view",
+    "sorted_ak_to_parquet", "flat_np_view", "attach_behavior",
 ]
 
 
@@ -903,6 +903,30 @@ def flat_np_view(ak_array: ak.Array, axis: Optional[int] = None) -> np.array:
     return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
+def attach_behavior(
+    ak_array: ak.Array,
+    type_name: str,
+    behavior: Optional[dict] = None,
+) -> ak.Array:
+    """
+    Attaches behavior of type *type_name* to an awkward array *ak_array* and returns it. *type_name*
+    must be a key of a *behavior* dictionary which defaults to the "behavior" attribute of
+    *ak_array* when present. Otherwise, a *ValueError* is raised.
+    """
+    if behavior is None:
+        behavior = getattr(ak_array, "behavior", None)
+        if behavior is None:
+            raise ValueError(
+                f"behavior for type '{type_name}' is not set and not existing in input array",
+            )
+
+    return ak.zip(
+        {field: ak_array[field] for field in ak_array.fields},
+        with_name=type_name,
+        behavior=behavior,
+    )
+
+
 class RouteFilter(object):
     """
     Shallow helper class that handles removal of routes in an awkward array that do not match those
@@ -1123,22 +1147,42 @@ class ArrayFunction(Derivable):
 
     def __init__(
         self,
-        call_func: Optional[Callable] = None,
+        call_func: Optional[Callable] = law.no_value,
         deferred_init: Optional[bool] = True,
         instance_cache: Optional[dict] = None,
         **kwargs,
     ):
         super().__init__()
 
+        # add class-level attributes as defaults for unset arguments (no_value)
+        if call_func == law.no_value:
+            call_func = self.__class__.call_func
+
         # when a custom call_func is passed, bind it to this instance
         if call_func:
             self.call_func = call_func.__get__(self, self.__class__)
 
         # create instance-level sets of dependent ArrayFunction classes,
-        # optionally extended by sets passed in keyword arguments
+        # optionally with priority to sets passed in keyword arguments
         for attr in self.dependency_sets:
-            deps = set(law.util.make_list(getattr(self.__class__, attr)))
-            deps |= set(law.util.make_list(kwargs.get(attr) or []))
+            if attr in kwargs:
+                try:
+                    deps = set(law.util.make_list(kwargs.get(attr) or []))
+                except TypeError as e:
+                    e.args = (
+                        f"cannot convert keyword argument '{attr}' passed to {self.__class__} "
+                        f"to set: {e.args[0]}",
+                    )
+                    raise e
+            else:
+                try:
+                    deps = set(law.util.make_list(getattr(self.__class__, attr)))
+                except TypeError as e:
+                    e.args = (
+                        f"cannot convert class attribute '{attr}' of {self.__class__} "
+                        f"to set: {e.args[0]}",
+                    )
+                    raise e
             setattr(self, attr, deps)
 
         # dictionary of dependency class to instance, set in create_dependencies
@@ -1299,7 +1343,10 @@ class TaskArrayFunction(ArrayFunction):
     interface to tasks and can influence their behavior - and vice-versa. For this purpose, an
     initialization function can be wrapped through a decorator (similiar to ``property`` setters) as
     shown in the example below. Custom task requirements, and a setup of objects resulting from
-    these requirements can be defined in a similar, programmatic way. Exmple:
+    these requirements can be defined in a similar, programmatic way. Also, they might define an
+    optional *sandbox* that is required to run this array function.
+
+    Exmple:
 
     .. code-block:: python
 
@@ -1378,6 +1425,11 @@ class TaskArrayFunction(ArrayFunction):
 
        The registered function performing the custom setup step, or *None*.
 
+    .. py:attribute:: sandbox
+       type: str, None
+
+       A optional string referring to a sandbox that is required to run this array function.
+
     .. py:attribute:: call_force
        type: None, bool
 
@@ -1390,6 +1442,8 @@ class TaskArrayFunction(ArrayFunction):
     init_func = None
     requires_func = None
     setup_func = None
+    sandbox = None
+    call_force = None
     shifts = set()
     dependency_sets = ArrayFunction.dependency_sets | {"shifts"}
 
@@ -1437,14 +1491,12 @@ class TaskArrayFunction(ArrayFunction):
     def setup(cls, func: Callable[[dict], None]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`setup_func`
-        which is used to perform a custom setup of objects. The function is invoked while bound to
-        this instance should accept three arguments,
+        which is used to perform a custom setup of objects. The function should accept two
+        positional arguments:
 
-            - *task*, the :py:class:`law.Task` instance,
-            - *inputs*, a dictionary with input targets corresponding to the requirements created by
-              :py:meth:`run_requires`, and
-            - *call_kwargs*, a dictionary into which arguments should be inserted that are later
-              on passed to the wrapped function.
+            - *reqs*, a dictionary containing the required tasks as defined by the custom
+              :py:meth:`requires_func`.
+            - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
 
         The decorator does not return the wrapped function.
         """
@@ -1453,10 +1505,11 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        init_func: Optional[Callable] = None,
-        requires_func: Optional[Callable] = None,
-        setup_func: Optional[Callable] = None,
-        call_force: Optional[bool] = None,
+        init_func: Optional[Callable] = law.no_value,
+        requires_func: Optional[Callable] = law.no_value,
+        setup_func: Optional[Callable] = law.no_value,
+        sandbox: Optional[str] = law.no_value,
+        call_force: Optional[bool] = law.no_value,
         inst_dict: Optional[dict] = None,
         **kwargs,
     ):
@@ -1464,6 +1517,18 @@ class TaskArrayFunction(ArrayFunction):
         self.inst_dict = dict(inst_dict or {})
 
         super().__init__(*args, **kwargs)
+
+        # add class-level attributes as defaults for unset arguments (no_value)
+        if init_func == law.no_value:
+            init_func = self.__class__.init_func
+        if requires_func == law.no_value:
+            requires_func = self.__class__.requires_func
+        if setup_func == law.no_value:
+            setup_func = self.__class__.setup_func
+        if sandbox == law.no_value:
+            sandbox = self.__class__.sandbox
+        if call_force == law.no_value:
+            call_force = self.__class__.call_force
 
         # when custom funcs are passed, bind them to this instance
         if init_func:
@@ -1474,6 +1539,7 @@ class TaskArrayFunction(ArrayFunction):
             self.setup_func = setup_func.__get__(self, self.__class__)
 
         # other attributes
+        self.sandbox = sandbox
         self.call_force = call_force
 
     def __getattr__(self, attr: str) -> Any:
@@ -1567,12 +1633,14 @@ class TaskArrayFunction(ArrayFunction):
 
     def run_setup(
         self,
+        reqs: dict,
         inputs: dict,
         call_cache: Optional[set] = None,
     ) -> None:
         """
-        Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *inputs*
-        corresponds to the requirements created by :py:func:`run_requires`.
+        Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
+        corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
+        outputs.
         """
         # init the call cache
         if call_cache is None:
@@ -1580,13 +1648,13 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(inputs)
+            self.setup_func(reqs, inputs)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
             if dep not in call_cache:
                 call_cache.add(dep)
-                dep.run_setup(inputs, call_cache=call_cache)
+                dep.run_setup(reqs, inputs, call_cache=call_cache)
 
     def __call__(
         self,

@@ -7,7 +7,9 @@ Tasks related to producing new columns.
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin, ProducerMixin
+from columnflow.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedReaderMixin,
+)
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.util import dev_sandbox
@@ -18,6 +20,7 @@ class ProduceColumns(
     ProducerMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -57,16 +60,17 @@ class ProduceColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,
+            RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
+        reqs = self.requires()
         inputs = self.input()
         output = self.output()
         output_chunks = {}
 
         # run the producer setup
-        self.producer_inst.run_setup(inputs["producer"])
+        self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -80,24 +84,22 @@ class ProduceColumns(
         route_filter = RouteFilter(keep_columns)
 
         # iterate over chunks of events and diffs
-        with ChunkedReader(
+        for events, pos in self.iter_chunked_reader(
             inputs["events"]["collection"][0].path,
             source_type="awkward_parquet",
             # TODO: not working yet since parquet columns are nested
             # open_options={"columns": load_columns},
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # invoke the producer
-                events = self.producer_inst(events)
+        ):
+            # invoke the producer
+            events = self.producer_inst(events)
 
-                # remove columns
-                events = route_filter(events)
+            # remove columns
+            events = route_filter(events)
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-                output_chunks[pos.index] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+            # save as parquet via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+            output_chunks[pos.index] = chunk
+            self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

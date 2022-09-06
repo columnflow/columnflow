@@ -189,6 +189,37 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
         self.transfer(bundle)
 
 
+class SandboxTrigger(AnalysisTask):
+
+    sandbox = luigi.Parameter(
+        default=law.NO_STR,
+        description="the sandbox to install",
+    )
+
+    version = None
+
+    def output(self):
+        return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
+
+    def run(self):
+        # no need to run anything as the sandboxing mechanism handles the installation
+        return
+
+
+class PrepareJobSandboxes(AnalysisTask, law.WrapperTask):
+
+    version = None
+
+    # make sure this task is run before BundleSoftware
+    priority = BundleSoftware.priority + 1
+
+    def requires(self):
+        return [
+            SandboxTrigger.req(self, sandbox=sandbox)
+            for sandbox in self.analysis_inst.x("job_sandboxes", [])
+        ]
+
+
 _default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
 
 
@@ -238,9 +269,13 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     dep_BundleRepo = BundleRepo
     dep_BundleSoftware = BundleSoftware
     dep_BundleCMSSW = BundleCMSSW
+    dep_PrepareJobSandboxes = PrepareJobSandboxes
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
+
+        # trigger the local installation of all sandboxes that might be required for jobs
+        reqs["sandboxes"] = self.dep_PrepareJobSandboxes.req(self)
 
         # add bundles for repo, software and optionally cmssw sandboxes
         reqs["repo"] = self.dep_BundleRepo.req(self, replicas=3)
@@ -397,6 +432,17 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
     }
+
+    # default upstream dependency task classes
+    dep_PrepareJobSandboxes = PrepareJobSandboxes
+
+    def slurm_workflow_requires(self):
+        reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
+
+        # trigger the local installation of all sandboxes that might be required for jobs
+        reqs["sandboxes"] = self.dep_PrepareJobSandboxes.req(self)
+
+        return reqs
 
     def slurm_output_directory(self):
         # the directory where submission meta data and logs should be stored

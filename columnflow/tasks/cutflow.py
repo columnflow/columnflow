@@ -12,7 +12,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin,
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin, ChunkedReaderMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.plotting import ProcessPlotBase
@@ -25,6 +25,7 @@ class CreateCutflowHistograms(
     SelectorStepsMixin,
     CalibratorsMixin,
     VariablesMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -50,6 +51,7 @@ class CreateCutflowHistograms(
             return reqs
 
         reqs["masks"] = self.dep_MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+
         return reqs
 
     def requires(self):
@@ -66,7 +68,7 @@ class CreateCutflowHistograms(
     def run(self):
         import hist
         import awkward as ak
-        from columnflow.columnar_util import ChunkedReader, Route, add_ak_aliases
+        from columnflow.columnar_util import Route, add_ak_aliases
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -107,52 +109,50 @@ class CreateCutflowHistograms(
                 .Weight()
             )
 
-        with ChunkedReader(
+        for arr, pos in self.iter_chunked_reader(
             inputs["masks"].path,
             source_type="awkward_parquet",
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
-            for arr, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                events = arr.events
+        ):
+            events = arr.events
 
-                # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # pad the category_ids when the event is not categorized at all
-                category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
+            # pad the category_ids when the event is not categorized at all
+            category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
 
-                for variable_inst in variable_insts:
-                    var_name = variable_inst.name
-                    # helper to build the point for filling, except for the step which does
-                    # not support broadcasting
-                    def get_point(mask=Ellipsis):
-                        return {
-                            variable_inst.name: expressions[var_name](events)[mask],
-                            "process": events.process_id[mask],
-                            "category": category_ids[mask],
-                            "shift": self.shift_inst.id,
-                            "weight": events.normalization_weight[mask],
-                        }
+            for variable_inst in variable_insts:
+                var_name = variable_inst.name
+                # helper to build the point for filling, except for the step which does
+                # not support broadcasting
+                def get_point(mask=Ellipsis):
+                    return {
+                        variable_inst.name: expressions[var_name](events)[mask],
+                        "process": events.process_id[mask],
+                        "category": category_ids[mask],
+                        "shift": self.shift_inst.id,
+                        "weight": events.normalization_weight[mask],
+                    }
 
-                    # fill the raw point
-                    fill_kwargs = get_point()
+                # fill the raw point
+                fill_kwargs = get_point()
+                arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                histograms[var_name].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
+
+                # fill all other steps
+                steps = self.selector_steps or arr.steps.fields
+
+                mask = True
+                for step in steps:
+                    if step not in arr.steps.fields:
+                        raise ValueError(
+                            f"step '{step}' is not defined by selector {self.selector}",
+                        )
+                    # incrementally update the mask and fill the point
+                    mask = mask & arr.steps[step]
+                    fill_kwargs = get_point(mask)
                     arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                    histograms[var_name].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
-
-                    # fill all other steps
-                    steps = self.selector_steps or arr.steps.fields
-
-                    mask = True
-                    for step in steps:
-                        if step not in arr.steps.fields:
-                            raise ValueError(
-                                f"step '{step}' is not defined by selector {self.selector}",
-                            )
-                        # incrementally update the mask and fill the point
-                        mask = mask & arr.steps[step]
-                        fill_kwargs = get_point(mask)
-                        arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                        histograms[var_name].fill(step=step, **dict(zip(fill_kwargs, arrays)))
+                    histograms[var_name].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
         # dump the histograms
         for var_name in histograms.keys():

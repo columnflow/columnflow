@@ -9,7 +9,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin,
+    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedReaderMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -23,6 +23,7 @@ class PrepareMLEvents(
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -84,7 +85,7 @@ class PrepareMLEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -112,37 +113,35 @@ class PrepareMLEvents(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        with ChunkedReader(
+        for (events, *columns), pos in self.iter_chunked_reader(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                n_events += len(events)
+        ):
+            n_events += len(events)
 
-                # add additional columns
-                events = update_ak_array(events, *columns)
+            # add additional columns
+            events = update_ak_array(events, *columns)
 
-                # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # generate fold indices
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+            # generate fold indices
+            fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
-                # remove columns
-                events = route_filter(events)
+            # remove columns
+            events = route_filter(events)
 
-                # loop over folds, use indices to generate masks and project into files
-                for f in range(self.ml_model_inst.folds):
-                    fold_events = events[fold_indices == f]
-                    n_fold_events[f] += len(fold_events)
+            # loop over folds, use indices to generate masks and project into files
+            for f in range(self.ml_model_inst.folds):
+                fold_events = events[fold_indices == f]
+                n_fold_events[f] += len(fold_events)
 
-                    # save as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
-                    output_chunks[f][pos.index] = chunk
-                    reader.add_task(sorted_ak_to_parquet, (fold_events, chunk.path))
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
+                output_chunks[f][pos.index] = chunk
+                self.chunked_reader.add_task(sorted_ak_to_parquet, (fold_events, chunk.path))
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs.targets):
@@ -301,6 +300,7 @@ class MLEvaluation(
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -363,7 +363,7 @@ class MLEvaluation(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, ChunkedReader, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -393,39 +393,37 @@ class MLEvaluation(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        with ChunkedReader(
+        for (events, *columns), pos in self.iter_chunked_reader(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events ..."
-            for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # add additional columns
-                events = update_ak_array(events, *columns)
+        ):
+            # add additional columns
+            events = update_ak_array(events, *columns)
 
-                # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # asdasd
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+            # asdasd
+            fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
-                # evaluate the model
-                events = self.ml_model_inst.evaluate(
-                    self,
-                    events,
-                    models,
-                    fold_indices,
-                    events_used_in_training=events_used_in_training,
-                )
+            # evaluate the model
+            events = self.ml_model_inst.evaluate(
+                self,
+                events,
+                models,
+                fold_indices,
+                events_used_in_training=events_used_in_training,
+            )
 
-                # remove columns
-                events = route_filter(events)
+            # remove columns
+            events = route_filter(events)
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-                output_chunks[pos.index] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+            # save as parquet via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+            output_chunks[pos.index] = chunk
+            self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

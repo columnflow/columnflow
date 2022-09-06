@@ -7,7 +7,7 @@ Tasks related to calibrating events.
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorMixin
+from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedReaderMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
@@ -16,7 +16,13 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 ak = maybe_import("awkward")
 
 
-class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, RemoteWorkflow):
+class CalibrateEvents(
+    DatasetTask,
+    CalibratorMixin,
+    ChunkedReaderMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
@@ -54,17 +60,18 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, RemoteWor
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
+        reqs = self.requires()
+        lfn_task = reqs["lfns"]
         inputs = self.input()
-        lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
 
         # run the calibrator setup
-        self.calibrator_inst.run_setup(inputs["calibrator"])
+        self.calibrator_inst.run_setup(reqs["calibrator"], inputs["calibrator"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -86,28 +93,26 @@ class CalibrateEvents(DatasetTask, CalibratorMixin, law.LocalWorkflow, RemoteWor
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks
-        with ChunkedReader(
+        for events, pos in self.iter_chunked_reader(
             nano_file,
             source_type="coffea_root",
             read_options={"iteritems_options": {"filter_name": load_columns_nano}},
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for events, pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
-                # would result in the coffea behavior being partially lost after new columns are
-                # added, which - for some reason - does not happen on copies
-                events = ak.copy(events)
+        ):
+            # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+            # would result in the coffea behavior being partially lost after new columns are
+            # added, which - for some reason - does not happen on copies
+            events = ak.copy(events)
 
-                # just invoke the calibration function
-                events = self.calibrator_inst(events)
+            # just invoke the calibration function
+            events = self.calibrator_inst(events)
 
-                # remove columns
-                events = route_filter(events)
+            # remove columns
+            events = route_filter(events)
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
-                output_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+            # save as parquet via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+            output_chunks[(lfn_index, pos.index)] = chunk
+            self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:

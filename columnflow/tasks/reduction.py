@@ -11,7 +11,9 @@ import law
 import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorStepsMixin
+from columnflow.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, ChunkedReaderMixin,
+)
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
@@ -25,6 +27,7 @@ class ReduceEvents(
     DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -70,8 +73,8 @@ class ReduceEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
-            add_ak_aliases, sorted_ak_to_parquet, set_ak_column,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet, set_ak_column,
         )
 
         # prepare inputs and outputs
@@ -104,72 +107,72 @@ class ReduceEvents(
         with self.publish_step("load and open ..."):
             nano_file = input_file.load(formatter="uproot")
 
-        # iterate over chunks of events and diffs
+        # collect input paths
         input_paths = [nano_file]
         input_paths.append(inputs["selection"]["results"].path)
         input_paths.extend([inp.path for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
             input_paths.append(inputs["selection"]["columns"].path)
-        with ChunkedReader(
+
+        # iterate over chunks of events and diffs
+        for (events, sel, *diffs), pos in self.iter_chunked_reader(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for (events, sel, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
-                # would result in the coffea behavior being partially lost after new columns are
-                # added, which - for some reason - does not happen on copies
-                events = ak.copy(events)
+        ):
+            # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+            # would result in the coffea behavior being partially lost after new columns are
+            # added, which - for some reason - does not happen on copies
+            events = ak.copy(events)
 
-                # add the calibrated diffs and potentially new columns
-                events = update_ak_array(events, *diffs)
+            # add the calibrated diffs and potentially new columns
+            events = update_ak_array(events, *diffs)
 
-                # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # build the event mask
-                if self.selector_steps:
-                    # check if all steps are present
-                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
-                    if missing_steps:
-                        raise Exception(
-                            f"selector steps {','.join(missing_steps)} are not produced by "
-                            f"selector '{self.selector}'",
-                        )
-                    event_mask = functools.reduce(
-                        (lambda a, b: a & b),
-                        (sel["steps", step] for step in self.selector_steps),
+            # build the event mask
+            if self.selector_steps:
+                # check if all steps are present
+                missing_steps = set(self.selector_steps) - set(sel.steps.fields)
+                if missing_steps:
+                    raise Exception(
+                        f"selector steps {','.join(missing_steps)} are not produced by "
+                        f"selector '{self.selector}'",
                     )
-                else:
-                    event_mask = sel.event if "event" in sel.fields else Ellipsis
+                event_mask = functools.reduce(
+                    (lambda a, b: a & b),
+                    (sel["steps", step] for step in self.selector_steps),
+                )
+            else:
+                event_mask = sel.event if "event" in sel.fields else Ellipsis
 
-                # apply the mask
-                n_all += len(events)
-                events = events[event_mask]
-                n_reduced += len(events)
+            # apply the mask
+            n_all += len(events)
+            events = events[event_mask]
+            n_reduced += len(events)
 
-                # loop through all object selection, go through their masks
-                # and create new collections if required
-                for src_name in sel.objects.fields:
-                    # get all destination collections, handling those named identically to the
-                    # source collection last
-                    dst_names = sel["objects", src_name].fields
-                    if src_name in dst_names:
-                        dst_names.remove(src_name)
-                        dst_names.append(src_name)
-                    for dst_name in dst_names:
-                        object_mask = sel.objects[src_name, dst_name][event_mask]
-                        dst_collection = events[src_name][object_mask]
-                        events = set_ak_column(events, dst_name, dst_collection)
+            # loop through all object selection, go through their masks
+            # and create new collections if required
+            for src_name in sel.objects.fields:
+                # get all destination collections, handling those named identically to the
+                # source collection last
+                dst_names = sel["objects", src_name].fields
+                if src_name in dst_names:
+                    dst_names.remove(src_name)
+                    dst_names.append(src_name)
+                for dst_name in dst_names:
+                    object_mask = sel.objects[src_name, dst_name][event_mask]
+                    dst_collection = events[src_name][object_mask]
+                    events = set_ak_column(events, dst_name, dst_collection)
 
-                # remove columns
-                events = route_filter(events)
+            # remove columns
+            events = route_filter(events)
 
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-                output_chunks[pos.index] = chunk
-                reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+            # save as parquet via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+            output_chunks[pos.index] = chunk
+            self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
         self.publish_message(

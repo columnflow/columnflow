@@ -7,6 +7,7 @@ Object and event selection tools.
 from typing import Optional, Union, Callable
 
 import law
+import order as od
 
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
@@ -50,7 +51,7 @@ def selector(
     return decorator(func) if func else decorator
 
 
-class SelectionResult(object):
+class SelectionResult(od.AuxDataMixin):
     """
     Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
     provides convenience methods to merge them or to dump them into an awkward array. The resulting
@@ -90,7 +91,8 @@ class SelectionResult(object):
         res.to_ak()
 
     Arbitrary, auxiliary information (additional arrays, or other objects) that should not be stored
-    in dumped akward arrays can be placed in the *aux* dictionary.
+    in dumped akward arrays can be placed in the *aux* dictionary
+    (see :py:class:`order.AuxDataMixin`).
     """
 
     def __init__(
@@ -100,13 +102,12 @@ class SelectionResult(object):
         objects: Optional[Union[DotDict, dict]] = None,
         aux: Optional[Union[DotDict, dict]] = None,
     ):
-        super().__init__()
+        super().__init__(aux=aux)
 
         # store fields
         self.main = DotDict.wrap(main or {})
         self.steps = DotDict.wrap(steps or {})
         self.objects = DotDict.wrap(objects or {})
-        self.aux = DotDict.wrap(aux or {})
 
     def __iadd__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
         """

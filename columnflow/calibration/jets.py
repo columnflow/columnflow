@@ -224,14 +224,14 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jec.setup
-def jec_setup(self: Calibrator, inputs: dict) -> None:
+def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     """
     Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
     """
 
     # get external files bundle that contains JEC text files
-    bundle = self.task.requires()["calibrator"]["external_files"]
+    bundle = reqs["external_files"]
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
@@ -414,14 +414,14 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jer.setup
-def jer_setup(self: Calibrator, inputs: dict) -> None:
+def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     """
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.
     """
 
     # get external files bundle that contains JR text files
-    bundle = self.task.requires()["calibrator"]["external_files"]
+    bundle = reqs["external_files"]
 
     # make selector for JEC text files based on sample type
     if self.dataset_inst.is_data:
