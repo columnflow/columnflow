@@ -9,7 +9,7 @@ from collections import defaultdict
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedReaderMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
@@ -24,6 +24,7 @@ class SelectEvents(
     DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -86,20 +87,21 @@ class SelectEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, ChunkedReader, mandatory_coffea_columns, update_ak_array,
-            add_ak_aliases, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
+        reqs = self.requires()
+        lfn_task = reqs["lfns"]
         inputs = self.input()
-        lfn_task = self.requires()["lfns"]
         outputs = self.output()
         result_chunks = {}
         column_chunks = {}
         stats = defaultdict(float)
 
         # run the selector setup
-        self.selector_inst.run_setup(inputs["selector"])
+        self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -125,40 +127,38 @@ class SelectEvents(
 
         # iterate over chunks of events and diffs
         n_calib = len(inputs["calibrations"])
-        with ChunkedReader(
+        for (events, *diffs), pos in self.iter_chunked_reader(
             [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for (events, *diffs), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
-                # would result in the coffea behavior being partially lost after new columns are
-                # added, which - for some reason - does not happen on copies
-                events = ak.copy(events)
+        ):
+            # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
+            # would result in the coffea behavior being partially lost after new columns are
+            # added, which - for some reason - does not happen on copies
+            events = ak.copy(events)
 
-                # apply the calibrated diffs
-                events = update_ak_array(events, *diffs)
+            # apply the calibrated diffs
+            events = update_ak_array(events, *diffs)
 
-                # add aliases
-                events = add_ak_aliases(events, aliases)
+            # add aliases
+            events = add_ak_aliases(events, aliases)
 
-                # invoke the selection function
-                events, results = self.selector_inst(events, stats)
+            # invoke the selection function
+            events, results = self.selector_inst(events, stats)
 
-                # save results as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
-                result_chunks[(lfn_index, pos.index)] = chunk
-                reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+            # save results as parquet via a thread in the same pool
+            chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
+            result_chunks[(lfn_index, pos.index)] = chunk
+            self.chunked_reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
-                # remove columns
-                if keep_columns:
-                    events = route_filter(events)
+            # remove columns
+            if keep_columns:
+                events = route_filter(events)
 
-                    # save additional columns as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
-                    column_chunks[(lfn_index, pos.index)] = chunk
-                    reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+                # save additional columns as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
+                column_chunks[(lfn_index, pos.index)] = chunk
+                self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
@@ -170,7 +170,7 @@ class SelectEvents(
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
 
         # save stats
-        outputs["stats"].dump(stats, formatter="json")
+        outputs["stats"].dump(stats, indent=4, formatter="json")
 
         # print some stats
         eff = safe_div(stats["n_events_selected"], stats["n_events"])
@@ -336,7 +336,10 @@ class MergeSelectionMasks(
         chunks = []
 
         # setup the normalization weights producer
-        self.norm_weight_producer.run_setup(self.input()["forest_merge"]["normalization"])
+        self.norm_weight_producer.run_setup(
+            self.requires()["forest_merge"]["normalization"],
+            self.input()["forest_merge"]["normalization"],
+        )
 
         # get columns to keep
         keep_columns = set(self.config_inst.x.keep_columns[self.task_family])

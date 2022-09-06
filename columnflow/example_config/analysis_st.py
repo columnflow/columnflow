@@ -28,6 +28,12 @@ analysis_st = Analysis(
 analysis_st.set_aux("versions", {
 })
 
+# sandboxes that might be required by remote tasks
+# (used in PrepareJobSandboxes)
+analysis_st.set_aux("job_sandboxes", [
+    "bash::$CF_BASE/sandboxes/venv_columnar.sh",
+])
+
 # cmssw sandboxes that should be bundled for remote jobs in case they are needed
 analysis_st.set_aux("cmssw_sandboxes", [
     # "cmssw_default.sh",

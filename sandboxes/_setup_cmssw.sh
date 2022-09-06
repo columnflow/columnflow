@@ -86,8 +86,8 @@ setup_cmssw() {
     [ -z "${GFAL_PLUGIN_DIR_ORIG}" ] && export GFAL_PLUGIN_DIR_ORIG="${GFAL_PLUGIN_DIR}"
     local install_base="${CF_CMSSW_BASE}/${CF_CMSSW_ENV_NAME}"
     local install_path="${install_base}/${CF_CMSSW_VERSION}"
-    local flag_file="${install_path}/cf_flag"
     local pending_flag_file="${CF_CMSSW_BASE}/pending_${CF_CMSSW_ENV_NAME}_${CF_CMSSW_VERSION}"
+    export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
     # ensure CF_CMSSW_BASE exists
     mkdir -p "${CF_CMSSW_BASE}"
@@ -128,7 +128,7 @@ setup_cmssw() {
             ) || return "$?"
 
             # write the flag into a file
-            echo "version ${CF_CMSSW_FLAG}" > "${flag_file}"
+            echo "version ${CF_CMSSW_FLAG}" > "${CF_SANDBOX_FLAG_FILE}"
         fi
     else
         # in local environments, install from scratch
@@ -183,7 +183,7 @@ setup_cmssw() {
                 )
 
                 # write the flag into a file
-                echo "version ${CF_CMSSW_FLAG}" > "${flag_file}"
+                echo "version ${CF_CMSSW_FLAG}" > "${CF_SANDBOX_FLAG_FILE}"
                 rm -f "${pending_flag_file}"
             ) || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
         fi
@@ -196,7 +196,7 @@ setup_cmssw() {
     fi
 
     # check the flag and show a warning when there was an update
-    if [ "$( cat "${flag_file}" | grep -Po "version \K\d+.*" )" != "${CF_CMSSW_FLAG}" ]; then
+    if [ "$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )" != "${CF_CMSSW_FLAG}" ]; then
         >&2 echo ""
         >&2 echo "WARNING: the CMSSW software environment ${CF_CMSSW_ENV_NAME} seems to be outdated"
         >&2 echo "WARNING: please consider removing (mode 'clear') or updating it (mode 'reinstall')"

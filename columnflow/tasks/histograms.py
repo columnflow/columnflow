@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin,
+    ShiftSourcesMixin, ChunkedReaderMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -28,6 +28,7 @@ class CreateHistograms(
     SelectorStepsMixin,
     CalibratorsMixin,
     VariablesMixin,
+    ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -88,9 +89,7 @@ class CreateHistograms(
         import hist
         import numpy as np
         import awkward as ak
-        from columnflow.columnar_util import (
-            Route, ChunkedReader, update_ak_array, add_ak_aliases, has_ak_column,
-        )
+        from columnflow.columnar_util import Route, update_ak_array, add_ak_aliases, has_ak_column
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -111,67 +110,65 @@ class CreateHistograms(
             files.extend([inp.path for inp in inputs["producers"]])
         if self.ml_models:
             files.extend([inp.path for inp in inputs["ml"]])
-        with ChunkedReader(
+        for (events, *columns), pos in self.iter_chunked_reader(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested
             # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
-        ) as reader:
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
-            for (events, *columns), pos in self.iter_progress(reader, reader.n_chunks, msg=msg):
-                # add additional columns
-                events = update_ak_array(events, *columns)
+        ):
+            # add additional columns
+            events = update_ak_array(events, *columns)
 
-                # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
-                # build the full event weight
-                weight = ak.Array(np.ones(len(events)))
-                if self.dataset_inst.is_mc:
-                    for column in self.config_inst.x.event_weights:
+            # build the full event weight
+            weight = ak.Array(np.ones(len(events)))
+            if self.dataset_inst.is_mc:
+                for column in self.config_inst.x.event_weights:
+                    weight = weight * events[Route(column).fields]
+                for column in self.dataset_inst.x("event_weights", []):
+                    if has_ak_column(events, column):
                         weight = weight * events[Route(column).fields]
-                    for column in self.dataset_inst.x("event_weights", []):
-                        if has_ak_column(events, column):
-                            weight = weight * events[Route(column).fields]
-                        else:
-                            self.logger.warning_once(
-                                "missing_dataset_weight",
-                                f"weight '{column}' for dataset {self.dataset_inst.name} not found",
-                            )
-
-                # define and fill histograms
-                for var_name in self.variables:
-                    variable_inst = self.config_inst.get_variable(var_name)
-
-                    # get the expression and when it's a string, parse it to extract index lookups
-                    expr = variable_inst.expression
-                    if isinstance(expr, str):
-                        route = Route(expr)
-                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
-
-                    if var_name not in histograms:
-                        histograms[var_name] = (
-                            hist.Hist.new
-                            .IntCat([], name="category", growth=True)
-                            .IntCat([], name="process", growth=True)
-                            .IntCat([], name="shift", growth=True)
-                            .Var(
-                                variable_inst.bin_edges,
-                                name=var_name,
-                                label=variable_inst.get_full_x_title(),
-                            )
-                            .Weight()
+                    else:
+                        self.logger.warning_once(
+                            "missing_dataset_weight",
+                            f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                         )
-                    # broadcast arrays so that each event can be filled for all its categories
-                    fill_kwargs = {
-                        var_name: expr(events),
-                        "category": events.category_ids,
-                        "process": events.process_id,
-                        "shift": self.shift_inst.id,
-                        "weight": weight,
-                    }
-                    arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                    histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
+
+            # define and fill histograms
+            for var_name in self.variables:
+                variable_inst = self.config_inst.get_variable(var_name)
+
+                # get the expression and when it's a string, parse it to extract index lookups
+                expr = variable_inst.expression
+                if isinstance(expr, str):
+                    route = Route(expr)
+                    expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+
+                if var_name not in histograms:
+                    histograms[var_name] = (
+                        hist.Hist.new
+                        .IntCat([], name="category", growth=True)
+                        .IntCat([], name="process", growth=True)
+                        .IntCat([], name="shift", growth=True)
+                        .Var(
+                            variable_inst.bin_edges,
+                            name=var_name,
+                            label=variable_inst.get_full_x_title(),
+                        )
+                        .Weight()
+                    )
+                # broadcast arrays so that each event can be filled for all its categories
+                fill_kwargs = {
+                    var_name: expr(events),
+                    "category": events.category_ids,
+                    "process": events.process_id,
+                    "shift": self.shift_inst.id,
+                    "weight": weight,
+                }
+                arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")

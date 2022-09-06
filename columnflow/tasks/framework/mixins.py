@@ -71,6 +71,11 @@ class CalibratorMixin(ConfigTask):
                 self.calibrator,
                 self.get_calibrator_kwargs(self),
             )
+
+            # overwrite the sandbox when set
+            if self._calibrator_inst.sandbox:
+                self.sandbox = self._calibrator_inst.sandbox
+
         return self._calibrator_inst
 
     def store_parts(self):
@@ -201,6 +206,11 @@ class SelectorMixin(ConfigTask):
                 self.selector,
                 self.get_selector_kwargs(self),
             )
+
+            # overwrite the sandbox when set
+            if self._selector_inst.sandbox:
+                self.sandbox = self._selector_inst.sandbox
+
         return self._selector_inst
 
     def store_parts(self):
@@ -301,6 +311,11 @@ class ProducerMixin(ConfigTask):
                 self.producer,
                 self.get_producer_kwargs(self),
             )
+
+            # overwrite the sandbox when set
+            if self._producer_inst.sandbox:
+                self.sandbox = self._producer_inst.sandbox
+
         return self._producer_inst
 
     def store_parts(self):
@@ -893,3 +908,24 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
 
 
 PlotMixin.view_output_plots = view_output_plots
+
+
+class ChunkedReaderMixin(AnalysisTask):
+
+    def iter_chunked_reader(self, *args, **kwargs):
+        from columnflow.columnar_util import ChunkedReader
+
+        # get the chunked reader from first arg or create a new one with all args
+        if len(args) == 1 and isinstance(args[0], ChunkedReader):
+            reader = args[0]
+        else:
+            reader = ChunkedReader(*args, **kwargs)
+
+        # iterate in the reader context
+        with reader:
+            self.chunked_reader = reader
+            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
+            try:
+                yield from self.iter_progress(reader, reader.n_chunks, msg=msg)
+            finally:
+                self.chunked_reader = None

@@ -97,9 +97,9 @@ setup_venv() {
     #
 
     local install_path="${CF_VENV_BASE}/${CF_VENV_NAME}"
-    local flag_file="${install_path}/cf_flag"
-    local pending_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
+    local pending_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}"
+    export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
     # the venv version must be set
     if [ -z "${venv_version}" ]; then
@@ -117,7 +117,7 @@ setup_venv() {
     fi
 
     # complain in remote jobs when the env is not installed
-    if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -f "${flag_file}" ]; then
+    if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
         >&2 echo "the venv ${CF_VENV_NAME} is not installed but should be provided externally for remote jobs"
         return "7"
     fi
@@ -126,7 +126,7 @@ setup_venv() {
     # conditions from multiple processes, guard the setup with the pending_flag_file and sleep for a
     # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
     # starting processes getting here at the same time
-    if [ ! -f "${flag_file}" ]; then
+    if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
         local sleep_counter="0"
         sleep "$( python3 -c 'import random;print(random.random() * 10)')"
         # when the file is older than 30 minutes, consider it a dangling leftover from a
@@ -152,7 +152,7 @@ setup_venv() {
     local ret="0"
 
     # install or fetch when not existing
-    if [ ! -f "${flag_file}" ]; then
+    if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
         touch "${pending_flag_file}"
         echo "installing venv at ${install_path}"
 
@@ -183,14 +183,14 @@ setup_venv() {
         cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "14" )
 
         # write the version and a timestamp into the flag file
-        echo "version ${venv_version}" > "${flag_file}"
-        echo "timestamp $( date "+%s" )" >> "${flag_file}"
+        echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
+        echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
         rm -f "${pending_flag_file}"
     else
         # get the current version
-        local curr_version="$( cat "${flag_file}" | grep -Po "version \K\d+.*" )"
+        local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
         if [ -z "${curr_version}" ]; then
-            >&2 echo "the flag file ${flag_file} does not contain a valid version"
+            >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
             return "20"
         fi
 

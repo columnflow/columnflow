@@ -148,7 +148,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         self._file_names = None
 
         # cached dict for lazy access to files in fetched bundle
-        self._files_dir = None
+        self.files_dir = None
         self._files = None
 
     @classmethod
@@ -193,12 +193,12 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
                 )
             if isinstance(output, law.FileCollection):
                 output = output.random_target()
-            self._files_dir = law.LocalDirectoryTarget(is_tmp=True)
-            output.load(self._files_dir, formatter="tar")
+            self.files_dir = law.LocalDirectoryTarget(is_tmp=True)
+            output.load(self.files_dir, formatter="tar")
 
             # resolve basenames in the bundle directory and map to file targets
             def resolve_basename(unique_basename):
-                return self._files_dir.child(unique_basename, type="f")
+                return self.files_dir.child(unique_basename, type="f")
 
             self._files = law.util.map_struct(resolve_basename, self.file_names)
 
