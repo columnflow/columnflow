@@ -223,7 +223,7 @@ def plot_variable_per_process(
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
     shape_norm: Optional[bool] = False,
-    y_scale: Optional[str] = "",
+    yscale: Optional[str] = "",
     scale_process: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
@@ -232,12 +232,10 @@ def plot_variable_per_process(
     process_lines = kwargs.get("process_lines", ())
     data_hists, mc_hists, mc_colors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels = [], [], []
-    print(scale_process)
+
     for process_inst, h in hists.items():
         if scale_process and process_inst.name in scale_process.keys():
-            print("test", h.values())
             h = h * float(scale_process[process_inst.name])
-            print(h.values())
             process_inst.label = process_inst.label + " x" + scale_process[process_inst.name]
         if process_inst.is_data:
             data_hists.append(h)
@@ -298,15 +296,15 @@ def plot_variable_per_process(
         }
 
     # setup style config
-    if not y_scale:
-        y_scale = "log" if variable_inst.log_y else "linear"
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
-            "yscale": y_scale,
+            "yscale": yscale,
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
@@ -330,7 +328,7 @@ def plot_variable_variants(
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
-    y_scale: str = "",
+    yscale: str = "",
     **kwargs,
 ) -> plt.Figure:
     plot_config = OrderedDict()
@@ -346,15 +344,15 @@ def plot_variable_variants(
         }
 
     # setup style config
-    if not y_scale:
-        y_scale = "log" if variable_inst.log_y else "linear"
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
-            "yscale": y_scale,
+            "yscale": yscale,
         },
         "rax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
@@ -381,7 +379,7 @@ def plot_shifted_variable(
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
-    y_scale: str = "",
+    yscale: str = "",
     **kwargs,
 ) -> plt.Figure:
 
@@ -411,14 +409,14 @@ def plot_shifted_variable(
     }
 
     # setup style config
-    if not y_scale:
-        y_scale = "log" if variable_inst.log_y else "linear"
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylabel": variable_inst.get_full_y_title(),
-            "yscale": y_scale,
+            "yscale": yscale,
         },
         "rax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
@@ -457,7 +455,7 @@ def plot_cutflow(
         h_mc_stack = hist.Stack(*mc_hists)
 
     # get configs from kwargs
-    y_scale = kwargs.get("y_scale") or "linear"
+    yscale = kwargs.get("yscale") or "linear"
 
     # setup plotting configs
     plot_config = {

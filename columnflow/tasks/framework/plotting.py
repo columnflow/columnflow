@@ -45,7 +45,7 @@ class PlotBase1D(PlotBase):
         description="when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel; "
         "default: False",
     )
-    y_scale = luigi.ChoiceParameter(
+    yscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
         significant=False,
@@ -64,7 +64,7 @@ class PlotBase1D(PlotBase):
         params = super().get_plot_parameters()
 
         params["skip_ratio"] = self.skip_ratio
-        params["y_scale"] = None if self.y_scale == law.NO_STR else self.y_scale
+        params["yscale"] = None if self.yscale == law.NO_STR else self.yscale
         params["shape_norm"] = self.shape_norm
 
         return params
