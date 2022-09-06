@@ -224,30 +224,40 @@ def plot_variable_per_process(
     style_config: Optional[dict] = None,
     shape_norm: Optional[bool] = False,
     yscale: Optional[str] = "",
-    scale_process: Optional[dict] = None,
+    process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
 
+    # process_settings
+    if not process_settings:
+        process_settings = {}
+
     # separate histograms into stack, lines and data hists
-    process_lines = kwargs.get("process_lines", ())
     data_hists, mc_hists, mc_colors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels = [], [], []
 
     for process_inst, h in hists.items():
-        if scale_process and process_inst.name in scale_process.keys():
-            h = h * float(scale_process[process_inst.name])
-            process_inst.label = process_inst.label + " x" + scale_process[process_inst.name]
+        # get settings for this process
+        settings = process_settings.get(process_inst.name, {})
+        print(settings)
+        color = settings.get("color", process_inst.color)
+        label = settings.get("label", process_inst.label)
+
+        if "scale" in settings.keys():
+            h = h * settings["scale"]
+            label = f"{label} x{settings['scale']}"
+
         if process_inst.is_data:
             data_hists.append(h)
         elif process_inst.is_mc:
-            if process_inst.name in process_lines:
+            if "unstack" in settings:
                 line_hists.append(h)
-                line_colors.append(process_inst.color)
-                line_labels.append(process_inst.label)
+                line_colors.append(color)
+                line_labels.append(label)
             else:
                 mc_hists.append(h)
-                mc_colors.append(process_inst.color)
-                mc_labels.append(process_inst.label)
+                mc_colors.append(color)
+                mc_labels.append(label)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:

@@ -8,6 +8,7 @@ import law
 import luigi
 
 from columnflow.tasks.framework.mixins import PlotMixin, CategoriesMixin, DatasetsProcessesMixin
+from columnflow.util import test_float
 
 
 class PlotBase(PlotMixin):
@@ -15,6 +16,11 @@ class PlotBase(PlotMixin):
     Base class for all plotting tasks.
     """
 
+    plot_suffix = luigi.Parameter(
+        default=law.NO_STR,
+        significant=True,
+        description="adds a suffix to the output file name of a plot",
+    )
     skip_legend = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -79,28 +85,34 @@ class ProcessPlotBase(
     Base class for tasks creating plots where contributions of different processes are shown.
     """
 
-    process_lines = law.CSVParameter(
+    # TODO: allow default_process_settings in config
+    process_settings = law.MultiCSVParameter(
         default=(),
         significant=False,
-        description="comma-separated process names or patterns to plot as individual lines; "
-        "can also be the key of a mapping defined in the 'process_groups' auxiliary data of "
-        "the config; uses no process when empty; empty default",
-    )
-
-    scale_process = law.CSVParameter(
-        default=(),
-        significant=False,
-        description="comma-seperated process names and values with which to scale the process, "
-        "e.g. ('signal:100'); empty default",
+        description="e.g. (signal,scale=10,unstack=True:tt,scale=1,label=top antitop); "
+        "implemented settings: scale,unstack,label,color; empty default", # TODO make good description
+        brace_expand=True,
     )
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
-        params["process_lines"] = self.process_lines
-        params["scale_process"] = {i[0]: i[1] for i in [s.split(":") for s in self.scale_process]}
+        def parse_setting(setting: str):
+            pair = setting.split("=", 1)
+            key, value = pair if len(pair) == 2 else (pair[0], "True")
+            if test_float(value):
+                value = float(value)
+            elif value.lower() == "true":
+                value = True
+            elif value.lower() == "false":
+                value = False
+            return (key, value)
 
+        params["process_settings"] = {
+            proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
+            for proc_settings in self.process_settings
+        }
         return params
 
     def store_parts(self):
