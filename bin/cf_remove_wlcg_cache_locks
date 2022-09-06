@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+cf_remove_wlcg_cache_locks() {
+    # Removes all *.lock files in the cache directories of all WLCG file systems, located in
+    # $CF_WLCG_CACHE_ROOT.
+    #
+    #
+    # Required environment variables:
+    #   CF_WLCG_CACHE_ROOT:
+    #       The base path where all cache WLCG cache directories are stored.
+
+    # check environment variables
+    if [ -z "${CF_WLCG_CACHE_ROOT}" ]; then
+        2>&1 echo "environment variable CF_WLCG_CACHE_ROOT must not be empty"
+        return "1"
+    fi
+
+    local n_locks="$( ls -a1 "${CF_WLCG_CACHE_ROOT}"/* | grep ".lock" | wc -l )"
+    if [ "${n_locks}" = "0" ]; then
+        echo "no lock files to remove"
+    else
+        echo "removing ${n_locks} lock file(s)"
+        rm -rf "${CF_WLCG_CACHE_ROOT}"/*/*.lock
+        echo "done"
+    fi
+}
+
+cf_remove_wlcg_cache_locks "$@"
