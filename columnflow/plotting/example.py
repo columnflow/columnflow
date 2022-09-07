@@ -239,7 +239,6 @@ def plot_variable_per_process(
     for process_inst, h in hists.items():
         # get settings for this process
         settings = process_settings.get(process_inst.name, {})
-        print(settings)
         color = settings.get("color", process_inst.color)
         label = settings.get("label", process_inst.label)
 

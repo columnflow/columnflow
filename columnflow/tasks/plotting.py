@@ -71,7 +71,8 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        suffix = f"_{self.plot_suffix}" if self.plot_suffix else ""
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
     @PlotMixin.view_output_plots

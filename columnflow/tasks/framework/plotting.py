@@ -15,11 +15,11 @@ class PlotBase(PlotMixin):
     """
     Base class for all plotting tasks.
     """
-
+    # TODO implement in task
     plot_suffix = luigi.Parameter(
-        default=law.NO_STR,
+        default="",
         significant=True,
-        description="adds a suffix to the output file name of a plot",
+        description="adds a suffix to the output file name of a plot; empty default",
     )
     skip_legend = luigi.BoolParameter(
         default=False,
@@ -85,12 +85,13 @@ class ProcessPlotBase(
     Base class for tasks creating plots where contributions of different processes are shown.
     """
 
-    # TODO: allow default_process_settings in config
     process_settings = law.MultiCSVParameter(
         default=(),
         significant=False,
-        description="e.g. (signal,scale=10,unstack=True:tt,scale=1,label=top antitop); "
-        "implemented settings: scale,unstack,label,color; empty default", # TODO make good description
+        description="parameter for changing different process settings; Format: "
+        "'process1,option1=value1,option3=value3:process2,option2=value2'; options implemented: "
+        "scale, unstack, label; can also be the key of a mapping defined in 'process_settings_groups; "
+        "default: value of the 'default_process_settings' if defined, else empty default",
         brace_expand=True,
     )
 
@@ -113,6 +114,27 @@ class ProcessPlotBase(
             proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
             for proc_settings in self.process_settings
         }
+        return params
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve process_settings
+        if "process_settings" in params:
+            # when empty and default process_settings are defined, use them instead
+            if not params["process_settings"] and config_inst.x("default_process_settings", ()):
+                params["process_settings"] = tuple(config_inst.x("default_process_settings", ()))
+
+            # when process_settings are a key to a process_settings_groups, use this instead
+            groups = config_inst.x("process_settings_groups", {})
+            if params["process_settings"] and params["process_settings"][0][0] in groups.keys():
+                params["process_settings"] = groups[params["process_settings"][0][0]]
+
         return params
 
     def store_parts(self):
