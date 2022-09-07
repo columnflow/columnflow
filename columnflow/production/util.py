@@ -83,6 +83,9 @@ def attach_coffea_behavior(
         }
 
     for name, info in _collections.items():
+        if not info:
+            continue
+
         # get the collection to update
         if name not in events.fields:
             continue
