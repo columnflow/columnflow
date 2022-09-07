@@ -1,8 +1,10 @@
 # coding: utf-8
 
 """
-General producers that might be utilized in various places
+General producers that might be utilized in various places.
 """
+
+from typing import Optional, Union, Sequence
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
@@ -11,31 +13,90 @@ from columnflow.columnar_util import set_ak_column, attach_behavior
 ak = maybe_import("awkward")
 
 
+#: Information on behavior of certain collections to (re-)attach it via attach_coffea_behavior.
+default_collections = {
+    "Jet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "FatJet": {
+        "type_name": "FatJet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "SubJet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Muon": {
+        "type_name": "Muon",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Electron": {
+        "type_name": "Electron",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Tau": {
+        "type_name": "Tau",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "MET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+}
+
+
 @producer
-def attach_coffea_behavior(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def attach_coffea_behavior(
+    self: Producer,
+    events: ak.Array,
+    collections: Optional[Union[dict, Sequence]] = None,
+    **kwargs,
+) -> ak.Array:
     """
     Rebuild certain collections with original coffea behavior in case some of them might have been
-    invalidated in a potential previous step.
+    invalidated in a potential previous step. All information on source collection names, type
+    names, attributes to check whether the correct behavior is already attached, and fields to
+    potentially skip is taken from :py:obj:`default_collections`.
+
+    However, this information is updated by *collections* when it is a dict. In case it is a list,
+    its items are interpreted as names of collections defined as keys in
+    :py:obj:`default_collections` for which the behavior should be attached.
     """
-    if "Jet" in events.fields and getattr(events.Jet, "metric_table", None) is None:
-        events = set_ak_column(events, "Jet", attach_behavior(events.Jet, "Jet", skip_fields="*Idx*G"))
+    # update or reduce collection info
+    _collections = default_collections
+    if isinstance(collections, dict):
+        _collections = _collections.copy()
+        _collections.update(collections)
+    elif isinstance(collections, (list, tuple)):
+        _collections = {
+            name: info
+            for name, info in _collections.items()
+            if name in collections
+        }
 
-    if "FatJet" in events.fields and getattr(events.FatJet, "metric_table", None) is None:
-        events = set_ak_column(events, "FatJet", attach_behavior(events.FatJet, "FatJet", skip_fields="*Idx*G"))
+    for name, info in _collections.items():
+        # get the collection to update
+        if name not in events.fields:
+            continue
+        coll = events[name]
 
-    if "SubJet" in events.fields and getattr(events.SubJet, "metric_table", None) is None:
-        events = set_ak_column(events, "SubJet", attach_behavior(events.SubJet, "Jet", skip_fields="*Idx*G"))
+        # when a check_attr is defined, do nothing in case it already exists
+        if info.get("check_attr") and getattr(coll, info["check_attr"], None) is not None:
+            continue
 
-    if "Muon" in events.fields and getattr(events.Muon, "metric_table", None) is None:
-        events = set_ak_column(events, "Muon", attach_behavior(events.Muon, "Muon", skip_fields="*Idx*G"))
+        # default infos
+        type_name = info.get("type_name") or name
+        skip_fields = info.get("skip_fields")
 
-    if "Electron" in events.fields and getattr(events.Electron, "metric_table", None) is None:
-        events = set_ak_column(events, "Electron", attach_behavior(events.Electron, "Electron", skip_fields="*Idx*G"))
-
-    if "Tau" in events.fields and getattr(events.Tau, "metric_table", None) is None:
-        events = set_ak_column(events, "Tau", attach_behavior(events.Tau, "Tau", skip_fields="*Idx*G"))
-
-    if "MET" in events.fields and getattr(events.MET, "metric_table", None) is None:
-        events = set_ak_column(events, "MET", attach_behavior(events.MET, "MissingET", skip_fields="*Idx*G"))
+        # apply the behavior
+        events = set_ak_column(events, name, attach_behavior(coll, type_name, skip_fields=skip_fields))
 
     return events
