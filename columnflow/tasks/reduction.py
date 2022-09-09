@@ -120,11 +120,6 @@ class ReduceEvents(
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
         ):
-            # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
-            # would result in the coffea behavior being partially lost after new columns are
-            # added, which - for some reason - does not happen on copies
-            events = ak.copy(events)
-
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
 

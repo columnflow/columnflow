@@ -132,11 +132,6 @@ class SelectEvents(
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ):
-            # shallow-copy the events chunk first due to some coffea/awkward peculiarity which
-            # would result in the coffea behavior being partially lost after new columns are
-            # added, which - for some reason - does not happen on copies
-            events = ak.copy(events)
-
             # apply the calibrated diffs
             events = update_ak_array(events, *diffs)
 
