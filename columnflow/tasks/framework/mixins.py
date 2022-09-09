@@ -4,6 +4,7 @@
 Lightweight mixins task classes.
 """
 
+import time
 import importlib
 from typing import Union, Sequence, List, Set, Dict, Any, Callable
 
@@ -926,6 +927,22 @@ class ChunkedReaderMixin(AnalysisTask):
             self.chunked_reader = reader
             msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
             try:
-                yield from self.iter_progress(reader, reader.n_chunks, msg=msg)
+                # measure runtimes without IO
+                loop_durations = []
+                for obj in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                    t1 = time.perf_counter()
+
+                    # yield the object provided by the chunked reader
+                    yield obj
+
+                    # save the runtime
+                    loop_durations.append(time.perf_counter() - t1)
+
+                # print runtimes
+                self.publish_message(
+                    "event processing in loop body took "
+                    f"{law.util.human_duration(seconds=sum(loop_durations))}",
+                )
+
             finally:
                 self.chunked_reader = None

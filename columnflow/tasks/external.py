@@ -8,6 +8,7 @@ __all__ = []
 
 
 import os
+import time
 import shutil
 import subprocess
 from typing import Union, Tuple, List, Sequence, Optional
@@ -69,10 +70,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         task: Union[AnalysisTask, DatasetTask],
         remote_fs: Optional[Union[str, List[str], Tuple[str]]] = None,
         lfn_indices: Optional[List[int]] = None,
+        eager_lookup: Union[bool, int] = 1,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
-        *lfn_indices*  given the lfns obtained by *this* task which needs to be complete for this
+        *lfn_indices* given the lfns obtained by *this* task which needs to be complete for this
         function to succeed.
 
         When *lfn_indices* are not given, *task* must be a branch of :py:class:`DatasetTask`
@@ -80,7 +82,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
         Iterating yields a 2-tuple (file index, input file) where the latter is a
         :py:class:`law.wlcg.WLCGFileTarget` with its fs set to *remote_fs*. When a sequence is
-        passed, the fs names are evaluated in that order and the first existing one is used.
+        passed, the fs names are evaluated in that order and the first existing one is generally
+        used. However, if *eager_lookup* is *True*, in case the stat request to a fs was successful
+        but took longer than two seconds, the next fs is eagerly checked and used in case it
+        responded with less delay. In case *eager_lookup* is an integer, this check is only
+        performed after the *eager_lookup*th fs.
         """
         # input checks
         if not lfn_indices:
@@ -106,11 +112,36 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             lfn = str(lfns[lfn_index])
 
             # get the input file
-            for fs in remote_fs:
+            i = 0
+            last_working = None
+            while i < len(remote_fs):
+                # measure the time required to perform the stat query
+                fs = remote_fs[i]
                 input_file = law.wlcg.WLCGFileTarget(lfn, fs=fs)
+                t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
+                duration = time.perf_counter() - t1
+                i += 1
+
+                # when the stat query took longer than 2 seconds, eagerly try the next fs
+                # and check if it responds faster and if so, take it instead
+                if (
+                    isinstance(eager_lookup, int) and
+                    not isinstance(eager_lookup, bool) and
+                    i > eager_lookup
+                ) or eager_lookup:
+                    if input_stat and duration > 1 and not last_working and i < len(remote_fs):
+                        last_working = fs, input_file, input_stat, duration
+                        continue
+                    if last_working and (not input_stat or last_working[3] < duration):
+                        fs, input_file, input_stat, duration = last_working
+
+                # stop when the stat was successful at this point
                 if input_stat:
-                    task.publish_message(f"using fs {fs}")
+                    task.publish_message(
+                        f"using fs {fs}, stat responded in "
+                        f"{law.util.human_duration(seconds=duration)}",
+                    )
                     break
             else:
                 raise Exception(f"LFN {lfn} not found at any remote fs {remote_fs}")
