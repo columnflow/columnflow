@@ -582,7 +582,16 @@ def set_ak_column(
     route = Route(route)
 
     # force creating a view for consistent behavior
-    ak_array = ak_array[ak_array.fields]
+    orig_fields = ak_array.fields
+    ak_array = ak_array[orig_fields]
+
+    # when there is only one field, and route refers to that field, ak_array will be empty
+    # after the removal in the next step and all shape information might get lost,
+    # so in this case add value first as a dummy column and remove it afterwards
+    match_only_existing = len(orig_fields) == 1 and len(route) == 1 and orig_fields[0] == route[0]
+    if match_only_existing:
+        tmp_field = f"tmp_field_{id(object())}"
+        ak_array[tmp_field] = value
 
     # try to remove the route first so that existing columns are not overwritten but re-inserted
     ak_array = remove_ak_column(ak_array, route, silent=True)
@@ -590,6 +599,11 @@ def set_ak_column(
     # trivial case
     if len(route) == 1:
         ak_array[route.fields] = value
+
+        # remove the tmp field if existing
+        if match_only_existing:
+            ak_array = remove_ak_column(ak_array, tmp_field, silent=True)
+
         return ak_array
 
     # identify the existing part of the subroute
