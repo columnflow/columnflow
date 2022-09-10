@@ -420,7 +420,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         f"naf; default: '{_default_slurm_flavor}'",
     )
 
-    exclude_params_branch = {"max_runtime"}
+    exclude_params_branch = {"max_runtime", "slurm_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
     slurm_forward_env_variables = {

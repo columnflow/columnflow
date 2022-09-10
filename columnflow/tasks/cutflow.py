@@ -22,9 +22,9 @@ from columnflow.util import dev_sandbox, DotDict
 
 class CreateCutflowHistograms(
     DatasetTask,
+    VariablesMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
     ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -319,9 +319,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 class PlotCutflowVariables(
     ShiftTask,
+    VariablesMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,

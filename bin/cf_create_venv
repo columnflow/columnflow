@@ -4,16 +4,13 @@ cf_create_venv() {
     # Creates a new virtual environment inside $CF_VENV_BASE, exchanges all absolute paths in the
     # activation script with relative ones, and makes the environment relocatable.
     #
-    #
     # Arguments:
     #   1. name
     #       The name of the virtual env inside $CF_VENV_BASE.
     #
-    #
     # Required environment variables:
     #   CF_VENV_BASE:
     #       The base path where CF virtual environments are stored.
-    #
     #
     # Optional environments variables:
     #   CF_CI_JOB

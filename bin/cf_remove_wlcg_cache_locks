@@ -4,7 +4,6 @@ cf_remove_wlcg_cache_locks() {
     # Removes all *.lock files in the cache directories of all WLCG file systems, located in
     # $CF_WLCG_CACHE_ROOT.
     #
-    #
     # Required environment variables:
     #   CF_WLCG_CACHE_ROOT:
     #       The base path where all cache WLCG cache directories are stored.

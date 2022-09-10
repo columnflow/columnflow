@@ -36,11 +36,11 @@ class ProcessPlotBase(
 
 class PlotVariables(
     ShiftTask,
+    VariablesMixin,
+    CalibratorsMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
-    CalibratorsMixin,
-    VariablesMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -172,13 +172,13 @@ class PlotVariables(
 
 
 class PlotShiftedVariables(
+    VariablesMixin,
+    ShiftSourcesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
     ProcessPlotBase,
-    ShiftSourcesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

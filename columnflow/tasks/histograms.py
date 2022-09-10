@@ -23,11 +23,11 @@ from columnflow.util import dev_sandbox
 
 class CreateHistograms(
     MergeReducedEventsUser,
+    VariablesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
     ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -183,11 +183,11 @@ CreateHistogramsWrapper = wrapper_factory(
 
 class MergeHistograms(
     DatasetTask,
+    VariablesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -283,12 +283,12 @@ MergeHistogramsWrapper = wrapper_factory(
 
 class MergeShiftedHistograms(
     DatasetTask,
+    VariablesMixin,
+    ShiftSourcesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    VariablesMixin,
-    ShiftSourcesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

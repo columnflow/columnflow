@@ -5,12 +5,10 @@ setup_columnflow() {
     # "CF_", the installation of the software stack via virtual environments, and optionally an
     # interactive setup where the user can configure certain variables.
     #
-    #
     # Arguments:
     #   1. The name of the setup. "default" (which is itself the default when no name is set)
     #      triggers a setup with good defaults, avoiding all queries to the user and the writing of
     #      a custom setup file. See "interactive_setup()" for more info.
-    #
     #
     # Optionally preconfigured environment variables:
     #   CF_REINSTALL_SOFTWARE
@@ -24,7 +22,6 @@ setup_columnflow() {
     #       A custom globus user proxy location.
     #   LANGUAGE, LANG, LC_ALL
     #       Custom language flags.
-    #
     #
     # Variables defined by the setup and potentially required throughout columnflow:
     #   CF_SETUP_NAME
@@ -234,7 +231,6 @@ cf_setup_interactive() {
     # beforehand a function called "cf_setup_interactive_body". This function can make use of the
     # internal functions "export_and_save" and "query", defined below.
     #
-    #
     # Arguments:
     #   1. The name of the setup. "default" triggers a setup with good defaults, avoiding all
     #      queries to the user and the writing of a custom setup file.
@@ -331,18 +327,15 @@ cf_setup_software_stack() {
     # Sets up the columnflow software stack consisting of updated PATH variables, virtual
     # environments and git submodule initialization / updates.
     #
-    #
     # Arguments:
     #   1. setup_name
     #       The name of the setup.
-    #
     #
     # Required environment variables:
     #   CF_BASE
     #       The columnflow base directory.
     #   CF_VENV_BASE
     #       The base directory were virtual envs are installed.
-    #
     #
     # Optional environments variables:
     #   CF_CI_JOB
@@ -414,7 +407,6 @@ cf_setup_software_stack() {
 
 cf_init_submodule() {
     # Initializes and updates a git submodule.
-    #
     #
     # Arguments:
     #   1. mpath
