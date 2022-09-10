@@ -15,21 +15,23 @@ ak = maybe_import("awkward")
 
 @producer(
     uses={
-        "nJet", "Jet.pt", normalization_weights, pu_weights,
+        normalization_weights, pu_weights,
+        "nJet", "Jet.pt",
     },
     produces={
-        "ht", "n_jet", normalization_weights, pu_weights,
+        normalization_weights, pu_weights,
+        "ht", "n_jet",
     },
     shifts={
         "minbias_xs_up", "minbias_xs_down",
     },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    events = self[normalization_weights](events, **kwargs)
+    events = self[pu_weights](events, **kwargs)
+
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1))
-
-    events = self[pu_weights](events, **kwargs)
-    events = self[normalization_weights](events, **kwargs)
 
     return events
 

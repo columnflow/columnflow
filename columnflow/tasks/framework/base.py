@@ -333,8 +333,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if location == OutputLocation.config:
             location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
             if not location:
-                self.logger.info(
-                    f"no option 'outputs.{self.task_family}' found in law.cfg to obtain target "
+                self.logger.debug(
+                    f"no option 'outputs::{self.task_family}' found in law.cfg to obtain target "
                     "location, falling back to 'local'",
                 )
                 location = ["local"]

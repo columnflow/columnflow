@@ -20,6 +20,9 @@ from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTas
 from columnflow.util import ensure_proxy, wget, safe_div
 
 
+logger = law.logger.get_logger(__name__)
+
+
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
@@ -115,8 +118,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             i = 0
             last_working = None
             while i < len(remote_fs):
-                # measure the time required to perform the stat query
                 fs = remote_fs[i]
+
+                # measure the time required to perform the stat query
+                logger.debug(f"checking fs {fs} for lfn {lfn}")
                 input_file = law.wlcg.WLCGFileTarget(lfn, fs=fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
@@ -125,16 +130,21 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
                 # when the stat query took longer than 2 seconds, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
-                if (
-                    isinstance(eager_lookup, int) and
-                    not isinstance(eager_lookup, bool) and
-                    i > eager_lookup
-                ) or eager_lookup:
-                    if input_stat and duration > 1 and not last_working and i < len(remote_fs):
-                        last_working = fs, input_file, input_stat, duration
-                        continue
-                    if last_working and (not input_stat or last_working[3] < duration):
-                        fs, input_file, input_stat, duration = last_working
+                if eager_lookup:
+                    if (
+                        isinstance(eager_lookup, int) and
+                        not isinstance(eager_lookup, bool) and
+                        i <= eager_lookup
+                    ):
+                        logger.debug(f"eager fs lookup skipped for fs {fs} at index {i}")
+                    else:
+                        if input_stat and duration > 2 and not last_working and i < len(remote_fs):
+                            last_working = fs, input_file, input_stat, duration
+                            logger.debug("duration exceeded 2s, checking next fs for comparison")
+                            continue
+                        if last_working and (not input_stat or last_working[3] < duration):
+                            logger.debug("previously checked fs responded faster")
+                            fs, input_file, input_stat, duration = last_working
 
                 # stop when the stat was successful at this point
                 if input_stat:

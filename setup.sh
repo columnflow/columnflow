@@ -60,6 +60,12 @@ setup_columnflow() {
     #       The name of the user's virtual organization. Queried during the interactive setup.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
+    #   CF_PERSISTENT_PATH
+    #       PATH fragments that should be considered by sandboxes (bash, venv, cmssw) as having
+    #       priority, e.g. to ensure that executable of local packages in used first.
+    #   CF_PERSISTENT_PYTHONPATH
+    #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) as
+    #       having priority, e.g. to ensure that local packages in submodules are imported first.
     #   CF_ORIG_PATH
     #       Copy of the $PATH variable before ammended by the seutp.
     #   CF_ORIG_PYTHONPATH
@@ -358,10 +364,12 @@ cf_setup_software_stack() {
         return "1"
     fi
 
+    # persistent PATH and PYTHONPATH parts that should be
+    # priotized over any additions made in sandboxes
+    export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin"
+    export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
+
     # update paths and flags
-    local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
-    export PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin:${PATH}"
-    export PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order:${PYTHONPATH}"
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
     export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
@@ -396,6 +404,10 @@ cf_setup_software_stack() {
         # source the prod sandbox
         source "${CF_BASE}/sandboxes/cf_prod.sh" ""
     fi
+
+    # prepend persistent path fragments
+    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # initialze submodules
     if [ -d "${CF_BASE}/.git" ]; then
