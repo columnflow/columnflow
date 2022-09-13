@@ -144,8 +144,7 @@ def plot_all(
     else:
         fig, ax = plt.subplots()
 
-    for key in plot_config:
-        cfg = plot_config[key]
+    for key, cfg in plot_config.items():
         if "method" not in cfg:
             raise ValueError("No method given in plot_cfg entry {key}")
         method = cfg["method"]
@@ -458,11 +457,22 @@ def plot_cutflow(
         },
     }
 
+    # update xticklabels based on config
+    xticklabels = []
+    selector_step_labels = config_inst.x("selector_step_labels", {})
+    for xtl in list(mc_hists[0].axes["step"]):
+        xticklabels.append(selector_step_labels.get(xtl, xtl))
+
     default_style_config = {
         "ax_cfg": {
             "ylabel": "Selection efficiency",
             "xlabel": "Selection steps",
+            "xticklabels": xticklabels,
             "yscale": yscale,
+        },
+        "rax_cfg": {
+            "xlabel": "Selection steps",
+            "xticklabels": xticklabels,
         },
         "legend_cfg": {
             "loc": "upper right",

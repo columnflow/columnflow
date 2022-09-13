@@ -303,7 +303,6 @@ class PlotCutflow(
                 hists=hists,
                 config_inst=self.config_inst,
                 **self.get_plot_parameters(),
-
             )
 
             # save the plot
