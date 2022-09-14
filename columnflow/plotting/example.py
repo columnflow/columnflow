@@ -342,13 +342,16 @@ def plot_variable_variants(
 ) -> plt.Figure:
     plot_config = OrderedDict()
 
+    # for updating labels of individual selector steps
+    selector_step_labels = config_inst.x("selector_step_labels", {})
+
     # add hists
     for label, h in hists.items():
         norm = sum(h.values()) if shape_norm else 1
         plot_config[f"hist_{label}"] = {
             "method": "draw_hist",
             "hist": h,
-            "kwargs": {"norm": norm, "label": label},
+            "kwargs": {"norm": norm, "label": selector_step_labels.get(label, label)},
             "ratio_kwargs": {"norm": hists["Initial"].values()},
         }
 
@@ -389,6 +392,7 @@ def plot_shifted_variable(
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
     yscale: str = "",
+    process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
 
@@ -417,6 +421,11 @@ def plot_shifted_variable(
         },
     }
 
+    # process_settings
+    if not process_settings:
+        process_settings = {}
+    process_label = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
+
     # setup style config
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
@@ -434,7 +443,7 @@ def plot_shifted_variable(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {
-            "title": process_inst.label,
+            "title": process_label,
         },
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
@@ -444,35 +453,52 @@ def plot_shifted_variable(
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
-    return plot_all(plot_config, style_config, ratio=True)
+    return plot_all(plot_config, style_config, **kwargs)
 
 
 def plot_cutflow(
     hists: OrderedDict,
     config_inst: od.config,
     style_config: Optional[dict] = None,
+    shape_norm: bool = False,
+    yscale: str = "",
+    process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
+    if not process_settings:
+        process_settings = {}
 
-    mc_hists = [h for process_inst, h in hists.items() if process_inst.is_mc]
-    mc_colors = [process_inst.color for process_inst in hists if process_inst.is_mc]
-    mc_labels = [process_inst.label for process_inst in hists if process_inst.is_mc]
+    mc_hists, mc_colors, mc_labels, data_hists = [], [], [], []
+    for process_inst, h in hists.items():
+        # get settings for this process
+        settings = process_settings.get(process_inst.name, {})
+        color = settings.get("color", process_inst.color)
+        label = settings.get("label", process_inst.label)
+
+        if process_inst.is_mc:
+            mc_hists.append(h)
+            mc_colors.append(color)
+            mc_labels.append(label)
+        else:
+            data_hists.append(h)
 
     # create the stack
-    h_mc_stack = None
+    h_mc_stack, h_data = None, None
     if mc_hists:
         h_mc_stack = hist.Stack(*mc_hists)
-
-    # get configs from kwargs
-    yscale = kwargs.get("yscale") or "linear"
+    if data_hists:
+        h_data = sum(data_hists[1:], data_hists[0].copy())
 
     # setup plotting configs
+    if not yscale:
+        yscale = "linear"
+
     plot_config = {
         "procs": {
             "method": "draw_stack",
             "hist": h_mc_stack,
             "kwargs": {
-                "norm": [h[{"step": "Initial"}].value for h in mc_hists],
+                "norm": [h[{"step": "Initial"}].value for h in mc_hists] if shape_norm else 1,
                 "label": mc_labels,
                 "color": mc_colors,
                 "histtype": "step",
@@ -480,6 +506,15 @@ def plot_cutflow(
             },
         },
     }
+    if data_hists:
+        plot_config["data"] = {
+            "method": "draw_hist",
+            "hist": h_data,
+            "kwargs": {
+                "norm": h_data[{"step": "Initial"}].value if shape_norm else 1,
+                "label": "Data",
+            },
+        }
 
     # update xticklabels based on config
     xticklabels = []
@@ -489,14 +524,10 @@ def plot_cutflow(
 
     default_style_config = {
         "ax_cfg": {
-            "ylabel": "Selection efficiency",
+            "ylabel": "Selection efficiency" if shape_norm else "Selection yields",
             "xlabel": "Selection steps",
             "xticklabels": xticklabels,
             "yscale": yscale,
-        },
-        "rax_cfg": {
-            "xlabel": "Selection steps",
-            "xticklabels": xticklabels,
         },
         "legend_cfg": {
             "loc": "upper right",
@@ -507,4 +538,4 @@ def plot_cutflow(
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
-    return plot_all(plot_config, style_config, ratio=False)
+    return plot_all(plot_config, style_config, **kwargs)

@@ -186,6 +186,15 @@ class PlotCutflow(
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
 
+    def get_plot_parameters(self):
+        params = super().get_plot_parameters()
+
+        # no ratio plot implemented: disable ratio plot for `plot_cutflow`
+        if self.plot_function_name == "columnflow.plotting.example.plot_cutflow":
+            params["skip_ratio"] = True
+
+        return params
+
     def create_branch_map(self):
         # one category per branch
         if not self.categories:
