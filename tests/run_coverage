@@ -23,7 +23,7 @@ action() {
             echo "testing ${mod} in sandbox ${sandbox} ..."
             (
                 cd "${cf_dir}" && \
-                bash -c "source sandboxes/${sandbox} \"\" yes && pytest -s --verbosity=1 --cache-clear --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
+                bash -c "source sandboxes/${sandbox} \"\" yes && pytest --verbosity=1 --cache-clear --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
             )
         fi
     }

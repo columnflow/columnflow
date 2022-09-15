@@ -26,7 +26,6 @@ cf_make_venv_relocateable() {
 
     # use /usr/bin/env in shebang's of bin scripts
     for f in $( find "${CF_VENV_BASE}/${name}/bin" -type f ); do
-        echo "MAKE RELOCATEABLE: $f"
         # must be readable and executable
         if [ -r "${f}" ] && [ -x "${f}" ]; then
             sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
