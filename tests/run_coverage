@@ -20,14 +20,13 @@ action() {
             echo "testing ${mod} ..."
             (
                 cd "${cf_dir}" && \
-                pytest --cov=columnflow --cov-report "xml:coverage_${mod}.xml" "tests/${mod}.py"
+                pytest --cache-clear --verbosity=1 --cov=columnflow --cov-report "xml:coverage_${mod}.xml" "tests/${mod}.py"
             )
         else
             echo "testing ${mod} in sandbox ${sandbox} ..."
             (
                 cd "${cf_dir}" && \
-                bash -c "source sandboxes/${sandbox} \"\" yes"
-                bash -c "source sandboxes/${sandbox} \"\" yes && pytest --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
+                bash -i -l -c "source sandboxes/${sandbox} \"\" yes && pytest --verbosity=1 --cache-clear --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
             )
         fi
     }
