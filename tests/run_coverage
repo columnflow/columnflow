@@ -19,13 +19,14 @@ action() {
         if [ -z "${sandbox}" ]; then
             echo "testing ${mod} ..."
             (
-                cd "$cf_dir" && \
+                cd "${cf_dir}" && \
                 pytest --cov=columnflow --cov-report "xml:coverage_${mod}.xml" "tests/${mod}.py"
             )
         else
             echo "testing ${mod} in sandbox ${sandbox} ..."
             (
-                cd "$cf_dir" && \
+                cd "${cf_dir}" && \
+                bash -c "source sandboxes/${sandbox} \"\" yes"
                 bash -c "source sandboxes/${sandbox} \"\" yes && pytest --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
             )
         fi
@@ -38,7 +39,7 @@ action() {
     # test_util
     run_coverage test_util
     ret="$?"
-    [ "$gret" = "0" ] && gret="${ret}"
+    [ "${gret}" = "0" ] && gret="${ret}"
 
     # test_columnar_util
     echo
