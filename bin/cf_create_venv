@@ -31,10 +31,10 @@ cf_create_venv() {
     fi
 
     # in CI jobs, just create the venv as is and finish
-    if [ "${CF_CI_JOB}" = "1" ]; then
-        python3 -m venv "${CF_VENV_BASE}/${name}"
-        return "$?"
-    fi
+    # if [ "${CF_CI_JOB}" = "1" ]; then
+    #     python3 -m venv "${CF_VENV_BASE}/${name}"
+    #     return "$?"
+    # fi
 
     # create the venv the usual way
     python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"

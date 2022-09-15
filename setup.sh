@@ -404,7 +404,7 @@ cf_setup_software_stack() {
         [ "$?" = "21" ] && show_version_warning "cf_dev"
     else
         # source the prod sandbox
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "yes"
+        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
     fi
 
     # prepend persistent path fragments again for ensure priority for local packages
