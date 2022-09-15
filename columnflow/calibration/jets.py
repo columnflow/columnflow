@@ -141,7 +141,7 @@ def prop_met(
     jet_px2 = jet_pt2 * np.cos(jet_phi2)
     jet_py2 = jet_pt2 * np.sin(jet_phi2)
 
-    # build sums instead per-jet info was passed
+    # build sums instead if per-jet info was passed
     if jet_pt1.ndim > 1:
         jet_px1 = ak.sum(jet_px1, axis=1)
         jet_py1 = ak.sum(jet_py1, axis=1)
@@ -247,8 +247,8 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
             # MET propagation
-            jet_pt_up = events.Jet[f"pt_{name}_up"]
-            jet_pt_down = events.Jet[f"pt_{name}_down"]
+            jet_pt_up = events.Jet[f"pt_jec_{name}_up"]
+            jet_pt_down = events.Jet[f"pt_jec_{name}_down"]
             met_pt_up, met_phi_up = prop_met(jet_pt2, jet_phi2, jet_pt_up, jet_phi2, met_pt2, met_phi2)
             met_pt_down, met_phi_down = prop_met(jet_pt2, jet_phi2, jet_pt_down, jet_phi2, met_pt2, met_phi2)
             events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
