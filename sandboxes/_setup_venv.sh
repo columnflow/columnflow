@@ -25,10 +25,10 @@
 #        - '' (default): The virtual environment is installed when not existing yet and sourced.
 #        - reinstall:    The virtual environment is removed first, then reinstalled and sourced.
 # 2. versioncheck
-#      When empty "yes", perform a version check, print a warning in case of a mismatch and set a
-#      specific exit code (21). When "no", the check is skipped alltogether. When "silent", no
-#      warning is printed but an exit code might be set. When "warn" (the default), a warning might
-#      be printed, but the exit code remains unchanged.
+#      When "yes", perform a version check, print a warning in case of a mismatch and set a specific
+#      exit code (21). When "no", the check is skipped alltogether. When "silent", no warning is
+#      printed but an exit code might be set. When "warn" (the default), a warning might be printed,
+#      but the exit code remains unchanged.
 #
 # Note on remote jobs:
 # When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
