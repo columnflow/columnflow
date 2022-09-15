@@ -8,9 +8,6 @@ action() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local cf_dir="$( dirname "${this_dir}" )"
 
-    # dev flag for sandboxes
-    local dev="$( [ "${CF_DEV}" = "1" ] && echo "_dev" || echo "" )"
-
     # helper to run a coverage test
     run_coverage() {
         local mod="$1"
@@ -26,7 +23,7 @@ action() {
             echo "testing ${mod} in sandbox ${sandbox} ..."
             (
                 cd "${cf_dir}" && \
-                bash -i -l -c "source sandboxes/${sandbox} \"\" yes && pytest --verbosity=1 --cache-clear --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
+                bash -c "source sandboxes/${sandbox} \"\" yes && pytest -s --verbosity=1 --cache-clear --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
             )
         fi
     }
@@ -42,7 +39,7 @@ action() {
 
     # test_columnar_util
     echo
-    run_coverage test_columnar_util "venv_columnar${dev}.sh"
+    run_coverage test_columnar_util "venv_columnar_dev.sh"
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 
