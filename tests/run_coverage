@@ -22,7 +22,7 @@ action() {
         else
             echo "testing ${mod} in sandbox ${sandbox} ..."
             # ( cd "$cf_dir"; bash -c "source sandboxes/${sandbox} \"\" yes && pytest --cov=columnflow --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
-            ( cd "$cf_dir"; bash -c "source sandboxes/${sandbox} \"\" yes && python -c 'import awkward as ak;print(ak.__file__)'" )
+            ( cd "$cf_dir"; bash -c "source sandboxes/${sandbox} \"\" yes && python -c 'from columnflow.util import maybe_import; ak = maybe_import(\"awkward\");print(ak.__file__)'" )
         fi
     }
 
