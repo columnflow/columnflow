@@ -395,15 +395,13 @@ cf_setup_software_stack() {
             >&2 echo ""
         }
 
-        # source the prod and dev sandboxes
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "silent"
-        local ret_prod="$?"
-        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        local ret_dev="$?"
+        # source the prod sandbox
+        bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
+        [ "$?" = "21" ] && show_version_warning "cf_prod"
 
-        # show version warnings
-        [ "${ret_prod}" = "21" ] && show_version_warning "cf_prod"
-        [ "${ret_dev}" = "21" ] && show_version_warning "cf_dev"
+        # source the dev sandbox
+        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
+        [ "$?" = "21" ] && show_version_warning "cf_dev"
     else
         # source the prod sandbox
         source "${CF_BASE}/sandboxes/cf_prod.sh" "" "yes"
