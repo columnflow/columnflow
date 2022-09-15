@@ -16,19 +16,6 @@ from columnflow.columnar_util import (
 
 ak = maybe_import("awkward")
 
-# test
-import os, sys
-print("        global prints")
-print("============================")
-print(os.environ["PYTHONPATH"])
-print("----------------------------")
-print(sys.path)
-print("----------------------------")
-print(ak)
-print(ak.__file__)
-print("============================")
-# test end
-
 
 class TestRoute(unittest.TestCase):
 
@@ -438,135 +425,125 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         self.ak_array = ak.Array([array_content])
         self.empty_ak_array = ak.Array([])
 
-    # def test_get_ak_routes(self):
-    #     self.assertIsInstance(get_ak_routes(self.empty_ak_array), List)
-    #     self.assertEqual(get_ak_routes(self.empty_ak_array), [])
-    #     self.assertEqual(get_ak_routes(self.empty_ak_array, 1), [])
-    #     self.assertEqual(get_ak_routes(self.empty_ak_array, -1), [])
-    #     self.assertIsInstance(get_ak_routes(self.ak_array)[0], Route)
+    def test_get_ak_routes(self):
+        self.assertIsInstance(get_ak_routes(self.empty_ak_array), List)
+        self.assertEqual(get_ak_routes(self.empty_ak_array), [])
+        self.assertEqual(get_ak_routes(self.empty_ak_array, 1), [])
+        self.assertEqual(get_ak_routes(self.empty_ak_array, -1), [])
+        self.assertIsInstance(get_ak_routes(self.ak_array)[0], Route)
 
-    #     # check all routes are in the list with the correct ordering
-    #     self.assertEqual(get_ak_routes(self.ak_array),
-    #                      ["a", "c_1", "b.bb1", "d.d_1", "b.bb2.bbb1", "b.bb2.bbb2.bbbb2",
-    #                       "b.bb2.bbb2.b_bbb1.b_bbbb1", "b.bb2.bbb2.b_bbb1.bbbbb2"])
-    #     # check positive max depth works correctly, even for routes with smaller depth and for routes merging together
-    #     self.assertEqual(get_ak_routes(self.ak_array, 2), ["a", "c_1", "b.bb1", "b.bb2", "d.d_1"])
-    #     # check negative max depth argument, also with some routes getting merged together
-    #     self.assertEqual(get_ak_routes(self.ak_array, -1), ["b", "d", "b.bb2", "b.bb2.bbb2", "b.bb2.bbb2.b_bbb1"])
-    #     # check negative max depth such that some route might have "length of -1"
-    #     self.assertEqual(get_ak_routes(self.ak_array, -2), ["b", "b.bb2", "b.bb2.bbb2"])
+        # check all routes are in the list with the correct ordering
+        self.assertEqual(get_ak_routes(self.ak_array),
+                         ["a", "c_1", "b.bb1", "d.d_1", "b.bb2.bbb1", "b.bb2.bbb2.bbbb2",
+                          "b.bb2.bbb2.b_bbb1.b_bbbb1", "b.bb2.bbb2.b_bbb1.bbbbb2"])
+        # check positive max depth works correctly, even for routes with smaller depth and for routes merging together
+        self.assertEqual(get_ak_routes(self.ak_array, 2), ["a", "c_1", "b.bb1", "b.bb2", "d.d_1"])
+        # check negative max depth argument, also with some routes getting merged together
+        self.assertEqual(get_ak_routes(self.ak_array, -1), ["b", "d", "b.bb2", "b.bb2.bbb2", "b.bb2.bbb2.b_bbb1"])
+        # check negative max depth such that some route might have "length of -1"
+        self.assertEqual(get_ak_routes(self.ak_array, -2), ["b", "b.bb2", "b.bb2.bbb2"])
 
-    # def test_has_ak_column(self):
-    #     self.assertIsInstance(has_ak_column(self.ak_array, "a"), bool)
-    #     self.assertTrue(has_ak_column(self.ak_array, "a"))
-    #     self.assertTrue(has_ak_column(self.ak_array, "b.bb1"))
+    def test_has_ak_column(self):
+        self.assertIsInstance(has_ak_column(self.ak_array, "a"), bool)
+        self.assertTrue(has_ak_column(self.ak_array, "a"))
+        self.assertTrue(has_ak_column(self.ak_array, "b.bb1"))
 
-    #     # test input types
-    #     self.assertTrue(has_ak_column(self.ak_array, Route("b.bb2.bbb2.b_bbb1.b_bbbb1")))
-    #     self.assertTrue(has_ak_column(self.ak_array, ("b", "bb2", "bbb2", "b_bbb1", "b_bbbb1")))
-    #     self.assertTrue(has_ak_column(self.ak_array, ["b", "bb2", "bbb2", "b_bbb1", "b_bbbb1"]))
-    #     self.assertFalse(has_ak_column(self.ak_array, ("b", "bb2", "bbb2", "b_bbb1", "bbbbb1")))
+        # test input types
+        self.assertTrue(has_ak_column(self.ak_array, Route("b.bb2.bbb2.b_bbb1.b_bbbb1")))
+        self.assertTrue(has_ak_column(self.ak_array, ("b", "bb2", "bbb2", "b_bbb1", "b_bbbb1")))
+        self.assertTrue(has_ak_column(self.ak_array, ["b", "bb2", "bbb2", "b_bbb1", "b_bbbb1"]))
+        self.assertFalse(has_ak_column(self.ak_array, ("b", "bb2", "bbb2", "b_bbb1", "bbbbb1")))
 
-    #     # test with empty Routes:
-    #     self.assertTrue(has_ak_column(self.ak_array, ""))
-    #     self.assertTrue(has_ak_column(self.ak_array, []))
-    #     self.assertTrue(has_ak_column(self.ak_array, ()))
-    #     self.assertTrue(has_ak_column(self.empty_ak_array, ""))
+        # test with empty Routes:
+        self.assertTrue(has_ak_column(self.ak_array, ""))
+        self.assertTrue(has_ak_column(self.ak_array, []))
+        self.assertTrue(has_ak_column(self.ak_array, ()))
+        self.assertTrue(has_ak_column(self.empty_ak_array, ""))
 
-    # def test_set_ak_column(self):
-    #     array2_content = {"a": [0, 1]}
-    #     ak_array2 = ak.Array(array2_content)
+    def test_set_ak_column(self):
+        array2_content = {"a": [0, 1]}
+        ak_array2 = ak.Array(array2_content)
 
-    #     # test adding a top level route
-    #     value = [2, 3]
-    #     ak_array3 = set_ak_column(ak_array2, Route("b"), value)
-    #     self.assertEqual(ak_array3.fields, ["a", "b"])
-    #     self.assertEqual(ak_array3["b"][0], 2)
-    #     self.assertEqual(ak_array3["b"][1], 3)
-    #     self.assertEqual(ak_array3["a"][0], 0)
-    #     self.assertEqual(ak_array3["a"][1], 1)
-    #     self.assertEqual(ak_array2.fields, ["a"])
+        # test adding a top level route
+        value = [2, 3]
+        ak_array3 = set_ak_column(ak_array2, Route("b"), value)
+        self.assertEqual(ak_array3.fields, ["a", "b"])
+        self.assertEqual(ak_array3["b"][0], 2)
+        self.assertEqual(ak_array3["b"][1], 3)
+        self.assertEqual(ak_array3["a"][0], 0)
+        self.assertEqual(ak_array3["a"][1], 1)
+        self.assertEqual(ak_array2.fields, ["a"])
 
-    #     # test adding a nested column
-    #     value = [4, 5]
-    #     ak_array4 = set_ak_column(ak_array3, Route("c.d"), value)
-    #     self.assertEqual(ak_array4.fields, ["a", "b", "c"])
-    #     self.assertEqual(ak_array4["c"].fields, ["d"])
-    #     self.assertEqual(ak_array4[("c", "d")][0], 4)
-    #     self.assertEqual(ak_array4[("c", "d")][1], 5)
-    #     self.assertEqual(ak_array4["a"][0], 0)
-    #     self.assertEqual(ak_array4["a"][1], 1)
-    #     self.assertEqual(ak_array2.fields, ["a"])
+        # test adding a nested column
+        value = [4, 5]
+        ak_array4 = set_ak_column(ak_array3, Route("c.d"), value)
+        self.assertEqual(ak_array4.fields, ["a", "b", "c"])
+        self.assertEqual(ak_array4["c"].fields, ["d"])
+        self.assertEqual(ak_array4[("c", "d")][0], 4)
+        self.assertEqual(ak_array4[("c", "d")][1], 5)
+        self.assertEqual(ak_array4["a"][0], 0)
+        self.assertEqual(ak_array4["a"][1], 1)
+        self.assertEqual(ak_array2.fields, ["a"])
 
-    #     # test adding an embranchment to an existing nested column
-    #     value = [6, 7]
-    #     ak_array5 = set_ak_column(ak_array4, Route("c.e"), value)
-    #     self.assertEqual(ak_array5["c"].fields, ["d", "e"])
-    #     self.assertEqual(ak_array5[("c", "e")][0], 6)
-    #     self.assertEqual(ak_array5[("c", "e")][1], 7)
-    #     self.assertEqual(ak_array5["c", "d"][0], 4)
-    #     self.assertEqual(ak_array5["c", "d"][1], 5)
-    #     self.assertEqual(ak_array2.fields, ["a"])
+        # test adding an embranchment to an existing nested column
+        value = [6, 7]
+        ak_array5 = set_ak_column(ak_array4, Route("c.e"), value)
+        self.assertEqual(ak_array5["c"].fields, ["d", "e"])
+        self.assertEqual(ak_array5[("c", "e")][0], 6)
+        self.assertEqual(ak_array5[("c", "e")][1], 7)
+        self.assertEqual(ak_array5["c", "d"][0], 4)
+        self.assertEqual(ak_array5["c", "d"][1], 5)
+        self.assertEqual(ak_array2.fields, ["a"])
 
-    #     # test overwriting an existing column
-    #     value = [8, 9]
-    #     ak_array6 = set_ak_column(ak_array5, Route("c.e"), value)
-    #     self.assertEqual(ak_array6[("c", "e")][0], 8)
-    #     self.assertEqual(ak_array6[("c", "e")][1], 9)
-    #     self.assertEqual(ak_array2.fields, ["a"])
+        # test overwriting an existing column
+        value = [8, 9]
+        ak_array6 = set_ak_column(ak_array5, Route("c.e"), value)
+        self.assertEqual(ak_array6[("c", "e")][0], 8)
+        self.assertEqual(ak_array6[("c", "e")][1], 9)
+        self.assertEqual(ak_array2.fields, ["a"])
 
-    # def test_remove_ak_column(self):
-    #     # test if removal works for different input types of routes
-    #     ak_array2_str = remove_ak_column(self.ak_array, "d.d_1")
-    #     self.assertEqual(ak_array2_str.fields, ["a", "c_1", "b"])
-    #     ak_array2_tuple = remove_ak_column(self.ak_array, ("d", "d_1"))
-    #     self.assertEqual(ak_array2_tuple.fields, ["a", "c_1", "b"])
-    #     ak_array2_list = remove_ak_column(self.ak_array, ["d", "d_1"])
-    #     self.assertEqual(ak_array2_list.fields, ["a", "c_1", "b"])
-    #     ak_array2_route = remove_ak_column(self.ak_array, Route("d.d_1"))
-    #     self.assertEqual(ak_array2_route.fields, ["a", "c_1", "b"])
+    def test_remove_ak_column(self):
+        # test if removal works for different input types of routes
+        ak_array2_str = remove_ak_column(self.ak_array, "d.d_1")
+        self.assertEqual(ak_array2_str.fields, ["a", "c_1", "b"])
+        ak_array2_tuple = remove_ak_column(self.ak_array, ("d", "d_1"))
+        self.assertEqual(ak_array2_tuple.fields, ["a", "c_1", "b"])
+        ak_array2_list = remove_ak_column(self.ak_array, ["d", "d_1"])
+        self.assertEqual(ak_array2_list.fields, ["a", "c_1", "b"])
+        ak_array2_route = remove_ak_column(self.ak_array, Route("d.d_1"))
+        self.assertEqual(ak_array2_route.fields, ["a", "c_1", "b"])
 
-    #     # test if removal works for subroutes, top level or nested
-    #     ak_array3 = remove_ak_column(self.ak_array, "b")
-    #     self.assertEqual(ak_array3.fields, ["a", "c_1", "d"])
-    #     ak_array4 = remove_ak_column(self.ak_array, "b.bb2.bbb2")
-    #     self.assertEqual(ak_array4[("b", "bb2")].fields, ["bbb1"])
+        # test if removal works for subroutes, top level or nested
+        ak_array3 = remove_ak_column(self.ak_array, "b")
+        self.assertEqual(ak_array3.fields, ["a", "c_1", "d"])
+        ak_array4 = remove_ak_column(self.ak_array, "b.bb2.bbb2")
+        self.assertEqual(ak_array4[("b", "bb2")].fields, ["bbb1"])
 
-    #     # reset the array
-    #     array_content = {"a": 0, "c_1": 1,
-    #                      "b": {"bb1": 1, "bb2": {"bbb1": 2, "bbb2": {"b_bbb1": {"b_bbbb1": 4, "bbbbb2": 5},
-    #                      "bbbb2": 3}}},
-    #                      "d": {"d_1": 1}}
-    #     self.ak_array = ak.Array([array_content])
+        # reset the array
+        array_content = {"a": 0, "c_1": 1,
+                         "b": {"bb1": 1, "bb2": {"bbb1": 2, "bbb2": {"b_bbb1": {"b_bbbb1": 4, "bbbbb2": 5},
+                         "bbbb2": 3}}},
+                         "d": {"d_1": 1}}
+        self.ak_array = ak.Array([array_content])
 
-    #     # removal of a single nested route
-    #     ak_array5 = remove_ak_column(self.ak_array, "b.bb2.bbb2.b_bbb1.bbbbb2")
-    #     self.assertEqual(ak_array5[("b", "bb2", "bbb2", "b_bbb1")].fields, ["b_bbbb1"])
-    #     self.ak_array = ak.Array([array_content])
+        # removal of a single nested route
+        ak_array5 = remove_ak_column(self.ak_array, "b.bb2.bbb2.b_bbb1.bbbbb2")
+        self.assertEqual(ak_array5[("b", "bb2", "bbb2", "b_bbb1")].fields, ["b_bbbb1"])
+        self.ak_array = ak.Array([array_content])
 
-    #     # test error and silent
-    #     self.assertRaises(ValueError, remove_ak_column, self.ak_array, "e")
-    #     self.ak_array = ak.Array([array_content])
-    #     ak_array6 = remove_ak_column(self.ak_array, "e", silent=True)
-    #     self.assertEqual(ak_array6.fields, ["a", "c_1", "b", "d"])
+        # test error and silent
+        self.assertRaises(ValueError, remove_ak_column, self.ak_array, "e")
+        self.ak_array = ak.Array([array_content])
+        ak_array6 = remove_ak_column(self.ak_array, "e", silent=True)
+        self.assertEqual(ak_array6.fields, ["a", "c_1", "b", "d"])
 
-    #     # test empty route
-    #     self.assertRaises(ValueError, remove_ak_column, self.ak_array, Route())
-    #     self.ak_array = ak.Array([array_content])
-    #     ak_array7 = remove_ak_column(self.ak_array, Route(), silent=True)
-    #     self.assertEqual(ak_array7.fields, ["a", "c_1", "b", "d"])
+        # test empty route
+        self.assertRaises(ValueError, remove_ak_column, self.ak_array, Route())
+        self.ak_array = ak.Array([array_content])
+        ak_array7 = remove_ak_column(self.ak_array, Route(), silent=True)
+        self.assertEqual(ak_array7.fields, ["a", "c_1", "b", "d"])
 
     def test_add_ak_alias(self):
-        print("        test prints")
-        print("============================")
-        print(os.environ["PYTHONPATH"])
-        print("----------------------------")
-        print(sys.path)
-        print("----------------------------")
-        print(ak)
-        print(ak.__file__)
-        print("============================")
-        sys.stdout.flush()
         ak_array_aliasdd1 = add_ak_alias(self.ak_array, "d.d_1", "e")
         self.assertEqual(ak_array_aliasdd1["e"][0], 1)
         # test that it is not in place operation
@@ -595,274 +572,274 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         # test non existing src route
         self.assertRaises(ValueError, add_ak_alias, self.ak_array, "this_column_does_not_exist", "f")
 
-    # def test_add_ak_aliases(self):
-    #     dictionary = {"f": "b.bb2.bbb2.b_bbb1"}
-    #     dictionary2 = {"e": "d.d_1", "f": "b.bb2.bbb2.b_bbb1"}
-    #     dictionary3 = {"e": "d.d_1", "f": "b.bb2.bbb2.b_bbb1.bbbbb2"}
+    def test_add_ak_aliases(self):
+        dictionary = {"f": "b.bb2.bbb2.b_bbb1"}
+        dictionary2 = {"e": "d.d_1", "f": "b.bb2.bbb2.b_bbb1"}
+        dictionary3 = {"e": "d.d_1", "f": "b.bb2.bbb2.b_bbb1.bbbbb2"}
 
-    #     # test adding a single alias
-    #     ak_array2 = add_ak_aliases(self.ak_array, dictionary)
-    #     self.assertEqual(ak_array2.fields, ["a", "c_1", "b", "d", "f"])
-    #     self.assertEqual(ak_array2["f"].fields, ak_array2[("b", "bb2", "bbb2", "b_bbb1")].fields)
-    #     self.assertEqual(ak_array2[("f", "bbbbb2")], ak_array2[("b", "bb2", "bbb2", "b_bbb1", "bbbbb2")])
-    #     self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
+        # test adding a single alias
+        ak_array2 = add_ak_aliases(self.ak_array, dictionary)
+        self.assertEqual(ak_array2.fields, ["a", "c_1", "b", "d", "f"])
+        self.assertEqual(ak_array2["f"].fields, ak_array2[("b", "bb2", "bbb2", "b_bbb1")].fields)
+        self.assertEqual(ak_array2[("f", "bbbbb2")], ak_array2[("b", "bb2", "bbb2", "b_bbb1", "bbbbb2")])
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
 
-    #     # reset the test array
-    #     array_content = {"a": 0, "c_1": 1,
-    #                      "b": {"bb1": 1, "bb2": {"bbb1": 2, "bbb2": {"b_bbb1": {"b_bbbb1": 4, "bbbbb2": 5},
-    #                      "bbbb2": 3}}},
-    #                      "d": {"d_1": 1}}
-    #     self.ak_array = ak.Array([array_content])
-    #     # test with removal of the source column
-    #     ak_array3 = add_ak_aliases(self.ak_array, dictionary, remove_src=True)
-    #     self.assertEqual(ak_array3.fields, ["a", "c_1", "d", "f", "b"])
-    #     self.assertEqual(ak_array3[("b", "bb2", "bbb2")].fields, ["bbbb2"])
+        # reset the test array
+        array_content = {"a": 0, "c_1": 1,
+                         "b": {"bb1": 1, "bb2": {"bbb1": 2, "bbb2": {"b_bbb1": {"b_bbbb1": 4, "bbbbb2": 5},
+                         "bbbb2": 3}}},
+                         "d": {"d_1": 1}}
+        self.ak_array = ak.Array([array_content])
+        # test with removal of the source column
+        ak_array3 = add_ak_aliases(self.ak_array, dictionary, remove_src=True)
+        self.assertEqual(ak_array3.fields, ["a", "c_1", "d", "f", "b"])
+        self.assertEqual(ak_array3[("b", "bb2", "bbb2")].fields, ["bbbb2"])
 
-    #     # test adding aliases for several columns
-    #     self.ak_array = ak.Array([array_content])
-    #     ak_array4 = add_ak_aliases(self.ak_array, dictionary2)
-    #     self.assertEqual(ak_array4.fields, ["a", "c_1", "b", "d", "e", "f"])
-    #     self.assertEqual(ak_array4["e"], ak_array4[("d", "d_1")])
-    #     self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
+        # test adding aliases for several columns
+        self.ak_array = ak.Array([array_content])
+        ak_array4 = add_ak_aliases(self.ak_array, dictionary2)
+        self.assertEqual(ak_array4.fields, ["a", "c_1", "b", "d", "e", "f"])
+        self.assertEqual(ak_array4["e"], ak_array4[("d", "d_1")])
+        self.assertEqual(self.ak_array.fields, ["a", "c_1", "b", "d"])
 
-    #     # test removing several source columns
-    #     self.ak_array = ak.Array([array_content])
-    #     ak_array5 = add_ak_aliases(self.ak_array, dictionary2, remove_src=True)
-    #     self.assertEqual(ak_array5.fields, ["a", "c_1", "e", "f", "b"])
-    #     self.assertEqual(ak_array5[("b", "bb2", "bbb2")].fields, ["bbbb2"])
+        # test removing several source columns
+        self.ak_array = ak.Array([array_content])
+        ak_array5 = add_ak_aliases(self.ak_array, dictionary2, remove_src=True)
+        self.assertEqual(ak_array5.fields, ["a", "c_1", "e", "f", "b"])
+        self.assertEqual(ak_array5[("b", "bb2", "bbb2")].fields, ["bbbb2"])
 
-    #     # test overwriting several aliases
-    #     self.ak_array = ak.Array([array_content])
-    #     ak_array6 = add_ak_aliases(self.ak_array, dictionary2)
-    #     ak_array7 = add_ak_aliases(ak_array6, dictionary3)
-    #     self.assertEqual(ak_array7["e"], ak_array7[Route("d.d_1").fields])
-    #     self.assertEqual(ak_array7["f"], ak_array7[Route("b.bb2.bbb2.b_bbb1.bbbbb2").fields])
+        # test overwriting several aliases
+        self.ak_array = ak.Array([array_content])
+        ak_array6 = add_ak_aliases(self.ak_array, dictionary2)
+        ak_array7 = add_ak_aliases(ak_array6, dictionary3)
+        self.assertEqual(ak_array7["e"], ak_array7[Route("d.d_1").fields])
+        self.assertEqual(ak_array7["f"], ak_array7[Route("b.bb2.bbb2.b_bbb1.bbbbb2").fields])
 
-    # def test_update_ak_array(self):
-    #     array1_content = {"a": [0, 1], "c_1": [1, 2]}
-    #     array2_content = {"d": {"d_1": [2, 3]}, "b": {"bb1": [3, 4]}}
-    #     array3_content = {"b": {"bb2": {"bbb1": [4, 5]}}}
-    #     array4_content = {"b": {"bb2": {"bbb1": [5, 6]}}}
-    #     ak_array1 = ak.Array(array1_content)
-    #     ak_array2 = ak.Array(array2_content)
-    #     ak_array3 = ak.Array(array3_content)
-    #     ak_array4 = ak.Array(array4_content)
+    def test_update_ak_array(self):
+        array1_content = {"a": [0, 1], "c_1": [1, 2]}
+        array2_content = {"d": {"d_1": [2, 3]}, "b": {"bb1": [3, 4]}}
+        array3_content = {"b": {"bb2": {"bbb1": [4, 5]}}}
+        array4_content = {"b": {"bb2": {"bbb1": [5, 6]}}}
+        ak_array1 = ak.Array(array1_content)
+        ak_array2 = ak.Array(array2_content)
+        ak_array3 = ak.Array(array3_content)
+        ak_array4 = ak.Array(array4_content)
 
-    #     # test an update without any updating array
-    #     not_updated_array = update_ak_array(ak_array1)
-    #     self.assertEqual(not_updated_array.fields, ["a", "c_1"])
+        # test an update without any updating array
+        not_updated_array = update_ak_array(ak_array1)
+        self.assertEqual(not_updated_array.fields, ["a", "c_1"])
 
-    #     # test an update with only purely new columns
-    #     updated_array1 = update_ak_array(ak_array1, ak_array2)
-    #     self.assertEqual(updated_array1.fields, ["a", "c_1", "d", "b"])
-    #     self.assertEqual(updated_array1["a"][0], 0)
-    #     self.assertEqual(updated_array1[("d", "d_1")][0], 2)
-    #     self.assertEqual(updated_array1[("b", "bb1")][0], 3)
-    #     # test if in not place
-    #     self.assertEqual(ak_array1.fields, ["a", "c_1"])
-    #     self.assertEqual(ak_array2.fields, ["d", "b"])
+        # test an update with only purely new columns
+        updated_array1 = update_ak_array(ak_array1, ak_array2)
+        self.assertEqual(updated_array1.fields, ["a", "c_1", "d", "b"])
+        self.assertEqual(updated_array1["a"][0], 0)
+        self.assertEqual(updated_array1[("d", "d_1")][0], 2)
+        self.assertEqual(updated_array1[("b", "bb1")][0], 3)
+        # test if in not place
+        self.assertEqual(ak_array1.fields, ["a", "c_1"])
+        self.assertEqual(ak_array2.fields, ["d", "b"])
 
-    #     # test an update with some columns with fields in common
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     self.assertEqual(updated_array2[("b", "bb2", "bbb1")][0], 4)
-    #     self.assertEqual(updated_array2[("b", "bb1")][0], 3)
-    #     # test if not in place
-    #     self.assertEqual(ak_array1.fields, ["a", "c_1"])
+        # test an update with some columns with fields in common
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        self.assertEqual(updated_array2[("b", "bb2", "bbb1")][0], 4)
+        self.assertEqual(updated_array2[("b", "bb1")][0], 3)
+        # test if not in place
+        self.assertEqual(ak_array1.fields, ["a", "c_1"])
 
-    #     # test an update with same columns, should overwrite value per default
-    #     updated_array3 = update_ak_array(updated_array2, ak_array4)
-    #     self.assertEqual(updated_array3[("b", "bb2", "bbb1")][0], 5)
+        # test an update with same columns, should overwrite value per default
+        updated_array3 = update_ak_array(updated_array2, ak_array4)
+        self.assertEqual(updated_array3[("b", "bb2", "bbb1")][0], 5)
 
-    #     # test updates with concatenation
-    #     updated_array4 = update_ak_array(updated_array3, ak_array4, concat_routes=True)
-    #     self.assertEqual(updated_array4[("b", "bb2", "bbb1")][0, 0], 5)
-    #     self.assertEqual(updated_array4[("b", "bb2", "bbb1")][0, 1], 5)
-    #     self.assertEqual(updated_array4[("b", "bb2", "bbb1")][1, 0], 6)
-    #     self.assertEqual(updated_array4[("b", "bb2", "bbb1")][1, 1], 6)
+        # test updates with concatenation
+        updated_array4 = update_ak_array(updated_array3, ak_array4, concat_routes=True)
+        self.assertEqual(updated_array4[("b", "bb2", "bbb1")][0, 0], 5)
+        self.assertEqual(updated_array4[("b", "bb2", "bbb1")][0, 1], 5)
+        self.assertEqual(updated_array4[("b", "bb2", "bbb1")][1, 0], 6)
+        self.assertEqual(updated_array4[("b", "bb2", "bbb1")][1, 1], 6)
 
-    #     updated_array4_2 = update_ak_array(updated_array4, ak_array4[..., None], concat_routes=True)
-    #     self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][0, 0, 0], 5)
-    #     self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][0, 1, 0], 5)
-    #     self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][1, 0, 0], 6)
-    #     self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][1, 1, 0], 6)
+        updated_array4_2 = update_ak_array(updated_array4, ak_array4[..., None], concat_routes=True)
+        self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][0, 0, 0], 5)
+        self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][0, 1, 0], 5)
+        self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][1, 0, 0], 6)
+        self.assertEqual(updated_array4_2[("b", "bb2", "bbb1")][1, 1, 0], 6)
 
-    #     # reset array to state before overwriting and concatenation
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        # reset array to state before overwriting and concatenation
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
 
-    #     # test update with empty list for concatenation, should overwrite value
-    #     updated_array5 = update_ak_array(updated_array2, ak_array4, concat_routes=[])
-    #     self.assertEqual(updated_array5[("b", "bb2", "bbb1")][0], 5)
+        # test update with empty list for concatenation, should overwrite value
+        updated_array5 = update_ak_array(updated_array2, ak_array4, concat_routes=[])
+        self.assertEqual(updated_array5[("b", "bb2", "bbb1")][0], 5)
 
-    #     # test update with true route for concatenation
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array6 = update_ak_array(updated_array2, ak_array4, concat_routes=["b.bb2.bbb1"])
-    #     self.assertEqual(updated_array6[("b", "bb2", "bbb1")][0, 0], 4)
-    #     self.assertEqual(updated_array6[("b", "bb2", "bbb1")][0, 1], 5)
-    #     self.assertEqual(updated_array6[("b", "bb2", "bbb1")][1, 0], 5)
-    #     self.assertEqual(updated_array6[("b", "bb2", "bbb1")][1, 1], 6)
+        # test update with true route for concatenation
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array6 = update_ak_array(updated_array2, ak_array4, concat_routes=["b.bb2.bbb1"])
+        self.assertEqual(updated_array6[("b", "bb2", "bbb1")][0, 0], 4)
+        self.assertEqual(updated_array6[("b", "bb2", "bbb1")][0, 1], 5)
+        self.assertEqual(updated_array6[("b", "bb2", "bbb1")][1, 0], 5)
+        self.assertEqual(updated_array6[("b", "bb2", "bbb1")][1, 1], 6)
 
-    #     # test update with only partial route for concatenation = wrong route, value should be overwritten
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array7 = update_ak_array(updated_array2, ak_array4, concat_routes=["b.bb2"])
-    #     self.assertEqual(updated_array7[("b", "bb2", "bbb1")][0], 5)
+        # test update with only partial route for concatenation = wrong route, value should be overwritten
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array7 = update_ak_array(updated_array2, ak_array4, concat_routes=["b.bb2"])
+        self.assertEqual(updated_array7[("b", "bb2", "bbb1")][0], 5)
 
-    #     # same tests for add_routes
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array8 = update_ak_array(updated_array2, ak_array4, add_routes=True)
-    #     self.assertEqual(updated_array8[("b", "bb2", "bbb1")][0], 9)
-    #     self.assertEqual(updated_array8[("b", "bb2", "bbb1")][1], 11)
+        # same tests for add_routes
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array8 = update_ak_array(updated_array2, ak_array4, add_routes=True)
+        self.assertEqual(updated_array8[("b", "bb2", "bbb1")][0], 9)
+        self.assertEqual(updated_array8[("b", "bb2", "bbb1")][1], 11)
 
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array9 = update_ak_array(updated_array2, ak_array4, add_routes=["b.bb2.bbb1"])
-    #     self.assertEqual(updated_array9[("b", "bb2", "bbb1")][0], 9)
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array9 = update_ak_array(updated_array2, ak_array4, add_routes=["b.bb2.bbb1"])
+        self.assertEqual(updated_array9[("b", "bb2", "bbb1")][0], 9)
 
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array10 = update_ak_array(updated_array2, ak_array4, add_routes=["b.bb2"])
-    #     self.assertEqual(updated_array10[("b", "bb2", "bbb1")][0], 5)
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array10 = update_ak_array(updated_array2, ak_array4, add_routes=["b.bb2"])
+        self.assertEqual(updated_array10[("b", "bb2", "bbb1")][0], 5)
 
-    #     # same tests for overwrite_routes
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     updated_array11 = update_ak_array(updated_array2, ak_array4, overwrite_routes=["b.bb2.bbb1"])
-    #     self.assertEqual(updated_array11[("b", "bb2", "bbb1")][0], 5)
+        # same tests for overwrite_routes
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        updated_array11 = update_ak_array(updated_array2, ak_array4, overwrite_routes=["b.bb2.bbb1"])
+        self.assertEqual(updated_array11[("b", "bb2", "bbb1")][0], 5)
 
-    #     # try overwriting with a subroute: no update should be done
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     self.assertRaises(Exception, update_ak_array, updated_array2, ak_array4, overwrite_routes=["b.bb2"])
+        # try overwriting with a subroute: no update should be done
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        self.assertRaises(Exception, update_ak_array, updated_array2, ak_array4, overwrite_routes=["b.bb2"])
 
-    #     # As indicated in docstring: when no option is given to resolve conflict of two same column,
-    #     # should raise exception
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
-    #     self.assertRaises(Exception, update_ak_array, updated_array2, ak_array4, overwrite_routes=False)
+        # As indicated in docstring: when no option is given to resolve conflict of two same column,
+        # should raise exception
+        ak_array1 = ak.Array([array1_content])
+        updated_array2 = update_ak_array(ak_array1, ak_array2, ak_array3)
+        self.assertRaises(Exception, update_ak_array, updated_array2, ak_array4, overwrite_routes=False)
 
-    #     # test empty array as updating array or as array to be updated
-    #     ak_array1 = ak.Array([array1_content])
-    #     updated_array12 = update_ak_array(ak_array1, self.empty_ak_array)
-    #     self.assertEqual(updated_array12.fields, ["a", "c_1"])
+        # test empty array as updating array or as array to be updated
+        ak_array1 = ak.Array([array1_content])
+        updated_array12 = update_ak_array(ak_array1, self.empty_ak_array)
+        self.assertEqual(updated_array12.fields, ["a", "c_1"])
 
-    #     # ValueError because of impossibility to add a new field in an empty akward array
-    #     ak_array1 = ak.Array([array1_content])
-    #     self.assertRaises(ValueError, update_ak_array, self.empty_ak_array, ak_array1)
+        # ValueError because of impossibility to add a new field in an empty akward array
+        ak_array1 = ak.Array([array1_content])
+        self.assertRaises(ValueError, update_ak_array, self.empty_ak_array, ak_array1)
 
-    #     # add tests for different input types for route argument (route, str, tuple, list, other sequences)?
+        # add tests for different input types for route argument (route, str, tuple, list, other sequences)?
 
-    # def test_flatten_ak_array(self):
-    #     # WARNING: for the tests of this function, it is assumed that the flattened columns
-    #     # in the output OrderedDict is given by increasing order of nesting, as outputted by get_ak_routes
-    #     array2_content = {"a": 0, "c_1": 1}
-    #     array3_content = {"d": {"d_1": 1}, "b": {"bb1": 1}}
-    #     ak_array2 = ak.Array([array2_content])
-    #     ak_array3 = ak.Array([array3_content])
+    def test_flatten_ak_array(self):
+        # WARNING: for the tests of this function, it is assumed that the flattened columns
+        # in the output OrderedDict is given by increasing order of nesting, as outputted by get_ak_routes
+        array2_content = {"a": 0, "c_1": 1}
+        array3_content = {"d": {"d_1": 1}, "b": {"bb1": 1}}
+        ak_array2 = ak.Array([array2_content])
+        ak_array3 = ak.Array([array3_content])
 
-    #     flattened_array = flatten_ak_array(ak_array2)
-    #     self.assertEqual(list(flattened_array.keys()), ak_array2.fields)
-    #     flattened_array2 = flatten_ak_array(ak_array3)
-    #     self.assertEqual(list(flattened_array2.keys()), ["d.d_1", "b.bb1"])
+        flattened_array = flatten_ak_array(ak_array2)
+        self.assertEqual(list(flattened_array.keys()), ak_array2.fields)
+        flattened_array2 = flatten_ak_array(ak_array3)
+        self.assertEqual(list(flattened_array2.keys()), ["d.d_1", "b.bb1"])
 
-    #     # with routes argument to choose which routes should be saved
-    #     flattened_array_withroute = flatten_ak_array(self.ak_array, routes=["d.d_1", "a"])
-    #     self.assertEqual(list(flattened_array_withroute.keys()), ["a", "d.d_1"])
-    #     self.assertEqual(flattened_array_withroute["a"], self.ak_array["a"])
-    #     flattened_array_withroute2 = flatten_ak_array(self.ak_array, routes=["b.bb1", "b.bb2"])
-    #     self.assertEqual(list(flattened_array_withroute2.keys()), ["b.bb1"])
-    #     flattened_array_withroute3 = flatten_ak_array(self.ak_array, routes=[Route("d.d_1"), Route("a")])
-    #     self.assertEqual(list(flattened_array_withroute3.keys()), ["a", "d.d_1"])
-    #     self.assertEqual(flattened_array_withroute3["a"], self.ak_array["a"])
-    #     flattened_array_withroute4 = flatten_ak_array(self.ak_array, routes=(Route("d.d_1"), Route("a")))
-    #     self.assertEqual(list(flattened_array_withroute4.keys()), ["a", "d.d_1"])
-    #     self.assertEqual(flattened_array_withroute4["a"], self.ak_array["a"])
-    #     flattened_array_withroute5 = flatten_ak_array(self.ak_array, routes=("d.d_1", "a"))
-    #     self.assertEqual(list(flattened_array_withroute5.keys()), ["a", "d.d_1"])
-    #     self.assertEqual(flattened_array_withroute5["a"], self.ak_array["a"])
-    #     flattened_array_withroute6 = flatten_ak_array(self.ak_array, routes={"d.d_1", "a"})
-    #     self.assertEqual(list(flattened_array_withroute6.keys()), ["a", "d.d_1"])
-    #     self.assertEqual(flattened_array_withroute6["a"], self.ak_array["a"])
+        # with routes argument to choose which routes should be saved
+        flattened_array_withroute = flatten_ak_array(self.ak_array, routes=["d.d_1", "a"])
+        self.assertEqual(list(flattened_array_withroute.keys()), ["a", "d.d_1"])
+        self.assertEqual(flattened_array_withroute["a"], self.ak_array["a"])
+        flattened_array_withroute2 = flatten_ak_array(self.ak_array, routes=["b.bb1", "b.bb2"])
+        self.assertEqual(list(flattened_array_withroute2.keys()), ["b.bb1"])
+        flattened_array_withroute3 = flatten_ak_array(self.ak_array, routes=[Route("d.d_1"), Route("a")])
+        self.assertEqual(list(flattened_array_withroute3.keys()), ["a", "d.d_1"])
+        self.assertEqual(flattened_array_withroute3["a"], self.ak_array["a"])
+        flattened_array_withroute4 = flatten_ak_array(self.ak_array, routes=(Route("d.d_1"), Route("a")))
+        self.assertEqual(list(flattened_array_withroute4.keys()), ["a", "d.d_1"])
+        self.assertEqual(flattened_array_withroute4["a"], self.ak_array["a"])
+        flattened_array_withroute5 = flatten_ak_array(self.ak_array, routes=("d.d_1", "a"))
+        self.assertEqual(list(flattened_array_withroute5.keys()), ["a", "d.d_1"])
+        self.assertEqual(flattened_array_withroute5["a"], self.ak_array["a"])
+        flattened_array_withroute6 = flatten_ak_array(self.ak_array, routes={"d.d_1", "a"})
+        self.assertEqual(list(flattened_array_withroute6.keys()), ["a", "d.d_1"])
+        self.assertEqual(flattened_array_withroute6["a"], self.ak_array["a"])
 
-    #     # test for Callables
-    #     def having_a_fun_callable_is_the_joy_of_every_programmer(route):
-    #         if route == "d.d_1" or route == "a" or route == "b.bb2.bbb1" or route == "b.bb2.bbb2":
-    #             return True
-    #         else:
-    #             return False
+        # test for Callables
+        def having_a_fun_callable_is_the_joy_of_every_programmer(route):
+            if route == "d.d_1" or route == "a" or route == "b.bb2.bbb1" or route == "b.bb2.bbb2":
+                return True
+            else:
+                return False
 
-    #     flattened_array_withroute7 = flatten_ak_array(self.ak_array,
-    #                                                   having_a_fun_callable_is_the_joy_of_every_programmer)
-    #     self.assertEqual(list(flattened_array_withroute7.keys()), ["a", "d.d_1", "b.bb2.bbb1"])
-    #     self.assertEqual(flattened_array_withroute7["a"], self.ak_array["a"])
+        flattened_array_withroute7 = flatten_ak_array(self.ak_array,
+                                                      having_a_fun_callable_is_the_joy_of_every_programmer)
+        self.assertEqual(list(flattened_array_withroute7.keys()), ["a", "d.d_1", "b.bb2.bbb1"])
+        self.assertEqual(flattened_array_withroute7["a"], self.ak_array["a"])
 
-    # def test_sort_ak_fields(self):
-    #     array2_content = {
-    #         "I": {
-    #             "dontlike": 1,
-    #             "like": {
-    #                 "trains": 2,
-    #                 "the": 3,
-    #             },
-    #             "zorro": 5,
-    #             "asthma": 6,
-    #         },
-    #         "42": {
-    #             "24": 1,
-    #         },
-    #     }
-    #     ak_array2 = ak.Array([array2_content])
+    def test_sort_ak_fields(self):
+        array2_content = {
+            "I": {
+                "dontlike": 1,
+                "like": {
+                    "trains": 2,
+                    "the": 3,
+                },
+                "zorro": 5,
+                "asthma": 6,
+            },
+            "42": {
+                "24": 1,
+            },
+        }
+        ak_array2 = ak.Array([array2_content])
 
-    #     ordered_ak_array2_content = OrderedDict([
-    #         ("42", OrderedDict([("24", 1)])),
-    #         ("I", OrderedDict([
-    #             ("asthma", 6),
-    #             ("dontlike", 1),
-    #             ("like", OrderedDict([
-    #                 ("the", 3),
-    #                 ("trains", 2),
-    #             ])),
-    #             ("zorro", 5),
-    #         ])),
-    #     ])
-    #     ordered_ak_array2 = ak.Array([ordered_ak_array2_content])
+        ordered_ak_array2_content = OrderedDict([
+            ("42", OrderedDict([("24", 1)])),
+            ("I", OrderedDict([
+                ("asthma", 6),
+                ("dontlike", 1),
+                ("like", OrderedDict([
+                    ("the", 3),
+                    ("trains", 2),
+                ])),
+                ("zorro", 5),
+            ])),
+        ])
+        ordered_ak_array2 = ak.Array([ordered_ak_array2_content])
 
-    #     ak_array3 = sort_ak_fields(ak_array2)
-    #     # check if numbers are sorted before letters
-    #     self.assertEqual(tuple(ak_array3.fields), tuple(ordered_ak_array2.fields))
-    #     # check if nested structure gets ordered
-    #     self.assertEqual(tuple(ak_array3["I"].fields), tuple(ordered_ak_array2["I"].fields))
-    #     # check if deeper nested structure with same first letter gets ordered
-    #     self.assertEqual(tuple(ak_array3[("I", "like")].fields), tuple(ordered_ak_array2[("I", "like")].fields))
+        ak_array3 = sort_ak_fields(ak_array2)
+        # check if numbers are sorted before letters
+        self.assertEqual(tuple(ak_array3.fields), tuple(ordered_ak_array2.fields))
+        # check if nested structure gets ordered
+        self.assertEqual(tuple(ak_array3["I"].fields), tuple(ordered_ak_array2["I"].fields))
+        # check if deeper nested structure with same first letter gets ordered
+        self.assertEqual(tuple(ak_array3[("I", "like")].fields), tuple(ordered_ak_array2[("I", "like")].fields))
 
-    #     # add sort_fn to invert the name of the fields before ordering them (this sort_fn outputs a string!)
-    #     def sorting_function(some_string):
-    #         return some_string[::-1]
+        # add sort_fn to invert the name of the fields before ordering them (this sort_fn outputs a string!)
+        def sorting_function(some_string):
+            return some_string[::-1]
 
-    #     ak_array4 = sort_ak_fields(ak_array2, sort_fn=sorting_function)
-    #     self.assertEqual(tuple(ak_array4["I"].fields), ("asthma", "like", "dontlike", "zorro"))
+        ak_array4 = sort_ak_fields(ak_array2, sort_fn=sorting_function)
+        self.assertEqual(tuple(ak_array4["I"].fields), ("asthma", "like", "dontlike", "zorro"))
 
-    #     # add sort_fn with an int as output: this function outputs the length of the field names for the ordering
-    #     def sorting_function_to_int(some_string):
-    #         position = len(some_string)
-    #         return position
+        # add sort_fn with an int as output: this function outputs the length of the field names for the ordering
+        def sorting_function_to_int(some_string):
+            position = len(some_string)
+            return position
 
-    #     ak_array5 = sort_ak_fields(ak_array2, sort_fn=sorting_function_to_int)
-    #     self.assertEqual(tuple(ak_array5.fields), ("I", "42"))
-    #     self.assertEqual(tuple(ak_array5["I"].fields), ("like", "zorro", "asthma", "dontlike"))
+        ak_array5 = sort_ak_fields(ak_array2, sort_fn=sorting_function_to_int)
+        self.assertEqual(tuple(ak_array5.fields), ("I", "42"))
+        self.assertEqual(tuple(ak_array5["I"].fields), ("like", "zorro", "asthma", "dontlike"))
 
-    #     # check that the sorting algorithm is stable
-    #     array_content_with_names_of_same_length = {"ccccc": 1, "aaaaa": 3, "bbbbb": 2}
-    #     ak_array_same_length = ak.Array([array_content_with_names_of_same_length])
-    #     ak_array_same_length_sorted = sort_ak_fields(ak_array_same_length)
-    #     self.assertEqual(tuple(ak_array_same_length_sorted.fields), ("aaaaa", "bbbbb", "ccccc"))
-    #     ak_array_same_length_intsorted = sort_ak_fields(ak_array_same_length_sorted, sort_fn=sorting_function_to_int)
-    #     self.assertEqual(tuple(ak_array_same_length_intsorted.fields), ("aaaaa", "bbbbb", "ccccc"))
+        # check that the sorting algorithm is stable
+        array_content_with_names_of_same_length = {"ccccc": 1, "aaaaa": 3, "bbbbb": 2}
+        ak_array_same_length = ak.Array([array_content_with_names_of_same_length])
+        ak_array_same_length_sorted = sort_ak_fields(ak_array_same_length)
+        self.assertEqual(tuple(ak_array_same_length_sorted.fields), ("aaaaa", "bbbbb", "ccccc"))
+        ak_array_same_length_intsorted = sort_ak_fields(ak_array_same_length_sorted, sort_fn=sorting_function_to_int)
+        self.assertEqual(tuple(ak_array_same_length_intsorted.fields), ("aaaaa", "bbbbb", "ccccc"))
 
-    #     # check that there is no problem with the empty array
-    #     empty_ak_array_sorted = sort_ak_fields(self.empty_ak_array)
-    #     self.assertFalse(empty_ak_array_sorted.fields)
-    #     empty_ak_array_intsorted = sort_ak_fields(self.empty_ak_array, sort_fn=sorting_function)
-    #     self.assertFalse(empty_ak_array_intsorted.fields)
+        # check that there is no problem with the empty array
+        empty_ak_array_sorted = sort_ak_fields(self.empty_ak_array)
+        self.assertFalse(empty_ak_array_sorted.fields)
+        empty_ak_array_intsorted = sort_ak_fields(self.empty_ak_array, sort_fn=sorting_function)
+        self.assertFalse(empty_ak_array_intsorted.fields)

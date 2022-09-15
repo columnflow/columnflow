@@ -10,10 +10,6 @@ cf_make_venv_relocateable() {
     # Required environment variables:
     #   CF_VENV_BASE
     #       The base path where AP virtual environments are stored.
-    #
-    # Optional environments variables:
-    #   CF_CI_JOB
-    #       When "1", this scripts does nothing.
 
     # check arguments
     local name="$1"
@@ -27,11 +23,6 @@ cf_make_venv_relocateable() {
         2>&1 echo "environment variable CF_VENV_BASE must not be empty"
         return "2"
     fi
-
-    # do nothing when in a CI job
-    # if [ "${CF_CI_JOB}" = "1" ]; then
-    #     return "0"
-    # fi
 
     # use /usr/bin/env in shebang's of bin scripts
     for f in $( find "${CF_VENV_BASE}/${name}/bin" -type f ); do

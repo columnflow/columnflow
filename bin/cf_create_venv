@@ -14,8 +14,8 @@ cf_create_venv() {
     #
     # Optional environments variables:
     #   CF_CI_JOB
-    #       When "1", the virtual environment is created the normal way without copies and
-    #       relocation.
+    #       When "1", the virtual environment is created without copying existing packages from the
+    #       encapsulating enviroment.
 
     # check arguments
     local name="$1"
@@ -30,22 +30,12 @@ cf_create_venv() {
         return "2"
     fi
 
-    # in CI jobs, just create the venv as is and finish
-    # if [ "${CF_CI_JOB}" = "1" ]; then
-    #     python3 -m venv "${CF_VENV_BASE}/${name}"
-    #     return "$?"
-    # fi
-
-    # create the venv the usual way
-    # python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
-
-    # test
+    # create the venv the usual way, not using copies in CI jobs
     if [ "${CF_CI_JOB}" = "1" ]; then
         python3 -m venv "${CF_VENV_BASE}/${name}" || return "$?"
     else
         python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
     fi
-    # test end
 
     # remove csh and fish support
     rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}

@@ -398,7 +398,7 @@ cf_setup_software_stack() {
         }
 
         # source the prod sandbox, potentially skipped in CI jobs
-        if [ "CF_CI_JOB" != "1" ]; then
+        if [ "${CF_CI_JOB}" != "1" ]; then
             bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
             [ "$?" = "21" ] && show_version_warning "cf_prod"
         fi
