@@ -1,7 +1,7 @@
-# version 3
+# version 4
 
 pyarrow==6.0.*
 coffea==0.7.*
-awkward==1.8.*
-uproot==4.2.3
+awkward==1.9.*
+uproot==4.3.*
 tabulate==0.8.*
