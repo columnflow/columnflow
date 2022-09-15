@@ -468,6 +468,6 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator) -> None:
-    if self.dataset_inst.is_mc:
+    if getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc:
         self.uses |= {jer}
         self.produces |= {jer}

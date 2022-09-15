@@ -14,6 +14,7 @@ __all__ = [
 ]
 
 
+import os
 import re
 import math
 import time
@@ -1811,8 +1812,8 @@ class ChunkedReader(object):
         self,
         source: Any,
         source_type: Optional[Union[str, List[str]]] = None,
-        chunk_size: int = 50000,
-        pool_size: int = 4,
+        chunk_size: int = int(os.getenv("CF_CHUNKED_READER_CHUNK_SIZE", 50000)),
+        pool_size: int = int(os.getenv("CF_CHUNKED_READER_POOL_SIZE", 4)),
         lazy: Union[bool, List[bool]] = False,
         open_options: Optional[Union[dict, List[dict]]] = None,
         read_options: Optional[Union[dict, List[dict]]] = None,

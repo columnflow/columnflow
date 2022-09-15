@@ -199,6 +199,7 @@ class SandboxTrigger(AnalysisTask):
     version = None
 
     def output(self):
+        # note: invoking self.env will already trigger installing the sandbox
         return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
 
     def run(self):

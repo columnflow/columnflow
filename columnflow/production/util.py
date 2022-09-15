@@ -45,11 +45,16 @@ default_collections = {
         "check_attr": "metric_table",
         "skip_fields": "*Idx*G",
     },
-    "MET": {
-        "type_name": "MissingET",
-        "check_attr": "metric_table",
-        "skip_fields": "*Idx*G",
-    },
+    # NOTE: disabled at the moment since the MissingET in coffea handles columns such as
+    #       "MET.pt_jer/jec_up/down" as systematics itself and attaching this behavior creates
+    #       multiple MET objects per event (that still, for some reason, are identical); it would
+    #       be nice if one could entirely disable this coffea feature as we are treating systematics
+    #       on our own
+    # "MET": {
+    #     "type_name": "MissingET",
+    #     "check_attr": "metric_table",
+    #     "skip_fields": "*Idx*G",
+    # },
 }
 
 
