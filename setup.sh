@@ -369,6 +369,10 @@ cf_setup_software_stack() {
     export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin"
     export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
 
+    # prepend them
+    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
+
     # update paths and flags
     export PYTHONWARNINGS="ignore"
     export GLOBUS_THREAD_MODEL="none"
@@ -392,9 +396,9 @@ cf_setup_software_stack() {
         }
 
         # source the prod and dev sandboxes
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "1"
+        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "silent"
         local ret_prod="$?"
-        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "1"
+        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
         local ret_dev="$?"
 
         # show version warnings
@@ -402,10 +406,10 @@ cf_setup_software_stack() {
         [ "${ret_dev}" = "21" ] && show_version_warning "cf_dev"
     else
         # source the prod sandbox
-        source "${CF_BASE}/sandboxes/cf_prod.sh" ""
+        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "yes"
     fi
 
-    # prepend persistent path fragments
+    # prepend persistent path fragments again for ensure priority for local packages
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 

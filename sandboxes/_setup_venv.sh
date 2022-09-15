@@ -24,9 +24,11 @@
 #      The setup mode. Different values are accepted:
 #        - '' (default): The virtual environment is installed when not existing yet and sourced.
 #        - reinstall:    The virtual environment is removed first, then reinstalled and sourced.
-# 2. nocheck
-#      When "1", the version check at the end of the setup is silenced. However, the exit code of
-#      _this_ script might still reflect whether the check was successful or not.
+# 2. versioncheck
+#      When empty "yes", perform a version check, print a warning in case of a mismatch and set a
+#      specific exit code (21). When "no", the check is skipped alltogether. When "silent", no
+#      warning is printed but an exit code might be set. When "warn" (the default), a warning might
+#      be printed, but the exit code remains unchanged.
 #
 # Note on remote jobs:
 # When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
@@ -47,7 +49,7 @@ setup_venv() {
     #
 
     local mode="${1:-}"
-    local nocheck="${2:-}"
+    local versioncheck="${2:-warn}"
     if [ ! -z "${mode}" ] && [ "${mode}" != "reinstall" ]; then
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
@@ -55,6 +57,10 @@ setup_venv() {
     if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -z "${mode}" ]; then
         >&2 echo "the venv setup mode must be empty in remote jobs, but got '${mode}'"
         return "2"
+    fi
+    if [ "${versioncheck}" != "yes" ] && [ "${versioncheck}" != "no" ] && [ "${versioncheck}" != "silent" ] && [ "${versioncheck}" != "warn" ]; then
+        >&2 echo "unknown versioncheck setting '${versioncheck}'"
+        return "3"
     fi
 
 
@@ -64,11 +70,11 @@ setup_venv() {
 
     if [ -z "${CF_VENV_NAME}" ]; then
         >&2 echo "CF_VENV_NAME is not set but required by ${this_file}"
-        return "3"
+        return "5"
     fi
     if [ -z "${CF_VENV_REQUIREMENTS}" ]; then
         >&2 echo "CF_VENV_REQUIREMENTS is not set but required by ${this_file}"
-        return "4"
+        return "6"
     fi
 
     # split $CF_VENV_REQUIREMENTS into an array
@@ -82,7 +88,7 @@ setup_venv() {
     for f in ${requirement_files[@]}; do
         if [ ! -f "${f}" ]; then
             >&2 echo "requirement file '${f}' does not exist"
-            return "5"
+            return "7"
         fi
         if [ "${f}" = "${CF_BASE}/requirements_prod.txt" ]; then
             requirement_files_contains_prod="true"
@@ -104,7 +110,7 @@ setup_venv() {
     # the venv version must be set
     if [ -z "${venv_version}" ]; then
         >&2 echo "first requirement file ${first_requirement_file} does not contain a version line"
-        return "6"
+        return "8"
     fi
 
     # ensure the CF_VENV_BASE exists
@@ -119,7 +125,7 @@ setup_venv() {
     # complain in remote jobs when the env is not installed
     if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
         >&2 echo "the venv ${CF_VENV_NAME} is not installed but should be provided externally for remote jobs"
-        return "7"
+        return "9"
     fi
 
     # from here onwards, files and directories could be created and in order to prevent race
@@ -141,7 +147,7 @@ setup_venv() {
             sleep_counter="$(( $sleep_counter + 1 ))"
             if [ "${sleep_counter}" -ge 180 ]; then
                 >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
-                return "8"
+                return "10"
             fi
             echo -e "\x1b[0;49;36mvenv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 180\x1b[0m"
             sleep 5
@@ -157,30 +163,30 @@ setup_venv() {
         echo "installing venv at ${install_path}"
 
         rm -rf "${install_path}"
-        cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "9" )
+        cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "11" )
 
         # activate it
-        source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "10" )
+        source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "12" )
 
         # update pip
         echo -e "\n\x1b[0;49;35mupdating pip\x1b[0m"
-        python3 -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "11" )
+        python3 -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
 
         # install basic production requirements
         if ! ${requirement_files_contains_prod}; then
             echo -e "\n\x1b[0;49;35minstalling requirement file ${CF_BASE}/requirements_prod.txt\x1b[0m"
-            python3 -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "12" )
+            python3 -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
         fi
 
         # install requirement files
         for f in ${requirement_files[@]}; do
             echo -e "\n\x1b[0;49;35minstalling requirement file ${f}\x1b[0m"
-            python3 -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "13" )
+            python3 -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
             echo
         done
 
         # ensure that the venv is relocateable
-        cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "14" )
+        cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "16" )
 
         # write the version and a timestamp into the flag file
         echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
@@ -195,9 +201,11 @@ setup_venv() {
         fi
 
         # complain when the version is outdated
-        if [ "${curr_version}" != "${venv_version}" ]; then
-            ret="21"
-            if [ "${nocheck}" != "1" ]; then
+        if [ "${curr_version}" != "${venv_version}" ] && [ "${versioncheck}" != "no" ]; then
+            if [ "${versioncheck}" != "warn" ]; then
+                ret="21"
+            fi
+            if [ "${versioncheck}" != "silent" ]; then
                 >&2 echo ""
                 >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' located at"
                 >&2 echo "WARNING: ${install_path}"
