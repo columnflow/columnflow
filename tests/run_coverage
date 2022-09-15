@@ -6,10 +6,10 @@ action() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
-    local cf_dir="$( dirname "$this_dir" )"
+    local cf_dir="$( dirname "${this_dir}" )"
 
     # dev flag for sandboxes
-    local dev="$( [ "$CF_DEV" = "1" ] && echo "_dev" || echo "" )"
+    local dev="$( [ "${CF_DEV}" = "1" ] && echo "_dev" || echo "" )"
 
     # helper to run a coverage test
     run_coverage() {
@@ -18,11 +18,16 @@ action() {
 
         if [ -z "${sandbox}" ]; then
             echo "testing ${mod} ..."
-            ( cd "$cf_dir"; pytest --cov=columnflow --cov-report xml:coverage_${mod}.xml "tests/${mod}.py" )
+            (
+                cd "$cf_dir" && \
+                pytest --cov=columnflow --cov-report "xml:coverage_${mod}.xml" "tests/${mod}.py"
+            )
         else
             echo "testing ${mod} in sandbox ${sandbox} ..."
-            # ( cd "$cf_dir"; bash -c "source sandboxes/${sandbox} \"\" yes && pytest --cov=columnflow --cov-report xml:coverage_${mod}.xml tests/${mod}.py" )
-            ( cd "$cf_dir"; bash -c "source sandboxes/${sandbox} \"\" yes && python -c 'from columnflow.util import maybe_import; ak = maybe_import(\"awkward\");print(ak.__file__)'" )
+            (
+                cd "$cf_dir" && \
+                bash -c "source sandboxes/${sandbox} \"\" yes && pytest --cov=columnflow --cov-report \"xml:coverage_${mod}.xml\" \"tests/${mod}.py\""
+            )
         fi
     }
 
@@ -33,14 +38,14 @@ action() {
     # test_util
     run_coverage test_util
     ret="$?"
-    [ "$gret" = "0" ] && gret="$ret"
+    [ "$gret" = "0" ] && gret="${ret}"
 
     # test_columnar_util
     echo
     run_coverage test_columnar_util "venv_columnar${dev}.sh"
     ret="$?"
-    [ "$gret" = "0" ] && gret="$ret"
+    [ "${gret}" = "0" ] && gret="${ret}"
 
-    return "$gret"
+    return "${gret}"
 }
 action "$@"

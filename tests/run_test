@@ -6,7 +6,7 @@ action() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
-    local cf_dir="$( dirname "$this_dir" )"
+    local cf_dir="$( dirname "${this_dir}" )"
 
     # get and check arguments
     local mod="$1"
@@ -27,7 +27,7 @@ action() {
         echo "testing ${mod} in sandbox ${sandbox} ..."
         (
             cd "${cf_dir}" && \
-            bash -c "source sandboxes/${sandbox} && python -m unittest tests.${mod}"
+            bash -c "source \"sandboxes/${sandbox}\" \"\" yes && python -m unittest \"tests.${mod}\""
         )
     fi
 }

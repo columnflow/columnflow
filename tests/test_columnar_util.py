@@ -16,6 +16,19 @@ from columnflow.columnar_util import (
 
 ak = maybe_import("awkward")
 
+# test
+import os, sys
+print("        global prints")
+print("============================")
+print(os.environ["PYTHONPATH"])
+print("----------------------------")
+print(sys.path)
+print("----------------------------")
+print(ak)
+print(ak.__file__)
+print("============================")
+# test end
+
 
 class TestRoute(unittest.TestCase):
 

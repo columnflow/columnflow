@@ -8,7 +8,7 @@ action() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
 
     # dev flag for sandboxes
-    local dev="$( [ "$CF_DEV" = "1" ] && echo "_dev" || echo "" )"
+    local dev="$( [ "${CF_DEV}" = "1" ] && echo "_dev" || echo "" )"
 
     # start tests and keep track of immediate and global return values
     local gret="0"
@@ -17,14 +17,14 @@ action() {
     # test_util
     bash "${this_dir}/run_test" test_util
     ret="$?"
-    [ "$gret" = "0" ] && gret="$ret"
+    [ "${gret}" = "0" ] && gret="${ret}"
 
     # test_columnar_util
     echo
     bash "${this_dir}/run_test" test_columnar_util "venv_columnar${dev}.sh"
     ret="$?"
-    [ "$gret" = "0" ] && gret="$ret"
+    [ "${gret}" = "0" ] && gret="${ret}"
 
-    return "$gret"
+    return "${gret}"
 }
 action "$@"
