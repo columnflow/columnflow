@@ -37,7 +37,15 @@ cf_create_venv() {
     # fi
 
     # create the venv the usual way
-    python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
+    # python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
+
+    # test
+    if [ "${CF_CI_JOB}" = "1" ]; then
+        python3 -m venv "${CF_VENV_BASE}/${name}" || return "$?"
+    else
+        python3 -m venv --copies "${CF_VENV_BASE}/${name}" || return "$?"
+    fi
+    # test end
 
     # remove csh and fish support
     rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}

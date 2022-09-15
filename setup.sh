@@ -344,8 +344,10 @@ cf_setup_software_stack() {
     #       The base directory were virtual envs are installed.
     #
     # Optional environments variables:
+    #   CF_REMOTE_JOB
+    #       When "1", the software stack is sourced but not built.
     #   CF_CI_JOB
-    #       When "1", the software stack is sourcd but not built.
+    #       When "1", the "cf_prod" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
 
@@ -395,15 +397,17 @@ cf_setup_software_stack() {
             >&2 echo ""
         }
 
-        # source the prod sandbox
-        bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
-        [ "$?" = "21" ] && show_version_warning "cf_prod"
+        # source the prod sandbox, potentially skipped in CI jobs
+        if [ "CF_CI_JOB" != "1" ]; then
+            bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
+            [ "$?" = "21" ] && show_version_warning "cf_prod"
+        fi
 
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
         [ "$?" = "21" ] && show_version_warning "cf_dev"
     else
-        # source the prod sandbox
+        # source the prod sandbox in remote jobs, skipping version checks
         source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
     fi
 
