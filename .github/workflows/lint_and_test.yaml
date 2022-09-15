@@ -78,7 +78,6 @@ jobs:
         run: twine check "dist/$( python setup.py --fullname ).tar.gz"
 
   coverage:
-    needs: test
     runs-on: ubuntu-latest
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
