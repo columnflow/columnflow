@@ -235,7 +235,8 @@ class PlotCutflow(
         }
 
     def output(self):
-        return self.target(f"cutflow__cat_{self.branch_data}.pdf")
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
+        return self.target(f"cutflow__cat_{self.branch_data}{suffix}.pdf")
 
     @law.decorator.log
     @PlotMixin.view_output_plots
@@ -406,14 +407,15 @@ class PlotCutflowVariables(
 
     def output(self):
         b = self.branch_data
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
         if self.per_plot == "processes":
             return law.SiblingFileCollection({
-                s: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}.pdf")
+                s: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}{suffix}.pdf")
                 for i, s in enumerate(self.chosen_steps)
             })
         else:  # per_plot == "steps"
             return law.SiblingFileCollection({
-                p: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}.pdf")
+                p: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}{suffix}.pdf")
                 for p in self.processes
             })
 

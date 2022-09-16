@@ -71,7 +71,7 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        suffix = f"_{self.plot_suffix}" if self.plot_suffix else ""
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
         return self.target(f"plot__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
@@ -212,7 +212,8 @@ class PlotShiftedVariables(
 
     def output(self):
         b = self.branch_data
-        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
+        return self.target(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
     @PlotMixin.view_output_plots
