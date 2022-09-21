@@ -116,7 +116,8 @@ class CreateCutflowHistograms(
             events = arr.events
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            if not self.shift_inst.has_tag("selection_dependent"):
+                events = add_ak_aliases(events, aliases, remove_src=True)
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)

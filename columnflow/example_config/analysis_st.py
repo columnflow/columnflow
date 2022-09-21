@@ -128,6 +128,9 @@ config_2018.add_shift(name="hdamp_down", id=4, type="shape", tags={"disjoint_fro
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
 add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
+config_2018.add_shift(name="jecdummy_up", id=9, type="shape", tags={"selection_dependent"})
+config_2018.add_shift(name="jecdummy_down", id=10, type="shape", tags={"selection_dependent"})
+add_aliases("jecdummy", {"Jet.pt": "Jet.pt_jec_{direction}", "Jet.mass": "Jet.mass_jec_{direction}"})
 
 # external files
 config_2018.set_aux("external_files", DotDict.wrap({
