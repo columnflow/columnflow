@@ -210,8 +210,10 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         Rho=events.fixedGridRhoFastjetAll,
     )
 
-    # store pt and phi of the full jet system
-    jetsum = ak.sum(events.Jet, axis=1)
+    # store pt and phi of the full jet system for MET propagation, including a selection in raw info
+    # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
+    met_prob_mask = (events.Jet.pt_raw > 10.0) & (abs(events.Jet.eta) < 5.2)
+    jetsum = ak.sum(events.Jet[met_prob_mask], axis=1)
     jet_pt1 = jetsum.pt
     jet_phi1 = jetsum.phi
 
@@ -224,7 +226,7 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # get pt and phi of all jets after correcting
-    jetsum = ak.sum(events.Jet, axis=1)
+    jetsum = ak.sum(events.Jet[met_prob_mask], axis=1)
     jet_pt2 = jetsum.pt
     jet_phi2 = jetsum.phi
 
@@ -247,8 +249,8 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
             # MET propagation
-            jet_pt_up = events.Jet[f"pt_jec_{name}_up"]
-            jet_pt_down = events.Jet[f"pt_jec_{name}_down"]
+            jet_pt_up = events.Jet[f"pt_jec_{name}_up"][met_prob_mask]
+            jet_pt_down = events.Jet[f"pt_jec_{name}_down"][met_prob_mask]
             met_pt_up, met_phi_up = prop_met(jet_pt2, jet_phi2, jet_pt_up, jet_phi2, met_pt2, met_phi2)
             met_pt_down, met_phi_down = prop_met(jet_pt2, jet_phi2, jet_pt_down, jet_phi2, met_pt2, met_phi2)
             events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
