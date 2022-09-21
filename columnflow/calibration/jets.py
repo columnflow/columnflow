@@ -137,16 +137,21 @@ def prop_met(
     met_pt1: ak.Array,
     met_phi1: ak.Array,
 ) -> Tuple[ak.Array, ak.Array]:
+    # avoid unwanted broadcasting
+    assert jet_pt1.ndim == jet_phi1.ndim
+    assert jet_pt2.ndim == jet_phi2.ndim
+
     # build px and py sums before and after
     jet_px1 = jet_pt1 * np.cos(jet_phi1)
     jet_py1 = jet_pt1 * np.sin(jet_phi1)
     jet_px2 = jet_pt2 * np.cos(jet_phi2)
     jet_py2 = jet_pt2 * np.sin(jet_phi2)
 
-    # build sums instead if per-jet info was passed
+    # sum over axis 1 when not already done
     if jet_pt1.ndim > 1:
         jet_px1 = ak.sum(jet_px1, axis=1)
         jet_py1 = ak.sum(jet_py1, axis=1)
+    if jet_pt2.ndim > 1:
         jet_px2 = ak.sum(jet_px2, axis=1)
         jet_py2 = ak.sum(jet_py2, axis=1)
 
@@ -169,7 +174,7 @@ def prop_met(
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId",
-        "MET.pt", "MET.phi",
+        "RawMET.pt", "RawMET.phi",
         "fixedGridRhoFastjetAll",
         attach_coffea_behavior,
     },
@@ -179,7 +184,13 @@ def prop_met(
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
 )
-def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+def jec(
+    self: Calibrator,
+    events: ak.Array,
+    min_pt_met_prop: float = 15.0,
+    max_eta_met_prop: float = 5.2,
+    **kwargs,
+) -> ak.Array:
     """
     Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
     """
@@ -196,11 +207,11 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         coffea_jetmet_tools.FactorizedJetCorrector,
         names=self.jec_names,
     )
-    jec_provider_nol1 = get_lookup_provider(
-        self.jec_files_nol1,
+    jec_provider_only_l1 = get_lookup_provider(
+        self.jec_files_only_l1,
         coffea_txt_converters.convert_jec_txt_file,
         coffea_jetmet_tools.FactorizedJetCorrector,
-        names=self.jec_names_nol1,
+        names=self.jec_names_only_l1,
     )
     if self.junc_names:
         junc_provider = get_lookup_provider(
@@ -217,29 +228,24 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         JetA=events.Jet.area,
         Rho=events.fixedGridRhoFastjetAll,
     )
-    jec_factors_nol1 = jec_provider_nol1.getCorrection(
+    jec_factors_only_l1 = jec_provider_only_l1.getCorrection(
         JetEta=events.Jet.eta,
         JetPt=events.Jet.pt_raw,
         JetA=events.Jet.area,
         Rho=events.fixedGridRhoFastjetAll,
     )
 
-    # store pt and phi of the full jet system for MET propagation, including a selection in raw info
-    # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
-    met_prob_mask = (events.Jet.pt_raw > 10.0) & (abs(events.Jet.eta) < 5.2)
-    jetsum = ak.sum(events.Jet[met_prob_mask], axis=1)
-    jet_pt1 = jetsum.pt
-    jet_phi1 = jetsum.phi
-
-    # apply the new factors without L1 corrections
-    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_nol1)
-    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_nol1)
+    # apply the new factors with only L1 corrections
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_only_l1)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_only_l1)
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
-    # get pt and phi of all jets after correcting
-    jetsum = ak.sum(events.Jet[met_prob_mask], axis=1)
-    jet_pt2 = jetsum.pt
-    jet_phi2 = jetsum.phi
+    # store pt and phi of the full jet system for MET propagation, including a selection in raw info
+    # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
+    met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
+    jetsum = events.Jet[met_prop_mask].sum(axis=1)
+    jet_pt_only_l1 = jetsum.pt
+    jet_phi_only_l1 = jetsum.phi
 
     # full jet correction with all levels
     events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
@@ -247,10 +253,22 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
-    # propagate changes to MET
-    met_pt2, met_phi2 = prop_met(jet_pt1, jet_phi1, jet_pt2, jet_phi2, events.MET.pt, events.MET.phi)
-    events = set_ak_column(events, "MET.pt", met_pt2)
-    events = set_ak_column(events, "MET.phi", met_phi2)
+    # get pt and phi of all jets after correcting
+    jetsum = events.Jet[met_prop_mask].sum(axis=1)
+    jet_pt_all_levels = jetsum.pt
+    jet_phi_all_levels = jetsum.phi
+
+    # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
+    met_pt, met_phi = prop_met(
+        jet_pt_only_l1,
+        jet_phi_only_l1,
+        jet_pt_all_levels,
+        jet_phi_all_levels,
+        events.RawMET.pt,
+        events.RawMET.phi,
+    )
+    events = set_ak_column(events, "MET.pt", met_pt)
+    events = set_ak_column(events, "MET.phi", met_phi)
 
     # look up JEC uncertainties
     if self.junc_names:
@@ -266,10 +284,24 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
             # MET propagation
-            jet_pt_up = events.Jet[f"pt_jec_{name}_up"][met_prob_mask]
-            jet_pt_down = events.Jet[f"pt_jec_{name}_down"][met_prob_mask]
-            met_pt_up, met_phi_up = prop_met(jet_pt2, jet_phi2, jet_pt_up, jet_phi2, met_pt2, met_phi2)
-            met_pt_down, met_phi_down = prop_met(jet_pt2, jet_phi2, jet_pt_down, jet_phi2, met_pt2, met_phi2)
+            jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
+            jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
+            met_pt_up, met_phi_up = prop_met(
+                jet_pt_all_levels,
+                jet_phi_all_levels,
+                jet_pt_up,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
+            met_pt_down, met_phi_down = prop_met(
+                jet_pt_all_levels,
+                jet_phi_all_levels,
+                jet_pt_down,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
             events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
             events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
             events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
@@ -341,18 +373,18 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
         get_basenames(resolve_samples(self.config_inst.x.external_files.jec).values()),
     ))
 
-    # store jec files without L1* corrections for MET propagation
-    self.jec_files_nol1 = [
+    # store jec files with only L1* corrections for MET propagation
+    self.jec_files_only_l1 = [
         t.path
         for level, t in resolve_samples(bundle.files.jec).items()
-        if not level.startswith("L1")
+        if level.startswith("L1")
     ]
-    self.jec_names_nol1 = list(zip(
-        get_basenames(self.jec_files_nol1),
+    self.jec_names_only_l1 = list(zip(
+        get_basenames(self.jec_files_only_l1),
         get_basenames([
             src
             for level, src in resolve_samples(self.config_inst.x.external_files.jec).items()
-            if not level.startswith("L1")
+            if level.startswith("L1")
         ]),
     ))
 
@@ -507,9 +539,9 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
     # store pt and phi of the full jet system
-    jetsum = ak.sum(events.Jet, axis=1)
-    jet_pt1 = jetsum.pt
-    jet_phi1 = jetsum.phi
+    jetsum = events.Jet.sum(axis=1)
+    jet_pt_before = jetsum.pt
+    jet_phi_before = jetsum.phi
 
     # apply the smearing factors to the pt and mass
     # (note: apply variations first since they refer to the original pt)
@@ -524,16 +556,37 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # get pt and phi of all jets after correcting
-    jetsum = ak.sum(events.Jet, axis=1)
-    jet_pt2 = jetsum.pt
-    jet_phi2 = jetsum.phi
+    jetsum = events.Jet.sum(axis=1)
+    jet_pt_after = jetsum.pt
+    jet_phi_after = jetsum.phi
 
     # propagate changes to MET
-    met_pt2, met_phi2 = prop_met(jet_pt1, jet_phi1, jet_pt2, jet_phi2, events.MET.pt, events.MET.phi)
-    met_pt_up, met_phi_up = prop_met(jet_pt2, jet_phi2, events.Jet.pt_jer_up, jet_phi2, met_pt2, met_phi2)
-    met_pt_down, met_phi_down = prop_met(jet_pt2, jet_phi2, events.Jet.pt_jer_down, jet_phi2, met_pt2, met_phi2)
-    events = set_ak_column(events, "MET.pt", met_pt2)
-    events = set_ak_column(events, "MET.phi", met_phi2)
+    met_pt, met_phi = prop_met(
+        jet_pt_before,
+        jet_phi_before,
+        jet_pt_after,
+        jet_phi_after,
+        events.MET.pt,
+        events.MET.phi,
+    )
+    met_pt_up, met_phi_up = prop_met(
+        jet_pt_after,
+        jet_phi_after,
+        events.Jet.pt_jer_up,
+        events.Jet.phi,
+        met_pt,
+        met_phi,
+    )
+    met_pt_down, met_phi_down = prop_met(
+        jet_pt_after,
+        jet_phi_after,
+        events.Jet.pt_jer_down,
+        events.Jet.phi,
+        met_pt,
+        met_phi,
+    )
+    events = set_ak_column(events, "MET.pt", met_pt)
+    events = set_ak_column(events, "MET.phi", met_phi)
     events = set_ak_column(events, "MET.pt_jer_up", met_pt_up)
     events = set_ak_column(events, "MET.pt_jer_down", met_pt_down)
     events = set_ak_column(events, "MET.phi_jer_up", met_phi_up)
