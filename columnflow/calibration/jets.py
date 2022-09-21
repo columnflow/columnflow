@@ -27,6 +27,42 @@ coffea_txt_converters = maybe_import("coffea.lookup_tools.txt_converters")
 # first, some utility functions
 #
 
+
+def get_basenames(struct):
+    """
+    Replace full file paths in an arbitrary struct by the file basenames.
+    """
+    return law.util.map_struct(
+        lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
+        struct,
+    )
+
+
+# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
+def ak_random(*args, rand_func):
+    """
+    Return an awkward array filled with random numbers. The *args* must be broadcastable
+    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
+    random numbers.
+    """
+    args = ak.broadcast_arrays(*args)
+
+    if hasattr(args[0].layout, "offsets"):
+        # convert to flat numpy arrays
+        np_args = [np.asarray(a.layout.content) for a in args]
+
+        # pass flat arrays to random function and get random values
+        np_randvals = rand_func(*np_args)
+
+        # convert back to awkward array
+        return ak.Array(ak.layout.ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
+
+    # pass args directly (this may fail for some array types)
+    # TODO: make function more general
+    np_randvals = rand_func(*args)
+    return ak.from_numpy(np_randvals)
+
+
 @memoize
 def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     """
@@ -90,40 +126,6 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     })
 
     return provider
-
-
-def get_basenames(struct):
-    """Replace full file paths in an arbitrary struct by the file basenames"""
-    return law.util.map_struct(
-        lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
-        struct,
-    )
-
-
-# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
-def ak_random(*args, rand_func):
-    """Return an awkward array filled with random numbers. The *args* must be broadcastable
-    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
-    random numbers."""
-    from awkward import Array
-    from awkward.layout import ListOffsetArray64
-
-    args = ak.broadcast_arrays(*args)
-
-    if hasattr(args[0].layout, "offsets"):
-        # convert to flat numpy arrays
-        np_args = [np.asarray(a.layout.content) for a in args]
-
-        # pass flat arrays to random function and get random values
-        np_randvals = rand_func(*np_args)
-
-        # convert back to awkward array
-        return Array(ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
-    else:
-        # pass args directly (this may fail for some array types)
-        # TODO: make function more general
-        np_randvals = rand_func(*args)
-        return ak.from_numpy(np_randvals)
 
 
 # helper to compute new MET based on per-jet pts and phis before and after a correction
@@ -194,6 +196,12 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         coffea_jetmet_tools.FactorizedJetCorrector,
         names=self.jec_names,
     )
+    jec_provider_nol1 = get_lookup_provider(
+        self.jec_files_nol1,
+        coffea_txt_converters.convert_jec_txt_file,
+        coffea_jetmet_tools.FactorizedJetCorrector,
+        names=self.jec_names_nol1,
+    )
     if self.junc_names:
         junc_provider = get_lookup_provider(
             self.junc_files,
@@ -209,6 +217,12 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         JetA=events.Jet.area,
         Rho=events.fixedGridRhoFastjetAll,
     )
+    jec_factors_nol1 = jec_provider_nol1.getCorrection(
+        JetEta=events.Jet.eta,
+        JetPt=events.Jet.pt_raw,
+        JetA=events.Jet.area,
+        Rho=events.fixedGridRhoFastjetAll,
+    )
 
     # store pt and phi of the full jet system for MET propagation, including a selection in raw info
     # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
@@ -217,18 +231,21 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     jet_pt1 = jetsum.pt
     jet_phi1 = jetsum.phi
 
-    # store corrected pt, mass and recalculate rawFactor
-    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
-    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
-    events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
-
-    # recover coffea behavior
+    # apply the new factors without L1 corrections
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_nol1)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_nol1)
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # get pt and phi of all jets after correcting
     jetsum = ak.sum(events.Jet[met_prob_mask], axis=1)
     jet_pt2 = jetsum.pt
     jet_phi2 = jetsum.phi
+
+    # full jet correction with all levels
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
+    events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # propagate changes to MET
     met_pt2, met_phi2 = prop_met(jet_pt1, jet_phi1, jet_pt2, jet_phi2, events.MET.pt, events.MET.phi)
@@ -305,31 +322,49 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
     """
-
     # get external files bundle that contains JEC text files
     bundle = reqs["external_files"]
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
-        resolve_sample = lambda x: x.data[self.dataset_inst.x.jec_era]
+        resolve_samples = lambda x: x.data[self.dataset_inst.x.jec_era]
     else:
-        resolve_sample = lambda x: x.mc
+        resolve_samples = lambda x: x.mc
 
-    # pass text files to calibrator method
-    for key in ("jec", "junc"):
-        # pass the paths to the text files that contain the corrections/uncertainties
-        files = [
-            t.path for t in resolve_sample(bundle.files[key])
-        ]
-        setattr(self, f"{key}_files", files)
+    # store jec files with all correction levels
+    self.jec_files = [
+        t.path
+        for t in resolve_samples(bundle.files.jec).values()
+    ]
+    self.jec_names = list(zip(
+        get_basenames(self.jec_files),
+        get_basenames(resolve_samples(self.config_inst.x.external_files.jec).values()),
+    ))
 
-        # also pass a list of tuples encoding the correspondence between the original
-        # file basenames and filenames on disk (as determined by `BundleExternalFiles`)
-        # and the original file basenames (needed by coffea tools to handle the
-        # weights correctly)
-        basenames = get_basenames(files)
-        orig_basenames = get_basenames(resolve_sample(self.config_inst.x.external_files[key]))
-        setattr(self, f"{key}_names", list(zip(basenames, orig_basenames)))
+    # store jec files without L1* corrections for MET propagation
+    self.jec_files_nol1 = [
+        t.path
+        for level, t in resolve_samples(bundle.files.jec).items()
+        if not level.startswith("L1")
+    ]
+    self.jec_names_nol1 = list(zip(
+        get_basenames(self.jec_files_nol1),
+        get_basenames([
+            src
+            for level, src in resolve_samples(self.config_inst.x.external_files.jec).items()
+            if not level.startswith("L1")
+        ]),
+    ))
+
+    # store uncertainty
+    self.junc_files = [
+        t.path
+        for t in resolve_samples(bundle.files.junc)
+    ]
+    self.junc_names = list(zip(
+        get_basenames(self.junc_files),
+        get_basenames(resolve_samples(self.config_inst.x.external_files.junc)),
+    ))
 
     # ensure exactly one 'UncertaintySources' file is passed
     if len(self.junc_names) != 1:

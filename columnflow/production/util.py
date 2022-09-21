@@ -58,7 +58,7 @@ default_collections = {
 }
 
 
-@producer
+@producer(call_force=True)
 def attach_coffea_behavior(
     self: Producer,
     events: ak.Array,
