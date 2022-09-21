@@ -337,7 +337,7 @@ def plot_variable_variants(
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
-    yscale: str = "",
+    yscale: Optional[str] = None,
     **kwargs,
 ) -> plt.Figure:
     plot_config = OrderedDict()
@@ -387,46 +387,61 @@ def plot_variable_variants(
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
-    process_inst: od.process,
     variable_inst: od.variable,
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
-    yscale: str = "",
+    yscale: Optional[str] = None,
+    legtitle: Optional[str] = None,
     process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
-
-    # create the stack and the sum
+    # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
-    h_stack = h_sum.stack("shift")
-    label = [config_inst.get_shift(h_sum.axes["shift"][i]).label for i in range(3)]
-
-    # get the normalization factors into the correct shape (over/underflow bins)
-    norm = np.concatenate(([-1], h_sum[{"shift": hist.loc(0)}].values(), [-1]))
 
     # setup plotting configs
-    mc_norm = [sum(h_sum[{"shift": i}].values()) for i in range(3)]
-    plot_config = {
-        "MC": {
-            "method": "draw_stack",
-            "hist": h_stack,
-            "kwargs": {
-                "norm": mc_norm,
-                "label": label,
-                "color": ["black", "red", "blue"],
-                "histtype": "step",
-                "stack": False,
-            },
-            "ratio_kwargs": {"norm": norm, "color": ["black", "red", "blue"], "histtype": "step", "stack": False},
-        },
+    plot_config = {}
+    colors = {
+        "nominal": "black",
+        "up": "red",
+        "down": "blue",
     }
+    for i, shift in enumerate(h_sum.axes["shift"]):
+        shift_label = config_inst.get_shift(shift).label
+        h = h_sum[{"shift": hist.loc(shift)}]
+        # assuming `nominal` always has shift id 0
+        ratio_norm = h_sum[{"shift": hist.loc(0)}].values()
 
-    # process_settings
-    if not process_settings:
-        process_settings = {}
-    process_label = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
+        diff = sum(h.values()) / sum(ratio_norm) - 1
+        label = config_inst.get_shift(shift).label + " ({0:+.2f}%)".format(diff * 100)
+
+        plot_config[f"{shift}"] = {
+            "method": "draw_hist",
+            "hist": h,
+            "kwargs": {
+                "norm": sum(h.values()) if shape_norm else 1,
+                "label": label,
+                "color": colors[shift_label.split("_")[-1]],
+            },
+            "ratio_kwargs": {
+                "norm": ratio_norm,
+                "color": colors[shift_label.split("_")[-1]],
+            },
+        }
 
     # setup style config
+    if not process_settings:
+        process_settings = {}
+
+    # legend title setting
+    if not legtitle:
+        if len(hists) == 1:
+            # use process label as default if 1 process
+            process_inst = list(hists.keys())[0]
+            legtitle = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
+        else:
+            # default to `Background` for multiple processes
+            legtitle = "Background"
+
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
@@ -439,11 +454,11 @@ def plot_shifted_variable(
         "rax_cfg": {
             "xlim": (variable_inst.x_min, variable_inst.x_max),
             "ylim": (0.25, 1.75),
-            "ylabel": "Sys / Nom",
+            "ylabel": "Ratio",
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {
-            "title": process_label,
+            "title": legtitle,
         },
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
@@ -461,7 +476,7 @@ def plot_cutflow(
     config_inst: od.config,
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
-    yscale: str = "",
+    yscale: Optional[str] = None,
     process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
