@@ -221,7 +221,7 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
 
     # recover coffea behavior
-    events = self[attach_coffea_behavior](events, colletions=["Jet"], **kwargs)
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # get pt and phi of all jets after correcting
     jetsum = ak.sum(events.Jet, axis=1)
@@ -484,7 +484,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "Jet.mass", events.Jet.mass * smear_factors[:, :, 0])
 
     # recover coffea behavior
-    events = self[attach_coffea_behavior](events, colletions=["Jet"], **kwargs)
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # get pt and phi of all jets after correcting
     jetsum = ak.sum(events.Jet, axis=1)
