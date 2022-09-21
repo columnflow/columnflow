@@ -54,8 +54,9 @@ def sel_1e(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
 
 @selector(
     uses={req_jet},
-    produces={"jet_high_multiplicity"},
+    produces={"n_jets"},
     exposed=True,
+    shifts={"jecdummy_up", "jecdummy_down"},
 )
 def jet_selection_test(
     self: Selector,
@@ -66,13 +67,11 @@ def jet_selection_test(
     # example cuts:
     # - require at least 4 jets with pt>30, eta<2.4
     # example columns:
-    # - high jet multiplicity region (>=6 selected jets)
+    # - n_jets: number of jets fulfilling the jet mask
 
     jet_mask = self[req_jet](events)
-    jet_sel = ak.num(jet_mask, axis=1) >= 4
-
-    jet_high_multiplicity = ak.num(jet_mask, axis=1) >= 6
-    events = set_ak_column(events, "jet_high_multiplicity", jet_high_multiplicity)
+    events = set_ak_column(events, "n_jets", ak.sum(jet_mask, axis=1))
+    jet_sel = events.n_jets >= 4
 
     jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)
     masked_jet_indices = jet_indices[jet_mask[jet_indices]]
