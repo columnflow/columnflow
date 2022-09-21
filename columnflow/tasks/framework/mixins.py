@@ -525,9 +525,9 @@ class InferenceModelMixin(ConfigTask):
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
-        default=("1mu",),
+        default=("incl",),
         description="comma-separated category names or patterns to select; can also be the key of "
-        "a mapping defined in 'category_groups' auxiliary data of the config; default: ('1mu',)",
+        "a mapping defined in 'category_groups' auxiliary data of the config; default: ('incl',)",
         brace_expand=True,
     )
 
