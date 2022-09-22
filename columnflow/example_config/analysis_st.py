@@ -5,6 +5,7 @@ Configuration of the single top analysis.
 """
 
 import re
+from typing import Set
 
 from scinum import Number, REL
 from order import Analysis, Shift
@@ -109,14 +110,15 @@ config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
 
 
 # helper to add column aliases for both shifts of a source
-def add_aliases(shift_source, aliases):
+def add_aliases(shift_source: str, aliases: Set[str], selection_dependent: bool):
     for direction in ["up", "down"]:
         shift = config_2018.get_shift(Shift.join_name(shift_source, direction))
         # format keys and values
         inject_shift = lambda s: re.sub(r"\{([^_])", r"{_\1", s).format(**shift.__dict__)
         _aliases = {inject_shift(key): inject_shift(value) for key, value in aliases.items()}
+        alias_type = "column_aliases_selection_dependent" if selection_dependent else "column_aliases"
         # extend existing or register new column aliases
-        shift.set_aux("column_aliases", shift.get_aux("column_aliases", {})).update(_aliases)
+        shift.set_aux(alias_type, shift.get_aux(alias_type, {})).update(_aliases)
 
 
 # register shifts
@@ -127,7 +129,14 @@ config_2018.add_shift(name="hdamp_up", id=3, type="shape", tags={"disjoint_from_
 config_2018.add_shift(name="hdamp_down", id=4, type="shape", tags={"disjoint_from_nominal"})
 config_2018.add_shift(name="minbias_xs_up", id=7, type="shape")
 config_2018.add_shift(name="minbias_xs_down", id=8, type="shape")
-add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"})
+add_aliases("minbias_xs", {"pu_weight": "pu_weight_{name}"}, selection_dependent=False)
+config_2018.add_shift(name="jecdummy_up", id=9, type="shape")
+config_2018.add_shift(name="jecdummy_down", id=10, type="shape")
+add_aliases(
+    "jecdummy",
+    {"Jet.pt": "Jet.pt_jec_{direction}", "Jet.mass": "Jet.mass_jec_{direction}"},
+    selection_dependent=True,
+)
 
 # external files
 config_2018.set_aux("external_files", DotDict.wrap({

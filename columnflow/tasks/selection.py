@@ -108,7 +108,7 @@ class SelectEvents(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
         # define nano columns that need to be loaded
         load_columns = mandatory_coffea_columns | self.selector_inst.used_columns
