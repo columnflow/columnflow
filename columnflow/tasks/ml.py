@@ -125,8 +125,7 @@ class PrepareMLEvents(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            if not self.shift_inst.has_tag("selection_dependent"):
-                events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
             # generate fold indices
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds
