@@ -11,10 +11,10 @@ import luigi
 
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
     VariablesMixin, ShiftSourcesMixin,
 )
-from columnflow.tasks.framework.plotting import ProcessPlotBase
+from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict
@@ -76,7 +76,7 @@ class PlotVariables(
         return self.target(f"plot__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
@@ -249,7 +249,7 @@ class PlotShiftedVariables(
             return self.target(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 

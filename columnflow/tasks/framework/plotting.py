@@ -11,7 +11,7 @@ import law
 import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask
-from columnflow.tasks.framework.mixins import PlotMixin, CategoriesMixin, DatasetsProcessesMixin
+from columnflow.tasks.framework.mixins import CategoriesMixin, DatasetsProcessesMixin
 from columnflow.util import test_float
 
 
@@ -133,7 +133,7 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
     return before_call, call, after_call
 
 
-PlotMixin.view_output_plots = view_output_plots
+PlotBase.view_output_plots = view_output_plots
 
 
 class PlotBase1D(PlotBase):

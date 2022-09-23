@@ -12,9 +12,9 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, ChunkedReaderMixin,
 )
-from columnflow.tasks.framework.plotting import ProcessPlotBase
+from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -239,7 +239,7 @@ class PlotCutflow(
         return self.target(f"cutflow__cat_{self.branch_data}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
@@ -420,7 +420,7 @@ class PlotCutflowVariables(
             })
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
