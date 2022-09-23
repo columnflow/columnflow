@@ -72,8 +72,10 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
-        return self.target(f"plot__cat_{b.category}__var_{b.variable}{suffix}.pdf")
+        return [
+            self.target(name)
+            for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}")
+        ]
 
     @law.decorator.log
     @PlotBase.view_output_plots
@@ -155,7 +157,8 @@ class PlotVariables(
             )
 
             # save the plot
-            self.output().dump(fig, formatter="mpl")
+            for outp in self.output():
+                outp.dump(fig, formatter="mpl")
 
 
 class PlotShiftedVariables(
@@ -234,19 +237,25 @@ class PlotShiftedVariables(
 
     def output(self):
         b = self.branch_data
-        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
         if self.per_process:
             # one output per process
             return law.SiblingFileCollection({
-                p: self.target(
-                    f"plot__proc_{p}__unc_{b.shift_source}__cat_{b.category}"
-                    f"__var_{b.variable}{suffix}.pdf",
-                )
+                p: [
+                    self.target(name) for name in self.get_plot_names(
+                        f"plot__proc_{p}__unc_{b.shift_source}__cat_{b.category}"
+                        f"__var_{b.variable}",
+                    )
+                ]
                 for p in self.processes
             })
         else:
             # a single output
-            return self.target(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}{suffix}.pdf")
+            return [
+                self.target(name)
+                for name in self.get_plot_names(
+                    f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}",
+                )
+            ]
 
     @law.decorator.log
     @PlotBase.view_output_plots
@@ -269,6 +278,7 @@ class PlotShiftedVariables(
 
         # histogram data per process
         hists = OrderedDict()
+        outputs = self.output()
 
         with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
             for dataset, inp in self.input().items():
@@ -327,7 +337,8 @@ class PlotShiftedVariables(
                         **self.get_plot_parameters(),
                     )
                     # save the plot
-                    self.output()[process_inst.name].dump(fig, formatter="mpl")
+                    for outp in outputs[process_inst.name]:
+                        outp.dump(fig, formatter="mpl")
             else:
                 # call the plot function once
                 fig = self.call_plot_func(
@@ -339,4 +350,5 @@ class PlotShiftedVariables(
                 )
 
                 # save the plot
-                self.output().dump(fig, formatter="mpl")
+                for outp in outputs:
+                    outp.dump(fig, formatter="mpl")
