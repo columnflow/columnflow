@@ -5,11 +5,13 @@ Calibration methods for jets
 """
 
 import os
+from typing import Tuple
 
 import law
 
 from columnflow.util import maybe_import, memoize
 from columnflow.calibration import Calibrator, calibrator
+from columnflow.production.util import attach_coffea_behavior
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -24,6 +26,42 @@ coffea_txt_converters = maybe_import("coffea.lookup_tools.txt_converters")
 #
 # first, some utility functions
 #
+
+
+def get_basenames(struct):
+    """
+    Replace full file paths in an arbitrary struct by the file basenames.
+    """
+    return law.util.map_struct(
+        lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
+        struct,
+    )
+
+
+# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
+def ak_random(*args, rand_func):
+    """
+    Return an awkward array filled with random numbers. The *args* must be broadcastable
+    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
+    random numbers.
+    """
+    args = ak.broadcast_arrays(*args)
+
+    if hasattr(args[0].layout, "offsets"):
+        # convert to flat numpy arrays
+        np_args = [np.asarray(a.layout.content) for a in args]
+
+        # pass flat arrays to random function and get random values
+        np_randvals = rand_func(*np_args)
+
+        # convert back to awkward array
+        return ak.Array(ak.layout.ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
+
+    # pass args directly (this may fail for some array types)
+    # TODO: make function more general
+    np_randvals = rand_func(*args)
+    return ak.from_numpy(np_randvals)
+
 
 @memoize
 def get_lookup_provider(files, conversion_func, provider_cls, names=None):
@@ -90,38 +128,42 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     return provider
 
 
-def get_basenames(struct):
-    """Replace full file paths in an arbitrary struct by the file basenames"""
-    return law.util.map_struct(
-        lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
-        struct,
-    )
+# helper to compute new MET based on per-jet pts and phis before and after a correction
+def prop_met(
+    jet_pt1: ak.Array,
+    jet_phi1: ak.Array,
+    jet_pt2: ak.Array,
+    jet_phi2: ak.Array,
+    met_pt1: ak.Array,
+    met_phi1: ak.Array,
+) -> Tuple[ak.Array, ak.Array]:
+    # avoid unwanted broadcasting
+    assert jet_pt1.ndim == jet_phi1.ndim
+    assert jet_pt2.ndim == jet_phi2.ndim
 
+    # build px and py sums before and after
+    jet_px1 = jet_pt1 * np.cos(jet_phi1)
+    jet_py1 = jet_pt1 * np.sin(jet_phi1)
+    jet_px2 = jet_pt2 * np.cos(jet_phi2)
+    jet_py2 = jet_pt2 * np.sin(jet_phi2)
 
-# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
-def ak_random(*args, rand_func):
-    """Return an awkward array filled with random numbers. The *args* must be broadcastable
-    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
-    random numbers."""
-    from awkward import Array
-    from awkward.layout import ListOffsetArray64
+    # sum over axis 1 when not already done
+    if jet_pt1.ndim > 1:
+        jet_px1 = ak.sum(jet_px1, axis=1)
+        jet_py1 = ak.sum(jet_py1, axis=1)
+    if jet_pt2.ndim > 1:
+        jet_px2 = ak.sum(jet_px2, axis=1)
+        jet_py2 = ak.sum(jet_py2, axis=1)
 
-    args = ak.broadcast_arrays(*args)
+    # propagate to met
+    met_px2 = met_pt1 * np.cos(met_phi1) - (jet_px2 - jet_px1)
+    met_py2 = met_pt1 * np.sin(met_phi1) - (jet_py2 - jet_py1)
 
-    if hasattr(args[0].layout, "offsets"):
-        # convert to flat numpy arrays
-        np_args = [np.asarray(a.layout.content) for a in args]
+    # compute new components
+    met_pt2 = (met_px2**2.0 + met_py2**2.0)**0.5
+    met_phi2 = np.arctan(met_py2 / met_px2)
 
-        # pass flat arrays to random function and get random values
-        np_randvals = rand_func(*np_args)
-
-        # convert back to awkward array
-        return Array(ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
-    else:
-        # pass args directly (this may fail for some array types)
-        # TODO: make function more general
-        np_randvals = rand_func(*args)
-        return ak.from_numpy(np_randvals)
+    return met_pt2, met_phi2
 
 
 #
@@ -130,20 +172,28 @@ def ak_random(*args, rand_func):
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.area", "Jet.mass", "Jet.rawFactor",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
+        "Jet.jetId",
+        "RawMET.pt", "RawMET.phi",
         "fixedGridRhoFastjetAll",
+        attach_coffea_behavior,
     },
     produces={
-        "Jet.pt", "Jet.mass", "Jet.rawFactor",
+        "Jet.pt", "Jet.mass", "Jet.rawFactor", "MET.pt", "MET.phi",
     },
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
 )
-def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+def jec(
+    self: Calibrator,
+    events: ak.Array,
+    min_pt_met_prop: float = 15.0,
+    max_eta_met_prop: float = 5.2,
+    **kwargs,
+) -> ak.Array:
     """
     Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
     """
-
     # calculate uncorrected pt, mass
     events = set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
     events = set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
@@ -156,6 +206,12 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         coffea_txt_converters.convert_jec_txt_file,
         coffea_jetmet_tools.FactorizedJetCorrector,
         names=self.jec_names,
+    )
+    jec_provider_only_l1 = get_lookup_provider(
+        self.jec_files_only_l1,
+        coffea_txt_converters.convert_jec_txt_file,
+        coffea_jetmet_tools.FactorizedJetCorrector,
+        names=self.jec_names_only_l1,
     )
     if self.junc_names:
         junc_provider = get_lookup_provider(
@@ -172,11 +228,47 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         JetA=events.Jet.area,
         Rho=events.fixedGridRhoFastjetAll,
     )
+    jec_factors_only_l1 = jec_provider_only_l1.getCorrection(
+        JetEta=events.Jet.eta,
+        JetPt=events.Jet.pt_raw,
+        JetA=events.Jet.area,
+        Rho=events.fixedGridRhoFastjetAll,
+    )
 
-    # store corrected pt, mass and recalculate rawFactor
+    # apply the new factors with only L1 corrections
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_only_l1)
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_only_l1)
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+
+    # store pt and phi of the full jet system for MET propagation, including a selection in raw info
+    # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
+    met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
+    jetsum = events.Jet[met_prop_mask].sum(axis=1)
+    jet_pt_only_l1 = jetsum.pt
+    jet_phi_only_l1 = jetsum.phi
+
+    # full jet correction with all levels
     events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
     events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
     events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+
+    # get pt and phi of all jets after correcting
+    jetsum = events.Jet[met_prop_mask].sum(axis=1)
+    jet_pt_all_levels = jetsum.pt
+    jet_phi_all_levels = jetsum.phi
+
+    # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
+    met_pt, met_phi = prop_met(
+        jet_pt_only_l1,
+        jet_phi_only_l1,
+        jet_pt_all_levels,
+        jet_phi_all_levels,
+        events.RawMET.pt,
+        events.RawMET.phi,
+    )
+    events = set_ak_column(events, "MET.pt", met_pt)
+    events = set_ak_column(events, "MET.phi", met_phi)
 
     # look up JEC uncertainties
     if self.junc_names:
@@ -186,10 +278,34 @@ def jec(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         )
         for name, jec_unc_factors in jec_uncertainties:
             # jec_unc_factors[I_EVT][I_JET][I_VAR]
-            events = set_ak_column(events, f"Jet.pt_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
-            events = set_ak_column(events, f"Jet.pt_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
-            events = set_ak_column(events, f"Jet.mass_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
-            events = set_ak_column(events, f"Jet.mass_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
+            events = set_ak_column(events, f"Jet.pt_jec_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.pt_jec_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
+            events = set_ak_column(events, f"Jet.mass_jec_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
+            events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
+
+            # MET propagation
+            jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
+            jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
+            met_pt_up, met_phi_up = prop_met(
+                jet_pt_all_levels,
+                jet_phi_all_levels,
+                jet_pt_up,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
+            met_pt_down, met_phi_down = prop_met(
+                jet_pt_all_levels,
+                jet_phi_all_levels,
+                jet_pt_down,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
+            events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
+            events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
+            events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
+            events = set_ak_column(events, f"MET.phi_jec_{name}_down", met_phi_down)
 
     return events
 
@@ -203,9 +319,18 @@ def jec_init(self: Calibrator) -> None:
     if sources is None:
         sources = self.config_inst.x.jec.uncertainty_sources
 
+    # add shifted jet variables
     self.produces |= {
-        f"Jet.{shifted_var}_{junc_name}_{junc_dir}"
+        f"Jet.{shifted_var}_jec_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
+        for junc_name in sources
+        for junc_dir in ("up", "down")
+    }
+
+    # add shifted MET variables
+    self.produces |= {
+        f"MET.{shifted_var}_jec_{junc_name}_{junc_dir}"
+        for shifted_var in ("pt", "phi")
         for junc_name in sources
         for junc_dir in ("up", "down")
     }
@@ -229,31 +354,49 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
     """
-
     # get external files bundle that contains JEC text files
     bundle = reqs["external_files"]
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
-        resolve_sample = lambda x: x.data[self.dataset_inst.x.jec_era]
+        resolve_samples = lambda x: x.data[self.dataset_inst.x.jec_era]
     else:
-        resolve_sample = lambda x: x.mc
+        resolve_samples = lambda x: x.mc
 
-    # pass text files to calibrator method
-    for key in ("jec", "junc"):
-        # pass the paths to the text files that contain the corrections/uncertainties
-        files = [
-            t.path for t in resolve_sample(bundle.files[key])
-        ]
-        setattr(self, f"{key}_files", files)
+    # store jec files with all correction levels
+    self.jec_files = [
+        t.path
+        for t in resolve_samples(bundle.files.jec).values()
+    ]
+    self.jec_names = list(zip(
+        get_basenames(self.jec_files),
+        get_basenames(resolve_samples(self.config_inst.x.external_files.jec).values()),
+    ))
 
-        # also pass a list of tuples encoding the correspondence between the original
-        # file basenames and filenames on disk (as determined by `BundleExternalFiles`)
-        # and the original file basenames (needed by coffea tools to handle the
-        # weights correctly)
-        basenames = get_basenames(files)
-        orig_basenames = get_basenames(resolve_sample(self.config_inst.x.external_files[key]))
-        setattr(self, f"{key}_names", list(zip(basenames, orig_basenames)))
+    # store jec files with only L1* corrections for MET propagation
+    self.jec_files_only_l1 = [
+        t.path
+        for level, t in resolve_samples(bundle.files.jec).items()
+        if level.startswith("L1")
+    ]
+    self.jec_names_only_l1 = list(zip(
+        get_basenames(self.jec_files_only_l1),
+        get_basenames([
+            src
+            for level, src in resolve_samples(self.config_inst.x.external_files.jec).items()
+            if level.startswith("L1")
+        ]),
+    ))
+
+    # store uncertainty
+    self.junc_files = [
+        t.path
+        for t in resolve_samples(bundle.files.junc)
+    ]
+    self.junc_names = list(zip(
+        get_basenames(self.junc_files),
+        get_basenames(resolve_samples(self.config_inst.x.external_files.junc)),
+    ))
 
     # ensure exactly one 'UncertaintySources' file is passed
     if len(self.junc_names) != 1:
@@ -279,16 +422,18 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx", "fixedGridRhoFastjetAll",
+        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
+        "fixedGridRhoFastjetAll",
         "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
+        "MET.pt", "MET.phi",
+        attach_coffea_behavior,
     },
     produces={
         "Jet.pt", "Jet.mass",
         "Jet.pt_unsmeared", "Jet.mass_unsmeared",
-    } | {
-        f"Jet.{shifted_var}_JERSF_{jersf_dir}"
-        for shifted_var in ("pt", "mass")
-        for jersf_dir in ("up", "down")
+        "Jet.pt_jer_up", "Jet.pt_jer_down", "Jet.mass_jer_up", "Jet.mass_jer_down",
+        "MET.pt", "MET.phi",
+        "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
@@ -393,10 +538,59 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
-    # applu the final smearing factors to the pt and mass
-    for idx, suffix in enumerate(("", "_jer_up", "_jer_down")):
-        events = set_ak_column(events, f"Jet.pt{suffix}", events.Jet.pt * smear_factors[:, :, idx])
-        events = set_ak_column(events, f"Jet.mass{suffix}", events.Jet.mass * smear_factors[:, :, idx])
+    # store pt and phi of the full jet system
+    jetsum = events.Jet.sum(axis=1)
+    jet_pt_before = jetsum.pt
+    jet_phi_before = jetsum.phi
+
+    # apply the smearing factors to the pt and mass
+    # (note: apply variations first since they refer to the original pt)
+    events = set_ak_column(events, "Jet.pt_jer_up", events.Jet.pt * smear_factors[:, :, 1])
+    events = set_ak_column(events, "Jet.mass_jer_up", events.Jet.mass * smear_factors[:, :, 1])
+    events = set_ak_column(events, "Jet.pt_jer_down", events.Jet.pt * smear_factors[:, :, 2])
+    events = set_ak_column(events, "Jet.mass_jer_down", events.Jet.mass * smear_factors[:, :, 2])
+    events = set_ak_column(events, "Jet.pt", events.Jet.pt * smear_factors[:, :, 0])
+    events = set_ak_column(events, "Jet.mass", events.Jet.mass * smear_factors[:, :, 0])
+
+    # recover coffea behavior
+    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+
+    # get pt and phi of all jets after correcting
+    jetsum = events.Jet.sum(axis=1)
+    jet_pt_after = jetsum.pt
+    jet_phi_after = jetsum.phi
+
+    # propagate changes to MET
+    met_pt, met_phi = prop_met(
+        jet_pt_before,
+        jet_phi_before,
+        jet_pt_after,
+        jet_phi_after,
+        events.MET.pt,
+        events.MET.phi,
+    )
+    met_pt_up, met_phi_up = prop_met(
+        jet_pt_after,
+        jet_phi_after,
+        events.Jet.pt_jer_up,
+        events.Jet.phi,
+        met_pt,
+        met_phi,
+    )
+    met_pt_down, met_phi_down = prop_met(
+        jet_pt_after,
+        jet_phi_after,
+        events.Jet.pt_jer_down,
+        events.Jet.phi,
+        met_pt,
+        met_phi,
+    )
+    events = set_ak_column(events, "MET.pt", met_pt)
+    events = set_ak_column(events, "MET.phi", met_phi)
+    events = set_ak_column(events, "MET.pt_jer_up", met_pt_up)
+    events = set_ak_column(events, "MET.pt_jer_down", met_pt_down)
+    events = set_ak_column(events, "MET.phi_jer_up", met_phi_up)
+    events = set_ak_column(events, "MET.phi_jer_down", met_phi_down)
 
     return events
 
