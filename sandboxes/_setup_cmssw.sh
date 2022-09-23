@@ -80,6 +80,14 @@ setup_cmssw() {
 
 
     #
+    # store variables of the encapsulating venv
+    #
+
+    local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
+    local venv_site_packages="${CF_VENV_BASE}/${CF_VENV_NAME}/lib/python${pyv}/site-packages"
+
+
+    #
     # start the setup
     #
 
@@ -215,9 +223,14 @@ setup_cmssw() {
     eval "$( scramv1 runtime -sh )"
     cd "${orig_dir}"
 
-    # prepend the presistent cf paths so that local packages are priotized
+    # prepend persistent path fragments again for ensure priority for local packages
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
+
+    # prepend the site-packages of the encapsulating venv for priotity over cmssw-shipped packages
+    # note: this could potentially lead to version mismatches so in case this becomes in issue,
+    # this injection needs refactoring
+    export PYTHONPATH="${venv_site_packages}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_CMSSW_ENV_NAME}.sh"

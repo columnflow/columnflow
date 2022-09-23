@@ -411,10 +411,6 @@ cf_setup_software_stack() {
         source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
     fi
 
-    # prepend persistent path fragments again for ensure priority for local packages
-    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
-
     # initialze submodules
     if [ -d "${CF_BASE}/.git" ]; then
         for m in $( ls -1q "${CF_BASE}/modules" ); do
