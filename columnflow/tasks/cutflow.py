@@ -12,10 +12,10 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, PlotMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, ChunkedReaderMixin,
 )
+from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.plotting import ProcessPlotBase
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
 
@@ -186,6 +186,15 @@ class PlotCutflow(
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
 
+    def get_plot_parameters(self):
+        params = super().get_plot_parameters()
+
+        # no ratio plot implemented: disable ratio plot for `plot_cutflow`
+        if self.plot_function_name == "columnflow.plotting.example.plot_cutflow":
+            params["skip_ratio"] = True
+
+        return params
+
     def create_branch_map(self):
         # one category per branch
         if not self.categories:
@@ -226,10 +235,11 @@ class PlotCutflow(
         }
 
     def output(self):
-        return self.target(f"cutflow__cat_{self.branch_data}.pdf")
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
+        return self.target(f"cutflow__cat_{self.branch_data}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
@@ -303,7 +313,6 @@ class PlotCutflow(
                 hists=hists,
                 config_inst=self.config_inst,
                 **self.get_plot_parameters(),
-
             )
 
             # save the plot
@@ -398,19 +407,20 @@ class PlotCutflowVariables(
 
     def output(self):
         b = self.branch_data
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
         if self.per_plot == "processes":
             return law.SiblingFileCollection({
-                s: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}.pdf")
+                s: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}{suffix}.pdf")
                 for i, s in enumerate(self.chosen_steps)
             })
         else:  # per_plot == "steps"
             return law.SiblingFileCollection({
-                p: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}.pdf")
+                p: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}{suffix}.pdf")
                 for p in self.processes
             })
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 

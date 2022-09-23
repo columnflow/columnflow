@@ -7,31 +7,17 @@ Tasks to plot different types of histograms.
 from collections import OrderedDict
 
 import law
+import luigi
 
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, PlotMixin, CategoriesMixin,
-    VariablesMixin, DatasetsProcessesMixin, ShiftSourcesMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
+    VariablesMixin, ShiftSourcesMixin,
 )
+from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict
-
-
-class ProcessPlotBase(
-    CategoriesMixin,
-    DatasetsProcessesMixin,
-    PlotMixin,
-):
-    """
-    Base class for tasks creating plots where contributions of different processes are shown.
-    """
-
-    def store_parts(self):
-        parts = super().store_parts()
-        part = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
-        parts.insert_before("version", "plot", part)
-        return parts
 
 
 class PlotVariables(
@@ -86,10 +72,11 @@ class PlotVariables(
 
     def output(self):
         b = self.branch_data
-        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
+        return self.target(f"plot__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
@@ -191,6 +178,27 @@ class PlotShiftedVariables(
     # default plot function
     plot_function_name = "columnflow.plotting.example.plot_shifted_variable"
 
+    per_process = luigi.BoolParameter(
+        default=False,
+        significant=True,
+        description="when True, one plot per process is produced; default: False",
+    )
+
+    legend_title = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="sets the title of the legend; when empty and only one process is present in "
+        "the plot, the process_inst label is used; empty default",
+    )
+
+    def get_plot_parameters(self):
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+
+        params["legend_title"] = None if self.legend_title == law.NO_STR else self.legend_title
+
+        return params
+
     def store_parts(self):
         parts = super().store_parts()
         parts["plot"] += f"__shifts_{self.shift_sources_repr}"
@@ -226,16 +234,32 @@ class PlotShiftedVariables(
 
     def output(self):
         b = self.branch_data
-        return self.target(f"plot__cat_{b.category}__var_{b.variable}.pdf")
+        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
+        if self.per_process:
+            # one output per process
+            return law.SiblingFileCollection({
+                p: self.target(
+                    f"plot__proc_{p}__unc_{b.shift_source}__cat_{b.category}"
+                    f"__var_{b.variable}{suffix}.pdf",
+                )
+                for p in self.processes
+            })
+        else:
+            # a single output
+            return self.target(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}{suffix}.pdf")
 
     @law.decorator.log
-    @PlotMixin.view_output_plots
+    @PlotBase.view_output_plots
     def run(self):
         import hist
 
         # prepare config objects
         variable_inst = self.config_inst.get_variable(self.branch_data.variable)
         category_inst = self.config_inst.get_category(self.branch_data.category)
+        shift_insts = [
+            self.config_inst.get_shift(s) for s in
+            ["nominal", f"{self.branch_data.shift_source}_up", f"{self.branch_data.shift_source}_down"]
+        ]
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
         process_insts = list(map(self.config_inst.get_process, self.processes))
         sub_process_insts = {
@@ -272,6 +296,11 @@ class PlotShiftedVariables(
                             for c in leaf_category_insts
                             if c.id in h.axes["category"]
                         ],
+                        "shift": [
+                            hist.loc(s.id)
+                            for s in shift_insts
+                            if s.id in h.axes["shift"]
+                        ],
                     }]
 
                     # axis reductions
@@ -287,15 +316,27 @@ class PlotShiftedVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            # call the plot function
-            fig = self.call_plot_func(
-                self.plot_function_name,
-                hists=hists,
-                config_inst=self.config_inst,
-                process_inst=process_inst,
-                variable_inst=variable_inst,
-                **self.get_plot_parameters(),
-            )
+            if self.per_process:
+                for process_inst, h in hists.items():
+                    # call the plot function once per process
+                    fig = self.call_plot_func(
+                        self.plot_function_name,
+                        hists={process_inst: h},
+                        config_inst=self.config_inst,
+                        variable_inst=variable_inst,
+                        **self.get_plot_parameters(),
+                    )
+                    # save the plot
+                    self.output()[process_inst.name].dump(fig, formatter="mpl")
+            else:
+                # call the plot function once
+                fig = self.call_plot_func(
+                    self.plot_function_name,
+                    hists=hists,
+                    config_inst=self.config_inst,
+                    variable_inst=variable_inst,
+                    **self.get_plot_parameters(),
+                )
 
-            # save the plot
-            self.output().dump(fig, formatter="mpl")
+                # save the plot
+                self.output().dump(fig, formatter="mpl")
