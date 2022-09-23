@@ -15,7 +15,7 @@ class PlotBase(PlotMixin):
     """
     Base class for all plotting tasks.
     """
-    # TODO implement in task
+
     plot_suffix = luigi.Parameter(
         default="",
         significant=True,
@@ -34,10 +34,12 @@ class PlotBase(PlotMixin):
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
-        return {
-            "skip_legend": self.skip_legend,
-            "skip_cms": self.skip_cms,
-        }
+        params = super().get_plot_parameters()
+
+        params["skip_legend"] = self.skip_legend
+        params["skip_cms"] = self.skip_cms
+
+        return params
 
 
 class PlotBase1D(PlotBase):

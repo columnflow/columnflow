@@ -782,6 +782,10 @@ class PlotMixin(AnalysisTask):
         "terminal; no default",
     )
 
+    def get_plot_parameters(self):
+        # collect parameters relevant for the plotting function
+        return {}
+
     def get_plot_func(self, func_name: str) -> Callable:
         """
         Returns a function, imported from a module given *func_name* which should have the format

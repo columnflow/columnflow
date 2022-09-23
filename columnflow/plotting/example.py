@@ -391,7 +391,7 @@ def plot_shifted_variable(
     style_config: Optional[dict] = None,
     shape_norm: bool = False,
     yscale: Optional[str] = None,
-    legtitle: Optional[str] = None,
+    legend_title: Optional[str] = None,
     process_settings: Optional[dict] = None,
     **kwargs,
 ) -> plt.Figure:
@@ -433,14 +433,14 @@ def plot_shifted_variable(
         process_settings = {}
 
     # legend title setting
-    if not legtitle:
+    if not legend_title:
         if len(hists) == 1:
             # use process label as default if 1 process
             process_inst = list(hists.keys())[0]
-            legtitle = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
+            legend_title = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
         else:
             # default to `Background` for multiple processes
-            legtitle = "Background"
+            legend_title = "Background"
 
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
@@ -458,7 +458,7 @@ def plot_shifted_variable(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {
-            "title": legtitle,
+            "title": legend_title,
         },
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb

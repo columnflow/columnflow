@@ -184,7 +184,7 @@ class PlotShiftedVariables(
         description="when True, one plot per process is produced; default: False",
     )
 
-    legtitle = luigi.Parameter(
+    legend_title = luigi.Parameter(
         default=law.NO_STR,
         significant=False,
         description="sets the title of the legend; when empty and only one process is present in "
@@ -195,7 +195,7 @@ class PlotShiftedVariables(
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
-        params["legtitle"] = None if self.legtitle == law.NO_STR else self.legtitle
+        params["legend_title"] = None if self.legend_title == law.NO_STR else self.legend_title
 
         return params
 
@@ -238,8 +238,10 @@ class PlotShiftedVariables(
         if self.per_process:
             # one output per process
             return law.SiblingFileCollection({
-                p: self.target(f"plot__proc_{p}__unc_{b.shift_source}__cat_"
-                               f"{b.category}__var_{b.variable}{suffix}.pdf")
+                p: self.target(
+                    f"plot__proc_{p}__unc_{b.shift_source}__cat_{b.category}"
+                    f"__var_{b.variable}{suffix}.pdf",
+                )
                 for p in self.processes
             })
         else:
