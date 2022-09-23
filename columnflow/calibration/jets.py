@@ -161,7 +161,7 @@ def prop_met(
 
     # compute new components
     met_pt2 = (met_px2**2.0 + met_py2**2.0)**0.5
-    met_phi2 = np.arctan(met_py2 / met_px2)
+    met_phi2 = np.arctan2(met_py2, met_px2)
 
     return met_pt2, met_phi2
 

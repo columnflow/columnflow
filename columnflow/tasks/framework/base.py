@@ -94,7 +94,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
         _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
-        _prefer_cli.add("version")
+        _prefer_cli |= {"version", "workflow"}
         kwargs["_prefer_cli"] = _prefer_cli
 
         # when cls accepts a version, but non was actively requested, use the version map to assign it
