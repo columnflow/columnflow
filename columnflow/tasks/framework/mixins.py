@@ -5,8 +5,7 @@ Lightweight mixins task classes.
 """
 
 import time
-import importlib
-from typing import Union, Sequence, List, Set, Dict, Any, Callable
+from typing import Union, Sequence, List, Set, Dict, Any
 
 import law
 import luigi
@@ -771,102 +770,6 @@ class ShiftSourcesMixin(ConfigTask):
             return self.shift_sources[0]
 
         return f"{len(self.shift_sources)}_{law.util.create_hash(sorted(self.shift_sources))}"
-
-
-class PlotMixin(AnalysisTask):
-
-    view_cmd = luigi.Parameter(
-        default=law.NO_STR,
-        significant=False,
-        description="a command to execute after the task has run to visualize plots right in the "
-        "terminal; no default",
-    )
-
-    def get_plot_parameters(self):
-        # collect parameters relevant for the plotting function
-        return {}
-
-    def get_plot_func(self, func_name: str) -> Callable:
-        """
-        Returns a function, imported from a module given *func_name* which should have the format
-        ``<module_to_import>.<function_name>``.
-        """
-        # prepare names
-        if "." not in func_name:
-            raise ValueError(f"invalid func_name format: {func_name}")
-        module_id, name = func_name.rsplit(".", 1)
-
-        # import the module
-        try:
-            mod = importlib.import_module(module_id)
-        except ImportError as e:
-            raise ImportError(f"cannot import plot function {name} from module {module_id}: {e}")
-
-        # get the function
-        func = getattr(mod, name, None)
-        if func is None:
-            raise Exception(f"module {module_id} does not contain plot function {name}")
-
-        return func
-
-    def call_plot_func(self, func_name: str, **kwargs) -> Any:
-        """
-        Gets the plot function referred to by *func_name* via :py:meth:`get_plot_func`, calls it
-        with all *kwargs* and returns its result. *kwargs* are updated through the
-        :py:meth:`update_plot_kwargs` hook first.
-        """
-        return self.get_plot_func(func_name)(**(self.update_plot_kwargs(kwargs)))
-
-    def update_plot_kwargs(self, kwargs: dict) -> dict:
-        """
-        Hook to update keyword arguments *kwargs* used for plotting in :py:meth:`call_plot_func`.
-        """
-        return kwargs
-
-
-@law.decorator.factory(accept_generator=True)
-def view_output_plots(fn, opts, task, *args, **kwargs):
-    def before_call():
-        return None
-
-    def call(state):
-        return fn(task, *args, **kwargs)
-
-    def after_call(state):
-        view_cmd = getattr(task, "view_cmd", None)
-        if not view_cmd or view_cmd == law.NO_STR:
-            return
-
-        # prepare the view command
-        if "{}" not in view_cmd:
-            view_cmd += " {}"
-
-        # collect all paths to view
-        view_paths = []
-        outputs = law.util.flatten(task.output())
-        while outputs:
-            output = outputs.pop(0)
-            if isinstance(output, law.TargetCollection):
-                outputs.extend(output._flat_target_list)
-                continue
-            if not getattr(output, "path", None):
-                continue
-            if output.path.endswith((".pdf", ".png")):
-                if not isinstance(output, law.LocalTarget):
-                    task.logger.warning(f"cannot show non-local plot at '{output.path}'")
-                    continue
-                elif output.path not in view_paths:
-                    view_paths.append(output.path)
-
-        # loop through paths and view them
-        for path in view_paths:
-            task.publish_message("showing {}".format(path))
-            law.util.interruptable_popen(view_cmd.format(path), shell=True, executable="/bin/bash")
-
-    return before_call, call, after_call
-
-
-PlotMixin.view_output_plots = view_output_plots
 
 
 class ChunkedReaderMixin(AnalysisTask):
