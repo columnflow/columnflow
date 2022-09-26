@@ -6,9 +6,10 @@ Collection of general helpers and utilities.
 
 __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
-    "maybe_import", "import_plt", "import_ROOT", "create_random_name", "expand_path", "real_path",
-    "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox", "safe_div",
-    "test_float", "is_pattern", "is_regex", "pattern_matcher", "get_root_processes_from_campaign",
+    "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
+    "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
+    "safe_div", "test_float", "is_pattern", "is_regex", "pattern_matcher",
+    "get_root_processes_from_campaign",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
@@ -118,6 +119,30 @@ def import_ROOT() -> ModuleType:
         _ROOT = ROOT
 
     return _ROOT
+
+
+def import_file(path, attr=None):
+    """
+    Loads the content of a python file located at *path* and returns its package content as a
+    dictionary. When *attr* is set, only the attribute with that name is returned.
+
+    The file is not required to be importable as its content is loaded directly into the
+    interpreter. While this approach is not necessarily clean, it can be useful in places where
+    custom code must be loaded.
+    """
+    # load the package contents (do not try this at home)
+    path = expand_path(path)
+    pkg = DotDict()
+    with open(path, "r") as f:
+        exec(f.read(), pkg)
+
+    # extract a particular attribute
+    if attr:
+        if attr not in pkg:
+            raise AttributeError(f"no local member '{attr}' found in file {path}")
+        return pkg[attr]
+
+    return pkg
 
 
 def create_random_name() -> str:

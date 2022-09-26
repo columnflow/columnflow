@@ -427,8 +427,6 @@ class PlotCutflowVariables(
     def run(self):
         import hist
 
-        outputs = self.output()
-
         # prepare config objects
         variable_inst = self.config_inst.get_variable(self.branch_data.variable)
         category_inst = self.config_inst.get_category(self.branch_data.category)
