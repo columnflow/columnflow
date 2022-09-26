@@ -235,8 +235,10 @@ class PlotCutflow(
         }
 
     def output(self):
-        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
-        return self.target(f"cutflow__cat_{self.branch_data}{suffix}.pdf")
+        return [
+            self.target(name)
+            for name in self.get_plot_names(f"cutflow__cat_{self.branch_data}")
+        ]
 
     @law.decorator.log
     @PlotBase.view_output_plots
@@ -316,7 +318,8 @@ class PlotCutflow(
             )
 
             # save the plot
-            self.output().dump(fig, formatter="mpl")
+            for outp in self.output():
+                outp.dump(fig, formatter="mpl")
 
 
 PlotCutflowWrapper = wrapper_factory(
@@ -485,6 +488,7 @@ class PlotCutflowVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
+            outputs = self.output()
             if self.per_plot == "processes":
                 for step in self.chosen_steps:
                     # sort hists by process order
@@ -504,7 +508,8 @@ class PlotCutflowVariables(
                     )
 
                     # save the plot
-                    outputs[step].dump(fig, formatter="mpl")
+                    for outp in outputs[step]:
+                        outp.dump(fig, formatter="mpl")
 
             else:  # per_plot == "steps"
                 for process_inst, h in hists.items():
@@ -524,4 +529,5 @@ class PlotCutflowVariables(
                     )
 
                     # save the plot
-                    outputs[process_inst.name].dump(fig, formatter="mpl")
+                    for outp in outputs[process_inst.name]:
+                        outp.dump(fig, formatter="mpl")

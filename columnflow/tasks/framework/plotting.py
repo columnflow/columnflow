@@ -1,11 +1,11 @@
 # coding: utf-8
 
 """
-Base tasks for different types of plotting tasks
+Base classes for different types of plotting tasks.
 """
 
 import importlib
-from typing import Any, Callable
+from typing import Any, Callable, List
 
 import law
 import luigi
@@ -20,6 +20,22 @@ class PlotBase(AnalysisTask):
     Base class for all plotting tasks.
     """
 
+    file_types = law.CSVParameter(
+        default=("pdf",),
+        significant=True,
+        description="comma-separated list of file extensions to produce; default: pdf",
+    )
+    plot_suffix = luigi.Parameter(
+        default=law.NO_STR,
+        significant=True,
+        description="adds a suffix to the output file name of a plot; empty default",
+    )
+    view_cmd = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="a command to execute after the task has run to visualize plots right in the "
+        "terminal; no default",
+    )
     skip_legend = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -40,18 +56,19 @@ class PlotBase(AnalysisTask):
 
         return params
 
-    plot_suffix = luigi.Parameter(
-        default="",
-        significant=True,
-        description="adds a suffix to the output file name of a plot; empty default",
-    )
+    def get_plot_names(self, name: str) -> List[str]:
+        """
+        Returns a list of basenames for created plots given a file *name* for all configured file
+        types, plus the additional plot suffix.
+        """
+        suffix = ""
+        if self.plot_suffix and self.plot_suffix != law.NO_STR:
+            suffix = f"__{self.plot_suffix}"
 
-    view_cmd = luigi.Parameter(
-        default=law.NO_STR,
-        significant=False,
-        description="a command to execute after the task has run to visualize plots right in the "
-        "terminal; no default",
-    )
+        return [
+            f"{name}{suffix}.{ft}"
+            for ft in self.file_types
+        ]
 
     def get_plot_func(self, func_name: str) -> Callable:
         """
