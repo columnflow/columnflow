@@ -909,12 +909,22 @@ def sorted_ak_to_parquet(
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
-def flat_np_view(ak_array: ak.Array, axis: Optional[int] = None) -> np.array:
+def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
     """
     Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
-    *axis*. See *ak.flatten* for more info. Changes applied in-place to that view are transferred to
-    the original *ak_array*.
+    *axis*. See *ak.flatten* for more info.
+
+    .. note::
+        Changes applied in-place to that view are transferred to the original *ak_array*, but
+        **only** when the axis is not *None* but an integer value. For this reason, passing
+        ``axis=None`` will cause an exception to be thrown.
     """
+    if axis is None:
+        raise ValueError(
+            "axis must not be None as changes applied the returned view will not propagate to the ",
+            "original awkward array",
+        )
+
     return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
