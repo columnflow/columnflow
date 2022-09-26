@@ -648,7 +648,7 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 # General jets calibrator
 #
 
-@calibrator(uses={jec, jer}, produces={jec, jer})
+@calibrator(uses={jec}, produces={jec})
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
     events = self[jec](events, **kwargs)
