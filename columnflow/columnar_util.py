@@ -1058,10 +1058,10 @@ class ArrayFunction(Derivable):
     ArrayFunction's declare dependence between one another through class-level sets *uses* and
     *produces*. This allows for the construction of an internal callstack. Once an ArrayFunction is
     instantiated, all dependent objects in this callstack are instantiated as well and stored
-    internally *once per class*. This is strictly required as ArrayFunctions, and most likely their
-    subclasses, can have a state (a set of instance-level members that are allowed to differ between
-    instances). The instance of a dependency can be accessed via item syntax (``self[my_func]``
-    above).
+    internally mapped to their class. This is strictly required as ArrayFunctions, and most likely
+    their subclasses, can have a state (a set of instance-level members that are allowed to differ
+    between instances). The instance of a dependency can be accessed via item syntax
+    (``self[my_func]`` above).
 
     .. note::
 
@@ -1755,7 +1755,7 @@ class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):
                 self._mapping,
                 key_format=key_format,
                 lazy=False,
-                lazy_cache="new" if self._cache is None else self._cache,
+                lazy_cache=None,
                 behavior=behavior,
             )
             self._events = weakref.ref(events)
@@ -1905,6 +1905,54 @@ class ChunkedReader(object):
         return cls.ChunkPosition(chunk_index, entry_start, entry_stop)
 
     @classmethod
+    def get_source_handlers(
+        cls,
+        source_type: Optional[str],
+        source: Optional[Any],
+    ) -> Tuple[str, Callable, Callable]:
+        """
+        Takes a *source_type* (see list below) and gathers information about how to open and read
+        content from a specific source. A 3-tuple *(source type, open function, read function)* is
+        returned.
+
+        When *source_type* is *None* but an arbitrary *source* is set, the type is derived from that
+        object, and an exception is raised in case no type can be inferred.
+
+        Currently supported source types are:
+
+            - "awkward_parquet"
+            - "uproot_root"
+            - "coffea_root"
+            - "coffea_parquet"
+        """
+        if source_type is None:
+            if isinstance(source, uproot.ReadOnlyDirectory):
+                # uproot file
+                source_type = "uproot_root"
+            elif isinstance(source, str):
+                # file path, guess based on extension
+                if source.endswith(".root"):
+                    # priotize coffea nano events
+                    source_type = "coffea_root"
+                elif source.endswith(".parquet"):
+                    # priotize coffea nano events
+                    source_type = "coffea_parquet"
+
+            if not source_type:
+                raise Exception(f"could not determine source_type from source '{source}'")
+
+        if source_type == "awkward_parquet":
+            return (source_type, cls.open_awkward_parquet, cls.read_awkward_parquet)
+        if source_type == "uproot_root":
+            return (source_type, cls.open_uproot_root, cls.read_uproot_root)
+        if source_type == "coffea_root":
+            return (source_type, cls.open_coffea_root, cls.read_coffea_root)
+        if source_type == "coffea_parquet":
+            return (source_type, cls.open_coffea_parquet, cls.read_coffea_parquet)
+
+        raise NotImplementedError(f"unknown source_type '{source_type}'")
+
+    @classmethod
     def open_awkward_parquet(
         cls,
         source: str,
@@ -1917,11 +1965,12 @@ class ChunkedReader(object):
         *file_cache* has no effect.
         """
         if not isinstance(source, str):
-            raise Exception(f"'{source}' cannot be opend awkward_parquet")
+            raise Exception(f"'{source}' cannot be opened as awkward_parquet")
 
         # prepare open options
         open_options = open_options or {}
-        open_options.setdefault("lazy", True)
+        open_options["lazy"] = True
+        open_options["lazy_cache"] = None
 
         # load the array
         arr = ak.from_parquet(source, **open_options)
@@ -1958,7 +2007,7 @@ class ChunkedReader(object):
         elif isinstance(source, uproot.ReadOnlyDirectory):
             tree = source[tree_name]
         else:
-            raise Exception(f"'{source}' cannot be opend as uproot_root")
+            raise Exception(f"'{source}' cannot be opened as uproot_root")
 
         return (tree, tree.num_entries)
 
@@ -1992,7 +2041,7 @@ class ChunkedReader(object):
         elif isinstance(source, uproot.ReadOnlyDirectory):
             tree = source[tree_name]
         else:
-            raise Exception(f"'{source}' cannot be opend as coffea_root")
+            raise Exception(f"'{source}' cannot be opened as coffea_root")
 
         return (source, tree.num_entries)
 
@@ -2023,7 +2072,7 @@ class ChunkedReader(object):
         *read_options* has no effect.
         """
         chunk = source_object[chunk_pos.entry_start:chunk_pos.entry_stop]
-        return chunk if lazy else ak.copy(chunk)
+        return chunk if lazy else ak.materialized(chunk)
 
     @classmethod
     def read_uproot_root(
@@ -2105,54 +2154,6 @@ class ChunkedReader(object):
         ).events()
 
         return chunk
-
-    @classmethod
-    def get_source_handlers(
-        cls,
-        source_type: Optional[str],
-        source: Optional[Any],
-    ) -> Tuple[str, Callable, Callable]:
-        """
-        Takes a *source_type* (see list below) and gathers information about how to open and read
-        content from a specific source. A 3-tuple *(source type, open function, read function)* is
-        returned.
-
-        When *source_type* is *None* but an arbitrary *source* is set, the type is derived from that
-        object, and an exception is raised in case no type can be inferred.
-
-        Currently supported source types are:
-
-            - "awkward_parquet"
-            - "uproot_root"
-            - "coffea_root"
-            - "coffea_parquet"
-        """
-        if source_type is None:
-            if isinstance(source, uproot.ReadOnlyDirectory):
-                # uproot file
-                source_type = "uproot_root"
-            elif isinstance(source, str):
-                # file path, guess based on extension
-                if source.endswith(".root"):
-                    # priotize coffea nano events
-                    source_type = "coffea_root"
-                elif source.endswith(".parquet"):
-                    # priotize coffea nano events
-                    source_type = "coffea_parquet"
-
-            if not source_type:
-                raise Exception(f"could not determine source_type from source '{source}'")
-
-        if source_type == "awkward_parquet":
-            return (source_type, cls.open_awkward_parquet, cls.read_awkward_parquet)
-        if source_type == "uproot_root":
-            return (source_type, cls.open_uproot_root, cls.read_uproot_root)
-        if source_type == "coffea_root":
-            return (source_type, cls.open_coffea_root, cls.read_coffea_root)
-        if source_type == "coffea_parquet":
-            return (source_type, cls.open_coffea_parquet, cls.read_coffea_parquet)
-
-        raise NotImplementedError(f"unknown source_type '{source_type}'")
 
     @property
     def n_chunks(self) -> int:

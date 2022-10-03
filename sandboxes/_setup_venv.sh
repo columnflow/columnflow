@@ -169,18 +169,18 @@ setup_venv() {
 
         # update pip
         echo -e "\n\x1b[0;49;35mupdating pip\x1b[0m"
-        python3 -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
+        python -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
 
         # install basic production requirements
         if ! ${requirement_files_contains_prod}; then
             echo -e "\n\x1b[0;49;35minstalling requirement file ${CF_BASE}/requirements_prod.txt\x1b[0m"
-            python3 -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
+            python -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
         fi
 
         # install requirement files
         for f in ${requirement_files[@]}; do
             echo -e "\n\x1b[0;49;35minstalling requirement file ${f}\x1b[0m"
-            python3 -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
+            python -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
             echo
         done
 

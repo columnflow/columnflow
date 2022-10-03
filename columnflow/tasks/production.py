@@ -25,6 +25,7 @@ class ProduceColumns(
     RemoteWorkflow,
 ):
 
+    # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(MergeReducedEvents.shifts)
