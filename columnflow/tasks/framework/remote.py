@@ -18,8 +18,8 @@ from columnflow.util import real_path
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
-        default=5,
-        description="number of replicas to generate; default: 5",
+        default=3,
+        description="number of replicas to generate; default: 3",
     )
     version = None
 
@@ -48,10 +48,8 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         self.bundle(bundle)
 
         # log the size
-        self.publish_message(
-            "bundled repository archive, size is {:.2f} {}".format(
-                *law.util.human_bytes(bundle.stat().st_size)),
-        )
+        size, unit = law.util.human_bytes(bundle.stat().st_size)
+        self.publish_message(f"size is {size:.2f} {unit}")
 
         # transfer the bundle
         self.transfer(bundle)
@@ -60,42 +58,13 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
-        default=5,
-        description="number of replicas to generate; default: 5",
+        default=3,
+        description="number of replicas to generate; default: 3",
     )
     version = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._checksum = None
-
-    @property
-    def checksum(self):
-        if not self._checksum:
-            # get a list of all software flag files
-            flag_files = []
-            for venv_name in os.listdir(os.environ["CF_VENV_BASE"]):
-                # skip all dev envs
-                if venv_name.endswith("_dev"):
-                    continue
-                venv_flag = os.path.join(os.environ["CF_VENV_BASE"], venv_name, "cf_flag")
-                flag_files.append(venv_flag)
-            flag_files = sorted(set(map(os.path.realpath, flag_files)))
-
-            # read content of all software flag files and create a hash
-            contents = []
-            for flag_file in flag_files:
-                if os.path.isfile(flag_file):
-                    with open(flag_file, "r") as f:
-                        contents.append((flag_file, f.read().strip()))
-
-            self._checksum = law.util.create_hash(contents)
-
-        return self._checksum
-
     def single_output(self):
-        return self.target(f"software.{self.checksum}.tgz")
+        return self.target("software.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -104,42 +73,109 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
-        software_path = os.environ["CF_SOFTWARE_BASE"]
+        software_path = os.environ["CF_CONDA_BASE"]
 
         # create the local bundle
-        bundle = law.LocalFileTarget(software_path + ".tgz", is_tmp=True)
-
-        def _filter(tarinfo):
-            # skip hidden dev files
-            if re.search(r"(\.pyc|\/\.git|\.tgz|__pycache__)$", tarinfo.name):
-                return None
-            # skip all venvs ending with _dev
-            if re.search(r"^\./venvs/.*_dev(|/.*)$", tarinfo.name):
-                return None
-            return tarinfo
+        bundle = law.LocalFileTarget(is_tmp=".tgz")
 
         # create the archive with a custom filter
-        bundle.dump(software_path, filter=_filter, formatter="tar")
+        with self.publish_step("bundling software stack ..."):
+            cmd = f"conda-pack --prefix {software_path} --output {bundle.path}"
+            code = law.util.interruptable_popen(cmd, shell=True, executable="/bin/bash")[0]
+        if code != 0:
+            raise Exception("conda-pack failed")
 
         # log the size
-        self.publish_message(
-            "bundled software archive, size is {:.2f} {}".format(
-                *law.util.human_bytes(bundle.stat().st_size)),
-        )
+        size, unit = law.util.human_bytes(bundle.stat().st_size)
+        self.publish_message(f"size is {size:.2f} {unit}")
 
         # transfer the bundle
         self.transfer(bundle)
 
 
-class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
+class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
     sandbox_file = luigi.Parameter(
-        description="name of the sandbox file; when not absolute, the path is evaluated relative "
-        "to $CF_BASE/sandboxes",
+        description="name of the bash sandbox file; when not absolute, the path is evaluated "
+        "relative to $CF_BASE/sandboxes",
     )
     replicas = luigi.IntParameter(
-        default=5,
-        description="number of replicas to generate; default: 5",
+        default=3,
+        description="number of replicas to generate; default: 3",
+    )
+    version = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the name and install path of the sandbox
+        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+        sandbox_file = os.path.join("$CF_BASE", "sandboxes", sandbox_file)
+        self.sandbox_key = f"bash::{sandbox_file}"
+        self.venv_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
+        self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name)
+
+        # checksum cache
+        self._checksum = None
+
+    @property
+    def checksum(self):
+        if not self._checksum:
+            # get the flag file
+            flag_file = os.path.join(self.venv_path, "cf_flag")
+
+            # hash the content
+            if os.path.isfile(flag_file):
+                with open(flag_file, "r") as f:
+                    content = (flag_file, f.read().strip())
+                self._checksum = law.util.create_hash(content)
+
+        return self._checksum
+
+    def single_output(self):
+        checksum = self.checksum or "TO_BE_INSTALLED"
+        return self.target(f"{self.venv_name}.{checksum}.tgz")
+
+    def get_file_pattern(self):
+        path = os.path.expandvars(os.path.expanduser(self.single_output().path))
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
+
+    @law.decorator.log
+    @law.decorator.safe_output
+    def run(self):
+        # ensure the sandbox exists
+        law.Sandbox.new(self.sandbox_key).env
+
+        # create the local bundle
+        bundle = law.LocalFileTarget(is_tmp=".tgz")
+
+        def _filter(tarinfo):
+            # skip hidden dev files
+            if re.search(r"(\.pyc|\/\.git|\.tgz|__pycache__)$", tarinfo.name):
+                return None
+            return tarinfo
+
+        # create the archive with a custom filter
+        with self.publish_step(f"bundling venv {self.venv_name} ..."):
+            bundle.dump(self.venv_path, add_kwargs={"filter": _filter}, formatter="tar")
+
+        # log the size
+        size, unit = law.util.human_bytes(bundle.stat().st_size)
+        self.publish_message(f"size is {size:.2f} {unit}")
+
+        # transfer the bundle
+        self.transfer(bundle)
+
+
+class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
+
+    sandbox_file = luigi.Parameter(
+        description="name of the cmssw sandbox file; when not absolute, the path is evaluated "
+        "relative to $CF_BASE/sandboxes",
+    )
+    replicas = luigi.IntParameter(
+        default=3,
+        description="number of replicas to generate; default: 3",
     )
     version = None
 
@@ -154,12 +190,13 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
     @property
     def cmssw_sandbox(self):
         if self._cmssw_sandbox is None:
-            env_file = real_path("$CF_BASE/sandboxes", self.sandbox_file)
-            self._cmssw_sandbox = law.BashSandbox(env_file)
+            env_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+            self._cmssw_sandbox = law.BashSandbox(real_path("$CF_BASE/sandboxes", env_file))
 
         return self._cmssw_sandbox
 
     def get_cmssw_path(self):
+        # invoking .env will trigger building the sandbox
         return self.cmssw_sandbox.env["CMSSW_BASE"]
 
     def get_file_pattern(self):
@@ -180,45 +217,11 @@ class BundleCMSSW(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile
         self.bundle(bundle)
 
         # log the size
-        self.publish_message(
-            "bundled CMSSW archive, size is {:.2f} {}".format(
-                *law.util.human_bytes(bundle.stat().st_size)),
-        )
+        size, unit = law.util.human_bytes(bundle.stat().st_size)
+        self.publish_message(f"size is {size:.2f} {unit}")
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
-
-
-class SandboxTrigger(AnalysisTask):
-
-    sandbox = luigi.Parameter(
-        default=law.NO_STR,
-        description="the sandbox to install",
-    )
-
-    version = None
-
-    def output(self):
-        # note: invoking self.env will already trigger installing the sandbox
-        return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
-
-    def run(self):
-        # no need to run anything as the sandboxing mechanism handles the installation
-        return
-
-
-class PrepareJobSandboxes(AnalysisTask, law.WrapperTask):
-
-    version = None
-
-    # make sure this task is run before BundleSoftware
-    priority = BundleSoftware.priority + 1
-
-    def requires(self):
-        return [
-            SandboxTrigger.req(self, sandbox=sandbox)
-            for sandbox in self.analysis_inst.x("job_sandboxes", [])
-        ]
 
 
 _default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
@@ -257,7 +260,6 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     htcondor_forward_env_variables = {
         "CF_BASE": "cf_base",
         "CF_REPO_BASE": "cf_repo_base",
-        "CF_LCG_SETUP": "cf_lcg_setup",
         "CF_CERN_USER": "cf_cern_user",
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
@@ -269,30 +271,40 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     # default upstream dependency task classes
     dep_BundleRepo = BundleRepo
     dep_BundleSoftware = BundleSoftware
-    dep_BundleCMSSW = BundleCMSSW
-    dep_PrepareJobSandboxes = PrepareJobSandboxes
+    dep_BundleBashSandbox = BundleBashSandbox
+    dep_BundleCMSSWSandbox = BundleCMSSWSandbox
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
-        # trigger the local installation of all sandboxes that might be required for jobs
-        reqs["sandboxes"] = self.dep_PrepareJobSandboxes.req(self)
-
-        # add bundles for repo, software and optionally cmssw sandboxes
-        reqs["repo"] = self.dep_BundleRepo.req(self, replicas=3)
-        reqs["software"] = self.dep_BundleSoftware.req(self, replicas=3)
-
-        # get names of cmssw environments to bundle
+        # get names of pure bash and cmssw sandboxes
+        bash_sandboxes = None
         cmssw_sandboxes = None
         if getattr(self, "analysis_inst", None):
-            cmssw_sandboxes = self.analysis_inst.get_aux("cmssw_sandboxes")
+            bash_sandboxes = self.analysis_inst.x("bash_sandboxes", [])
+            cmssw_sandboxes = self.analysis_inst.x("cmssw_sandboxes", [])
         if getattr(self, "config_inst", None):
-            cmssw_sandboxes = self.config_inst.get_aux("cmssw_sandboxes", cmssw_sandboxes)
+            bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
+            cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
+
+        # main software stack
+        reqs["software"] = self.dep_BundleSoftware.req(self)
+
+        # bash-based sandboxes
+        reqs["bash_sandboxes"] = [
+            self.dep_BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+            for sandbox_file in bash_sandboxes
+        ]
+
+        # optional cmssw sandboxes
         if cmssw_sandboxes:
-            reqs["cmssw"] = [
-                self.dep_BundleCMSSW.req(self, replicas=3, sandbox_file=f)
-                for f in cmssw_sandboxes
+            reqs["cmssw_sandboxes"] = [
+                self.dep_BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                for sandbox_file in cmssw_sandboxes
             ]
+
+        # add bundles for repo, software and optionally cmssw sandboxes
+        reqs["repo"] = self.dep_BundleRepo.req(self)
 
         return reqs
 
@@ -343,6 +355,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         # helper to return uris and a file pattern for replicated bundles
         reqs = self.htcondor_workflow_requires()
+        join_bash = lambda seq: " ".join(map('"{}"'.format, seq))
         def get_bundle_info(task):
             uris = task.output().dir.uri(cmd="filecopy", return_all=True)
             pattern = os.path.basename(task.get_file_pattern())
@@ -353,26 +366,34 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         config.render_variables["cf_software_uris"] = uris
         config.render_variables["cf_software_pattern"] = pattern
 
+        # add bash sandbox variables
+        uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
+        names = [
+            os.path.splitext(os.path.basename(t.sandbox_file))[0]
+            for t in reqs["bash_sandboxes"]
+        ]
+        config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
+        config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
+        config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
+
+        # add cmssw sandbox variables
+        config.render_variables["cf_cmssw_sandbox_uris"] = ""
+        config.render_variables["cf_cmssw_sandbox_patterns"] = ""
+        config.render_variables["cf_cmssw_sandbox_names"] = ""
+        if "cmssw_sandboxes" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
+            names = [
+                os.path.splitext(os.path.basename(t.sandbox_file))[0]
+                for t in reqs["cmssw_sandboxes"]
+            ]
+            config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
+            config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
+            config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
+
         # add repo variables
         uris, pattern = get_bundle_info(reqs["repo"])
         config.render_variables["cf_repo_uris"] = uris
         config.render_variables["cf_repo_pattern"] = pattern
-
-        # add cmssw sandbox variables
-        config.render_variables["cf_cmssw_sandbox_uris"] = "()"
-        config.render_variables["cf_cmssw_sandbox_patterns"] = "()"
-        config.render_variables["cf_cmssw_sandbox_names"] = "()"
-        if "cmssw" in reqs:
-            info = [get_bundle_info(t) for t in reqs["cmssw"]]
-            uris = [tpl[0] for tpl in info]
-            patterns = [tpl[1] for tpl in info]
-            names = [os.path.basename(t.sandbox_file)[:-3] for t in reqs["cmssw"]]
-            config.render_variables["cf_cmssw_sandbox_uris"] = "({})".format(
-                " ".join(map('"{}"'.format, uris)))
-            config.render_variables["cf_cmssw_sandbox_patterns"] = "({})".format(
-                " ".join(map('"{}"'.format, patterns)))
-            config.render_variables["cf_cmssw_sandbox_names"] = "({})".format(
-                " ".join(map('"{}"'.format, names)))
 
         # other render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
@@ -427,7 +448,6 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
     slurm_forward_env_variables = {
         "CF_BASE": "cf_base",
         "CF_REPO_BASE": "cf_repo_base",
-        "CF_LCG_SETUP": "cf_lcg_setup",
         "CF_CERN_USER": "cf_cern_user",
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
@@ -435,13 +455,34 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
     }
 
     # default upstream dependency task classes
-    dep_PrepareJobSandboxes = PrepareJobSandboxes
+    dep_BundleBashSandbox = BundleBashSandbox
+    dep_BundleCMSSWSandbox = BundleCMSSWSandbox
 
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
 
-        # trigger the local installation of all sandboxes that might be required for jobs
-        reqs["sandboxes"] = self.dep_PrepareJobSandboxes.req(self)
+        # get names of pure bash and cmssw sandboxes
+        bash_sandboxes = None
+        cmssw_sandboxes = None
+        if getattr(self, "analysis_inst", None):
+            bash_sandboxes = self.analysis_inst.x("bash_sandboxes", [])
+            cmssw_sandboxes = self.analysis_inst.x("cmssw_sandboxes", [])
+        if getattr(self, "config_inst", None):
+            bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
+            cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
+
+        # bash-based sandboxes
+        reqs["bash_sandboxes"] = [
+            self.dep_BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+            for sandbox_file in bash_sandboxes
+        ]
+
+        # optional cmssw sandboxes
+        if cmssw_sandboxes:
+            reqs["cmssw_sandboxes"] = [
+                self.dep_BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                for sandbox_file in cmssw_sandboxes
+            ]
 
         return reqs
 

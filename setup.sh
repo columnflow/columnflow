@@ -36,15 +36,17 @@ setup_columnflow() {
     #   CF_SOFTWARE_BASE
     #       The directory where general software is installed. Might point to $CF_DATA/software.
     #       Queried during the interactive setup.
-    #   CF_CMSSW_BASE
-    #       The directory where CMSSW releases are installed. Might point to $CF_DATA/cmssw. Queried
-    #       during the interactive setup.
     #   CF_REPO_BASE
     #       The base path of the main repository invoking tasks or scripts. Used by columnflow tasks
     #       to identify the repository for e.g. bundling. Set to $CF_BASE when not defined already.
+    #   CF_CONDA_BASE
+    #       The directory where conda and conda envs are installed. Might point to
+    #       $CF_SOFTWARE_BASE/conda.
     #   CF_VENV_BASE
     #       The directory where virtual envs are installed. Might point to $CF_SOFTWARE_BASE/venvs.
-    #       Queried during the interactive setup.
+    #   CF_CMSSW_BASE
+    #       The directory where CMSSW releases are installed. Might point to
+    #       $CF_SOFTWARE_BASE/cmssw.
     #   CF_JOB_BASE
     #       The directory where job files from batch system submissions are kept. Used in law.cfg.
     #       Might point to $CF_DATA/jobs. Queried during the interactive setup.
@@ -126,7 +128,7 @@ setup_columnflow() {
     # prepare local variables
     #
 
-    local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig="${PWD}"
@@ -165,7 +167,6 @@ setup_columnflow() {
             export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
-            query CF_CMSSW_BASE "Local directory for installing CMSSW" "\$CF_DATA/cmssw"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
             query CF_VOMS "Virtual-organization" "cms"
             export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
@@ -183,7 +184,9 @@ setup_columnflow() {
 
     # continue the fixed setup
     export CF_REPO_BASE="${CF_REPO_BASE:-$CF_BASE}"
-    export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
+    export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
+    export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
+    export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
     export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
@@ -252,14 +255,14 @@ cf_setup_interactive() {
     # source the corresponding env file and stop
     if ! ${setup_is_default}; then
         if [ -f "${env_file}" ]; then
-            echo -e "using variables for setup '\x1b[0;49;35m${setup_name}\x1b[0m' from ${env_file}"
+            echo "using variables for setup '$( cf_color magenta ${setup_name} )' from ${env_file}"
             source "${env_file}" ""
             return "$?"
         elif [ -z "${env_file}" ]; then
             >&2 echo "no env file passed as 2nd argument to cf_interactive_setup"
             return "1"
         else
-            echo -e "no setup file ${env_file} found for setup '\x1b[0;49;35m${setup_name}\x1b[0m'"
+            echo "no setup file ${env_file} found for setup '$( cf_color magenta ${setup_name} )'"
         fi
     fi
 
@@ -287,7 +290,7 @@ cf_setup_interactive() {
             # set the variable when existing
             eval "value=\${$varname:-\$value}"
         else
-            printf "${text} (\x1b[1;49;39m${varname}\x1b[0m, default \x1b[1;49;39m${default_text}\x1b[0m):  "
+            printf "${text} ($( cf_color bright_white ${varname} ), default $( cf_color bright_white ${default_text} )):  "
             read query_response
             [ "X${query_response}" = "X" ] && query_response="${default}"
 
@@ -295,7 +298,7 @@ cf_setup_interactive() {
             while true; do
                 ( [ "${default}" != "True" ] && [ "${default}" != "False" ] ) && break
                 ( [ "${query_response}" = "True" ] || [ "${query_response}" = "False" ] ) && break
-                printf "please enter either '\x1b[1;49;39mTrue\x1b[0m' or '\x1b[1;49;39mFalse\x1b[0m':  " query_response
+                printf "please enter either '$( cf_color bright_white True )' or '$( cf_color bright_white False )':  " query_response
                 read query_response
                 [ "X${query_response}" = "X" ] && query_response="${default}"
             done
@@ -316,7 +319,7 @@ cf_setup_interactive() {
         rm -f "${env_file_tmp}"
         mkdir -p "$( dirname "${env_file_tmp}" )"
 
-        echo -e "Start querying variables for setup '\x1b[0;49;35m${setup_name}\x1b[0m', press enter to accept default values\n"
+        echo -e "Start querying variables for setup '$( cf_color magenta ${setup_name} )', press enter to accept default values\n"
     fi
 
     # query for variables
@@ -330,8 +333,8 @@ cf_setup_interactive() {
 }
 
 cf_setup_software_stack() {
-    # Sets up the columnflow software stack consisting of updated PATH variables, virtual
-    # environments and git submodule initialization / updates.
+    # Sets up the columnflow software stack consisting of a base environment using conda,
+    # lightweight virtual environments on top and git submodule initialization / updates.
     #
     # Arguments:
     #   1. setup_name
@@ -340,6 +343,8 @@ cf_setup_software_stack() {
     # Required environment variables:
     #   CF_BASE
     #       The columnflow base directory.
+    #   CF_CONDA_BASE
+    #       The directory where conda and conda envs will be installed.
     #   CF_VENV_BASE
     #       The base directory were virtual envs are installed.
     #
@@ -351,20 +356,27 @@ cf_setup_software_stack() {
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
 
+    # check global variables
+    if [ -z "${CF_BASE}" ]; then
+        >&2 echo "CF_BASE not defined, stopping software setup"
+        return "1"
+    fi
+    if [ -z "${CF_CONDA_BASE}" ]; then
+        >&2 echo "CF_CONDA_BASE not defined, stopping software setup"
+        return "2"
+    fi
+    if [ -z "${CF_VENV_BASE}" ]; then
+        >&2 echo "CF_VENV_BASE not defined, stopping software setup"
+        return "3"
+    fi
+
+    # local variables
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-
-    # use the latest centos7 ui from the grid setup on cvmfs
-    export CF_LCG_SETUP="${CF_LCG_SETUP:-/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh}"
-    if [ -f "${CF_LCG_SETUP}" ]; then
-        source "${CF_LCG_SETUP}" ""
-    elif [ "${CF_CI_JOB}" = "1" ]; then
-        >&2 echo "LCG setup file ${CF_LCG_SETUP} not existing in CI env, skipping"
-    else
-        >&2 echo "LCG setup file ${CF_LCG_SETUP} not existing"
-        return "1"
-    fi
+    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh"
+    local pyv="3.9"
 
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes
@@ -375,20 +387,82 @@ cf_setup_software_stack() {
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
+    # also add the python path of the cenv to be installed to propagate changes to any outer venv
+    export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+
     # update paths and flags
-    export PYTHONWARNINGS="ignore"
-    export GLOBUS_THREAD_MODEL="none"
+    export PYTHONWARNINGS="${PYTHONWARNINGS:-ignore}"
+    export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
     export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
+    export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
+    export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
+    export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
     ulimit -s unlimited
 
-    # local python stack in two virtual envs:
-    # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
-    # - "cf_dev" : "prod" + additional python tools for local development (e.g. ipython)
+    # local python stack in one conda env and two virtual envs:
+    #   - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
+    #   - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
         if [ "${CF_REINSTALL_SOFTWARE}" = "1" ]; then
-            echo "removing software stack at ${CF_VENV_BASE}"
-            rm -rf "${CF_VENV_BASE}"/cf_{prod,dev}
+            echo "removing conda at $( cf_color magenta ${CF_CONDA_BASE})"
+            rm -rf "${CF_CONDA_BASE}"
+
+            echo "removing software virtual envs at $( cf_color magenta ${CF_VENV_BASE})"
+            rm -rf "${CF_VENV_BASE}"
         fi
+
+        #
+        # conda setup
+        #
+
+        # not needed in CI jobs
+        if [ "${CF_CI_JOB}" != "1" ]; then
+            # conda base environment
+            local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
+            if ${conda_missing}; then
+                echo
+                cf_color magenta "installing conda at ${CF_CONDA_BASE}"
+                (
+                    wget "${miniconda_source}" -O setup_miniconda.sh &&
+                    bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
+                    rm setup_miniconda.sh &&
+                    echo "changeps1: false" >> "${CF_CONDA_BASE}/.condarc"
+                ) || return "$?"
+            fi
+
+            # initialize conda
+            local __conda_setup="$( "${CF_CONDA_BASE}/bin/conda" "shell.$( ${shell_is_zsh} && echo "zsh" || echo "bash" )" "hook" 2> /dev/null )"
+            if [ "$?" = "0" ]; then
+                eval "${__conda_setup}"
+            else
+                if [ -f "${CF_CONDA_BASE}/etc/profile.d/conda.sh" ]; then
+                    . "${CF_CONDA_BASE}/etc/profile.d/conda.sh"
+                else
+                    export PATH="${CF_CONDA_BASE}/bin:${PATH}"
+                fi
+            fi
+            echo "initialized conda with $( cf_color magenta "python ${pyv}" )"
+
+            # install packages
+            if ${conda_missing}; then
+                echo
+                cf_color magenta "setting up conda environment"
+                conda install --yes --channel conda-forge gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
+
+                # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
+                cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
+export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
+export GFAL_PLUGIN_DIR="\${CONDA_PREFIX}/lib/gfal2-plugins"
+export X509_CERT_DIR="${X509_CERT_DIR}"
+export X509_VOMS_DIR="${X509_VOMS_DIR}"
+export X509_VOMSES="${X509_VOMSES}"
+EOF
+            fi
+        fi
+
+        #
+        # venv setup
+        #
 
         show_version_warning() {
             >&2 echo ""
@@ -406,16 +480,22 @@ cf_setup_software_stack() {
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
         [ "$?" = "21" ] && show_version_warning "cf_dev"
-    else
-        # source the prod sandbox in remote jobs, skipping version checks
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
-    fi
 
-    # initialze submodules
-    if [ -d "${CF_BASE}/.git" ]; then
-        for m in $( ls -1q "${CF_BASE}/modules" ); do
-            cf_init_submodule "${CF_BASE}/modules/${m}"
-        done
+        # initialze submodules
+        if [ -d "${CF_BASE}/.git" ]; then
+            for m in $( ls -1q "${CF_BASE}/modules" ); do
+                cf_init_submodule "${CF_BASE}/modules/${m}"
+            done
+        fi
+    else
+        # at this point we are located in a remote job
+
+        # initialize conda
+        source "${CF_CONDA_BASE}/bin/activate" "" || return "$?"
+        echo "initialized conda with $( cf_color magenta "python ${pyv}" )"
+
+        # source the prod sandbox
+        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
     fi
 }
 
@@ -450,16 +530,69 @@ cf_init_submodule() {
     fi
 }
 
+cf_color() {
+    local color="$1"
+    local msg="${@:2}"
+
+    # disable coloring in remote jobs
+    [ "${CF_REMOTE_JOB}" = "1" ] && color="none"
+
+    case "${color}" in
+        red)
+            echo -e "\x1b[0;49;31m${msg}\x1b[0m"
+            ;;
+        green)
+            echo -e "\x1b[0;49;32m${msg}\x1b[0m"
+            ;;
+        yellow)
+            echo -e "\x1b[0;49;33m${msg}\x1b[0m"
+            ;;
+        blue)
+            echo -e "\x1b[0;49;34m${msg}\x1b[0m"
+            ;;
+        magenta)
+            echo -e "\x1b[0;49;35m${msg}\x1b[0m"
+            ;;
+        cyan)
+            echo -e "\x1b[0;49;36m${msg}\x1b[0m"
+            ;;
+        bright_white)
+            echo -e "\x1b[0;49;39m${msg}\x1b[0m"
+            ;;
+        bright_red)
+            echo -e "\x1b[0;49;91m${msg}\x1b[0m"
+            ;;
+        bright_green)
+            echo -e "\x1b[0;49;92m${msg}\x1b[0m"
+            ;;
+        bright_yellow)
+            echo -e "\x1b[0;49;93m${msg}\x1b[0m"
+            ;;
+        bright_blue)
+            echo -e "\x1b[0;49;94m${msg}\x1b[0m"
+            ;;
+        bright_magenta)
+            echo -e "\x1b[0;49;95m${msg}\x1b[0m"
+            ;;
+        bright_cyan)
+            echo -e "\x1b[0;49;96m${msg}\x1b[0m"
+            ;;
+        *)
+            echo "${msg}"
+            ;;
+    esac
+}
+
 main() {
     # Invokes the main action of this script, catches possible error codes and prints a message.
 
     # run the actual setup
     if setup_columnflow "$@"; then
-        echo -e "co\x1b[0;49;32ml\x1b[0mumnf\x1b[0;49;32ml\x1b[0mow \x1b[0;49;35msuccessfully setup\x1b[0m"
+        cf_color green "columnflow successfully setup"
         return "0"
     else
         local code="$?"
-        echo -e "\x1b[0;49;31mcolumnflow setup failed with code ${code}\x1b[0m"
+        cf_color red "columnflow setup failed with code ${code}"
         return "${code}"
     fi
 }

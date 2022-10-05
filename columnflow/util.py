@@ -292,8 +292,8 @@ def ensure_proxy(
     the decorated method.
     """
     def before_call():
-        # do nothing for grid jobs
-        if env_is_grid:
+        # do nothing in remote jobs
+        if env_is_remote:
             return None
 
         # check the proxy validity
