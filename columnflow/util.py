@@ -4,6 +4,8 @@
 Collection of general helpers and utilities.
 """
 
+from __future__ import annotations
+
 __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
@@ -28,7 +30,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Tuple, Callable, Any, Optional, Union, Sequence
+from typing import Callable, Any, Sequence
 from types import ModuleType
 
 import law
@@ -58,9 +60,9 @@ primes = [
 
 def maybe_import(
     name: str,
-    package: Optional[str] = None,
+    package: str | None = None,
     force: bool = False,
-) -> Union[ModuleType, "MockModule"]:
+) -> ModuleType | MockModule:
     """
     Calls *importlib.import_module* internally and returns the module if it exists, or otherwise a
     :py:class:`MockModule` instance with the same name. When *force* is *True* and the import fails,
@@ -121,7 +123,7 @@ def import_ROOT() -> ModuleType:
     return _ROOT
 
 
-def import_file(path, attr=None):
+def import_file(path: str, attr: str | None = None):
     """
     Loads the content of a python file located at *path* and returns its package content as a
     dictionary. When *attr* is set, only the attribute with that name is returned.
@@ -219,9 +221,9 @@ def wget(src: str, dst: str, force: bool = False) -> str:
 def call_thread(
     func: Callable,
     args: tuple = (),
-    kwargs: Optional[dict] = None,
-    timeout: Optional[float] = None,
-) -> Tuple[bool, Any, Optional[str]]:
+    kwargs: dict | None = None,
+    timeout: float | None = None,
+) -> tuple[bool, Any, str | None]:
     """
     Execute a function *func* in a thread and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
@@ -250,9 +252,9 @@ def call_thread(
 def call_proc(
     func: Callable,
     args: tuple = (),
-    kwargs: Optional[dict] = None,
-    timeout: Optional[float] = None,
-) -> Tuple[bool, Any, Optional[str]]:
+    kwargs: dict | None = None,
+    timeout: float | None = None,
+) -> tuple[bool, Any, str | None]:
     """
     Execute a function *func* in a process and aborts the call when *timeout* is reached. *args* and
     *kwargs* are forwarded to the function.
@@ -286,7 +288,7 @@ def ensure_proxy(
     task: law.Task,
     *args,
     **kwargs,
-) -> Tuple[Callable, Callable, Callable]:
+) -> tuple[Callable, Callable, Callable]:
     """
     Law task decorator that checks whether either a voms or arc proxy is existing before calling
     the decorated method.
@@ -377,7 +379,7 @@ def memoize(f: Callable) -> Callable:
     return wrapper
 
 
-def safe_div(a: Union[int, float], b: Union[int, float]) -> float:
+def safe_div(a: int | float, b: int | float) -> float:
     """
     Returns *a* divided by *b* if *b* is not zero, and zero otherwise.
     """
@@ -411,7 +413,7 @@ def is_regex(s: str) -> bool:
     return s.startswith("^") and s.endswith("$")
 
 
-def pattern_matcher(pattern: Union[Sequence[str], str], mode=any) -> Callable[[str], bool]:
+def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Callable[[str], bool]:
     r"""
     Takes a string *pattern* which might be an actual pattern for fnmatching, a regular expressions
     or just a plain string and returns a function that can be used to test of a string matches that
@@ -515,21 +517,21 @@ class DotDict(OrderedDict):
         # => 1
     """
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         try:
             return self[attr]
         except KeyError:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
 
-    def __setattr__(self, attr, value):
+    def __setattr__(self, attr: str, value: Any) -> None:
         self[attr] = value
 
-    def copy(self):
+    def copy(self) -> DotDict:
         """"""
         return self.__class__(self)
 
     @classmethod
-    def wrap(cls, *args, **kwargs) -> "DotDict":
+    def wrap(cls, *args, **kwargs) -> DotDict:
         """
         Takes a dictionary *d* and recursively replaces it and all other nested dictionary types
         with :py:class:`DotDict`'s for deep attribute-style access.
@@ -560,24 +562,24 @@ class MockModule(object):
        The name of the mock module.
     """
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         super().__init__()
 
         self._name = name
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> MockModule:
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} '{self._name}' at {hex(id(self))}>"
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> None:
         raise Exception(f"{self._name} is a mock module and cannot be called")
 
-    def __nonzero__(self):
+    def __nonzero__(self) -> bool:
         return False
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return False
 
 
@@ -603,13 +605,13 @@ class ClassPropertyDescriptor(object):
     Generic descriptor class that is used by :py:func:`classproperty`.
     """
 
-    def __init__(self, fget: Callable, fset: Optional[Callable] = None):
+    def __init__(self, fget: Callable, fset: Callable | None = None):
         super().__init__()
 
         self.fget = fget
         self.fset = fset
 
-    def __get__(self, obj: type, cls: Optional[type] = None) -> Any:
+    def __get__(self, obj: type, cls: type | None = None) -> Any:
         if cls is None:
             cls = type(obj)
 
@@ -623,7 +625,7 @@ class ClassPropertyDescriptor(object):
         return self.fset.__get__(obj, type(obj))(value)
 
 
-def classproperty(func):
+def classproperty(func: Callable) -> ClassPropertyDescriptor:
     """
     Propety decorator for class-level methods.
     """
@@ -647,7 +649,7 @@ class DerivableMeta(type):
         cls_name: str,
         bases: tuple,
         cls_dict: dict,
-    ) -> "DerivableMeta":
+    ) -> DerivableMeta:
         """
         Class creation.
         """
@@ -684,7 +686,7 @@ class DerivableMeta(type):
         cls_name: str,
         deep: bool = True,
         silent: bool = False,
-    ) -> Union["DerivableMeta", None]:
+    ) -> DerivableMeta | None:
         """
         Returns a previously created subclass named *cls_name*. When *deep* is *True*, the lookup is
         recursive through all levels of subclasses. When no such subclass was found an exception is
@@ -717,8 +719,8 @@ class DerivableMeta(type):
         cls,
         cls_name: str,
         bases: tuple = (),
-        cls_dict: Optional[dict] = None,
-    ) -> "DerivableMeta":
+        cls_dict: dict | None = None,
+    ) -> DerivableMeta:
         """
         Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
         *bases*. *cls_dict* will be attached as class-level attributes.
@@ -737,7 +739,7 @@ class DerivableMeta(type):
 
         return subcls
 
-    def derived_by(cls, other: "DerivableMeta") -> bool:
+    def derived_by(cls, other: DerivableMeta) -> bool:
         """
         Returns if a class *other* is either *this* or derived from *this* class, and *False*
         otherwise.

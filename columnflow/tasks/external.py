@@ -4,14 +4,15 @@
 Tasks dealing with external data.
 """
 
-__all__ = []
+from __future__ import annotations
 
+__all__ = []
 
 import os
 import time
 import shutil
 import subprocess
-from typing import Union, Tuple, List, Sequence, Optional
+from typing import Sequence
 
 import luigi
 import law
@@ -70,10 +71,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     def iter_nano_files(
         self,
-        task: Union[AnalysisTask, DatasetTask],
-        remote_fs: Optional[Union[str, List[str], Tuple[str]]] = None,
-        lfn_indices: Optional[List[int]] = None,
-        eager_lookup: Union[bool, int] = 1,
+        task: AnalysisTask | DatasetTask,
+        remote_fs: str | Sequence[str] | None = None,
+        lfn_indices: list[int] | None = None,
+        eager_lookup: bool | int = 1,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
@@ -127,7 +128,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
-                logger.info(f"file does {'' if input_stat else 'not'} exist at fs {fs}")
+                logger.info(f"file {lfn} does{'' if input_stat else ' not'} exist at fs {fs}")
 
                 # when the stat query took longer than 2 seconds, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
@@ -351,7 +352,7 @@ class CreatePileupWeights(ConfigTask):
     def read_mc_profile_from_cfg(
         cls,
         pu_config_target: law.FileSystemTarget,
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and
         return the pu profile as a list of float probabilities.
@@ -385,7 +386,7 @@ class CreatePileupWeights(ConfigTask):
     def read_data_profile_from_hist(
         cls,
         pu_hist_target: law.FileSystemTarget,
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*,
         builds the ratio to mc and returns the weights in a list.
@@ -399,7 +400,7 @@ class CreatePileupWeights(ConfigTask):
         cls,
         pu_file_target: law.FileSystemTarget,
         minbias_xs: float,
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Takes the pileup profile in data read stored in *pu_file_target*, which should have been
         produced when processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to
@@ -408,7 +409,7 @@ class CreatePileupWeights(ConfigTask):
         raise NotImplementedError
 
     @classmethod
-    def normalize_values(cls, values: Sequence[float]) -> List[float]:
+    def normalize_values(cls, values: Sequence[float]) -> list[float]:
         _sum = sum(values, 0.0)
         return [value / _sum for value in values]
 

@@ -4,9 +4,11 @@
 Helpers to write and work with datacards.
 """
 
+from __future__ import annotations
+
 import os
 from collections import OrderedDict
-from typing import Optional, Dict, Tuple, List, Sequence, Any
+from typing import Sequence, Any
 
 import law
 
@@ -41,7 +43,7 @@ class DatacardWriter(object):
     def __init__(
         self,
         inference_model_inst: InferenceModel,
-        histograms: Dict[str, Dict[str, Dict[str, hist.Hist]]],
+        histograms: dict[str, dict[str, dict[str, hist.Hist]]],
         rate_precision: int = 4,
         parameter_precision: int = 4,
     ):
@@ -57,7 +59,7 @@ class DatacardWriter(object):
         self,
         datacard_path: str,
         shapes_path: str,
-        shapes_path_ref: Optional[str] = None,
+        shapes_path_ref: str | None = None,
     ) -> None:
         """
         Writes the datacard into *datacard_path* with shapes saved in *shapes_path*. When the paths
@@ -307,9 +309,9 @@ class DatacardWriter(object):
         self,
         shapes_path: str,
         fill_empty_bins: float = 1e-5,
-    ) -> Tuple[
-        Dict[str, Dict[str, float]],
-        Dict[str, Dict[str, Dict[str, Tuple[float, float]]]],
+    ) -> tuple[
+        dict[str, dict[str, float]],
+        dict[str, dict[str, dict[str, tuple[float, float]]]],
         str,
         str,
     ]:
@@ -494,7 +496,7 @@ class DatacardWriter(object):
     def align_lines(
         cls,
         lines: Sequence[Any],
-    ) -> List[str]:
+    ) -> list[str]:
         lines = [
             (line.split() if isinstance(line, str) else list(map(str, law.util.flatten(line))))
             for line in lines
@@ -528,7 +530,7 @@ class DatacardWriter(object):
         cls,
         rates: Sequence[Any],
         parameters: Sequence[Any],
-    ) -> Tuple[List[str], List[str]]:
+    ) -> tuple[list[str], list[str]]:
         rates, parameters = [
             [
                 (line.split() if isinstance(line, str) else list(map(str, law.util.flatten(line))))

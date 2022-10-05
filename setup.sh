@@ -535,7 +535,7 @@ cf_color() {
     local msg="${@:2}"
 
     # disable coloring in remote jobs
-    [ "${CF_REMOTE_JOB}" = "1" ] && color="none"
+    ( [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ] ) && color="none"
 
     case "${color}" in
         red)

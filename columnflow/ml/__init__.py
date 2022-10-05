@@ -4,8 +4,10 @@
 Definition of basic objects for describing and creating ML models.
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Optional, Union, List, Tuple, Any, Set
+from typing import Any
 
 import law
 import order as od
@@ -76,7 +78,7 @@ class MLModel(Derivable):
         self,
         config_inst: od.Config,
         *,
-        parameters: Optional[OrderedDict] = None,
+        parameters: OrderedDict | None = None,
     ):
         super().__init__()
 
@@ -115,7 +117,7 @@ class MLModel(Derivable):
             for name, value in self.parameter_pairs(only_significant=True)
         )
 
-    def parameter_pairs(self, only_significant: bool = False) -> List[Tuple[str, Any]]:
+    def parameter_pairs(self, only_significant: bool = False) -> list[tuple[str, Any]]:
         """
         Returns a list of all parameter name-value tuples. In this context, significant parameters
         are those that potentially lead to different results (e.g. network architecture parameters
@@ -124,19 +126,19 @@ class MLModel(Derivable):
         return list(self.parameters.items())
 
     @property
-    def used_datasets(self) -> Set[od.Dataset]:
+    def used_datasets(self) -> set[od.Dataset]:
         if self._used_datasets is None:
             self._used_datasets = set(self.datasets())
         return self._used_datasets
 
     @property
-    def used_columns(self) -> Set[Union[Route, str]]:
+    def used_columns(self) -> set[Route | str]:
         if self._used_columns is None:
             self._used_columns = set(self.uses())
         return self._used_columns
 
     @property
-    def produced_columns(self) -> Set[Union[Route, str]]:
+    def produced_columns(self) -> set[Route | str]:
         if self._produced_columns is None:
             self._produced_columns = set(self.produces())
         return self._produced_columns
@@ -148,19 +150,19 @@ class MLModel(Derivable):
         """
         raise NotImplementedError()
 
-    def datasets(self) -> Set[od.Dataset]:
+    def datasets(self) -> set[od.Dataset]:
         """
         Returns a set of all required datasets. To be implemented in subclasses.
         """
         raise NotImplementedError()
 
-    def uses(self) -> Set[Union[Route, str]]:
+    def uses(self) -> set[Route | str]:
         """
         Returns a set of all required columns. To be implemented in subclasses.
         """
         raise NotImplementedError()
 
-    def produces(self) -> Set[Union[Route, str]]:
+    def produces(self) -> set[Route | str]:
         """
         Returns a set of all produced columns. To be implemented in subclasses.
         """
@@ -195,7 +197,7 @@ class MLModel(Derivable):
         self,
         task: law.Task,
         events: ak.Array,
-        models: List[Any],
+        models: list[Any],
         fold_indices: ak.Array,
         events_used_in_training: bool = False,
     ) -> ak.Array:

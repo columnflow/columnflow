@@ -5,7 +5,6 @@ Calibration methods for jets
 """
 
 import os
-from typing import Tuple
 
 import law
 
@@ -136,7 +135,7 @@ def prop_met(
     jet_phi2: ak.Array,
     met_pt1: ak.Array,
     met_phi1: ak.Array,
-) -> Tuple[ak.Array, ak.Array]:
+) -> tuple[ak.Array, ak.Array]:
     # avoid unwanted broadcasting
     assert jet_pt1.ndim == jet_phi1.ndim
     assert jet_pt2.ndim == jet_phi2.ndim

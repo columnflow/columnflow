@@ -4,7 +4,9 @@
 Distance-based methods.
 """
 
-from typing import Callable, Dict, List, Optional, Union
+from __future__ import annotations
+
+from typing import Callable
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import
@@ -17,8 +19,8 @@ ak = maybe_import("awkward")
 def cleaning_factory(
     selector_name: str,
     to_clean: str,
-    clean_against: List[str],
-    metric: Optional[Callable] = None,
+    clean_against: list[str],
+    metric: Callable | None = None,
 ) -> Callable:
     """
     factory to generate a function with name *selector_name* that cleans the
@@ -59,10 +61,10 @@ def cleaning_factory(
         self: Selector,
         events: ak.Array,
         to_clean: str,
-        clean_against: List[str],
-        metric: Optional[Callable] = metric,
+        clean_against: list[str],
+        metric: Callable | None = metric,
         threshold: float = 0.4,
-    ) -> List[int]:
+    ) -> list[int]:
         """
         abstract function to perform a cleaning of field *to_clean* against
         a (list of) field(s) *clean_against* based on an abitrary metric
@@ -127,7 +129,7 @@ delta_r_jet_lepton = cleaning_factory(
 def jet_lepton_delta_r_cleaning(
     self: Selector,
     events: ak.Array,
-    stats: Dict[str, Union[int, float]],
+    stats: dict[str, int | float],
     threshold: float = 0.4,
     **kwargs,
 ) -> SelectionResult:

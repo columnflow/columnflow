@@ -1,5 +1,4 @@
-# version 2
+# version 3
 
-tensorflow==2.6.*
-pyarrow==6.0.*
-awkward==1.9.*
+tensorflow==2.10.*
+awkward==1.10.*

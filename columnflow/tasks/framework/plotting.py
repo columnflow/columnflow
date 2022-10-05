@@ -5,7 +5,7 @@ Base classes for different types of plotting tasks.
 """
 
 import importlib
-from typing import Any, Callable, List
+from typing import Any, Callable
 
 import law
 import luigi
@@ -56,7 +56,7 @@ class PlotBase(AnalysisTask):
 
         return params
 
-    def get_plot_names(self, name: str) -> List[str]:
+    def get_plot_names(self, name: str) -> list[str]:
         """
         Returns a list of basenames for created plots given a file *name* for all configured file
         types, plus the additional plot suffix.

@@ -4,8 +4,10 @@
 Lightweight mixins task classes.
 """
 
+from __future__ import annotations
+
 import time
-from typing import Union, Sequence, List, Set, Dict, Any
+from typing import Sequence, Any
 
 import law
 import luigi
@@ -231,7 +233,7 @@ class SelectorStepsMixin(SelectorMixin):
     selector_steps_order_sensitive = False
 
     @classmethod
-    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
 
         # expand selector step groups
@@ -400,7 +402,7 @@ class MLModelMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
 
         # add the default ml model when empty
@@ -452,7 +454,7 @@ class MLModelsMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
 
         if "config_inst" in params:
@@ -493,7 +495,7 @@ class InferenceModelMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
 
         # add the default inference model when empty
@@ -752,11 +754,11 @@ class ShiftSourcesMixin(ConfigTask):
         return params
 
     @classmethod
-    def expand_shift_sources(cls, sources: Union[Sequence[str], Set[str]]) -> List[str]:
+    def expand_shift_sources(cls, sources: Sequence[str] | set[str]) -> list[str]:
         return sum(([f"{s}_up", f"{s}_down"] for s in sources), [])
 
     @classmethod
-    def reduce_shifts(cls, shifts: Union[Sequence[str], Set[str]]) -> List[str]:
+    def reduce_shifts(cls, shifts: Sequence[str] | set[str]) -> list[str]:
         return list(set(od.Shift.split_name(shift)[0] for shift in shifts))
 
     def __init__(self, *args, **kwargs):

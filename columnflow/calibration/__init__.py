@@ -4,7 +4,9 @@
 Object and event calibration tools.
 """
 
-from typing import Optional, Union, Callable
+from __future__ import annotations
+
+from typing import Callable
 
 from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
@@ -14,10 +16,10 @@ Calibrator = TaskArrayFunction.derive("Calibrator")
 
 
 def calibrator(
-    func: Optional[Callable] = None,
+    func: Callable | None = None,
     bases=(),
     **kwargs,
-) -> Union[DerivableMeta, Callable]:
+) -> DerivableMeta | Callable:
     """
     Decorator for creating a new :py:class:`Calibrator` subclass with additional, optional *bases*
     and attaching the decorated function to it as ``call_func``. All additional *kwargs* are added

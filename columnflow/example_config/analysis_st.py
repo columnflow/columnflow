@@ -5,7 +5,6 @@ Configuration of the single top analysis.
 """
 
 import re
-from typing import Set
 
 from scinum import Number, REL
 from order import Analysis, Shift
@@ -111,7 +110,7 @@ config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
 
 
 # helper to add column aliases for both shifts of a source
-def add_aliases(shift_source: str, aliases: Set[str], selection_dependent: bool):
+def add_aliases(shift_source: str, aliases: set[str], selection_dependent: bool):
     for direction in ["up", "down"]:
         shift = config_2018.get_shift(Shift.join_name(shift_source, direction))
         # format keys and values
