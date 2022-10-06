@@ -175,7 +175,7 @@ class PlotCutflow(
     RemoteWorkflow,
 ):
 
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(CreateCutflowHistograms.shifts)
 
@@ -352,7 +352,7 @@ class PlotCutflowVariables(
         description="when True, only create plots for the final selector step; default: False",
     )
 
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(CreateCutflowHistograms.shifts)
 
