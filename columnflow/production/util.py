@@ -4,7 +4,9 @@
 General producers that might be utilized in various places.
 """
 
-from typing import Optional, Union, Sequence
+from __future__ import annotations
+
+from typing import Sequence
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
@@ -62,7 +64,7 @@ default_collections = {
 def attach_coffea_behavior(
     self: Producer,
     events: ak.Array,
-    collections: Optional[Union[dict, Sequence]] = None,
+    collections: dict | Sequence | None = None,
     **kwargs,
 ) -> ak.Array:
     """

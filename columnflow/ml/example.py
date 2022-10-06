@@ -4,7 +4,9 @@
 Exemplary ML model.
 """
 
-from typing import List, Any, Set, Union, Optional
+from __future__ import annotations
+
+from typing import Any
 
 import law
 import order as od
@@ -19,7 +21,7 @@ tf = maybe_import("tensorflow")
 
 class ExampleModel(MLModel):
 
-    def __init__(self, *args, folds: Optional[int] = None, **kwargs):
+    def __init__(self, *args, folds: int | None = None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # class- to instance-level attributes
@@ -44,16 +46,16 @@ class ExampleModel(MLModel):
     def sandbox(self, task: law.Task) -> str:
         return dev_sandbox("bash::$CF_BASE/sandboxes/venv_ml_tf.sh")
 
-    def datasets(self) -> Set[od.Dataset]:
+    def datasets(self) -> set[od.Dataset]:
         return {
             self.config_inst.get_dataset("st_tchannel_t"),
             self.config_inst.get_dataset("tt_sl"),
         }
 
-    def uses(self) -> Set[Union[Route, str]]:
+    def uses(self) -> set[Route | str]:
         return {"ht", "n_jet", "n_muon", "n_electron", "normalization_weight"}
 
-    def produces(self) -> Set[Union[Route, str]]:
+    def produces(self) -> set[Route | str]:
         return {f"{self.cls_name}.n_muon", f"{self.cls_name}.n_electron"}
 
     def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
@@ -82,7 +84,7 @@ class ExampleModel(MLModel):
         self,
         task: law.Task,
         events: ak.Array,
-        models: List[Any],
+        models: list[Any],
         fold_indices: ak.Array,
         events_used_in_training: bool = False,
     ) -> ak.Array:

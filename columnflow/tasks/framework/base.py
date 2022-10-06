@@ -4,13 +4,15 @@
 Generic tools and base tasks that are defined along typical objects in an analysis.
 """
 
+from __future__ import annotations
+
 import os
 import enum
 import importlib
 import itertools
 import inspect
 import functools
-from typing import Optional, Sequence, List, Union, Set, Dict
+from typing import Sequence
 
 import luigi
 import law
@@ -161,13 +163,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     @classmethod
     def find_config_objects(
         cls,
-        names: Union[str, Sequence[str], Set[str]],
+        names: str | Sequence[str] | set[str],
         container: od.UniqueObject,
         object_cls: od.UniqueObjectMeta,
-        object_groups: Optional[Dict[str, list]] = None,
+        object_groups: dict[str, list] | None = None,
         accept_patterns: bool = True,
         deep: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Returns all names of objects of type *object_cls* known to a *container* (e.g.
         :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
@@ -765,8 +767,8 @@ def wrapper_factory(
     base_cls: law.Task,
     require_cls: AnalysisTask,
     enable: Sequence[str],
-    cls_name: Optional[str] = None,
-    attributes: Optional[dict] = None,
+    cls_name: str | None = None,
+    attributes: dict | None = None,
 ) -> law.task.base.Register:
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and

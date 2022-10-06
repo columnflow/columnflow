@@ -4,9 +4,11 @@
 Basic objects for defining statistical inference models.
 """
 
+from __future__ import annotations
+
 import enum
 import copy as _copy
-from typing import Optional, Tuple, List, Union, Dict, Generator, Callable, TextIO, Sequence, Any
+from typing import Generator, Callable, TextIO, Sequence, Any
 
 import law
 import order as od
@@ -218,11 +220,11 @@ class InferenceModel(Derivable):
     def category_spec(
         cls,
         name: str,
-        category: Optional[str] = None,
-        variable: Optional[str] = None,
-        data_datasets: Optional[Sequence[str]] = None,
-        data_from_processes: Optional[Sequence[str]] = None,
-        mc_stats: Optional[Union[float, tuple]] = None,
+        category: str | None = None,
+        variable: str | None = None,
+        data_datasets: Sequence[str] | None = None,
+        data_from_processes: Sequence[str] | None = None,
+        mc_stats: float | tuple | None = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a category (interchangeably called bin or channel in other
@@ -252,9 +254,9 @@ class InferenceModel(Derivable):
     def process_spec(
         cls,
         name: str,
-        process: Optional[str] = None,
+        process: str | None = None,
         signal: bool = False,
-        mc_datasets: Optional[Sequence[str]] = None,
+        mc_datasets: Sequence[str] | None = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
@@ -277,10 +279,10 @@ class InferenceModel(Derivable):
     def parameter_spec(
         cls,
         name: str,
-        type: Union[ParameterType, str],
-        transformations: Sequence[Union[ParameterTransformation, str]] = (ParameterTransformation.none,),
-        shift_source: Optional[str] = None,
-        effect: Union[Any] = 1.0,
+        type: ParameterType | str,
+        transformations: Sequence[ParameterTransformation | str] = (ParameterTransformation.none,),
+        shift_source: str | None = None,
+        effect: Any | None = 1.0,
     ) -> DotDict:
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
@@ -306,7 +308,7 @@ class InferenceModel(Derivable):
     def parameter_group_spec(
         cls,
         name: str,
-        parameter_names: Optional[Sequence[str]] = None,
+        parameter_names: Sequence[str] | None = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a group of parameter names.
@@ -358,7 +360,7 @@ class InferenceModel(Derivable):
         if callable(self.init_func):
             self.init_func()
 
-    def to_yaml(self, stream: Optional[TextIO] = None) -> Union[None, str]:
+    def to_yaml(self, stream: TextIO | None = None) -> str | None:
         """
         Writes the content of the :py:attr:`model` into a file-like object *stream* when given, and
         returns a string representation otherwise.
@@ -389,9 +391,9 @@ class InferenceModel(Derivable):
 
     def get_categories(
         self,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        category: str | Sequence[str] | None = None,
         only_names: bool = False,
-    ) -> List[Union[DotDict, str]]:
+    ) -> list[DotDict | str]:
         """
         Returns a list of categories whose name match *category*. *category* can be a string, a
         pattern, or sequence of them. When *only_names* is *True*, only names of categories are
@@ -409,10 +411,10 @@ class InferenceModel(Derivable):
 
     def get_category(
         self,
-        category: Union[str, Sequence[str]],
+        category: str | Sequence[str],
         only_name: bool = False,
         silent: bool = False,
-    ) -> Union[DotDict, str]:
+    ) -> DotDict | str:
         """
         Returns a single category whose name matches *category*. *category* can be a string, a
         pattern, or sequence of them. An exception is raised if no or more than one category is
@@ -438,7 +440,7 @@ class InferenceModel(Derivable):
 
     def has_category(
         self,
-        category: Union[str, Sequence[str]],
+        category: str | Sequence[str],
     ) -> bool:
         """
         Returns *True* if a category whose name matches *category* is existing, and *False*
@@ -468,7 +470,7 @@ class InferenceModel(Derivable):
 
     def remove_category(
         self,
-        category: Union[str, Sequence[str]],
+        category: str | Sequence[str],
     ) -> bool:
         """
         Removes one or more categories whose names match *category*. Returns *True* if at least one
@@ -499,11 +501,11 @@ class InferenceModel(Derivable):
 
     def get_processes(
         self,
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
         only_names: bool = False,
         flat: bool = False,
-    ) -> Union[Dict[str, Union[DotDict, str]], List[str]]:
+    ) -> dict[str, DotDict | str] | list[str]:
         """
         Returns a dictionary of processes whose names match *process*, mapped to the name of the
         category they belong to. Categories can optionally be filtered through *category*. Both
@@ -545,11 +547,11 @@ class InferenceModel(Derivable):
 
     def get_process(
         self,
-        process: Union[str, Sequence[str]],
-        category: Optional[Union[str, Sequence[str]]] = None,
+        process: str | Sequence[str],
+        category: str | Sequence[str] | None = None,
         only_name: bool = False,
         silent: bool = False,
-    ) -> Union[DotDict, str]:
+    ) -> DotDict | str:
         """
         Returns a single process whose name matches *process*, and optionally, whose category's name
         matches *category*. Both *process* and *category* can be a string, a pattern, or sequence of
@@ -598,8 +600,8 @@ class InferenceModel(Derivable):
 
     def has_process(
         self,
-        process: Union[str, Sequence[str]],
-        category: Optional[Union[str, Sequence[str]]] = None,
+        process: str | Sequence[str],
+        category: str | Sequence[str] | None = None,
     ) -> bool:
         """
         Returns *True* if a process whose name matches *process*, and optionally whose category's
@@ -616,7 +618,7 @@ class InferenceModel(Derivable):
     def add_process(
         self,
         *args,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        category: str | Sequence[str] | None = None,
         silent: bool = False,
         **kwargs,
     ) -> None:
@@ -654,8 +656,8 @@ class InferenceModel(Derivable):
 
     def remove_process(
         self,
-        process: Union[str, Sequence[str]],
-        category: Optional[Union[str, Sequence[str]]] = None,
+        process: str | Sequence[str],
+        category: str | Sequence[str] | None = None,
     ) -> bool:
         """
         Removes one or more processes whose names match *process*, and optionally whose category's
@@ -692,12 +694,12 @@ class InferenceModel(Derivable):
 
     def get_parameters(
         self,
-        parameter: Optional[Union[str, Sequence[str]]] = None,
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str] | None = None,
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
         only_names: bool = False,
         flat: bool = False,
-    ) -> Union[Dict[str, Dict[str, Union[DotDict, str]]], List[str]]:
+    ) -> dict[str, dict[str, DotDict | str]] | list[str]:
         """
         Returns a dictionary of parameter whose names match *parameter*, mapped twice to the name of
         the category and the name of the process they belong to. Categories and processes can
@@ -748,12 +750,12 @@ class InferenceModel(Derivable):
 
     def get_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
         only_name: bool = False,
         silent: bool = False,
-    ) -> Union[DotDict, str]:
+    ) -> DotDict | str:
         """
         Returns a single parameter whose name matches *parameter*, and optionally, whose category's
         and process' name matches *category* and *process*. All three, *parameter*, *process* and
@@ -816,9 +818,9 @@ class InferenceModel(Derivable):
 
     def has_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
     ) -> bool:
         """
         Returns *True* if a parameter whose name matches *parameter*, and optionally whose
@@ -841,8 +843,8 @@ class InferenceModel(Derivable):
     def add_parameter(
         self,
         *args,
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
         **kwargs,
     ) -> DotDict:
         """
@@ -881,9 +883,9 @@ class InferenceModel(Derivable):
 
     def remove_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
     ) -> bool:
         """
         Removes one or more parameters whose names match *parameter*, and optionally whose
@@ -923,9 +925,9 @@ class InferenceModel(Derivable):
 
     def get_parameter_groups(
         self,
-        group: Optional[Union[str, Sequence[str]]] = None,
+        group: str | Sequence[str] | None = None,
         only_names: bool = False,
-    ) -> List[Union[DotDict, str]]:
+    ) -> list[DotDict | str]:
         """
         Returns a list of parameter group whose name match *group*. *group* can be a string, a
         pattern, or sequence of them.
@@ -945,9 +947,9 @@ class InferenceModel(Derivable):
 
     def get_parameter_group(
         self,
-        group: Union[str, Sequence[str]],
+        group: str | Sequence[str],
         only_name: bool = False,
-    ) -> Union[DotDict, str]:
+    ) -> DotDict | str:
         """
         Returns a single parameter group whose name matches *group*. *group* can be a string, a
         pattern, or sequence of them.
@@ -971,7 +973,7 @@ class InferenceModel(Derivable):
 
     def has_parameter_group(
         self,
-        group: Union[str, Sequence[str]],
+        group: str | Sequence[str],
     ) -> bool:
         """
         Returns *True* if a parameter group whose name matches *group* is existing, and *False*
@@ -1000,7 +1002,7 @@ class InferenceModel(Derivable):
 
     def remove_parameter_group(
         self,
-        group: Union[str, Sequence[str]],
+        group: str | Sequence[str],
     ) -> bool:
         """
         Removes one or more parameter groups whose names match *group*. *group* can be a string, a
@@ -1023,8 +1025,8 @@ class InferenceModel(Derivable):
 
     def add_parameter_to_group(
         self,
-        parameter: Union[str, Sequence[str]],
-        group: Union[str, Sequence[str]],
+        parameter: str | Sequence[str],
+        group: str | Sequence[str],
     ) -> bool:
         """
         Adds a parameter named *parameter* to one or multiple parameter groups whose name match
@@ -1062,8 +1064,8 @@ class InferenceModel(Derivable):
 
     def remove_parameter_from_groups(
         self,
-        parameter: Union[str, Sequence[str]],
-        group: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        group: str | Sequence[str] | None = None,
     ) -> bool:
         """
         Removes all parameters matching *parameter* from parameter groups whose names match *group*.
@@ -1098,8 +1100,8 @@ class InferenceModel(Derivable):
 
     def get_categories_with_process(
         self,
-        process: Union[str, Sequence[str]],
-    ) -> List[str]:
+        process: str | Sequence[str],
+    ) -> list[str]:
         """
         Returns a flat list of category names that contain processes matching *process*. *process*
         can be a string, a pattern, or sequence of them.
@@ -1112,10 +1114,10 @@ class InferenceModel(Derivable):
 
     def get_processes_with_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-        category: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        category: str | Sequence[str] | None = None,
         flat: bool = True,
-    ) -> Union[List[str], Dict[str, List[str]]]:
+    ) -> list[str] | dict[str, list[str]]:
         """
         Returns a dictionary of names of processes that contain a parameter whose names match
         *parameter*, mapped to categories names. Categories can optionally be filtered through
@@ -1147,10 +1149,10 @@ class InferenceModel(Derivable):
 
     def get_categories_with_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-        process: Optional[Union[str, Sequence[str]]] = None,
+        parameter: str | Sequence[str],
+        process: str | Sequence[str] | None = None,
         flat: bool = True,
-    ) -> Union[List[str], Dict[str, List[str]]]:
+    ) -> list[str] | dict[str, list[str]]:
         """
         Returns a dictionary of category names mapping to process names that contain parameters
         whose name match *parameter*. Processes can optionally be filtered through *process*. Both
@@ -1182,8 +1184,8 @@ class InferenceModel(Derivable):
 
     def get_groups_with_parameter(
         self,
-        parameter: Union[str, Sequence[str]],
-    ) -> List[str]:
+        parameter: str | Sequence[str],
+    ) -> list[str]:
         """
         Returns a list of names of parameter groups that contain a parameter whose name matches
         *parameter*, which can be a string, a pattern, or sequence of them.
@@ -1254,9 +1256,9 @@ class InferenceModel(Derivable):
 
     def iter_processes(
         self,
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
-    ) -> Generator[Tuple[DotDict, DotDict], None, None]:
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
+    ) -> Generator[tuple[DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all processes whose names match *process*, optionally
         in all categories whose names match *category*. The yielded value is a 2-tuple containing
@@ -1269,10 +1271,10 @@ class InferenceModel(Derivable):
 
     def iter_parameters(
         self,
-        parameter: Optional[Union[str, Sequence[str]]] = None,
-        process: Optional[Union[str, Sequence[str]]] = None,
-        category: Optional[Union[str, Sequence[str]]] = None,
-    ) -> Generator[Tuple[DotDict, DotDict, DotDict], None, None]:
+        parameter: str | Sequence[str] | None = None,
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
+    ) -> Generator[tuple[DotDict, DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all parameters whose names match *parameter*, optionally
         in all processes and categories whose names match *process* and *category*. The yielded
@@ -1286,10 +1288,10 @@ class InferenceModel(Derivable):
 
 
 def inference_model(
-    func: Optional[Callable] = None,
+    func: Callable | None = None,
     bases=(),
     **kwargs,
-) -> Union[DerivableMeta, Callable]:
+) -> DerivableMeta | Callable:
     """
     Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
     *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are

@@ -144,14 +144,14 @@ setup_venv() {
             fi
             # start the sleep loop
             while [ -f "${pending_flag_file}" ]; do
-                # wait at most 15 minutes
+                # wait at most 20 minutes
                 sleep_counter="$(( $sleep_counter + 1 ))"
-                if [ "${sleep_counter}" -ge 180 ]; then
+                if [ "${sleep_counter}" -ge 120 ]; then
                     >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
                     return "10"
                 fi
-                echo -e "\x1b[0;49;36mvenv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 180\x1b[0m"
-                sleep 5
+                cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
+                sleep 10
             done
         fi
 

@@ -17,7 +17,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from columnflow.util import DotDict
+from columnflow.util import DotDict, dev_sandbox
 
 
 class PlotVariables(
@@ -32,7 +32,7 @@ class PlotVariables(
     RemoteWorkflow,
 ):
 
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(MergeHistograms.shifts)
 
@@ -173,7 +173,7 @@ class PlotShiftedVariables(
     RemoteWorkflow,
 ):
 
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # default upstream dependency task classes
     dep_MergeShiftedHistograms = MergeShiftedHistograms

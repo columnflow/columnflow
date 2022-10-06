@@ -290,7 +290,7 @@ cf_setup_interactive() {
             # set the variable when existing
             eval "value=\${$varname:-\$value}"
         else
-            printf "${text} ($( cf_color bright_white ${varname} ), default $( cf_color bright_white ${default_text} )):  "
+            printf "${text} ($( cf_color default_bright ${varname} ), default $( cf_color default_bright ${default_text} )):  "
             read query_response
             [ "X${query_response}" = "X" ] && query_response="${default}"
 
@@ -298,7 +298,7 @@ cf_setup_interactive() {
             while true; do
                 ( [ "${default}" != "True" ] && [ "${default}" != "False" ] ) && break
                 ( [ "${query_response}" = "True" ] || [ "${query_response}" = "False" ] ) && break
-                printf "please enter either '$( cf_color bright_white True )' or '$( cf_color bright_white False )':  " query_response
+                printf "please enter either '$( cf_color default_bright True )' or '$( cf_color default_bright False )':  " query_response
                 read query_response
                 [ "X${query_response}" = "X" ] && query_response="${default}"
             done
@@ -397,6 +397,7 @@ cf_setup_software_stack() {
     export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
     export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
     export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
+    export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
     ulimit -s unlimited
 
     # local python stack in one conda env and two virtual envs:
@@ -426,8 +427,13 @@ cf_setup_software_stack() {
                     wget "${miniconda_source}" -O setup_miniconda.sh &&
                     bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
                     rm setup_miniconda.sh &&
-                    echo "changeps1: false" >> "${CF_CONDA_BASE}/.condarc"
-                ) || return "$?"
+                    cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+changeps1: false
+channels:
+  - conda-forge
+  - defaults
+EOF
+                )
             fi
 
             # initialize conda
@@ -446,8 +452,8 @@ cf_setup_software_stack() {
             # install packages
             if ${conda_missing}; then
                 echo
-                cf_color magenta "setting up conda environment"
-                conda install --yes --channel conda-forge gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
+                cf_color cyan "setting up conda environment"
+                conda install --yes libgcc gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -456,6 +462,7 @@ export GFAL_PLUGIN_DIR="\${CONDA_PREFIX}/lib/gfal2-plugins"
 export X509_CERT_DIR="${X509_CERT_DIR}"
 export X509_VOMS_DIR="${X509_VOMS_DIR}"
 export X509_VOMSES="${X509_VOMSES}"
+export VOMS_USERCONF="${VOMS_USERCONF}"
 EOF
             fi
         fi
@@ -535,9 +542,12 @@ cf_color() {
     local msg="${@:2}"
 
     # disable coloring in remote jobs
-    [ "${CF_REMOTE_JOB}" = "1" ] && color="none"
+    ( [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ] ) && color="none"
 
     case "${color}" in
+        default)
+            echo -e "\x1b[0;49;39m${msg}\x1b[0m"
+            ;;
         red)
             echo -e "\x1b[0;49;31m${msg}\x1b[0m"
             ;;
@@ -556,26 +566,26 @@ cf_color() {
         cyan)
             echo -e "\x1b[0;49;36m${msg}\x1b[0m"
             ;;
-        bright_white)
-            echo -e "\x1b[0;49;39m${msg}\x1b[0m"
+        default_bright)
+            echo -e "\x1b[1;49;39m${msg}\x1b[0m"
             ;;
-        bright_red)
-            echo -e "\x1b[0;49;91m${msg}\x1b[0m"
+        red_bright)
+            echo -e "\x1b[1;49;31m${msg}\x1b[0m"
             ;;
-        bright_green)
-            echo -e "\x1b[0;49;92m${msg}\x1b[0m"
+        green_bright)
+            echo -e "\x1b[1;49;32m${msg}\x1b[0m"
             ;;
-        bright_yellow)
-            echo -e "\x1b[0;49;93m${msg}\x1b[0m"
+        yellow_bright)
+            echo -e "\x1b[1;49;33m${msg}\x1b[0m"
             ;;
-        bright_blue)
-            echo -e "\x1b[0;49;94m${msg}\x1b[0m"
+        blue_bright)
+            echo -e "\x1b[1;49;34m${msg}\x1b[0m"
             ;;
-        bright_magenta)
-            echo -e "\x1b[0;49;95m${msg}\x1b[0m"
+        magenta_bright)
+            echo -e "\x1b[1;49;35m${msg}\x1b[0m"
             ;;
-        bright_cyan)
-            echo -e "\x1b[0;49;96m${msg}\x1b[0m"
+        cyan_bright)
+            echo -e "\x1b[1;49;36m${msg}\x1b[0m"
             ;;
         *)
             echo "${msg}"

@@ -4,8 +4,10 @@
 Example plot functions.
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Sequence, Optional
+from typing import Sequence
 
 import law
 
@@ -221,10 +223,10 @@ def plot_variable_per_process(
     hists: OrderedDict,
     config_inst: od.config,
     variable_inst: od.variable,
-    style_config: Optional[dict] = None,
-    shape_norm: Optional[bool] = False,
-    yscale: Optional[str] = "",
-    process_settings: Optional[dict] = None,
+    style_config: dict | None = None,
+    shape_norm: bool | None = False,
+    yscale: str | None = "",
+    process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
 
@@ -335,9 +337,9 @@ def plot_variable_variants(
     hists: OrderedDict,
     config_inst: od.config,
     variable_inst: od.variable,
-    style_config: Optional[dict] = None,
+    style_config: dict | None = None,
     shape_norm: bool = False,
-    yscale: Optional[str] = None,
+    yscale: str | None = None,
     **kwargs,
 ) -> plt.Figure:
     plot_config = OrderedDict()
@@ -388,11 +390,11 @@ def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
     variable_inst: od.variable,
-    style_config: Optional[dict] = None,
+    style_config: dict | None = None,
     shape_norm: bool = False,
-    yscale: Optional[str] = None,
-    legend_title: Optional[str] = None,
-    process_settings: Optional[dict] = None,
+    yscale: str | None = None,
+    legend_title: str | None = None,
+    process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     # create the sum of histograms over all processes
@@ -474,10 +476,10 @@ def plot_shifted_variable(
 def plot_cutflow(
     hists: OrderedDict,
     config_inst: od.config,
-    style_config: Optional[dict] = None,
+    style_config: dict | None = None,
     shape_norm: bool = False,
-    yscale: Optional[str] = None,
-    process_settings: Optional[dict] = None,
+    yscale: str | None = None,
+    process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     if not process_settings:

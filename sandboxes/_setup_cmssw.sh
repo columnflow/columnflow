@@ -124,14 +124,14 @@ setup_cmssw() {
             fi
             # start the sleep loop
             while [ -f "${pending_flag_file}" ]; do
-                # wait at most 10 minutes
+                # wait at most 20 minutes
                 sleep_counter="$(( $sleep_counter + 1 ))"
                 if [ "${sleep_counter}" -ge 120 ]; then
                     >&2 echo "cmssw ${CF_CMSSW_VERSION} is setup in different process, but number of sleeps exceeded"
                     return "7"
                 fi
-                echo -e "\x1b[0;49;36mcmssw ${CF_CMSSW_VERSION} already being setup in different process, sleep ${sleep_counter} / 120\x1b[0m"
-                sleep 5
+                cf_color yellow "cmssw ${CF_CMSSW_VERSION} already being setup in different process, sleep ${sleep_counter} / 120"
+                sleep 10
             done
         fi
 

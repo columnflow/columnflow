@@ -4,7 +4,9 @@
 Object and event selection tools.
 """
 
-from typing import Optional, Union, Callable
+from __future__ import annotations
+
+from typing import Callable
 
 import law
 import order as od
@@ -29,10 +31,10 @@ class Selector(TaskArrayFunction):
 
 
 def selector(
-    func: Optional[Callable] = None,
+    func: Callable | None = None,
     bases=(),
     **kwargs,
-) -> Union[DerivableMeta, Callable]:
+) -> DerivableMeta | Callable:
     """
     Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases* and
     attaching the decorated function to it as ``call_func``. All additional *kwargs* are added as
@@ -97,10 +99,10 @@ class SelectionResult(od.AuxDataMixin):
 
     def __init__(
         self,
-        main: Optional[Union[DotDict, dict]] = None,
-        steps: Optional[Union[DotDict, dict]] = None,
-        objects: Optional[Union[DotDict, dict]] = None,
-        aux: Optional[Union[DotDict, dict]] = None,
+        main: DotDict | dict | None = None,
+        steps: DotDict | dict | None = None,
+        objects: DotDict | dict | None = None,
+        aux: DotDict | dict | None = None,
     ):
         super().__init__(aux=aux)
 
@@ -109,7 +111,7 @@ class SelectionResult(od.AuxDataMixin):
         self.steps = DotDict.wrap(steps or {})
         self.objects = DotDict.wrap(objects or {})
 
-    def __iadd__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
+    def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
         """
         Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
         unchanged.
@@ -132,7 +134,7 @@ class SelectionResult(od.AuxDataMixin):
 
         return self
 
-    def __add__(self, other: Union["SelectionResult", None]) -> "SelectionResult":
+    def __add__(self, other: SelectionResult | None) -> SelectionResult:
         """
         Returns a new instance with all fields of *this* and an *other* instance merged. When
         *None*, a copy of *this* instance is returned.

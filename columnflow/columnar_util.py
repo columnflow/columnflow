@@ -4,6 +4,8 @@
 Helpers and utilities for working with columnar libraries.
 """
 
+from __future__ import annotations
+
 __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
@@ -12,7 +14,6 @@ __all__ = [
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "flat_np_view", "attach_behavior",
 ]
-
 
 import os
 import re
@@ -25,7 +26,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import partial
 from collections import namedtuple, OrderedDict, defaultdict
-from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
+from typing import Sequence, Callable, Any
 
 import law
 
@@ -80,7 +81,7 @@ class RouteMeta(type):
     constructor.
     """
 
-    def __call__(cls, route: Optional[Union["Route", Any]] = None):
+    def __call__(cls, route: Route | Any | None = None):
         if isinstance(route, cls):
             return route
 
@@ -158,7 +159,7 @@ class Route(object, metaclass=RouteMeta):
     def _join(
         cls,
         sep: str,
-        fields: Sequence[Union[str, int, slice, type(Ellipsis), tuple, list]],
+        fields: Sequence[str | int | slice | type(Ellipsis) | tuple | list],
         _outer: bool = True,
     ) -> str:
         """
@@ -189,7 +190,7 @@ class Route(object, metaclass=RouteMeta):
     @classmethod
     def join(
         cls,
-        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
@@ -199,7 +200,7 @@ class Route(object, metaclass=RouteMeta):
     @classmethod
     def join_nano(
         cls,
-        fields: Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
@@ -211,7 +212,7 @@ class Route(object, metaclass=RouteMeta):
         cls,
         sep: str,
         column: str,
-    ) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
+    ) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
@@ -264,7 +265,7 @@ class Route(object, metaclass=RouteMeta):
         return tuple(parts)
 
     @classmethod
-    def split(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
+    def split(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string assumed to be in dot format and returns the fragments, potentially with
         selection, slice and advanced indexing expressions.
@@ -272,7 +273,7 @@ class Route(object, metaclass=RouteMeta):
         return cls._split(cls.DOT_SEP, column)
 
     @classmethod
-    def split_nano(cls, column: str) -> Tuple[Union[str, int, slice, type(Ellipsis), list, tuple]]:
+    def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
@@ -290,15 +291,15 @@ class Route(object, metaclass=RouteMeta):
             self.add(route)
 
     @property
-    def fields(self):
+    def fields(self) -> tuple:
         return tuple(self._fields)
 
     @property
-    def column(self):
+    def column(self) -> str:
         return self.join(self._fields)
 
     @property
-    def nano_column(self):
+    def nano_column(self) -> str:
         return self.join_nano(self._fields)
 
     def __str__(self) -> str:
@@ -313,7 +314,7 @@ class Route(object, metaclass=RouteMeta):
     def __len__(self) -> int:
         return len(self._fields)
 
-    def __eq__(self, other: Union["Route", Sequence[str], str]) -> bool:
+    def __eq__(self, other: Route | Sequence[str] | str) -> bool:
         if isinstance(other, Route):
             return self.fields == other.fields
         elif isinstance(other, (list, tuple)):
@@ -330,7 +331,7 @@ class Route(object, metaclass=RouteMeta):
 
     def __add__(
         self,
-        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> "Route":
         route = self.copy()
         route.add(other)
@@ -338,13 +339,13 @@ class Route(object, metaclass=RouteMeta):
 
     def __radd__(
         self,
-        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> "Route":
         return self.__add__(other)
 
     def __iadd__(
         self,
-        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> "Route":
         self.add(other)
         return self
@@ -352,7 +353,7 @@ class Route(object, metaclass=RouteMeta):
     def __getitem__(
         self,
         index: Any,
-    ) -> Union["Route", str, int, slice, type(Ellipsis), list, tuple]:
+    ) -> Route | str | int | slice | type(Ellipsis) | list | tuple:
         # detect slicing and return a new instance with the selected fields
         field = self._fields.__getitem__(index)
         return field if isinstance(index, int) else self.__class__(field)
@@ -360,13 +361,13 @@ class Route(object, metaclass=RouteMeta):
     def __setitem__(
         self,
         index: Any,
-        value: Union[str, int, slice, type(Ellipsis), list, tuple],
+        value: str | int | slice | type(Ellipsis) | list | tuple,
     ) -> None:
         self._fields.__setitem__(index, value)
 
     def add(
         self,
-        other: Union["Route", str, Sequence[Union[str, int, slice, type(Ellipsis), list, tuple]]],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> None:
         """
         Adds an *other* route instance, or the fields extracted from either a sequence of strings or
@@ -394,7 +395,7 @@ class Route(object, metaclass=RouteMeta):
         """
         self._fields[:] = self._fields[::-1]
 
-    def copy(self) -> "Route":
+    def copy(self) -> Route:
         """
         Returns a copy if this instance.
         """
@@ -482,7 +483,7 @@ class Route(object, metaclass=RouteMeta):
 def get_ak_routes(
     ak_array: ak.Array,
     max_depth: int = 0,
-) -> List[Route]:
+) -> list[Route]:
     """
     Extracts all routes pointing to columns of a potentially deeply nested awkward array *ak_array*
     and returns them in a list of :py:class:`Route` instances. Example:
@@ -534,7 +535,7 @@ def get_ak_routes(
 
 def has_ak_column(
     ak_array: ak.Array,
-    route: Union[Route, Sequence[str], str],
+    route: Route | Sequence[str] | str,
 ) -> bool:
     """
     Returns whether an awkward array *ak_array* contains a nested field identified by a *route*. A
@@ -553,7 +554,7 @@ def has_ak_column(
 
 def set_ak_column(
     ak_array: ak.Array,
-    route: Union[Route, Sequence[str], str],
+    route: Route | Sequence[str] | str,
     value: ak.Array,
 ) -> ak.Array:
     """
@@ -633,7 +634,7 @@ def set_ak_column(
 
 def remove_ak_column(
     ak_array: ak.Array,
-    route: Union[Route, Sequence[str], str],
+    route: Route | Sequence[str] | str,
     silent: bool = False,
 ) -> ak.Array:
     """
@@ -680,8 +681,8 @@ def remove_ak_column(
 
 def add_ak_alias(
     ak_array: ak.Array,
-    src_route: Union[Route, Sequence[str], str],
-    dst_route: Union[Route, Sequence[str], str],
+    src_route: Route | Sequence[str] | str,
+    dst_route: Route | Sequence[str] | str,
     remove_src: bool = False,
 ) -> ak.Array:
     """
@@ -715,7 +716,7 @@ def add_ak_alias(
 
 def add_ak_aliases(
     ak_array: ak.Array,
-    aliases: Dict[Union[Route, Sequence[str], str], Union[Route, Sequence[str], str]],
+    aliases: dict[Route | Sequence[str] | str, Route | Sequence[str], str],
     remove_src: bool = False,
 ) -> ak.Array:
     """
@@ -739,9 +740,9 @@ def add_ak_aliases(
 def update_ak_array(
     ak_array: ak.Array,
     *others: ak.Array,
-    overwrite_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = True,
-    add_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
-    concat_routes: Union[bool, List[Union[Route, Sequence[str], str]]] = False,
+    overwrite_routes: bool | list[Route | Sequence[str], str] = True,
+    add_routes: bool | list[Route | Sequence[str], str] = False,
+    concat_routes: bool | list[Route | Sequence[str], str] = False,
 ) -> ak.Array:
     """
     Updates an awkward array *ak_array* with the content of multiple different arrays *others* and
@@ -824,7 +825,7 @@ def update_ak_array(
 
 def flatten_ak_array(
     ak_array: ak.Array,
-    routes: Optional[Union[Sequence, set, Callable[[str], bool]]] = None,
+    routes: Sequence | set | Callable[[str], bool] | None = None,
 ) -> OrderedDict:
     """
     Flattens a nested awkward array *ak_array* into a dictionary that maps joined column names to
@@ -856,7 +857,7 @@ def flatten_ak_array(
 
 def sort_ak_fields(
     ak_array: ak.Array,
-    sort_fn: Optional[Callable[[str], int]] = None,
+    sort_fn: Callable[[str], int] | None = None,
 ) -> ak.Array:
     """
     Recursively sorts all fields of an awkward array *ak_array* and returns a new view. When a
@@ -931,8 +932,8 @@ def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
-    behavior: Optional[dict] = None,
-    skip_fields: Optional[Sequence[str]] = None,
+    behavior: dict | None = None,
+    skip_fields: Sequence[str] | None = None,
 ) -> ak.Array:
     """
     Attaches behavior of type *type_name* to an awkward array *ak_array* and returns it. *type_name*
@@ -995,13 +996,13 @@ class RouteFilter(object):
        instance.
     """
 
-    def __init__(self, keep_routes):
+    def __init__(self, keep_routes: Sequence[Route | str]):
         super().__init__()
 
         self.keep_routes = list(keep_routes)
         self.remove_routes = None
 
-    def __call__(self, ak_array):
+    def __call__(self, ak_array: ak.Array) -> ak.Array:
         # manually remove colums that should not be kept
         if self.remove_routes is None:
             # convert routes to keep into string columns for pattern checks
@@ -1186,9 +1187,9 @@ class ArrayFunction(Derivable):
 
     def __init__(
         self,
-        call_func: Optional[Callable] = law.no_value,
-        deferred_init: Optional[bool] = True,
-        instance_cache: Optional[dict] = None,
+        call_func: Callable | None = law.no_value,
+        deferred_init: bool | None = True,
+        instance_cache: dict | None = None,
         **kwargs,
     ):
         super().__init__()
@@ -1231,7 +1232,7 @@ class ArrayFunction(Derivable):
         if deferred_init:
             self.deferred_init(instance_cache or {})
 
-    def __getitem__(self, dep_cls: DerivableMeta) -> "ArrayFunction":
+    def __getitem__(self, dep_cls: DerivableMeta) -> ArrayFunction:
         """
         Item access to dependencies.
         """
@@ -1283,13 +1284,13 @@ class ArrayFunction(Derivable):
             # save the updated set of dependencies
             setattr(self, f"{attr}_instances", deps)
 
-    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> "ArrayFunction":
+    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> ArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*.
         """
         return cls(**kwargs)
 
-    def get_dependencies(self, include_others: bool = False) -> Set[Union["ArrayFunction", Any]]:
+    def get_dependencies(self, include_others: bool = False) -> set[ArrayFunction | Any]:
         """
         Returns a set of instances of all dependencies. When *include_others* is *True*, also
         non-ArrayFunction types are returned.
@@ -1307,7 +1308,7 @@ class ArrayFunction(Derivable):
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: Optional[set] = None) -> Set[str]:
+    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1339,18 +1340,18 @@ class ArrayFunction(Derivable):
 
         return columns
 
-    def _get_used_columns(self, call_cache: Optional[set] = None) -> Set[str]:
+    def _get_used_columns(self, call_cache: set | None = None) -> set[str]:
         return self._get_columns(io_flag=self.IOFlag.USES, call_cache=call_cache)
 
     @property
-    def used_columns(self) -> Set[str]:
+    def used_columns(self) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, call_cache: Optional[set] = None) -> Set[str]:
+    def _get_produced_columns(self, call_cache: set | None = None) -> set[str]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, call_cache=call_cache)
 
     @property
-    def produced_columns(self) -> Set[str]:
+    def produced_columns(self) -> set[str]:
         return self._get_produced_columns()
 
     def __call__(self, *args, **kwargs):
@@ -1544,12 +1545,12 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        init_func: Optional[Callable] = law.no_value,
-        requires_func: Optional[Callable] = law.no_value,
-        setup_func: Optional[Callable] = law.no_value,
-        sandbox: Optional[str] = law.no_value,
-        call_force: Optional[bool] = law.no_value,
-        inst_dict: Optional[dict] = None,
+        init_func: Callable | None = law.no_value,
+        requires_func: Callable | None = law.no_value,
+        setup_func: Callable | None = law.no_value,
+        sandbox: str | None = law.no_value,
+        call_force: bool | None = law.no_value,
+        inst_dict: dict | None = None,
         **kwargs,
     ):
         # store the inst dict with arbitrary attributes that are forwarded to dependency creation
@@ -1605,7 +1606,7 @@ class TaskArrayFunction(ArrayFunction):
         # call super, which instantiates the dependencies
         super().deferred_init(instance_cache)
 
-    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> "TaskArrayFunction":
+    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> TaskArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*,
         updated by *this* instances :py:attr:`inst_dict`.
@@ -1616,7 +1617,7 @@ class TaskArrayFunction(ArrayFunction):
 
         return super().instantiate_dependency(cls, **kwargs)
 
-    def _get_all_shifts(self, call_cache: Optional[set] = None) -> Set[str]:
+    def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
         shifts = set()
 
         # init the call cache
@@ -1638,13 +1639,13 @@ class TaskArrayFunction(ArrayFunction):
         return shifts
 
     @property
-    def all_shifts(self) -> Set[str]:
+    def all_shifts(self) -> set[str]:
         return self._get_all_shifts()
 
     def run_requires(
         self,
-        reqs: Optional[dict] = None,
-        call_cache: Optional[set] = None,
+        reqs: dict | None = None,
+        call_cache: set | None = None,
     ) -> dict:
         """
         Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
@@ -1674,7 +1675,7 @@ class TaskArrayFunction(ArrayFunction):
         self,
         reqs: dict,
         inputs: dict,
-        call_cache: Optional[set] = None,
+        call_cache: set | None = None,
     ) -> None:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
@@ -1698,8 +1699,8 @@ class TaskArrayFunction(ArrayFunction):
     def __call__(
         self,
         *args,
-        call_cache: Optional[Union[bool, defaultdict]] = None,
-        call_force: Optional[bool] = None,
+        call_cache: bool | defaultdict | None = None,
+        call_force: bool | None = None,
         n_return: int = 1,
         **kwargs,
     ) -> Any:
@@ -1821,12 +1822,12 @@ class ChunkedReader(object):
     def __init__(
         self,
         source: Any,
-        source_type: Optional[Union[str, List[str]]] = None,
+        source_type: str | Sequence[str] | None = None,
         chunk_size: int = int(os.getenv("CF_CHUNKED_READER_CHUNK_SIZE", 50000)),
         pool_size: int = int(os.getenv("CF_CHUNKED_READER_POOL_SIZE", 4)),
-        lazy: Union[bool, List[bool]] = False,
-        open_options: Optional[Union[dict, List[dict]]] = None,
-        read_options: Optional[Union[dict, List[dict]]] = None,
+        lazy: bool | Sequence[bool] = False,
+        open_options: dict | list[dict] | None = None,
+        read_options: dict | list[dict] | None = None,
         iter_message: str = "handling chunk {pos.index}",
     ):
         super().__init__()
@@ -1907,9 +1908,9 @@ class ChunkedReader(object):
     @classmethod
     def get_source_handlers(
         cls,
-        source_type: Optional[str],
-        source: Optional[Any],
-    ) -> Tuple[str, Callable, Callable]:
+        source_type: str | None,
+        source: Any | None,
+    ) -> tuple[str, Callable, Callable]:
         """
         Takes a *source_type* (see list below) and gathers information about how to open and read
         content from a specific source. A 3-tuple *(source type, open function, read function)* is
@@ -1956,9 +1957,9 @@ class ChunkedReader(object):
     def open_awkward_parquet(
         cls,
         source: str,
-        open_options: Optional[dict] = None,
-        file_cache: Optional[list] = None,
-    ) -> Tuple[ak.Array, int]:
+        open_options: dict | None = None,
+        file_cache: list | None = None,
+    ) -> tuple[ak.Array, int]:
         """
         Opens a parquet file saved at *source*, loads the content as an awkward array and returns a
         2-tuple *(array, length)*. *open_options* are forwarded to ``awkward.from_parquet``. Passing
@@ -1967,10 +1968,11 @@ class ChunkedReader(object):
         if not isinstance(source, str):
             raise Exception(f"'{source}' cannot be opened as awkward_parquet")
 
-        # prepare open options
+        # default open options
         open_options = open_options or {}
         open_options["lazy"] = True
         open_options["lazy_cache"] = None
+        open_options["use_threads"] = False
 
         # load the array
         arr = ak.from_parquet(source, **open_options)
@@ -1980,15 +1982,15 @@ class ChunkedReader(object):
     @classmethod
     def open_uproot_root(
         cls,
-        source: Union[
-            str,
-            uproot.ReadOnlyDirectory,
-            Tuple[str, str],
-            Tuple[uproot.ReadOnlyDirectory, str],
-        ],
-        open_options: Optional[dict] = None,
-        file_cache: Optional[list] = None,
-    ) -> Tuple[uproot.TTree, int]:
+        source: (
+            str |
+            uproot.ReadOnlyDirectory |
+            tuple[str, str] |
+            tuple[uproot.ReadOnlyDirectory, str]
+        ),
+        open_options: dict | None = None,
+        file_cache: list | None = None,
+    ) -> tuple[uproot.TTree, int]:
         """
         Opens an uproot tree from a root file at *source* and returns a 2-tuple *(tree, entries)*.
         *source* can be the path of the file, an already opened, readable uproot file (assuming the
@@ -2014,15 +2016,15 @@ class ChunkedReader(object):
     @classmethod
     def open_coffea_root(
         cls,
-        source: Union[
-            str,
-            uproot.ReadOnlyDirectory,
-            Tuple[str, str],
-            Tuple[uproot.ReadOnlyDirectory, str],
-        ],
-        open_options: Optional[dict] = None,
-        file_cache: Optional[list] = None,
-    ) -> Tuple[uproot.ReadOnlyDirectory, int]:
+        source: (
+            str |
+            uproot.ReadOnlyDirectory |
+            tuple[str, str] |
+            tuple[uproot.ReadOnlyDirectory, str]
+        ),
+        open_options: dict | None = None,
+        file_cache: list | None = None,
+    ) -> tuple[uproot.ReadOnlyDirectory, int]:
         """
         Opens an uproot file at *source* for subsequent processing with coffea and returns a 2-tuple
         *(uproot file, tree entries)*. *source* can be the path of the file, an already opened,
@@ -2049,9 +2051,9 @@ class ChunkedReader(object):
     def open_coffea_parquet(
         cls,
         source: str,
-        open_options: Optional[dict] = None,
-        file_cache: Optional[list] = None,
-    ) -> Tuple[str, int]:
+        open_options: dict | None = None,
+        file_cache: list | None = None,
+    ) -> tuple[str, int]:
         """
         Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
         *open_options* and or *file_cache* has no effect.
@@ -2064,8 +2066,8 @@ class ChunkedReader(object):
         source_object: ak.Array,
         chunk_pos: ChunkPosition,
         lazy: bool = False,
-        read_options: Optional[dict] = None,
-    ):
+        read_options: dict | None = None,
+    ) -> ak.Array:
         """
         Given an awkward array *source_object*, returns the chunk referred to by *chunk_pos* either
         as a lazy slice if *lazy* is *True*, or as a full copy loaded into memory otherwise. Passing
@@ -2080,7 +2082,7 @@ class ChunkedReader(object):
         source_object: uproot.TTree,
         chunk_pos: ChunkPosition,
         lazy: bool = False,
-        read_options: Optional[dict] = None,
+        read_options: dict | None = None,
     ) -> ak.Array:
         """
         Given an uproot TTree *source_object*, returns an awkward array chunk referred to by
@@ -2102,10 +2104,10 @@ class ChunkedReader(object):
     @classmethod
     def read_coffea_root(
         cls,
-        source_object: Union[str, uproot.ReadOnlyDirectory],
+        source_object: str | uproot.ReadOnlyDirectory,
         chunk_pos: ChunkPosition,
         lazy: bool = False,
-        read_options: Optional[dict] = None,
+        read_options: dict | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
         """
         Given a file location or opened uproot file *source_object*, returns an awkward array chunk
@@ -2133,7 +2135,7 @@ class ChunkedReader(object):
         source_object: str,
         chunk_pos: ChunkPosition,
         lazy: bool = False,
-        read_options: Optional[dict] = None,
+        read_options: dict | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
         """
         Given a the location of a parquet file *source_object*, returns an awkward array chunk
@@ -2222,7 +2224,7 @@ class ChunkedReader(object):
         self,
         func: Callable,
         args: tuple = (),
-        kwargs: Optional[dict] = None,
+        kwargs: dict | None = None,
         where: int = 0,
     ) -> None:
         """
