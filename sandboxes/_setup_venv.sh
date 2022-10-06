@@ -37,10 +37,13 @@
 # fetched from a local or remote location and unpacked.
 
 setup_venv() {
-    local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="${PWD}"
+
+    # source the main setup script to access helpers
+    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
 
     #
@@ -115,106 +118,136 @@ setup_venv() {
     # ensure the CF_VENV_BASE exists
     mkdir -p "${CF_VENV_BASE}"
 
-    # remove the current installation
-    if [ "${mode}" = "reinstall" ]; then
-        echo "removing current installation at $install_path (mode '${mode}')"
-        rm -rf "${install_path}"
-    fi
-
-    # complain in remote jobs when the env is not installed
-    if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-        >&2 echo "the venv ${CF_VENV_NAME} is not installed but should be provided externally for remote jobs"
-        return "9"
-    fi
-
-    # from here onwards, files and directories could be created and in order to prevent race
-    # conditions from multiple processes, guard the setup with the pending_flag_file and sleep for a
-    # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
-    # starting processes getting here at the same time
-    if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-        local sleep_counter="0"
-        sleep "$( python3 -c 'import random;print(random.random() * 10)')"
-        # when the file is older than 30 minutes, consider it a dangling leftover from a
-        # previously failed installation attempt and delete it.
-        if [ -f "${pending_flag_file}" ]; then
-            local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
-            [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
-        fi
-        # start the sleep loop
-        while [ -f "${pending_flag_file}" ]; do
-            # wait at most 15 minutes
-            sleep_counter="$(( $sleep_counter + 1 ))"
-            if [ "${sleep_counter}" -ge 180 ]; then
-                >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
-                return "10"
-            fi
-            echo -e "\x1b[0;49;36mvenv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 180\x1b[0m"
-            sleep 5
-        done
-    fi
-
     # possible return value
     local ret="0"
 
-    # install or fetch when not existing
-    if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-        touch "${pending_flag_file}"
-        echo "installing venv at ${install_path}"
-
-        rm -rf "${install_path}"
-        cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "11" )
-
-        # activate it
-        source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "12" )
-
-        # update pip
-        echo -e "\n\x1b[0;49;35mupdating pip\x1b[0m"
-        python3 -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
-
-        # install basic production requirements
-        if ! ${requirement_files_contains_prod}; then
-            echo -e "\n\x1b[0;49;35minstalling requirement file ${CF_BASE}/requirements_prod.txt\x1b[0m"
-            python3 -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
+    # only continue outside remote jobs
+    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+        # optionally remove the current installation
+        if [ "${mode}" = "reinstall" ]; then
+            echo "removing current installation at $install_path (mode '${mode}')"
+            rm -rf "${install_path}"
         fi
 
-        # install requirement files
-        for f in ${requirement_files[@]}; do
-            echo -e "\n\x1b[0;49;35minstalling requirement file ${f}\x1b[0m"
-            python3 -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
-            echo
-        done
-
-        # ensure that the venv is relocateable
-        cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "16" )
-
-        # write the version and a timestamp into the flag file
-        echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
-        echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
-        rm -f "${pending_flag_file}"
-    else
-        # get the current version
-        local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
-        if [ -z "${curr_version}" ]; then
-            >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
-            return "20"
-        fi
-
-        # complain when the version is outdated
-        if [ "${curr_version}" != "${venv_version}" ] && [ "${versioncheck}" != "no" ]; then
-            if [ "${versioncheck}" != "warn" ]; then
-                ret="21"
+        # from here onwards, files and directories could be created and in order to prevent race
+        # conditions from multiple processes, guard the setup with the pending_flag_file and sleep for a
+        # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
+        # starting processes getting here at the same time
+        if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            local sleep_counter="0"
+            sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+            # when the file is older than 30 minutes, consider it a dangling leftover from a
+            # previously failed installation attempt and delete it.
+            if [ -f "${pending_flag_file}" ]; then
+                local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
+                [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
             fi
-            if [ "${versioncheck}" != "silent" ]; then
-                >&2 echo ""
-                >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' located at"
-                >&2 echo "WARNING: ${install_path}"
-                >&2 echo "WARNING: please consider updating it by adding 'reinstall' to the source command"
-                >&2 echo ""
+            # start the sleep loop
+            while [ -f "${pending_flag_file}" ]; do
+                # wait at most 15 minutes
+                sleep_counter="$(( $sleep_counter + 1 ))"
+                if [ "${sleep_counter}" -ge 180 ]; then
+                    >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
+                    return "10"
+                fi
+                echo -e "\x1b[0;49;36mvenv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 180\x1b[0m"
+                sleep 5
+            done
+        fi
+
+        # install or fetch when not existing
+        if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            echo
+            touch "${pending_flag_file}"
+            cf_color cyan "installing venv at ${install_path}"
+
+            rm -rf "${install_path}"
+            cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "11" )
+
+            # activate it
+            source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "12" )
+
+            # update pip
+            cf_color magenta "updating pip"
+            python -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
+
+            # install basic production requirements
+            if ! ${requirement_files_contains_prod}; then
+                cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
+                python -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
+            fi
+
+            # install requirement files
+            for f in ${requirement_files[@]}; do
+                cf_color magenta "installing requirement file ${f}"
+                python -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
+                echo
+            done
+
+            # ensure that the venv is relocateable
+            cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "16" )
+
+            # write the version and a timestamp into the flag file
+            echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
+            echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
+            rm -f "${pending_flag_file}"
+        else
+            # get the current version
+            local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            if [ -z "${curr_version}" ]; then
+                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
+                return "20"
+            fi
+
+            # complain when the version is outdated
+            if [ "${curr_version}" != "${venv_version}" ] && [ "${versioncheck}" != "no" ]; then
+                if [ "${versioncheck}" != "warn" ]; then
+                    ret="21"
+                fi
+                if [ "${versioncheck}" != "silent" ]; then
+                    >&2 echo ""
+                    >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' located at"
+                    >&2 echo "WARNING: ${install_path}"
+                    >&2 echo "WARNING: please consider updating it by adding 'reinstall' to the source command"
+                    >&2 echo ""
+                fi
+            fi
+
+            # activate it
+            source "${install_path}/bin/activate" "" || return "$?"
+        fi
+    else
+        # in this case, the environment is inside a remote job, i.e., these variables are present:
+        # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
+        if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            # fetch the bundle and unpack it
+            echo "looking for bash sandbox bundle for venv ${CF_VENV_NAME}"
+            local sandbox_names=(${CF_JOB_BASH_SANDBOX_NAMES})
+            local sandbox_uris=(${CF_JOB_BASH_SANDBOX_URIS})
+            local sandbox_patterns=(${CF_JOB_BASH_SANDBOX_PATTERNS})
+            local found_sandbox="false"
+            for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
+                if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
+                    echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
+                    (
+                        mkdir -p "${install_path}" &&
+                        cd "${install_path}" &&
+                        law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
+                        tar -xzf "bundle.tgz"
+                    ) || return "$?"
+                    found_sandbox="true"
+                    break
+                fi
+            done
+            if ! ${found_sandbox}; then
+                >&2 echo "bash sandbox ${CF_VENV_BASE} not found in job configuration, stopping"
+                return "30"
             fi
         fi
 
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"
+        echo
     fi
 
     # export variables

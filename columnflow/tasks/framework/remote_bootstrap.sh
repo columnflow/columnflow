@@ -13,6 +13,7 @@ bootstrap_htcondor_standalone() {
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
     export CF_CMSSW_BASE="${CF_DATA}/cmssw"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
@@ -20,42 +21,40 @@ bootstrap_htcondor_standalone() {
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_VOMS="{{cf_voms}}"
     export CF_TASK_NAMESPACE="{{cf_task_namespace}}"
-    export CF_LCG_SETUP="{{cf_lcg_setup}}"
     export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
-    # source the lcg software when defined
-    if [ ! -z "${CF_LCG_SETUP}" ]; then
-        source "${CF_LCG_SETUP}" "" || return "$?"
-    fi
-
     # source the law wlcg tools, mainly for law_wlcg_get_file
-    source "{{wlcg_tools}}" ""
+    local lcg_setup="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
+    source "{{wlcg_tools}}" "" || return "$?"
 
-    # load the software bundle
+    # load and unpack the software bundle, then source it
     (
-        mkdir -p "${CF_SOFTWARE_BASE}" && \
-        cd "${CF_SOFTWARE_BASE}" && \
-        law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" && \
-        tar -xzf "software.tgz" && \
+        source "${lcg_setup}" "" &&
+        mkdir -p "${CF_SOFTWARE_BASE}" &&
+        mkdir -p "${CF_CONDA_BASE}" &&
+        cd "${CF_CONDA_BASE}" &&
+        law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" &&
+        tar -xzf "software.tgz" &&
         rm "software.tgz"
     ) || return "$?"
 
     # load the repo bundle
     (
-        mkdir -p "${CF_REPO_BASE}" && \
-        cd "${CF_REPO_BASE}" && \
-        law_wlcg_get_file "{{cf_repo_uris}}" "{{cf_repo_pattern}}" "repo.tgz" && \
-        tar -xzf "repo.tgz" && \
+        source "${lcg_setup}" "" &&
+        mkdir -p "${CF_REPO_BASE}" &&
+        cd "${CF_REPO_BASE}" &&
+        law_wlcg_get_file "{{cf_repo_uris}}" "{{cf_repo_pattern}}" "repo.tgz" &&
+        tar -xzf "repo.tgz" &&
         rm "repo.tgz"
     ) || return "$?"
 
-    # prefetch cmssw sandbox bundles
-    local cmssw_sandbox_uris={{cf_cmssw_sandbox_uris}}
-    local cmssw_sandbox_patterns={{cf_cmssw_sandbox_patterns}}
-    local cmssw_sandbox_names={{cf_cmssw_sandbox_names}}
-    for (( i=0; i<${#cmssw_sandbox_uris[@]}; i+=1 )); do
-        law_wlcg_get_file "${cmssw_sandbox_uris[i]}" "${cmssw_sandbox_patterns[i]}" "${CF_SOFTWARE_BASE}/cmssw_sandboxes/${cmssw_sandbox_names[i]}.tgz" || return "$?"
-    done
+    # export variables used in cf setup script on-the-fly to load sandboxes
+    export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
+    export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
+    export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
+    export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
+    export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
+    export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
 
     # optional custom command before the setup is sourced
     {{cf_pre_setup_command}}

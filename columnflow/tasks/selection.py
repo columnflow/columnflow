@@ -29,6 +29,7 @@ class SelectEvents(
     RemoteWorkflow,
 ):
 
+    # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts

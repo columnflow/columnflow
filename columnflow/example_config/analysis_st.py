@@ -29,15 +29,16 @@ analysis_st = Analysis(
 analysis_st.set_aux("versions", {
 })
 
-# sandboxes that might be required by remote tasks
-# (used in PrepareJobSandboxes)
+# files of bash sandboxes that might be required by remote tasks
+# (used in cf.HTCondorWorkflow)
 analysis_st.set_aux("job_sandboxes", [
-    "bash::$CF_BASE/sandboxes/venv_columnar.sh",
+    "$CF_BASE/sandboxes/venv_columnar.sh",
 ])
 
-# cmssw sandboxes that should be bundled for remote jobs in case they are needed
+# files of cmssw sandboxes that should be bundled for remote jobs in case they are needed
+# (used in cf.HTCondorWorkflow)
 analysis_st.set_aux("cmssw_sandboxes", [
-    # "cmssw_default.sh",
+    # "$CF_BASE/sandboxes/cmssw_default.sh",
 ])
 
 # config groups for conveniently looping over certain configs

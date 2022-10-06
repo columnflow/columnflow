@@ -127,10 +127,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
+                logger.info(f"file does {'' if input_stat else 'not'} exist at fs {fs}")
 
                 # when the stat query took longer than 2 seconds, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
-                if eager_lookup:
+                if input_stat and eager_lookup:
                     if (
                         isinstance(eager_lookup, int) and
                         not isinstance(eager_lookup, bool) and
@@ -138,7 +139,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                     ):
                         logger.debug(f"eager fs lookup skipped for fs {fs} at index {i}")
                     else:
-                        if input_stat and duration > 2 and not last_working and i < len(remote_fs):
+                        if input_stat and not last_working and duration > 2.0 and i < len(remote_fs):
                             last_working = fs, input_file, input_stat, duration
                             logger.debug("duration exceeded 2s, checking next fs for comparison")
                             continue

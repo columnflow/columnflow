@@ -24,6 +24,7 @@ class CalibrateEvents(
     RemoteWorkflow,
 ):
 
+    # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     shifts = set(GetDatasetLFNs.shifts)
