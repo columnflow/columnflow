@@ -108,7 +108,7 @@ class CalibrateEvents(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
             output_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:
