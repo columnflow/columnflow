@@ -15,7 +15,6 @@ __all__ = [
     "sorted_ak_to_parquet", "flat_np_view", "attach_behavior",
 ]
 
-
 import os
 import re
 import math
@@ -27,7 +26,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import partial
 from collections import namedtuple, OrderedDict, defaultdict
-from typing import Optional, Union, Sequence, Set, Tuple, List, Dict, Callable, Any
+from typing import Sequence, Callable, Any
 
 import law
 
