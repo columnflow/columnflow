@@ -397,6 +397,7 @@ cf_setup_software_stack() {
     export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
     export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
     export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
+    export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
     ulimit -s unlimited
 
     # local python stack in one conda env and two virtual envs:
@@ -428,7 +429,6 @@ cf_setup_software_stack() {
                     rm setup_miniconda.sh &&
                     cat << EOF >> "${CF_CONDA_BASE}/.condarc"
 changeps1: false
-channel_priority: strict
 channels:
   - conda-forge
   - defaults
@@ -462,6 +462,7 @@ export GFAL_PLUGIN_DIR="\${CONDA_PREFIX}/lib/gfal2-plugins"
 export X509_CERT_DIR="${X509_CERT_DIR}"
 export X509_VOMS_DIR="${X509_VOMS_DIR}"
 export X509_VOMSES="${X509_VOMSES}"
+export VOMS_USERCONF="${VOMS_USERCONF}"
 EOF
             fi
         fi
