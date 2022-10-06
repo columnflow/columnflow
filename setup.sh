@@ -426,9 +426,14 @@ cf_setup_software_stack() {
                     wget "${miniconda_source}" -O setup_miniconda.sh &&
                     bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
                     rm setup_miniconda.sh &&
-                    echo "changeps1: false" >> "${CF_CONDA_BASE}/.condarc"
-                    echo "channel_priority: strict" >> "${CF_CONDA_BASE}/.condarc"
-                ) || return "$?"
+                    cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+changeps1: false
+channel_priority: strict
+channels:
+  - conda-forge
+  - defaults
+EOF
+                )
             fi
 
             # initialize conda
@@ -448,7 +453,6 @@ cf_setup_software_stack() {
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
-                conda config --add channels conda-forge || return "$?"
                 conda install --yes libgcc gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
