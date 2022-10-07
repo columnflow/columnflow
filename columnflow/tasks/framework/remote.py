@@ -509,8 +509,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
     }
 
     # default upstream dependency task classes
-    dep_BundleBashSandbox = BundleBashSandbox
-    dep_BundleCMSSWSandbox = BundleCMSSWSandbox
+    dep_BuildBashSandbox = BuildBashSandbox
 
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
@@ -527,14 +526,14 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
         # bash-based sandboxes
         reqs["bash_sandboxes"] = [
-            self.dep_BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+            self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
         ]
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
             reqs["cmssw_sandboxes"] = [
-                self.dep_BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
             ]
 
