@@ -148,11 +148,11 @@ def plot_all(
 
     for key, cfg in plot_config.items():
         if "method" not in cfg:
-            raise ValueError("No method given in plot_cfg entry {key}")
+            raise ValueError(f"no method given in plot_cfg entry {key}")
         method = cfg["method"]
 
         if "hist" not in cfg:
-            raise ValueError("No histogram(s) given in plot_cfg entry {key}")
+            raise ValueError(f"no histogram(s) given in plot_cfg entry {key}")
         hist = cfg["hist"]
         kwargs = cfg.get("kwargs", {})
         plot_methods[method](ax, hist, **kwargs)
@@ -241,7 +241,8 @@ def plot_variable_per_process(
     for process_inst, h in hists.items():
         # get settings for this process
         settings = process_settings.get(process_inst.name, {})
-        color = settings.get("color", process_inst.color)
+        color1 = settings.get("color1", settings.get("color", process_inst.color1))
+        color2 = settings.get("color2", process_inst.color2)
         label = settings.get("label", process_inst.label)
 
         if "scale" in settings.keys():
@@ -253,11 +254,12 @@ def plot_variable_per_process(
         elif process_inst.is_mc:
             if "unstack" in settings:
                 line_hists.append(h)
-                line_colors.append(color)
+                line_colors.append(color1)
                 line_labels.append(label)
             else:
                 mc_hists.append(h)
-                mc_colors.append(color)
+                mc_colors.append(color1)
+                line_colors.append(color2)
                 mc_labels.append(label)
 
     h_data, h_mc, h_mc_stack = None, None, None
@@ -276,7 +278,13 @@ def plot_variable_per_process(
         plot_config["mc_stack"] = {
             "method": "draw_stack",
             "hist": h_mc_stack,
-            "kwargs": {"norm": mc_norm, "label": mc_labels, "color": mc_colors},
+            "kwargs": {
+                "norm": mc_norm,
+                "label": mc_labels,
+                "facecolor": mc_colors,
+                "edgecolor": line_colors,
+                "linewidth": [(0 if c is None else 1) for c in line_colors],
+            },
         }
         plot_config["mc_uncert"] = {
             "method": "draw_error_bands",
@@ -485,16 +493,18 @@ def plot_cutflow(
     if not process_settings:
         process_settings = {}
 
-    mc_hists, mc_colors, mc_labels, data_hists = [], [], [], []
+    mc_hists, mc_colors, mc_line_colors, mc_labels, data_hists = [], [], [], [], []
     for process_inst, h in hists.items():
         # get settings for this process
         settings = process_settings.get(process_inst.name, {})
-        color = settings.get("color", process_inst.color)
+        color1 = settings.get("color1", settings.get("color", process_inst.color1))
+        color2 = settings.get("color2", process_inst.color2)
         label = settings.get("label", process_inst.label)
 
         if process_inst.is_mc:
             mc_hists.append(h)
-            mc_colors.append(color)
+            mc_colors.append(color1)
+            mc_line_colors.append(color2)
             mc_labels.append(label)
         else:
             data_hists.append(h)
@@ -517,7 +527,9 @@ def plot_cutflow(
             "kwargs": {
                 "norm": [h[{"step": "Initial"}].value for h in mc_hists] if shape_norm else 1,
                 "label": mc_labels,
-                "color": mc_colors,
+                "facecolor": mc_colors,
+                "edgecolor": mc_line_colors,
+                "linewidth": [(0 if c is None else 1) for c in mc_line_colors],
                 "histtype": "step",
                 "stack": False,
             },
