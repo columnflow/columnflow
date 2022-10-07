@@ -12,9 +12,7 @@ bootstrap_htcondor_standalone() {
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
-    export CF_SOFTWARE_BASE="${CF_DATA}/software"
-    export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
-    export CF_CMSSW_BASE="${CF_DATA}/cmssw"
+    export CF_SOFTWARE_BASE="{{cf_software_base}}"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
@@ -23,20 +21,30 @@ bootstrap_htcondor_standalone() {
     export CF_TASK_NAMESPACE="{{cf_task_namespace}}"
     export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
+    # fallback to a default path when the externally given software base is empty or inaccessible
+    local fetch_software="true"
+    if [ -z "${CF_SOFTWARE_BASE}" ] || [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
+        export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    else
+        fetch_software="false"
+        echo "found existing software at ${CF_SOFTWARE_BASE}"
+    fi
+
     # source the law wlcg tools, mainly for law_wlcg_get_file
     local lcg_setup="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
     source "{{wlcg_tools}}" "" || return "$?"
 
     # load and unpack the software bundle, then source it
-    (
-        source "${lcg_setup}" "" &&
-        mkdir -p "${CF_SOFTWARE_BASE}" &&
-        mkdir -p "${CF_CONDA_BASE}" &&
-        cd "${CF_CONDA_BASE}" &&
-        law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" &&
-        tar -xzf "software.tgz" &&
-        rm "software.tgz"
-    ) || return "$?"
+    if ${fetch_software}; then
+        (
+            source "${lcg_setup}" "" &&
+            mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
+            cd "${CF_SOFTWARE_BASE}/conda" &&
+            law_wlcg_get_file "{{cf_software_uris}}" "{{cf_software_pattern}}" "software.tgz" &&
+            tar -xzf "software.tgz" &&
+            rm "software.tgz"
+        ) || return "$?"
+    fi
 
     # load the repo bundle
     (

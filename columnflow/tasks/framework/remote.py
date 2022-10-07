@@ -93,6 +93,46 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         self.transfer(bundle)
 
 
+class BuildBashSandbox(AnalysisTask):
+
+    sandbox_file = luigi.Parameter(
+        description="the sandbox file to install",
+    )
+    sandbox = luigi.Parameter(
+        default=law.NO_STR,
+        description="do not set manually",
+    )
+
+    version = None
+
+    exclude_params_index = {"sandbox"}
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # resolve the sandbox file relative to $CF_BASE/sandboxes
+        if "sandbox_file" in params:
+            path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
+            abs_path = real_path(path)
+            if os.path.exists(abs_path):
+                path = abs_path
+            else:
+                path = os.path.join("$CF_BASE", "sandboxes", path)
+            params["sandbox_file"] = path
+            params["sandbox"] = law.Sandbox.join_key("bash", path)
+
+        return params
+
+    def output(self):
+        # note: invoking self.env will already trigger installing the sandbox
+        return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
+
+    def run(self):
+        # no need to run anything as the sandboxing mechanism handles the installation
+        return
+
+
 class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
     sandbox_file = luigi.Parameter(
@@ -105,18 +145,22 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
     )
     version = None
 
+    # default upstream dependency task classes
+    dep_BuildBashSandbox = BuildBashSandbox
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # get the name and install path of the sandbox
         sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-        sandbox_file = os.path.join("$CF_BASE", "sandboxes", sandbox_file)
-        self.sandbox_key = f"bash::{sandbox_file}"
-        self.venv_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
+        self.venv_name = os.path.splitext(os.path.basename(sandbox_file))[0]
         self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name)
 
         # checksum cache
         self._checksum = None
+
+    def requires(self):
+        return self.dep_BuildBashSandbox.req(self, sandbox_file=f"bash::{self.sandbox_file}")
 
     @property
     def checksum(self):
@@ -143,9 +187,6 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
-        # ensure the sandbox exists
-        law.Sandbox.new(self.sandbox_key).env
-
         # create the local bundle
         bundle = law.LocalFileTarget(is_tmp=".tgz")
 
@@ -181,23 +222,21 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     exclude = "^src/tmp"
 
+    # default upstream dependency task classes
+    dep_BuildBashSandbox = BuildBashSandbox
+
     def __init__(self, *args, **kwargs):
         # cached bash sandbox that wraps the cmssw environment
         self._cmssw_sandbox = None
 
         super().__init__(*args, **kwargs)
 
-    @property
-    def cmssw_sandbox(self):
-        if self._cmssw_sandbox is None:
-            env_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-            self._cmssw_sandbox = law.BashSandbox(real_path("$CF_BASE/sandboxes", env_file))
-
-        return self._cmssw_sandbox
+    def requires(self):
+        return self.dep_BuildBashSandbox.req(self, sandbox_file=f"bash::{self.sandbox_file}")
 
     def get_cmssw_path(self):
-        # invoking .env will trigger building the sandbox
-        return self.cmssw_sandbox.env["CMSSW_BASE"]
+        # invoking .env will already trigger building the sandbox
+        return self.requires().sandbox_inst.env["CMSSW_BASE"]
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -253,8 +292,16 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
         f"naf,cern; default: '{_default_htcondor_flavor}'",
     )
+    htcondor_share_software = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, do not bundle and download sofware and sandboxes but instruct jobs "
+        "to use the software in the current CF_SOFTWARE_BASE if accessible; default: False",
+    )
 
-    exclude_params_branch = {"max_runtime", "htcondor_cpus", "htcondor_flavor"}
+    exclude_params_branch = {
+        "max_runtime", "htcondor_cpus", "htcondor_flavor", "htcondor_share_software",
+    }
 
     # mapping of environment variables to render variables that are forwarded
     htcondor_forward_env_variables = {
@@ -271,11 +318,19 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     # default upstream dependency task classes
     dep_BundleRepo = BundleRepo
     dep_BundleSoftware = BundleSoftware
+    dep_BuildBashSandbox = BuildBashSandbox
     dep_BundleBashSandbox = BundleBashSandbox
     dep_BundleCMSSWSandbox = BundleCMSSWSandbox
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
+
+        # add the repository bundle
+        reqs["repo"] = self.dep_BundleRepo.req(self)
+
+        # main software stack
+        if not self.htcondor_share_software:
+            reqs["software"] = self.dep_BundleSoftware.req(self)
 
         # get names of pure bash and cmssw sandboxes
         bash_sandboxes = None
@@ -287,24 +342,20 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
             cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
 
-        # main software stack
-        reqs["software"] = self.dep_BundleSoftware.req(self)
-
         # bash-based sandboxes
+        cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleBashSandbox
         reqs["bash_sandboxes"] = [
-            self.dep_BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+            cls.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
         ]
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
+            cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleCMSSWSandbox
             reqs["cmssw_sandboxes"] = [
-                self.dep_BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                cls.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
             ]
-
-        # add bundles for repo, software and optionally cmssw sandboxes
-        reqs["repo"] = self.dep_BundleRepo.req(self)
 
         return reqs
 
@@ -361,39 +412,42 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             pattern = os.path.basename(task.get_file_pattern())
             return ",".join(uris), pattern
 
-        # add software variables
-        uris, pattern = get_bundle_info(reqs["software"])
-        config.render_variables["cf_software_uris"] = uris
-        config.render_variables["cf_software_pattern"] = pattern
-
-        # add bash sandbox variables
-        uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
-        names = [
-            os.path.splitext(os.path.basename(t.sandbox_file))[0]
-            for t in reqs["bash_sandboxes"]
-        ]
-        config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
-        config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
-        config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
-
-        # add cmssw sandbox variables
-        config.render_variables["cf_cmssw_sandbox_uris"] = ""
-        config.render_variables["cf_cmssw_sandbox_patterns"] = ""
-        config.render_variables["cf_cmssw_sandbox_names"] = ""
-        if "cmssw_sandboxes" in reqs:
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
-            names = [
-                os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["cmssw_sandboxes"]
-            ]
-            config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
-            config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
-            config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
-
         # add repo variables
         uris, pattern = get_bundle_info(reqs["repo"])
         config.render_variables["cf_repo_uris"] = uris
         config.render_variables["cf_repo_pattern"] = pattern
+
+        if self.htcondor_share_software:
+            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
+        else:
+            # add software variables
+            uris, pattern = get_bundle_info(reqs["software"])
+            config.render_variables["cf_software_uris"] = uris
+            config.render_variables["cf_software_pattern"] = pattern
+
+            # add bash sandbox variables
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
+            names = [
+                os.path.splitext(os.path.basename(t.sandbox_file))[0]
+                for t in reqs["bash_sandboxes"]
+            ]
+            config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
+            config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
+            config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
+
+            # add cmssw sandbox variables
+            config.render_variables["cf_cmssw_sandbox_uris"] = ""
+            config.render_variables["cf_cmssw_sandbox_patterns"] = ""
+            config.render_variables["cf_cmssw_sandbox_names"] = ""
+            if "cmssw_sandboxes" in reqs:
+                uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
+                names = [
+                    os.path.splitext(os.path.basename(t.sandbox_file))[0]
+                    for t in reqs["cmssw_sandboxes"]
+                ]
+                config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
+                config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
+                config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
 
         # other render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
