@@ -157,7 +157,6 @@ setup_venv() {
 
         # install or fetch when not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            echo
             touch "${pending_flag_file}"
             cf_color cyan "installing venv at ${install_path}"
 

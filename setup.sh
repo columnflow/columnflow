@@ -437,16 +437,8 @@ EOF
             fi
 
             # initialize conda
-            local __conda_setup="$( "${CF_CONDA_BASE}/bin/conda" "shell.$( ${shell_is_zsh} && echo "zsh" || echo "bash" )" "hook" 2> /dev/null )"
-            if [ "$?" = "0" ]; then
-                eval "${__conda_setup}"
-            else
-                if [ -f "${CF_CONDA_BASE}/etc/profile.d/conda.sh" ]; then
-                    . "${CF_CONDA_BASE}/etc/profile.d/conda.sh"
-                else
-                    export PATH="${CF_CONDA_BASE}/bin:${PATH}"
-                fi
-            fi
+            source "${CF_CONDA_BASE}/etc/profile.d/conda.sh" "" || return "$?"
+            conda activate || return "$?"
             echo "initialized conda with $( cf_color magenta "python ${pyv}" )"
 
             # install packages
