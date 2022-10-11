@@ -366,11 +366,13 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     def htcondor_bootstrap_file(self):
         # each job can define a bootstrap file that is executed prior to the actual job
         # in order to setup software and environment variables
+        bootstrap_file = os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
         if "CF_REMOTE_BOOTSTRAP_FILE" in os.environ:
-            return os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
+            bootstrap_file = os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
 
-        # default
-        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
+        # copy the file only once into the submission directory (sharing between jobs)
+        # and allow rendering inside the job
+        return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def htcondor_job_config(self, config, job_num, branches):
         # include the voms proxy
@@ -379,14 +381,15 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             raise Exception("voms proxy not valid, submission aborted")
         config.input_files["voms_proxy_file"] = law.JobInputFile(
             voms_proxy_file,
-            postfix=False,
+            share=True,
             render=False,
         )
 
         # include the wlcg specific tools script in the input sandbox
         config.input_files["wlcg_tools"] = law.JobInputFile(
             law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
-            copy=False,
+            share=True,
+            render=False,
         )
 
         # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
@@ -546,11 +549,13 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
     def slurm_bootstrap_file(self):
         # each job can define a bootstrap file that is executed prior to the actual job
         # in order to setup software and environment variables
+        bootstrap_file = os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
         if "CF_REMOTE_BOOTSTRAP_FILE" in os.environ:
-            return os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
+            bootstrap_file = os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
 
-        # default
-        return os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
+        # copy the file only once into the submission directory (sharing between jobs)
+        # and allow rendering inside the job
+        return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def slurm_job_config(self, config, job_num, branches):
         # include the voms proxy
@@ -558,7 +563,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         if os.path.exists(voms_proxy_file):
             config.input_files["voms_proxy_file"] = law.JobInputFile(
                 voms_proxy_file,
-                postfix=False,
+                share=True,
                 render=False,
             )
 
@@ -569,7 +574,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
             if os.path.exists(kerberos_proxy_file):
                 config.input_files["kerberos_proxy_file"] = law.JobInputFile(
                     kerberos_proxy_file,
-                    postfix=False,
+                    share=True,
                     render=False,
                 )
 
@@ -594,8 +599,9 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         # custom tmp dir since slurm uses the job submission dir as the main job directory, and law
         # puts the tmp directory in this job directory which might become quite long; then,
         # python's default multiprocessing puts socket files into that tmp directory which comes
-        # with the restriction to less then 80 characters that would be violated
-        config.render_variables["law_job_tmp"] = "/tmp/law_$( basename $LAW_JOB_HOME )"
+        # with the restriction of less then 80 characters that would be violated, and potentially
+        # would also overwhelm the submission directory
+        config.render_variables["law_job_tmp"] = "/tmp/law_$( basename \"$LAW_JOB_HOME\" )"
 
         # forward env variables
         for ev, rv in self.slurm_forward_env_variables.items():
