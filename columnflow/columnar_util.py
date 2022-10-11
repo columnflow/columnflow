@@ -41,6 +41,9 @@ maybe_import("coffea.nanoevents.methods.base")
 pq = maybe_import("pyarrow.parquet")
 
 
+logger = law.logger.get_logger(__name__)
+
+
 #: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
 
@@ -1763,6 +1766,104 @@ class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):
         return events
 
 
+class NoThreadPool(object):
+    """
+    Dummy implementation that mimics parts of the usual thread pool interface but instead of
+    offloading to threads, functions are instantly invoked in the calling (main) thread.
+    """
+
+    class SyncResult(object):
+
+        def __init__(self, return_value: Any):
+            super().__init__()
+            self.return_value = return_value
+
+        def ready(self) -> bool:
+            return True
+
+        def get(self) -> Any:
+            return self.return_value
+
+    def __init__(self, processes):
+        super().__init__()
+
+        self.processes = processes
+        self.opened = True
+
+    def __enter__(self) -> NoThreadPool:
+        if not self.opened:
+            raise Exception("cannot enter closed NoThreadPool")
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self.opened = False
+
+    def terminate(self) -> None:
+        return
+
+    def apply_async(self, func, args=(), kwargs=None) -> SyncResult:
+        return self.SyncResult(func(*args, **(kwargs or {})))
+
+
+class TaskQueue(object):
+    """
+    Simple task queue that saves functions and arguments to call them with in multiple queues,
+    separated by priority level, as used in the :py:class:`ChunkedReader`.
+    """
+
+    # task object
+    Task = namedtuple("Task", ["func", "args", "kwargs"])
+
+    def __init__(self):
+        super().__init__()
+
+        self._tasks = {}
+
+    def __bool__(self):
+        return bool(self._tasks)
+
+    def add(
+        self,
+        func: Callable,
+        args: tuple = (),
+        kwargs: dict | None = None,
+        priority: int = 0,
+    ) -> None:
+        """
+        Adds a callable *func* that will be executed with *args* and *kwargs* into the queue of
+        tasks to process in multiple threads with a certain *priority*. The processing commences
+        upon iteration through this reader instance.
+        """
+        if priority not in self._tasks:
+            self._tasks[priority] = []
+
+        self._tasks[priority].append(self.Task(func, args, kwargs or {}))
+
+    def get_next(self) -> tuple | None:
+        """
+        Returns the next task to be executed (see :py:meth:`add_task`), or *None* in case the task
+        queue is empty.
+        """
+        if not self._tasks:
+            return None
+
+        # get the maximum existing priority
+        prio = max(self._tasks)
+
+        # get the first task
+        task = self._tasks[prio].pop(0)
+
+        # remove the list for that priority when empty
+        if not self._tasks[prio]:
+            del self._tasks[prio]
+
+        return task
+
+
 class ChunkedReader(object):
     """
     Allows reading one or multiple files and iterating through chunks of their content with
@@ -1829,6 +1930,7 @@ class ChunkedReader(object):
         open_options: dict | list[dict] | None = None,
         read_options: dict | list[dict] | None = None,
         iter_message: str = "handling chunk {pos.index}",
+        debug: bool = law.util.flag_to_bool(os.getenv("CF_CHUNKED_READER_DEBUG", False)),
     ):
         super().__init__()
 
@@ -1872,15 +1974,22 @@ class ChunkedReader(object):
         self.read_options_list = list(read_options) if self.is_multi else [read_options]
         self.lazy_list = list(lazy) if self.is_multi else [lazy]
         self.chunk_size = chunk_size
-        self.pool_size = pool_size
+        self.pool_size = max(pool_size, 1)
         self.iter_message = iter_message
 
         # attributes that are set in open(), close() or __iter__()
         self.file_cache = []
         self.source_objects = []
         self.n_entries = None
-        self.tasks = []
+        self.task_queue = TaskQueue()
+        self.pool_cls = multiprocessing.pool.ThreadPool
         self.pool = None
+
+        # debug settings
+        if debug:
+            logger.info("ChunkedReader set to debug mode, using in-thread pool with size 1")
+            self.pool_size = 1
+            self.pool_cls = NoThreadPool
 
         # determine type, open and read functions per source
         self.source_handlers = [
@@ -2002,7 +2111,11 @@ class ChunkedReader(object):
         if isinstance(source, tuple) and len(source) == 2:
             source, tree_name = source
         if isinstance(source, str):
-            source = uproot.open(source, **(open_options or {}))
+            # default open options
+            open_options = open_options or {}
+            open_options["object_cache"] = None
+            open_options["array_cache"] = None
+            source = uproot.open(source, **open_options)
             if isinstance(file_cache, list):
                 file_cache.append(source)
             tree = source[tree_name]
@@ -2036,7 +2149,11 @@ class ChunkedReader(object):
         if isinstance(source, tuple) and len(source) == 2:
             source, tree_name = source
         if isinstance(source, str):
-            source = uproot.open(source, **(open_options or {}))
+            # default open options
+            open_options = open_options or {}
+            open_options["object_cache"] = None
+            open_options["array_cache"] = None
+            source = uproot.open(source, **open_options)
             if isinstance(file_cache, list):
                 file_cache.append(source)
             tree = source[tree_name]
@@ -2089,14 +2206,18 @@ class ChunkedReader(object):
         *chunk_pos* as a lazy slice if *lazy* is *True*, or as a full copy loaded into memory
         otherwise. *read_options* are passed to either ``uproot.TTree.arrays`` or ``uproot.lazy``.
         """
+        # default read options
+        read_options = read_options or {}
+        read_options["array_cache"] = None
+
         if lazy:
-            view = uproot.lazy(source_object, **(read_options or {}))
+            view = uproot.lazy(source_object, **read_options)
             chunk = view[chunk_pos.entry_start:chunk_pos.entry_stop]
         else:
             chunk = source_object.arrays(
                 entry_start=chunk_pos.entry_start,
                 entry_stop=chunk_pos.entry_stop,
-                **(read_options or {}),
+                **read_options,
             )
 
         return chunk
@@ -2118,13 +2239,18 @@ class ChunkedReader(object):
         # define the factory to use
         factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
 
+        # default read options
+        read_options = read_options or {}
+        read_options["runtime_cache"] = None
+        read_options["persistent_cache"] = None
+
         # read the events chunk into memory
         chunk = factory.from_root(
             source_object,
             entry_start=chunk_pos.entry_start,
             entry_stop=chunk_pos.entry_stop,
             schemaclass=coffea.nanoevents.NanoAODSchema,
-            **(read_options or {}),
+            **read_options,
         ).events()
 
         return chunk
@@ -2220,19 +2346,12 @@ class ChunkedReader(object):
         del self.source_objects[:]
         del self.file_cache[:]
 
-    def add_task(
-        self,
-        func: Callable,
-        args: tuple = (),
-        kwargs: dict | None = None,
-        where: int = 0,
-    ) -> None:
+    def queue(self, *args, **kwargs) -> None:
         """
-        Adds a callable *func* that will be executed with *args* and *kwargs* into the list of tasks
-        to process in multiple threads at the position denoted by *where*. The processing commences
-        upon iteration through this reader instance.
+        Adds a new task to the internal task queue with all *args* and *kwargs* forwarded to
+        :py:meth:`TaskQueue.add`.
         """
-        self.tasks.insert(where, (func, args, kwargs or {}))
+        return self.task_queue.add(*args, **kwargs)
 
     def _iter_impl(self):
         """
@@ -2265,16 +2384,17 @@ class ChunkedReader(object):
         ]
 
         # fill the list of tasks the pool has to work through
-        self.tasks.extend((read, (chunk_pos,)) for chunk_pos in chunk_positions)
+        for chunk_pos in chunk_positions:
+            self.task_queue.add(read, (chunk_pos,), priority=-1)
 
         # strategy: setup the pool and manually keep it filled up to pool_size and do not insert all
         # chunks right away as this could swamp the memory if processing is slower than IO
-        with multiprocessing.pool.ThreadPool(self.pool_size) as self.pool:
+        with self.pool_cls(self.pool_size) as self.pool:
             results = []
             no_result = object()
 
             try:
-                while self.tasks or results:
+                while self.task_queue or results:
                     # find the first done result and remove it from the list
                     # this will do nothing in the first iteration
                     result_obj = no_result
@@ -2292,8 +2412,9 @@ class ChunkedReader(object):
                         continue
 
                     # immediately try to fill up the pool
-                    while len(results) < self.pool_size and self.tasks:
-                        results.append(self.pool.apply_async(*self.tasks.pop(0)))
+                    while len(results) < self.pool_size and self.task_queue:
+                        task = self.task_queue.get_next()
+                        results.append(self.pool.apply_async(task.func, task.args, task.kwargs))
 
                     # if a result was ready and it returned a ReadResult, yield it
                     if isinstance(result_obj, self.ReadResult):

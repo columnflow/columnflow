@@ -145,7 +145,7 @@ class SelectEvents(
             # save results as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
             result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.add_task(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+            self.chunked_reader.queue(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
 
             # remove columns
             if keep_columns:
@@ -154,7 +154,7 @@ class SelectEvents(
                 # save additional columns as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
                 column_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_reader.add_task(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
