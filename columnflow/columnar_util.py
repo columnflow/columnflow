@@ -1131,8 +1131,15 @@ class ArrayFunction(Derivable):
     .. py:attribute:: deps
        type: dict
 
-       The callstack of dependencies, i.e., a dictionary mapping depenent classes to their instances
-       as to be used by *this* instance. Item access on this instance is forwarded to this object.
+       The callstack of dependencies, i.e., a dictionary mapping dependent classes to their
+       instances as to be used by *this* instance. Item access on this instance is forwarded to this
+       object.
+
+    .. py:attribute:: deps_kwargs
+       type: dict
+
+       Optional keyword arguments mapped to dependent classes that are forwarded to their
+       initialization.
 
     .. py::attribute:: used_columns
        type: set
@@ -1231,6 +1238,9 @@ class ArrayFunction(Derivable):
         # dictionary of dependency class to instance, set in create_dependencies
         self.deps = DotDict()
 
+        # dictionary of keyword arguments mapped to dependenc classes to be forwarded to their init
+        self.deps_kwargs = DotDict()
+
         # deferred part of the initialization
         if deferred_init:
             self.deferred_init(instance_cache or {})
@@ -1289,8 +1299,15 @@ class ArrayFunction(Derivable):
 
     def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> ArrayFunction:
         """
-        Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*.
+        Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*. The
+        latter update optional keyword arguments in :py:attr:`self.deps_kwargs` and are then
+        forwarded to the instantiation.
         """
+        # merge kwargs with those in deps_kwargs
+        deps_kwargs = self.deps_kwargs.get(cls) or {}
+        if deps_kwargs:
+            kwargs = law.util.merge_dicts(deps_kwargs, kwargs)
+
         return cls(**kwargs)
 
     def get_dependencies(self, include_others: bool = False) -> set[ArrayFunction | Any]:

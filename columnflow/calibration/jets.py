@@ -173,15 +173,16 @@ def prop_met(
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId",
-        "RawMET.pt", "RawMET.phi",
         "fixedGridRhoFastjetAll",
         attach_coffea_behavior,
     },
     produces={
-        "Jet.pt", "Jet.mass", "Jet.rawFactor", "MET.pt", "MET.phi",
+        "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
+    # toggle for propagation to MET
+    propagate_met=True,
 )
 def jec(
     self: Calibrator,
@@ -241,10 +242,11 @@ def jec(
 
     # store pt and phi of the full jet system for MET propagation, including a selection in raw info
     # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
-    met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
-    jetsum = events.Jet[met_prop_mask].sum(axis=1)
-    jet_pt_only_l1 = jetsum.pt
-    jet_phi_only_l1 = jetsum.phi
+    if self.propagate_met:
+        met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
+        jetsum = events.Jet[met_prop_mask].sum(axis=1)
+        jet_pt_only_l1 = jetsum.pt
+        jet_phi_only_l1 = jetsum.phi
 
     # full jet correction with all levels
     events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
@@ -252,22 +254,24 @@ def jec(
     events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
-    # get pt and phi of all jets after correcting
-    jetsum = events.Jet[met_prop_mask].sum(axis=1)
-    jet_pt_all_levels = jetsum.pt
-    jet_phi_all_levels = jetsum.phi
+    # nominal met propagation
+    if self.propagate_met:
+        # get pt and phi of all jets after correcting
+        jetsum = events.Jet[met_prop_mask].sum(axis=1)
+        jet_pt_all_levels = jetsum.pt
+        jet_phi_all_levels = jetsum.phi
 
-    # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
-    met_pt, met_phi = prop_met(
-        jet_pt_only_l1,
-        jet_phi_only_l1,
-        jet_pt_all_levels,
-        jet_phi_all_levels,
-        events.RawMET.pt,
-        events.RawMET.phi,
-    )
-    events = set_ak_column(events, "MET.pt", met_pt)
-    events = set_ak_column(events, "MET.phi", met_phi)
+        # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
+        met_pt, met_phi = prop_met(
+            jet_pt_only_l1,
+            jet_phi_only_l1,
+            jet_pt_all_levels,
+            jet_phi_all_levels,
+            events.RawMET.pt,
+            events.RawMET.phi,
+        )
+        events = set_ak_column(events, "MET.pt", met_pt)
+        events = set_ak_column(events, "MET.phi", met_phi)
 
     # look up JEC uncertainties
     if self.junc_names:
@@ -282,29 +286,30 @@ def jec(
             events = set_ak_column(events, f"Jet.mass_jec_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
             events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
-            # MET propagation
-            jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
-            jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
-            met_pt_up, met_phi_up = prop_met(
-                jet_pt_all_levels,
-                jet_phi_all_levels,
-                jet_pt_up,
-                events.Jet[met_prop_mask].phi,
-                met_pt,
-                met_phi,
-            )
-            met_pt_down, met_phi_down = prop_met(
-                jet_pt_all_levels,
-                jet_phi_all_levels,
-                jet_pt_down,
-                events.Jet[met_prop_mask].phi,
-                met_pt,
-                met_phi,
-            )
-            events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
-            events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
-            events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
-            events = set_ak_column(events, f"MET.phi_jec_{name}_down", met_phi_down)
+            # shifted MET propagation
+            if self.propagate_met:
+                jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
+                jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
+                met_pt_up, met_phi_up = prop_met(
+                    jet_pt_all_levels,
+                    jet_phi_all_levels,
+                    jet_pt_up,
+                    events.Jet[met_prop_mask].phi,
+                    met_pt,
+                    met_phi,
+                )
+                met_pt_down, met_phi_down = prop_met(
+                    jet_pt_all_levels,
+                    jet_phi_all_levels,
+                    jet_pt_down,
+                    events.Jet[met_prop_mask].phi,
+                    met_pt,
+                    met_phi,
+                )
+                events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
+                events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
+                events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
+                events = set_ak_column(events, f"MET.phi_jec_{name}_down", met_phi_down)
 
     return events
 
@@ -326,13 +331,18 @@ def jec_init(self: Calibrator) -> None:
         for junc_dir in ("up", "down")
     }
 
-    # add shifted MET variables
-    self.produces |= {
-        f"MET.{shifted_var}_jec_{junc_name}_{junc_dir}"
-        for shifted_var in ("pt", "phi")
-        for junc_name in sources
-        for junc_dir in ("up", "down")
-    }
+    # add MET variables
+    if self.propagate_met:
+        self.uses |= {"RawMET.pt", "RawMET.phi"}
+        self.produces |= {"MET.pt", "MET.phi"}
+
+        # add shifted MET variables
+        self.produces |= {
+            f"MET.{shifted_var}_jec_{junc_name}_{junc_dir}"
+            for shifted_var in ("pt", "phi")
+            for junc_name in sources
+            for junc_dir in ("up", "down")
+        }
 
 
 @jec.requires
@@ -434,6 +444,8 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
         "MET.pt", "MET.phi",
         "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
+    # toggle for propagation to MET
+    propagate_met=True,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -538,9 +550,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
     # store pt and phi of the full jet system
-    jetsum = events.Jet.sum(axis=1)
-    jet_pt_before = jetsum.pt
-    jet_phi_before = jetsum.phi
+    if self.propagate_met:
+        jetsum = events.Jet.sum(axis=1)
+        jet_pt_before = jetsum.pt
+        jet_phi_before = jetsum.phi
 
     # apply the smearing factors to the pt and mass
     # (note: apply variations first since they refer to the original pt)
@@ -554,44 +567,61 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # recover coffea behavior
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
-    # get pt and phi of all jets after correcting
-    jetsum = events.Jet.sum(axis=1)
-    jet_pt_after = jetsum.pt
-    jet_phi_after = jetsum.phi
+    # met propagation
+    if self.propagate_met:
+        # get pt and phi of all jets after correcting
+        jetsum = events.Jet.sum(axis=1)
+        jet_pt_after = jetsum.pt
+        jet_phi_after = jetsum.phi
 
-    # propagate changes to MET
-    met_pt, met_phi = prop_met(
-        jet_pt_before,
-        jet_phi_before,
-        jet_pt_after,
-        jet_phi_after,
-        events.MET.pt,
-        events.MET.phi,
-    )
-    met_pt_up, met_phi_up = prop_met(
-        jet_pt_after,
-        jet_phi_after,
-        events.Jet.pt_jer_up,
-        events.Jet.phi,
-        met_pt,
-        met_phi,
-    )
-    met_pt_down, met_phi_down = prop_met(
-        jet_pt_after,
-        jet_phi_after,
-        events.Jet.pt_jer_down,
-        events.Jet.phi,
-        met_pt,
-        met_phi,
-    )
-    events = set_ak_column(events, "MET.pt", met_pt)
-    events = set_ak_column(events, "MET.phi", met_phi)
-    events = set_ak_column(events, "MET.pt_jer_up", met_pt_up)
-    events = set_ak_column(events, "MET.pt_jer_down", met_pt_down)
-    events = set_ak_column(events, "MET.phi_jer_up", met_phi_up)
-    events = set_ak_column(events, "MET.phi_jer_down", met_phi_down)
+        # propagate changes to MET
+        met_pt, met_phi = prop_met(
+            jet_pt_before,
+            jet_phi_before,
+            jet_pt_after,
+            jet_phi_after,
+            events.MET.pt,
+            events.MET.phi,
+        )
+        met_pt_up, met_phi_up = prop_met(
+            jet_pt_after,
+            jet_phi_after,
+            events.Jet.pt_jer_up,
+            events.Jet.phi,
+            met_pt,
+            met_phi,
+        )
+        met_pt_down, met_phi_down = prop_met(
+            jet_pt_after,
+            jet_phi_after,
+            events.Jet.pt_jer_down,
+            events.Jet.phi,
+            met_pt,
+            met_phi,
+        )
+        events = set_ak_column(events, "MET.pt", met_pt)
+        events = set_ak_column(events, "MET.phi", met_phi)
+        events = set_ak_column(events, "MET.pt_jer_up", met_pt_up)
+        events = set_ak_column(events, "MET.pt_jer_down", met_pt_down)
+        events = set_ak_column(events, "MET.phi_jer_up", met_phi_up)
+        events = set_ak_column(events, "MET.phi_jer_down", met_phi_down)
 
     return events
+
+
+@jer.init
+def jer_init(self: Calibrator) -> None:
+    """
+    Initialization of dynamic components of the jer calibrator.
+    """
+    if self.propagate_met:
+        self.uses |= {
+            "MET.pt", "MET.phi",
+        }
+        self.produces |= {
+            "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
+            "MET.phi_jer_down",
+        }
 
 
 @jer.requires
@@ -647,7 +677,12 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 # General jets calibrator
 #
 
-@calibrator(uses={jec}, produces={jec})
+@calibrator(
+    uses={jec},
+    produces={jec},
+    # toggle for propagation to MET
+    propagate_met=True,
+)
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
     events = self[jec](events, **kwargs)
@@ -661,6 +696,9 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator) -> None:
+    self.deps_kwargs[jec] = {"propagate_met": self.propagate_met}
+
     if getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc:
         self.uses |= {jer}
         self.produces |= {jer}
+        self.deps_kwargs[jer] = {"propagate_met": self.propagate_met}
