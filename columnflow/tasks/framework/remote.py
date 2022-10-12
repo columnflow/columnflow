@@ -160,7 +160,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         self._checksum = None
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self, sandbox_file=f"bash::{self.sandbox_file}")
+        return self.dep_BuildBashSandbox.req(self)
 
     @property
     def checksum(self):
@@ -232,7 +232,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         super().__init__(*args, **kwargs)
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self, sandbox_file=f"bash::{self.sandbox_file}")
+        return self.dep_BuildBashSandbox.req(self)
 
     def get_cmssw_path(self):
         # invoking .env will already trigger building the sandbox
