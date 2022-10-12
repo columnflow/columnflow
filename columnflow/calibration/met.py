@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-MET phi correction.
+MET corrections.
 """
 
 from columnflow.calibration import Calibrator, calibrator
