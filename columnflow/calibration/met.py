@@ -5,7 +5,7 @@ MET corrections.
 """
 
 from columnflow.calibration import Calibrator, calibrator
-from columnflow.util import maybe_import, import_file
+from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
 ak = maybe_import("awkward")
@@ -51,7 +51,7 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector object
-    pkg = import_file(bundle.files.met_phi_corr.path)
+    pkg = bundle.files.met_phi_corr.load(formatter="python")
     METPhiCorrector = pkg.METPhiCorrector
     METCampaign = pkg.Campaign
 
