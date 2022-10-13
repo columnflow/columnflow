@@ -35,7 +35,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
-        return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
@@ -68,7 +68,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
-        return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
     @law.decorator.log
     @law.decorator.safe_output
@@ -182,7 +182,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
-        return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
     @law.decorator.log
     @law.decorator.safe_output
@@ -240,7 +240,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
-        return self.get_replicated_path(path, i=None if self.replicas <= 0 else "*")
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
     def single_output(self):
         cmssw_path = os.path.basename(self.get_cmssw_path())
