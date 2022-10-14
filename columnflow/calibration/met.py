@@ -8,6 +8,7 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
@@ -17,19 +18,21 @@ ak = maybe_import("awkward")
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Performs the MET phi (type II) correction using the external corrector tool. Requires the
-    corrector tool external to be loaded as an external file in the config as:
+    Performs the MET phi (type II) correction using the correctionlib. Requires an external file in
+    the config as (e.g.):
 
     .. code-block:: python
 
-        "met_phi_corr": ("https://mrieger.web.cern.ch/snippets/met_phi_correction.py", "v1"),
+        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/cms-met/metphi_corrs_all.json.gz", "v1")
     """
-    corr_pt, corr_phi = self.met_phi_corrector(
-        uncor_pt=events.MET.pt,
-        uncor_phi=events.MET.phi,
-        npv=events.PV.npvs,
-        run=events.run,
+    args = (
+        events.MET.pt,
+        events.MET.phi,
+        ak.values_astype(events.PV.npvs, np.float32),
+        ak.values_astype(events.run, np.float32),
     )
+    corr_pt = self.met_pt_corrector.evaluate(*args)
+    corr_phi = self.met_phi_corrector.evaluate(*args)
 
     events = set_ak_column(events, "MET.pt", corr_pt)
     events = set_ak_column(events, "MET.phi", corr_phi)
@@ -50,19 +53,16 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
 def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     bundle = reqs["external_files"]
 
-    # create the corrector object
-    pkg = bundle.files.met_phi_corr.load(formatter="python")
-    METPhiCorrector = pkg.METPhiCorrector
-    METCampaign = pkg.Campaign
-
-    # determine the campaign
-    if self.config_inst.campaign.x.year == 2016:
-        met_campaign = METCampaign.UL_2016 if self.dataset_inst.is_data else METCampaign.UL_2016_APV
-    elif self.config_inst.campaign.x.year == 2017:
-        met_campaign = METCampaign.UL_2017
-    elif self.config_inst.campaign.x.year == 2018:
-        met_campaign = METCampaign.UL_2018
-    else:
-        raise ValueError(f"no MET phi correction campaign defined for config {self.config_inst}")
-
-    self.met_phi_corrector = METPhiCorrector(met_campaign, self.dataset_inst.is_data)
+    # create the pt and phi correctors
+    import correctionlib
+    correction_set = correctionlib.CorrectionSet.from_string(
+        bundle.files.met_phi_corr.load(formatter="gzip").decode("utf-8"),
+    )
+    self.met_pt_corrector = correction_set[self.config_inst.x.met_phi_correction_set.format(
+        variable="pt",
+        data_source=self.dataset_inst.data_source,
+    )]
+    self.met_phi_corrector = correction_set[self.config_inst.x.met_phi_correction_set.format(
+        variable="phi",
+        data_source=self.dataset_inst.data_source,
+    )]
