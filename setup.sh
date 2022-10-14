@@ -483,7 +483,7 @@ EOF
         # initialze submodules
         if [ -d "${CF_BASE}/.git" ]; then
             for m in $( ls -1q "${CF_BASE}/modules" ); do
-                cf_init_submodule "${CF_BASE}/modules/${m}"
+                cf_init_submodule "${CF_BASE}" "modules/${m}"
             done
         fi
     else
@@ -502,29 +502,33 @@ cf_init_submodule() {
     # Initializes and updates a git submodule.
     #
     # Arguments:
-    #   1. mpath
-    #       The absolute path to the submodule.
+    #   1. base_path
+    #     The path of the base directory relative to which the module_path is evaluated.
+    #   2. module_path
+    #       The path to the submodule, relative to base_path.
 
     # local variables
-    local mpath="${1}"
+    local base_path="${1}"
+    local module_path="${2}"
 
     # do nothing in remote jobs
     [ "$CF_REMOTE_JOB" = "1" ] && return "0"
 
     # do nothing when the path does not exist or it is not a submodule
-    if [ ! -d "${mpath}" ] || [ ! -f "${mpath}/.git" ] ; then
+    if [ ! -d "${base_path}/${module_path}" ] || [ ! -f "${base_path}/${module_path}.git" ]; then
         return "0"
     fi
 
     # initialize the submodule when the directory is empty
-    if [ "$( ls -1q "${mpath}" | wc -l )" = "0" ]; then
-        git submodule update --init --recursive "${mpath}"
+
+    if [ "$( ls -1q "${base_path}/${module_path}" | wc -l )" = "0" ]; then
+        ( cd "${base_path}" && git submodule update --init --recursive "${module_path}" )
     else
         # update when not on a working branch and there are no changes
-        local detached_head="$( ( cd "${mpath}"; git symbolic-ref -q HEAD &> /dev/null ) && echo "true" || echo "false" )"
-        local changed_files="$( cd "${mpath}"; git status --porcelain=v1 2> /dev/null | wc -l )"
+        local detached_head="$( ( cd "${base_path}/${module_path}"; git symbolic-ref -q HEAD &> /dev/null ) && echo "true" || echo "false" )"
+        local changed_files="$( cd "${base_path}/${module_path}"; git status --porcelain=v1 2> /dev/null | wc -l )"
         if ! ${detached_head} && [ "${changed_files}" = "0" ]; then
-            git submodule update --init --recursive "${mpath}"
+            ( cd "${base_path}" && git submodule update --init --recursive "${module_path}" )
         fi
     fi
 }
