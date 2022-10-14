@@ -19,11 +19,19 @@ ak = maybe_import("awkward")
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
     Performs the MET phi (type II) correction using the correctionlib. Requires an external file in
-    the config as (e.g.):
+    the config as (e.g.)
 
     .. code-block:: python
 
         "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/cms-met/metphi_corrs_all.json.gz", "v1")
+
+    as well as an auxiliary entry in the config to refer to the name of the correction set such as
+
+    .. code-block:: python
+
+        cfg.x.met_phi_correction_set = "metphicorr_{variable}_pfmet_{data_source}_2017"
+
+    where "variable" and "data_source" are placeholders that are inserted in the calibrator setup.
     """
     args = (
         events.MET.pt,
