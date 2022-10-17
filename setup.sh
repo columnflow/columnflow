@@ -520,7 +520,6 @@ cf_init_submodule() {
     fi
 
     # initialize the submodule when the directory is empty
-
     if [ "$( ls -1q "${base_path}/${module_path}" | wc -l )" = "0" ]; then
         ( cd "${base_path}" && git submodule update --init --recursive "${module_path}" )
     else

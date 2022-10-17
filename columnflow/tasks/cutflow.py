@@ -410,15 +410,20 @@ class PlotCutflowVariables(
 
     def output(self):
         b = self.branch_data
-        suffix = f"__{self.plot_suffix}" if self.plot_suffix else ""
         if self.per_plot == "processes":
             return law.SiblingFileCollection({
-                s: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}{suffix}.pdf")
+                s: [
+                    self.local_target(name)
+                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
+                ]
                 for i, s in enumerate(self.chosen_steps)
             })
         else:  # per_plot == "steps"
             return law.SiblingFileCollection({
-                p: self.local_target(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}{suffix}.pdf")
+                p: [
+                    self.local_target(name)
+                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}")
+                ]
                 for p in self.processes
             })
 

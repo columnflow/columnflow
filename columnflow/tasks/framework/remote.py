@@ -18,8 +18,8 @@ from columnflow.util import real_path
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
-        default=3,
-        description="number of replicas to generate; default: 3",
+        default=5,
+        description="number of replicas to generate; default: 5",
     )
     version = None
 
@@ -58,8 +58,8 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
-        default=3,
-        description="number of replicas to generate; default: 3",
+        default=5,
+        description="number of replicas to generate; default: 5",
     )
     version = None
 
@@ -140,8 +140,8 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         "relative to $CF_BASE/sandboxes",
     )
     replicas = luigi.IntParameter(
-        default=3,
-        description="number of replicas to generate; default: 3",
+        default=5,
+        description="number of replicas to generate; default: 5",
     )
     version = None
 
@@ -215,8 +215,8 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         "relative to $CF_BASE/sandboxes",
     )
     replicas = luigi.IntParameter(
-        default=3,
-        description="number of replicas to generate; default: 3",
+        default=5,
+        description="number of replicas to generate; default: 5",
     )
     version = None
 
@@ -295,8 +295,8 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     htcondor_share_software = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, do not bundle and download sofware and sandboxes but instruct jobs "
-        "to use the software in the current CF_SOFTWARE_BASE if accessible; default: False",
+        description="when True, do not bundle and download software plus sandboxes but instruct "
+        "jobs to use the software in the current CF_SOFTWARE_BASE if accessible; default: False",
     )
 
     exclude_params_branch = {
