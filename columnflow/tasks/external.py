@@ -81,16 +81,16 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         *lfn_indices* given the lfns obtained by *this* task which needs to be complete for this
         function to succeed.
 
-        When *lfn_indices* are not given, *task* must be a branch of :py:class:`DatasetTask`
+        When *lfn_indices* are not given, *task* must be a branch of a :py:class:`DatasetTask`
         workflow whose branch value is used instead.
 
-        Iterating yields a 2-tuple (file index, input file) where the latter is a
-        :py:class:`law.wlcg.WLCGFileTarget` with its fs set to *remote_fs*. When a sequence is
-        passed, the fs names are evaluated in that order and the first existing one is generally
-        used. However, if *eager_lookup* is *True*, in case the stat request to a fs was successful
-        but took longer than two seconds, the next fs is eagerly checked and used in case it
-        responded with less delay. In case *eager_lookup* is an integer, this check is only
-        performed after the *eager_lookup*th fs.
+        Iterating yields a 2-tuple (file index, input file) where the latter is either a
+        :py:class:`law.LocalFileTarget` or a :py:class:`law.wlcg.WLCGFileTarget` with its fs set to
+        *remote_fs*. When a sequence is passed, the fs names are evaluated in that order and the
+        first existing one is generally used. However, if *eager_lookup* is *True*, in case the stat
+        request to a fs was successful but took longer than two seconds, the next fs is eagerly
+        checked and used in case it responded with less delay. In case *eager_lookup* is an integer,
+        this check is only performed after the *eager_lookup*th fs.
         """
         # input checks
         if not lfn_indices:
@@ -100,7 +100,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
         if not remote_fs:
-            remote_fs = law.config.get_expanded("outputs", "wlcg_lfn_sources", split_csv=True)
+            remote_fs = law.config.get_expanded("outputs", "lfn_sources", split_csv=True)
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
@@ -120,10 +120,17 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             last_working = None
             while i < len(remote_fs):
                 fs = remote_fs[i]
+                logger.debug(f"checking fs {fs} for lfn {lfn}")
+
+                # check if the fs is really remote or local
+                fs_base = law.config.get_expanded(fs, "base")
+                is_local = law.target.file.get_scheme(fs_base) in (None, "file")
+                logger.debug(f"fs {fs} is {'local' if is_local else 'remote'}")
+                target_cls = law.LocalFileTarget if is_local else law.wlcg.WLCGFileTarget
 
                 # measure the time required to perform the stat query
                 logger.debug(f"checking fs {fs} for lfn {lfn}")
-                input_file = law.wlcg.WLCGFileTarget(lfn, fs=fs)
+                input_file = target_cls(lfn, fs=fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
