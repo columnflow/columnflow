@@ -45,6 +45,11 @@ setup_venv() {
     # source the main setup script to access helpers
     CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+    fi
+
 
     #
     # get and check arguments
@@ -96,8 +101,7 @@ setup_venv() {
             requirement_files_contains_prod="true"
         fi
     done
-    local i0="$( ${shell_is_zsh} && echo "1" || echo "0" )"
-    local first_requirement_file="${requirement_files[$i0]}"
+    local first_requirement_file="${requirement_files[0]}"
 
 
     #
