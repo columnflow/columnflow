@@ -6,7 +6,7 @@ Configuration of the single top analysis.
 
 import re
 
-from scinum import Number, REL
+from scinum import Number
 from order import Analysis, Shift
 
 from columnflow.example_config.campaign_2018 import (
@@ -25,24 +25,23 @@ analysis_st = Analysis(
 )
 
 # analysis-global versions
-analysis_st.set_aux("versions", {
-})
+analysis_st.x.versions = {}
 
 # files of bash sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
-analysis_st.set_aux("job_sandboxes", [
+analysis_st.x.job_sandboxes = [
     "$CF_BASE/sandboxes/venv_columnar.sh",
-])
+]
 
 # files of cmssw sandboxes that should be bundled for remote jobs in case they are needed
 # (used in cf.HTCondorWorkflow)
-analysis_st.set_aux("cmssw_sandboxes", [
+analysis_st.x.cmssw_sandboxes = [
     # "$CF_BASE/sandboxes/cmssw_default.sh",
-])
+]
 
 # config groups for conveniently looping over certain configs
 # (used in wrapper_factory)
-analysis_st.set_aux("config_groups", {})
+analysis_st.x.config_groups = {}
 
 
 #
@@ -64,49 +63,51 @@ config_2018.add_dataset(campaign_2018.get_dataset("tt_sl"))
 
 
 # default calibrator, selector, producer, ml model and inference model
-config_2018.set_aux("default_calibrator", "example")
-config_2018.set_aux("default_selector", "example")
-config_2018.set_aux("default_producer", "example")
-config_2018.set_aux("default_ml_model", None)
-config_2018.set_aux("default_inference_model", "example")
+config_2018.x.default_calibrator = "example"
+config_2018.x.default_selector = "example"
+config_2018.x.default_producer = "example"
+config_2018.x.default_ml_model = None
+config_2018.x.default_inference_model = "example"
+config_2018.x.default_categories = ("incl",)
+config_2018.x.default_variables = ("ht", "jet1_pt")
 
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
-config_2018.set_aux("process_groups", {})
+config_2018.x.process_groups = {}
 
 # dataset groups for conveniently looping over certain datasets
 # (used in wrapper_factory and during plotting)
-config_2018.set_aux("dataset_groups", {})
+config_2018.x.dataset_groups = {}
 
 # category groups for conveniently looping over certain categories
 # (used during plotting)
-config_2018.set_aux("category_groups", {})
+config_2018.x.category_groups = {}
 
 # variable groups for conveniently looping over certain variables
 # (used during plotting)
-config_2018.set_aux("variable_groups", {})
+config_2018.x.variable_groups = {}
 
 # shift groups for conveniently looping over certain shifts
 # (used during plotting)
-config_2018.set_aux("shift_groups", {})
+config_2018.x.shift_groups = {}
 
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
-config_2018.set_aux("selector_step_groups", {
+config_2018.x.selector_step_groups = {
     "example": ["Jet"],
-})
+}
 
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
-config_2018.set_aux("luminosity", Number(59740, {
-    "lumi_13TeV_correlated": (REL, 0.02),
-    "lumi_13TeV_2018": (REL, 0.015),
-    "lumi_13TeV_1718": (REL, 0.002),
-}))
+config_2018.x.luminosity = Number(59740, {
+    "lumi_13TeV_correlated": 0.02j,
+    "lumi_13TeV_2018": 0.015j,
+    "lumi_13TeV_1718": 0.002j,
+})
 
 # 2018 minimum bias cross section in mb (milli) for creating PU weights, values from
 # https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II
-config_2018.set_aux("minbiasxs", Number(69.2, (REL, 0.046)))
+config_2018.x.minbiasxs = Number(69.2, 0.046j)
 
 
 # helper to add column aliases for both shifts of a source
@@ -139,7 +140,7 @@ add_aliases(
 )
 
 # external files
-config_2018.set_aux("external_files", DotDict.wrap({
+config_2018.x.external_files = DotDict.wrap({
     # files from TODO
     "lumi": {
         "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/Legacy_2018/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt", "v1"),  # noqa
@@ -156,10 +157,10 @@ config_2018.set_aux("external_files", DotDict.wrap({
             "minbias_xs_down": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions18/13TeV/PileUp/UltraLegacy/PileupHistogram-goldenJSON-13tev-2018-66000ub-99bins.root", "v1"),  # noqa
         },
     },
-}))
+})
 
 # columns to keep after certain steps
-config_2018.set_aux("keep_columns", DotDict.wrap({
+config_2018.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
         "run", "luminosityBlock", "event",
         "nJet", "Jet.pt", "Jet.eta", "Jet.btagDeepFlavB",
@@ -168,15 +169,14 @@ config_2018.set_aux("keep_columns", DotDict.wrap({
     "cf.MergeSelectionMasks": {
         "mc_weight", "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
-}))
+})
 
 # event weight columns
-config_2018.set_aux("event_weights", ["normalization_weight", "pu_weight"])
+config_2018.x.event_weights = ["normalization_weight", "pu_weight"]
 
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value
-config_2018.set_aux("versions", {
-})
+config_2018.x.versions = {}
 
 # add categories
 config_2018.add_category(

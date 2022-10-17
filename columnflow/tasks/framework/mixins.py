@@ -526,12 +526,14 @@ class InferenceModelMixin(ConfigTask):
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
-        default=("incl",),
+        default=(),
         description="comma-separated category names or patterns to select; can also be the key of "
-        "a mapping defined in 'category_groups' auxiliary data of the config; default: ('incl',)",
+        "a mapping defined in 'category_groups' auxiliary data of the config; when empty, uses the "
+        "auxiliary data enty 'default_categories' when set; empty default",
         brace_expand=True,
     )
 
+    default_categories = None
     allow_empty_categories = False
 
     @classmethod
@@ -544,6 +546,15 @@ class CategoriesMixin(ConfigTask):
 
         # resolve categories
         if "categories" in params:
+            # when empty, use the config default
+            if not params["categories"] and config_inst.x("default_categories", ()):
+                params["categories"] = tuple(config_inst.x.default_categories)
+
+            # when still empty and default variables are defined, use them instead
+            if not params["categories"] and cls.default_categories:
+                params["categories"] = tuple(cls.default_categories)
+
+            # resolve them
             categories = cls.find_config_objects(
                 params["categories"],
                 config_inst,
@@ -554,7 +565,7 @@ class CategoriesMixin(ConfigTask):
 
             # complain when no categories were found
             if not categories and not cls.allow_empty_categories:
-                raise ValueError(f"no categories found matching '{params['categories']}'")
+                raise ValueError(f"no categories found matching {params['categories']}")
 
             params["categories"] = tuple(categories)
 
@@ -591,10 +602,15 @@ class VariablesMixin(ConfigTask):
 
         # resolve variables
         if "variables" in params:
-            # when empty and default variables are defined, use them instead
+            # when empty, use the config default
+            if not params["variables"] and config_inst.x("default_variables", ()):
+                params["variables"] = tuple(config_inst.x.default_variables)
+
+            # when still empty and default variables are defined, use them instead
             if not params["variables"] and cls.default_variables:
                 params["variables"] = tuple(cls.default_variables)
 
+            # resolve them
             if params["variables"]:
                 # resolve variable names
                 variables = cls.find_config_objects(
@@ -609,7 +625,7 @@ class VariablesMixin(ConfigTask):
 
             # complain when no variables were found
             if not variables and not cls.allow_empty_variables:
-                raise ValueError(f"no variables found matching '{params['variables']}'")
+                raise ValueError(f"no variables found matching {params['variables']}")
 
             params["variables"] = tuple(variables)
 
@@ -667,7 +683,7 @@ class DatasetsProcessesMixin(ConfigTask):
 
             # complain when no processes were found
             if not processes and not cls.allow_empty_processes:
-                raise ValueError(f"no processes found matching '{params['processes']}'")
+                raise ValueError(f"no processes found matching {params['processes']}")
 
             params["processes"] = tuple(processes)
 
@@ -694,7 +710,7 @@ class DatasetsProcessesMixin(ConfigTask):
 
             # complain when no datasets were found
             if not datasets and not cls.allow_empty_datasets:
-                raise ValueError(f"no datasets found matching '{params['datasets']}'")
+                raise ValueError(f"no datasets found matching {params['datasets']}")
 
             params["datasets"] = tuple(datasets)
 
@@ -746,7 +762,7 @@ class ShiftSourcesMixin(ConfigTask):
 
             # complain when no shifts were found
             if not shifts and not cls.allow_empty_shift_sources:
-                raise ValueError(f"no shifts found matching '{params['shift_sources']}'")
+                raise ValueError(f"no shifts found matching {params['shift_sources']}")
 
             # convert back to sources
             params["shift_sources"] = tuple(cls.reduce_shifts(shifts))
