@@ -550,7 +550,7 @@ class CategoriesMixin(ConfigTask):
             if not params["categories"] and config_inst.x("default_categories", ()):
                 params["categories"] = tuple(config_inst.x.default_categories)
 
-            # when still empty and default variables are defined, use them instead
+            # when still empty and default categories are defined, use them instead
             if not params["categories"] and cls.default_categories:
                 params["categories"] = tuple(cls.default_categories)
 
