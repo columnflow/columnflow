@@ -12,7 +12,7 @@ __all__ = [
     "PreloadedNanoEventsFactory",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet", "flat_np_view", "attach_behavior",
+    "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
 ]
 
 import os
@@ -913,25 +913,6 @@ def sorted_ak_to_parquet(
     ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
 
 
-def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
-    """
-    Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
-    *axis*. See *ak.flatten* for more info.
-
-    .. note::
-        Changes applied in-place to that view are transferred to the original *ak_array*, but
-        **only** when the axis is not *None* but an integer value. For this reason, passing
-        ``axis=None`` will cause an exception to be thrown.
-    """
-    if axis is None:
-        raise ValueError(
-            "axis must not be None as changes applied the returned view will not propagate to the ",
-            "original awkward array",
-        )
-
-    return np.asarray(ak.flatten(ak_array, axis=axis))
-
-
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
@@ -968,6 +949,62 @@ def attach_behavior(
         with_name=type_name,
         behavior=behavior,
     )
+
+
+def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
+    """
+    Structures an input *data_array* by making at an awkward array with a layout inferred from
+    *layout_array* and returns it. In particular, this function can be used to create new awkward
+    arrays from existing numpy arrays and forcing a known, arbitrarily ragged shape to it. Example:
+
+    .. code-block:: python
+
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        b = ak.Array([[], [0, 0], [], [0, 0, 0]])
+
+        c = layout_ak_array(a, b)
+        # <Array [[], [1.0, 2.0], [], [3.0, 4.0, 5.0]] type='4 * var * float32'>
+    """
+    # flatten and convert to content
+    if isinstance(data_array, np.ndarray):
+        data = ak.layout.NumpyArray(np.reshape(data_array, (-1,)))
+    elif isinstance(data_array, ak.Array):
+        data = ak.flatten(data_array, axis=None)  # might create a copy
+    else:
+        raise TypeError(f"unhandled type of data array {data_array}")
+
+    # infer the offsets
+    if not getattr(layout_array, "layout", None):
+        raise ValueError(f"layout array {layout_array} does not have a valid layout")
+    if getattr(layout_array.layout, "offsets", None):
+        offsets = layout_array.layout.offsets
+    else:
+        try:
+            # possibly unregularly partitioned
+            offsets = layout_array.layout.toContent().offsets_and_flatten()[0]
+        except:
+            raise ValueError(f"offsets extraction not implemented for layout array {layout_array}")
+
+    return ak.Array(ak.layout.ListOffsetArray64(offsets, data))
+
+
+def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
+    """
+    Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
+    *axis*. See *ak.flatten* for more info.
+
+    .. note::
+        Changes applied in-place to that view are transferred to the original *ak_array*, but
+        **only** when the axis is not *None* but an integer value. For this reason, passing
+        ``axis=None`` will cause an exception to be thrown.
+    """
+    if axis is None:
+        raise ValueError(
+            "axis must not be None as changes applied the returned view will not propagate to the ",
+            "original awkward array",
+        )
+
+    return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
 class RouteFilter(object):
