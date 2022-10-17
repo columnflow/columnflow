@@ -63,7 +63,12 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
         return reqs
 
     from columnflow.tasks.selection import MergeSelectionStats
-    reqs["selection_stats"] = MergeSelectionStats.req(self.task, tree_index=0, branch=-1)
+    reqs["selection_stats"] = MergeSelectionStats.req(
+        self.task,
+        tree_index=0,
+        branch=-1,
+        _exclude=MergeSelectionStats.exclude_params_forest_merge,
+    )
 
 
 @normalization_weights.setup
