@@ -265,29 +265,40 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return parts
 
     def local_path(self, *path, **kwargs):
-        """ local_path(*path, store=None)
-        Joins path fragments from *store* (defaulting to :py:attr:`default_store`), *store_parts()*
-        and *path* and returns the joined path.
+        """ local_path(*path, store=None, fs=None)
+        Joins path fragments from *store* (defaulting to :py:attr:`default_store`),
+        :py:meth:`store_parts` and *path* and returns the joined path. In case a *fs* is defined,
+        it should refer to the config section of a local file system, and consequently, *store* is
+        not prepended to the returned path as the resolution of absolute paths is handled by that
+        file system.
         """
-        # determine the main store directory
-        store = kwargs.get("store") or self.default_store
+        # if no fs is set, determine the main store directory
+        parts = ()
+        if not kwargs.pop("fs", None):
+            store = kwargs.get("store") or self.default_store
+            parts += (store,)
 
         # concatenate all parts that make up the path and join them
-        parts = tuple(self.store_parts().values()) + path
-        path = os.path.join(store, *(str(p) for p in parts))
+        parts += tuple(self.store_parts().values()) + path
+        path = os.path.join(*map(str, parts))
 
         return path
 
     def local_target(self, *path, **kwargs):
-        """ local_target(*path, dir=False, store=None, **kwargs)
+        """ local_target(*path, dir=False, store=None, fs=None, **kwargs)
         Creates either a local file or directory target, depending on *dir*, forwarding all *path*
-        fragments and *store* to :py:meth:`local_path` and all *kwargs* the respective target class.
+        fragments, *store* and *fs* to :py:meth:`local_path` and all *kwargs* the respective target
+        class.
         """
+        _dir = kwargs.pop("dir", False)
+        store = kwargs.pop("store", None)
+        fs = kwargs.get("fs", None)
+
         # select the target class
-        cls = law.LocalDirectoryTarget if kwargs.pop("dir", False) else law.LocalFileTarget
+        cls = law.LocalDirectoryTarget if _dir else law.LocalFileTarget
 
         # create the local path
-        path = self.local_path(*path, store=kwargs.pop("store", None))
+        path = self.local_path(*path, store=store, fs=fs)
 
         # create the target instance and return it
         return cls(path, **kwargs)
@@ -301,7 +312,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # concatenate all parts that make up the path and join them
         parts = tuple(self.store_parts().values()) + path
-        path = os.path.join(*(str(p) for p in parts))
+        path = os.path.join(*map(str, parts))
 
         return path
 
@@ -311,11 +322,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         *path* fragments to :py:meth:`wlcg_path` and all *kwargs* the respective target class. When
         *None*, *fs* defaults to the *default_wlcg_fs* class level attribute.
         """
+        _dir = kwargs.pop("dir", False)
         if not kwargs.get("fs"):
             kwargs["fs"] = self.default_wlcg_fs
 
         # select the target class
-        cls = law.wlcg.WLCGDirectoryTarget if kwargs.pop("dir", False) else law.wlcg.WLCGFileTarget
+        cls = law.wlcg.WLCGDirectoryTarget if _dir else law.wlcg.WLCGFileTarget
 
         # create the local path
         path = self.wlcg_path(*path)
@@ -346,11 +358,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # forward to correct function
         if location[0] == OutputLocation.local:
             # get other options
-            (store,) = (location[1:] + [None])[:1]
-            kwargs.setdefault("store", store)
+            (loc,) = (location[1:] + [None])[:1]
+            loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
+            kwargs.setdefault(loc_key, loc)
             return self.local_target(*path, **kwargs)
 
-        elif location[0] == OutputLocation.wlcg:
+        if location[0] == OutputLocation.wlcg:
             # get other options
             (fs,) = (location[1:] + [None])[:1]
             kwargs.setdefault("fs", fs)
