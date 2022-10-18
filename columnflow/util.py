@@ -298,6 +298,10 @@ def ensure_proxy(
         if env_is_remote:
             return None
 
+        # do nothing when explicitly skipped by the law config
+        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+            return None
+
         # check the proxy validity
         if not law.wlcg.check_voms_proxy_validity() and not law.arc.check_arc_proxy_validity():
             raise Exception("neither voms nor arc proxy valid")
