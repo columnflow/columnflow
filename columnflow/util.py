@@ -30,7 +30,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Callable, Any, Sequence
+from typing import Callable, Any, Sequence, Union
 from types import ModuleType
 
 import law
@@ -585,6 +585,10 @@ class MockModule(object):
 
     def __bool__(self) -> bool:
         return False
+
+    def __or__(self, other) -> Any:
+        # forward union type hints
+        return Union[type(self), other]
 
 
 class FunctionArgs(object):
