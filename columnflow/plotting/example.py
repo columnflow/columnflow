@@ -281,7 +281,7 @@ def plot_variable_per_process(
             "kwargs": {
                 "norm": mc_norm,
                 "label": mc_labels,
-                "facecolor": mc_colors,
+                "color": mc_colors,
                 "edgecolor": line_colors,
                 "linewidth": [(0 if c is None else 1) for c in line_colors],
             },
@@ -527,7 +527,7 @@ def plot_cutflow(
             "kwargs": {
                 "norm": [h[{"step": "Initial"}].value for h in mc_hists] if shape_norm else 1,
                 "label": mc_labels,
-                "facecolor": mc_colors,
+                "color": mc_colors,
                 "edgecolor": mc_line_colors,
                 "linewidth": [(0 if c is None else 1) for c in mc_line_colors],
                 "histtype": "step",
