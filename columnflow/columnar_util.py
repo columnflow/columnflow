@@ -1280,7 +1280,7 @@ class ArrayFunction(Derivable):
 
         # deferred part of the initialization
         if deferred_init:
-            self.deferred_init(instance_cache or {})
+            self.deferred_init(instance_cache=instance_cache)
 
     def __getitem__(self, dep_cls: DerivableMeta) -> ArrayFunction:
         """
@@ -1288,15 +1288,18 @@ class ArrayFunction(Derivable):
         """
         return self.deps[dep_cls]
 
-    def deferred_init(self, instance_cache: dict) -> None:
+    def deferred_init(self, instance_cache: dict | None = None) -> dict:
         """
         Controls the deferred part of the initialization process.
         """
+        instance_cache = instance_cache or {}
         self.create_dependencies(instance_cache)
+        return instance_cache
 
     def create_dependencies(
         self,
         instance_cache: dict,
+        only_update: bool = False,
     ) -> None:
         # create instance-level sets to store instances of dependent ArrayFunction classes
         # that are defined in class-level sets
@@ -1313,26 +1316,48 @@ class ArrayFunction(Derivable):
             self.deps[inst.__class__] = inst
             return inst
 
+        # track dependent classes that are handled in the following
+        added_deps = []
+
         for attr in self.dependency_sets:
-            # get the current set of instances
-            deps = set()
+            # get the current set of instances, potentially clearing existing ones
+            instances = getattr(self, f"{attr}_instances", set())
+            instances.clear()
 
             # go through all dependent objects and create instances of classes, considering caching
             for obj in getattr(self, attr):
                 if ArrayFunction.derived_by(obj):
-                    obj = add_dep(instantiate(obj))
+                    if only_update and obj in self.deps:
+                        obj = self.deps[obj]
+                    else:
+                        obj = add_dep(instantiate(obj))
+                    added_deps.append(obj.__class__)
                 elif isinstance(obj, ArrayFunction):
-                    add_dep(obj)
+                    if not only_update or obj.__class__ not in self.deps:
+                        obj = add_dep(obj)
+                    added_deps.append(obj.__class__)
                 elif isinstance(obj, self.Flagged):
-                    if ArrayFunction.derived_by(obj.wrapped):
-                        obj = self.Flagged(instantiate(obj.wrapped), obj.io_flag)
-                    add_dep(obj.wrapped)
+                    if only_update and obj.wrapped in self.deps:
+                        obj = self.deps[obj.wrapped]
+                    else:
+                        if ArrayFunction.derived_by(obj.wrapped):
+                            obj = self.Flagged(instantiate(obj.wrapped), obj.io_flag)
+                        obj = add_dep(obj.wrapped)
+                    added_deps.append(obj.__class__)
                 else:
                     obj = copy.deepcopy(obj)
-                deps.add(obj)
+                instances.add(obj)
 
             # save the updated set of dependencies
-            setattr(self, f"{attr}_instances", deps)
+            setattr(self, f"{attr}_instances", instances)
+
+        # synchronize dependencies
+        # this might remove deps that were present in self.deps already before this method is called
+        # but that were not added in the loop above
+        if only_update:
+            for cls in list(self.deps.keys()):
+                if cls not in added_deps:
+                    del self.deps[cls]
 
     def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> ArrayFunction:
         """
@@ -1650,18 +1675,23 @@ class TaskArrayFunction(ArrayFunction):
 
     def deferred_init(
         self,
-        instance_cache: dict,
-    ) -> None:
+        instance_cache: dict | None = None,
+    ) -> dict:
         """
         Controls the deferred part of the initialization process, first calling this instances
         :py:meth:`init_func` and then setting up dependencies.
         """
+        # call super, which instantiates the statically defined dependencies
+        instance_cache = super().deferred_init(instance_cache)
+
         # run this instance's init function which might update dependent classes
         if callable(self.init_func):
             self.init_func()
 
-        # call super, which instantiates the dependencies
-        super().deferred_init(instance_cache)
+        # instantiate dependencies again, potentially updating existing ones
+        instance_cache = self.create_dependencies(instance_cache, only_update=True)
+
+        return instance_cache
 
     def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> TaskArrayFunction:
         """

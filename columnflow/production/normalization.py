@@ -60,7 +60,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
     # do nothing for data
     if self.dataset_inst.is_data:
-        return reqs
+        return
 
     from columnflow.tasks.selection import MergeSelectionStats
     reqs["selection_stats"] = MergeSelectionStats.req(
