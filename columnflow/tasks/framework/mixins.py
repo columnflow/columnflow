@@ -790,6 +790,29 @@ class ShiftSourcesMixin(ConfigTask):
         return f"{len(self.shift_sources)}_{law.util.create_hash(sorted(self.shift_sources))}"
 
 
+class EventWeightMixin(ConfigTask):
+
+    @classmethod
+    def determine_allowed_shifts(cls, config_inst, params):
+        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
+
+        # add shifts introduced by event weights
+        if config_inst.has_aux("event_weights"):
+            for shift_insts in config_inst.x.event_weights.values():
+                allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+
+        # optionally also for weights defined by a dataset
+        if "dataset" in params:
+            requested_dataset = params.get("dataset")
+            if requested_dataset not in (None, law.NO_STR):
+                dataset_inst = config_inst.get_dataset(requested_dataset)
+                if dataset_inst.has_aux("event_weights"):
+                    for shift_insts in dataset_inst.x.event_weights.values():
+                        allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+
+        return allowed_shifts
+
+
 class ChunkedReaderMixin(AnalysisTask):
 
     def iter_chunked_reader(self, *args, **kwargs):

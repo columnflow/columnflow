@@ -12,7 +12,7 @@ import luigi
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
-    VariablesMixin, ShiftSourcesMixin,
+    VariablesMixin, ShiftSourcesMixin, EventWeightMixin,
 )
 from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -27,6 +27,7 @@ class PlotVariables(
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
+    EventWeightMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -173,14 +174,6 @@ class PlotShiftedVariables(
     RemoteWorkflow,
 ):
 
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    # default upstream dependency task classes
-    dep_MergeShiftedHistograms = MergeShiftedHistograms
-
-    # default plot function
-    plot_function_name = "columnflow.plotting.example.plot_shifted_variable"
-
     per_process = luigi.BoolParameter(
         default=False,
         significant=True,
@@ -193,6 +186,14 @@ class PlotShiftedVariables(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    # default plot function
+    plot_function_name = "columnflow.plotting.example.plot_shifted_variable"
+
+    # default upstream dependency task classes
+    dep_MergeShiftedHistograms = MergeShiftedHistograms
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting

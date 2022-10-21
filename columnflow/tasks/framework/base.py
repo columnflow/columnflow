@@ -499,12 +499,12 @@ class ShiftTask(ConfigTask):
     def determine_allowed_shifts(cls, config_inst, params):
         # for the basic shift task, only the shifts implemented by this task class are allowed
         # still call super for simplified mro control
-        shifts = super().determine_allowed_shifts(config_inst, params)
+        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
 
         # add class level shifts
-        shifts |= cls.shifts
+        allowed_shifts |= cls.shifts
 
-        return shifts
+        return allowed_shifts
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):

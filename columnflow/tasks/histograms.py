@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, ChunkedReaderMixin,
+    ShiftSourcesMixin, EventWeightMixin, ChunkedReaderMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -28,6 +28,7 @@ class CreateHistograms(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    EventWeightMixin,
     ChunkedReaderMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -188,6 +189,7 @@ class MergeHistograms(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    EventWeightMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

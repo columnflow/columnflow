@@ -171,8 +171,21 @@ config_2018.x.keep_columns = DotDict.wrap({
     },
 })
 
-# event weight columns
-config_2018.x.event_weights = ["normalization_weight", "pu_weight"]
+
+# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
+def get_shifts(*names):
+    return sum((
+        [
+            config_2018.get_shift(f"{name}_up"),
+            config_2018.get_shift(f"{name}_down"),
+        ]
+        for name in names
+    ), [])
+
+
+config_2018.x.event_weights = DotDict()
+config_2018.x.event_weights["normalization_weight"] = []
+config_2018.x.event_weights["pu_weight"] = get_shifts("minbias_xs")
 
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value
