@@ -45,7 +45,7 @@ def pu_weights_requires(self: Producer, reqs: dict) -> None:
     """
     # do nothing for data
     if self.dataset_inst.is_data:
-        return reqs
+        return
 
     from columnflow.tasks.external import CreatePileupWeights
     reqs["pu_weights"] = CreatePileupWeights.req(self.task)
@@ -57,9 +57,9 @@ def pu_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
     """
-    # set to None for data
+    self.pu_weights = None
+
     if self.dataset_inst.is_data:
-        self.pu_weights = None
         return
 
     self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))

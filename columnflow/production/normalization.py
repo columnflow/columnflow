@@ -83,14 +83,14 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
         - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
           processes known to the config of the task, with keys being process ids.
     """
-    # set to None for data
+    self.sum_weights_table = None
+    self.xs_table = None
+
     if self.dataset_inst.is_data:
-        self.selection_stats = None
-        self.xs_table = None
         return
 
     # load the selection stats
-    self.selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
+    selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
 
     # for the lookup tables below, determine the maximum process id
     process_insts = [
@@ -102,7 +102,7 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
 
     # create a event weight sum lookup table with all known processes
     sum_weights_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
-    for process_id, sum_weights in self.selection_stats["sum_mc_weight_per_process"].items():
+    for process_id, sum_weights in selection_stats["sum_mc_weight_per_process"].items():
         sum_weights_table[0, int(process_id)] = sum_weights
     self.sum_weights_table = sum_weights_table
 
