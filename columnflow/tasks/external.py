@@ -47,7 +47,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     @law.decorator.log
     @ensure_proxy
-    @law.decorator.safe_output
     def run(self):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):

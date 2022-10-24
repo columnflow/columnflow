@@ -15,7 +15,7 @@ ak = maybe_import("awkward")
     uses={"PV.npvs"},
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
 )
-def pu_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Based on the number of primary vertices, assigns each event pileup weights using the profile
     of pileup ratios at the py:attr:`pu_weights` attribute provided by the requires and setup
@@ -38,8 +38,8 @@ def pu_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@pu_weights.requires
-def pu_weights_requires(self: Producer, reqs: dict) -> None:
+@pu_weight.requires
+def pu_weight_requires(self: Producer, reqs: dict) -> None:
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
@@ -51,8 +51,8 @@ def pu_weights_requires(self: Producer, reqs: dict) -> None:
     reqs["pu_weights"] = CreatePileupWeights.req(self.task)
 
 
-@pu_weights.setup
-def pu_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+@pu_weight.setup
+def pu_weight_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     """
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
