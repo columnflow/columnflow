@@ -106,6 +106,12 @@ setup_columnflow() {
     #   CF_WORKER_KEEP_ALIVE
     #       Set to "false" when not already set, or when a remote ($CF_REMOTE_JOB) or CI environment
     #       ($CF_CI_JOB) is detected. Used in law.cfg.
+    #   CF_HTCONDOR_FLAVOR
+    #       The default htcondor flavor setting for the HTCondorWorkflow task.
+    #   CF_SLURM_FLAVOR
+    #       The default slurm flavor setting for the SlurmWorkflow task.
+    #   CF_SLURM_PARTITION
+    #       The default slurm partition setting for the SlurmWorkflow task.
     #   PATH
     #       Ammended PATH variable.
     #   PYTHONPATH
@@ -231,8 +237,8 @@ setup_columnflow() {
             cf_htcondor_flavor_default="cern"
         fi
         export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
-        export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
         export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
+        export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
     fi
 
 
