@@ -216,6 +216,27 @@ setup_columnflow() {
 
 
     #
+    # detect host-dependent variables
+    #
+
+    # default job flavor settings, used by tasks/framework/remote.py
+    local hname="$( hostname 2> /dev/null )"
+    if [ "$?" = "0" ]; then
+        # start with naf / maxwell cluster defaults
+        local cf_htcondor_flavor_default="naf"
+        local cf_slurm_flavor_default="maxwell"
+        local cf_slurm_partition_default="cms-uhh"
+        # lxplus
+        if [[ "${hname}" == lx*.cern.ch ]]; then
+            cf_htcondor_flavor_default="cern"
+        fi
+        export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
+        export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
+        export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
+    fi
+
+
+    #
     # law setup
     #
 
@@ -377,6 +398,9 @@ cf_setup_software_stack() {
     [ "${setup_name}" = "default" ] && setup_is_default="true"
     local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh"
     local pyv="3.9"
+
+    # empty the PYTHONPATH
+    export PYTHONPATH=""
 
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes

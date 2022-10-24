@@ -15,6 +15,11 @@ from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.util import real_path
 
 
+_default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
+_default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "maxwell")
+_default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
+
+
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
@@ -263,9 +268,6 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         self.transfer(bundle)
 
 
-_default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
-
-
 class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
     transfer_logs = luigi.BoolParameter(
@@ -392,13 +394,17 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             render=False,
         )
 
-        # use cc7 at CERN (http://batchdocs.web.cern.ch/batchdocs/local/submit.html#os-choice)
-        if self.htcondor_flavor == "cern":
-            config.custom_content.append(("requirements", '(OpSysAndVer =?= "CentOS7")'))
-
         # some htcondor setups requires a "log" config, but we can safely set it to /dev/null
         # if you are interested in the logs of the batch system itself, set a meaningful value here
         config.custom_content.append(("log", "/dev/null"))
+
+        # use cc7 at CERN (https://batchdocs.web.cern.ch/local/submit.html)
+        if self.htcondor_flavor == "cern":
+            config.custom_content.append(("requirements", '(OpSysAndVer =?= "CentOS7")'))
+
+        # same on naf with case insensitive comparison (https://confluence.desy.de/display/IS/BIRD)
+        if self.htcondor_flavor == "naf":
+            config.custom_content.append(("requirements", '(OpSysAndVer == "CentOS7")'))
 
         # max runtime
         config.custom_content.append(("+MaxRuntime", int(math.floor(self.max_runtime * 3600)) - 1))
@@ -469,10 +475,6 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         return True
 
 
-_default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
-_default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "naf")
-
-
 class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
     transfer_logs = luigi.BoolParameter(
@@ -493,13 +495,13 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
     )
     slurm_flavor = luigi.ChoiceParameter(
         default=_default_slurm_flavor,
-        choices=("naf", "cern"),
+        choices=("maxwell",),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf; default: '{_default_slurm_flavor}'",
+        f"maxwell; default: '{_default_slurm_flavor}'",
     )
 
-    exclude_params_branch = {"max_runtime", "slurm_flavor"}
+    exclude_params_branch = {"max_runtime", "slurm_partition", "slurm_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
     slurm_forward_env_variables = {
@@ -587,7 +589,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         config.custom_content.append(("nodes", 1))
 
         # custom, flavor dependent settings
-        if self.slurm_flavor == "naf":
+        if self.slurm_flavor == "maxwell":
             # extend kerberos privileges to afs on NAF
             if "kerberos_proxy_file" in config.input_files:
                 config.render_variables["cf_pre_setup_command"] = "aklog"
