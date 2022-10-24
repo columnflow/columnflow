@@ -415,26 +415,29 @@ def plot_shifted_variable(
         "up": "red",
         "down": "blue",
     }
-    for i, shift in enumerate(h_sum.axes["shift"]):
-        shift_label = config_inst.get_shift(shift).label
-        h = h_sum[{"shift": hist.loc(shift)}]
+    for i, shift_id in enumerate(h_sum.axes["shift"]):
+        shift_inst = config_inst.get_shift(shift_id)
+
+        h = h_sum[{"shift": hist.loc(shift_id)}]
         # assuming `nominal` always has shift id 0
         ratio_norm = h_sum[{"shift": hist.loc(0)}].values()
 
         diff = sum(h.values()) / sum(ratio_norm) - 1
-        label = config_inst.get_shift(shift).label + " ({0:+.2f}%)".format(diff * 100)
+        label = shift_inst.label
+        if not shift_inst.is_nominal:
+            label += " ({0:+.2f}%)".format(diff * 100)
 
-        plot_config[f"{shift}"] = {
+        plot_config[shift_inst.name] = {
             "method": "draw_hist",
             "hist": h,
             "kwargs": {
                 "norm": sum(h.values()) if shape_norm else 1,
                 "label": label,
-                "color": colors[shift_label.split("_")[-1]],
+                "color": colors[shift_inst.direction],
             },
             "ratio_kwargs": {
                 "norm": ratio_norm,
-                "color": colors[shift_label.split("_")[-1]],
+                "color": colors[shift_inst.direction],
             },
         }
 
