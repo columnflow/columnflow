@@ -112,6 +112,8 @@ setup_columnflow() {
     #       The default slurm flavor setting for the SlurmWorkflow task.
     #   CF_SLURM_PARTITION
     #       The default slurm partition setting for the SlurmWorkflow task.
+    #   CF_SETUP
+    #       A flag that is set to 1 after the setup was successful.
     #   PATH
     #       Ammended PATH variable.
     #   PYTHONPATH
@@ -129,6 +131,14 @@ setup_columnflow() {
     #       Set to $CF_BASE/.law.
     #   LAW_CONFIG_FILE
     #       Set to $CF_BASE/law.cfg.
+
+    # prevent repeated setups
+    if [ "${CF_SETUP}" = "1" ]; then
+        >&2 echo "columnflow was already succesfully setup"
+        >&2 echo "re-running the setup requires a new shell"
+        return "1"
+    fi
+
 
     #
     # prepare local variables
@@ -256,6 +266,9 @@ setup_columnflow() {
         # silently index
         law index -q
     fi
+
+    # finalize
+    export CF_SETUP="1"
 }
 
 cf_setup_interactive() {
