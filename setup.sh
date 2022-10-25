@@ -555,8 +555,6 @@ cf_init_submodule() {
     local base_path="${1}"
     local submodule_path="${2}"
 
-    echo "init ${base_path}/${submodule_path}"
-
     # do nothing in remote jobs
     [ "$CF_REMOTE_JOB" = "1" ] && return "0"
 
