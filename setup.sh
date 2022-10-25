@@ -524,7 +524,7 @@ EOF
         [ "$?" = "21" ] && show_version_warning "cf_dev"
 
         # initialze submodules
-        if [ -d "${CF_BASE}/.git" ]; then
+        if [ -e "${CF_BASE}/.git" ]; then
             local m
             for m in $( ls -1q "${CF_BASE}/modules" ); do
                 cf_init_submodule "${CF_BASE}" "modules/${m}"
@@ -555,11 +555,13 @@ cf_init_submodule() {
     local base_path="${1}"
     local submodule_path="${2}"
 
+    echo "init ${base_path}/${submodule_path}"
+
     # do nothing in remote jobs
     [ "$CF_REMOTE_JOB" = "1" ] && return "0"
 
     # do nothing when the path does not exist or it is not a submodule
-    if [ ! -d "${base_path}/${submodule_path}" ] || [ ! -f "${base_path}/${submodule_path}.git" ]; then
+    if [ ! -e "${base_path}/${submodule_path}" ]; then
         return "0"
     fi
 
