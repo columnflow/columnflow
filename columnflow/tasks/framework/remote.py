@@ -287,6 +287,12 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         description="number of CPUs to request; empty value leads to the cluster default setting; "
         "empty default",
     )
+    htcondor_gpus = luigi.IntParameter(
+        default=law.NO_INT,
+        significant=False,
+        description="number of GPUs to request; empty value leads to the cluster default setting; "
+        "empty default",
+    )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
         choices=("naf", "cern"),
@@ -412,6 +418,12 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         # request cpus
         if self.htcondor_cpus > 0:
             config.custom_content.append(("RequestCpus", self.htcondor_cpus))
+
+        # request gpus
+        if self.htcondor_gpus > 0:
+            # TODO: the exact setting might be flavor dependent in the future
+            # e.g. https://confluence.desy.de/display/IS/GPU+on+NAF
+            config.custom_content.append(("Request_GPUs", self.htcondor_gpus))
 
         # helper to return uris and a file pattern for replicated bundles
         reqs = self.htcondor_workflow_requires()
