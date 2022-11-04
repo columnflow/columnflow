@@ -23,10 +23,10 @@ from columnflow.util import DotDict, dev_sandbox
 class PlotVariables(
     ShiftTask,
     VariablesMixin,
-    CalibratorsMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
+    CalibratorsMixin,
     EventWeightMixin,
     ProcessPlotBase,
     law.LocalWorkflow,
