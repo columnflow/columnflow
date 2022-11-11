@@ -631,6 +631,15 @@ class VariablesMixin(ConfigTask):
 
         return params
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # if enabled, split names of multi-dimensional parameters into tuples using "*_vs_*"
+        self.variable_tuples = {
+            var_name: tuple(var_name.split("_vs_"))
+            for var_name in self.variables
+        }
+
     @property
     def variables_repr(self):
         if len(self.variables) == 1:
