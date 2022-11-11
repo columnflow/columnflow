@@ -81,6 +81,7 @@ Projects using columnflow
 - `hh2bbtautau <https://github.com/uhh-cms/hh2bbtautau>`__: HH → bb𝜏𝜏 analysis with CMS.
 - `hh2bbww <https://github.com/uhh-cms/hh2bbww>`__: HH → bbWW analysis with CMS.
 - `topmass <https://github.com/uhh-cms/topmass>`__: Top quark mass measurement with CMS.
+- `mttbar <https://github.com/uhh-cms/mttbar>`__: Search for heavy resonances in ttbar events with CMS.
 
 
 Development
