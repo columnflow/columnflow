@@ -222,13 +222,14 @@ def plot_all(
 def plot_variable_per_process(
     hists: OrderedDict,
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     yscale: str | None = "",
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
 
     # process_settings
     if not process_settings:
@@ -344,12 +345,14 @@ def plot_variable_per_process(
 def plot_variable_variants(
     hists: OrderedDict,
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
+
     plot_config = OrderedDict()
 
     # for updating labels of individual selector steps
@@ -366,6 +369,7 @@ def plot_variable_variants(
         }
 
     # setup style config
+
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
@@ -397,7 +401,7 @@ def plot_variable_variants(
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -405,6 +409,8 @@ def plot_shifted_variable(
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
+
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
 

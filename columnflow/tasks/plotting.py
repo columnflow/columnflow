@@ -84,7 +84,11 @@ class PlotVariables(
         import hist
 
         # prepare config objects
-        variable_inst = self.config_inst.get_variable(self.branch_data.variable)
+        variable_tuple = self.variable_tuples[self.branch_data.variable]
+        variable_insts = [
+            self.config_inst.get_variable(var_name)
+            for var_name in variable_tuple
+        ]
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
         process_insts = list(map(self.config_inst.get_process, self.processes))
@@ -96,10 +100,10 @@ class PlotVariables(
         # histogram data per process
         hists = {}
 
-        with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
+        with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].targets[variable_inst.name].load(formatter="pickle")
+                h_in = inp["collection"][0].targets[self.branch_data.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -149,11 +153,14 @@ class PlotVariables(
             )
 
             # call the plot function
+            if len(variable_insts) == 2:
+                self.plot_function_name = "columnflow.plotting.plot2d.plot_2d"
+
             fig = self.call_plot_func(
                 self.plot_function_name,
                 hists=hists,
                 config_inst=self.config_inst,
-                variable_inst=variable_inst,
+                variable_insts=variable_insts,
                 **self.get_plot_parameters(),
             )
 
