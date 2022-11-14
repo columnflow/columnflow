@@ -127,10 +127,10 @@ class CreateHistograms(
             weight = ak.Array(np.ones(len(events)))
             if self.dataset_inst.is_mc:
                 for column in self.config_inst.x.event_weights:
-                    weight = weight * events[Route(column).fields]
+                    weight = weight * Route(column).apply(events)
                 for column in self.dataset_inst.x("event_weights", []):
                     if has_ak_column(events, column):
-                        weight = weight * events[Route(column).fields]
+                        weight = weight * Route(column).apply(events)
                     else:
                         self.logger.warning_once(
                             "missing_dataset_weight",
