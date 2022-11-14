@@ -138,12 +138,12 @@ class CreateHistograms(
                         )
 
             # define and fill histograms, taking into account multiple axes
-            for key, var_names in self.variable_tuples:
+            for var_key, var_names in self.variable_tuples.items():
                 # get variable instances
                 variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
                 # create the histogram if not present yet
-                if key not in histograms:
+                if var_key not in histograms:
                     h = (
                         hist.Hist.new
                         .IntCat([], name="category", growth=True)
@@ -158,7 +158,7 @@ class CreateHistograms(
                             label=variable_inst.get_full_x_title(),
                         )
                     # enable weights and store it
-                    histograms[key] = h.Weight()
+                    histograms[var_key] = h.Weight()
 
                 # broadcast arrays so that each event can be filled for all its categories
                 fill_kwargs = {
@@ -177,7 +177,7 @@ class CreateHistograms(
                     fill_kwargs[variable_inst.name] = expr(events)
                 # broadcast and fill
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[key].fill(**dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")

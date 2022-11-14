@@ -211,7 +211,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         object_names = []
         patterns = []
-        lookup = list(names)
+        lookup = law.util.make_list(names)
         while lookup:
             name = lookup.pop(0)
             if has_obj(name):

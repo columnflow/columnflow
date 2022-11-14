@@ -80,34 +80,38 @@ class CreateCutflowHistograms(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
-        # define a list of variables to create the histograms for
-        variable_insts = [self.config_inst.get_variable(v) for v in self.variables]
-
-        # get the expression per variable and when it's a string, parse it to extract index lookups
+        # prepare expressions and histograms
         expressions = {}
-        for variable_inst in variable_insts:
-            expr = variable_inst.expression
-            if isinstance(expr, str):
-                route = Route(expr)
-                expr = functools.partial(route.apply, null_value=variable_inst.null_value)
-            expressions[variable_inst.name] = expr
-
-        # create histograms per variable
         histograms = {}
-        for variable_inst in variable_insts:
-            histograms[variable_inst.name] = (
-                hist.Hist.new
-                .IntCat([], name="category", growth=True)
-                .IntCat([], name="process", growth=True)
-                .StrCat([], name="step", growth=True)
-                .IntCat([], name="shift", growth=True)
-                .Var(
-                    variable_inst.bin_edges,
-                    name=variable_inst.name,
-                    label=variable_inst.get_full_x_title(),
+        for var_key, var_names in self.variable_tuples.items():
+            variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+
+            # get the expression per variable and when a string, parse it to extract index lookups
+            for variable_inst in variable_insts:
+                expr = variable_inst.expression
+                if isinstance(expr, str):
+                    route = Route(expr)
+                    expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                expressions[variable_inst.name] = expr
+
+            # create histogram of not already existing
+            if var_key not in histograms:
+                h = (
+                    hist.Hist.new
+                    .IntCat([], name="category", growth=True)
+                    .IntCat([], name="process", growth=True)
+                    .StrCat([], name="step", growth=True)
+                    .IntCat([], name="shift", growth=True)
                 )
-                .Weight()
-            )
+                # add variable axes
+                for variable_inst in variable_insts:
+                    h = h.Var(
+                        variable_inst.bin_edges,
+                        name=variable_inst.name,
+                        label=variable_inst.get_full_x_title(),
+                    )
+                # enable weights and store it
+                histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_reader(
             inputs["masks"].path,
@@ -121,27 +125,27 @@ class CreateCutflowHistograms(
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
 
-            for variable_inst in variable_insts:
-                var_name = variable_inst.name
+            for var_key, var_names in self.variable_tuples.items():
                 # helper to build the point for filling, except for the step which does
                 # not support broadcasting
                 def get_point(mask=Ellipsis):
-                    return {
-                        variable_inst.name: expressions[var_name](events)[mask],
+                    point = {
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
                         "shift": self.shift_inst.id,
                         "weight": events.normalization_weight[mask],
                     }
+                    for var_name in var_names:
+                        point[var_name] = expressions[var_name](events)[mask]
+                    return point
 
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_name].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
 
                 # fill all other steps
                 steps = self.selector_steps or arr.steps.fields
-
                 mask = True
                 for step in steps:
                     if step not in arr.steps.fields:
@@ -152,11 +156,11 @@ class CreateCutflowHistograms(
                     mask = mask & arr.steps[step]
                     fill_kwargs = get_point(mask)
                     arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                    histograms[var_name].fill(step=step, **dict(zip(fill_kwargs, arrays)))
+                    histograms[var_key].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
         # dump the histograms
-        for var_name in histograms.keys():
-            self.output()[var_name].dump(histograms[var_name], formatter="pickle")
+        for var_key in histograms.keys():
+            self.output()[var_key].dump(histograms[var_key], formatter="pickle")
 
 
 CreateCutflowHistogramsWrapper = wrapper_factory(
