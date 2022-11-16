@@ -12,15 +12,15 @@ import luigi
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
-    VariablesMixin, ShiftSourcesMixin, EventWeightMixin,
+    VariablesMixin, CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, ProcessPlotBase
+from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, PlotBase2d, ProcessPlotSettingMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox
 
 
-class PlotVariables(
+class PlotVariablesBase(
     ShiftTask,
     VariablesMixin,
     MLModelsMixin,
@@ -28,7 +28,8 @@ class PlotVariables(
     SelectorStepsMixin,
     CalibratorsMixin,
     EventWeightMixin,
-    ProcessPlotBase,
+    CategoriesMixin,
+    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -39,9 +40,6 @@ class PlotVariables(
 
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms
-
-    # default plot function
-    plot_function_name = "columnflow.plotting.example.plot_variable_per_process"
 
     def create_branch_map(self):
         return [
@@ -152,12 +150,20 @@ class PlotVariables(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            # call the plot function
-            if len(variable_insts) == 2:
-                self.plot_function_name = "columnflow.plotting.plot2d.plot_2d"
+            # determine the correct plot function for this variable (TODO: there is probably a better way to do this?)
+            plot_function_name = self.plot_function_name
+            if len(variable_insts) == 1:
+                if "plot_function_name_1d" in dir(self):
+                    plot_function_name = self.plot_function_name_1d
+            elif len(variable_insts) == 2:
+                if "plot_function_name_2d" in dir(self):
+                    plot_function_name = self.plot_function_name_2d
+            else:
+                raise NotImplementedError("Plotting is only enabled for histograms with 1 or 2 variables")
 
+            # call the plot function
             fig = self.call_plot_func(
-                self.plot_function_name,
+                plot_function_name,
                 hists=hists,
                 config_inst=self.config_inst,
                 variable_insts=variable_insts,
@@ -169,6 +175,52 @@ class PlotVariables(
                 outp.dump(fig, formatter="mpl")
 
 
+class PlotVariables1d(
+    PlotVariablesBase,
+    PlotBase1d,
+    ProcessPlotSettingMixin,
+):
+
+    plot_function_name = luigi.Parameter(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+    )
+
+
+class PlotVariables2d(
+    PlotVariablesBase,
+    PlotBase2d,
+    ProcessPlotSettingMixin,
+):
+
+    plot_function_name = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d''",
+    )
+
+
+class PlotVariables(
+    PlotVariablesBase,
+    PlotBase1d,
+    PlotBase2d,
+    ProcessPlotSettingMixin,
+):
+
+    plot_function_name_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+    )
+
+    plot_function_name_2d = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+    )
+
+
 class PlotShiftedVariables(
     VariablesMixin,
     ShiftSourcesMixin,
@@ -176,7 +228,8 @@ class PlotShiftedVariables(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    ProcessPlotBase,
+    CategoriesMixin,
+    ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

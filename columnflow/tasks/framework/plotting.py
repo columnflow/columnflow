@@ -11,7 +11,7 @@ import law
 import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask
-from columnflow.tasks.framework.mixins import CategoriesMixin, DatasetsProcessesMixin
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
 from columnflow.util import test_float
 
 
@@ -20,6 +20,11 @@ class PlotBase(AnalysisTask):
     Base class for all plotting tasks.
     """
 
+    plot_function_name = luigi.Parameter(
+        default="",
+        significant=False,
+        description="name of the plot function; empty default",
+    )
     file_types = law.CSVParameter(
         default=("pdf",),
         significant=True,
@@ -153,7 +158,7 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
 PlotBase.view_output_plots = view_output_plots
 
 
-class PlotBase1D(PlotBase):
+class PlotBase1d(PlotBase):
     """
     Base class for plotting tasks creating 1-dimensional plots.
     """
@@ -189,10 +194,9 @@ class PlotBase1D(PlotBase):
         return params
 
 
-class ProcessPlotBase(
-    CategoriesMixin,
+class ProcessPlotSettingMixin(
     DatasetsProcessesMixin,
-    PlotBase1D,
+    PlotBase,
 ):
     """
     Base class for tasks creating plots where contributions of different processes are shown.
@@ -257,7 +261,7 @@ class ProcessPlotBase(
         return parts
 
 
-class PlotBase2D(PlotBase):
+class PlotBase2d(PlotBase):
     """
     Base class for plotting tasks creating 2-dimensional plots.
     """
@@ -266,7 +270,7 @@ class PlotBase2D(PlotBase):
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
         significant=False,
-        description="string parameter to define the z-axis scale of the plot in the upper panel; "
+        description="string parameter to define the z-axis scale of the plot; "
         "choices: NO_STR,linear,log; no default",
     )
 
