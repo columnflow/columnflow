@@ -530,6 +530,16 @@ class DotDict(OrderedDict):
     def __setattr__(self, attr: str, value: Any) -> None:
         self[attr] = value
 
+    def cautious_update(self, other: dict) -> None:
+        """
+        Updates DotDict, but only if no value is overwritten. Throws error otherwise.
+        """
+        key_replicas = set(self.keys()) & set(other.keys())
+        if not key_replicas:
+            self.update(other)
+        else:
+            raise KeyError(f"'{self.__class__.__name__}' object already has attributes {key_replicas}")
+
     def copy(self) -> DotDict:
         """"""
         return self.__class__(self)

@@ -12,7 +12,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
-from columnflow.util import test_float
+from columnflow.util import test_float, DotDict
 
 
 class PlotBase(AnalysisTask):
@@ -52,9 +52,9 @@ class PlotBase(AnalysisTask):
         description="when True, no CMS logo is drawn; default: False",
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
-        params = {}
+        params = DotDict({})
 
         params["skip_legend"] = self.skip_legend
         params["skip_cms"] = self.skip_cms
@@ -188,14 +188,16 @@ class PlotBase1d(PlotBase):
         "default: False",
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
-        params["skip_ratio"] = self.skip_ratio
-        params["yscale"] = None if self.yscale == law.NO_STR else self.yscale
-        params["shape_norm"] = self.shape_norm
-
+        params_to_add = {
+            "skip_ratio": self.skip_ratio,
+            "yscale": None if self.yscale == law.NO_STR else self.yscale,
+            "shape_norm": self.shape_norm,
+        }
+        params.cautious_update(params_to_add)
         return params
 
 
@@ -217,7 +219,7 @@ class ProcessPlotSettingMixin(
         brace_expand=True,
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
@@ -232,10 +234,12 @@ class ProcessPlotSettingMixin(
                 value = False
             return (key, value)
 
-        params["process_settings"] = {
+        process_settings = {
             proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
             for proc_settings in self.process_settings
         }
+        params.cautious_update({"process_settings": process_settings})
+
         return params
 
     @classmethod
@@ -284,10 +288,13 @@ class PlotBase2d(PlotBase):
         "choices: NO_STR,linear,log; no default",
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
-        params["zscale"] = None if self.zscale == law.NO_STR else self.zscale
+        params_to_add = {
+            "zscale": None if self.zscale == law.NO_STR else self.zscale,
+        }
+        params.cautious_update(params_to_add)
 
         return params
