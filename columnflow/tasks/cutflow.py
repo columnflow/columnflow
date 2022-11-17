@@ -14,7 +14,7 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedReaderMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, ProcessPlotSettingMixin
+from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, PlotBase2d, ProcessPlotSettingMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -185,7 +185,11 @@ class PlotCutflow(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
-    plot_function_name = "columnflow.plotting.example.plot_cutflow"
+    plot_function_name_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_cutflow",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_cutflow'",
+    )
 
     selector_steps_order_sensitive = True
 
@@ -196,7 +200,7 @@ class PlotCutflow(
         params = super().get_plot_parameters()
 
         # no ratio plot implemented: disable ratio plot for `plot_cutflow`
-        if self.plot_function_name == "columnflow.plotting.example.plot_cutflow":
+        if self.plot_function_name_1d == "columnflow.plotting.example.plot_cutflow":
             params["skip_ratio"] = True
 
         return params
@@ -317,7 +321,7 @@ class PlotCutflow(
 
             # call the plot function
             fig = self.call_plot_func(
-                self.plot_function_name,
+                self.plot_function_name_1d,
                 hists=hists,
                 config_inst=self.config_inst,
                 **self.get_plot_parameters(),
@@ -335,24 +339,17 @@ PlotCutflowWrapper = wrapper_factory(
 )
 
 
-class PlotCutflowVariables(
+class PlotCutflowVariablesBase(
     ShiftTask,
     VariablesMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    PlotBase1d,
-    ProcessPlotSettingMixin,
+    CategoriesMixin,
+    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
 
-    per_plot = luigi.ChoiceParameter(
-        choices=("processes", "steps"),
-        default="processes",
-        description="what to show per plot; choices: 'processes' (one plot per selection step, all "
-        "processes in one plot); 'steps' (one plot per process, all selection steps in one plot); "
-        "default: processes",
-    )
     only_final_step = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -367,10 +364,6 @@ class PlotCutflowVariables(
     initial_step = "Initial"
 
     default_variables = ("cf_*",)
-
-    # default plot functions
-    plot_function_name_per_process = "columnflow.plotting.example.plot_variable_per_process"
-    plot_function_name_per_step = "columnflow.plotting.example.plot_variable_variants"
 
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
@@ -402,7 +395,7 @@ class PlotCutflowVariables(
         ]
 
     def workflow_requires(self):
-        reqs = super(PlotCutflowVariables, self).workflow_requires()
+        reqs = super(PlotCutflowVariablesBase, self).workflow_requires()
         reqs["hists"] = [
             self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
@@ -416,23 +409,12 @@ class PlotCutflowVariables(
         }
 
     def output(self):
-        b = self.branch_data
-        if self.per_plot == "processes":
-            return law.SiblingFileCollection({
-                s: [
-                    self.local_target(name)
-                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
-                ]
-                for i, s in enumerate(self.chosen_steps)
-            })
-        else:  # per_plot == "steps"
-            return law.SiblingFileCollection({
-                p: [
-                    self.local_target(name)
-                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}")
-                ]
-                for p in self.processes
-            })
+        # To be implemented by daughter tasks
+        return None
+
+    def run_postprocess(self, hists, variable_insts, process_insts):
+        # to be implemented by daughter tasks
+        pass
 
     @law.decorator.log
     @PlotBase.view_output_plots
@@ -440,7 +422,11 @@ class PlotCutflowVariables(
         import hist
 
         # prepare config objects
-        variable_inst = self.config_inst.get_variable(self.branch_data.variable)
+        variable_tuple = self.variable_tuples[self.branch_data.variable]
+        variable_insts = [
+            self.config_inst.get_variable(var_name)
+            for var_name in variable_tuple
+        ]
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
         process_insts = list(map(self.config_inst.get_process, self.processes))
@@ -452,10 +438,10 @@ class PlotCutflowVariables(
         # histogram data per process
         hists = {}
 
-        with self.publish_step(f"plotting {variable_inst.name} in {category_inst.name}"):
+        with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp[variable_inst.name].load(formatter="pickle")
+                h_in = inp[self.branch_data.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -498,46 +484,141 @@ class PlotCutflowVariables(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            outputs = self.output()
-            if self.per_plot == "processes":
-                for step in self.chosen_steps:
-                    # sort hists by process order
-                    step_hists = OrderedDict(
-                        (process_inst, hists[process_inst][{"step": hist.loc(step)}])
-                        for process_inst in sorted(hists, key=process_insts.index)
-                    )
+            # call a postprocess function that produces outputs based on the implementation of the daughter task
+            self.run_postprocess(
+                hists=hists,
+                variable_insts=variable_insts,
+                process_insts=process_insts,  # TODO: should be manageable to remove
+            )
 
-                    # call the plot function
-                    fig = self.call_plot_func(
-                        self.plot_function_name_per_process,
-                        hists=step_hists,
-                        config_inst=self.config_inst,
-                        variable_inst=variable_inst,
-                        style_config={"legend_cfg": {"title": f"Step '{step}'"}},
-                        **self.get_plot_parameters(),
-                    )
 
-                    # save the plot
-                    for outp in outputs[step]:
-                        outp.dump(fig, formatter="mpl")
+class PlotCutflowVariables1d(
+    PlotCutflowVariablesBase,
+    PlotBase1d,
+    ProcessPlotSettingMixin,
+):
 
-            else:  # per_plot == "steps"
-                for process_inst, h in hists.items():
-                    process_hists = OrderedDict(
-                        (step, h[{"step": hist.loc(step)}])
-                        for step in self.chosen_steps
-                    )
+    per_plot = luigi.ChoiceParameter(
+        choices=("processes", "steps"),
+        default="processes",
+        description="what to show per plot; choices: 'processes' (one plot per selection step, all "
+        "processes in one plot); 'steps' (one plot per process, all selection steps in one plot); "
+        "default: processes",
+    )
+    # TODO: combine these hard-coded plot function name with law parameter
+    plot_function_name_per_process = "columnflow.plotting.example.plot_variable_per_process"
+    plot_function_name_per_step = "columnflow.plotting.example.plot_variable_variants"
 
-                    # call the plot function
-                    fig = self.call_plot_func(
-                        self.plot_function_name_per_step,
-                        hists=process_hists,
-                        config_inst=self.config_inst,
-                        variable_inst=variable_inst,
-                        style_config={"legend_cfg": {"title": process_inst.label}},
-                        **self.get_plot_parameters(),
-                    )
+    def output(self):
+        b = self.branch_data
+        if self.per_plot == "processes":
+            return law.SiblingFileCollection({
+                s: [
+                    self.local_target(name)
+                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
+                ]
+                for i, s in enumerate(self.chosen_steps)
+            })
+        else:  # per_plot == "steps"
+            return law.SiblingFileCollection({
+                p: [
+                    self.local_target(name)
+                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}")
+                ]
+                for p in self.processes
+            })
 
-                    # save the plot
-                    for outp in outputs[process_inst.name]:
-                        outp.dump(fig, formatter="mpl")
+    def run_postprocess(self, hists, variable_insts, process_insts):
+        import hist
+
+        if len(variable_insts) != 1:
+            raise Exception(f"Task {self.cls_name} is only working for single variables.")
+
+        outputs = self.output()
+        if self.per_plot == "processes":
+            for step in self.chosen_steps:
+                # sort hists by process order
+                step_hists = OrderedDict(
+                    (process_inst, hists[process_inst][{"step": hist.loc(step)}])
+                    for process_inst in sorted(hists, key=process_insts.index)
+                )
+
+                # call the plot function
+                fig = self.call_plot_func(
+                    self.plot_function_name_per_process,
+                    hists=step_hists,
+                    config_inst=self.config_inst,
+                    variable_insts=variable_insts,
+                    style_config={"legend_cfg": {"title": f"Step '{step}'"}},
+                    **self.get_plot_parameters(),
+                )
+
+                # save the plot
+                for outp in outputs[step]:
+                    outp.dump(fig, formatter="mpl")
+
+        else:  # per_plot == "steps"
+            for process_inst, h in hists.items():
+                process_hists = OrderedDict(
+                    (step, h[{"step": hist.loc(step)}])
+                    for step in self.chosen_steps
+                )
+
+                # call the plot function
+                fig = self.call_plot_func(
+                    self.plot_function_name_per_step,
+                    hists=process_hists,
+                    config_inst=self.config_inst,
+                    variable_insts=variable_insts,
+                    style_config={"legend_cfg": {"title": process_inst.label}},
+                    **self.get_plot_parameters(),
+                )
+
+                # save the plot
+                for outp in outputs[process_inst.name]:
+                    outp.dump(fig, formatter="mpl")
+
+
+class PlotCutflowVariables2d(
+    PlotCutflowVariablesBase,
+    PlotBase2d,
+    ProcessPlotSettingMixin,
+):
+
+    def output(self):
+        b = self.branch_data
+
+        outp = {
+            f"{p}_{s}": [
+                self.local_target(name)
+                for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}__step{i}_{s}")
+            ]
+            for p in self.processes
+            for i, s in enumerate(self.chosen_steps)
+        }
+        return law.SiblingFileCollection(outp)
+
+    def run_postprocess(self, hists, variable_insts, process_insts):
+        import hist
+
+        if len(variable_insts) != 2:
+            raise Exception(f"Task {self.cls_name} is only working for variable pairs.")
+
+        outputs = self.output()
+
+        for step in self.chosen_steps:
+            for process_inst, h in hists.items():
+                h_step = {process_inst: h[{"step": hist.loc(step)}]}
+
+                # call the plot function
+                fig = self.call_plot_func(
+                    self.plot_function_name_2d,
+                    hists=h_step,
+                    config_inst=self.config_inst,
+                    variable_insts=variable_insts,
+                    **self.get_plot_parameters(),
+                )
+
+                # save the plot
+                for outp in outputs[f"{process_inst.name}_{step}"]:
+                    outp.dump(fig, formatter="mpl")
