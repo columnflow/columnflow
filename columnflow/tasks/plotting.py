@@ -150,16 +150,16 @@ class PlotVariablesBase(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            # determine the correct plot function for this variable (TODO: there is probably a better way to do this?)
-            plot_function_name = self.plot_function_name
-            if len(variable_insts) == 1:
-                if "plot_function_name_1d" in dir(self):
-                    plot_function_name = self.plot_function_name_1d
-            elif len(variable_insts) == 2:
-                if "plot_function_name_2d" in dir(self):
-                    plot_function_name = self.plot_function_name_2d
-            else:
-                raise NotImplementedError("Plotting is only enabled for histograms with 1 or 2 variables")
+            # determine the correct plot function for this variable
+            plot_function_name = (
+                self.plot_function_name_1d if len(variable_insts) == 1 and "plot_function_name_1d" in dir(self) else
+                self.plot_function_name_2d if len(variable_insts) == 2 and "plot_function_name_2d" in dir(self) else
+                None
+            )
+            if not plot_function_name:
+                raise NotImplementedError(
+                    f"No Plotting function for {len(variable_insts)} variables implemented of task {self.cls_name}",
+                )
 
             # call the plot function
             fig = self.call_plot_func(
@@ -181,11 +181,7 @@ class PlotVariables1d(
     ProcessPlotSettingMixin,
 ):
 
-    plot_function_name = luigi.Parameter(
-        default="columnflow.plotting.example.plot_variable_per_process",
-        significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
-    )
+    pass
 
 
 class PlotVariables2d(
@@ -194,34 +190,10 @@ class PlotVariables2d(
     ProcessPlotSettingMixin,
 ):
 
-    plot_function_name = luigi.Parameter(
-        default="columnflow.plotting.plot2d.plot_2d",
-        significant=False,
-        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d''",
-    )
+    pass
 
 
-class PlotVariables(
-    PlotVariablesBase,
-    PlotBase1d,
-    PlotBase2d,
-    ProcessPlotSettingMixin,
-):
-
-    plot_function_name_1d = luigi.Parameter(
-        default="columnflow.plotting.example.plot_variable_per_process",
-        significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
-    )
-
-    plot_function_name_2d = luigi.Parameter(
-        default="columnflow.plotting.plot2d.plot_2d",
-        significant=False,
-        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
-    )
-
-
-class PlotShiftedVariables(
+class PlotShiftedVariables1d(
     VariablesMixin,
     ShiftSourcesMixin,
     MLModelsMixin,
@@ -229,6 +201,7 @@ class PlotShiftedVariables(
     SelectorStepsMixin,
     CalibratorsMixin,
     CategoriesMixin,
+    PlotBase1d,
     ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,

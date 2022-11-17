@@ -163,6 +163,11 @@ class PlotBase1d(PlotBase):
     Base class for plotting tasks creating 1-dimensional plots.
     """
 
+    plot_function_name_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+    )
     skip_ratio = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -266,6 +271,11 @@ class PlotBase2d(PlotBase):
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
+    plot_function_name_2d = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+    )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
