@@ -33,6 +33,7 @@ class PlotVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    exclude_index = True
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 

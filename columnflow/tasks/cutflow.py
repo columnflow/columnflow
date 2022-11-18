@@ -349,6 +349,7 @@ class PlotCutflowVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    exclude_index = True
 
     only_final_step = luigi.BoolParameter(
         default=False,
@@ -607,6 +608,8 @@ class PlotCutflowVariables2d(
         outputs = self.output()
 
         for step in self.chosen_steps:
+            # TODO: implement a 'per_process' parameter similar to PlotShiftedVariables
+            #       (maybe as parameter in ProcessPlotSettingMixin, since we could also use this in PlotVariables)
             for process_inst, h in hists.items():
                 h_step = {process_inst: h[{"step": hist.loc(step)}]}
 
@@ -616,6 +619,7 @@ class PlotCutflowVariables2d(
                     hists=h_step,
                     config_inst=self.config_inst,
                     variable_insts=variable_insts,
+                    style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
 

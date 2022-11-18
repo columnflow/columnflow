@@ -287,6 +287,12 @@ class PlotBase2d(PlotBase):
         description="string parameter to define the z-axis scale of the plot; "
         "choices: NO_STR,linear,log; no default",
     )
+    shape_norm = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, the overall bin content is normalized on its integral; "
+        "default: False",
+    )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
@@ -294,6 +300,7 @@ class PlotBase2d(PlotBase):
 
         params_to_add = {
             "zscale": None if self.zscale == law.NO_STR else self.zscale,
+            "shape_norm": self.shape_norm,
         }
         params.cautious_update(params_to_add)
 
