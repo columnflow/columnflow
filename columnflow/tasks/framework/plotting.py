@@ -20,11 +20,6 @@ class PlotBase(AnalysisTask):
     Base class for all plotting tasks.
     """
 
-    plot_function_name = luigi.Parameter(
-        default="",
-        significant=False,
-        description="name of the plot function; empty default",
-    )
     file_types = law.CSVParameter(
         default=("pdf",),
         significant=True,
