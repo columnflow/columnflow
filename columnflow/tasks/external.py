@@ -129,7 +129,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
                 # measure the time required to perform the stat query
                 logger.debug(f"checking fs {fs} for lfn {lfn}")
-                input_file = target_cls(lfn, fs=fs)
+                input_file = target_cls(lfn.lstrip(os.sep) if is_local else lfn, fs=fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
