@@ -52,35 +52,33 @@ for proc, color in colors.items():
 # add datasets we need to study
 dataset_names = [
     # DATA
-    # "data_e_b",
-    # "data_e_c",
-    # "data_e_d",
-    # "data_e_e",
-    # "data_e_f",
-    # "data_mu_b",
-    # "data_mu_c",
-    # "data_mu_d",
-    # "data_mu_e",
-    # "data_mu_f",
+    "data_e_b",
+    "data_e_c",
+    "data_e_d",
+    "data_e_e",
+    "data_e_f",
+    "data_mu_b",
+    "data_mu_c",
+    "data_mu_d",
+    "data_mu_e",
+    "data_mu_f",
     # TTbar
-    "tt_sl_powheg",  # only one available rn
-    # "tt_dl_powheg",
-    # "tt_fh_powheg",
+    "tt_sl_powheg",
+    "tt_dl_powheg",
+    "tt_fh_powheg",
     # SingleTop
-    # "st_tchannel_t_powheg",
-    # "st_tchannel_tbar_powheg",
-    # "st_twchannel_t_powheg",
-    # "st_twchannel_tbar_powheg",
-    # "st_schannel_lep_amcatnlo",
-    # "st_schannel_had_amcatnlo",
+    "st_tchannel_t_powheg",
+    "st_tchannel_tbar_powheg",
+    "st_twchannel_t_powheg",
+    "st_twchannel_tbar_powheg",
+    "st_schannel_lep_amcatnlo",
+    "st_schannel_had_amcatnlo",
 ]
 for dataset_name in dataset_names:
     dataset = config_2017.add_dataset(campaign_run2_2017.get_dataset(dataset_name))
 
-    # reduce n_files to max. 2 for testing purposes (TODO switch to full dataset)
+    # reduce n_files to max. 2 for testing purposes
     for k in dataset.info.keys():
-        # if dataset.name == "ggHH_kl_1_kt_1_sl_hbbhww_powheg":
-        #    continue
         if dataset[k].n_files > 2:
             dataset[k].n_files = 2
 
@@ -119,8 +117,8 @@ config_2017.set_aux("category_groups", {
 # variable groups for conveniently looping over certain variables
 # (used during plotting)
 config_2017.set_aux("variable_groups", {
-    "default": ["n_jet", "n_muon", "n_electron", "ht", "jet1_pt"],  # n_deepjet, ....
-    "cutflow": ["cf_jet1_pt", "cf_jet4_pt", "cf_n_jet", "cf_n_electron", "cf_n_muon"],  # cf_n_deepjet
+    "default": ["n_jet", "n_muon", "n_electron", "ht", "jet1_pt"],
+    "cutflow": ["cf_jet1_pt", "cf_jet4_pt", "cf_n_jet", "cf_n_electron", "cf_n_muon"],
 })
 
 # shift groups for conveniently looping over certain shifts
@@ -132,7 +130,7 @@ config_2017.set_aux("shift_groups", {
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 config_2017.set_aux("selector_step_groups", {
-    "default": ["Lepton", "Jet", "Bjet", "Trigger"],
+    "default": ["Lepton", "Jet", "Bjet"],
 })
 
 config_2017.set_aux("selector_step_labels", {
@@ -189,8 +187,6 @@ config_2017.set_aux("keep_columns", DotDict.wrap({
         "LHEPdfWeight", "LHEScaleWeight",
         # object properties
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB",
-        "Bjet.pt", "Bjet.eta", "Bjet.phi", "Bjet.mass", "Bjet.btagDeepFlavB",
-        # "Muon.*", "Electron.*", "MET.*",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass",
         "Electron.pt", "Electron.eta", "Electron.phi", "Electron.mass",
         "MET.pt", "MET.phi",
@@ -202,20 +198,12 @@ config_2017.set_aux("keep_columns", DotDict.wrap({
     },
 }))
 
-# event weight columns
-# config_2017.set_aux("event_weights", ["normalization_weight", "pu_weight"])
 # event weight columns as keys in an ordered dict, mapped to shift instances they depend on
 get_shifts = lambda *names: sum(([config_2017.get_shift(f"{name}_up"),
                                  config_2017.get_shift(f"{name}_down")] for name in names), [])
 config_2017.x.event_weights = DotDict()
 config_2017.x.event_weights["normalization_weight"] = []
 config_2017.x.event_weights["pu_weight"] = get_shifts("minbias_xs")
-#
-# TODO: check that pdf/scale weights work for all cases
-# for unc in ["mur", "muf", "scale", "pdf", "alpha"]:
-#    config_2017.x.event_weights[unc] = get_shifts(unc)
-# TODO: enable different cases for number of pdf/scale weights
-# config_2017.set_aux("event_weights", ["normalization_weight", "pu_weight", "scale_weight", "pdf_weight"])
 
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value

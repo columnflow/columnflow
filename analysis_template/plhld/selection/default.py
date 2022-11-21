@@ -58,19 +58,13 @@ def jet_selection(
     bjet_mask = (jet_mask) & (events.Jet.btagDeepFlavB >= wp_med)
     bjet_sel = ak.sum(bjet_mask, axis=1) >= 1
 
-    # sort jets after b-score and define b-jets as the two b-score leading jets
-    bjet_indices = masked_sorted_indices(jet_mask, events.Jet.btagDeepFlavB)[:, :2]
-
-    # lightjets are the remaining jets (TODO: b-score sorted but should be pt-sorted?)
-    lightjet_indices = masked_sorted_indices(jet_mask, events.Jet.btagDeepFlavB)[:, 2:]
-
     # example column: high jet multiplicity region (>=6 jets)
     events = set_ak_column(events, "jet_high_multiplicity", ak.sum(jet_mask, axis=1) >= 6)
 
     # build and return selection results plus new columns
     return events, SelectionResult(
         steps={"Jet": jet_sel, "Bjet": bjet_sel},
-        objects={"Jet": {"Jet": jet_indices, "Bjet": bjet_indices, "Lightjet": lightjet_indices}},
+        objects={"Jet": {"Jet": jet_indices}},
     )
 
 
@@ -85,22 +79,18 @@ def lepton_selection(
         **kwargs,
 ) -> Tuple[ak.Array, SelectionResult]:
     # plc2hldr lepton selection
-    # - require exactly 1 lepton (e or mu) with pt_e>28 / pt_mu>25, eta<2.4 and tight ID
-    # - veto additional leptons (TODO define exact cuts)
-    # - require that events are triggered by SingleMu or SingleEle trigger
+    # - require exactly 1 lepton (e or mu) with pt>30, eta<2.4 and tight ID
 
     # Lepton definition for this analysis
-    e_mask = (events.Electron.pt > 28) & (abs(events.Electron.eta) < 2.4) & (events.Electron.cutBased == 4)
+    e_mask = (events.Electron.pt > 30) & (abs(events.Electron.eta) < 2.4) & (events.Electron.cutBased == 4)
     mu_mask = (
-        (events.Muon.pt > 25) &
+        (events.Muon.pt > 30) &
         (abs(events.Muon.eta) < 2.4) &
         (events.Muon.tightId) &
         (events.Muon.pfRelIso04_all < 0.15)
     )
 
     lep_sel = ak.sum(e_mask, axis=-1) + ak.sum(mu_mask, axis=-1) == 1
-    # e_sel = (ak.sum(e_mask, axis=-1) == 1) & (ak.sum(mu_mask, axis=-1) == 0)
-    mu_sel = (ak.sum(e_mask, axis=-1) == 0) & (ak.sum(mu_mask, axis=-1) == 1)
 
     # determine the masked lepton indices
     e_indices = masked_sorted_indices(e_mask, events.Electron.pt)
@@ -110,7 +100,6 @@ def lepton_selection(
     return events, SelectionResult(
         steps={
             "Lepton": lep_sel,
-            "Muon": mu_sel,  # for comparing results with Msc Analysis
         },
         objects={"Electron": {"Electron": e_indices}, "Muon": {"Muon": mu_indices}},
     )

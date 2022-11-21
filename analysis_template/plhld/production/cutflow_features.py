@@ -20,7 +20,7 @@ ak = maybe_import("awkward")
 )
 def cutflow_features(self: Selector, events: ak.Array, results: SelectionResult, **kwargs) -> ak.Array:
 
-    # determine jet pt before applying jet pt cut (and ideally after applying eta cut?)
+    # determine jet pt before applying jet pt cut
     jet_indices = ak.argsort(events.Jet.pt, ascending=False)
     jets = events.Jet[jet_indices]
     for i in range(4):

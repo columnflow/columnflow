@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Configuration of the HH -> bbWW analysis.
+Configuration of the plc2hldr analysis.
 """
 
 import os
@@ -49,4 +49,3 @@ analysis_plhld.set_aux("config_groups", {})
 
 # trailing imports for different configs
 import plhld.config.config_2017  # noqa
-# import plhld.config.config_2018  # noqa

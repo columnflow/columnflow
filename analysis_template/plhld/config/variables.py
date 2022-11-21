@@ -88,38 +88,6 @@ def add_variables(config: od.Config) -> None:
             x_title=r"Jet %i mass" % (i + 1),
         )
 
-    # Bjets (2 b-score leading jets)
-    for i in range(2):
-        config.add_variable(
-            name=f"bjet{i+1}_pt",
-            expression=f"Bjet.pt[:,{i}]",
-            null_value=EMPTY_FLOAT,
-            binning=(40, 0., 400.),
-            unit="GeV",
-            x_title=r"Bjet %i $p_{T}$" % (i + 1),
-        )
-        config.add_variable(
-            name=f"bjet{i+1}_eta",
-            expression=f"Bjet.eta[:,{i}]",
-            null_value=EMPTY_FLOAT,
-            binning=(50, 0., 5),
-            x_title=r"Bjet %i $\eta$" % (i + 1),
-        )
-        config.add_variable(
-            name=f"bjet{i+1}_phi",
-            expression=f"Jet.phi[:,{i}]",
-            null_value=EMPTY_FLOAT,
-            binning=(40, -3.2, 3.2),
-            x_title=r"Bjet %i $\phi$" % (i + 1),
-        )
-        config.add_variable(
-            name=f"bjet{i+1}_mass",
-            expression=f"Bjet.mass[:,{i}]",
-            null_value=EMPTY_FLOAT,
-            binning=(40, -3.2, 3.2),
-            x_title=r"Bjet %i mass" % (i + 1),
-        )
-
     # Leptons
     for obj in ["Electron", "Muon"]:
         config.add_variable(
@@ -181,8 +149,6 @@ def add_variables(config: od.Config) -> None:
         binning=(40, 0, 5),
         x_title=r"$\Delta R(j_{1},j_{2})$",
     )
-
-    # Gen particles
 
     # cutflow variables
     config.add_variable(

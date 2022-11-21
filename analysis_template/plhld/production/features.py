@@ -15,7 +15,6 @@ from plhld.selection.general import jet_energy_shifts
 ak = maybe_import("awkward")
 coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents.methods.nanoaod")
-# from coffea.nanoevents.methods.nanoaod import behavior
 
 
 @producer(
