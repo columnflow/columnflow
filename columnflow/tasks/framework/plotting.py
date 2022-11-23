@@ -12,7 +12,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
-from columnflow.util import test_float, DotDict
+from columnflow.util import test_float, DotDict, dict_add_strict
 
 
 class PlotBase(AnalysisTask):
@@ -50,10 +50,8 @@ class PlotBase(AnalysisTask):
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = DotDict({})
-
-        params["skip_legend"] = self.skip_legend
-        params["skip_cms"] = self.skip_cms
-
+        dict_add_strict(params, "skip_legend", self.skip_legend)
+        dict_add_strict(params, "skip_cms", self.skip_cms)
         return params
 
     def get_plot_names(self, name: str) -> list[str]:
@@ -186,13 +184,9 @@ class PlotBase1d(PlotBase):
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        params_to_add = {
-            "skip_ratio": self.skip_ratio,
-            "yscale": None if self.yscale == law.NO_STR else self.yscale,
-            "shape_norm": self.shape_norm,
-        }
-        params.cautious_update(params_to_add)
+        dict_add_strict(params, "skip_ratio", self.skip_ratio)
+        dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
 
 
@@ -233,7 +227,7 @@ class ProcessPlotSettingMixin(
             proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
             for proc_settings in self.process_settings
         }
-        params.cautious_update({"process_settings": process_settings})
+        dict_add_strict(params, "process_settings", process_settings)
 
         return params
 
@@ -292,11 +286,6 @@ class PlotBase2d(PlotBase):
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        params_to_add = {
-            "zscale": None if self.zscale == law.NO_STR else self.zscale,
-            "shape_norm": self.shape_norm,
-        }
-        params.cautious_update(params_to_add)
-
+        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
         return params

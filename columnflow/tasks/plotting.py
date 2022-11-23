@@ -17,7 +17,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, PlotBase2d, ProcessPlotSettingMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from columnflow.util import DotDict, dev_sandbox
+from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
@@ -232,9 +232,7 @@ class PlotShiftedVariables1d(
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        params["legend_title"] = None if self.legend_title == law.NO_STR else self.legend_title
-
+        dict_add_strict(params, "legend_title", None if self.legend_title == law.NO_STR else self.legend_title)
         return params
 
     def store_parts(self):

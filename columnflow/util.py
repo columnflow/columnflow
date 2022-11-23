@@ -488,6 +488,15 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
     return index
 
 
+def dict_add_strict(d: dict, key: str, value: Any) -> None:
+    """
+    Adds key-value pair to dictionary if not present already; raises Error otherwise.
+    """
+    if key in d.keys():
+        raise KeyError(f"'{d.__class__.__name__}' object already has key {key}")
+    d[key] = value
+
+
 class DotDict(OrderedDict):
     """
     Subclass of *OrderedDict* that provides read and write access to items via attributes by
@@ -529,16 +538,6 @@ class DotDict(OrderedDict):
 
     def __setattr__(self, attr: str, value: Any) -> None:
         self[attr] = value
-
-    def cautious_update(self, other: dict) -> None:
-        """
-        Updates DotDict, but only if no value is overwritten. Throws error otherwise.
-        """
-        key_replicas = set(self.keys()) & set(other.keys())
-        if not key_replicas:
-            self.update(other)
-        else:
-            raise KeyError(f"'{self.__class__.__name__}' object already has attributes {key_replicas}")
 
     def copy(self) -> DotDict:
         """"""

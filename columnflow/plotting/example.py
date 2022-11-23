@@ -464,4 +464,7 @@ def plot_cutflow(
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
+    # ratio plot not used here; set `skip_ratio` to True
+    kwargs["skip_ratio"] = True
+
     return plot_all(plot_config, style_config, **kwargs)
