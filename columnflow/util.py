@@ -490,9 +490,10 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
 
 def dict_add_strict(d: dict, key: str, value: Any) -> None:
     """
-    Adds key-value pair to dictionary if not present already; raises Error otherwise.
+    Adds key-value pair to dictionary, but only if it does not change an existing value;
+    Raises KeyError otherwise.
     """
-    if key in d.keys():
+    if key in d.keys() and d[key] != value:
         raise KeyError(f"'{d.__class__.__name__}' object already has key {key}")
     d[key] = value
 
