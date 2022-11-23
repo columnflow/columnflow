@@ -4,6 +4,7 @@
 Tasks related to reducing events for use on further tasks.
 """
 
+import math
 import functools
 from collections import OrderedDict
 
@@ -248,41 +249,36 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
             return avg, std
 
         # compute some stats
-        max_size_merged = self.merged_size * 1024**2
         tot_size = sum(sizes)
         avg_size, std_size = get_avg_std(sizes)
         std_size = (sum((s - avg_size)**2 for s in sizes) / n)**0.5
-        merge_factor = max(1, int(round(max_size_merged / avg_size)))
-        merged_sizes = [sum(chunk) for chunk in law.util.iter_chunks(sizes, merge_factor)]
-        n_merged = len(merged_sizes)
-        avg_size_merged, std_size_merged = get_avg_std(merged_sizes)
+        max_size_merged = self.merged_size * 1024**2
+        merge_factor = int(round(max_size_merged / avg_size))
+        merge_factor = min(max(1, merge_factor), self.dataset_info_inst.n_files)
+        n_merged = int(math.ceil(self.dataset_info_inst.n_files / merge_factor))
 
         # save them
         stats = OrderedDict([
-            ("n_files", n),
+            ("n_test_files", n),
             ("tot_size", tot_size),
             ("avg_size", avg_size),
             ("std_size", std_size),
             ("max_size_merged", max_size_merged),
             ("merge_factor", merge_factor),
-            ("n_merged_files", n_merged),
-            ("avg_size_merged", avg_size_merged),
-            ("std_size_merged", std_size_merged),
         ])
         self.output().dump(stats, indent=4, formatter="json")
 
         # print them
-        self.publish_message(" files before merging ".center(40, "-"))
-        self.publish_message(f"# files  : {n}")
+        self.publish_message(f" stats of {n} input files ".center(40, "-"))
         self.publish_message(f"tot. size: {law.util.human_bytes(tot_size, fmt=True)}")
         self.publish_message(f"avg. size: {law.util.human_bytes(avg_size, fmt=True)}")
         self.publish_message(f"std. size: {law.util.human_bytes(std_size, fmt=True)}")
-        self.publish_message(" files after merging ".center(40, "-"))
-        self.publish_message(f"merging  : {merge_factor} into 1")
-        self.publish_message(f"# files  : {n_merged}")
-        self.publish_message(f"max. size: {law.util.human_bytes(max_size_merged, fmt=True)}")
-        self.publish_message(f"avg. size: {law.util.human_bytes(avg_size_merged, fmt=True)}")
-        self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
+        self.publish_message(" merging info ".center(40, "-"))
+        self.publish_message(f"target size  : {self.merged_size} MB")
+        self.publish_message(f"merging      : {merge_factor} into 1")
+        self.publish_message(f"# file before: {self.dataset_info_inst.n_files}")
+        self.publish_message(f"# file after : {n_merged}")
+        self.publish_message(40 * "-")
 
 
 MergeReductionStatsWrapper = wrapper_factory(
@@ -363,6 +359,13 @@ class MergeReducedEvents(
     # default upstream dependency task classes
     dep_MergeReductionStats = MergeReductionStats
     dep_ReduceEvents = ReduceEvents
+
+    def is_sandboxed(self):
+        # when the task is a merge forest, consider it sandboxed
+        if self.is_forest():
+            return True
+
+        return super().is_sandboxed()
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
