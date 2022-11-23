@@ -657,18 +657,18 @@ class VariablesMixin(ConfigTask):
     @classmethod
     def split_multi_variable(cls, variable: str) -> tuple[str]:
         """
-        Splits a multi-dimensional *variable* given in the format ``"var_a[_vs_var_b[_vs_]]"`` into
-        separate variable names using a delimiter (``"_vs_"``) and returns a tuple.
+        Splits a multi-dimensional *variable* given in the format ``"var_a[-var_b[-...]]"`` into
+        separate variable names using a delimiter (``"-"``) and returns a tuple.
         """
-        return tuple(variable.split("_vs_"))
+        return tuple(variable.split("-"))
 
     @classmethod
     def join_multi_variable(cls, variables: Sequence[str]) -> str:
         """
-        Joins the name of multiple *variables* using a delimiter (``"_vs_"``) into a single string
+        Joins the name of multiple *variables* using a delimiter (``"-"``) into a single string
         that represents a multi-dimensional variable and returns it.
         """
-        return "_vs_".join(map(str, variables))
+        return "-".join(map(str, variables))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
