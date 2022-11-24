@@ -635,7 +635,10 @@ class VariablesMixin(ConfigTask):
                 # combinatorics of all possibly pattern-resolved parts
                 for parts in multi_var_parts:
                     resolved_parts = [
-                        cls.find_config_objects(part, config_inst, od.Variable)
+                        cls.find_config_objects(
+                            part, config_inst, od.Variable, 
+                            config_inst.x("variable_groups", {}),
+                        )
                         for part in parts
                     ]
                     variables.extend([
