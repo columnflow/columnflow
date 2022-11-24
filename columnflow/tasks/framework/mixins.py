@@ -636,7 +636,7 @@ class VariablesMixin(ConfigTask):
                 for parts in multi_var_parts:
                     resolved_parts = [
                         cls.find_config_objects(
-                            part, config_inst, od.Variable, 
+                            part, config_inst, od.Variable,
                             config_inst.x("variable_groups", {}),
                         )
                         for part in parts
