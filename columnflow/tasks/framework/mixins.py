@@ -7,6 +7,7 @@ Lightweight mixins task classes.
 from __future__ import annotations
 
 import time
+import itertools
 from typing import Sequence, Any
 
 import law
@@ -612,13 +613,35 @@ class VariablesMixin(ConfigTask):
 
             # resolve them
             if params["variables"]:
-                # resolve variable names
+                # first, split into single- and multi-dimensional variables
+                single_vars = []
+                multi_var_parts = []
+                for variable in params["variables"]:
+                    parts = cls.split_multi_variable(variable)
+                    if len(parts) == 1:
+                        single_vars.append(variable)
+                    else:
+                        multi_var_parts.append(parts)
+
+                # resolve single variables
                 variables = cls.find_config_objects(
-                    params["variables"],
+                    single_vars,
                     config_inst,
                     od.Variable,
                     config_inst.x("variable_groups", {}),
                 )
+
+                # for each multi-variable, resolve each part separately and create the full
+                # combinatorics of all possibly pattern-resolved parts
+                for parts in multi_var_parts:
+                    resolved_parts = [
+                        cls.find_config_objects(part, config_inst, od.Variable)
+                        for part in parts
+                    ]
+                    variables.extend([
+                        cls.join_multi_variable(_parts)
+                        for _parts in itertools.product(*resolved_parts)
+                    ])
             else:
                 # fallback to using all known variables
                 variables = config_inst.variables.names()
@@ -630,6 +653,31 @@ class VariablesMixin(ConfigTask):
             params["variables"] = tuple(variables)
 
         return params
+
+    @classmethod
+    def split_multi_variable(cls, variable: str) -> tuple[str]:
+        """
+        Splits a multi-dimensional *variable* given in the format ``"var_a[-var_b[-...]]"`` into
+        separate variable names using a delimiter (``"-"``) and returns a tuple.
+        """
+        return tuple(variable.split("-"))
+
+    @classmethod
+    def join_multi_variable(cls, variables: Sequence[str]) -> str:
+        """
+        Joins the name of multiple *variables* using a delimiter (``"-"``) into a single string
+        that represents a multi-dimensional variable and returns it.
+        """
+        return "-".join(map(str, variables))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # if enabled, split names of multi-dimensional parameters into tuples
+        self.variable_tuples = {
+            var_name: self.split_multi_variable(var_name)
+            for var_name in self.variables
+        }
 
     @property
     def variables_repr(self):

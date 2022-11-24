@@ -137,39 +137,47 @@ class CreateHistograms(
                             f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                         )
 
-            # define and fill histograms
-            for var_name in self.variables:
-                variable_inst = self.config_inst.get_variable(var_name)
+            # define and fill histograms, taking into account multiple axes
+            for var_key, var_names in self.variable_tuples.items():
+                # get variable instances
+                variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
-                # get the expression and when it's a string, parse it to extract index lookups
-                expr = variable_inst.expression
-                if isinstance(expr, str):
-                    route = Route(expr)
-                    expr = functools.partial(route.apply, null_value=variable_inst.null_value)
-
-                if var_name not in histograms:
-                    histograms[var_name] = (
+                # create the histogram if not present yet
+                if var_key not in histograms:
+                    h = (
                         hist.Hist.new
                         .IntCat([], name="category", growth=True)
                         .IntCat([], name="process", growth=True)
                         .IntCat([], name="shift", growth=True)
-                        .Var(
+                    )
+                    # add variable axes
+                    for variable_inst in variable_insts:
+                        h = h.Var(
                             variable_inst.bin_edges,
-                            name=var_name,
+                            name=variable_inst.name,
                             label=variable_inst.get_full_x_title(),
                         )
-                        .Weight()
-                    )
+                    # enable weights and store it
+                    histograms[var_key] = h.Weight()
+
                 # broadcast arrays so that each event can be filled for all its categories
                 fill_kwargs = {
-                    var_name: expr(events),
                     "category": events.category_ids,
                     "process": events.process_id,
                     "shift": self.shift_inst.id,
                     "weight": weight,
                 }
+                for variable_inst in variable_insts:
+                    # prepare the expression
+                    expr = variable_inst.expression
+                    if isinstance(expr, str):
+                        route = Route(expr)
+                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                    # apply it
+                    fill_kwargs[variable_inst.name] = expr(events)
+                # broadcast and fill
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_name].fill(**dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
         self.output().dump(histograms, formatter="pickle")

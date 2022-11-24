@@ -7,11 +7,12 @@ Example plot functions.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Sequence
+from typing import Sequence, Iterable
 
 import law
 
 from columnflow.util import maybe_import, test_float
+from columnflow.plotting.plot_util import prepare_plot_config
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -222,97 +223,17 @@ def plot_all(
 def plot_variable_per_process(
     hists: OrderedDict,
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     yscale: str | None = "",
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
 
-    # process_settings
-    if not process_settings:
-        process_settings = {}
-
-    # separate histograms into stack, lines and data hists
-    data_hists, mc_hists, mc_colors, mc_labels = [], [], [], []
-    line_hists, line_colors, line_labels = [], [], []
-
-    for process_inst, h in hists.items():
-        # get settings for this process
-        settings = process_settings.get(process_inst.name, {})
-        color1 = settings.get("color1", settings.get("color", process_inst.color1))
-        color2 = settings.get("color2", process_inst.color2)
-        label = settings.get("label", process_inst.label)
-
-        if "scale" in settings.keys():
-            h = h * settings["scale"]
-            label = f"{label} x{settings['scale']}"
-
-        if process_inst.is_data:
-            data_hists.append(h)
-        elif process_inst.is_mc:
-            if "unstack" in settings:
-                line_hists.append(h)
-                line_colors.append(color1)
-                line_labels.append(label)
-            else:
-                mc_hists.append(h)
-                mc_colors.append(color1)
-                line_colors.append(color2)
-                mc_labels.append(label)
-
-    h_data, h_mc, h_mc_stack = None, None, None
-    if data_hists:
-        h_data = sum(data_hists[1:], data_hists[0].copy())
-    if mc_hists:
-        h_mc = sum(mc_hists[1:], mc_hists[0].copy())
-        h_mc_stack = hist.Stack(*mc_hists)
-
-    # setup plotting configs
-    plot_config = {}
-
-    # draw stack + error bands
-    if h_mc_stack:
-        mc_norm = sum(h_mc.values()) if shape_norm else 1
-        plot_config["mc_stack"] = {
-            "method": "draw_stack",
-            "hist": h_mc_stack,
-            "kwargs": {
-                "norm": mc_norm,
-                "label": mc_labels,
-                "color": mc_colors,
-                "edgecolor": line_colors,
-                "linewidth": [(0 if c is None else 1) for c in line_colors],
-            },
-        }
-        plot_config["mc_uncert"] = {
-            "method": "draw_error_bands",
-            "hist": h_mc,
-            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-            "ratio_kwargs": {"norm": h_mc.values()},
-        }
-
-    # draw lines
-    for i, h in enumerate(line_hists):
-        label = line_labels[i]
-        line_norm = sum(h.values()) if shape_norm else 1
-        plot_config[f"line_{label}"] = {
-            "method": "draw_hist",
-            "hist": h,
-            "kwargs": {"norm": line_norm, "label": label, "color": line_colors[i]},
-            # "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
-        }
-
-    # draw data
-    if data_hists:
-        data_norm = sum(h_data.values()) if shape_norm else 1
-        plot_config["data"] = {
-            "method": "draw_errorbars",
-            "hist": h_data,
-            "kwargs": {"norm": data_norm, "label": "Data"},
-            "ratio_kwargs": {"norm": h_mc.values()},
-        }
+    # setup plotting config
+    plot_config = prepare_plot_config(hists, shape_norm, process_settings)
 
     # setup style config
     if not yscale:
@@ -344,12 +265,14 @@ def plot_variable_per_process(
 def plot_variable_variants(
     hists: OrderedDict,
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
+
     plot_config = OrderedDict()
 
     # for updating labels of individual selector steps
@@ -366,6 +289,7 @@ def plot_variable_variants(
         }
 
     # setup style config
+
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
@@ -397,7 +321,7 @@ def plot_variable_variants(
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
-    variable_inst: od.variable,
+    variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -405,6 +329,8 @@ def plot_shifted_variable(
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    variable_inst = variable_insts[0]
+
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
 
@@ -496,63 +422,31 @@ def plot_cutflow(
     if not process_settings:
         process_settings = {}
 
-    mc_hists, mc_colors, mc_line_colors, mc_labels, data_hists = [], [], [], [], []
-    for process_inst, h in hists.items():
-        # get settings for this process
-        settings = process_settings.get(process_inst.name, {})
-        color1 = settings.get("color1", settings.get("color", process_inst.color1))
-        color2 = settings.get("color2", process_inst.color2)
-        label = settings.get("label", process_inst.label)
+    # setup plotting config
+    plot_config = prepare_plot_config(hists, shape_norm, process_settings)
 
-        if process_inst.is_mc:
-            mc_hists.append(h)
-            mc_colors.append(color1)
-            mc_line_colors.append(color2)
-            mc_labels.append(label)
-        else:
-            data_hists.append(h)
-
-    # create the stack
-    h_mc_stack, h_data = None, None
-    if mc_hists:
-        h_mc_stack = hist.Stack(*mc_hists)
-    if data_hists:
-        h_data = sum(data_hists[1:], data_hists[0].copy())
-
-    # setup plotting configs
-    if not yscale:
-        yscale = "linear"
-
-    plot_config = {
-        "procs": {
-            "method": "draw_stack",
-            "hist": h_mc_stack,
-            "kwargs": {
-                "norm": [h[{"step": "Initial"}].value for h in mc_hists] if shape_norm else 1,
-                "label": mc_labels,
-                "color": mc_colors,
-                "edgecolor": mc_line_colors,
-                "linewidth": [(0 if c is None else 1) for c in mc_line_colors],
-                "histtype": "step",
-                "stack": False,
-            },
-        },
-    }
-    if data_hists:
-        plot_config["data"] = {
-            "method": "draw_hist",
-            "hist": h_data,
-            "kwargs": {
-                "norm": h_data[{"step": "Initial"}].value if shape_norm else 1,
-                "label": "Data",
-            },
-        }
+    if shape_norm:
+        # switch normalization to normalizing to `initial step` bin
+        for key in list(plot_config):
+            item = plot_config[key]
+            h_key = item["hist"]
+            if isinstance(h_key, Iterable):
+                norm = sum(h[{"step": "Initial"}].value for h in h_key)
+            else:
+                norm = h_key[{"step": "Initial"}].value
+            item["kwargs"]["norm"] = norm
 
     # update xticklabels based on config
     xticklabels = []
     selector_step_labels = config_inst.x("selector_step_labels", {})
-    for xtl in list(mc_hists[0].axes["step"]):
-        xticklabels.append(selector_step_labels.get(xtl, xtl))
+
+    selector_steps = list(hists[list(hists.keys())[0]].axes["step"])
+    for step in selector_steps:
+        xticklabels.append(selector_step_labels.get(step, step))
+
+    # setup style config
+    if not yscale:
+        yscale = "linear"
 
     default_style_config = {
         "ax_cfg": {
@@ -569,5 +463,8 @@ def plot_cutflow(
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
+    # ratio plot not used here; set `skip_ratio` to True
+    kwargs["skip_ratio"] = True
 
     return plot_all(plot_config, style_config, **kwargs)

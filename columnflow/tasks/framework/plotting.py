@@ -11,8 +11,8 @@ import law
 import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask
-from columnflow.tasks.framework.mixins import CategoriesMixin, DatasetsProcessesMixin
-from columnflow.util import test_float
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
+from columnflow.util import test_float, DotDict, dict_add_strict
 
 
 class PlotBase(AnalysisTask):
@@ -47,13 +47,11 @@ class PlotBase(AnalysisTask):
         description="when True, no CMS logo is drawn; default: False",
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
-        params = {}
-
-        params["skip_legend"] = self.skip_legend
-        params["skip_cms"] = self.skip_cms
-
+        params = DotDict({})
+        dict_add_strict(params, "skip_legend", self.skip_legend)
+        dict_add_strict(params, "skip_cms", self.skip_cms)
         return params
 
     def get_plot_names(self, name: str) -> list[str]:
@@ -153,11 +151,16 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
 PlotBase.view_output_plots = view_output_plots
 
 
-class PlotBase1D(PlotBase):
+class PlotBase1d(PlotBase):
     """
     Base class for plotting tasks creating 1-dimensional plots.
     """
 
+    plot_function_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+    )
     skip_ratio = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -178,21 +181,18 @@ class PlotBase1D(PlotBase):
         "default: False",
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        params["skip_ratio"] = self.skip_ratio
-        params["yscale"] = None if self.yscale == law.NO_STR else self.yscale
-        params["shape_norm"] = self.shape_norm
-
+        dict_add_strict(params, "skip_ratio", self.skip_ratio)
+        dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
 
 
-class ProcessPlotBase(
-    CategoriesMixin,
+class ProcessPlotSettingMixin(
     DatasetsProcessesMixin,
-    PlotBase1D,
+    PlotBase,
 ):
     """
     Base class for tasks creating plots where contributions of different processes are shown.
@@ -208,7 +208,7 @@ class ProcessPlotBase(
         brace_expand=True,
     )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
 
@@ -223,10 +223,12 @@ class ProcessPlotBase(
                 value = False
             return (key, value)
 
-        params["process_settings"] = {
+        process_settings = {
             proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
             for proc_settings in self.process_settings
         }
+        dict_add_strict(params, "process_settings", process_settings)
+
         return params
 
     @classmethod
@@ -257,23 +259,33 @@ class ProcessPlotBase(
         return parts
 
 
-class PlotBase2D(PlotBase):
+class PlotBase2d(PlotBase):
     """
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
+    plot_function_2d = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+    )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
         significant=False,
-        description="string parameter to define the z-axis scale of the plot in the upper panel; "
+        description="string parameter to define the z-axis scale of the plot; "
         "choices: NO_STR,linear,log; no default",
     )
+    shape_norm = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, the overall bin content is normalized on its integral; "
+        "default: False",
+    )
 
-    def get_plot_parameters(self):
+    def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        params["zscale"] = None if self.zscale == law.NO_STR else self.zscale
-
+        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
