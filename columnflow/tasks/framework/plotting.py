@@ -156,7 +156,7 @@ class PlotBase1d(PlotBase):
     Base class for plotting tasks creating 1-dimensional plots.
     """
 
-    plot_function_name_1d = luigi.Parameter(
+    plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_variable_per_process",
         significant=False,
         description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
@@ -264,7 +264,7 @@ class PlotBase2d(PlotBase):
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
-    plot_function_name_2d = luigi.Parameter(
+    plot_function_2d = luigi.Parameter(
         default="columnflow.plotting.plot2d.plot_2d",
         significant=False,
         description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",

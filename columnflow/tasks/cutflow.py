@@ -185,7 +185,7 @@ class PlotCutflow(
 
     shifts = set(CreateCutflowHistograms.shifts)
 
-    plot_function_name_1d = luigi.Parameter(
+    plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_cutflow",
         significant=False,
         description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_cutflow'",
@@ -312,7 +312,7 @@ class PlotCutflow(
 
             # call the plot function
             fig = self.call_plot_func(
-                self.plot_function_name_1d,
+                self.plot_function_1d,
                 hists=hists,
                 config_inst=self.config_inst,
                 **self.get_plot_parameters(),
@@ -498,8 +498,8 @@ class PlotCutflowVariables1d(
         "default: processes",
     )
     # TODO: combine these hard-coded plot function name with law parameter
-    plot_function_name_per_process = "columnflow.plotting.example.plot_variable_per_process"
-    plot_function_name_per_step = "columnflow.plotting.example.plot_variable_variants"
+    plot_function_per_process = "columnflow.plotting.example.plot_variable_per_process"
+    plot_function_per_step = "columnflow.plotting.example.plot_variable_variants"
 
     def output(self):
         b = self.branch_data
@@ -537,7 +537,7 @@ class PlotCutflowVariables1d(
 
                 # call the plot function
                 fig = self.call_plot_func(
-                    self.plot_function_name_per_process,
+                    self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
                     variable_insts=variable_insts,
@@ -558,7 +558,7 @@ class PlotCutflowVariables1d(
 
                 # call the plot function
                 fig = self.call_plot_func(
-                    self.plot_function_name_per_step,
+                    self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
                     variable_insts=variable_insts,
@@ -606,7 +606,7 @@ class PlotCutflowVariables2d(
 
                 # call the plot function
                 fig = self.call_plot_func(
-                    self.plot_function_name_2d,
+                    self.plot_function_2d,
                     hists=h_step,
                     config_inst=self.config_inst,
                     variable_insts=variable_insts,

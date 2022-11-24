@@ -152,19 +152,19 @@ class PlotVariablesBase(
             )
 
             # determine the correct plot function for this variable
-            plot_function_name = (
-                self.plot_function_name_1d if len(variable_insts) == 1 and "plot_function_name_1d" in dir(self) else
-                self.plot_function_name_2d if len(variable_insts) == 2 and "plot_function_name_2d" in dir(self) else
+            plot_function = (
+                self.plot_function_1d if len(variable_insts) == 1 and "plot_function_1d" in dir(self) else
+                self.plot_function_2d if len(variable_insts) == 2 and "plot_function_2d" in dir(self) else
                 None
             )
-            if not plot_function_name:
+            if not plot_function:
                 raise NotImplementedError(
                     f"No Plotting function for {len(variable_insts)} variables implemented of task {self.cls_name}",
                 )
 
             # call the plot function
             fig = self.call_plot_func(
-                plot_function_name,
+                plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
                 variable_insts=variable_insts,
@@ -223,9 +223,12 @@ class PlotShiftedVariables1d(
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default plot function
-    plot_function_name = "columnflow.plotting.example.plot_shifted_variable"
-
+    # overriding the default plot function
+    plot_function_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_shifted_variable",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_shifted_variable'",
+    )
     # default upstream dependency task classes
     dep_MergeShiftedHistograms = MergeShiftedHistograms
 
@@ -363,7 +366,7 @@ class PlotShiftedVariables1d(
                 for process_inst, h in hists.items():
                     # call the plot function once per process
                     fig = self.call_plot_func(
-                        self.plot_function_name,
+                        self.plot_function_1d,
                         hists={process_inst: h},
                         config_inst=self.config_inst,
                         variable_inst=variable_inst,
@@ -375,7 +378,7 @@ class PlotShiftedVariables1d(
             else:
                 # call the plot function once
                 fig = self.call_plot_func(
-                    self.plot_function_name,
+                    self.plot_function,
                     hists=hists,
                     config_inst=self.config_inst,
                     variable_inst=variable_inst,
