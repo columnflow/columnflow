@@ -23,13 +23,13 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     .. code-block:: python
 
-        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/cms-met/metphi_corrs_all.json.gz", "v1")
+        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz", "v1")  # noqa
 
     as well as an auxiliary entry in the config to refer to the name of the correction set such as
 
     .. code-block:: python
 
-        cfg.x.met_phi_correction_set = "metphicorr_{variable}_pfmet_{data_source}_2017"
+        cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
     where "variable" and "data_source" are placeholders that are inserted in the calibrator setup.
     """
