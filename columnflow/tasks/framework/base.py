@@ -50,6 +50,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     allow_empty_sandbox = True
     sandbox = None
 
+    message_cache_size = 25
     local_workflow_require_branches = False
     output_collection_cls = law.SiblingFileCollection
 

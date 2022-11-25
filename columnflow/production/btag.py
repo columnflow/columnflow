@@ -50,6 +50,9 @@ def btag_weights(
     if self.dataset_inst.is_data:
         return events
 
+    # get the total number of jets in the chunk
+    n_jets_all = ak.sum(ak.num(events.Jet, axis=1))
+
     # get flat inputs, evaluated at jet_mask
     flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
     abs_eta = flat_np_view(abs(events.Jet.eta[jet_mask]), axis=1)
@@ -75,7 +78,7 @@ def btag_weights(
         )
 
         # insert them into an array of ones whose length corresponds to the total number of jets
-        sf_flat_all = np.ones_like(flavor, dtype=np.float32)
+        sf_flat_all = np.ones(n_jets_all, dtype=np.float32)
         if jet_mask is Ellipsis:
             indices = flavor_mask
         else:
@@ -84,7 +87,7 @@ def btag_weights(
                 indices = np.where(indices)[0][flavor_mask]
         sf_flat_all[indices] = sf_flat
 
-        # enforce the correct shape and create the product via all jets per event
+        # enforce the correct shape and create the product over all jets per event
         sf = layout_ak_array(sf_flat_all, events.Jet.pt)
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
