@@ -43,7 +43,7 @@ def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         return events
 
     # get year string
-    year = self.config_inst.x.muon_sf_names[1]
+    sf_year = self.config_inst.x.muon_sf_names[1]
 
     # flat absolute eta and pt views
     abs_eta = ak.flatten(abs(events.Muon.eta), axis=1)
@@ -55,7 +55,7 @@ def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         ("systup", "_up"),
         ("systdown", "_down"),
     ]:
-        sf_flat = self.muon_sf_corrector.evaluate(year, abs_eta, pt, syst).astype(np.float32)
+        sf_flat = self.muon_sf_corrector.evaluate(sf_year, abs_eta, pt, syst).astype(np.float32)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Muon.pt)

@@ -40,7 +40,7 @@ def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         return events
 
     # get year string and working point name
-    year, wp = self.config_inst.x.electron_sf_names[1:]
+    sf_year, wp = self.config_inst.x.electron_sf_names[1:]
 
     # flat super cluster eta and pt views
     sc_eta = ak.flatten(events.Electron.eta + events.Electron.deltaEtaSC, axis=1)
@@ -52,7 +52,7 @@ def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         ("sfup", "_up"),
         ("sfdown", "_down"),
     ]:
-        sf_flat = self.electron_sf_corrector.evaluate(year, syst, wp, sc_eta, pt).astype(np.float32)
+        sf_flat = self.electron_sf_corrector.evaluate(sf_year, syst, wp, sc_eta, pt).astype(np.float32)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt)

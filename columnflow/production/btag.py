@@ -20,7 +20,7 @@ ak = maybe_import("awkward")
     },
     # produced columns are defined in the init function below
 )
-def btag_weight(
+def btag_weights(
     self: Producer,
     events: ak.Array,
     jet_mask: ak.Array | type(Ellipsis) = Ellipsis,
@@ -50,9 +50,6 @@ def btag_weight(
     if self.dataset_inst.is_data:
         return events
 
-    # get the total number of jets in the chunk
-    n_jets_all = len(flat_np_view(events.Jet.pt, axis=1))
-
     # get flat inputs, evaluated at jet_mask
     flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
     abs_eta = flat_np_view(abs(events.Jet.eta[jet_mask]), axis=1)
@@ -78,7 +75,7 @@ def btag_weight(
         )
 
         # insert them into an array of ones whose length corresponds to the total number of jets
-        sf_flat_all = np.ones(n_jets_all, dtype=np.float32)
+        sf_flat_all = np.ones_like(flavor, dtype=np.float32)
         if jet_mask is Ellipsis:
             indices = flavor_mask
         else:
@@ -121,8 +118,8 @@ def btag_weight(
     return events
 
 
-@btag_weight.init
-def btag_weight_init(self: Producer) -> None:
+@btag_weights.init
+def btag_weights_init(self: Producer) -> None:
     # depending on the requested shift_inst, there are three cases to handle:
     #   1. when a JEC uncertainty is requested whose propagation to btag weights is known, the
     #      producer should only produce that specific weight column
@@ -172,8 +169,8 @@ def btag_weight_init(self: Producer) -> None:
         self.produces.add("btag_weight")
 
 
-@btag_weight.requires
-def btag_weight_requires(self: Producer, reqs: dict) -> None:
+@btag_weights.requires
+def btag_weights_requires(self: Producer, reqs: dict) -> None:
     if self.dataset_inst.is_data or "external_files" in reqs:
         return
 
@@ -181,8 +178,8 @@ def btag_weight_requires(self: Producer, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@btag_weight.setup
-def btag_weight_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+@btag_weights.setup
+def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     if self.dataset_inst.is_data:
         self.btag_sf_corrector = None
         return
