@@ -42,6 +42,9 @@ def btag_weights(
     In addition, JEC uncertainty sources are propagated and weight columns are written if an
     auxiliary config entry ``btag_sf_jec_sources`` exists.
 
+    Optionally, a *jet_mask* can be supplied to compute the scale factor weight
+    based only on a subset of jets.
+
     Resources:
 
        - https://twiki.cern.ch/twiki/bin/view/CMS/BTagShapeCalibration?rev=26

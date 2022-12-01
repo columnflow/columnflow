@@ -4,9 +4,11 @@
 Electron related event weights.
 """
 
+from __future__ import annotations
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, layout_ak_array
+from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -20,7 +22,12 @@ ak = maybe_import("awkward")
         "electron_weight", "electron_weight_up", "electron_weight_down",
     },
 )
-def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def electron_weights(
+    self: Producer,
+    events: ak.Array,
+    electron_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    **kwargs,
+) -> ak.Array:
     """
     Electron scale factor producer. Requires an external file in the config as (e.g.)
 
@@ -35,6 +42,9 @@ def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.electron_sf_names = ("UL-Electron-ID-SF", "2017", "wp80iso")
+
+    Optionally, an *electron_mask* can be supplied to compute the scale factor weight
+    based only on a subset of electrons.
     """
     if self.dataset_inst.is_data:
         return events
@@ -43,8 +53,11 @@ def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     sf_year, wp = self.config_inst.x.electron_sf_names[1:]
 
     # flat super cluster eta and pt views
-    sc_eta = ak.flatten(events.Electron.eta + events.Electron.deltaEtaSC, axis=1)
-    pt = ak.flatten(events.Electron.pt, axis=1)
+    sc_eta = flat_np_view((
+        events.Electron.eta[electron_mask] +
+        events.Electron.deltaEtaSC[electron_mask]
+    ), axis=1)
+    pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
 
     # loop over systematics
     for syst, postfix in [
@@ -55,7 +68,7 @@ def electron_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         sf_flat = self.electron_sf_corrector.evaluate(sf_year, syst, wp, sc_eta, pt).astype(np.float32)
 
         # add the correct layout to it
-        sf = layout_ak_array(sf_flat, events.Electron.pt)
+        sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
 
         # create the product over all electrons in one event
         weight = ak.prod(sf, axis=1, mask_identity=False)
