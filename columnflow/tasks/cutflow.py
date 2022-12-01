@@ -401,10 +401,10 @@ class PlotCutflowVariablesBase(
         }
 
     def output(self):
-        # To be implemented by daughter tasks
+        # to be implemented by daughter tasks
         return None
 
-    def run_postprocess(self, hists, variable_insts, process_insts):
+    def run_postprocess(self, hists, variable_insts):
         # to be implemented by daughter tasks
         pass
 
@@ -480,7 +480,6 @@ class PlotCutflowVariablesBase(
             self.run_postprocess(
                 hists=hists,
                 variable_insts=variable_insts,
-                process_insts=process_insts,  # TODO: should be manageable to remove
             )
 
 
@@ -520,7 +519,7 @@ class PlotCutflowVariables1d(
                 for p in self.processes
             })
 
-    def run_postprocess(self, hists, variable_insts, process_insts):
+    def run_postprocess(self, hists, variable_insts):
         import hist
 
         if len(variable_insts) != 1:
@@ -531,8 +530,8 @@ class PlotCutflowVariables1d(
             for step in self.chosen_steps:
                 # sort hists by process order
                 step_hists = OrderedDict(
-                    (process_inst, hists[process_inst][{"step": hist.loc(step)}])
-                    for process_inst in sorted(hists, key=process_insts.index)
+                    (process_inst, h[{"step": h.loc(step)}])
+                    for process_inst, h in hists.items()
                 )
 
                 # call the plot function
@@ -590,7 +589,7 @@ class PlotCutflowVariables2d(
         }
         return law.SiblingFileCollection(outp)
 
-    def run_postprocess(self, hists, variable_insts, process_insts):
+    def run_postprocess(self, hists, variable_insts):
         import hist
 
         if len(variable_insts) != 2:
