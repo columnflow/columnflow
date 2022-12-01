@@ -208,6 +208,12 @@ class ProcessPlotSettingMixin(
         brace_expand=True,
     )
 
+    per_process = luigi.BoolParameter(
+        default=False,
+        significant=True,
+        description="when True, one plot per process is produced; default: False",
+    )
+
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
