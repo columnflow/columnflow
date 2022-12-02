@@ -4,9 +4,11 @@
 Muon related event weights.
 """
 
+from __future__ import annotations
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, layout_ak_array
+from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -20,7 +22,12 @@ ak = maybe_import("awkward")
         "muon_weight", "muon_weight_up", "muon_weight_down",
     },
 )
-def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def muon_weights(
+    self: Producer,
+    events: ak.Array,
+    muon_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    **kwargs,
+) -> ak.Array:
     """
     Reads the muon scale factor from the external file given in the config,
     using the keys from the corresponding auxiliary entry in the config.
@@ -38,6 +45,9 @@ def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", "2017_UL")
+
+    Optionally, a *muon_mask* can be supplied to compute the scale factor weight
+    based only on a subset of muons.
     """
     if self.dataset_inst.is_data:
         return events
@@ -46,8 +56,8 @@ def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     sf_year = self.config_inst.x.muon_sf_names[1]
 
     # flat absolute eta and pt views
-    abs_eta = ak.flatten(abs(events.Muon.eta), axis=1)
-    pt = ak.flatten(events.Muon.pt, axis=1)
+    abs_eta = flat_np_view(abs(events.Muon.eta[muon_mask]), axis=1)
+    pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
 
     # loop over systematics
     for syst, postfix in [
@@ -58,7 +68,7 @@ def muon_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         sf_flat = self.muon_sf_corrector.evaluate(sf_year, abs_eta, pt, syst).astype(np.float32)
 
         # add the correct layout to it
-        sf = layout_ak_array(sf_flat, events.Muon.pt)
+        sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
 
         # create the product over all muons in one event
         weight = ak.prod(sf, axis=1, mask_identity=False)
