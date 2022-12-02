@@ -12,9 +12,11 @@ import luigi
 from columnflow.tasks.framework.base import ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
-    VariablesMixin, CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
+    CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin
+from columnflow.tasks.framework.plotting import (
+    PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
+)
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
@@ -22,7 +24,7 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 class PlotVariablesBase(
     ShiftTask,
-    VariablesMixin,
+    VariablePlotSettingMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
@@ -210,7 +212,7 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotShiftedVariables1D(
-    VariablesMixin,
+    VariablePlotSettingMixin,
     ShiftSourcesMixin,
     MLModelsMixin,
     ProducersMixin,

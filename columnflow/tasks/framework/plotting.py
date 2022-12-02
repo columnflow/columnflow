@@ -10,8 +10,9 @@ from typing import Any, Callable
 import law
 import luigi
 
+from columnflow.tasks.framework.parameters import SettingsParameter
 from columnflow.tasks.framework.base import AnalysisTask
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.util import test_float, DotDict, dict_add_strict
 
 
@@ -190,12 +191,44 @@ class PlotBase1D(PlotBase):
         return params
 
 
+class PlotBase2D(PlotBase):
+    """
+    Base class for plotting tasks creating 2-dimensional plots.
+    """
+
+    plot_function_2D = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2D plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+    )
+    zscale = luigi.ChoiceParameter(
+        choices=(law.NO_STR, "linear", "log"),
+        default=law.NO_STR,
+        significant=False,
+        description="string parameter to define the z-axis scale of the plot; "
+        "choices: NO_STR,linear,log; no default",
+    )
+    shape_norm = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, the overall bin content is normalized on its integral; "
+        "default: False",
+    )
+
+    def get_plot_parameters(self) -> DotDict:
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
+        return params
+
+
 class ProcessPlotSettingMixin(
     DatasetsProcessesMixin,
     PlotBase,
 ):
     """
-    Base class for tasks creating plots where contributions of different processes are shown.
+    Mixin class for tasks creating plots where contributions of different processes are shown.
     """
 
     process_settings = law.MultiCSVParameter(
@@ -206,12 +239,6 @@ class ProcessPlotSettingMixin(
         "scale, unstack, label; can also be the key of a mapping defined in 'process_settings_groups; "
         "default: value of the 'default_process_settings' if defined, else empty default",
         brace_expand=True,
-    )
-
-    per_process = luigi.BoolParameter(
-        default=False,
-        significant=True,
-        description="when True, one plot per process is produced; default: False",
     )
 
     def get_plot_parameters(self) -> DotDict:
@@ -265,33 +292,54 @@ class ProcessPlotSettingMixin(
         return parts
 
 
-class PlotBase2D(PlotBase):
+class VariablePlotSettingMixin(
+        VariablesMixin,
+        PlotBase,
+):
     """
-    Base class for plotting tasks creating 2-dimensional plots.
+    Mixin class for tasks creating plots for multiple variables.
     """
 
-    plot_function_2D = luigi.Parameter(
-        default="columnflow.plotting.plot2d.plot_2d",
+    variable_settings = SettingsParameter(
+        default=(),
         significant=False,
-        description="name of the 2D plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
-    )
-    zscale = luigi.ChoiceParameter(
-        choices=(law.NO_STR, "linear", "log"),
-        default=law.NO_STR,
-        significant=False,
-        description="string parameter to define the z-axis scale of the plot; "
-        "choices: NO_STR,linear,log; no default",
-    )
-    shape_norm = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="when True, the overall bin content is normalized on its integral; "
-        "default: False",
+        description="parameter for changing different variable settings; Format: "
+        "'var1,option1=value1,option3=value3:var2,option2=value2'; options implemented: "
+        "rebin; can also be the key of a mapping defined in 'variable_settings_groups; "
+        "default: value of the 'default_variable_settings' if defined, else empty default",
+        brace_expand=True,
     )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
-        dict_add_strict(params, "shape_norm", self.shape_norm)
+        dict_add_strict(params, "variable_settings", self.variable_settings)
+
+        return params
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve variable_settings
+        if "variable_settings" in params:
+            settings = params["variable_settings"]
+            # when empty and default variable_settings are defined, use them instead
+            if not settings and config_inst.x("default_variable_settings", ()):
+                settings = config_inst.x("default_variable_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.variable_settings.parse(settings)
+
+            # when variable_settings are a key to a variable_settings_groups, use them instead
+            groups = config_inst.x("variable_settings_groups", {})
+
+            if settings and cls.variable_settings.serialize(settings) in groups.keys():
+                settings = groups[cls.variable_settings.serialize(settings)]
+                if isinstance(settings, tuple):
+                    settings = cls.variable_settings.parse(settings)
+
+            params["variable_settings"] = settings
         return params

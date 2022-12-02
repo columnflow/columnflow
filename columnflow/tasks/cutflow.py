@@ -14,7 +14,9 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedReaderMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin
+from columnflow.tasks.framework.plotting import (
+    PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
+)
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -332,7 +334,7 @@ PlotCutflowWrapper = wrapper_factory(
 
 class PlotCutflowVariablesBase(
     ShiftTask,
-    VariablesMixin,
+    VariablePlotSettingMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     CategoriesMixin,
