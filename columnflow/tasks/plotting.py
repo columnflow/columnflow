@@ -194,6 +194,21 @@ class PlotVariables2d(
     pass
 
 
+class PlotVariablesPerProcess2d(
+    law.WrapperTask,
+    PlotVariables2d,
+):
+
+    # force this one to be a local workflow
+    workflow = "local"
+
+    def requires(self):
+        return {
+            process: PlotVariables2d.req(self, processes=(process,))
+            for process in self.processes
+        }
+
+
 class PlotShiftedVariables1d(
     VariablesMixin,
     ShiftSourcesMixin,
