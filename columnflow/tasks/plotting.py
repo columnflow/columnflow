@@ -14,7 +14,7 @@ from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
     VariablesMixin, CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, PlotBase2d, ProcessPlotSettingMixin
+from columnflow.tasks.framework.plotting import PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
@@ -176,27 +176,27 @@ class PlotVariablesBase(
                 outp.dump(fig, formatter="mpl")
 
 
-class PlotVariables1d(
+class PlotVariables1D(
     PlotVariablesBase,
-    PlotBase1d,
+    PlotBase1D,
     ProcessPlotSettingMixin,
 ):
 
     pass
 
 
-class PlotVariables2d(
+class PlotVariables2D(
     PlotVariablesBase,
-    PlotBase2d,
+    PlotBase2D,
     ProcessPlotSettingMixin,
 ):
 
     pass
 
 
-class PlotVariablesPerProcess2d(
+class PlotVariablesPerProcess2D(
     law.WrapperTask,
-    PlotVariables2d,
+    PlotVariables2D,
 ):
 
     # force this one to be a local workflow
@@ -204,12 +204,12 @@ class PlotVariablesPerProcess2d(
 
     def requires(self):
         return {
-            process: PlotVariables2d.req(self, processes=(process,))
+            process: PlotVariables2D.req(self, processes=(process,))
             for process in self.processes
         }
 
 
-class PlotShiftedVariables1d(
+class PlotShiftedVariables1D(
     VariablesMixin,
     ShiftSourcesMixin,
     MLModelsMixin,
@@ -217,7 +217,7 @@ class PlotShiftedVariables1d(
     SelectorStepsMixin,
     CalibratorsMixin,
     CategoriesMixin,
-    PlotBase1d,
+    PlotBase1D,
     ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -370,9 +370,9 @@ class PlotShiftedVariables1d(
                 outp.dump(fig, formatter="mpl")
 
 
-class PlotShiftedVariablesPerProcess1d(
+class PlotShiftedVariablesPerProcess1D(
     law.WrapperTask,
-    PlotShiftedVariables1d,
+    PlotShiftedVariables1D,
 ):
 
     # force this one to be a local workflow
@@ -380,6 +380,6 @@ class PlotShiftedVariablesPerProcess1d(
 
     def requires(self):
         return {
-            process: PlotShiftedVariables1d.req(self, processes=(process,))
+            process: PlotShiftedVariables1D.req(self, processes=(process,))
             for process in self.processes
         }

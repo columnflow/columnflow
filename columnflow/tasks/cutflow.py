@@ -14,7 +14,7 @@ from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedReaderMixin,
 )
-from columnflow.tasks.framework.plotting import PlotBase, PlotBase1d, PlotBase2d, ProcessPlotSettingMixin
+from columnflow.tasks.framework.plotting import PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -175,7 +175,7 @@ class PlotCutflow(
     SelectorStepsMixin,
     CalibratorsMixin,
     CategoriesMixin,
-    PlotBase1d,
+    PlotBase1D,
     ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -483,9 +483,9 @@ class PlotCutflowVariablesBase(
             )
 
 
-class PlotCutflowVariables1d(
+class PlotCutflowVariables1D(
     PlotCutflowVariablesBase,
-    PlotBase1d,
+    PlotBase1D,
     ProcessPlotSettingMixin,
 ):
 
@@ -570,9 +570,9 @@ class PlotCutflowVariables1d(
                     outp.dump(fig, formatter="mpl")
 
 
-class PlotCutflowVariables2d(
+class PlotCutflowVariables2D(
     PlotCutflowVariablesBase,
-    PlotBase2d,
+    PlotBase2D,
     ProcessPlotSettingMixin,
 ):
 
@@ -610,9 +610,9 @@ class PlotCutflowVariables2d(
                 outp.dump(fig, formatter="mpl")
 
 
-class PlotCutflowVariablesPerProcess2d(
+class PlotCutflowVariablesPerProcess2D(
     law.WrapperTask,
-    PlotCutflowVariables2d,
+    PlotCutflowVariables2D,
 ):
 
     # force this one to be a local workflow
@@ -620,6 +620,6 @@ class PlotCutflowVariablesPerProcess2d(
 
     def requires(self):
         return {
-            process: PlotCutflowVariables2d.req(self, processes=(process,))
+            process: PlotCutflowVariables2D.req(self, processes=(process,))
             for process in self.processes
         }

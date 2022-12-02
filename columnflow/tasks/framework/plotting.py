@@ -151,7 +151,7 @@ def view_output_plots(fn, opts, task, *args, **kwargs):
 PlotBase.view_output_plots = view_output_plots
 
 
-class PlotBase1d(PlotBase):
+class PlotBase1D(PlotBase):
     """
     Base class for plotting tasks creating 1-dimensional plots.
     """
@@ -159,7 +159,7 @@ class PlotBase1d(PlotBase):
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_variable_per_process",
         significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+        description="name of the 1D plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
     )
     skip_ratio = luigi.BoolParameter(
         default=False,
@@ -265,15 +265,15 @@ class ProcessPlotSettingMixin(
         return parts
 
 
-class PlotBase2d(PlotBase):
+class PlotBase2D(PlotBase):
     """
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
-    plot_function_2d = luigi.Parameter(
+    plot_function_2D = luigi.Parameter(
         default="columnflow.plotting.plot2d.plot_2d",
         significant=False,
-        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+        description="name of the 2D plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
     )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
