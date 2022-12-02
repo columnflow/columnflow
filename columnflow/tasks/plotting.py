@@ -45,8 +45,8 @@ class PlotVariablesBase(
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name})
-            for cat_name in sorted(self.categories)
-            for var_name in sorted(self.variables)
+            for var_name in self.variables
+            for cat_name in self.categories
         ]
 
     def workflow_requires(self, only_super: bool = False):
@@ -213,22 +213,21 @@ class PlotShiftedVariables1d(
         significant=True,
         description="when True, one plot per process is produced; default: False",
     )
-
     legend_title = luigi.Parameter(
         default=law.NO_STR,
         significant=False,
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
     # overriding the default plot function
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_shifted_variable",
         significant=False,
         description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_shifted_variable'",
     )
+
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
     # default upstream dependency task classes
     dep_MergeShiftedHistograms = MergeShiftedHistograms
 
@@ -246,9 +245,9 @@ class PlotShiftedVariables1d(
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name, "shift_source": source})
-            for cat_name in sorted(self.categories)
-            for var_name in sorted(self.variables)
-            for source in sorted(self.shift_sources)
+            for var_name in self.variables
+            for cat_name in self.categories
+            for source in self.shift_sources
         ]
 
     def workflow_requires(self, only_super: bool = False):
