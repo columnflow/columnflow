@@ -578,16 +578,13 @@ class PlotCutflowVariables2d(
 
     def output(self):
         b = self.branch_data
-
-        outp = {
-            f"{p}_{s}": [
+        return law.SiblingFileCollection({
+            s: [
                 self.local_target(name)
-                for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}__step{i}_{s}")
+                for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
             ]
-            for p in self.processes
             for i, s in enumerate(self.chosen_steps)
-        }
-        return law.SiblingFileCollection(outp)
+        })
 
     def run_postprocess(self, hists, variable_insts):
         import hist
@@ -598,21 +595,31 @@ class PlotCutflowVariables2d(
         outputs = self.output()
 
         for step in self.chosen_steps:
-            # TODO: implement a 'per_process' parameter similar to PlotShiftedVariables
-            #       (maybe as parameter in ProcessPlotSettingMixin, since we could also use this in PlotVariables)
-            for process_inst, h in hists.items():
-                h_step = {process_inst: h[{"step": hist.loc(step)}]}
+            # call the plot function
+            fig = self.call_plot_func(
+                self.plot_function_2d,
+                hists=hists[{"step": hist.loc(step)}],
+                config_inst=self.config_inst,
+                variable_insts=variable_insts,
+                style_config={"legend_cfg": {"title": f"Step '{step}'"}},
+                **self.get_plot_parameters(),
+            )
 
-                # call the plot function
-                fig = self.call_plot_func(
-                    self.plot_function_2d,
-                    hists=h_step,
-                    config_inst=self.config_inst,
-                    variable_insts=variable_insts,
-                    style_config={"legend_cfg": {"title": f"Step '{step}'"}},
-                    **self.get_plot_parameters(),
-                )
+            # save the plot
+            for outp in outputs[step]:
+                outp.dump(fig, formatter="mpl")
 
-                # save the plot
-                for outp in outputs[f"{process_inst.name}_{step}"]:
-                    outp.dump(fig, formatter="mpl")
+
+class PlotCutflowVariablesPerProcess2d(
+    law.WrapperTask,
+    PlotCutflowVariables2d,
+):
+
+    # force this one to be a local workflow
+    workflow = "local"
+
+    def requires(self):
+        return {
+            process: PlotCutflowVariables2d.req(self, processes=(process,))
+            for process in self.processes
+        }

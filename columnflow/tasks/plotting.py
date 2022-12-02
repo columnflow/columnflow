@@ -223,11 +223,6 @@ class PlotShiftedVariables1d(
     RemoteWorkflow,
 ):
 
-    per_process = luigi.BoolParameter(
-        default=False,
-        significant=True,
-        description="when True, one plot per process is produced; default: False",
-    )
     legend_title = luigi.Parameter(
         default=law.NO_STR,
         significant=False,
@@ -287,25 +282,10 @@ class PlotShiftedVariables1d(
 
     def output(self):
         b = self.branch_data
-        if self.per_process:
-            # one output per process
-            return law.SiblingFileCollection({
-                p: [
-                    self.target(name) for name in self.get_plot_names(
-                        f"plot__proc_{p}__unc_{b.shift_source}__cat_{b.category}"
-                        f"__var_{b.variable}",
-                    )
-                ]
-                for p in self.processes
-            })
-        else:
-            # a single output
-            return [
-                self.target(name)
-                for name in self.get_plot_names(
-                    f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}",
-                )
-            ]
+        return [
+            self.target(name)
+            for name in self.get_plot_names(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}")
+        ]
 
     @law.decorator.log
     @PlotBase.view_output_plots
@@ -376,29 +356,30 @@ class PlotShiftedVariables1d(
             if not hists:
                 raise Exception("no histograms found to plot")
 
-            if self.per_process:
-                for process_inst, h in hists.items():
-                    # call the plot function once per process
-                    fig = self.call_plot_func(
-                        self.plot_function_1d,
-                        hists={process_inst: h},
-                        config_inst=self.config_inst,
-                        variable_inst=variable_inst,
-                        **self.get_plot_parameters(),
-                    )
-                    # save the plot
-                    for outp in outputs[process_inst.name]:
-                        outp.dump(fig, formatter="mpl")
-            else:
-                # call the plot function once
-                fig = self.call_plot_func(
-                    self.plot_function,
-                    hists=hists,
-                    config_inst=self.config_inst,
-                    variable_inst=variable_inst,
-                    **self.get_plot_parameters(),
-                )
+            # call the plot function once
+            fig = self.call_plot_func(
+                self.plot_function,
+                hists=hists,
+                config_inst=self.config_inst,
+                variable_inst=variable_inst,
+                **self.get_plot_parameters(),
+            )
 
-                # save the plot
-                for outp in outputs:
-                    outp.dump(fig, formatter="mpl")
+            # save the plot
+            for outp in outputs:
+                outp.dump(fig, formatter="mpl")
+
+
+class PlotShiftedVariablesPerProcess1d(
+    law.WrapperTask,
+    PlotShiftedVariables1d,
+):
+
+    # force this one to be a local workflow
+    workflow = "local"
+
+    def requires(self):
+        return {
+            process: PlotShiftedVariables1d.req(self, processes=(process,))
+            for process in self.processes
+        }
