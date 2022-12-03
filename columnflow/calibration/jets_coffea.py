@@ -122,7 +122,7 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     # toggle for propagation to MET
     propagate_met=True,
 )
-def jec(
+def jec_coffea(
     self: Calibrator,
     events: ak.Array,
     min_pt_met_prop: float = 15.0,
@@ -252,8 +252,8 @@ def jec(
     return events
 
 
-@jec.init
-def jec_init(self: Calibrator) -> None:
+@jec_coffea.init
+def jec_coffea_init(self: Calibrator) -> None:
     """
     Add JEC uncertainty shifts to the list of produced columns.
     """
@@ -283,8 +283,8 @@ def jec_init(self: Calibrator) -> None:
         }
 
 
-@jec.requires
-def jec_requires(self: Calibrator, reqs: dict) -> None:
+@jec_coffea.requires
+def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
     """
     Add external files bundle (for JEC text files) to dependencies.
     """
@@ -295,8 +295,8 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@jec.setup
-def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+@jec_coffea.setup
+def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     """
     Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
@@ -385,7 +385,7 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # toggle for propagation to MET
     propagate_met=True,
 )
-def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
     Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
@@ -547,8 +547,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@jer.init
-def jer_init(self: Calibrator) -> None:
+@jer_coffea.init
+def jer_coffea_init(self: Calibrator) -> None:
     """
     Initialization of dynamic components of the jer calibrator.
     """
@@ -562,8 +562,8 @@ def jer_init(self: Calibrator) -> None:
         }
 
 
-@jer.requires
-def jer_requires(self: Calibrator, reqs: dict) -> None:
+@jer_coffea.requires
+def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
     """
     Add external files bundle (for JR text files) to dependencies.
     """
@@ -574,8 +574,8 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@jer.setup
-def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+@jer_coffea.setup
+def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     """
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.
@@ -616,27 +616,27 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 #
 
 @calibrator(
-    uses={jec},
-    produces={jec},
+    uses={jec_coffea},
+    produces={jec_coffea},
     # toggle for propagation to MET
     propagate_met=True,
 )
-def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
-    events = self[jec](events, **kwargs)
+    events = self[jec_coffea](events, **kwargs)
 
     # apply jer smearing on MC only
     if self.dataset_inst.is_mc:
-        events = self[jer](events, **kwargs)
+        events = self[jer_coffea](events, **kwargs)
 
     return events
 
 
-@jets.init
-def jets_init(self: Calibrator) -> None:
-    self.deps_kwargs[jec] = {"propagate_met": self.propagate_met}
+@jets_coffea.init
+def jets_coffea_init(self: Calibrator) -> None:
+    self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}
 
     if getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc:
-        self.uses |= {jer}
-        self.produces |= {jer}
-        self.deps_kwargs[jer] = {"propagate_met": self.propagate_met}
+        self.uses |= {jer_coffea}
+        self.produces |= {jer_coffea}
+        self.deps_kwargs[jer_coffea] = {"propagate_met": self.propagate_met}
