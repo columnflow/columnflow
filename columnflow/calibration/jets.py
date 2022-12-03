@@ -28,10 +28,13 @@ def get_evaluators(correction_set, names):
     """
 
     # raise nice error if keys not found
-    missing_keys = set(names) - set(correction_set.keys()) - set(correction_set.compound.keys())
+    available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
+    missing_keys = set(names) - available_keys
     if missing_keys:
         raise RuntimeError("Corrections not found:" + "".join(
             f"\n  - {name}" for name in names if name in missing_keys
+        ) + "\nAvailable:" + "".join(
+            f"\n  - {name}" for name in sorted(available_keys)
         ))
 
     # retrieve the evaluators
