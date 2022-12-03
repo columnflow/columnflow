@@ -10,6 +10,7 @@ import law
 
 from columnflow.util import maybe_import, memoize
 from columnflow.calibration import Calibrator, calibrator
+from columnflow.calibration.util import propagate_met, ak_random
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.columnar_util import set_ak_column
 
@@ -35,31 +36,6 @@ def get_basenames(struct):
         lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
         struct,
     )
-
-
-# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
-def ak_random(*args, rand_func):
-    """
-    Return an awkward array filled with random numbers. The *args* must be broadcastable
-    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
-    random numbers.
-    """
-    args = ak.broadcast_arrays(*args)
-
-    if hasattr(args[0].layout, "offsets"):
-        # convert to flat numpy arrays
-        np_args = [np.asarray(a.layout.content) for a in args]
-
-        # pass flat arrays to random function and get random values
-        np_randvals = rand_func(*np_args)
-
-        # convert back to awkward array
-        return ak.Array(ak.layout.ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
-
-    # pass args directly (this may fail for some array types)
-    # TODO: make function more general
-    np_randvals = rand_func(*args)
-    return ak.from_numpy(np_randvals)
 
 
 @memoize
@@ -125,44 +101,6 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     })
 
     return provider
-
-
-# helper to compute new MET based on per-jet pts and phis before and after a correction
-def prop_met(
-    jet_pt1: ak.Array,
-    jet_phi1: ak.Array,
-    jet_pt2: ak.Array,
-    jet_phi2: ak.Array,
-    met_pt1: ak.Array,
-    met_phi1: ak.Array,
-) -> tuple[ak.Array, ak.Array]:
-    # avoid unwanted broadcasting
-    assert jet_pt1.ndim == jet_phi1.ndim
-    assert jet_pt2.ndim == jet_phi2.ndim
-
-    # build px and py sums before and after
-    jet_px1 = jet_pt1 * np.cos(jet_phi1)
-    jet_py1 = jet_pt1 * np.sin(jet_phi1)
-    jet_px2 = jet_pt2 * np.cos(jet_phi2)
-    jet_py2 = jet_pt2 * np.sin(jet_phi2)
-
-    # sum over axis 1 when not already done
-    if jet_pt1.ndim > 1:
-        jet_px1 = ak.sum(jet_px1, axis=1)
-        jet_py1 = ak.sum(jet_py1, axis=1)
-    if jet_pt2.ndim > 1:
-        jet_px2 = ak.sum(jet_px2, axis=1)
-        jet_py2 = ak.sum(jet_py2, axis=1)
-
-    # propagate to met
-    met_px2 = met_pt1 * np.cos(met_phi1) - (jet_px2 - jet_px1)
-    met_py2 = met_pt1 * np.sin(met_phi1) - (jet_py2 - jet_py1)
-
-    # compute new components
-    met_pt2 = (met_px2**2.0 + met_py2**2.0)**0.5
-    met_phi2 = np.arctan2(met_py2, met_px2)
-
-    return met_pt2, met_phi2
 
 
 #
@@ -262,7 +200,7 @@ def jec(
         jet_phi_all_levels = jetsum.phi
 
         # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
-        met_pt, met_phi = prop_met(
+        met_pt, met_phi = propagate_met(
             jet_pt_only_l1,
             jet_phi_only_l1,
             jet_pt_all_levels,
@@ -290,7 +228,7 @@ def jec(
             if self.propagate_met:
                 jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
                 jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
-                met_pt_up, met_phi_up = prop_met(
+                met_pt_up, met_phi_up = propagate_met(
                     jet_pt_all_levels,
                     jet_phi_all_levels,
                     jet_pt_up,
@@ -298,7 +236,7 @@ def jec(
                     met_pt,
                     met_phi,
                 )
-                met_pt_down, met_phi_down = prop_met(
+                met_pt_down, met_phi_down = propagate_met(
                     jet_pt_all_levels,
                     jet_phi_all_levels,
                     jet_pt_down,
@@ -575,7 +513,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         jet_phi_after = jetsum.phi
 
         # propagate changes to MET
-        met_pt, met_phi = prop_met(
+        met_pt, met_phi = propagate_met(
             jet_pt_before,
             jet_phi_before,
             jet_pt_after,
@@ -583,7 +521,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             events.MET.pt,
             events.MET.phi,
         )
-        met_pt_up, met_phi_up = prop_met(
+        met_pt_up, met_phi_up = propagate_met(
             jet_pt_after,
             jet_phi_after,
             events.Jet.pt_jer_up,
@@ -591,7 +529,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             met_pt,
             met_phi,
         )
-        met_pt_down, met_phi_down = prop_met(
+        met_pt_down, met_phi_down = propagate_met(
             jet_pt_after,
             jet_phi_after,
             events.Jet.pt_jer_down,
