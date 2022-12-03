@@ -507,6 +507,10 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # met propagation
     if self.propagate_met:
+        # save unsmeared quantities
+        events = set_ak_column(events, "MET.pt_unsmeared", events.MET.pt)
+        events = set_ak_column(events, "MET.phi_unsmeared", events.MET.phi)
+
         # get pt and phi of all jets after correcting
         jetsum = events.Jet.sum(axis=1)
         jet_pt_after = jetsum.pt
@@ -558,7 +562,7 @@ def jer_coffea_init(self: Calibrator) -> None:
         }
         self.produces |= {
             "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-            "MET.phi_jer_down",
+            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
         }
 
 
