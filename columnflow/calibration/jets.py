@@ -332,10 +332,10 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # compute JEC keys from config information
     jec = self.config_inst.x.jec
 
-    def make_jme_keys(names, jec=jec):
+    def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
         return [
             f"{jec.campaign}_{self.dataset_inst.x.jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
-            if self.dataset_inst.is_data else
+            if is_data else
             f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
             for name in names
         ]
@@ -347,7 +347,7 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 
     jec_keys = make_jme_keys(jec.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec.levels_for_type1_met)
-    junc_keys = make_jme_keys(sources)
+    junc_keys = make_jme_keys(sources, is_data=False)  # uncertainties only stored as MC keys
 
     # store the evaluators
     self.evaluators = {
