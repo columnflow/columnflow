@@ -467,4 +467,8 @@ def plot_cutflow(
     # ratio plot not used here; set `skip_ratio` to True
     kwargs["skip_ratio"] = True
 
-    return plot_all(plot_config, style_config, **kwargs)
+    p = plot_all(plot_config, style_config, **kwargs)
+
+    plt.gca().set_xticklabels(xticklabels, rotation=45, ha="right")
+
+    return p
