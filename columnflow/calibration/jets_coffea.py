@@ -16,7 +16,6 @@ from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-coffea = maybe_import("coffea")
 
 coffea_extractor = maybe_import("coffea.lookup_tools.extractor")
 coffea_jetmet_tools = maybe_import("coffea.jetmet_tools")

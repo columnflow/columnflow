@@ -169,9 +169,7 @@ def jec(
             ]
             correction = ak_evaluate(corrector, *inputs)
             # update pt for subsequent correctors
-            variable_map.update({
-                "JetPt": variable_map["JetPt"] * correction,
-            })
+            variable_map["JetPt"] = variable_map["JetPt"] * correction
             full_correction = full_correction * correction
 
         return full_correction
