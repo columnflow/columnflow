@@ -143,9 +143,11 @@ def plot_all(
 
     rax = None
     if not skip_ratio:
-        fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+        fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+        (ax, rax) = axs
     else:
         fig, ax = plt.subplots()
+        axs = (ax,)
 
     for key, cfg in plot_config.items():
         if "method" not in cfg:
@@ -217,7 +219,7 @@ def plot_all(
 
     plt.tight_layout()
 
-    return fig
+    return fig, axs
 
 
 def plot_variable_per_process(
@@ -478,8 +480,8 @@ def plot_cutflow(
     # ratio plot not used here; set `skip_ratio` to True
     kwargs["skip_ratio"] = True
 
-    p = plot_all(plot_config, style_config, **kwargs)
+    fig, (ax,) = plot_all(plot_config, style_config, **kwargs)
 
-    plt.gca().set_xticklabels(xticklabels, rotation=45, ha="right")
+    ax.set_xticklabels(xticklabels, rotation=45, ha="right")
 
-    return p
+    return fig, (ax,)

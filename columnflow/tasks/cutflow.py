@@ -325,7 +325,7 @@ class PlotCutflow(
             )
 
             # call the plot function
-            fig = self.call_plot_func(
+            fig, _ = self.call_plot_func(
                 self.plot_function_1d,
                 hists=hists,
                 config_inst=self.config_inst,
@@ -558,7 +558,7 @@ class PlotCutflowVariables1D(
                 )
 
                 # call the plot function
-                fig = self.call_plot_func(
+                fig, _ = self.call_plot_func(
                     self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
@@ -579,7 +579,7 @@ class PlotCutflowVariables1D(
                 )
 
                 # call the plot function
-                fig = self.call_plot_func(
+                fig, _ = self.call_plot_func(
                     self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
@@ -619,7 +619,7 @@ class PlotCutflowVariables2D(
 
         for step in self.chosen_steps:
             # call the plot function
-            fig = self.call_plot_func(
+            fig, _ = self.call_plot_func(
                 self.plot_function_2d,
                 hists=hists[{"step": hist.loc(step)}],
                 config_inst=self.config_inst,

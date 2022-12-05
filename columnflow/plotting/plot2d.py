@@ -95,4 +95,4 @@ def plot_2d(
 
     h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
 
-    return fig
+    return fig, (ax,)

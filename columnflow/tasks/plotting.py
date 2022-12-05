@@ -164,7 +164,7 @@ class PlotVariablesBase(
                 )
 
             # call the plot function
-            fig = self.call_plot_func(
+            fig, _ = self.call_plot_func(
                 plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
