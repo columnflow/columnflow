@@ -317,7 +317,7 @@ class PlotCutflow(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "shift": sum, "mc_weight": sum}]
+                    h = h[{"process": sum, "category": sum, "mc_weight": sum}]
 
                     # add the histogram
                     if process_inst in hists:
@@ -477,7 +477,7 @@ class PlotCutflowVariablesBase(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "shift": sum}]
+                    h = h[{"process": sum, "category": sum}]
 
                     # add the histogram
                     if process_inst in hists:
