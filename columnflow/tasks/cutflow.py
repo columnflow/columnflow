@@ -6,6 +6,7 @@ Tasks to be implemented: MergeSelectionMasks, PlotCutflow
 
 import functools
 from collections import OrderedDict
+from abc import abstractmethod
 
 import luigi
 import law
@@ -176,23 +177,19 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 )
 
 
-class PlotCutflow(
+class PlotCutflowBase(
     ShiftTask,
     SelectorStepsMixin,
     CalibratorsMixin,
     CategoriesMixin,
-    PlotBase1D,
-    ProcessPlotSettingMixin,
+    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    plot_function_1d = luigi.Parameter(
-        default="columnflow.plotting.example.plot_cutflow",
-        significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_cutflow'",
-    )
+    exclude_index = True
+
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     selector_steps_order_sensitive = True
 
@@ -209,6 +206,20 @@ class PlotCutflow(
         parts = super().store_parts()
         parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
         return parts
+
+
+class PlotCutflow(
+    PlotCutflowBase,
+    PlotBase1D,
+    ProcessPlotSettingMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
+    plot_function_1d = luigi.Parameter(
+        default="columnflow.plotting.example.plot_cutflow",
+        significant=False,
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_cutflow'",
+    )
 
     def create_branch_map(self):
         # one category per branch
@@ -345,16 +356,12 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
-    ShiftTask,
+    PlotCutflowBase,
     VariablePlotSettingMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    CategoriesMixin,
-    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    exclude_index = True
 
     only_final_step = luigi.BoolParameter(
         default=False,
@@ -362,21 +369,9 @@ class PlotCutflowVariablesBase(
         description="when True, only create plots for the final selector step; default: False",
     )
 
-    exclude_index = True
-
-    selector_steps_order_sensitive = True
     initial_step = "Initial"
 
     default_variables = ("cf_*",)
-
-    # default upstream dependency task classes
-    dep_CreateCutflowHistograms = CreateCutflowHistograms
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CreateCutflowHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -385,11 +380,6 @@ class PlotCutflowVariablesBase(
         self.chosen_steps = [self.initial_step] + list(self.selector_steps)
         if self.only_final_step:
             del self.chosen_steps[:-1]
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
-        return parts
 
     def create_branch_map(self):
         if not self.categories:
@@ -423,13 +413,13 @@ class PlotCutflowVariablesBase(
             for d in self.datasets
         }
 
+    @abstractmethod
     def output(self):
-        # to be implemented by daughter tasks
-        return None
+        return
 
+    @abstractmethod
     def run_postprocess(self, hists, variable_insts):
-        # to be implemented by daughter tasks
-        pass
+        return
 
     @law.decorator.log
     @view_output_plots
