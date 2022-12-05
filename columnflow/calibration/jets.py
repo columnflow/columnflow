@@ -143,7 +143,7 @@ def jec(
                 "CorrelationGroupUncorrelated",
             ]
         }
-        
+
     If running on data, the datasets must have an auxiliary key *jec_era* defined, e.g. "RunF" for 2017 data.
     """
     # calculate uncorrected pt, mass
@@ -397,7 +397,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             "version": "JRV2",
             "jet_type": "AK4PFchs",
         },
-        
+
     Throws an error if running on data.
     """
     # fail when running on data
