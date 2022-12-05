@@ -12,7 +12,7 @@ from typing import Sequence, Iterable
 import law
 
 from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import prepare_plot_config
+from columnflow.plotting.plot_util import prepare_plot_config, remove_residual_axis
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -234,16 +234,7 @@ def plot_variable_per_process(
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
 
-    # remove any residual shift axis
-    for key, hist in list(hists.items()):
-        if "shift" in hist.axes.name:
-            n_shifts = len(hist.axes["shift"])
-            if n_shifts != 1:
-                raise Exception(
-                    f"shift axis of histogram for key {key} has {n_shifts} values whereas at most "
-                    "1 is expected",
-                )
-            hists[key] = hist[{"shift": sum}]
+    remove_residual_axis(hists, "shift")
 
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
@@ -285,6 +276,8 @@ def plot_variable_variants(
     **kwargs,
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
+
+    remove_residual_axis(hists, "shift")
 
     plot_config = OrderedDict()
 
@@ -432,6 +425,8 @@ def plot_cutflow(
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    remove_residual_axis(hists, "shift")
+
     if not process_settings:
         process_settings = {}
 

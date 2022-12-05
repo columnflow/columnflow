@@ -12,6 +12,7 @@ from collections import OrderedDict
 import law
 
 from columnflow.util import maybe_import
+from columnflow.plot_util import remove_residual_axis
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -33,6 +34,8 @@ def plot_2d(
     process_settings: dict | None = None,  # TODO use
     **kwargs,
 ) -> plt.Figure:
+    # remove shift axis from histograms
+    remove_residual_axis(hists, "shift")
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)

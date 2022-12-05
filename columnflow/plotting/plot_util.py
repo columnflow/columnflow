@@ -17,6 +17,23 @@ mplhep = maybe_import("mplhep")
 od = maybe_import("order")
 
 
+def remove_residual_axis(hists: dict, ax_name: str, max_bins: int=1) -> dict:
+    """
+    removes axis named 'ax_name' if existing and there is only a single bin in the axis;
+    raises Exception otherwise
+    """
+    for key, hist in list(hists.items()):
+        if ax_name in hist.axes.name:
+            n_bins = len(hist.axes[ax_name])
+            if n_bins > max_bins:
+                raise Exception(
+                    f"{ax_name} axis of histogram for key {key} has {n_bins} values whereas at most "
+                    "{max_bins} is expected",
+                )
+            hists[key] = hist[{ax_name: sum}]
+
+    return hists
+
 def prepare_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
