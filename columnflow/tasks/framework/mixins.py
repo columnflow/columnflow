@@ -43,8 +43,8 @@ class CalibratorMixin(ConfigTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
         if params.get("calibrator") not in (None, law.NO_STR):
@@ -108,8 +108,8 @@ class CalibratorsMixin(ConfigTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
         if params.get("calibrators") not in (None, law.NO_STR):
@@ -173,8 +173,8 @@ class SelectorMixin(ConfigTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
         if params.get("selector") not in (None, law.NO_STR):
@@ -283,8 +283,8 @@ class ProducerMixin(ConfigTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
         if params.get("producer") not in (None, law.NO_STR):
@@ -348,8 +348,8 @@ class ProducersMixin(ConfigTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
         if params.get("producers") not in (None, law.NO_STR):
@@ -846,8 +846,8 @@ class ShiftSourcesMixin(ConfigTask):
 class EventWeightMixin(ConfigTask):
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_allowed_shifts(cls, config_inst, params):
+        allowed_shifts = super().get_allowed_shifts(config_inst, params)
 
         # add shifts introduced by event weights
         if config_inst.has_aux("event_weights"):

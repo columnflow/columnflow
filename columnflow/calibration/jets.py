@@ -1,172 +1,94 @@
 # coding: utf-8
 
 """
-Calibration methods for jets
+Jet energy corrections and jet resolution smearing.
 """
 
-import os
-
-import law
-
-from columnflow.util import maybe_import, memoize
 from columnflow.calibration import Calibrator, calibrator
+from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior
-from columnflow.columnar_util import set_ak_column
+from columnflow.util import maybe_import
+from columnflow.columnar_util import set_ak_column, layout_ak_array
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-coffea = maybe_import("coffea")
-
-coffea_extractor = maybe_import("coffea.lookup_tools.extractor")
-coffea_jetmet_tools = maybe_import("coffea.jetmet_tools")
-coffea_txt_converters = maybe_import("coffea.lookup_tools.txt_converters")
 
 
 #
-# first, some utility functions
+# helper functions
 #
 
-
-def get_basenames(struct):
+def get_evaluators(correction_set, names):
     """
-    Replace full file paths in an arbitrary struct by the file basenames.
-    """
-    return law.util.map_struct(
-        lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
-        struct,
-    )
+    Helper function to get a list of correction evaluators from a correctionlib
+    *CorrectionSet* object given a list of *names*. The *names* can refer to either
+    simple or compound corrections.
 
-
-# https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
-def ak_random(*args, rand_func):
-    """
-    Return an awkward array filled with random numbers. The *args* must be broadcastable
-    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
-    random numbers.
-    """
-    args = ak.broadcast_arrays(*args)
-
-    if hasattr(args[0].layout, "offsets"):
-        # convert to flat numpy arrays
-        np_args = [np.asarray(a.layout.content) for a in args]
-
-        # pass flat arrays to random function and get random values
-        np_randvals = rand_func(*np_args)
-
-        # convert back to awkward array
-        return ak.Array(ak.layout.ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
-
-    # pass args directly (this may fail for some array types)
-    # TODO: make function more general
-    np_randvals = rand_func(*args)
-    return ak.from_numpy(np_randvals)
-
-
-@memoize
-def get_lookup_provider(files, conversion_func, provider_cls, names=None):
-    """
-    Create a coffea helper object for looking up information in files of various formats.
-
-    This function reads in the *files* containing lookup tables (e.g. JEC text files), extracts
-    the table of values ("weights") using the conversion function *conversion_func* implemented
-    in coffea, and uses them to construct a helper object of type *provider_cls* that can be
-    passed event data to yield the lookup values (e.g. a :py:class:`FactorizedJetCorrector` or
-    :py:class:`JetCorrectionUncertainty`).
-
-    Optionally, a list of *names* can be supplied to select only a subset of weight tables
-    for constructing the provider object (the default is to use all of them). This is intended
-    to be useful for e.g. selecting only a particular set of jet energy uncertainties from an
-    "UncertaintySources" file. By convention, the *names* always start with the basename of the
-    file that contains the corresponding weight table.
-
-    Entries in *names* may also be tuples of the form (*src_name*, *dst_name*), in which case the
-    *src_name* will be replaced by *dst_name* when passing the names to the *provider_cls*.
-
-    The user must ensure that the *files* can be parsed by the *conversion_func* supplied, and that
-    the information contained in the files is meaningful in connection with the *provider_cls*.
+    Throws a *KeyError* if any of the *names* are not found.
     """
 
-    # the extractor reads the information contained in the files
-    extractor = coffea_extractor.extractor()
+    # raise nice error if keys not found
+    available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
+    missing_keys = set(names) - available_keys
+    if missing_keys:
+        raise RuntimeError("Corrections not found:" + "".join(
+            f"\n  - {name}" for name in names if name in missing_keys
+        ) + "\nAvailable:" + "".join(
+            f"\n  - {name}" for name in sorted(available_keys)
+        ))
 
-    # files contain one or more lookup tables, each identified by a name
-    all_names = []
-    for file_ in files:
-        # the actual file parsing is done here
-        weights = conversion_func(file_)
-        for (name, type_), value in weights.items():
-            extractor.add_weight_set(name, type_, value)
-            all_names.append(name)
+    # retrieve the evaluators
+    return [
+        correction_set.compound[name]
+        if name in correction_set.compound
+        else correction_set[name]
+        for name in names
+    ]
 
-    extractor.finalize()
 
-    # if user provided explicit names, check that corresponding
-    # weight tables have been read
-    if names is not None:
-        src_dst_names = [n if isinstance(n, tuple) else (n, n) for n in names]
-        unknown_names = set(src_name for src_name, _ in src_dst_names) - set(all_names)
-        if unknown_names:
-            unknown_names = ", ".join(sorted(list(unknown_names)))
-            available = ", ".join(sorted(list(all_names)))
-            raise ValueError(
-                f"no weight tables found for the following names: {unknown_names}, "
-                f"available: {available}",
-            )
+def ak_evaluate(evaluator, *args):
+    """
+    Evaluate a correctionlib *Correction* using one or more awkward arrays as inputs.
+    """
+    # fail if no arguments
+    if not args:
+        raise ValueError("Expected at least one argument.")
+
+    # collect arguments that are awkward arrays
+    ak_args = [
+        arg for arg in args if isinstance(arg, ak.Array)
+    ]
+
+    # broadcast akward arrays together and flatten
+    if ak_args:
+        bc_args = ak.broadcast_arrays(*ak_args)
+        flat_args = (
+            np.asarray(ak.flatten(bc_arg, axis=None))
+            for bc_arg in bc_args
+        )
+        output_layout_array = bc_args[0]
     else:
-        names = [(n, n) for n in all_names]
+        flat_args = iter(())
+        output_layout_array = None
 
-    # the evaluator does the actual lookup for each separate name
-    evaluator = extractor.make_evaluator()
+    # multiplex flattened and non-awkward inputs
+    all_flat_args = [
+        next(flat_args) if isinstance(arg, ak.Array) else arg
+        for arg in args
+    ]
 
-    # the provider combines lookup results from multiple names
-    provider = provider_cls(**{
-        dst_name: evaluator[src_name]
-        for src_name, dst_name in names
-    })
+    # apply evaluator to flattened/multiplexed inputs
+    result = evaluator.evaluate(*all_flat_args)
 
-    return provider
+    # apply broadcasted layout to result
+    if output_layout_array is not None:
+        result = layout_ak_array(result, output_layout_array)
 
-
-# helper to compute new MET based on per-jet pts and phis before and after a correction
-def prop_met(
-    jet_pt1: ak.Array,
-    jet_phi1: ak.Array,
-    jet_pt2: ak.Array,
-    jet_phi2: ak.Array,
-    met_pt1: ak.Array,
-    met_phi1: ak.Array,
-) -> tuple[ak.Array, ak.Array]:
-    # avoid unwanted broadcasting
-    assert jet_pt1.ndim == jet_phi1.ndim
-    assert jet_pt2.ndim == jet_phi2.ndim
-
-    # build px and py sums before and after
-    jet_px1 = jet_pt1 * np.cos(jet_phi1)
-    jet_py1 = jet_pt1 * np.sin(jet_phi1)
-    jet_px2 = jet_pt2 * np.cos(jet_phi2)
-    jet_py2 = jet_pt2 * np.sin(jet_phi2)
-
-    # sum over axis 1 when not already done
-    if jet_pt1.ndim > 1:
-        jet_px1 = ak.sum(jet_px1, axis=1)
-        jet_py1 = ak.sum(jet_py1, axis=1)
-    if jet_pt2.ndim > 1:
-        jet_px2 = ak.sum(jet_px2, axis=1)
-        jet_py2 = ak.sum(jet_py2, axis=1)
-
-    # propagate to met
-    met_px2 = met_pt1 * np.cos(met_phi1) - (jet_px2 - jet_px1)
-    met_py2 = met_pt1 * np.sin(met_phi1) - (jet_py2 - jet_py1)
-
-    # compute new components
-    met_pt2 = (met_px2**2.0 + met_py2**2.0)**0.5
-    met_phi2 = np.arctan2(met_py2, met_px2)
-
-    return met_pt2, met_phi2
+    return result
 
 
 #
-# Jet energy corrections
+# jet energy corrections
 #
 
 @calibrator(
@@ -192,63 +114,101 @@ def jec(
     **kwargs,
 ) -> ak.Array:
     """
-    Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
+    Performs the jet energy corrections and uncertainty shifts using the correctionlib, optionally
+    propagating the changes to the MET.
+
+    Requires an external file in the config, for instance:
+
+    .. code-block:: python
+
+        "jet_jerc": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz", "v1")  # noqa
+
+    An auxiliary entry in the config specifying the jet energy correction details is also
+    required, e.g.:
+
+    .. code-block:: python
+
+        cfg.x.jec = {
+            "campaign": "Summer19UL17",
+            "version": "V5",
+            "jet_type": "AK4PFchs",
+            "levels": ["L1L2L3Res"],  # or individual correction levels
+            "levels_for_type1_met": ["L1Fastjet"],
+            "uncertainty_sources": [
+                "Total",
+                "CorrelationGroupMPFInSitu",
+                "CorrelationGroupIntercalibration",
+                "CorrelationGroupbJES",
+                "CorrelationGroupFlavor",
+                "CorrelationGroupUncorrelated",
+            ]
+        }
+
+    If running on data, the datasets must have an auxiliary key *jec_era* defined, e.g. "RunF" for 2017 data.
     """
     # calculate uncorrected pt, mass
     events = set_ak_column(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
     events = set_ak_column(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
 
-    # build/retrieve lookup providers for JECs and uncertainties
-    # NOTE: could also be moved to `jec_setup`, but keep here in case the provider ever needs
-    #       to change based on the event content (JEC change in the middle of a run)
-    jec_provider = get_lookup_provider(
-        self.jec_files,
-        coffea_txt_converters.convert_jec_txt_file,
-        coffea_jetmet_tools.FactorizedJetCorrector,
-        names=self.jec_names,
-    )
-    jec_provider_only_l1 = get_lookup_provider(
-        self.jec_files_only_l1,
-        coffea_txt_converters.convert_jec_txt_file,
-        coffea_jetmet_tools.FactorizedJetCorrector,
-        names=self.jec_names_only_l1,
-    )
-    if self.junc_names:
-        junc_provider = get_lookup_provider(
-            self.junc_files,
-            coffea_txt_converters.convert_junc_txt_file,
-            coffea_jetmet_tools.JetCorrectionUncertainty,
-            names=self.junc_names,
+    def correct_jets(pt, area, eta, rho, evaluator_key="jec"):
+        # variable naming convention
+        variable_map = {
+            "JetA": area,
+            "JetEta": eta,
+            "JetPt": pt,
+            "Rho": ak.values_astype(rho, np.float32),
+        }
+
+        # apply all correctors sequentially, updating the pt each time
+        full_correction = ak.ones_like(pt, dtype=np.float32)
+        for corrector in self.evaluators[evaluator_key]:
+            # determine correct inputs (change depending on corrector)
+            inputs = [
+                variable_map[inp.name]
+                for inp in corrector.inputs
+            ]
+            correction = ak_evaluate(corrector, *inputs)
+            # update pt for subsequent correctors
+            variable_map["JetPt"] = variable_map["JetPt"] * correction
+            full_correction = full_correction * correction
+
+        return full_correction
+
+    # correct jets with only a subset of correction levels
+    # (for calculating TypeI MET correction)
+    if self.propagate_met:
+
+        # get correction factors
+        jec_factors_subset_type1_met = correct_jets(
+            pt=events.Jet.pt_raw,
+            eta=events.Jet.eta,
+            area=events.Jet.area,
+            rho=events.fixedGridRhoFastjetAll,
+            evaluator_key="jec_subset_type1_met",
         )
 
-    # look up JEC correction factors
-    jec_factors = jec_provider.getCorrection(
-        JetEta=events.Jet.eta,
-        JetPt=events.Jet.pt_raw,
-        JetA=events.Jet.area,
-        Rho=events.fixedGridRhoFastjetAll,
-    )
-    jec_factors_only_l1 = jec_provider_only_l1.getCorrection(
-        JetEta=events.Jet.eta,
-        JetPt=events.Jet.pt_raw,
-        JetA=events.Jet.area,
-        Rho=events.fixedGridRhoFastjetAll,
-    )
+        # temporarily apply the new factors with only subset of corrections
+        events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_subset_type1_met)
+        events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_subset_type1_met)
+        events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
-    # apply the new factors with only L1 corrections
-    events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors_only_l1)
-    events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors_only_l1)
-    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
-
-    # store pt and phi of the full jet system for MET propagation, including a selection in raw info
-    # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
-    if self.propagate_met:
+        # store pt and phi of the full jet system for MET propagation, including a selection in raw info
+        # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
         met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
         jetsum = events.Jet[met_prop_mask].sum(axis=1)
-        jet_pt_only_l1 = jetsum.pt
-        jet_phi_only_l1 = jetsum.phi
+        jetsum_pt_subset_type1_met = jetsum.pt
+        jetsum_phi_subset_type1_met = jetsum.phi
 
-    # full jet correction with all levels
+    # factors for full jet correction with all levels
+    jec_factors = correct_jets(
+        pt=events.Jet.pt_raw,
+        eta=events.Jet.eta,
+        area=events.Jet.area,
+        rho=events.fixedGridRhoFastjetAll,
+        evaluator_key="jec",
+    )
+
+    # apply full jet correction
     events = set_ak_column(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
     events = set_ak_column(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
     events = set_ak_column(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
@@ -258,58 +218,61 @@ def jec(
     if self.propagate_met:
         # get pt and phi of all jets after correcting
         jetsum = events.Jet[met_prop_mask].sum(axis=1)
-        jet_pt_all_levels = jetsum.pt
-        jet_phi_all_levels = jetsum.phi
+        jetsum_pt_all_levels = jetsum.pt
+        jetsum_phi_all_levels = jetsum.phi
 
-        # propagate changes from L2 corrections and onwards (i.e. no L1) to MET
-        met_pt, met_phi = prop_met(
-            jet_pt_only_l1,
-            jet_phi_only_l1,
-            jet_pt_all_levels,
-            jet_phi_all_levels,
+        # propagate changes to MET, starting from jets corrected with subset of JEC levels
+        # (recommendation is to propagate only L2 corrections and onwards)
+        met_pt, met_phi = propagate_met(
+            jetsum_pt_subset_type1_met,
+            jetsum_phi_subset_type1_met,
+            jetsum_pt_all_levels,
+            jetsum_phi_all_levels,
             events.RawMET.pt,
             events.RawMET.phi,
         )
         events = set_ak_column(events, "MET.pt", met_pt)
         events = set_ak_column(events, "MET.phi", met_phi)
 
-    # look up JEC uncertainties
-    if self.junc_names:
-        jec_uncertainties = junc_provider.getUncertainty(
-            JetEta=events.Jet.eta,
-            JetPt=events.Jet.pt_raw,
+    # jet energy uncertainty components
+    for name, evaluator in self.evaluators["junc"].items():
+        # get uncertainty
+        jec_uncertainty = ak_evaluate(
+            evaluator,
+            events.Jet.eta,
+            events.Jet.pt_raw,
         )
-        for name, jec_unc_factors in jec_uncertainties:
-            # jec_unc_factors[I_EVT][I_JET][I_VAR]
-            events = set_ak_column(events, f"Jet.pt_jec_{name}_up", events.Jet.pt * jec_unc_factors[:, :, 0])
-            events = set_ak_column(events, f"Jet.pt_jec_{name}_down", events.Jet.pt * jec_unc_factors[:, :, 1])
-            events = set_ak_column(events, f"Jet.mass_jec_{name}_up", events.Jet.mass * jec_unc_factors[:, :, 0])
-            events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * jec_unc_factors[:, :, 1])
 
-            # shifted MET propagation
-            if self.propagate_met:
-                jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
-                jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
-                met_pt_up, met_phi_up = prop_met(
-                    jet_pt_all_levels,
-                    jet_phi_all_levels,
-                    jet_pt_up,
-                    events.Jet[met_prop_mask].phi,
-                    met_pt,
-                    met_phi,
-                )
-                met_pt_down, met_phi_down = prop_met(
-                    jet_pt_all_levels,
-                    jet_phi_all_levels,
-                    jet_pt_down,
-                    events.Jet[met_prop_mask].phi,
-                    met_pt,
-                    met_phi,
-                )
-                events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
-                events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
-                events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
-                events = set_ak_column(events, f"MET.phi_jec_{name}_down", met_phi_down)
+        # apply jet uncertainty shifts
+        events = set_ak_column(events, f"Jet.pt_jec_{name}_up", events.Jet.pt * (1.0 + jec_uncertainty))
+        events = set_ak_column(events, f"Jet.pt_jec_{name}_down", events.Jet.pt * (1.0 - jec_uncertainty))
+        events = set_ak_column(events, f"Jet.mass_jec_{name}_up", events.Jet.mass * (1.0 + jec_uncertainty))
+        events = set_ak_column(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * (1.0 - jec_uncertainty))
+
+        # propagate shifts to MET
+        if self.propagate_met:
+            jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
+            jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
+            met_pt_up, met_phi_up = propagate_met(
+                jetsum_pt_all_levels,
+                jetsum_phi_all_levels,
+                jet_pt_up,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
+            met_pt_down, met_phi_down = propagate_met(
+                jetsum_pt_all_levels,
+                jetsum_phi_all_levels,
+                jet_pt_down,
+                events.Jet[met_prop_mask].phi,
+                met_pt,
+                met_phi,
+            )
+            events = set_ak_column(events, f"MET.pt_jec_{name}_up", met_pt_up)
+            events = set_ak_column(events, f"MET.pt_jec_{name}_down", met_pt_down)
+            events = set_ak_column(events, f"MET.phi_jec_{name}_up", met_phi_up)
+            events = set_ak_column(events, f"MET.phi_jec_{name}_down", met_phi_down)
 
     return events
 
@@ -347,9 +310,6 @@ def jec_init(self: Calibrator) -> None:
 
 @jec.requires
 def jec_requires(self: Calibrator, reqs: dict) -> None:
-    """
-    Add external files bundle (for JEC text files) to dependencies.
-    """
     if "external_files" in reqs:
         return
 
@@ -359,74 +319,44 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 @jec.setup
 def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """
-    Determine correct JEC files for task based on config/dataset and inject them
-    into the calibrator function call.
-    """
-    # get external files bundle that contains JEC text files
     bundle = reqs["external_files"]
 
-    # make selector for JEC text files based on sample type (and era for data)
-    if self.dataset_inst.is_data:
-        resolve_samples = lambda x: x.data[self.dataset_inst.x.jec_era]
-    else:
-        resolve_samples = lambda x: x.mc
+    # import the correction sets from the external file
+    import correctionlib
+    correction_set = correctionlib.CorrectionSet.from_string(
+        bundle.files.jet_jerc.load(formatter="gzip").decode("utf-8"),
+    )
 
-    # store jec files with all correction levels
-    self.jec_files = [
-        t.path
-        for t in resolve_samples(bundle.files.jec).values()
-    ]
-    self.jec_names = list(zip(
-        get_basenames(self.jec_files),
-        get_basenames(resolve_samples(self.config_inst.x.external_files.jec).values()),
-    ))
+    # compute JEC keys from config information
+    jec = self.config_inst.x.jec
 
-    # store jec files with only L1* corrections for MET propagation
-    self.jec_files_only_l1 = [
-        t.path
-        for level, t in resolve_samples(bundle.files.jec).items()
-        if level.startswith("L1")
-    ]
-    self.jec_names_only_l1 = list(zip(
-        get_basenames(self.jec_files_only_l1),
-        get_basenames([
-            src
-            for level, src in resolve_samples(self.config_inst.x.external_files.jec).items()
-            if level.startswith("L1")
-        ]),
-    ))
+    def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
+        return [
+            f"{jec.campaign}_{self.dataset_inst.x.jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
+            if is_data else
+            f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
+            for name in names
+        ]
 
-    # store uncertainty
-    self.junc_files = [
-        t.path
-        for t in resolve_samples(bundle.files.junc)
-    ]
-    self.junc_names = list(zip(
-        get_basenames(self.junc_files),
-        get_basenames(resolve_samples(self.config_inst.x.external_files.junc)),
-    ))
-
-    # ensure exactly one 'UncertaintySources' file is passed
-    if len(self.junc_names) != 1:
-        raise ValueError(
-            f"expected exactly one 'UncertaintySources' file, got {len(self.junc_names)}",
-        )
-
+    # take sources from constructor or config
     sources = self.uncertainty_sources
     if sources is None:
-        sources = self.config_inst.x.jec.uncertainty_sources
+        sources = jec.uncertainty_sources
 
-    # update the weight names to include the uncertainty sources specified in the config
-    self.junc_names = [
-        (f"{basename}_{src}", f"{orig_basename}_{src}")
-        for basename, orig_basename in self.junc_names
-        for src in sources
-    ]
+    jec_keys = make_jme_keys(jec.levels)
+    jec_keys_subset_type1_met = make_jme_keys(jec.levels_for_type1_met)
+    junc_keys = make_jme_keys(sources, is_data=False)  # uncertainties only stored as MC keys
+
+    # store the evaluators
+    self.evaluators = {
+        "jec": get_evaluators(correction_set, jec_keys),
+        "jec_subset_type1_met": get_evaluators(correction_set, jec_keys_subset_type1_met),
+        "junc": dict(zip(sources, get_evaluators(correction_set, junc_keys))),
+    }
 
 
 #
-# Jet energy resolution smearing
+# jet energy resolution smearing
 #
 
 @calibrator(
@@ -449,11 +379,28 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
-    Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
-    """
+    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty shifts
+    using the correctionlib, following the recommendations given in
+    https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
+    Requires an external file in the config as (e.g.)
 
-    # complain when running on data
+    .. code-block:: python
+
+        "jet_jerc": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz", "v1")  # noqa
+
+    as well as an auxiliary entry in the config specifying the jet energy resolution details, e.g.:
+
+    .. code-block:: python
+
+        cfg.x.jer = {
+            "campaign": "Summer19UL17",
+            "version": "JRV2",
+            "jet_type": "AK4PFchs",
+        },
+
+    Throws an error if running on data.
+    """
+    # fail when running on data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
 
@@ -465,36 +412,30 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # TODO: use seeds!
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
-    # build/retrieve lookup providers for JECs and uncertainties
-    # NOTE: could also be moved to `jer_setup`, but keep here in case the provider ever needs
-    #       to change based on the event content (JER change in the middle of a run)
-    jer_provider = get_lookup_provider(
-        self.jer_files,
-        coffea_txt_converters.convert_jr_txt_file,
-        coffea_jetmet_tools.JetResolution,
-        names=self.jer_names,
-    )
-    jersf_provider = get_lookup_provider(
-        self.jersf_files,
-        coffea_txt_converters.convert_jersf_txt_file,
-        coffea_jetmet_tools.JetResolutionScaleFactor,
-        names=self.jersf_names,
+    # pt resolution
+    jer = ak_evaluate(
+        self.evaluators["jer"],
+        events.Jet.eta,
+        events.Jet.pt,
+        events.fixedGridRhoFastjetAll,
     )
 
-    # look up jet energy resolutions
-    # jer[I_EVT][I_JET]
-    jer = ak.materialized(jer_provider.getResolution(
-        JetEta=events.Jet.eta,
-        JetPt=events.Jet.pt,
-        Rho=events.fixedGridRhoFastjetAll,
-    ))
+    # JER scale factors and systematic variations
+    jersf = {
+        syst: ak_evaluate(
+            self.evaluators["sf"],
+            events.Jet.eta,
+            syst,
+        )
+        for syst in ("nom", "up", "down")
+    }
 
-    # look up jet energy resolution scale factors
-    # jersf[I_EVT][I_JET][I_VAR]
-    jersf = jersf_provider.getScaleFactor(
-        JetEta=events.Jet.eta,
-        JetPt=events.Jet.pt,
-    )
+    # array with all JER scale factor variations as an additional axis
+    # (note: axis needs to be regular for broadcasting to work correctly)
+    jersf = ak.to_regular(ak.concatenate([
+        ak.singletons(jersf[syst])
+        for syst in ("nom", "up", "down")
+    ], axis=-1), axis=-1)
 
     # -- stochastic smearing
 
@@ -552,8 +493,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # store pt and phi of the full jet system
     if self.propagate_met:
         jetsum = events.Jet.sum(axis=1)
-        jet_pt_before = jetsum.pt
-        jet_phi_before = jetsum.phi
+        jetsum_pt_before = jetsum.pt
+        jetsum_phi_before = jetsum.phi
 
     # apply the smearing factors to the pt and mass
     # (note: apply variations first since they refer to the original pt)
@@ -569,38 +510,44 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # met propagation
     if self.propagate_met:
+        # save unsmeared quantities
+        events = set_ak_column(events, "MET.pt_unsmeared", events.MET.pt)
+        events = set_ak_column(events, "MET.phi_unsmeared", events.MET.phi)
+
         # get pt and phi of all jets after correcting
         jetsum = events.Jet.sum(axis=1)
-        jet_pt_after = jetsum.pt
-        jet_phi_after = jetsum.phi
+        jetsum_pt_after = jetsum.pt
+        jetsum_phi_after = jetsum.phi
 
         # propagate changes to MET
-        met_pt, met_phi = prop_met(
-            jet_pt_before,
-            jet_phi_before,
-            jet_pt_after,
-            jet_phi_after,
+        met_pt, met_phi = propagate_met(
+            jetsum_pt_before,
+            jetsum_phi_before,
+            jetsum_pt_after,
+            jetsum_phi_after,
             events.MET.pt,
             events.MET.phi,
         )
-        met_pt_up, met_phi_up = prop_met(
-            jet_pt_after,
-            jet_phi_after,
+        events = set_ak_column(events, "MET.pt", met_pt)
+        events = set_ak_column(events, "MET.phi", met_phi)
+
+        # syst variations on top of corrected MET
+        met_pt_up, met_phi_up = propagate_met(
+            jetsum_pt_after,
+            jetsum_phi_after,
             events.Jet.pt_jer_up,
             events.Jet.phi,
             met_pt,
             met_phi,
         )
-        met_pt_down, met_phi_down = prop_met(
-            jet_pt_after,
-            jet_phi_after,
+        met_pt_down, met_phi_down = propagate_met(
+            jetsum_pt_after,
+            jetsum_phi_after,
             events.Jet.pt_jer_down,
             events.Jet.phi,
             met_pt,
             met_phi,
         )
-        events = set_ak_column(events, "MET.pt", met_pt)
-        events = set_ak_column(events, "MET.phi", met_phi)
         events = set_ak_column(events, "MET.pt_jer_up", met_pt_up)
         events = set_ak_column(events, "MET.pt_jer_down", met_pt_down)
         events = set_ak_column(events, "MET.phi_jer_up", met_phi_up)
@@ -620,7 +567,7 @@ def jer_init(self: Calibrator) -> None:
         }
         self.produces |= {
             "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-            "MET.phi_jer_down",
+            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
         }
 
 
@@ -642,39 +589,34 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.
     """
-
-    # get external files bundle that contains JR text files
     bundle = reqs["external_files"]
 
-    # make selector for JEC text files based on sample type
+    # fail if running over data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to setup jet energy resolution smearing in data")
-    resolve_sample = lambda x: x.mc
 
-    # pass text files to calibrator method
-    for key in ("jer", "jersf"):
-        # pass the paths to the text files that contain the corrections/uncertainties
-        files = [
-            t.path for t in resolve_sample(bundle.files[key])
-        ]
-        setattr(self, f"{key}_files", files)
+    # import the correction sets from the external file
+    import correctionlib
+    correction_set = correctionlib.CorrectionSet.from_string(
+        bundle.files.jet_jerc.load(formatter="gzip").decode("utf-8"),
+    )
 
-        # also pass a list of tuples encoding the correspondence between the
-        # file basenames on disk (as determined by `BundleExternalFiles`) and the
-        # original file basenames (needed by coffea to identify the weights correctly)
-        basenames = get_basenames(files)
-        orig_basenames = get_basenames(resolve_sample(self.config_inst.x.external_files[key]))
-        setattr(self, f"{key}_names", list(zip(basenames, orig_basenames)))
+    # compute JER keys from config information
+    jer = self.config_inst.x.jer
+    jer_keys = {
+        "jer": f"{jer.campaign}_{jer.version}_MC_PtResolution_{jer.jet_type}",
+        "sf": f"{jer.campaign}_{jer.version}_MC_ScaleFactor_{jer.jet_type}",
+    }
 
-        # ensure exactly one file is passed
-        if len(files) != 1:
-            raise ValueError(
-                f"Expected exactly one file for key '{key}', got {len(files)}.",
-            )
+    # store the evaluators
+    self.evaluators = {
+        name: get_evaluators(correction_set, [key])[0]
+        for name, key in jer_keys.items()
+    }
 
 
 #
-# General jets calibrator
+# single calibrator for doing both JEC and JER smearing
 #
 
 @calibrator(

@@ -39,12 +39,28 @@ class PlotVariablesBase(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
+    # default upstream dependency task classes
+    dep_MergeHistograms = MergeHistograms
+
     exclude_index = True
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeHistograms.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def store_parts(self):
         parts = super().store_parts()
         parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
         return parts
+
+    def create_branch_map(self):
+        return [
+            DotDict({"category": cat_name, "variable": var_name})
+            for cat_name in sorted(self.categories)
+            for var_name in sorted(self.variables)
+        ]
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -165,8 +181,6 @@ class PlotVariablesBaseSingleShift(
     ShiftTask,
     PlotVariablesBase,
 ):
-    shifts = set(MergeHistograms.shifts)
-
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms
 

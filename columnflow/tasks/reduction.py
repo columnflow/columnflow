@@ -32,15 +32,20 @@ class ReduceEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts | SelectEvents.shifts
 
     # default upstream dependency task classes
     dep_GetDatasetLFNs = GetDatasetLFNs
     dep_CalibrateEvents = CalibrateEvents
     dep_SelectEvents = SelectEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_GetDatasetLFNs.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_CalibrateEvents.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_SelectEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -203,8 +208,6 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         "value 'reduced_file_size' or 512MB'",
     )
 
-    shifts = set(ReduceEvents.shifts)
-
     # default upstream dependency task classes
     dep_ReduceEvents = ReduceEvents
 
@@ -220,6 +223,12 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
             params["merged_size"] = float(merged_size)
 
         return params
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_ReduceEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def requires(self):
         return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
@@ -351,14 +360,18 @@ class MergeReducedEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = ReduceEvents.shifts | MergeReductionStats.shifts
 
     # default upstream dependency task classes
     dep_MergeReductionStats = MergeReductionStats
     dep_ReduceEvents = ReduceEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeReductionStats.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_ReduceEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def is_sandboxed(self):
         # when the task is a merge forest, consider it sandboxed

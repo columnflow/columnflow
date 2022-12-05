@@ -33,15 +33,19 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     # default upstream dependency task classes
     dep_MergeReducedEvents = MergeReducedEvents
     dep_ProduceColumns = ProduceColumns
     dep_MLEvaluation = MLEvaluation
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super(CreateHistograms, self).workflow_requires()
@@ -201,7 +205,6 @@ class MergeHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     only_missing = luigi.BoolParameter(
         default=False,
         description="when True, identify missing variables first and only require histograms of "
@@ -215,10 +218,14 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(CreateHistograms.shifts)
-
     # default upstream dependency task classes
     dep_CreateHistograms = CreateHistograms
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_CreateHistograms.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
@@ -302,7 +309,6 @@ class MergeShiftedHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # disable the shift parameter
