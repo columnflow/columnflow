@@ -232,6 +232,17 @@ def plot_variable_per_process(
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
 
+    # remove any residual shift axis
+    for key, hist in list(hists.items()):
+        if "shift" in hist.axes.name:
+            n_shifts = len(hist.axes["shift"])
+            if n_shifts != 1:
+                raise Exception(
+                    f"shift axis of histogram for key {key} has {n_shifts} values whereas at most "
+                    "1 is expected",
+                )
+            hists[key] = hist[{"shift": sum}]
+
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
 

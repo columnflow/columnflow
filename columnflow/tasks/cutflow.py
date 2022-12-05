@@ -17,6 +17,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
 )
+from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import dev_sandbox, DotDict
@@ -198,6 +199,11 @@ class PlotCutflow(
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
 
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        return parts
+
     def create_branch_map(self):
         # one category per branch
         if not self.categories:
@@ -244,7 +250,7 @@ class PlotCutflow(
         ]
 
     @law.decorator.log
-    @PlotBase.view_output_plots
+    @view_output_plots
     def run(self):
         import hist
 
@@ -370,6 +376,11 @@ class PlotCutflowVariablesBase(
         if self.only_final_step:
             del self.chosen_steps[:-1]
 
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        return parts
+
     def create_branch_map(self):
         if not self.categories:
             raise Exception(
@@ -411,7 +422,7 @@ class PlotCutflowVariablesBase(
         pass
 
     @law.decorator.log
-    @PlotBase.view_output_plots
+    @view_output_plots
     def run(self):
         import hist
 
