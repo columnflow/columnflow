@@ -160,7 +160,7 @@ class PlotBase1D(PlotBase):
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_variable_per_process",
         significant=False,
-        description="name of the 1D plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
     )
     skip_ratio = luigi.BoolParameter(
         default=False,
@@ -196,10 +196,10 @@ class PlotBase2D(PlotBase):
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
-    plot_function_2D = luigi.Parameter(
+    plot_function_2d = luigi.Parameter(
         default="columnflow.plotting.plot2d.plot_2d",
         significant=False,
-        description="name of the 2D plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
     )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
@@ -287,7 +287,7 @@ class ProcessPlotSettingMixin(
 
     def store_parts(self):
         parts = super().store_parts()
-        part = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
+        part = f"datasets_{self.datasets_repr}"
         parts.insert_before("version", "plot", part)
         return parts
 

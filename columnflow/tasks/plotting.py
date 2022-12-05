@@ -76,7 +76,7 @@ class PlotVariablesBase(
         b = self.branch_data
         return [
             self.target(name)
-            for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}")
+            for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}")
         ]
 
     @law.decorator.log
@@ -161,7 +161,7 @@ class PlotVariablesBase(
             )
             if not plot_function:
                 raise NotImplementedError(
-                    f"No Plotting function for {len(variable_insts)} variables implemented of task {self.cls_name}",
+                    f"No Plotting function for {len(variable_insts)} variables implemented of task {self.task_family}",
                 )
 
             # call the plot function
@@ -284,10 +284,10 @@ class PlotShiftedVariables1D(
 
     def output(self):
         b = self.branch_data
-        return [
-            self.target(name)
-            for name in self.get_plot_names(f"plot__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}")
-        ]
+        return [self.target(name) for name in self.get_plot_names
+        (
+            f"plot__proc_{self.processes_repr}__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}"
+        )]
 
     @law.decorator.log
     @PlotBase.view_output_plots

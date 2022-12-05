@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Parameters
+Custom luigi parameters.
 """
 
 import law
@@ -17,8 +17,8 @@ class SettingsParameter(law.MultiCSVParameter):
 
         p = SettingsParameter()
         p.parse("obj1,k1=10,k2,k3=text:obj2,k4=false")
-        # => {"obj1": {"k1": 10, "k2": True, "k3": "text"}, {"obj2": {"k4": False}}}
-        p.serialize("{"obj1": {"k1": "val"}, obj2: {"k2": 2}}")
+        # => {"obj1": {"k1": 10.0, "k2": True, "k3": "text"}, {"obj2": {"k4": False}}}
+        p.serialize({"obj1": {"k1": "val"}, "obj2": {"k2": 2}})
         # => "obj1,k1=val:obj2,k2=2"
     """
     def parse(self, inp):

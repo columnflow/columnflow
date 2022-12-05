@@ -506,17 +506,17 @@ class PlotCutflowVariables1D(
         b = self.branch_data
         if self.per_plot == "processes":
             return law.SiblingFileCollection({
-                s: [
-                    self.local_target(name)
-                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
-                ]
+                s: [self.local_target(name) for name in self.get_plot_names
+                (
+                    f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}"
+                )]
                 for i, s in enumerate(self.chosen_steps)
             })
         else:  # per_plot == "steps"
             return law.SiblingFileCollection({
                 p: [
                     self.local_target(name)
-                    for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__proc_{p}")
+                    for name in self.get_plot_names(f"plot__proc_{p}__cat_{b.category}__var_{b.variable}")
                 ]
                 for p in self.processes
             })
@@ -581,10 +581,10 @@ class PlotCutflowVariables2D(
     def output(self):
         b = self.branch_data
         return law.SiblingFileCollection({
-            s: [
-                self.local_target(name)
-                for name in self.get_plot_names(f"plot__cat_{b.category}__var_{b.variable}__step{i}_{s}")
-            ]
+            s: [self.local_target(name) for name in self.get_plot_names
+            (
+                f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}"
+            )]
             for i, s in enumerate(self.chosen_steps)
         })
 
