@@ -13,7 +13,7 @@ import luigi
 from columnflow.tasks.framework.parameters import SettingsParameter
 from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
-from columnflow.util import test_float, DotDict, dict_add_strict
+from columnflow.util import DotDict, dict_add_strict
 
 
 class PlotBase(AnalysisTask):
@@ -186,7 +186,7 @@ class ProcessPlotSettingMixin(
     Mixin class for tasks creating plots where contributions of different processes are shown.
     """
 
-    process_settings = law.MultiCSVParameter(
+    process_settings = SettingsParameter(
         default=(),
         significant=False,
         description="parameter for changing different process settings; Format: "
@@ -199,45 +199,35 @@ class ProcessPlotSettingMixin(
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        def parse_setting(setting: str):
-            pair = setting.split("=", 1)
-            key, value = pair if len(pair) == 2 else (pair[0], "True")
-            if test_float(value):
-                value = float(value)
-            elif value.lower() == "true":
-                value = True
-            elif value.lower() == "false":
-                value = False
-            return (key, value)
-
-        process_settings = {
-            proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
-            for proc_settings in self.process_settings
-        }
-        dict_add_strict(params, "process_settings", process_settings)
+        dict_add_strict(params, "variable_settings", self.variable_settings)
 
         return params
 
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
-
         if "config_inst" not in params:
             return params
         config_inst = params["config_inst"]
 
         # resolve process_settings
         if "process_settings" in params:
+            settings = params["process_settings"]
             # when empty and default process_settings are defined, use them instead
-            if not params["process_settings"] and config_inst.x("default_process_settings", ()):
-                params["process_settings"] = tuple(config_inst.x("default_process_settings", ()))
+            if not settings and config_inst.x("default_process_settings", ()):
+                settings = config_inst.x("default_process_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.process_settings.parse(settings)
 
-            # when process_settings are a key to a process_settings_groups, use this instead
+            # when process_settings are a key to a process_settings_groups, use them instead
             groups = config_inst.x("process_settings_groups", {})
-            if params["process_settings"] and params["process_settings"][0][0] in groups.keys():
-                params["process_settings"] = groups[params["process_settings"][0][0]]
 
+            if settings and cls.process_settings.serialize(settings) in groups.keys():
+                settings = groups[cls.process_settings.serialize(settings)]
+                if isinstance(settings, tuple):
+                    settings = cls.process_settings.parse(settings)
+
+            params["process_settings"] = settings
         return params
 
 
