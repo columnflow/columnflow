@@ -28,15 +28,19 @@ class SelectEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts
 
     # default upstream dependency task classes
     dep_GetDatasetLFNs = GetDatasetLFNs
     dep_CalibrateEvents = CalibrateEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_GetDatasetLFNs.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_CalibrateEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def workflow_requires(self, only_super: bool = False):
         # workflow super classes might already define requirements, so extend them
@@ -186,15 +190,23 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.tasks.ForestMerge):
-
-    shifts = set(SelectEvents.shifts)
-
+class MergeSelectionStats(
+    DatasetTask,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.tasks.ForestMerge,
+):
     # recursively merge 20 files into one
     merge_factor = 20
 
     # default upstream dependency task classes
     dep_SelectEvents = SelectEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_SelectEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
@@ -263,16 +275,19 @@ class MergeSelectionMasks(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(SelectEvents.shifts)
 
     # recursively merge 8 files into one
     merge_factor = 8
 
     # default upstream dependency task classes
     dep_SelectEvents = SelectEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_SelectEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

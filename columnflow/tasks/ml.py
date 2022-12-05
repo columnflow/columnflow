@@ -27,14 +27,18 @@ class PrepareMLEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     # default upstream dependency task classes
     dep_MergeReducedEvents = MergeReducedEvents
     dep_ProduceColumns = ProduceColumns
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -171,14 +175,13 @@ class MergeMLEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     fold = luigi.IntParameter(
         default=0,
         description="the fold index of the prepared ML events to use; must be compatible with the "
         "number of folds defined in the ML model; default: 0",
     )
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # disable the shift parameter
     shift = None
@@ -304,15 +307,19 @@ class MLEvaluation(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = None
-
-    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
 
     # default upstream dependency task classes
     dep_MLTraining = MLTraining
     dep_MergeReducedEvents = MergeReducedEvents
     dep_ProduceColumns = ProduceColumns
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

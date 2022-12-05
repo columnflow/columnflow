@@ -24,14 +24,17 @@ class ProduceColumns(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = set(MergeReducedEvents.shifts)
-
     # default upstream dependency task classes
     dep_MergeReducedEvents = MergeReducedEvents
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()

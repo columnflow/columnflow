@@ -135,7 +135,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return ()
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
+    def get_allowed_shifts(cls, config_inst, params):
         # implemented only for simplified mro control
         return set()
 
@@ -430,9 +430,6 @@ class ShiftTask(ConfigTask):
     )
     effective_shift = luigi.Parameter(default=law.NO_STR)
 
-    # shifts implemented by this task or one of its requirements
-    shifts = set()
-
     # skip passing effective_shift to cli completion, req params and sandboxing
     exclude_params_index = {"effective_shift"}
     exclude_params_req = {"effective_shift"}
@@ -484,7 +481,7 @@ class ShiftTask(ConfigTask):
             raise ValueError(f"unknown shift: {requested_shift}")
 
         # determine the allowed shifts for this class
-        allowed_shifts = cls.determine_allowed_shifts(config_inst, params)
+        allowed_shifts = cls.get_allowed_shifts(config_inst, params)
 
         # when allowed, add it to the task parameters
         if requested_shift in allowed_shifts:
@@ -495,17 +492,6 @@ class ShiftTask(ConfigTask):
         params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
 
         return params
-
-    @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        # for the basic shift task, only the shifts implemented by this task class are allowed
-        # still call super for simplified mro control
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
-
-        # add class level shifts
-        allowed_shifts |= cls.shifts
-
-        return allowed_shifts
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
@@ -565,9 +551,9 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
+    def get_allowed_shifts(cls, config_inst, params):
         # dataset can have shifts, so extend the set of allowed shifts
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
+        allowed_shifts = super().get_allowed_shifts(config_inst, params)
 
         # dataset must be set
         if "dataset" in params:

@@ -33,14 +33,18 @@ class PlotVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    exclude_index = True
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(MergeHistograms.shifts)
 
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms
+
+    exclude_index = True
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeHistograms.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def create_branch_map(self):
         return [
@@ -229,6 +233,7 @@ class PlotShiftedVariables1d(
         significant=False,
         description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_shifted_variable'",
     )
+
     # default upstream dependency task classes
     dep_MergeShiftedHistograms = MergeShiftedHistograms
 

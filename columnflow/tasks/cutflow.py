@@ -29,10 +29,7 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(MergeSelectionMasks.shifts)
 
     selector_steps_order_sensitive = True
 
@@ -40,6 +37,12 @@ class CreateCutflowHistograms(
 
     # default upstream dependency task classes
     dep_MergeSelectionMasks = MergeSelectionMasks
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_MergeSelectionMasks.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def create_branch_map(self):
         # dummy branch map
@@ -180,10 +183,7 @@ class PlotCutflow(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(CreateCutflowHistograms.shifts)
 
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_cutflow",
@@ -195,6 +195,12 @@ class PlotCutflow(
 
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_CreateCutflowHistograms.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def create_branch_map(self):
         # one category per branch
@@ -340,7 +346,7 @@ class PlotCutflowVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    exclude_index = True
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     only_final_step = luigi.BoolParameter(
         default=False,
@@ -348,9 +354,7 @@ class PlotCutflowVariablesBase(
         description="when True, only create plots for the final selector step; default: False",
     )
 
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(CreateCutflowHistograms.shifts)
+    exclude_index = True
 
     selector_steps_order_sensitive = True
     initial_step = "Initial"
@@ -359,6 +363,12 @@ class PlotCutflowVariablesBase(
 
     # default upstream dependency task classes
     dep_CreateCutflowHistograms = CreateCutflowHistograms
+
+    @classmethod
+    def get_allowed_shifts(cls, config_inst, params):
+        shifts = super().get_allowed_shifts(config_inst, params)
+        shifts |= cls.dep_CreateCutflowHistograms.get_allowed_shifts(config_inst, params)
+        return shifts
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
