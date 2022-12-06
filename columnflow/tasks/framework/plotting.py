@@ -10,13 +10,13 @@ from typing import Any, Callable
 import law
 import luigi
 
-from columnflow.tasks.framework.parameters import SettingsParameter
-from columnflow.tasks.framework.base import AnalysisTask
+from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
+from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.util import DotDict, dict_add_strict
 
 
-class PlotBase(AnalysisTask):
+class PlotBase(ConfigTask):
     """
     Base class for all plotting tasks.
     """
@@ -37,6 +37,12 @@ class PlotBase(AnalysisTask):
         description="a command to execute after the task has run to visualize plots right in the "
         "terminal; no default",
     )
+    general_settings = SettingsParameter(
+        default=(),
+        significant=False,
+        description="Parameter to set a list of custom plotting parameters. Format: "
+        "'option1=val1,option2=val2,...'",
+    )
     skip_legend = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -53,6 +59,7 @@ class PlotBase(AnalysisTask):
         params = DotDict({})
         dict_add_strict(params, "skip_legend", self.skip_legend)
         dict_add_strict(params, "skip_cms", self.skip_cms)
+        dict_add_strict(params, "general_settings", self.general_settings)
         return params
 
     def get_plot_names(self, name: str) -> list[str]:
@@ -104,7 +111,38 @@ class PlotBase(AnalysisTask):
         """
         Hook to update keyword arguments *kwargs* used for plotting in :py:meth:`call_plot_func`.
         """
+        # set items of general_settings in kwargs if corresponding key is not yet present
+        general_settings = kwargs.get("general_settings", {})
+        for key, value in general_settings.items():
+            kwargs.setdefault(key, value)
+
         return kwargs
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve variable_settings
+        if "general_settings" in params:
+            settings = params["general_settings"]
+            # when empty and default general_settings are defined, use them instead
+            if not settings and config_inst.x("default_general_settings", ()):
+                settings = config_inst.x("default_general_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
+
+            # when general_settings are a key to a general_settings_groups, use them instead
+            groups = config_inst.x("general_settings_groups", {})
+            if settings and list(settings.keys())[0] in groups.keys():
+                settings = groups[list(settings.keys())[0]]
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
+
+            params["general_settings"] = settings
+        return params
 
 
 class PlotBase1D(PlotBase):
@@ -186,7 +224,7 @@ class ProcessPlotSettingMixin(
     Mixin class for tasks creating plots where contributions of different processes are shown.
     """
 
-    process_settings = SettingsParameter(
+    process_settings = MultiSettingsParameter(
         default=(),
         significant=False,
         description="parameter for changing different process settings; Format: "
@@ -239,7 +277,7 @@ class VariablePlotSettingMixin(
     Mixin class for tasks creating plots for multiple variables.
     """
 
-    variable_settings = SettingsParameter(
+    variable_settings = MultiSettingsParameter(
         default=(),
         significant=False,
         description="parameter for changing different variable settings; Format: "
