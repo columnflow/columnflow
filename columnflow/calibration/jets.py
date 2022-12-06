@@ -133,7 +133,7 @@ def jec(
             "version": "V5",
             "jet_type": "AK4PFchs",
             "levels": ["L1L2L3Res"],  # or individual correction levels
-            "levels_for_type1_met": ["L1Fastjet"],
+            "levels_for_type1_met": ["L1FastJet"],
             "uncertainty_sources": [
                 "Total",
                 "CorrelationGroupMPFInSitu",
