@@ -12,7 +12,7 @@ from typing import Sequence, Iterable
 import law
 
 from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import prepare_plot_config
+from columnflow.plotting.plot_util import prepare_plot_config, remove_residual_axis, apply_variable_settings
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -143,9 +143,11 @@ def plot_all(
 
     rax = None
     if not skip_ratio:
-        fig, (ax, rax) = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+        fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
+        (ax, rax) = axs
     else:
         fig, ax = plt.subplots()
+        axs = (ax,)
 
     for key, cfg in plot_config.items():
         if "method" not in cfg:
@@ -217,7 +219,7 @@ def plot_all(
 
     plt.tight_layout()
 
-    return fig
+    return fig, axs
 
 
 def plot_variable_per_process(
@@ -228,9 +230,15 @@ def plot_variable_per_process(
     shape_norm: bool | None = False,
     yscale: str | None = "",
     process_settings: dict | None = None,
+    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
+
+    remove_residual_axis(hists, "shift")
+
+    # apply variable_settings
+    hists = apply_variable_settings(hists, variable_settings)
 
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
@@ -269,9 +277,14 @@ def plot_variable_variants(
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
+    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
+
+    remove_residual_axis(hists, "shift")
+
+    hists = apply_variable_settings(hists, variable_settings)
 
     plot_config = OrderedDict()
 
@@ -327,9 +340,12 @@ def plot_shifted_variable(
     yscale: str | None = None,
     legend_title: str | None = None,
     process_settings: dict | None = None,
+    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
+
+    hists = apply_variable_settings(hists, variable_settings)
 
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
@@ -417,10 +433,15 @@ def plot_cutflow(
     shape_norm: bool = False,
     yscale: str | None = None,
     process_settings: dict | None = None,
+    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    remove_residual_axis(hists, "shift")
+
     if not process_settings:
         process_settings = {}
+
+    hists = apply_variable_settings(hists, variable_settings)
 
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
@@ -467,8 +488,8 @@ def plot_cutflow(
     # ratio plot not used here; set `skip_ratio` to True
     kwargs["skip_ratio"] = True
 
-    p = plot_all(plot_config, style_config, **kwargs)
+    fig, (ax,) = plot_all(plot_config, style_config, **kwargs)
 
-    plt.gca().set_xticklabels(xticklabels, rotation=45, ha="right")
+    ax.set_xticklabels(xticklabels, rotation=45, ha="right")
 
-    return p
+    return fig, (ax,)

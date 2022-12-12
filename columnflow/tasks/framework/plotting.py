@@ -10,12 +10,13 @@ from typing import Any, Callable
 import law
 import luigi
 
-from columnflow.tasks.framework.base import AnalysisTask
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
-from columnflow.util import test_float, DotDict, dict_add_strict
+from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
+from columnflow.tasks.framework.base import ConfigTask
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.util import DotDict, dict_add_strict
 
 
-class PlotBase(AnalysisTask):
+class PlotBase(ConfigTask):
     """
     Base class for all plotting tasks.
     """
@@ -36,13 +37,19 @@ class PlotBase(AnalysisTask):
         description="a command to execute after the task has run to visualize plots right in the "
         "terminal; no default",
     )
-    skip_legend = luigi.BoolParameter(
-        default=False,
+    general_settings = SettingsParameter(
+        default=DotDict(),
+        significant=False,
+        description="Parameter to set a list of custom plotting parameters. Format: "
+        "'option1=val1,option2=val2,...'",
+    )
+    skip_legend = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no legend is drawn; default: False",
     )
-    skip_cms = luigi.BoolParameter(
-        default=False,
+    skip_cms = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no CMS logo is drawn; default: False",
     )
@@ -52,6 +59,7 @@ class PlotBase(AnalysisTask):
         params = DotDict({})
         dict_add_strict(params, "skip_legend", self.skip_legend)
         dict_add_strict(params, "skip_cms", self.skip_cms)
+        dict_add_strict(params, "general_settings", self.general_settings)
         return params
 
     def get_plot_names(self, name: str) -> list[str]:
@@ -103,55 +111,41 @@ class PlotBase(AnalysisTask):
         """
         Hook to update keyword arguments *kwargs* used for plotting in :py:meth:`call_plot_func`.
         """
+        # set items of general_settings in kwargs if corresponding key is not yet present
+        general_settings = kwargs.get("general_settings", {})
+        for key, value in general_settings.items():
+            kwargs.setdefault(key, value)
+
         return kwargs
 
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
 
-@law.decorator.factory(accept_generator=True)
-def view_output_plots(fn, opts, task, *args, **kwargs):
-    def before_call():
-        return None
+        # resolve variable_settings
+        if "general_settings" in params:
+            settings = params["general_settings"]
+            # when empty and default general_settings are defined, use them instead
+            if not settings and config_inst.x("default_general_settings", ()):
+                settings = config_inst.x("default_general_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
 
-    def call(state):
-        return fn(task, *args, **kwargs)
+            # when general_settings are a key to a general_settings_groups, use them instead
+            groups = config_inst.x("general_settings_groups", {})
+            if settings and list(settings.keys())[0] in groups.keys():
+                settings = groups[list(settings.keys())[0]]
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
 
-    def after_call(state):
-        view_cmd = getattr(task, "view_cmd", None)
-        if not view_cmd or view_cmd == law.NO_STR:
-            return
-
-        # prepare the view command
-        if "{}" not in view_cmd:
-            view_cmd += " {}"
-
-        # collect all paths to view
-        view_paths = []
-        outputs = law.util.flatten(task.output())
-        while outputs:
-            output = outputs.pop(0)
-            if isinstance(output, law.TargetCollection):
-                outputs.extend(output._flat_target_list)
-                continue
-            if not getattr(output, "path", None):
-                continue
-            if output.path.endswith((".pdf", ".png")):
-                if not isinstance(output, law.LocalTarget):
-                    task.logger.warning(f"cannot show non-local plot at '{output.path}'")
-                    continue
-                elif output.path not in view_paths:
-                    view_paths.append(output.path)
-
-        # loop through paths and view them
-        for path in view_paths:
-            task.publish_message("showing {}".format(path))
-            law.util.interruptable_popen(view_cmd.format(path), shell=True, executable="/bin/bash")
-
-    return before_call, call, after_call
+            params["general_settings"] = settings
+        return params
 
 
-PlotBase.view_output_plots = view_output_plots
-
-
-class PlotBase1d(PlotBase):
+class PlotBase1D(PlotBase):
     """
     Base class for plotting tasks creating 1-dimensional plots.
     """
@@ -159,13 +153,14 @@ class PlotBase1d(PlotBase):
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_variable_per_process",
         significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+        description="name of the 1d plot function; default: "
+        "columnflow.plotting.example.plot_variable_per_process",
     )
-    skip_ratio = luigi.BoolParameter(
-        default=False,
+    skip_ratio = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel; "
-        "default: False",
+        "default: None",
     )
     yscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
@@ -174,11 +169,11 @@ class PlotBase1d(PlotBase):
         description="string parameter to define the y-axis scale of the plot in the upper panel; "
         "choices: NO_STR,linear,log; no default",
     )
-    shape_norm = luigi.BoolParameter(
-        default=False,
+    shape_norm = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, each process is normalized on it's integral in the upper panel; "
-        "default: False",
+        "default: None",
     )
 
     def get_plot_parameters(self) -> DotDict:
@@ -190,18 +185,50 @@ class PlotBase1d(PlotBase):
         return params
 
 
+class PlotBase2D(PlotBase):
+    """
+    Base class for plotting tasks creating 2-dimensional plots.
+    """
+
+    plot_function_2d = luigi.Parameter(
+        default="columnflow.plotting.plot2d.plot_2d",
+        significant=False,
+        description="name of the 2d plot function; default: columnflow.plotting.plot2d.plot_2d",
+    )
+    zscale = luigi.ChoiceParameter(
+        choices=(law.NO_STR, "linear", "log"),
+        default=law.NO_STR,
+        significant=False,
+        description="string parameter to define the z-axis scale of the plot; "
+        "choices: NO_STR,linear,log; no default",
+    )
+    shape_norm = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, the overall bin content is normalized on its integral; "
+        "default: None",
+    )
+
+    def get_plot_parameters(self) -> DotDict:
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "shape_norm", self.shape_norm)
+        return params
+
+
 class ProcessPlotSettingMixin(
     DatasetsProcessesMixin,
     PlotBase,
 ):
     """
-    Base class for tasks creating plots where contributions of different processes are shown.
+    Mixin class for tasks creating plots where contributions of different processes are shown.
     """
 
-    process_settings = law.MultiCSVParameter(
-        default=(),
+    process_settings = MultiSettingsParameter(
+        default=DotDict(),
         significant=False,
-        description="parameter for changing different process settings; Format: "
+        description="parameter for changing different process settings; format: "
         "'process1,option1=value1,option3=value3:process2,option2=value2'; options implemented: "
         "scale, unstack, label; can also be the key of a mapping defined in 'process_settings_groups; "
         "default: value of the 'default_process_settings' if defined, else empty default",
@@ -211,81 +238,86 @@ class ProcessPlotSettingMixin(
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-
-        def parse_setting(setting: str):
-            pair = setting.split("=", 1)
-            key, value = pair if len(pair) == 2 else (pair[0], "True")
-            if test_float(value):
-                value = float(value)
-            elif value.lower() == "true":
-                value = True
-            elif value.lower() == "false":
-                value = False
-            return (key, value)
-
-        process_settings = {
-            proc_settings[0]: dict(map(parse_setting, proc_settings[1:]))
-            for proc_settings in self.process_settings
-        }
-        dict_add_strict(params, "process_settings", process_settings)
+        dict_add_strict(params, "variable_settings", self.variable_settings)
 
         return params
 
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
-
         if "config_inst" not in params:
             return params
         config_inst = params["config_inst"]
 
         # resolve process_settings
         if "process_settings" in params:
+            settings = params["process_settings"]
             # when empty and default process_settings are defined, use them instead
-            if not params["process_settings"] and config_inst.x("default_process_settings", ()):
-                params["process_settings"] = tuple(config_inst.x("default_process_settings", ()))
+            if not settings and config_inst.x("default_process_settings", ()):
+                settings = config_inst.x("default_process_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.process_settings.parse(settings)
 
-            # when process_settings are a key to a process_settings_groups, use this instead
+            # when process_settings are a key to a process_settings_groups, use them instead
             groups = config_inst.x("process_settings_groups", {})
-            if params["process_settings"] and params["process_settings"][0][0] in groups.keys():
-                params["process_settings"] = groups[params["process_settings"][0][0]]
 
+            if settings and cls.process_settings.serialize(settings) in groups.keys():
+                settings = groups[cls.process_settings.serialize(settings)]
+                if isinstance(settings, tuple):
+                    settings = cls.process_settings.parse(settings)
+
+            params["process_settings"] = settings
         return params
 
-    def store_parts(self):
-        parts = super().store_parts()
-        part = f"datasets_{self.datasets_repr}__processes_{self.processes_repr}"
-        parts.insert_before("version", "plot", part)
-        return parts
 
-
-class PlotBase2d(PlotBase):
+class VariablePlotSettingMixin(
+        VariablesMixin,
+        PlotBase,
+):
     """
-    Base class for plotting tasks creating 2-dimensional plots.
+    Mixin class for tasks creating plots for multiple variables.
     """
 
-    plot_function_2d = luigi.Parameter(
-        default="columnflow.plotting.plot2d.plot_2d",
+    variable_settings = MultiSettingsParameter(
+        default=DotDict(),
         significant=False,
-        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
-    )
-    zscale = luigi.ChoiceParameter(
-        choices=(law.NO_STR, "linear", "log"),
-        default=law.NO_STR,
-        significant=False,
-        description="string parameter to define the z-axis scale of the plot; "
-        "choices: NO_STR,linear,log; no default",
-    )
-    shape_norm = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="when True, the overall bin content is normalized on its integral; "
-        "default: False",
+        description="parameter for changing different variable settings; format: "
+        "'var1,option1=value1,option3=value3:var2,option2=value2'; options implemented: "
+        "rebin; can also be the key of a mapping defined in 'variable_settings_groups; "
+        "default: value of the 'default_variable_settings' if defined, else empty default",
+        brace_expand=True,
     )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-        dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
-        dict_add_strict(params, "shape_norm", self.shape_norm)
+        dict_add_strict(params, "variable_settings", self.variable_settings)
+
+        return params
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve variable_settings
+        if "variable_settings" in params:
+            settings = params["variable_settings"]
+            # when empty and default variable_settings are defined, use them instead
+            if not settings and config_inst.x("default_variable_settings", ()):
+                settings = config_inst.x("default_variable_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.variable_settings.parse(settings)
+
+            # when variable_settings are a key to a variable_settings_groups, use them instead
+            groups = config_inst.x("variable_settings_groups", {})
+
+            if settings and cls.variable_settings.serialize(settings) in groups.keys():
+                settings = groups[cls.variable_settings.serialize(settings)]
+                if isinstance(settings, tuple):
+                    settings = cls.variable_settings.parse(settings)
+
+            params["variable_settings"] = settings
         return params

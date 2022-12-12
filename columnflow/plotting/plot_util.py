@@ -17,6 +17,54 @@ mplhep = maybe_import("mplhep")
 od = maybe_import("order")
 
 
+def apply_variable_settings(hists: dict, variable_settings: dict | None = None) -> dict:
+    """
+    applies settings from `variable_settings` dictionary to all histograms in `hists`.
+    """
+    # check if there are variable settings to apply
+    if not variable_settings:
+        return hists
+    relevant_variables = set(list(hists.values())[0].axes.name).intersection(variable_settings.keys())
+    if not relevant_variables:
+        return hists
+
+    # apply all settings
+    for var in relevant_variables:
+        var_settings = variable_settings[var]
+        for key, h in list(hists.items()):
+            # apply rebinning setting
+            rebin_factor = int(var_settings.get("rebin", 1))
+            h = h[{var: hist.rebin(rebin_factor)}]
+
+            # apply label setting
+            var_label = var_settings.get("label")
+            if var_label:
+                h.axes[var].label = var_label
+
+            # override the histogram
+            hists[key] = h
+
+    return hists
+
+
+def remove_residual_axis(hists: dict, ax_name: str, max_bins: int = 1) -> dict:
+    """
+    removes axis named 'ax_name' if existing and there is only a single bin in the axis;
+    raises Exception otherwise
+    """
+    for key, hist in list(hists.items()):
+        if ax_name in hist.axes.name:
+            n_bins = len(hist.axes[ax_name])
+            if n_bins > max_bins:
+                raise Exception(
+                    f"{ax_name} axis of histogram for key {key} has {n_bins} values whereas at most "
+                    "{max_bins} is expected",
+                )
+            hists[key] = hist[{ax_name: sum}]
+
+    return hists
+
+
 def prepare_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,

@@ -12,6 +12,7 @@ from collections import OrderedDict
 import law
 
 from columnflow.util import maybe_import
+from columnflow.plotting.plot_util import remove_residual_axis, apply_variable_settings
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -31,8 +32,13 @@ def plot_2d(
     skip_legend: bool = False,
     skip_cms: bool = False,
     process_settings: dict | None = None,  # TODO use
+    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+    # remove shift axis from histograms
+    remove_residual_axis(hists, "shift")
+
+    hists = apply_variable_settings(hists, variable_settings)
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)
@@ -95,4 +101,4 @@ def plot_2d(
 
     h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
 
-    return fig
+    return fig, (ax,)
