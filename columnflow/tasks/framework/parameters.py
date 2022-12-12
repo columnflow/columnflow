@@ -4,8 +4,6 @@
 Custom luigi parameters.
 """
 
-from typing import Union
-
 import law
 from columnflow.util import test_float
 
@@ -15,7 +13,7 @@ class SettingsParameterBase():
     Base class to implement class methods for different types of setting parameters.
     """
     @classmethod
-    def parse_setting(self, setting: str) -> tuple[str, Union[float, bool, str]]:
+    def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
         if test_float(value):
@@ -27,7 +25,7 @@ class SettingsParameterBase():
         return (key, value)
 
     @classmethod
-    def serialize_setting(self, name: str, value: str) -> str:
+    def serialize_setting(cls, name: str, value: str) -> str:
         return f"{name}={value}"
 
 
