@@ -38,18 +38,18 @@ class PlotBase(ConfigTask):
         "terminal; no default",
     )
     general_settings = SettingsParameter(
-        default=(),
+        default=DotDict(),
         significant=False,
         description="Parameter to set a list of custom plotting parameters. Format: "
         "'option1=val1,option2=val2,...'",
     )
-    skip_legend = luigi.BoolParameter(
-        default=False,
+    skip_legend = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no legend is drawn; default: False",
     )
-    skip_cms = luigi.BoolParameter(
-        default=False,
+    skip_cms = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no CMS logo is drawn; default: False",
     )
@@ -153,13 +153,14 @@ class PlotBase1D(PlotBase):
     plot_function_1d = luigi.Parameter(
         default="columnflow.plotting.example.plot_variable_per_process",
         significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_variable_per_process'",
+        description="name of the 1d plot function; default: "
+        "columnflow.plotting.example.plot_variable_per_process",
     )
-    skip_ratio = luigi.BoolParameter(
-        default=False,
+    skip_ratio = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel; "
-        "default: False",
+        "default: None",
     )
     yscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
@@ -168,11 +169,11 @@ class PlotBase1D(PlotBase):
         description="string parameter to define the y-axis scale of the plot in the upper panel; "
         "choices: NO_STR,linear,log; no default",
     )
-    shape_norm = luigi.BoolParameter(
-        default=False,
+    shape_norm = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, each process is normalized on it's integral in the upper panel; "
-        "default: False",
+        "default: None",
     )
 
     def get_plot_parameters(self) -> DotDict:
@@ -192,7 +193,7 @@ class PlotBase2D(PlotBase):
     plot_function_2d = luigi.Parameter(
         default="columnflow.plotting.plot2d.plot_2d",
         significant=False,
-        description="name of the 2d plot function; default: 'columnflow.plotting.plot2d.plot_2d'",
+        description="name of the 2d plot function; default: columnflow.plotting.plot2d.plot_2d",
     )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
@@ -201,11 +202,11 @@ class PlotBase2D(PlotBase):
         description="string parameter to define the z-axis scale of the plot; "
         "choices: NO_STR,linear,log; no default",
     )
-    shape_norm = luigi.BoolParameter(
-        default=False,
+    shape_norm = law.OptionalBoolParameter(
+        default=None,
         significant=False,
         description="when True, the overall bin content is normalized on its integral; "
-        "default: False",
+        "default: None",
     )
 
     def get_plot_parameters(self) -> DotDict:
@@ -225,9 +226,9 @@ class ProcessPlotSettingMixin(
     """
 
     process_settings = MultiSettingsParameter(
-        default=(),
+        default=DotDict(),
         significant=False,
-        description="parameter for changing different process settings; Format: "
+        description="parameter for changing different process settings; format: "
         "'process1,option1=value1,option3=value3:process2,option2=value2'; options implemented: "
         "scale, unstack, label; can also be the key of a mapping defined in 'process_settings_groups; "
         "default: value of the 'default_process_settings' if defined, else empty default",
@@ -278,9 +279,9 @@ class VariablePlotSettingMixin(
     """
 
     variable_settings = MultiSettingsParameter(
-        default=(),
+        default=DotDict(),
         significant=False,
-        description="parameter for changing different variable settings; Format: "
+        description="parameter for changing different variable settings; format: "
         "'var1,option1=value1,option3=value3:var2,option2=value2'; options implemented: "
         "rebin; can also be the key of a mapping defined in 'variable_settings_groups; "
         "default: value of the 'default_variable_settings' if defined, else empty default",
