@@ -4,27 +4,34 @@
 Custom luigi parameters.
 """
 
+from typing import Union
+
 import law
 from columnflow.util import test_float
 
 
-def parse_setting(setting: str):
-    pair = setting.split("=", 1)
-    key, value = pair if len(pair) == 2 else (pair[0], "True")
-    if test_float(value):
-        value = float(value)
-    elif value.lower() == "true":
-        value = True
-    elif value.lower() == "false":
-        value = False
-    return (key, value)
+class SettingsParameterBase():
+    """
+    Base class to implement class methods for different types of setting parameters.
+    """
+    @classmethod
+    def parse_setting(self, setting: str) -> tuple[str, Union[float, bool, str]]:
+        pair = setting.split("=", 1)
+        key, value = pair if len(pair) == 2 else (pair[0], "True")
+        if test_float(value):
+            value = float(value)
+        elif value.lower() == "true":
+            value = True
+        elif value.lower() == "false":
+            value = False
+        return (key, value)
+
+    @classmethod
+    def serialize_setting(self, name: str, value: str) -> str:
+        return f"{name}={value}"
 
 
-def serialize_setting(name, value):
-    return f"{name}={value}"
-
-
-class SettingsParameter(law.CSVParameter):
+class SettingsParameter(SettingsParameterBase, law.CSVParameter):
     r"""
     Parameter that parses the input of a CSVParameter into a dictionary
 
@@ -41,16 +48,16 @@ class SettingsParameter(law.CSVParameter):
     def parse(self, inp):
         inputs = super().parse(inp)
 
-        return dict(map(parse_setting, inputs))
+        return dict(map(self.parse_setting, inputs))
 
     def serialize(self, value):
         if isinstance(value, dict):
-            value = tuple(serialize_setting(*tpl) for tpl in value.items())
+            value = tuple(self.serialize_setting(*tpl) for tpl in value.items())
 
         return super().serialize(value)
 
 
-class MultiSettingsParameter(law.MultiCSVParameter):
+class MultiSettingsParameter(SettingsParameterBase, law.MultiCSVParameter):
     r"""
     Parameter that parses the input of a MultiCSVParameter into a double-dict structure.
 
@@ -68,7 +75,7 @@ class MultiSettingsParameter(law.MultiCSVParameter):
         inputs = super().parse(inp)
 
         outputs = {
-            settings[0]: dict(map(parse_setting, settings[1:]))
+            settings[0]: dict(map(self.parse_setting, settings[1:]))
             for settings in inputs
         }
 
@@ -77,7 +84,7 @@ class MultiSettingsParameter(law.MultiCSVParameter):
     def serialize(self, value):
         if isinstance(value, dict):
             value = tuple(
-                (str(k),) + tuple(serialize_setting(*tpl) for tpl in v.items())
+                (str(k),) + tuple(self.serialize_setting(*tpl) for tpl in v.items())
                 for k, v in value.items()
             )
 

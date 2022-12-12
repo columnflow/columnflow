@@ -18,23 +18,26 @@ od = maybe_import("order")
 
 
 def apply_variable_settings(hists: dict, variable_settings: dict | None = None) -> dict:
+    """
+    applies settings from `variable_settings` dictionary to all histograms in `hists`.
+    """
     # check if there are variable settings to apply
     if not variable_settings:
         return hists
-    relevant_variables = set(list(hists.values())[0].axes.name) & set(variable_settings.keys())
+    relevant_variables = set(list(hists.values())[0].axes.name).intersection(variable_settings.keys())
     if not relevant_variables:
         return hists
 
     # apply all settings
     for var in relevant_variables:
         var_settings = variable_settings[var]
-        for key, h in hists.items():
+        for key, h in list(hists.items()):
             # apply rebinning setting
             rebin_factor = int(var_settings.get("rebin", 1))
             h = h[{var: hist.rebin(rebin_factor)}]
 
             # apply label setting
-            var_label = var_settings.get("label", None)
+            var_label = var_settings.get("label")
             if var_label:
                 h.axes[var].label = var_label
 
