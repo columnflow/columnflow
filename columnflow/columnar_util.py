@@ -590,7 +590,7 @@ def set_ak_column(
 
     # cast type
     if value_type:
-        ak_array = ak.values_astype(ak_array, value_type)
+        value = ak.values_astype(value, value_type)
 
     # force creating a view for consistent behavior
     orig_fields = ak_array.fields

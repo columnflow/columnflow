@@ -414,7 +414,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column32(events, "Jet.mass_unsmeared", events.Jet.mass)
 
     # use event numbers in chunk to seed random number generator
-    # TODO: use seeds!
+    # TODO: use deterministic seeds!
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
     # pt resolution
