@@ -161,6 +161,10 @@ class CreateCutflowHistograms(
                         )
                     # incrementally update the mask and fill the point
                     mask = mask & arr.steps[step]
+                    if ak.sum(mask) == 0:
+                        # do not try to fill the histogram when all mask entrys are False
+                        break
+
                     fill_kwargs = get_point(mask)
                     arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
                     histograms[var_key].fill(step=step, **dict(zip(fill_kwargs, arrays)))
