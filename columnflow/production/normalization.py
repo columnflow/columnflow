@@ -44,7 +44,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
 
     # compute the weight and store it
     norm_weight = events.mc_weight * lumi * xs / sum_weights
-    events = set_ak_column(events, "normalization_weight", norm_weight)
+    events = set_ak_column(events, "normalization_weight", norm_weight, value_type=np.float32)
 
     return events
 

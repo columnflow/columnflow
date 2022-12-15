@@ -65,7 +65,7 @@ def muon_weights(
         ("systup", "_up"),
         ("systdown", "_down"),
     ]:
-        sf_flat = self.muon_sf_corrector.evaluate(sf_year, abs_eta, pt, syst).astype(np.float32)
+        sf_flat = self.muon_sf_corrector.evaluate(sf_year, abs_eta, pt, syst)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
@@ -74,7 +74,7 @@ def muon_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"muon_weight{postfix}", weight)
+        events = set_ak_column(events, f"muon_weight{postfix}", weight, value_type=np.float32)
 
     return events
 
