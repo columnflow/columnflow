@@ -46,12 +46,12 @@ class PlotBase(ConfigTask):
     skip_legend = law.OptionalBoolParameter(
         default=None,
         significant=False,
-        description="when True, no legend is drawn; default: False",
+        description="when True, no legend is drawn; default: None",
     )
     skip_cms = law.OptionalBoolParameter(
         default=None,
         significant=False,
-        description="when True, no CMS logo is drawn; default: False",
+        description="when True, no CMS logo is drawn; default: None",
     )
 
     def get_plot_parameters(self) -> DotDict:
@@ -111,6 +111,11 @@ class PlotBase(ConfigTask):
         """
         Hook to update keyword arguments *kwargs* used for plotting in :py:meth:`call_plot_func`.
         """
+        # remove None entrys from plot kwargs
+        for key, value in list(kwargs.items()):
+            if value is None:
+                kwargs.pop(key)
+
         # set items of general_settings in kwargs if corresponding key is not yet present
         general_settings = kwargs.get("general_settings", {})
         for key, value in general_settings.items():
@@ -238,7 +243,7 @@ class ProcessPlotSettingMixin(
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
-        dict_add_strict(params, "variable_settings", self.variable_settings)
+        dict_add_strict(params, "process_settings", self.process_settings)
 
         return params
 
