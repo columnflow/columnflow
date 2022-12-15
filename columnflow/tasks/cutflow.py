@@ -544,7 +544,7 @@ class PlotCutflowVariables1D(
             for step in self.chosen_steps:
                 # sort hists by process order
                 step_hists = OrderedDict(
-                    (process_inst, h[{"step": h.loc(step)}])
+                    (process_inst, h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
                 )
 
