@@ -58,13 +58,13 @@ They might require a **valid voms proxy** for accessing input data.
         --branch 0
 
     # create a plot
-    law run cf.PlotVariables \
+    # (if "imgcat" is installed for your shell, add ``--view-cmd imgcat``)
+    law run cf.PlotVariables1D \
         --version v1 \
         --datasets st_tchannel_t \
         --producers example \
         --variables jet1_pt \
-        --categories 1e \
-        --branch 0
+        --categories incl
 
     # create a (test) datacard (CMS-style)
     law run cf.CreateDatacards \
@@ -77,11 +77,11 @@ They might require a **valid voms proxy** for accessing input data.
 Projects using columnflow
 -------------------------
 
-- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
 - `hh2bbtautau <https://github.com/uhh-cms/hh2bbtautau>`__: HH → bb𝜏𝜏 analysis with CMS.
 - `hh2bbww <https://github.com/uhh-cms/hh2bbww>`__: HH → bbWW analysis with CMS.
 - `topmass <https://github.com/uhh-cms/topmass>`__: Top quark mass measurement with CMS.
 - `mttbar <https://github.com/uhh-cms/mttbar>`__: Search for heavy resonances in ttbar events with CMS.
+- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
 
 
 Development
@@ -89,6 +89,5 @@ Development
 
 - Source hosted at `GitHub <https://github.com/uhh-cms/columnflow>`__
 - Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/columnflow/issues>`__
-
 
 .. marker-after-body
