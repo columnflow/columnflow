@@ -25,7 +25,7 @@ class PlotFunctionParameter(luigi.Parameter):
         default: str,
         description: str | None = None,
         amend_description: bool = False,
-    ) -> luigi.Parameter:
+    ) -> PlotFunctionParameter:
         inst = copy.copy(self)
         inst._default = default
         if description is not None:
