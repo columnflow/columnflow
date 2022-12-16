@@ -152,20 +152,9 @@ class PlotVariablesBase(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            # determine the correct plot function for this variable
-            plot_function = (
-                self.plot_function_1d if len(variable_insts) == 1 and "plot_function_1d" in dir(self) else
-                self.plot_function_2d if len(variable_insts) == 2 and "plot_function_2d" in dir(self) else
-                None
-            )
-            if not plot_function:
-                raise NotImplementedError(
-                    f"No Plotting function for {len(variable_insts)} variables implemented of task {self.task_family}",
-                )
-
             # call the plot function
             fig, _ = self.call_plot_func(
-                plot_function,
+                self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
                 variable_insts=variable_insts,
@@ -220,14 +209,20 @@ class PlotVariables1D(
     PlotVariablesBaseSingleShift,
     PlotBase1D,
 ):
-    pass
+    plot_function = PlotBase.plot_function.with_default(
+        "columnflow.plotting.example.plot_variable_per_process",
+        amend_description=True,
+    )
 
 
 class PlotVariables2D(
     PlotVariablesBaseSingleShift,
     PlotBase2D,
 ):
-    pass
+    plot_function = PlotBase.plot_function.with_default(
+        "columnflow.plotting.plot2d.plot_2d",
+        amend_description=True,
+    )
 
 
 class PlotVariablesPerProcess2D(
@@ -253,11 +248,6 @@ class PlotVariablesBaseMultiShifts(
         significant=False,
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
-    )
-    plot_function_1d = luigi.Parameter(
-        default="columnflow.plotting.example.plot_shifted_variable",
-        significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_shifted_variable'",
     )
 
     # default upstream dependency task classes
@@ -311,7 +301,10 @@ class PlotShiftedVariables1D(
     PlotVariablesBaseMultiShifts,
     PlotBase1D,
 ):
-    pass
+    plot_function = PlotBase.plot_function.with_default(
+        "columnflow.plotting.example.plot_shifted_variable",
+        amend_description=True,
+    )
 
 
 class PlotShiftedVariablesPerProcess1D(

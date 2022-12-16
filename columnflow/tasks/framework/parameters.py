@@ -4,11 +4,35 @@
 Custom luigi parameters.
 """
 
-from typing import Union
+from __future__ import annotations
+
+import copy
 
 import law
+import luigi
 
 from columnflow.util import test_float, DotDict
+
+
+class PlotFunctionParameter(luigi.Parameter):
+    """
+    Simply parameter subclass that provides a convenience method for copying an instance, assigning
+    a different default value and optionally changing the description text.
+    """
+
+    def with_default(
+        self,
+        default: str,
+        description: str | None = None,
+        amend_description: bool = False,
+    ) -> luigi.Parameter:
+        inst = copy.copy(self)
+        inst._default = default
+        if description is not None:
+            inst.description = description
+        elif amend_description:
+            inst.description += f"; default: {default}"
+        return inst
 
 
 class SettingsParameter(law.CSVParameter):
@@ -28,7 +52,7 @@ class SettingsParameter(law.CSVParameter):
     """
 
     @classmethod
-    def parse_setting(cls, setting: str) -> tuple[str, Union[float, bool, str]]:
+    def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
         if test_float(value):
