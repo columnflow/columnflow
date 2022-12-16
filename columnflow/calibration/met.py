@@ -42,8 +42,8 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     corr_pt = self.met_pt_corrector.evaluate(*args)
     corr_phi = self.met_phi_corrector.evaluate(*args)
 
-    events = set_ak_column(events, "MET.pt", corr_pt)
-    events = set_ak_column(events, "MET.phi", corr_phi)
+    events = set_ak_column(events, "MET.pt", corr_pt, value_type=np.float32)
+    events = set_ak_column(events, "MET.phi", corr_phi, value_type=np.float32)
 
     return events
 

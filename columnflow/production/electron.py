@@ -65,7 +65,7 @@ def electron_weights(
         ("sfup", "_up"),
         ("sfdown", "_down"),
     ]:
-        sf_flat = self.electron_sf_corrector.evaluate(sf_year, syst, wp, sc_eta, pt).astype(np.float32)
+        sf_flat = self.electron_sf_corrector.evaluate(sf_year, syst, wp, sc_eta, pt)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
@@ -74,7 +74,7 @@ def electron_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"electron_weight{postfix}", weight)
+        events = set_ak_column(events, f"electron_weight{postfix}", weight, value_type=np.float32)
 
     return events
 

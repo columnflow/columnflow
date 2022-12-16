@@ -559,6 +559,7 @@ def set_ak_column(
     ak_array: ak.Array,
     route: Route | Sequence[str] | str,
     value: ak.Array,
+    value_type: type | str | None = None,
 ) -> ak.Array:
     """
     Inserts a new column into awkward array *ak_array* and returns a new view with the column added
@@ -567,7 +568,8 @@ def set_ak_column(
     The column can be defined through a route, i.e., a :py:class:`Route` instance, a tuple of
     strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot
     format (e.g. ``"Jet.pt"``), and the column *value* itself. Intermediate, non-existing fields are
-    automatically created.
+    automatically created. When a *value_type* is defined, *ak_array* is casted into this type
+    before it is inserted.
 
     Example:
 
@@ -585,6 +587,10 @@ def set_ak_column(
         a view to operate on.
     """
     route = Route(route)
+
+    # cast type
+    if value_type:
+        value = ak.values_astype(value, value_type)
 
     # force creating a view for consistent behavior
     orig_fields = ak_array.fields

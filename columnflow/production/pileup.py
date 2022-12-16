@@ -4,11 +4,18 @@
 Column production methods related to pileup weights.
 """
 
+import functools
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
+
+# helper
+set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
@@ -31,9 +38,9 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     indices[indices > max_bin] = max_bin
 
     # save the weights
-    events = set_ak_column(events, "pu_weight", self.pu_weights.nominal[indices])
-    events = set_ak_column(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
-    events = set_ak_column(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
+    events = set_ak_column_f32(events, "pu_weight", self.pu_weights.nominal[indices])
+    events = set_ak_column_f32(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
+    events = set_ak_column_f32(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
 
     return events
 

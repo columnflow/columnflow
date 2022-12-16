@@ -95,7 +95,7 @@ def btag_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # save the new column
-        return set_ak_column(events, column_name, ak.values_astype(weight, np.float32))
+        return set_ak_column(events, column_name, weight, value_type=np.float32)
 
     # when the uncertainty is a known jec shift, obtain the propagated effect and do not produce
     # additional systematics
