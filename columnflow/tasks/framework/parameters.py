@@ -16,7 +16,7 @@ from columnflow.util import test_float, DotDict
 
 class PlotFunctionParameter(luigi.Parameter):
     """
-    Simply parameter subclass that provides a convenience method for copying an instance, assigning
+    Plain parameter subclass that provides a convenience method for copying an instance, assigning
     a different default value and optionally changing the description text.
     """
 
