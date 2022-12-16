@@ -145,15 +145,24 @@ class SelectEvents(
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
+            results_array = results.to_ak()
+
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(results_array)
 
             # save results as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
             result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+            self.chunked_reader.queue(sorted_ak_to_parquet, (results_array, chunk.path))
 
             # remove columns
             if keep_columns:
                 events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite:
+                    self.raise_if_not_finite(events)
 
                 # save additional columns as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")

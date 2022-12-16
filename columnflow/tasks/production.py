@@ -100,6 +100,10 @@ class ProduceColumns(
             # remove columns
             events = route_filter(events)
 
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(events)
+
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
