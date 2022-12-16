@@ -325,11 +325,6 @@ class MergeSelectionMasks(
     def merge_output(self):
         return self.target("masks.parquet")
 
-    @law.decorator.log
-    @law.decorator.localize
-    def run(self):
-        return super().run()
-
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first
         if self.is_leaf():
@@ -338,7 +333,7 @@ class MergeSelectionMasks(
             tmp_dir.touch()
             inputs = self.zip_results_and_columns(inputs, tmp_dir)
 
-        law.pyarrow.merge_parquet_task(self, inputs, output, local=True)
+        law.pyarrow.merge_parquet_task(self, inputs, output)
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         import awkward as ak

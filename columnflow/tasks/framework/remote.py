@@ -16,6 +16,7 @@ from columnflow.util import real_path
 
 
 _default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
+_default_htcondor_share_software = law.util.flag_to_bool(os.getenv("CF_HTCONDOR_SHARE_SOFTWARE", "0"))
 _default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "maxwell")
 _default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
 
@@ -301,10 +302,11 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         f"naf,cern; default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
-        default=False,
+        default=_default_htcondor_share_software,
         significant=False,
         description="when True, do not bundle and download software plus sandboxes but instruct "
-        "jobs to use the software in the current CF_SOFTWARE_BASE if accessible; default: False",
+        "jobs to use the software in the current CF_SOFTWARE_BASE if accessible; default: "
+        f"{_default_htcondor_share_software}",
     )
 
     exclude_params_branch = {
