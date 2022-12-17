@@ -53,12 +53,18 @@ class ReduceEvents(
             return reqs
 
         reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calibrations"] = [
                 self.dep_CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
             reqs["selection"] = self.dep_SelectEvents.req(self)
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.dep_SelectEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+
         return reqs
 
     def requires(self):

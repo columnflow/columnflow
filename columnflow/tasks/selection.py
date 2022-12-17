@@ -43,17 +43,21 @@ class SelectEvents(
         return shifts
 
     def workflow_requires(self, only_super: bool = False):
-        # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
         reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calib"] = [
                 self.dep_CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.dep_CalibrateEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
