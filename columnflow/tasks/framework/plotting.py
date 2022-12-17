@@ -12,9 +12,7 @@ import luigi
 
 from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
-from columnflow.tasks.framework.parameters import (
-    SettingsParameter, MultiSettingsParameter, PlotFunctionParameter,
-)
+from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict
 
 
@@ -23,7 +21,7 @@ class PlotBase(ConfigTask):
     Base class for all plotting tasks.
     """
 
-    plot_function = PlotFunctionParameter(
+    plot_function = luigi.Parameter(
         significant=False,
         description="location of the plot function to use in the format 'module.function_name'",
     )
