@@ -9,7 +9,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -23,7 +23,7 @@ class PrepareMLEvents(
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -117,7 +117,7 @@ class PrepareMLEvents(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_reader(
+        for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested
@@ -149,7 +149,7 @@ class PrepareMLEvents(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
                 output_chunks[f][pos.index] = chunk
-                self.chunked_reader.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs.targets):
@@ -165,7 +165,7 @@ class PrepareMLEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-PrepareMLEvents.check_finite = ChunkedReaderMixin.check_finite.copy(
+PrepareMLEvents.check_finite = ChunkedIOMixin.check_finite.copy(
     default=PrepareMLEvents.task_family in check_finite_tasks,
     add_default_to_description=True,
 )
@@ -315,7 +315,7 @@ class MLEvaluation(
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -412,7 +412,7 @@ class MLEvaluation(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_reader(
+        for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested
@@ -446,7 +446,7 @@ class MLEvaluation(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
@@ -454,7 +454,7 @@ class MLEvaluation(
 
 
 # overwrite class defaults
-MLEvaluation.check_finite = ChunkedReaderMixin.check_finite.copy(
+MLEvaluation.check_finite = ChunkedIOMixin.check_finite.copy(
     default=MLEvaluation.task_family in check_finite_tasks,
     add_default_to_description=True,
 )

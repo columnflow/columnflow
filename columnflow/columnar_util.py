@@ -8,14 +8,13 @@ from __future__ import annotations
 
 __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
-    "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedReader",
+    "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
     "PreloadedNanoEventsFactory",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
 ]
 
-import os
 import re
 import math
 import time
@@ -1902,7 +1901,7 @@ class NoThreadPool(object):
 class TaskQueue(object):
     """
     Simple task queue that saves functions and arguments to call them with in multiple queues,
-    separated by priority level, as used in the :py:class:`ChunkedReader`.
+    separated by priority level, as used in the :py:class:`ChunkedIOHandler`.
     """
 
     # task object
@@ -1925,8 +1924,7 @@ class TaskQueue(object):
     ) -> None:
         """
         Adds a callable *func* that will be executed with *args* and *kwargs* into the queue of
-        tasks to process in multiple threads with a certain *priority*. The processing commences
-        upon iteration through this reader instance.
+        tasks to process in multiple threads with a certain *priority*.
         """
         if priority not in self._tasks:
             self._tasks[priority] = []
@@ -1954,11 +1952,13 @@ class TaskQueue(object):
         return task
 
 
-class ChunkedReader(object):
+class ChunkedIOHandler(object):
     """
     Allows reading one or multiple files and iterating through chunks of their content with
     multi-threaded read operations. Chunks and their positions (denoted by start and stop markers,
-    and the index of the chunk itself) are accessed by iterating through the reader.
+    and the index of the chunk itself) are accessed by iterating through a handler instance. Also,
+    this handler allows interactions with the internal queue handling tasks in multiple-threads to
+    effectively write output chunks within the same pool of threads.
 
     The content to load is configurable through *source*, which can be a file path or an opened file
     object, and a *source_type*, which defines how the *source* should be opened and traversed for
@@ -1970,8 +1970,8 @@ class ChunkedReader(object):
     .. code-block:: python
 
         # iterate through a single file
-        # (creating the reader and iterating through it in the same line)
-        for chunk, position in ChunkedReader("data.root", source_type="coffea_root"):
+        # (creating the handler and iterating through it in the same line)
+        for chunk, position in ChunkedIOHandler("data.root", source_type="coffea_root"):
             # chunk is a NanoAODEventsArray as returned by read_coffea_root
             jet_pts = chunk.Jet.pt
             print(f"jet pts of chunk {chunk.index}: {jet_pts}")
@@ -1979,16 +1979,19 @@ class ChunkedReader(object):
     .. code-block:: python
 
         # iterate through multiple files simultaneously
-        # (also, now creating the reader first and then iterating through it)
-        with ChunkedReader(
+        # (also, now creating the handler first and then iterating through it)
+        with ChunkedIOHandler(
             ("data.root", "masks.parquet"),
             source_type=("coffea_root", "awkward_parquet"),
-        ) as reader:
-            for (chunk, masks), position in reader:
+        ) as handler:
+            for (chunk, masks), position in handler:
                 # chunk is a NanoAODEventsArray as returned by read_coffea_root
                 # masks is an awkward array as returned by read_awkward_parquet
                 selected_jet_pts = chunk[masks].Jet.pt
                 print(f"selected jet pts of chunk {chunk.index}: {selected_jet_pts}")
+
+                # add a callback to the task queue, e.g. for saving a column
+                handler.queue(ak.to_parquet, (selected_jet_pts, "some/path.parquet"))
 
     The maximum size of the chunks and the number of threads to load them can be configured through
     *chunk_size* and *pool_size*. Unless *lazy* is *True*, chunks are fully loaded into memory
@@ -2014,13 +2017,13 @@ class ChunkedReader(object):
         self,
         source: Any,
         source_type: str | Sequence[str] | None = None,
-        chunk_size: int = int(os.getenv("CF_CHUNKED_READER_CHUNK_SIZE", 50000)),
-        pool_size: int = int(os.getenv("CF_CHUNKED_READER_POOL_SIZE", 4)),
+        chunk_size: int = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000),
+        pool_size: int = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 4),
         lazy: bool | Sequence[bool] = False,
         open_options: dict | list[dict] | None = None,
         read_options: dict | list[dict] | None = None,
         iter_message: str = "handling chunk {pos.index}",
-        debug: bool = law.util.flag_to_bool(os.getenv("CF_CHUNKED_READER_DEBUG", False)),
+        debug: bool = law.config.get_expanded_boolean("analysis", "chunked_io_debug", False),
     ):
         super().__init__()
 
@@ -2077,7 +2080,9 @@ class ChunkedReader(object):
 
         # debug settings
         if debug:
-            logger.info("ChunkedReader set to debug mode, using in-thread pool with size 1")
+            logger.info(
+                f"{self.__class__.__name__} set to debug mode, using in-thread pool with size 1",
+            )
             self.pool_size = 1
             self.pool_cls = NoThreadPool
 
@@ -2376,7 +2381,7 @@ class ChunkedReader(object):
     @property
     def n_chunks(self) -> int:
         """
-        Returns the number of chunks this reader will iterate over based on the number of entries
+        Returns the number of chunks this instance will iterate over based on the number of entries
         :py:attr:`n_entries` and the configured :py:attr:`chunk_size`. In case :py:attr:`n_entries`
         was not initialzed yet (via :py:meth:`open`), an *AttributeError* is raised.
         """
@@ -2387,14 +2392,14 @@ class ChunkedReader(object):
     @property
     def closed(self) -> bool:
         """
-        Returns whether the reader is closed.
+        Returns whether the instance is closed for reading.
         """
         return len(self.source_objects) != self.n_sources
 
     def open(self) -> None:
         """
         Opens all previously registered sources and preloads all source objects to read content from
-        later on. Nothing happens if the reader is already opened (i.e. not :py:attr:`closed`).
+        later on. Nothing happens if this instance is already opened (i.e. not :py:attr:`closed`).
         """
         if not self.closed:
             # already open
@@ -2426,7 +2431,7 @@ class ChunkedReader(object):
     def close(self) -> None:
         """
         Closes all cached, opened files and deletes loaded source objects. Nothing happens if the
-        reader is already :py:attr:`closed`.
+        instance is already :py:attr:`closed` for reading.
         """
         if self.closed:
             # already closed
@@ -2449,7 +2454,7 @@ class ChunkedReader(object):
         interface.
         """
         if self.closed:
-            raise Exception("cannot iterate trough closed reader")
+            raise Exception(f"cannot iterate through closed {self.__class__.__name__}")
 
         # create a list of read functions
         read_funcs = [

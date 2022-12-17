@@ -322,7 +322,6 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
         "CF_VOMS": "cf_voms",
-        "CF_TASK_NAMESPACE": "cf_task_namespace",
     }
 
     # default upstream dependency task classes

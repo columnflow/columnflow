@@ -36,7 +36,7 @@ class OutputLocation(enum.Enum):
 
 class BaseTask(law.Task):
 
-    task_namespace = os.getenv("CF_TASK_NAMESPACE")
+    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):

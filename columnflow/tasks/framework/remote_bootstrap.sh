@@ -18,7 +18,6 @@ bootstrap_htcondor_standalone() {
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_VOMS="{{cf_voms}}"
-    export CF_TASK_NAMESPACE="{{cf_task_namespace}}"
     export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible

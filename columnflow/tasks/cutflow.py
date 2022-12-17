@@ -13,7 +13,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -29,7 +29,7 @@ class CreateCutflowHistograms(
     VariablesMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -120,7 +120,7 @@ class CreateCutflowHistograms(
                 # enable weights and store it
                 histograms[var_key] = h.Weight()
 
-        for arr, pos in self.iter_chunked_reader(
+        for arr, pos in self.iter_chunked_io(
             inputs["masks"].path,
             source_type="awkward_parquet",
         ):

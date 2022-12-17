@@ -92,8 +92,6 @@ setup_columnflow() {
     #   CF_CERN_USER_FIRSTCHAR
     #       The first character of the user's CERN / WLCG name. Derived from $CF_CERN_USER. Used in
     #       law.cfg.
-    #   CF_TASK_NAMESPACE
-    #       The prefix (namespace) of tasks in columnflow. Set to "cf" when not already defined.
     #   CF_LOCAL_SCHEDULER
     #       Either "true" or "false", deciding whether the process-local luigi scheduler should be
     #       used by default. Queried during the interactive setup. Used in law.cfg.
