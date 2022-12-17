@@ -114,6 +114,14 @@ class ProduceColumns(
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
 
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+ProduceColumns.check_finite = ChunkedReaderMixin.check_finite.copy(
+    default=ProduceColumns.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+
 ProduceColumnsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=ProduceColumns,

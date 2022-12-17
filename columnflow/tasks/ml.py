@@ -163,6 +163,14 @@ class PrepareMLEvents(
             self.publish_message(f"partition {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
 
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+PrepareMLEvents.check_finite = ChunkedReaderMixin.check_finite.copy(
+    default=PrepareMLEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+
 PrepareMLEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=PrepareMLEvents,
@@ -443,6 +451,13 @@ class MLEvaluation(
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+
+
+# overwrite class defaults
+MLEvaluation.check_finite = ChunkedReaderMixin.check_finite.copy(
+    default=MLEvaluation.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
 
 
 MLEvaluationWrapper = wrapper_factory(

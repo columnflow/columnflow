@@ -192,6 +192,14 @@ class SelectEvents(
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
 
 
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+SelectEvents.check_finite = ChunkedReaderMixin.check_finite.copy(
+    default=SelectEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+
 SelectEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=SelectEvents,
