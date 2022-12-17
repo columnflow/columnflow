@@ -209,9 +209,9 @@ class PlotVariables1D(
     PlotVariablesBaseSingleShift,
     PlotBase1D,
 ):
-    plot_function = PlotBase.plot_function.with_default(
-        "columnflow.plotting.example.plot_variable_per_process",
-        amend_description=True,
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        add_default_to_description=True,
     )
 
 
@@ -219,9 +219,9 @@ class PlotVariables2D(
     PlotVariablesBaseSingleShift,
     PlotBase2D,
 ):
-    plot_function = PlotBase.plot_function.with_default(
-        "columnflow.plotting.plot2d.plot_2d",
-        amend_description=True,
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot2d.plot_2d",
+        add_default_to_description=True,
     )
 
 
@@ -301,9 +301,9 @@ class PlotShiftedVariables1D(
     PlotVariablesBaseMultiShifts,
     PlotBase1D,
 ):
-    plot_function = PlotBase.plot_function.with_default(
-        "columnflow.plotting.example.plot_shifted_variable",
-        amend_description=True,
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.example.plot_shifted_variable",
+        add_default_to_description=True,
     )
 
 

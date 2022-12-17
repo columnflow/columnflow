@@ -6,33 +6,9 @@ Custom luigi parameters.
 
 from __future__ import annotations
 
-import copy
-
 import law
-import luigi
 
 from columnflow.util import test_float, DotDict
-
-
-class PlotFunctionParameter(luigi.Parameter):
-    """
-    Plain parameter subclass that provides a convenience method for copying an instance, assigning
-    a different default value and optionally changing the description text.
-    """
-
-    def with_default(
-        self,
-        default: str,
-        description: str | None = None,
-        amend_description: bool = False,
-    ) -> PlotFunctionParameter:
-        inst = copy.copy(self)
-        inst._default = default
-        if description is not None:
-            inst.description = description
-        elif amend_description:
-            inst.description += f"; default: {default}"
-        return inst
 
 
 class SettingsParameter(law.CSVParameter):
