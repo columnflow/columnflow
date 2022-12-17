@@ -10,8 +10,8 @@ import time
 import itertools
 from typing import Sequence, Any
 
-import law
 import luigi
+import law
 import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask
@@ -20,6 +20,9 @@ from columnflow.selection import Selector
 from columnflow.production import Producer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
+from columnflow.util import maybe_import
+
+ak = maybe_import("awkward")
 
 
 class CalibratorMixin(ConfigTask):
@@ -868,6 +871,13 @@ class EventWeightMixin(ConfigTask):
 
 class ChunkedReaderMixin(AnalysisTask):
 
+    check_finite = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, checks whether output arrays only contain finite values before "
+        "writing to them to file",
+    )
+
     def iter_chunked_reader(self, *args, **kwargs):
         from columnflow.columnar_util import ChunkedReader
 
@@ -901,3 +911,16 @@ class ChunkedReaderMixin(AnalysisTask):
 
             finally:
                 self.chunked_reader = None
+
+    @classmethod
+    def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
+        import numpy as np
+        import awkward as ak
+        from columnflow.columnar_util import get_ak_routes
+
+        for route in get_ak_routes(ak_array):
+            if ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None))):
+                raise ValueError(
+                    f"found one or more non-finite values in column '{route.column}' "
+                    f"of array {ak_array}",
+                )

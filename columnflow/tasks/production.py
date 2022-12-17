@@ -100,6 +100,10 @@ class ProduceColumns(
             # remove columns
             events = route_filter(events)
 
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(events)
+
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
@@ -108,6 +112,14 @@ class ProduceColumns(
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+
+
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+ProduceColumns.check_finite = ChunkedReaderMixin.check_finite.copy(
+    default=ProduceColumns.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
 
 
 ProduceColumnsWrapper = wrapper_factory(
