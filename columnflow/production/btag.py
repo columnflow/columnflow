@@ -67,13 +67,15 @@ def btag_weights(
     def add_weight(syst_name, syst_direction, column_name):
         # define a mask that selects the correct flavor to assign to, depending on the systematic
         flavor_mask = Ellipsis
-        if syst_name in ["hf", "lf", "hfstats1", "hfstats2", "lfstats1", "lfstats2"]:
-            flavor_mask = flavor != 4
-        elif syst_name in ["cferr1", "cferr2"]:
+        if syst_name in ["cferr1", "cferr2"]:
+            # only apply to c flavor
             flavor_mask = flavor == 4
+        elif syst_name != "central":
+            # apply to all but c flavor
+            flavor_mask = flavor != 4
 
         # get the flat scale factors
-        sf_flat = self.btag_sf_corrector.evaluate(
+        sf_flat = self.btag_sf_corrector(
             syst_name if syst_name == "central" else f"{syst_direction}_{syst_name}",
             flavor[flavor_mask],
             abs_eta[flavor_mask],
