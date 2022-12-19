@@ -219,10 +219,9 @@ class PlotCutflow(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    plot_function_1d = luigi.Parameter(
+    plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.example.plot_cutflow",
-        significant=False,
-        description="name of the 1d plot function; default: 'columnflow.plotting.example.plot_cutflow'",
+        add_default_to_description=True,
     )
 
     def create_branch_map(self):
@@ -341,7 +340,7 @@ class PlotCutflow(
 
             # call the plot function
             fig, _ = self.call_plot_func(
-                self.plot_function_1d,
+                self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
                 **self.get_plot_parameters(),
@@ -365,8 +364,6 @@ class PlotCutflowVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    exclude_index = True
-
     only_final_step = luigi.BoolParameter(
         default=False,
         significant=False,
@@ -374,8 +371,9 @@ class PlotCutflowVariablesBase(
     )
 
     initial_step = "Initial"
-
     default_variables = ("cf_*",)
+
+    exclude_index = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -505,7 +503,10 @@ class PlotCutflowVariables1D(
     PlotBase1D,
     ProcessPlotSettingMixin,
 ):
-
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.example.plot_variable_per_process",
+        add_default_to_description=True,
+    )
     per_plot = luigi.ChoiceParameter(
         choices=("processes", "steps"),
         default="processes",
@@ -593,6 +594,10 @@ class PlotCutflowVariables2D(
     PlotBase2D,
     ProcessPlotSettingMixin,
 ):
+    plot_function = PlotBase.plot_function.copy(
+        copy="columnflow.plotting.plot2d.plot_2d",
+        add_default_to_description=True,
+    )
 
     def output(self):
         b = self.branch_data
@@ -616,7 +621,7 @@ class PlotCutflowVariables2D(
         for step in self.chosen_steps:
             # call the plot function
             fig, _ = self.call_plot_func(
-                self.plot_function_2d,
+                self.plot_function,
                 hists=hists[{"step": hist.loc(step)}],
                 config_inst=self.config_inst,
                 variable_insts=variable_insts,
@@ -633,7 +638,6 @@ class PlotCutflowVariablesPerProcess2D(
     law.WrapperTask,
     PlotCutflowVariables2D,
 ):
-
     # force this one to be a local workflow
     workflow = "local"
 

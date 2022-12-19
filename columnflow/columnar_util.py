@@ -335,7 +335,7 @@ class Route(object, metaclass=RouteMeta):
     def __add__(
         self,
         other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
-    ) -> "Route":
+    ) -> Route:
         route = self.copy()
         route.add(other)
         return route
@@ -343,13 +343,13 @@ class Route(object, metaclass=RouteMeta):
     def __radd__(
         self,
         other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
-    ) -> "Route":
+    ) -> Route:
         return self.__add__(other)
 
     def __iadd__(
         self,
         other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
-    ) -> "Route":
+    ) -> Route:
         self.add(other)
         return self
 

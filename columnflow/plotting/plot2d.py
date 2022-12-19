@@ -4,7 +4,6 @@
 Example 2d plot functions.
 """
 
-
 from __future__ import annotations
 
 from collections import OrderedDict

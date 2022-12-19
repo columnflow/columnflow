@@ -4,7 +4,7 @@
 Custom luigi parameters.
 """
 
-from typing import Union
+from __future__ import annotations
 
 import law
 
@@ -28,7 +28,7 @@ class SettingsParameter(law.CSVParameter):
     """
 
     @classmethod
-    def parse_setting(cls, setting: str) -> tuple[str, Union[float, bool, str]]:
+    def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
         if test_float(value):

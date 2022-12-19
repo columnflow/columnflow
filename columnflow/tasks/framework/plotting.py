@@ -10,9 +10,9 @@ from typing import Any, Callable
 import law
 import luigi
 
-from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict
 
 
@@ -21,6 +21,10 @@ class PlotBase(ConfigTask):
     Base class for all plotting tasks.
     """
 
+    plot_function = luigi.Parameter(
+        significant=False,
+        description="location of the plot function to use in the format 'module.function_name'",
+    )
     file_types = law.CSVParameter(
         default=("pdf",),
         significant=True,
@@ -56,7 +60,7 @@ class PlotBase(ConfigTask):
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
-        params = DotDict({})
+        params = DotDict()
         dict_add_strict(params, "skip_legend", self.skip_legend)
         dict_add_strict(params, "skip_cms", self.skip_cms)
         dict_add_strict(params, "general_settings", self.general_settings)
@@ -155,12 +159,6 @@ class PlotBase1D(PlotBase):
     Base class for plotting tasks creating 1-dimensional plots.
     """
 
-    plot_function_1d = luigi.Parameter(
-        default="columnflow.plotting.example.plot_variable_per_process",
-        significant=False,
-        description="name of the 1d plot function; default: "
-        "columnflow.plotting.example.plot_variable_per_process",
-    )
     skip_ratio = law.OptionalBoolParameter(
         default=None,
         significant=False,
@@ -195,11 +193,6 @@ class PlotBase2D(PlotBase):
     Base class for plotting tasks creating 2-dimensional plots.
     """
 
-    plot_function_2d = luigi.Parameter(
-        default="columnflow.plotting.plot2d.plot_2d",
-        significant=False,
-        description="name of the 2d plot function; default: columnflow.plotting.plot2d.plot_2d",
-    )
     zscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
