@@ -14,26 +14,32 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={
-        normalization_weights, pu_weight,
-        "nJet", "Jet.pt",
-    },
-    produces={
-        normalization_weights, pu_weight,
-        "ht", "n_jet",
-    },
+    uses={"nJet", "Jet.pt"},
+    produces={"ht", "n_jet"},
     shifts={
         "minbias_xs_up", "minbias_xs_down",
     },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-    events = self[normalization_weights](events, **kwargs)
-    events = self[pu_weight](events, **kwargs)
+    if self.dataset_inst.is_mc:
+        events = self[normalization_weights](events, **kwargs)
+        events = self[pu_weight](events, **kwargs)
 
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1))
 
     return events
+
+
+@example.init
+def example_init(self: Producer) -> None:
+    if not getattr(self, "dataset_inst", None) or self.dataset_inst.is_data:
+        return None
+
+    # mc only producers
+    producers = {normalization_weights, pu_weight}
+    self.uses |= producers
+    self.produces |= producers
 
 
 @producer(

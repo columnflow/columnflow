@@ -48,7 +48,7 @@ class CreateHistograms(
         return shifts
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(CreateHistograms, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 
@@ -70,7 +70,10 @@ class CreateHistograms(
         return reqs
 
     def requires(self):
-        reqs = {"events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
+        reqs = {
+            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+        }
+
         if self.producers:
             reqs["producers"] = [
                 self.dep_ProduceColumns.req(self, producer=p)
@@ -81,6 +84,7 @@ class CreateHistograms(
                 self.dep_MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
+
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -324,7 +328,7 @@ class MergeShiftedHistograms(
         return {0: None}
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(MergeShiftedHistograms, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 
@@ -341,7 +345,7 @@ class MergeShiftedHistograms(
         }
 
     def store_parts(self):
-        parts = super(MergeShiftedHistograms, self).store_parts()
+        parts = super().store_parts()
         parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts
 

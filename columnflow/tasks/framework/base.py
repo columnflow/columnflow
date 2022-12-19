@@ -637,6 +637,7 @@ class DatasetTask(ShiftTask):
         """
         Hook to modify the additional info printed along logs of the htcondor workflow.
         """
+        info.append(self.config_inst.name)
         info.append(self.dataset_inst.name)
         if self.shift_inst and self.shift_inst.name != "nominal":
             info.append(self.shift_inst.name)

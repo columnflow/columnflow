@@ -46,8 +46,9 @@ def electron_weights(
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight
     based only on a subset of electrons.
     """
+    # fail when running on data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to compute electron weights in data")
 
     # get year string and working point name
     sf_year, wp = self.config_inst.x.electron_sf_names[1:]
@@ -65,7 +66,7 @@ def electron_weights(
         ("sfup", "_up"),
         ("sfdown", "_down"),
     ]:
-        sf_flat = self.electron_sf_corrector.evaluate(sf_year, syst, wp, sc_eta, pt)
+        sf_flat = self.electron_sf_corrector(sf_year, syst, wp, sc_eta, pt)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
@@ -81,7 +82,7 @@ def electron_weights(
 
 @electron_weights.requires
 def electron_weights_requires(self: Producer, reqs: dict) -> None:
-    if self.dataset_inst.is_data or "external_files" in reqs:
+    if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
@@ -90,15 +91,11 @@ def electron_weights_requires(self: Producer, reqs: dict) -> None:
 
 @electron_weights.setup
 def electron_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
-    self.electron_sf_corrector = None
-
-    if self.dataset_inst.is_data:
-        return
-
     bundle = reqs["external_files"]
 
     # create the corrector
     import correctionlib
+    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
         bundle.files.electron_sf.load(formatter="gzip").decode("utf-8"),
     )

@@ -25,9 +25,6 @@ def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Arr
 
         [[t1, b1, W1, q1/l, q2/n(, additional_w_decay_products)], [t2, ...], ...]
     """
-    if self.dataset_inst.is_data or not self.dataset_inst.x("has_top", False):
-        return events
-
     # find hard top quarks
     abs_id = abs(events.GenPart.pdgId)
     t = events.GenPart[abs_id == 6]
@@ -171,6 +168,5 @@ def gen_top_decay_products_init(self: Producer) -> None:
     Ammends the set of used and produced columns of :py:class:`gen_top_decay_products` in case
     a dataset including top decays is processed.
     """
-    if getattr(self, "dataset_inst", None) and self.dataset_inst.x("has_top", False):
-        self.uses |= {"nGenPart", "GenPart.*"}
-        self.produces |= {"gen_top_decay"}
+    self.uses |= {"nGenPart", "GenPart.*"}
+    self.produces |= {"gen_top_decay"}

@@ -49,8 +49,9 @@ def muon_weights(
     Optionally, a *muon_mask* can be supplied to compute the scale factor weight
     based only on a subset of muons.
     """
+    # fail when running on data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to compute muon weights in data")
 
     # get year string
     sf_year = self.config_inst.x.muon_sf_names[1]
@@ -65,7 +66,7 @@ def muon_weights(
         ("systup", "_up"),
         ("systdown", "_down"),
     ]:
-        sf_flat = self.muon_sf_corrector.evaluate(sf_year, abs_eta, pt, syst)
+        sf_flat = self.muon_sf_corrector(sf_year, abs_eta, pt, syst)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
@@ -81,7 +82,7 @@ def muon_weights(
 
 @muon_weights.requires
 def muon_weights_requires(self: Producer, reqs: dict) -> None:
-    if self.dataset_inst.is_data or "external_files" in reqs:
+    if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
@@ -90,15 +91,11 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
 
 @muon_weights.setup
 def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
-    self.muon_sf_corrector = None
-
-    if self.dataset_inst.is_data:
-        return
-
     bundle = reqs["external_files"]
 
     # create the corrector
     import correctionlib
+    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
         bundle.files.muon_sf.load(formatter="gzip").decode("utf-8"),
     )

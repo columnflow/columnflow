@@ -50,8 +50,9 @@ def btag_weights(
        - https://twiki.cern.ch/twiki/bin/view/CMS/BTagShapeCalibration?rev=26
        - https://indico.cern.ch/event/1096988/contributions/4615134/attachments/2346047/4000529/Nov21_btaggingSFjsons.pdf
     """
+    # fail when running on data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to compute btag weights in data")
 
     # get the total number of jets in the chunk
     n_jets_all = ak.sum(ak.num(events.Jet, axis=1))
@@ -132,10 +133,7 @@ def btag_weights_init(self: Producer) -> None:
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
-    if getattr(self, "dataset_inst", None) is None or self.dataset_inst.is_data:
-        self.jec_source = None
-        self.shift_is_known_jec_source = None
-        self.btag_uncs = None
+    if not getattr(self, "dataset_inst", None):
         return
 
     # to handle this efficiently in one spot, store jec information
@@ -177,7 +175,7 @@ def btag_weights_init(self: Producer) -> None:
 
 @btag_weights.requires
 def btag_weights_requires(self: Producer, reqs: dict) -> None:
-    if self.dataset_inst.is_data or "external_files" in reqs:
+    if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
@@ -186,14 +184,11 @@ def btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 @btag_weights.setup
 def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
-    if self.dataset_inst.is_data:
-        self.btag_sf_corrector = None
-        return
-
     bundle = reqs["external_files"]
 
     # create the btag sf corrector
     import correctionlib
+    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
         bundle.files.btag_sf_corr.load(formatter="gzip").decode("utf-8"),
     )

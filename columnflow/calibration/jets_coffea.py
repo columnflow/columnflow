@@ -63,7 +63,6 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     The user must ensure that the *files* can be parsed by the *conversion_func* supplied, and that
     the information contained in the files is meaningful in connection with the *provider_cls*.
     """
-
     # the extractor reads the information contained in the files
     extractor = coffea_extractor.extractor()
 
@@ -585,13 +584,9 @@ def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.
     """
-
     # get external files bundle that contains JR text files
     bundle = reqs["external_files"]
 
-    # make selector for JEC text files based on sample type
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to setup jet energy resolution smearing in data")
     resolve_sample = lambda x: x.mc
 
     # pass text files to calibrator method

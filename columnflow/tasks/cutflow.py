@@ -53,7 +53,7 @@ class CreateCutflowHistograms(
         return [None]
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(CreateCutflowHistograms, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 
@@ -235,7 +235,7 @@ class PlotCutflow(
         return list(self.categories)
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(PlotCutflow, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 
@@ -402,7 +402,7 @@ class PlotCutflowVariablesBase(
         ]
 
     def workflow_requires(self):
-        reqs = super(PlotCutflowVariablesBase, self).workflow_requires()
+        reqs = super().workflow_requires()
         reqs["hists"] = [
             self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets

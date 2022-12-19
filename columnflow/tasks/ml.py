@@ -340,7 +340,7 @@ class MLEvaluation(
         self.sandbox = self.ml_model_inst.sandbox(self)
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(MLEvaluation, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 

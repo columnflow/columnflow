@@ -31,7 +31,6 @@ def get_evaluators(correction_set, names):
 
     Throws a *KeyError* if any of the *names* are not found.
     """
-
     # raise nice error if keys not found
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
     missing_keys = set(names) - available_keys
@@ -595,10 +594,6 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     into the calibrator function call.
     """
     bundle = reqs["external_files"]
-
-    # fail if running over data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to setup jet energy resolution smearing in data")
 
     # import the correction sets from the external file
     import correctionlib

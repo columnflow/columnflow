@@ -28,9 +28,9 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     of pileup ratios at the py:attr:`pu_weights` attribute provided by the requires and setup
     functions below.
     """
-    # stop here for data
+    # fail when running on data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to compute pileup weights in data")
 
     # compute the indices for looking up weights
     indices = events.PV.npvs.to_numpy() - 1
@@ -50,8 +50,7 @@ def pu_weight_requires(self: Producer, reqs: dict) -> None:
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
-    # do nothing for data
-    if self.dataset_inst.is_data:
+    if "pu_weights" in reqs:
         return
 
     from columnflow.tasks.external import CreatePileupWeights
@@ -64,9 +63,4 @@ def pu_weight_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
     """
-    self.pu_weights = None
-
-    if self.dataset_inst.is_data:
-        return
-
     self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))
