@@ -32,13 +32,25 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
-    skip_check = luigi.BoolParameter(
-        default=True,  # set to True as long as we are doing tests with reduced n_files in datasets
+    validate = law.OptionalBoolParameter(
+        default=None,  # set to True as long as we are doing tests with reduced n_files in datasets
         significant=False,
-        description="whether to skip the check of the number of obtained LFNs vs. expected ones; "
-        "default: False",
+        description="when True, complains if the number of obtained LFNs does not match the value "
+        "expected from the dataset info; default: obtained from 'validate_dataset_lfns' auxiliary "
+        "entry in config",
     )
     version = None
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # add the default calibrator when empty
+        if "config_inst" in params and params.get("validate") is None:
+            config_inst = params["config_inst"]
+            params["validate"] = config_inst.x("validate_dataset_lfns", False)
+
+        return params
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
@@ -52,15 +64,21 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info("get lfns for key {}".format(key))
             cmd = f"dasgoclient --query='file dataset={key}' --limit=0"
-            code, out, _ = law.util.interruptable_popen(cmd, shell=True, stdout=subprocess.PIPE,
-                executable="/bin/bash")
+            code, out, _ = law.util.interruptable_popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                executable="/bin/bash",
+            )
             if code != 0:
                 raise Exception(f"dasgoclient query failed:\n{out}")
             lfns.extend(out.strip().split("\n"))
 
-        if not self.skip_check and len(lfns) != self.dataset_info_inst.n_files:
-            raise ValueError("number of lfns does not match number of files "
-                f"for dataset {self.dataset_inst.name}")
+        if self.validate and len(lfns) != self.dataset_info_inst.n_files:
+            raise ValueError(
+                f"number of obtained lfns ({len(lfns)}) does not match number of files "
+                f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
+            )
 
         self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
 
