@@ -9,7 +9,7 @@ from collections import defaultdict
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedReaderMixin
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
@@ -24,7 +24,7 @@ class SelectEvents(
     DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -43,17 +43,21 @@ class SelectEvents(
         return shifts
 
     def workflow_requires(self, only_super: bool = False):
-        # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
         reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calib"] = [
                 self.dep_CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.dep_CalibrateEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
@@ -132,7 +136,7 @@ class SelectEvents(
 
         # iterate over chunks of events and diffs
         n_calib = len(inputs["calibrations"])
-        for (events, *diffs), pos in self.iter_chunked_reader(
+        for (events, *diffs), pos in self.iter_chunked_io(
             [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
@@ -154,7 +158,7 @@ class SelectEvents(
             # save results as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
             result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (results_array, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
 
             # remove columns
             if keep_columns:
@@ -167,7 +171,7 @@ class SelectEvents(
                 # save additional columns as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
                 column_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
@@ -194,7 +198,7 @@ class SelectEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-SelectEvents.check_finite = ChunkedReaderMixin.check_finite.copy(
+SelectEvents.check_finite = ChunkedIOMixin.check_finite.copy(
     default=SelectEvents.task_family in check_finite_tasks,
     add_default_to_description=True,
 )

@@ -13,7 +13,7 @@ import luigi
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -28,7 +28,7 @@ class ReduceEvents(
     DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -53,12 +53,18 @@ class ReduceEvents(
             return reqs
 
         reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calibrations"] = [
                 self.dep_CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
             reqs["selection"] = self.dep_SelectEvents.req(self)
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.dep_SelectEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+
         return reqs
 
     def requires(self):
@@ -121,7 +127,7 @@ class ReduceEvents(
             input_paths.append(inputs["selection"]["columns"].path)
 
         # iterate over chunks of events and diffs
-        for (events, sel, *diffs), pos in self.iter_chunked_reader(
+        for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
@@ -173,7 +179,7 @@ class ReduceEvents(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
         self.publish_message(
@@ -283,10 +289,10 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         self.publish_message(f"avg. size: {law.util.human_bytes(avg_size, fmt=True)}")
         self.publish_message(f"std. size: {law.util.human_bytes(std_size, fmt=True)}")
         self.publish_message(" merging info ".center(40, "-"))
-        self.publish_message(f"target size  : {self.merged_size} MB")
-        self.publish_message(f"merging      : {merge_factor} into 1")
-        self.publish_message(f"# file before: {self.dataset_info_inst.n_files}")
-        self.publish_message(f"# file after : {n_merged}")
+        self.publish_message(f"target size : {self.merged_size} MB")
+        self.publish_message(f"merging     : {merge_factor} into 1")
+        self.publish_message(f"files before: {self.dataset_info_inst.n_files}")
+        self.publish_message(f"files after : {n_merged}")
         self.publish_message(40 * "-")
 
 

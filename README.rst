@@ -30,6 +30,16 @@ Backend for vectorized, columnar HEP analyses with pure Python, `law <https://gi
 .. marker-after-header
 
 
+Note on current development
+---------------------------
+
+This project is currently in a beta phase.
+The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
+At this point (December 2022), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
+The first released version is expected in early 2023.
+However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
+
+
 Quickstart
 ----------
 

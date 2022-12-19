@@ -7,7 +7,7 @@ Tasks related to calibrating events.
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedReaderMixin
+from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
@@ -19,7 +19,7 @@ ak = maybe_import("awkward")
 class CalibrateEvents(
     DatasetTask,
     CalibratorMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -97,7 +97,7 @@ class CalibrateEvents(
             nano_file = input_file.load(formatter="uproot")
 
         # iterate over chunks
-        for events, pos in self.iter_chunked_reader(
+        for events, pos in self.iter_chunked_io(
             nano_file,
             source_type="coffea_root",
             read_options={"iteritems_options": {"filter_name": load_columns_nano}},
@@ -115,7 +115,7 @@ class CalibrateEvents(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
             output_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output.localize("w") as outp:
@@ -125,7 +125,7 @@ class CalibrateEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-CalibrateEvents.check_finite = ChunkedReaderMixin.check_finite.copy(
+CalibrateEvents.check_finite = ChunkedIOMixin.check_finite.copy(
     default=CalibrateEvents.task_family in check_finite_tasks,
     add_default_to_description=True,
 )

@@ -15,12 +15,6 @@ from columnflow.tasks.framework.base import AnalysisTask
 from columnflow.util import real_path
 
 
-_default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
-_default_htcondor_share_software = law.util.flag_to_bool(os.getenv("CF_HTCONDOR_SHARE_SOFTWARE", "0"))
-_default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "maxwell")
-_default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
-
-
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
@@ -269,6 +263,10 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         self.transfer(bundle)
 
 
+_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", "cern")
+_default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+
+
 class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
     transfer_logs = luigi.BoolParameter(
@@ -310,7 +308,8 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     )
 
     exclude_params_branch = {
-        "max_runtime", "htcondor_cpus", "htcondor_flavor", "htcondor_share_software",
+        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_flavor",
+        "htcondor_share_software",
     }
 
     # mapping of environment variables to render variables that are forwarded
@@ -322,7 +321,6 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
         "CF_VOMS": "cf_voms",
-        "CF_TASK_NAMESPACE": "cf_task_namespace",
     }
 
     # default upstream dependency task classes
@@ -487,6 +485,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     def htcondor_use_local_scheduler(self):
         # remote jobs should not communicate with ther central scheduler but with a local one
         return True
+
+
+_default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
+_default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
 
 
 class SlurmWorkflow(law.slurm.SlurmWorkflow):

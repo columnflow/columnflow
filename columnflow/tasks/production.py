@@ -8,7 +8,7 @@ import law
 
 from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -20,7 +20,7 @@ class ProduceColumns(
     ProducerMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -88,7 +88,7 @@ class ProduceColumns(
         route_filter = RouteFilter(keep_columns)
 
         # iterate over chunks of events and diffs
-        for events, pos in self.iter_chunked_reader(
+        for events, pos in self.iter_chunked_io(
             inputs["events"]["collection"][0].path,
             source_type="awkward_parquet",
             # TODO: not working yet since parquet columns are nested
@@ -107,7 +107,7 @@ class ProduceColumns(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
@@ -116,7 +116,7 @@ class ProduceColumns(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-ProduceColumns.check_finite = ChunkedReaderMixin.check_finite.copy(
+ProduceColumns.check_finite = ChunkedIOMixin.check_finite.copy(
     default=ProduceColumns.task_family in check_finite_tasks,
     add_default_to_description=True,
 )

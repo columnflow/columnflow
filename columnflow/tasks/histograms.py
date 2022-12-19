@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, EventWeightMixin, ChunkedReaderMixin,
+    ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -29,7 +29,7 @@ class CreateHistograms(
     SelectorStepsMixin,
     CalibratorsMixin,
     EventWeightMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -115,7 +115,7 @@ class CreateHistograms(
             files.extend([inp.path for inp in inputs["producers"]])
         if self.ml_models:
             files.extend([inp.path for inp in inputs["ml"]])
-        for (events, *columns), pos in self.iter_chunked_reader(
+        for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
             # TODO: not working yet since parquet columns are nested

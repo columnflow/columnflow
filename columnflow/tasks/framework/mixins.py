@@ -869,7 +869,7 @@ class EventWeightMixin(ConfigTask):
         return allowed_shifts
 
 
-class ChunkedReaderMixin(AnalysisTask):
+class ChunkedIOMixin(AnalysisTask):
 
     check_finite = luigi.BoolParameter(
         default=False,
@@ -878,26 +878,26 @@ class ChunkedReaderMixin(AnalysisTask):
         "writing to them to file",
     )
 
-    def iter_chunked_reader(self, *args, **kwargs):
-        from columnflow.columnar_util import ChunkedReader
+    def iter_chunked_io(self, *args, **kwargs):
+        from columnflow.columnar_util import ChunkedIOHandler
 
-        # get the chunked reader from first arg or create a new one with all args
-        if len(args) == 1 and isinstance(args[0], ChunkedReader):
-            reader = args[0]
+        # get the chunked io handler from first arg or create a new one with all args
+        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
+            handler = args[0]
         else:
-            reader = ChunkedReader(*args, **kwargs)
+            handler = ChunkedIOHandler(*args, **kwargs)
 
-        # iterate in the reader context
-        with reader:
-            self.chunked_reader = reader
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
+        # iterate in the handler context
+        with handler:
+            self.chunked_io = handler
+            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes without IO
                 loop_durations = []
-                for obj in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                for obj in self.iter_progress(handler, handler.n_chunks, msg=msg):
                     t1 = time.perf_counter()
 
-                    # yield the object provided by the chunked reader
+                    # yield the object provided by the handler
                     yield obj
 
                     # save the runtime
@@ -910,7 +910,7 @@ class ChunkedReaderMixin(AnalysisTask):
                 )
 
             finally:
-                self.chunked_reader = None
+                self.chunked_io = None
 
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
