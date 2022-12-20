@@ -83,7 +83,7 @@ class CoalesceColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"columns__{self.branch}.parquet")
+        return self.target(f"data_{self.branch}.parquet")
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
