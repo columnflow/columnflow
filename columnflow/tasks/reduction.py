@@ -103,7 +103,7 @@ class ReduceEvents(
         aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
         # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
+        keep_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
         load_columns = keep_columns | set(mandatory_coffea_columns)
         load_columns_nano = [Route(column).nano_column for column in load_columns]
         route_filter = RouteFilter(keep_columns)

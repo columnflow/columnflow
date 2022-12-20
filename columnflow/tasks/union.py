@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Task to merge columns into a single file for further processing.
+Task to unite columns horizontally into a single file for further, possibly external processing.
 """
 
 import law
@@ -17,7 +17,7 @@ from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 
 
-class CoalesceColumns(
+class UniteColumns(
     MergeReducedEventsUser,
     MLModelsMixin,
     ProducersMixin,
@@ -101,7 +101,7 @@ class CoalesceColumns(
         tmp_dir.touch()
 
         # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
+        keep_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
         # load_columns = keep_columns | set(mandatory_coffea_columns)
         route_filter = RouteFilter(keep_columns)
 
@@ -139,14 +139,14 @@ class CoalesceColumns(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-CoalesceColumns.check_finite = ChunkedIOMixin.check_finite.copy(
-    default=CoalesceColumns.task_family in check_finite_tasks,
+UniteColumns.check_finite = ChunkedIOMixin.check_finite.copy(
+    default=UniteColumns.task_family in check_finite_tasks,
     add_default_to_description=True,
 )
 
 
-CoalesceColumnsWrapper = wrapper_factory(
+UniteColumnsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
-    require_cls=CoalesceColumns,
+    require_cls=UniteColumns,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
