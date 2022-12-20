@@ -8,6 +8,7 @@ read -p "Enter an abbreveated analyis name (in lower case): " analysis_name
 ANALYSIS_NAME=${analysis_name^^}
 
 svn checkout https://github.com/uhh-cms/columnflow/braches/feature/template_analysis/analysis_template $repository_name
+
 cd $repository_name
 
 git init
@@ -30,6 +31,5 @@ git submodule update --init --recursive
 
 git add -A
 git commit -m "init"
-
 echo Analysis initialized
 
