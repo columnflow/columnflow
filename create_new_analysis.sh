@@ -2,18 +2,15 @@
 
 # get analysisname
 echo This script copies the columnflow analysis template
-echo and initializes it as a repository at https://github.com
-echo Before you continue, initialize an EMPTY repository
-read -p "and then enter the ssh link to it here: " repository_link
+echo and initializes it as a git repository
 read -p "Enter the name of the repository: " repository_name
 read -p "Enter an abbreveated analyis name (in lower case): " analysis_name
 ANALYSIS_NAME=${analysis_name^^}
 
-cp -r analysis_template ../$repository_name
-cd ../$repository_name
+svn checkout https://github.com/uhh-cms/columnflow/braches/feature/template_analysis/analysis_template $repository_name
+cd $repository_name
+
 git init
-#git remote rm origin
-git remote add origin "$repository_link"
 
 # rename directories and files
 find . -depth -name '*plc2hldr*' -execdir bash -c 'mv -i "$1" "${1//plc2hldr/'$repository_name'}"' bash {} \;
@@ -25,9 +22,14 @@ find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/plc2h
 find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/plhld/'$analysis_name'/g' {} +
 find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/PLHLD/'$ANALYSIS_NAME'/g' {} +
 
+mkdir modules
+
+git submodule add git@github.com:uhh-cms/columnflow.git modules/columnflow
+git submodule add git@github.com:uhh-cms/cmsdb.git modules/cmsdb
+git submodule update --init --recursive
+
 git add -A
 git commit -m "init"
-git push -u origin master
 
 echo Analysis initialized
 
