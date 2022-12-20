@@ -112,7 +112,7 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId",
-        "fixedGridRhoFastjetAll",
+        "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
         attach_coffea_behavior,
     },
     produces={
@@ -160,18 +160,25 @@ def jec_coffea(
             names=self.junc_names,
         )
 
+    # obtain rho, which might be located at different routes, depending on the nano version
+    rho = (
+        events.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields else
+        events.Rho.fixedGridRhoFastjetAll
+    )
+
     # look up JEC correction factors
     jec_factors = jec_provider.getCorrection(
         JetEta=events.Jet.eta,
         JetPt=events.Jet.pt_raw,
         JetA=events.Jet.area,
-        Rho=events.fixedGridRhoFastjetAll,
+        Rho=rho,
     )
     jec_factors_only_l1 = jec_provider_only_l1.getCorrection(
         JetEta=events.Jet.eta,
         JetPt=events.Jet.pt_raw,
         JetA=events.Jet.area,
-        Rho=events.fixedGridRhoFastjetAll,
+        Rho=rho,
     )
 
     # apply the new factors with only L1 corrections
@@ -371,7 +378,7 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 @calibrator(
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
-        "fixedGridRhoFastjetAll",
+        "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
         "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
@@ -403,6 +410,13 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # TODO: use seeds!
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
+    # obtain rho, which might be located at different routes, depending on the nano version
+    rho = (
+        events.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields else
+        events.Rho.fixedGridRhoFastjetAll
+    )
+
     # build/retrieve lookup providers for JECs and uncertainties
     # NOTE: could also be moved to `jer_setup`, but keep here in case the provider ever needs
     #       to change based on the event content (JER change in the middle of a run)
@@ -424,7 +438,7 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     jer = ak.materialized(jer_provider.getResolution(
         JetEta=events.Jet.eta,
         JetPt=events.Jet.pt,
-        Rho=events.fixedGridRhoFastjetAll,
+        Rho=rho,
     ))
 
     # look up jet energy resolution scale factors

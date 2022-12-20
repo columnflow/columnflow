@@ -99,7 +99,7 @@ def ak_evaluate(evaluator, *args):
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId",
-        "fixedGridRhoFastjetAll",
+        "fixedGridRhoFastjetAll", "Rho.fixedGridRhoFastjetAll",
         attach_coffea_behavior,
     },
     produces={
@@ -178,16 +178,22 @@ def jec(
 
         return full_correction
 
+    # obtain rho, which might be located at different routes, depending on the nano version
+    rho = (
+        events.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields else
+        events.Rho.fixedGridRhoFastjetAll
+    )
+
     # correct jets with only a subset of correction levels
     # (for calculating TypeI MET correction)
     if self.propagate_met:
-
         # get correction factors
         jec_factors_subset_type1_met = correct_jets(
             pt=events.Jet.pt_raw,
             eta=events.Jet.eta,
             area=events.Jet.area,
-            rho=events.fixedGridRhoFastjetAll,
+            rho=rho,
             evaluator_key="jec_subset_type1_met",
         )
 
@@ -208,7 +214,7 @@ def jec(
         pt=events.Jet.pt_raw,
         eta=events.Jet.eta,
         area=events.Jet.area,
-        rho=events.fixedGridRhoFastjetAll,
+        rho=rho,
         evaluator_key="jec",
     )
 
@@ -366,7 +372,7 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 @calibrator(
     uses={
         "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
-        "fixedGridRhoFastjetAll",
+        "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
         "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
@@ -416,12 +422,19 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # TODO: use deterministic seeds!
     rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
 
+    # obtain rho, which might be located at different routes, depending on the nano version
+    rho = (
+        events.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields else
+        events.Rho.fixedGridRhoFastjetAll
+    )
+
     # pt resolution
     jer = ak_evaluate(
         self.evaluators["jer"],
         events.Jet.eta,
         events.Jet.pt,
-        events.fixedGridRhoFastjetAll,
+        rho,
     )
 
     # JER scale factors and systematic variations
