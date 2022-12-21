@@ -18,7 +18,7 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
-from columnflow.util import ensure_proxy, wget, safe_div
+from columnflow.util import wget, safe_div
 
 
 logger = law.logger.get_logger(__name__)
@@ -58,21 +58,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         return self.target(f"lfns_{h}.json")
 
     @law.decorator.log
-    @ensure_proxy
     def run(self):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
-            self.logger.info("get lfns for key {}".format(key))
-            cmd = f"dasgoclient --query='file dataset={key}' --limit=0"
-            code, out, _ = law.util.interruptable_popen(
-                cmd,
-                shell=True,
-                stdout=subprocess.PIPE,
-                executable="/bin/bash",
-            )
-            if code != 0:
-                raise Exception(f"dasgoclient query failed:\n{out}")
-            lfns.extend(out.strip().split("\n"))
+            lfns.extend(self.determine_lfns(key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -85,6 +74,30 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
+
+    def determine_lfns(self, dataset_key):
+        # check if the config defines a custom method, otherwise forward to the dasgoclient impl
+        func = self.config_inst.x("determine_dataset_lfns", None)
+        if not callable(func):
+            self.logger.info(f"get lfns for dataset key {dataset_key} via dasgoclient")
+            return self.determine_lfns_dasgoclient(dataset_key)
+
+        self.logger.info(f"get lfns for dataset key {dataset_key} via custom config function")
+        return func(dataset_key)
+
+    def determine_lfns_dasgoclient(self, dataset_key):
+        cmd = f"dasgoclient --query='file dataset={dataset_key}' --limit=0"
+
+        code, out, _ = law.util.interruptable_popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            executable="/bin/bash",
+        )
+        if code != 0:
+            raise Exception(f"dasgoclient query failed:\n{out}")
+
+        return out.strip().split("\n")
 
     def iter_nano_files(
         self,
