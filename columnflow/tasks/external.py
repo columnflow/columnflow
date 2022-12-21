@@ -59,9 +59,17 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     @law.decorator.log
     def run(self):
+        # prepare the lfn getter
+        determine_lfns = self.config_inst.x("determine_dataset_lfns", None)
+        msg = "via custom config function"
+        if not callable(determine_lfns):
+            determine_lfns = self.determine_lfns_dasgoclient
+            msg = "vua dasgoclient"
+
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
-            lfns.extend(self.determine_lfns(key))
+            self.logger.info(f"get lfns for dataset key {key} {msg}")
+            lfns.extend(determine_lfns(key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -74,16 +82,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
-
-    def determine_lfns(self, dataset_key):
-        # check if the config defines a custom method, otherwise forward to the dasgoclient impl
-        func = self.config_inst.x("determine_dataset_lfns", None)
-        if not callable(func):
-            self.logger.info(f"get lfns for dataset key {dataset_key} via dasgoclient")
-            return self.determine_lfns_dasgoclient(dataset_key)
-
-        self.logger.info(f"get lfns for dataset key {dataset_key} via custom config function")
-        return func(dataset_key)
 
     def determine_lfns_dasgoclient(self, dataset_key):
         cmd = f"dasgoclient --query='file dataset={dataset_key}' --limit=0"
