@@ -16,6 +16,7 @@ from typing import Sequence
 
 import luigi
 import law
+import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from columnflow.util import wget, safe_div
@@ -25,8 +26,6 @@ logger = law.logger.get_logger(__name__)
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
-
-    sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
 
     replicas = luigi.IntParameter(
         default=5,
@@ -52,6 +51,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
         return params
 
+    @property
+    def sandbox(self):
+        sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
+        return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+
     def single_output(self):
         # required by law.tasks.TransferLocalFile
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
@@ -60,16 +64,16 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     @law.decorator.log
     def run(self):
         # prepare the lfn getter
-        determine_lfns = self.config_inst.x("determine_dataset_lfns", None)
+        get_dataset_lfns = self.config_inst.x("get_dataset_lfns", None)
         msg = "via custom config function"
-        if not callable(determine_lfns):
-            determine_lfns = self.determine_lfns_dasgoclient
-            msg = "vua dasgoclient"
+        if not callable(get_dataset_lfns):
+            get_dataset_lfns = self.get_dataset_lfns_dasgoclient
+            msg = "via dasgoclient"
 
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info(f"get lfns for dataset key {key} {msg}")
-            lfns.extend(determine_lfns(key))
+            lfns.extend(get_dataset_lfns(self.dataset_inst, self.shift_inst, key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -83,11 +87,14 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
 
-    def determine_lfns_dasgoclient(self, dataset_key):
-        cmd = f"dasgoclient --query='file dataset={dataset_key}' --limit=0"
-
+    def get_dataset_lfns_dasgoclient(
+        self,
+        dataset_inst: od.Dataset,
+        shift_inst: od.Shift,
+        dataset_key: str,
+    ) -> list[str]:
         code, out, _ = law.util.interruptable_popen(
-            cmd,
+            f"dasgoclient --query='file dataset={dataset_key}' --limit=0",
             shell=True,
             stdout=subprocess.PIPE,
             executable="/bin/bash",
@@ -95,7 +102,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
 
-        return out.strip().split("\n")
+        return [
+            line.strip()
+            for line in out.strip().split("\n")
+            if line.strip().endswith(".root")
+        ]
 
     def iter_nano_files(
         self,
