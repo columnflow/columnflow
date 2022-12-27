@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+cf_sandbox() {
+    # Runs an interactive command inside a sandbox, identified by a sandbox file. If not absolute
+    # and not located in the current directory, it is first resolved relative to
+    # $CF_REPO_BASE/sandboxes and then to $CF_BASE/sandboxes.
+    #
+    # Arguments:
+    #   1. sandbox_file
+    #       The sandbox file to use.
+    #   Rest
+    #       The command to run.
+    #
+    # Required environment variables:
+    #   CF_BASE
+    #       The absolute columnflow base directory.
+    #   CF_REPO_BASE
+    #       The base path of the main repository that uses columnflow.
+    #
+    # Examples:
+    #   > cf_sandbox venv_columnar_dev which python
+    #   > cf_sandbox venv_columnar_dev ipython
+
+    # check arguments
+    local sandbox_file="$1"
+    if [ -z "${sandbox_file}" ]; then
+        2>&1 echo "argument 0 (sandbox file) must not be empty"
+        return "1"
+    fi
+
+    # expand variables
+    eval "sandbox_file=\"$( echo $sandbox_file )\""
+
+    # add .sh file extension if there is none
+    [[ "$( basename "${sandbox_file}" )" != *.* ]] && sandbox_file="${sandbox_file}.sh"
+
+    # find the absolute location of the sandbox file
+    local is_abs="$( [ "${sandbox_file:0:1}" = "/" ] && echo "true" || echo "false" )"
+    local sandbox_file_abs
+    local sandbox_file_repr
+    if [ -f "${sandbox_file}" ]; then
+        sandbox_file_abs="$( ${is_abs} && echo "${sandbox_file}" || echo "${PWD}/${sandbox_file}" )"
+        sandbox_file_repr="${sandbox_file}"
+    elif ${is_abs}; then
+        2>&1 echo "sandbox file '${sandbox_file}' not existing"
+        return "2"
+    elif [ -z "${CF_REPO_BASE}" ]; then
+        2>&1 echo "environment variable CF_REPO_BASE must not be empty"
+        return "3"
+    elif [ -f "${CF_REPO_BASE}/sandboxes/${sandbox_file}" ]; then
+        sandbox_file_abs="${CF_REPO_BASE}/sandboxes/${sandbox_file}"
+        sandbox_file_repr="\${CF_REPO_BASE}/sandboxes/${sandbox_file}"
+    elif [ -z "${CF_BASE}" ]; then
+        2>&1 echo "environment variable CF_BASE must not be empty"
+        return "3"
+    elif [ -f "${CF_BASE}/sandboxes/${sandbox_file}" ]; then
+        sandbox_file_abs="${CF_BASE}/sandboxes/${sandbox_file}"
+        sandbox_file_repr="\${CF_BASE}/sandboxes/${sandbox_file}"
+    else
+        2>&1 echo "could not resolve and locate sandbox file '${sandbox_file}'"
+        return "4"
+    fi
+
+    # prepare the command
+    local cmd="${@:2}"
+    local interactive="false"
+    [ -z "${cmd}" ] && cmd="bash -l" && interactive="true"
+
+    # load tools
+    CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
+
+    # run it
+    echo "$( cf_color green "sandbox" ): ${sandbox_file_repr}"
+    echo "$( cf_color green "command" ): ${cmd}"
+    cf_color magenta "--- entering sandbox -----------------------------"
+    ${interactive} && echo "(ctrl+d or type 'exit' to leave)"
+
+    bash -c "source \"${sandbox_file_abs}\" \"\" && ${cmd}"
+
+    cf_color cyan "--- leaving sandbox ------------------------------"
+}
+
+cf_sandbox "$@"
