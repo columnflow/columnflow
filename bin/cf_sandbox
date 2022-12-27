@@ -76,8 +76,11 @@ cf_sandbox() {
     ${interactive} && echo "(ctrl+d or type 'exit' to leave)"
 
     bash -c "source \"${sandbox_file_abs}\" \"\" && ${cmd}"
+    local ret="$?"
 
     cf_color cyan "--- leaving sandbox ------------------------------"
+
+    return "${ret}"
 }
 
 cf_sandbox "$@"
