@@ -165,30 +165,36 @@ setup_venv() {
             cf_color cyan "installing venv at ${install_path}"
 
             rm -rf "${install_path}"
-            cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "11" )
+            cf_create_venv "${CF_VENV_NAME}"
+            [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "11"
 
             # activate it
-            source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "12" )
+            source "${install_path}/bin/activate" ""
+            [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "12"
 
             # update pip
             cf_color magenta "updating pip"
-            python -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
+            python -m pip install -U pip
+            [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "13"
 
             # install basic production requirements
             if ! ${requirement_files_contains_prod}; then
                 cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                python -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
+                python -m pip install -r "${CF_BASE}/requirements_prod.txt"
+                [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "14"
             fi
 
             # install requirement files
             for f in ${requirement_files[@]}; do
                 cf_color magenta "installing requirement file ${f}"
-                python -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
+                python -m pip install -r "${f}"
+                [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "16"
                 echo
             done
 
             # ensure that the venv is relocateable
-            cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "16" )
+            cf_make_venv_relocateable "${CF_VENV_NAME}"
+            [ "$?" != "0" ] && rm -f "${pending_flag_file}" && return "16"
 
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
