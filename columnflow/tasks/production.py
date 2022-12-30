@@ -25,7 +25,7 @@ class ProduceColumns(
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by producer function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar2.sh")
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # default upstream dependency task classes
     dep_MergeReducedEvents = MergeReducedEvents
