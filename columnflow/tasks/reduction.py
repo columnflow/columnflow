@@ -32,7 +32,7 @@ class ReduceEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar2.sh")
 
     # default upstream dependency task classes
     dep_GetDatasetLFNs = GetDatasetLFNs

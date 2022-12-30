@@ -208,6 +208,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
             task.publish_message(f"lfn {lfn}, size is {input_size}")
 
+            # hack
+            # input_file = law.LocalFileTarget("/afs/desy.de/user/r/riegerma/public/custom_nano_test/nano_v11_hh_9.root")
+            # print(f"hacked nano loop to use {input_file.path}")
+
             yield (lfn_index, input_file)
 
 

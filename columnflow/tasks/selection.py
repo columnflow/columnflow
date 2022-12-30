@@ -139,6 +139,7 @@ class SelectEvents(
         for (events, *diffs), pos in self.iter_chunked_io(
             [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
+            # TODO: pass column names also to awkward_parquet reader
             read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
         ):
             # apply the calibrated diffs

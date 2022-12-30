@@ -6,6 +6,7 @@ Useful functions for use by calibrators
 
 from __future__ import annotations
 
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
 
 np = maybe_import("numpy")
@@ -22,17 +23,13 @@ def ak_random(*args, rand_func):
     args = ak.broadcast_arrays(*args)
 
     if hasattr(args[0].layout, "offsets"):
-        # convert to flat numpy arrays
-        np_args = [np.asarray(a.layout.content) for a in args]
-
         # pass flat arrays to random function and get random values
-        np_randvals = rand_func(*np_args)
+        np_randvals = rand_func(*map(flat_np_view, args))
 
-        # convert back to awkward array
-        return ak.Array(ak.layout.ListOffsetArray64(args[0].layout.offsets, ak.layout.NumpyArray(np_randvals)))
+        # apply layout of first (ak) array
+        return layout_ak_array(np_randvals, args[0])
 
     # pass args directly (this may fail for some array types)
-    # TODO: make function more general
     np_randvals = rand_func(*args)
     return ak.from_numpy(np_randvals)
 

@@ -33,7 +33,7 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar2.sh")
 
     # default upstream dependency task classes
     dep_MergeReducedEvents = MergeReducedEvents
@@ -220,7 +220,7 @@ class MergeHistograms(
         description="when True, remove particlar input histograms after merging; default: False",
     )
 
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar2.sh")
 
     # default upstream dependency task classes
     dep_CreateHistograms = CreateHistograms
@@ -313,7 +313,7 @@ class MergeShiftedHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar2.sh")
 
     # disable the shift parameter
     shift = None

@@ -449,10 +449,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
-    jersf = ak.to_regular(ak.concatenate([
-        ak.singletons(jersf[syst])
-        for syst in ("nom", "up", "down")
-    ], axis=-1), axis=-1)
+    jersf = ak.concatenate(
+        [jersf[syst][..., None] for syst in ("nom", "up", "down")],
+        axis=-1,
+    )
 
     # -- stochastic smearing
 
