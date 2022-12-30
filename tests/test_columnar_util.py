@@ -604,7 +604,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         arr = add_ak_alias(arr, "Muon.eta", "Muon_eta", remove_src=True)
         self.assertEqual(
             set(r.column for r in get_ak_routes(arr)),
-            {"event", "Jet.pt", "Jet.eta", "Muon", "Jet_pt", "Muon_pt", "Muon_eta"},
+            {"event", "Jet.pt", "Jet.eta", "Jet_pt", "Muon_pt", "Muon_eta"},
         )
         self.test_get_ak_routes()
 
@@ -622,10 +622,8 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         arr = add_ak_aliases(self.array, {"Muon_pt": "Muon.pt", "Muon_eta": "Muon.eta"}, remove_src=True)
         self.assertEqual(
             set(r.column for r in get_ak_routes(arr)),
-            {"event", "Jet.pt", "Jet.eta", "Jet_pt", "Muon", "Muon_pt", "Muon_eta"},
+            {"event", "Jet.pt", "Jet.eta", "Jet_pt", "Muon_pt", "Muon_eta"},
         )
-        arr = remove_ak_column(arr, "Muon")
-        self.assertFalse(has_ak_column(arr, "Muon"))
         self.test_get_ak_routes()
 
         # error handling
