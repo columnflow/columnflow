@@ -878,6 +878,8 @@ class ChunkedIOMixin(AnalysisTask):
         "writing to them to file",
     )
 
+    exclude_params_req = {"check_finite"}
+
     def iter_chunked_io(self, *args, **kwargs):
         from columnflow.columnar_util import ChunkedIOHandler
 
