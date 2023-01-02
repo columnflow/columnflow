@@ -24,7 +24,7 @@
    :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
    :alt: License
 
-Backend for vectorized, columnar HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
+Backend for columnar, fully orchestrated HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
 
 
 .. marker-after-header
