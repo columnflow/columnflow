@@ -116,38 +116,38 @@ class InferenceModel(Derivable):
 
         categories:
           - name: cat1
-            category: 1e
-            variable: ht
-            data_datasets: [data_mu_a]
+            config_category: 1e
+            config_variable: ht
+            config_data_datasets: [data_mu_a]
             data_from_processes: []
             mc_stats: 10
             processes:
               - name: HH
-                process: hh
-                signal: True
-                mc_datasets: [hh_ggf]
+                config_process: hh
+                is_signal: True
+                config_mc_datasets: [hh_ggf]
                 parameters:
                   - name: lumi
                     type: rate_gauss
                     effect: 1.02
-                    shift_source: null
+                    config_shift_source: null
                   - name: pu
                     type: rate_gauss
                     effect: [0.97, 1.02]
-                    shift_source: null
+                    config_shift_source: null
                   - name: pileup
                     type: shape
                     effect: 1.0
-                    shift_source: minbias_xs
+                    config_shift_source: minbias_xs
               - name: tt
-                signal: False
-                process: ttbar
-                mc_datasets: [tt_sl, tt_dl, tt_fh]
+                is_signal: False
+                config_process: ttbar
+                config_mc_datasets: [tt_sl, tt_dl, tt_fh]
                 parameters:
                   - name: lumi
                     type: rate_gauss
                     effect: 1.02
-                    shift_source: null
+                    config_shift_source: null
 
           - name: cat2
             ...
@@ -220,9 +220,9 @@ class InferenceModel(Derivable):
     def category_spec(
         cls,
         name: str,
-        category: str | None = None,
-        variable: str | None = None,
-        data_datasets: Sequence[str] | None = None,
+        config_category: str | None = None,
+        config_variable: str | None = None,
+        config_data_datasets: Sequence[str] | None = None,
         data_from_processes: Sequence[str] | None = None,
         mc_stats: float | tuple | None = None,
     ) -> DotDict:
@@ -231,20 +231,19 @@ class InferenceModel(Derivable):
         tools), forwarding all arguments.
 
             - *name*: The name of the category in the model.
-            - *category*: The name of the source category in the config to use. Note the possibly
-              ambiguous yet consistent naming.
-            - *variable*: The name of the variable in the config to use.
-            - *data_datasets*: List of names of datasets in the config to use for real data.
+            - *config_category*: The name of the source category in the config to use.
+            - *config_variable*: The name of the variable in the config to use.
+            - *config_data_datasets*: List of names of datasets in the config to use for real data.
             - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
-              when *data_datasets* is not defined, make of a fake data contribution.
+              when *config_data_datasets* is not defined, make of a fake data contribution.
             - *mc_stats*: Either *None* to disable MC stat uncertainties, or a float or tuple of
               floats to control the options of MC stat options.
         """
         return DotDict([
             ("name", str(name)),
-            ("category", str(category) if category else None),
-            ("variable", str(variable) if variable else None),
-            ("data_datasets", list(map(str, data_datasets or []))),
+            ("config_category", str(config_category) if config_category else None),
+            ("config_variable", str(config_variable) if config_variable else None),
+            ("config_data_datasets", list(map(str, config_data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
             ("mc_stats", mc_stats),
             ("processes", []),
@@ -254,24 +253,23 @@ class InferenceModel(Derivable):
     def process_spec(
         cls,
         name: str,
-        process: str | None = None,
-        signal: bool = False,
-        mc_datasets: Sequence[str] | None = None,
+        config_process: str | None = None,
+        is_signal: bool = False,
+        config_mc_datasets: Sequence[str] | None = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
 
             - *name*: The name of the process in the model.
-            - *process*: The name of the source process in the config to use. Note the possibly
-              ambiguous yet consistent naming.
-            - *signal*: A boolean flag deciding whether this process describes signal.
-            - *mc_datasets*: List of names of MC datasets in the config to use.
+            - *is_signal*: A boolean flag deciding whether this process describes signal.
+            - *config_process*: The name of the source process in the config to use.
+            - *config_mc_datasets*: List of names of MC datasets in the config to use.
         """
         return DotDict([
             ("name", str(name)),
-            ("process", str(process) if process else None),
-            ("signal", bool(signal)),
-            ("mc_datasets", list(map(str, mc_datasets or []))),
+            ("is_signal", bool(is_signal)),
+            ("config_process", str(config_process) if config_process else None),
+            ("config_mc_datasets", list(map(str, config_mc_datasets or []))),
             ("parameters", []),
         ])
 
@@ -281,7 +279,7 @@ class InferenceModel(Derivable):
         name: str,
         type: ParameterType | str,
         transformations: Sequence[ParameterTransformation | str] = (ParameterTransformation.none,),
-        shift_source: str | None = None,
+        config_shift_source: str | None = None,
         effect: Any | None = 1.0,
     ) -> DotDict:
         """
@@ -291,7 +289,7 @@ class InferenceModel(Derivable):
             - *type*: A :py:class:`ParameterType` instance describing the type of this parameter.
             - *transformations*: A sequence of :py:class:`ParameterTransformation` instances
               describing transformations to be applied to the effect of this parameter.
-            - *shift_source*: The name of a systematic shift source in the config that this
+            - *config_shift_source*: The name of a systematic shift source in the config that this
               parameter corresponds to.
             - *effect*: An arbitrary object describing the effect of the parameter (e.g. float for
               symmetric rate effects, 2-tuple for down/up variation, etc).
@@ -300,7 +298,7 @@ class InferenceModel(Derivable):
             ("name", str(name)),
             ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
             ("transformations", ParameterTransformations(transformations)),
-            ("shift_source", str(shift_source) if shift_source else None),
+            ("config_shift_source", str(config_shift_source) if config_shift_source else None),
             ("effect", effect),
         ])
 
