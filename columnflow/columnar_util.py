@@ -147,6 +147,20 @@ class Route(object, metaclass=RouteMeta):
        read-only
 
        The name of the corresponding column in nano-style underscore format.
+
+    .. py:attribute:: string_column
+       type: string
+       read-only
+
+       The name of the corresponding column in dot format, but only consisting of string fields,
+       i.e., without slicing or indexing fields.
+
+    .. py:attribute:: string_nano_column
+       type: string
+       read-only
+
+       The name of the corresponding column in nano-style underscore format, but only consisting of
+       string fields, i.e., without slicing or indexing fields.
     """
 
     DOT_SEP = "."
@@ -307,6 +321,14 @@ class Route(object, metaclass=RouteMeta):
     def nano_column(self) -> str:
         return self.join_nano(self._fields)
 
+    @property
+    def string_column(self) -> str:
+        return self.join(f for f in self._fields if isinstance(f, str))
+
+    @property
+    def string_nano_column(self) -> str:
+        return self.join_nano(f for f in self._fields if isinstance(f, str))
+
     def __str__(self) -> str:
         return self.join(self._fields)
 
@@ -314,7 +336,7 @@ class Route(object, metaclass=RouteMeta):
         return f"<{self.__class__.__name__} '{self}' at {hex(id(self))}>"
 
     def __hash__(self) -> int:
-        return hash(self.fields)
+        return hash(self.column)
 
     def __len__(self) -> int:
         return len(self._fields)
@@ -1961,7 +1983,12 @@ class DaskArrayReader(object):
 
         # open the file
         open_options = open_options or {}
+        # TODO: selecting coluns is currently disabled due to a bug (misconception?) in dask_awkward
+        # that leads to segfaults when querying the length of arrays opened with selected columns
+        # TODO: open a dak issue for that
+        open_options.pop("columns", None)
         self.dak_array = dak.from_parquet(path, **open_options)
+        self.path = path
 
         # fixed mapping of chunk to partition indices, created once in _materialize_via_partitions
         self.chunk_to_partitions = {}
@@ -2114,12 +2141,18 @@ class ChunkedIOHandler(object):
 
     The maximum size of the chunks and the number of threads to load them can be configured through
     *chunk_size* and *pool_size*. Chunks are fully loaded into memory before they are yielded to be
-    used in the main thread. In addition, *open_options* and *read_options* are forwarded to
-    internal open and read implementations to further control and optimize IO.
+    used in the main thread.
 
-    If *source* refers to a single object, *source_type*, *open_options* and *read_options* should
-    be single values as well. Otherwise, if *source* is a sequence of sources, the other arguments
-    can be sequences as well with the same length.
+    In addition, *open_options* and *read_options* are forwarded to internal open and read
+    implementations to further control and optimize IO. For instance, they can be configured to
+    select only a subset of (nested) columns to read from disk. However, since this is highly
+    dependent on the specific source type, *read_columns* can be defined as a set (!) of strings (in
+    nano-style dot format) or :py:class:`Route` objects and is added to either *open_options* or
+    *read_options* internally (source type dependent).
+
+    If *source* refers to a single object, *source_type*, *open_options*, *read_options* and
+    *read_columns* should be single values as well. Otherwise, if *source* is a sequence of sources,
+    the other arguments can be sequences as well with the same length.
 
     During iteration, before chunks are yielded, an optional message *iter_message* is printed when
     set, receiving the chunk position as the field *pos* for formatting.
@@ -2149,8 +2182,9 @@ class ChunkedIOHandler(object):
         source_type: str | Sequence[str] | None = None,
         chunk_size: int = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000),
         pool_size: int = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 4),
-        open_options: dict | list[dict] | None = None,
-        read_options: dict | list[dict] | None = None,
+        open_options: dict | Sequence[dict] | None = None,
+        read_options: dict | Sequence[dict] | None = None,
+        read_columns: set | Sequence[set] | None = None,
         iter_message: str = "handling chunk {pos.index}",
         debug: bool = law.config.get_expanded_boolean("analysis", "chunked_io_debug", False),
     ):
@@ -2187,12 +2221,14 @@ class ChunkedIOHandler(object):
         source_type = _check_arg("source_type", source_type)
         open_options = _check_arg("open_options", open_options)
         read_options = _check_arg("read_options", read_options)
+        read_columns = _check_arg("read_columns", read_columns)
 
         # store input attributes
         self.source_list = list(source) if self.is_multi else [source]
         self.source_type_list = list(source_type) if self.is_multi else [source_type]
         self.open_options_list = list(open_options) if self.is_multi else [open_options]
         self.read_options_list = list(read_options) if self.is_multi else [read_options]
+        self.read_columns_list = list(read_columns) if self.is_multi else [read_columns]
         self.chunk_size = chunk_size
         self.pool_size = max(pool_size, 1)
         self.iter_message = iter_message
@@ -2313,12 +2349,14 @@ class ChunkedIOHandler(object):
             tuple[uproot.ReadOnlyDirectory, str]
         ),
         open_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> tuple[uproot.TTree, int]:
         """
         Opens an uproot tree from a root file at *source* and returns a 2-tuple *(tree, entries)*.
         *source* can be the path of the file, an already opened, readable uproot file (assuming the
         tree is called "Events"), or a 2-tuple whose second item defines the name of the tree to be
-        loaded. When a new file is opened, it receives *open_options*.
+        loaded. When a new file is opened, it receives *open_options*. Passing *read_columns* has no
+        effect.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -2357,14 +2395,22 @@ class ChunkedIOHandler(object):
         source_object: uproot.TTree,
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> ak.Array:
         """
         Given an uproot TTree *source_object*, returns an awkward array chunk referred to by
-        *chunk_pos*. *read_options* are passed to ``uproot.TTree.arrays``.
+        *chunk_pos*. *read_options* are passed to ``uproot.TTree.arrays``. *read_columns* are
+        converted to strings and, if not already present, added as field ``filter_name`` to
+        *read_options*.
         """
         # default read options
         read_options = read_options or {}
         read_options["array_cache"] = None
+
+        # inject read_columns
+        if read_columns and "filter_name" not in read_options:
+            filter_name = [Route(s).string_nano_column for s in read_columns]
+            read_options["filter_name"] = filter_name
 
         chunk = source_object.arrays(
             entry_start=chunk_pos.entry_start,
@@ -2384,13 +2430,14 @@ class ChunkedIOHandler(object):
             tuple[uproot.ReadOnlyDirectory, str]
         ),
         open_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> tuple[uproot.ReadOnlyDirectory, int]:
         """
         Opens an uproot file at *source* for subsequent processing with coffea and returns a 2-tuple
         *(uproot file, tree entries)*. *source* can be the path of the file, an already opened,
         readable uproot file (assuming the tree is called "Events"), or a 2-tuple whose second item
         defines the name of the tree to be loaded. *open_options* are forwarded to ``uproot.open``
-        if a new file is opened.
+        if a new file is opened. Passing *read_columns* has no effect.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -2428,16 +2475,27 @@ class ChunkedIOHandler(object):
         source_object: str | uproot.ReadOnlyDirectory,
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
         """
         Given a file location or opened uproot file *source_object*, returns an awkward array chunk
         referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
-        ``coffea.nanoevents.NanoEventsFactory.from_root``.
+        ``coffea.nanoevents.NanoEventsFactory.from_root``. *read_columns* are converted to strings
+        and, if not already present, added as nested field ``iteritems_options.filter_name`` to
+        *read_options*.
         """
         # default read options
         read_options = read_options or {}
         read_options["runtime_cache"] = None
         read_options["persistent_cache"] = None
+
+        # inject read_columns
+        if read_columns and (
+            "iteritems_options" not in read_options or
+            "filter_name" not in read_options["iteritems_options"]
+        ):
+            filter_name = [Route(s).string_nano_column for s in read_columns]
+            read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
 
         # read the events chunk into memory
         chunk = coffea.nanoevents.NanoEventsFactory.from_root(
@@ -2454,10 +2512,13 @@ class ChunkedIOHandler(object):
     #     cls,
     #     source: str,
     #     open_options: dict | None = None,
+    #     read_columns: set[str | Route] | None = None,
     # ) -> tuple[str, int]:
     #     """
     #     Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
     #     *open_options* has no effect.
+    #
+    #     TODO: use read_columns?
     #     """
     #     return (source, pq.ParquetFile(source).metadata.num_rows)
 
@@ -2477,14 +2538,17 @@ class ChunkedIOHandler(object):
     #     source_object: str,
     #     chunk_pos: ChunkPosition,
     #     read_options: dict | None = None,
+    #     read_columns: set[str | Route] | None = None,
     # ) -> coffea.nanoevents.methods.base.NanoEventsArray:
     #     """
     #     Given a the location of a parquet file *source_object*, returns an awkward array chunk
     #     referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
     #     *coffea.nanoevents.NanoEventsFactory.from_parquet*.
+    #
+    #     TODO: use read_columns?
     #     """
     #     # TODO: default read options? go via dak and preloaded?
-
+    #
     #     # read the events chunk into memory
     #     chunk = coffea.nanoevents.NanoEventsFactory.from_parquet(
     #         source_object,
@@ -2501,14 +2565,25 @@ class ChunkedIOHandler(object):
         cls,
         source: str,
         open_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> tuple[ak.Array, int]:
         """
         Opens a parquet file saved at *source*, loads the content as an dask awkward array,
         wrapped by a :py:class:`DaskArrayReader`, and returns a 2-tuple *(array, length)*.
-        *open_options* and *chunk_size* are forwarded to :py:class:`DaskArrayReader`.
+        *open_options* and *chunk_size* are forwarded to :py:class:`DaskArrayReader`. *read_columns*
+        are converted to strings and, if not already present, added as field ``columns`` to
+        *open_options*.
         """
         if not isinstance(source, str):
             raise Exception(f"'{source}' cannot be opened as awkward_parquet")
+
+        # default open options
+        open_options = open_options or {}
+
+        # inject read_columns
+        if read_columns and "columns" not in open_options:
+            filter_name = [Route(s).string_column for s in read_columns]
+            open_options["columns"] = filter_name
 
         # load the array wrapper
         arr = DaskArrayReader(source, open_options)
@@ -2531,10 +2606,12 @@ class ChunkedIOHandler(object):
         source_object: dak.Array,
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> ak.Array:
         """
         Given a :py:class:`DaskArrayReader` *source_object*, returns the chunk referred to by
-        *chunk_pos* as a full copy loaded into memory. Passing *read_options* has no effect.
+        *chunk_pos* as a full copy loaded into memory. Passing neither *read_options* nor
+        *read_columns* has an effect.
         """
         # get the materialized ak array for that chunk
         return source_object.materialize(
@@ -2577,13 +2654,14 @@ class ChunkedIOHandler(object):
         self.n_entries = None
 
         # open all sources and make sure they have the same number of entries
-        for i, (source, source_handler, open_options) in enumerate(zip(
+        for i, (source, source_handler, open_options, read_columns) in enumerate(zip(
             self.source_list,
             self.source_handlers,
             self.open_options_list,
+            self.read_columns_list,
         )):
             # open the source
-            obj, n = source_handler.open(source, open_options=open_options)
+            obj, n = source_handler.open(source, open_options=open_options, read_columns=read_columns)
             # check entries
             if i == 0:
                 self.n_entries = n
@@ -2628,11 +2706,12 @@ class ChunkedIOHandler(object):
 
         # create a list of read functions
         read_funcs = [
-            partial(source_handler.read, obj, read_options=read_options)
-            for obj, source_handler, read_options in zip(
+            partial(source_handler.read, obj, read_options=read_options, read_columns=read_columns)
+            for obj, source_handler, read_options, read_columns in zip(
                 self.source_objects,
                 self.source_handlers,
                 self.read_options_list,
+                self.read_columns_list,
             )
         ]
 

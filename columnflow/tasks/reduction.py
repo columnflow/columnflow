@@ -102,11 +102,13 @@ class ReduceEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
-        # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
-        load_columns = keep_columns | set(mandatory_coffea_columns)
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
+        route_filter = RouteFilter(write_columns)
+
+        # define columns that need to be read
+        read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
 
         # event counters
         n_all = 0
@@ -130,7 +132,7 @@ class ReduceEvents(
         for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
+            read_columns=[read_columns, None] + (len(input_paths) - 2) * [read_columns],
         ):
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)

@@ -119,13 +119,13 @@ class SelectEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.selector_inst.used_columns
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
+        # define columns that need to be read
+        read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be saved
-        keep_columns = self.selector_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = self.selector_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -139,8 +139,7 @@ class SelectEvents(
         for (events, *diffs), pos in self.iter_chunked_io(
             [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
-            # TODO: pass column names also to awkward_parquet reader
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
+            read_columns=(1 + n_calib) * [read_columns],
         ):
             # apply the calibrated diffs
             events = update_ak_array(events, *diffs)
@@ -162,7 +161,7 @@ class SelectEvents(
             self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
 
             # remove columns
-            if keep_columns:
+            if write_columns:
                 events = route_filter(events)
 
                 # optional check for finite values
@@ -179,7 +178,7 @@ class SelectEvents(
         law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
 
         # merge the column files
-        if keep_columns:
+        if write_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
 
@@ -369,9 +368,9 @@ class MergeSelectionMasks(
             self.input()["forest_merge"]["normalization"],
         )
 
-        # get columns to keep
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = set(self.config_inst.x.keep_columns[self.task_family])
+        route_filter = RouteFilter(write_columns)
 
         for inp in inputs:
             events = inp["columns"].load(formatter="awkward")

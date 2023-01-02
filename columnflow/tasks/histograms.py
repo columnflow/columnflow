@@ -113,6 +113,22 @@ class CreateHistograms(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
+        # define columns that need to be read
+        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        read_columns |= {
+            Route(variable_inst.expression)
+            if isinstance(variable_inst.expression, str) else
+            None  # TODO: handle variable_inst with custom expressions, can they declare columns?
+            for variable_inst in (
+                self.config_inst.get_variable(var_name)
+                for var_name in law.util.flatten(self.variable_tuples.values())
+            )
+        }
+        if self.dataset_inst.is_mc:
+            read_columns |= {Route(column) for column in self.config_inst.x.event_weights}
+            read_columns |= {Route(column) for column in self.dataset_inst.x("event_weights", [])}
+        read_columns = {Route(c) for c in read_columns}
+
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
@@ -122,8 +138,7 @@ class CreateHistograms(
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             # add additional columns
             events = update_ak_array(events, *columns)
@@ -319,6 +334,9 @@ class MergeShiftedHistograms(
     shift = None
     effective_shift = None
     allow_empty_shift = True
+
+    # allow only running on nominal
+    allow_empty_shift_sources = True
 
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms

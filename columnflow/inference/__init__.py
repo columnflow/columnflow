@@ -86,7 +86,7 @@ class ParameterTransformations(tuple):
     """
 
     def __new__(cls, transformations):
-        # TODO: at this point one could interfere and complain in case incompatible transfos are used
+        # TODO: at this point one could object / complain in case incompatible transfos are used
         transformations = [
             (t if isinstance(t, ParameterTransformation) else ParameterTransformation[t])
             for t in transformations
@@ -343,7 +343,7 @@ class InferenceModel(Derivable):
 
         # other cases are not supported
         raise Exception(
-            f"shape requirement cannot be evaluated of parameter '{param_obj.name}' with type "
+            f"shape requirement cannot be evaluated of parameter '{param_obj.name}' with type " +
             f"'{param_obj.type}' and transformations {param_obj.transformations}",
         )
 
@@ -592,7 +592,7 @@ class InferenceModel(Derivable):
                 return None
             names = processes if only_name else [p.name for p in processes]
             raise ValueError(
-                f"process '{process_name}' found more than once in category '{category}': "
+                f"process '{process_name}' found more than once in category '{category}': " +
                 ",".join(names),
             )
 
@@ -645,7 +645,7 @@ class InferenceModel(Derivable):
                 if silent:
                     continue
                 raise ValueError(
-                    f"process named '{process.name}' already registered in category "
+                    f"process named '{process.name}' already registered in category " +
                     f"'{category.name}'",
                 )
             target_categories.append(category)
@@ -791,7 +791,7 @@ class InferenceModel(Derivable):
             if silent:
                 return None
             raise ValueError(
-                f"parameter '{parameter_name}' found in more than one category: "
+                f"parameter '{parameter_name}' found in more than one category: " +
                 ",".join(parameters),
             )
 
@@ -800,7 +800,7 @@ class InferenceModel(Derivable):
             if silent:
                 return None
             raise ValueError(
-                f"parameter '{parameter_name}' found in more than one process in category "
+                f"parameter '{parameter_name}' found in more than one process in category " +
                 f"'{category}': " + ",".join(parameters),
             )
 
@@ -810,7 +810,7 @@ class InferenceModel(Derivable):
                 return None
             names = parameters if only_name else [p.name for p in parameters]
             raise ValueError(
-                f"parameter '{parameter_name}' found more than once in category '{category}' and "
+                f"parameter '{parameter_name}' found more than once in category '{category}' and " +
                 f"process '{process}': " + ",".join(names),
             )
 
@@ -870,7 +870,7 @@ class InferenceModel(Derivable):
             for process in _processes:
                 if self.has_parameter(parameter.name, process=process.name, category=category_name):
                     raise ValueError(
-                        f"parameter named '{parameter.name}' already registered for process "
+                        f"parameter named '{parameter.name}' already registered for process " +
                         f"'{process.name}' in category '{category_name}'",
                     )
 
