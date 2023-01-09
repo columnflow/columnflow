@@ -43,14 +43,6 @@ setup_plhld() {
     # (PLHLD = plc2hldr, CF = columnflow)
     #
 
-    # lang defaults
-    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
-    export LANG="${LANG:-en_US.UTF-8}"
-    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
-
-    # proxy
-    export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
-
     # start exporting variables
     export PLHLD_BASE="${this_dir}"
     export CF_BASE="${this_dir}/modules/columnflow"
@@ -95,20 +87,11 @@ setup_plhld() {
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
     export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
 
-    # overwrite some variables in remote and CI jobs
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
-        export CF_WLCG_USE_CACHE="true"
-        export CF_WLCG_CACHE_CLEANUP="true"
-        export CF_WORKER_KEEP_ALIVE="false"
-    elif [ "${CF_CI_JOB}" = "1" ]; then
-        export CF_WORKER_KEEP_ALIVE="false"
-    fi
+    #
+    # common variables
+    #
 
-    # some variable defaults
-    export CF_WORKER_KEEP_ALIVE="${CF_WORKER_KEEP_ALIVE:-false}"
-    export CF_SCHEDULER_HOST="${CF_SCHEDULER_HOST:-127.0.0.1}"
-    export CF_SCHEDULER_PORT="${CF_SCHEDULER_PORT:-8082}"
-
+    cf_setup_common_variables || return "$?"
 
     #
     # minimal local software setup
