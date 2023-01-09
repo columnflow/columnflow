@@ -5,11 +5,13 @@ echo This script copies the columnflow analysis template
 echo and initializes it as a git repository
 read -p "Enter the name of the repository: " repository_name
 read -p "Enter an abbreveated analyis name (in lower case): " analysis_name
-ANALYSIS_NAME=$(echo $analysis_name | tr '[:lower:]' '[:upper:]')
+ANALYSIS_NAME=${analysis_name^^}
 
 svn checkout https://github.com/uhh-cms/columnflow/branches/feature/template_analysis/analysis_template $repository_name
 
 cd $repository_name
+
+rm -rf .svn
 
 git init
 
