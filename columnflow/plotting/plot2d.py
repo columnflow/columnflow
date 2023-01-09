@@ -11,6 +11,7 @@ from collections import OrderedDict
 import law
 
 from columnflow.util import maybe_import
+from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.plotting.plot_util import remove_residual_axis, apply_variable_settings
 
 hist = maybe_import("hist")
@@ -68,6 +69,7 @@ def plot_2d(
         "plot2d_cfg": {
             "norm": mpl.colors.LogNorm() if zscale == "log" else None,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
+            "cmin": EMPTY_FLOAT + 1,  # display zero-entries as white points
             "cbar": True,
             "cbarextend": True,
         },
@@ -81,6 +83,11 @@ def plot_2d(
     if shape_norm:
         # TODO: normalizing in this way changes empty bins (white) to bins with value 0 (colorized)
         h_sum = h_sum / h_sum.sum().value
+
+    # set bins without any entries (variance == 0) to EMPTY_FLOAT
+    h_view = h_sum.view()
+    h_view.value[h_view.variance == 0] = EMPTY_FLOAT
+    h_sum[...] = h_view
 
     # apply style_config
     ax.set(**style_config["ax_cfg"])
@@ -99,5 +106,7 @@ def plot_2d(
     mplhep.cms.label(**cms_label_kwargs)
 
     h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
+
+    plt.tight_layout()
 
     return fig, (ax,)
