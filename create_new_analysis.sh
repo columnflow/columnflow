@@ -7,7 +7,7 @@ read -p "Enter the name of the repository: " repository_name
 read -p "Enter an abbreveated analyis name (in lower case): " analysis_name
 ANALYSIS_NAME=$(echo $analysis_name | tr '[:lower:]' '[:upper:]')
 
-svn checkout https://github.com/uhh-cms/columnflow/braches/feature/template_analysis/analysis_template $repository_name
+svn checkout https://github.com/uhh-cms/columnflow/branches/feature/template_analysis/analysis_template $repository_name
 
 cd $repository_name
 
