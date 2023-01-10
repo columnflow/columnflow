@@ -1,4 +1,4 @@
-# coding: utf-8
+od# coding: utf-8
 
 """
 Example plot functions.
@@ -230,7 +230,7 @@ def plot_all(
     # cms label
     if cms_label != "skip":
         label_options = {
-            "wip": "Work in Progress",
+            "wip": "Work in progress",
             "prelim": "Preliminary",
             "public": "",
         }
@@ -253,9 +253,9 @@ def plot_all(
 
 def plot_variable_per_process(
     hists: OrderedDict,
-    config_inst: od.config,
-    category_inst: od.category,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     yscale: str | None = "",
@@ -303,9 +303,9 @@ def plot_variable_per_process(
 
 def plot_variable_variants(
     hists: OrderedDict,
-    config_inst: od.config,
-    category_inst: od.category,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -366,9 +366,9 @@ def plot_variable_variants(
 
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
-    config_inst: od.config,
-    category_inst: od.category,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -463,8 +463,8 @@ def plot_shifted_variable(
 
 def plot_cutflow(
     hists: OrderedDict,
-    config_inst: od.config,
-    category_inst: od.category,
+    config_inst: od.Config,
+    category_inst: od.Category,
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,

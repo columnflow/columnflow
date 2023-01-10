@@ -26,9 +26,9 @@ od = maybe_import("order")
 
 def plot_2d(
     hists: OrderedDict,
-    config_inst: od.config,
-    category_inst: od.category,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     zscale: str | None = "",
@@ -119,7 +119,7 @@ def plot_2d(
     # cms label
     if cms_label != "skip":
         label_options = {
-            "wip": "Work in Progress",
+            "wip": "Work in progress",
             "prelim": "Preliminary",
             "public": "",
         }
