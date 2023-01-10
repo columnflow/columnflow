@@ -1,10 +1,30 @@
 #!/usr/bin/env bash
 
+
+check_string(){
+    local str=$*
+    case $str in
+        *" "*)
+            read -p "No spaces, please redo: " str
+            str=$(check_string $str);;
+        "")
+            read -p "Empty string, please redo: " str
+            str=$(check_string $str);;
+        *"!"*|*"@"*|*"#"*|*"$"*|*"%"*|*"^"*|*"&"*|*"*"*|*"("*|*")"*|*"+"*)
+            read -p "No special characters, please redo: " str
+            str=$(check_string $str);;
+    esac
+    echo $str
+}
+
+
 # get analysisname
 echo This script copies the columnflow analysis template
 echo and initializes it as a git repository
 read -p "Enter the name of the repository: " repository_name
+repository_name=$(check_string $repository_name)
 read -p "Enter an abbreveated analyis name (in lower case): " analysis_name
+analysis_name=$(check_string $analysis_name)
 ANALYSIS_NAME=${analysis_name^^}
 
 svn checkout https://github.com/uhh-cms/columnflow/branches/feature/template_analysis/analysis_template $repository_name
