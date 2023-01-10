@@ -12,7 +12,9 @@ import law
 
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT
-from columnflow.plotting.plot_util import remove_residual_axis, apply_variable_settings
+from columnflow.plotting.plot_util import (
+    remove_residual_axis, apply_variable_settings, get_position,
+)
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -76,10 +78,6 @@ def plot_2d(
         },
         "annotate_cfg": {
             "text": category_inst.label,
-            "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip
-            "xycoords": "axes points",
-            "color": "black",
-            "fontsize": 22,
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
@@ -103,7 +101,20 @@ def plot_2d(
         ax.legend(**style_config["legend_cfg"])
 
     # annotation of category label
-    plt.annotate(**default_style_config["annotate_cfg"])
+    annotate_kwargs = {
+        "text": "",
+        "xy": (
+            get_position(*ax.get_xlim(), factor=0.05, logscale=False),
+            get_position(*ax.get_ylim(), factor=0.95, logscale=False),
+        ),
+        "xycoords": "data",
+        "color": "black",
+        "fontsize": 22,
+        "horizontalalignment": "left",
+        "verticalalignment": "top",
+    }
+    annotate_kwargs.update(default_style_config.get("annotate_cfg", {}))
+    plt.annotate(**annotate_kwargs)
 
     # cms label
     if cms_label != "skip":

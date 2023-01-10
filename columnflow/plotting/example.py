@@ -12,10 +12,13 @@ from typing import Sequence, Iterable
 import law
 
 from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import prepare_plot_config, remove_residual_axis, apply_variable_settings
+from columnflow.plotting.plot_util import (
+    prepare_plot_config, remove_residual_axis, apply_variable_settings, get_position,
+)
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
+mpl = maybe_import("matplotlib")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 od = maybe_import("order")
@@ -174,9 +177,10 @@ def plot_all(
 
     # some default ylim settings based on yscale
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
-    ax_ymax = ax.get_ylim()[1]
-    ax_ylim = (ax_ymax / 10**4, ax_ymax * 40) if log_y else (0.00001, ax_ymax * 1.2)
-    ax_kwargs.update({"ylim": ax_ylim})
+
+    ax_ymin = ax.get_ylim()[1] / 10**4 if log_y else 0.00001
+    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1.4, logscale=log_y)
+    ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
@@ -208,10 +212,17 @@ def plot_all(
     # custom annotation
     annotate_kwargs = {
         "text": "",
-        "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip, the relative position changes
-        "xycoords": "axes points",
+        # "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip, the relative position changes
+        # "xycoords": "axes points",
+        "xy": (
+            get_position(*ax.get_xlim(), factor=0.05, logscale=False),
+            get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
+        ),
+        "xycoords": "data",
         "color": "black",
         "fontsize": 22,
+        "horizontalalignment": "left",
+        "verticalalignment": "top",
     }
     annotate_kwargs.update(style_config.get("annotate_cfg", {}))
     plt.annotate(**annotate_kwargs)
