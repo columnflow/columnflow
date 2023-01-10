@@ -157,6 +157,7 @@ class PlotVariablesBase(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
+                category_inst=category_inst,
                 variable_insts=variable_insts,
                 **self.get_plot_parameters(),
             )

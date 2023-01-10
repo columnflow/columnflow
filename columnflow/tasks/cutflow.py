@@ -343,6 +343,7 @@ class PlotCutflow(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
+                category_inst=category_inst,
                 **self.get_plot_parameters(),
             )
 
@@ -494,6 +495,7 @@ class PlotCutflowVariablesBase(
             # call a postprocess function that produces outputs based on the implementation of the daughter task
             self.run_postprocess(
                 hists=hists,
+                category_inst=category_inst,
                 variable_insts=variable_insts,
             )
 
@@ -538,7 +540,7 @@ class PlotCutflowVariables1D(
                 for p in self.processes
             })
 
-    def run_postprocess(self, hists, variable_insts):
+    def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
 
         if len(variable_insts) != 1:
@@ -558,6 +560,7 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
+                    category_inst=category_inst,
                     variable_insts=variable_insts,
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
@@ -579,6 +582,7 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
+                    category_inst=category_inst,
                     variable_insts=variable_insts,
                     style_config={"legend_cfg": {"title": process_inst.label}},
                     **self.get_plot_parameters(),

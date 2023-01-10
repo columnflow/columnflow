@@ -117,7 +117,7 @@ def plot_all(
     skip_ratio: bool = False,
     shape_norm: bool = False,
     skip_legend: bool = False,
-    skip_cms: bool = False,
+    cms_label: str = "wip",
     **kwargs,
 ) -> plt.Figure:
     """
@@ -205,17 +205,35 @@ def plot_all(
         legend_kwargs.update(style_config.get("legend_cfg", {}))
         ax.legend(**legend_kwargs)
 
-    # cms label
-    cms_label_kwargs = {
-        "ax": ax,
-        "llabel": "Work in progress",
+    # custom annotation
+    annotate_kwargs = {
+        "text": "",
+        "xy": (30, 540),  # this might be quite unstable, e.g. when `skip_cms`=True, the relative position changes
+        "xycoords": "axes points",
+        "color": "black",
         "fontsize": 22,
     }
-    # TODO: set "data": False when there are no data histograms (adds 'Simulation' to CMS label)
-    cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
-    if skip_cms:
-        cms_label_kwargs.update({"data": True, "label": ""})
-    mplhep.cms.label(**cms_label_kwargs)
+    annotate_kwargs.update(style_config.get("annotate_cfg", {}))
+    plt.annotate(**annotate_kwargs)
+
+    # cms label
+    if cms_label != "skip":
+        label_options = {
+            "wip": "Work in Progress",
+            "prelim": "Preliminary",
+            "public": "",
+        }
+        cms_label_kwargs = {
+            "ax": ax,
+            "llabel": label_options[cms_label],
+            "fontsize": 22,
+            "data": False,
+        }
+        if "data" not in plot_config.keys():
+            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
+
+        cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+        mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()
 
@@ -225,6 +243,7 @@ def plot_all(
 def plot_variable_per_process(
     hists: OrderedDict,
     config_inst: od.config,
+    category_inst: od.category,
     variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
@@ -259,6 +278,7 @@ def plot_variable_per_process(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
@@ -273,6 +293,7 @@ def plot_variable_per_process(
 def plot_variable_variants(
     hists: OrderedDict,
     config_inst: od.config,
+    category_inst: od.category,
     variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
@@ -323,6 +344,7 @@ def plot_variable_variants(
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
+        "annotate_cfg": {"text": category_inst.label},
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
@@ -334,6 +356,7 @@ def plot_variable_variants(
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
     config_inst: od.config,
+    category_inst: od.category,
     variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
@@ -415,6 +438,7 @@ def plot_shifted_variable(
         "legend_cfg": {
             "title": legend_title,
         },
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
@@ -429,6 +453,7 @@ def plot_shifted_variable(
 def plot_cutflow(
     hists: OrderedDict,
     config_inst: od.config,
+    category_inst: od.category,
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -479,6 +504,7 @@ def plot_cutflow(
         "legend_cfg": {
             "loc": "upper right",
         },
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
