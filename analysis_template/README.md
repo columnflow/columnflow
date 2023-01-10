@@ -9,9 +9,8 @@ A couple test tasks are listed below.
 They might require a **valid voms proxy** for accessing input data.
 
 ```shell
-# clone the project
-git clone --recursive git@github.com:BalduinLetzer/plc2hldr.git
-cd plc2hldr
+# download the project
+bash <(curl https://raw.githubusercontent.com/uhh-cms/columnflow/feature/template_analysis/create_new_analysis.sh)
 
 # source the setup and store decisions in .setups/dev.sh (arbitrary name)
 source setup.sh dev
@@ -30,7 +29,7 @@ law run cf.ReduceEvents \
     --branch 0
 
 # create a plot
-law run cf.PlotVariables \
+law run cf.PlotVariables1D \
     --version v1 \
     --datasets st_tchannel_t \
     --producers features \
