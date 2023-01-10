@@ -1983,9 +1983,10 @@ class DaskArrayReader(object):
 
         # open the file
         open_options = open_options or {}
+        open_options["split_row_groups"] = False
         # TODO: selecting coluns is currently disabled due to a bug (misconception?) in dask_awkward
-        # that leads to segfaults when querying the length of arrays opened with selected columns
-        # TODO: open a dak issue for that
+        # that leads to segfaults when querying the length of arrays opened with selected columns,
+        # see https://github.com/dask-contrib/dask-awkward/issues/140
         open_options.pop("columns", None)
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
@@ -2003,6 +2004,9 @@ class DaskArrayReader(object):
         # locks to protect against RCs during read operations by different threads
         self.chunk_to_partitions_lock = threading.Lock()
         self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
+
+    def __del__(self):
+        self.close()
 
     def __len__(self) -> int:
         return len(self.dak_array)
