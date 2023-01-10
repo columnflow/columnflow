@@ -208,7 +208,7 @@ def plot_all(
     # custom annotation
     annotate_kwargs = {
         "text": "",
-        "xy": (30, 540),  # this might be quite unstable, e.g. when `skip_cms`=True, the relative position changes
+        "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip, the relative position changes
         "xycoords": "axes points",
         "color": "black",
         "fontsize": 22,

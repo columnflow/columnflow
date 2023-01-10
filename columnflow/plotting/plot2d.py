@@ -25,12 +25,13 @@ od = maybe_import("order")
 def plot_2d(
     hists: OrderedDict,
     config_inst: od.config,
+    category_inst: od.category,
     variable_insts: list[od.variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     zscale: str | None = "",
     skip_legend: bool = False,
-    skip_cms: bool = False,
+    cms_label: str = "wip",
     process_settings: dict | None = None,  # TODO use
     variable_settings: dict | None = None,
     **kwargs,
@@ -73,6 +74,13 @@ def plot_2d(
             "cbar": True,
             "cbarextend": True,
         },
+        "annotate_cfg": {
+            "text": category_inst.label,
+            "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip
+            "xycoords": "axes points",
+            "color": "black",
+            "fontsize": 22,
+        },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
@@ -94,16 +102,28 @@ def plot_2d(
     if not skip_legend:
         ax.legend(**style_config["legend_cfg"])
 
-    # cms label (some TODOs might still be open here)
-    cms_label_kwargs = {
-        "ax": ax,
-        "llabel": "Work in progress",
-        "fontsize": 22,
-    }
-    cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
-    if skip_cms:
-        cms_label_kwargs.update({"data": True, "label": ""})
-    mplhep.cms.label(**cms_label_kwargs)
+    # annotation of category label
+    plt.annotate(**default_style_config["annotate_cfg"])
+
+    # cms label
+    if cms_label != "skip":
+        label_options = {
+            "wip": "Work in Progress",
+            "prelim": "Preliminary",
+            "public": "",
+        }
+        cms_label_kwargs = {
+            "ax": ax,
+            "llabel": label_options[cms_label],
+            "fontsize": 22,
+            "data": False,
+        }
+        # add 'Simulation' tag when no data is present
+        if not any([process_inst.is_data for process_inst in hists.keys()]):
+            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
+
+        cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+        mplhep.cms.label(**cms_label_kwargs)
 
     h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
 
