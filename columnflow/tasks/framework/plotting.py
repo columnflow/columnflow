@@ -52,17 +52,19 @@ class PlotBase(ConfigTask):
         significant=False,
         description="when True, no legend is drawn; default: None",
     )
-    skip_cms = law.OptionalBoolParameter(
-        default=None,
+    cms_label = luigi.ChoiceParameter(
+        choices=("wip", "prelim", "public", "skip"),
+        default="wip",
         significant=False,
-        description="when True, no CMS logo is drawn; default: None",
+        description="Parameter to set the type of CMS logo; choices: wip,prelim,public,skip; "
+        "default: wip",
     )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = DotDict()
         dict_add_strict(params, "skip_legend", self.skip_legend)
-        dict_add_strict(params, "skip_cms", self.skip_cms)
+        dict_add_strict(params, "cms_label", self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         return params
 
