@@ -167,8 +167,6 @@ def prepare_plot_config(
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
     """ get a relative position between a min and max value based on the scale """
-    import math
-
     if logscale:
         value = 10 ** ((math.log10(maximum) - math.log10(minimum)) * factor + math.log10(minimum))
     else:
