@@ -952,6 +952,11 @@ def sorted_ak_to_parquet(
     # sort fields
     ak_array = sort_ak_fields(ak_array)
 
+    # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
+    # TODO: remove workaround
+    kwargs["extensionarray"] = False
+    # end workaround
+
     # TODO: empty fields cannot be saved to parquet, but for that we would need to identify them
     ak.to_parquet(ak_array, *args, **kwargs)
 
@@ -1984,10 +1989,6 @@ class DaskArrayReader(object):
         # open the file
         open_options = open_options or {}
         open_options["split_row_groups"] = False
-        # TODO: selecting coluns is currently disabled due to a bug (misconception?) in dask_awkward
-        # that leads to segfaults when querying the length of arrays opened with selected columns,
-        # see https://github.com/dask-contrib/dask-awkward/issues/140
-        open_options.pop("columns", None)
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
@@ -2079,6 +2080,11 @@ class DaskArrayReader(object):
             part_start = max(entry_start - div_start, 0)
             part_stop = min(entry_stop - div_start, div_stop - div_start)
             parts.append(arr[part_start:part_stop])
+            # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
+            # make the array non-optional, assuming it is not meant to be optional
+            # TODO: remove this workaround
+            parts[-1] = ak.fill_none(parts[-1], 0)
+            # end workaround
 
         # construct the full array
         arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
