@@ -350,6 +350,7 @@ class PlotCutflow(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
+                category_inst=category_inst,
                 **self.get_plot_parameters(),
             )
 
@@ -368,6 +369,7 @@ PlotCutflowWrapper = wrapper_factory(
 class PlotCutflowVariablesBase(
     PlotCutflowBase,
     VariablePlotSettingMixin,
+    ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -427,7 +429,7 @@ class PlotCutflowVariablesBase(
         return
 
     @abstractmethod
-    def run_postprocess(self, hists, variable_insts):
+    def run_postprocess(self, hists, category_inst, variable_insts):
         return
 
     @law.decorator.log
@@ -498,9 +500,16 @@ class PlotCutflowVariablesBase(
             if not hists:
                 raise Exception("no histograms found to plot")
 
+            # sort hists by process order
+            hists = OrderedDict(
+                (process_inst, hists[process_inst])
+                for process_inst in sorted(hists, key=process_insts.index)
+            )
+
             # call a postprocess function that produces outputs based on the implementation of the daughter task
             self.run_postprocess(
                 hists=hists,
+                category_inst=category_inst,
                 variable_insts=variable_insts,
             )
 
@@ -508,7 +517,6 @@ class PlotCutflowVariablesBase(
 class PlotCutflowVariables1D(
     PlotCutflowVariablesBase,
     PlotBase1D,
-    ProcessPlotSettingMixin,
 ):
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.example.plot_variable_per_process",
@@ -545,16 +553,15 @@ class PlotCutflowVariables1D(
                 for p in self.processes
             })
 
-    def run_postprocess(self, hists, variable_insts):
+    def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
 
         if len(variable_insts) != 1:
-            raise Exception(f"Task {self.cls_name} is only working for single variables.")
+            raise Exception(f"Task {self.task_family} is only working for single variables.")
 
         outputs = self.output()
         if self.per_plot == "processes":
             for step in self.chosen_steps:
-                # sort hists by process order
                 step_hists = OrderedDict(
                     (process_inst, h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
@@ -565,6 +572,7 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
+                    category_inst=category_inst,
                     variable_insts=variable_insts,
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
@@ -586,6 +594,7 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
+                    category_inst=category_inst,
                     variable_insts=variable_insts,
                     style_config={"legend_cfg": {"title": process_inst.label}},
                     **self.get_plot_parameters(),
@@ -599,10 +608,9 @@ class PlotCutflowVariables1D(
 class PlotCutflowVariables2D(
     PlotCutflowVariablesBase,
     PlotBase2D,
-    ProcessPlotSettingMixin,
 ):
     plot_function = PlotBase.plot_function.copy(
-        copy="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot2d.plot_2d",
         add_default_to_description=True,
     )
 
@@ -617,20 +625,23 @@ class PlotCutflowVariables2D(
             for i, s in enumerate(self.chosen_steps)
         })
 
-    def run_postprocess(self, hists, variable_insts):
+    def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
-
-        if len(variable_insts) != 2:
-            raise Exception(f"Task {self.cls_name} is only working for variable pairs.")
 
         outputs = self.output()
 
         for step in self.chosen_steps:
+            step_hists = OrderedDict(
+                (process_inst, h[{"step": hist.loc(step)}])
+                for process_inst, h in hists.items()
+            )
+
             # call the plot function
             fig, _ = self.call_plot_func(
                 self.plot_function,
-                hists=hists[{"step": hist.loc(step)}],
+                hists=step_hists,
                 config_inst=self.config_inst,
+                category_inst=category_inst,
                 variable_insts=variable_insts,
                 style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                 **self.get_plot_parameters(),

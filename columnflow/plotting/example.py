@@ -12,10 +12,13 @@ from typing import Sequence, Iterable
 import law
 
 from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import prepare_plot_config, remove_residual_axis, apply_variable_settings
+from columnflow.plotting.plot_util import (
+    prepare_plot_config, remove_residual_axis, apply_variable_settings, get_position,
+)
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
+mpl = maybe_import("matplotlib")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 od = maybe_import("order")
@@ -117,7 +120,7 @@ def plot_all(
     skip_ratio: bool = False,
     shape_norm: bool = False,
     skip_legend: bool = False,
-    skip_cms: bool = False,
+    cms_label: str = "wip",
     **kwargs,
 ) -> plt.Figure:
     """
@@ -174,9 +177,10 @@ def plot_all(
 
     # some default ylim settings based on yscale
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
-    ax_ymax = ax.get_ylim()[1]
-    ax_ylim = (ax_ymax / 10**4, ax_ymax * 40) if log_y else (0.00001, ax_ymax * 1.2)
-    ax_kwargs.update({"ylim": ax_ylim})
+
+    ax_ymin = ax.get_ylim()[1] / 10**4 if log_y else 0.00001
+    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1.4, logscale=log_y)
+    ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
@@ -205,17 +209,42 @@ def plot_all(
         legend_kwargs.update(style_config.get("legend_cfg", {}))
         ax.legend(**legend_kwargs)
 
-    # cms label
-    cms_label_kwargs = {
-        "ax": ax,
-        "llabel": "Work in progress",
+    # custom annotation
+    annotate_kwargs = {
+        "text": "",
+        # "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip, the relative position changes
+        # "xycoords": "axes points",
+        "xy": (
+            get_position(*ax.get_xlim(), factor=0.05, logscale=False),
+            get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
+        ),
+        "xycoords": "data",
+        "color": "black",
         "fontsize": 22,
+        "horizontalalignment": "left",
+        "verticalalignment": "top",
     }
-    # TODO: set "data": False when there are no data histograms (adds 'Simulation' to CMS label)
-    cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
-    if skip_cms:
-        cms_label_kwargs.update({"data": True, "label": ""})
-    mplhep.cms.label(**cms_label_kwargs)
+    annotate_kwargs.update(style_config.get("annotate_cfg", {}))
+    plt.annotate(**annotate_kwargs)
+
+    # cms label
+    if cms_label != "skip":
+        label_options = {
+            "wip": "Work in progress",
+            "prelim": "Preliminary",
+            "public": "",
+        }
+        cms_label_kwargs = {
+            "ax": ax,
+            "llabel": label_options[cms_label],
+            "fontsize": 22,
+            "data": False,
+        }
+        if "data" not in plot_config.keys():
+            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
+
+        cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+        mplhep.cms.label(**cms_label_kwargs)
 
     plt.tight_layout()
 
@@ -224,8 +253,9 @@ def plot_all(
 
 def plot_variable_per_process(
     hists: OrderedDict,
-    config_inst: od.config,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     yscale: str | None = "",
@@ -259,6 +289,7 @@ def plot_variable_per_process(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
@@ -272,8 +303,9 @@ def plot_variable_per_process(
 
 def plot_variable_variants(
     hists: OrderedDict,
-    config_inst: od.config,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -323,6 +355,7 @@ def plot_variable_variants(
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
+        "annotate_cfg": {"text": category_inst.label},
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
@@ -333,8 +366,9 @@ def plot_variable_variants(
 
 def plot_shifted_variable(
     hists: Sequence[hist.Hist],
-    config_inst: od.config,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -415,6 +449,7 @@ def plot_shifted_variable(
         "legend_cfg": {
             "title": legend_title,
         },
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
@@ -428,7 +463,8 @@ def plot_shifted_variable(
 
 def plot_cutflow(
     hists: OrderedDict,
-    config_inst: od.config,
+    config_inst: od.Config,
+    category_inst: od.Category,
     style_config: dict | None = None,
     shape_norm: bool = False,
     yscale: str | None = None,
@@ -479,6 +515,7 @@ def plot_cutflow(
         "legend_cfg": {
             "loc": "upper right",
         },
+        "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },

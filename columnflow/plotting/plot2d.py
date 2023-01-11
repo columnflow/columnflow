@@ -11,7 +11,10 @@ from collections import OrderedDict
 import law
 
 from columnflow.util import maybe_import
-from columnflow.plotting.plot_util import remove_residual_axis, apply_variable_settings
+from columnflow.columnar_util import EMPTY_FLOAT
+from columnflow.plotting.plot_util import (
+    remove_residual_axis, apply_variable_settings, get_position,
+)
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -23,13 +26,14 @@ od = maybe_import("order")
 
 def plot_2d(
     hists: OrderedDict,
-    config_inst: od.config,
-    variable_insts: list[od.variable],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
     style_config: dict | None = None,
     shape_norm: bool | None = False,
     zscale: str | None = "",
     skip_legend: bool = False,
-    skip_cms: bool = False,
+    cms_label: str = "wip",
     process_settings: dict | None = None,  # TODO use
     variable_settings: dict | None = None,
     **kwargs,
@@ -68,8 +72,12 @@ def plot_2d(
         "plot2d_cfg": {
             "norm": mpl.colors.LogNorm() if zscale == "log" else None,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
+            "cmin": EMPTY_FLOAT + 1,  # display zero-entries as white points
             "cbar": True,
             "cbarextend": True,
+        },
+        "annotate_cfg": {
+            "text": category_inst.label,
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
@@ -82,22 +90,54 @@ def plot_2d(
         # TODO: normalizing in this way changes empty bins (white) to bins with value 0 (colorized)
         h_sum = h_sum / h_sum.sum().value
 
+    # set bins without any entries (variance == 0) to EMPTY_FLOAT
+    h_view = h_sum.view()
+    h_view.value[h_view.variance == 0] = EMPTY_FLOAT
+    h_sum[...] = h_view
+
     # apply style_config
     ax.set(**style_config["ax_cfg"])
     if not skip_legend:
         ax.legend(**style_config["legend_cfg"])
 
-    # cms label (some TODOs might still be open here)
-    cms_label_kwargs = {
-        "ax": ax,
-        "llabel": "Work in progress",
+    # annotation of category label
+    annotate_kwargs = {
+        "text": "",
+        "xy": (
+            get_position(*ax.get_xlim(), factor=0.05, logscale=False),
+            get_position(*ax.get_ylim(), factor=0.95, logscale=False),
+        ),
+        "xycoords": "data",
+        "color": "black",
         "fontsize": 22,
+        "horizontalalignment": "left",
+        "verticalalignment": "top",
     }
-    cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
-    if skip_cms:
-        cms_label_kwargs.update({"data": True, "label": ""})
-    mplhep.cms.label(**cms_label_kwargs)
+    annotate_kwargs.update(default_style_config.get("annotate_cfg", {}))
+    plt.annotate(**annotate_kwargs)
+
+    # cms label
+    if cms_label != "skip":
+        label_options = {
+            "wip": "Work in progress",
+            "prelim": "Preliminary",
+            "public": "",
+        }
+        cms_label_kwargs = {
+            "ax": ax,
+            "llabel": label_options[cms_label],
+            "fontsize": 22,
+            "data": False,
+        }
+        # add 'Simulation' tag when no data is present
+        if not any([process_inst.is_data for process_inst in hists.keys()]):
+            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
+
+        cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
+        mplhep.cms.label(**cms_label_kwargs)
 
     h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
+
+    plt.tight_layout()
 
     return fig, (ax,)
