@@ -36,7 +36,7 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if ak.any(N_pdfweights != 103) or ak.any(N_pdfweights != 101):
         raise Exception(
             f"Number of LHEPdfWeights ({N_pdfweights}) is not as expected (103 or 101) "
-            f"in dataset {self.dataset_inst.name}"
+            f"in dataset {self.dataset_inst.name}",
         )
 
     # first LHEPdfWeight value: nominal weight

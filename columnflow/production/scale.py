@@ -38,7 +38,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         N_scaleweights = N_scaleweights[N_scaleweights != 9]
         raise Exception(
             f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
-            f"in dataset {self.dataset_inst.name}"
+            f"in dataset {self.dataset_inst.name}",
         )
 
     if ak.any(events.LHEScaleWeight[:, 4] != 1):
@@ -78,7 +78,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
         N_scaleweights = N_scaleweights[N_scaleweights != 9]
         raise Exception(
             f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
-            f"in dataset {self.dataset_inst.name}"
+            f"in dataset {self.dataset_inst.name}",
         )
 
     if ak.any(events.LHEScaleWeight[:, 4] != 1):
