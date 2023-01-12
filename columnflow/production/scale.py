@@ -21,22 +21,27 @@ ak = maybe_import("awkward")
 )
 def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    reads out mur and muf uncertainties independently; documentation of the LHEScaleWeight columns:
-    https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
-    TODO: better documentation
+    Producer that reads out mur and muf uncertainties on an event-by-event basis.
+    Can only be called with MC datasets.
+
+    Resources:
+
+       - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
 
     # stop here for data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to read out mur/muf weights in data")
 
     N_scaleweights = ak.num(events.LHEScaleWeight, axis=1)
     if ak.any(N_scaleweights != 9):
         N_scaleweights = N_scaleweights[N_scaleweights != 9]
-        raise Exception(f"Number of LHEScaleWeights ({N_scaleweights}) is not "
-                        f"as expected (9) in dataset {self.dataset_inst.name}")
+        raise Exception(
+            f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
+            f"in dataset {self.dataset_inst.name}"
+        )
 
-    if ak.any(events.LHEScaleWeight[:, 4]):
+    if ak.any(events.LHEScaleWeight[:, 4] != 1):
         raise Exception("The nominal LHEScaleWeight should always be 1")
 
     events = set_ak_column(events, "mur_weight", events.LHEScaleWeight[:, 4])
@@ -53,11 +58,14 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     uses={"LHEScaleWeight"},
     produces={"scale_weight", "scale_weight_up", "scale_weight_down"},
 )
-def scale_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    determines the scale up and down variations; documentation of the LHEScaleWeight columns:
-    https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
-    TODO: better documentation
+    Producer that determines the envelope of the mur/muf up and down variations on an event-by-event basis.
+    Can only be called with MC datasets.
+
+    Resources:
+
+       - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
 
     # stop here for data
@@ -68,10 +76,12 @@ def scale_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # For now, make an exception for st_schannel_had dataset; should be fixed with NanoAODv10
     if ak.any(N_scaleweights != 9):
         N_scaleweights = N_scaleweights[N_scaleweights != 9]
-        raise Exception(f"Number of LHEScaleWeights ({N_scaleweights}) is not "
-                        f"as expected (9) in dataset {self.dataset_inst.name}")
+        raise Exception(
+            f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
+            f"in dataset {self.dataset_inst.name}"
+        )
 
-    if ak.any(events.LHEScaleWeight[:, 4]):
+    if ak.any(events.LHEScaleWeight[:, 4] != 1):
         raise Exception("The nominal LHEScaleWeight should always be 1")
 
     events = set_ak_column(events, "scale_weight", events.LHEScaleWeight[:, 4])
