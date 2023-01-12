@@ -43,36 +43,18 @@ def add_external_files(config: od.Config) -> None:
         },
 
         # jet energy correction
-        "jec": {
-            "mc": OrderedDict([
-                (level, (make_jme_filename(config.x.jec, "mc", name=level), "v1"))
-                for level in config.x.jec.levels
-            ]),
-            "data": {
-                era: OrderedDict([
-                    (level, (make_jme_filename(config.x.jec, "data", name=level, era=era), "v1"))
-                    for level in config.x.jec.levels
-                ])
-                for era in config.x.jec.data_eras
-            },
-        },
+        "jet_jerc": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz", "v1"),  # noqa
 
-        # jec energy correction uncertainties
-        "junc": {
-            "mc": [(make_jme_filename(config.x.jec, "mc", name="UncertaintySources"), "v1")],
-            "data": {
-                era: [(make_jme_filename(config.x.jec, "data", name="UncertaintySources", era=era), "v1")]
-                for era in config.x.jec.data_eras
-            },
-        },
+        # met phi corrector
+        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz", "v1"),  # noqa
 
-        # jet energy resolution (pt resolution)
-        "jer": {
-            "mc": [(make_jme_filename(config.x.jer, "mc", name="PtResolution"), "v1")],
-        },
+        # btag scale factor
+        "btag_sf_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/BTV/2017_UL/btagging.json.gz", "v1"),  # noqa
 
-        # jet energy resolution (data/mc scale factors)
-        "jersf": {
-            "mc": [(make_jme_filename(config.x.jer, "mc", name="SF"), "v1")],
-        },
+        # electron scale factors
+        "electron_sf": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/EGM/2017_UL/electron.json.gz", "v1"),  # noqa
+
+        # muon scale factors
+        "muon_sf": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/MUO/2017_UL/muon_Z.json.gz", "v1"),  # noqa
+
     })

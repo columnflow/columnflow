@@ -13,12 +13,11 @@ def add_jec_files(config: od.Config) -> None:
 
     # location of JEC txt files
     config.set_aux("jec", DotDict.wrap({
-        "source": "https://raw.githubusercontent.com/cms-jet/JECDatabase/master/textFiles",
         "campaign": "Summer19UL17",
-        "version": "V6",
+        "version": "V5",
         "jet_type": "AK4PFchs",
         "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
-        "data_eras": sorted(filter(None, {d.x("jec_era", None) for d in config.datasets if d.is_data})),
+        "levels_for_type1_met": ["L1FastJet"],
         "uncertainty_sources": [
             # comment out most for now to prevent large file sizes
             # "AbsoluteStat",
