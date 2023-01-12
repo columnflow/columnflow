@@ -29,6 +29,7 @@ class MLModel(Derivable):
         - :py:meth:`datasets`
         - :py:meth:`uses`,
         - :py:meth:`produces`
+        - :py:meth:`requires`
         - :py:meth:`output`
         - :py:meth:`open_model`
         - :py:meth:`train`
@@ -167,6 +168,12 @@ class MLModel(Derivable):
         Returns a set of all produced columns. To be implemented in subclasses.
         """
         raise NotImplementedError()
+
+    def requires(self, task: law.Task) -> Any:
+        """
+        Returns required tasks that should be performed beforehand and whose outputs are needed.
+        """
+        return None
 
     def output(self, task: law.Task) -> Any:
         """
