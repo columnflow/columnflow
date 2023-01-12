@@ -565,3 +565,48 @@ MLEvaluationWrapper = wrapper_factory(
     require_cls=MLEvaluation,
     enable=["configs", "skip_configs", "shifts", "skip_shifts", "datasets", "skip_datasets"],
 )
+
+
+class MergeMLEvaluation(
+    MergeReducedEventsUser,
+    MLModelMixin,
+    ProducersMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    ChunkedIOMixin,
+    law.tasks.ForestMerge,
+    RemoteWorkflow,
+):
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    # recursively merge 20 files into one
+    merge_factor = 20
+
+    # default upstream dependency task classes
+    dep_MLEvaluation = MLEvaluation
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return self.dep_MLEvaluation.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return [
+            self.dep_MLEvaluation.req(self, branch=b)
+            for b in range(start_branch, end_branch)
+        ]
+
+    def merge_output(self):
+        return self.target("ml_cols.parquet")
+
+    def merge(self, inputs, output):
+        law.pyarrow.merge_parquet_task(self, inputs, output)
+
+
+MergeMLEvaluationWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeMLEvaluation,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
