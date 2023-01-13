@@ -33,11 +33,11 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if self.dataset_inst.is_data:
         raise ValueError("attempt to read out mur/muf weights in data")
 
-    N_scaleweights = ak.num(events.LHEScaleWeight, axis=1)
-    if ak.any(N_scaleweights != 9):
-        N_scaleweights = N_scaleweights[N_scaleweights != 9]
+    n_weights = ak.num(events.LHEScaleWeight, axis=1)
+    if ak.any(n_weights != 9):
+        n_weights = n_weights[n_weights != 9]
         raise Exception(
-            f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
+            f"Number of LHEScaleWeights ({n_weights}) is not as expected (9) "
             f"in dataset {self.dataset_inst.name}",
         )
 
@@ -56,7 +56,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={"LHEScaleWeight"},
-    produces={"scale_weight", "scale_weight_up", "scale_weight_down"},
+    produces={"murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down"},
 )
 def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -72,25 +72,24 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     if self.dataset_inst.is_data:
         return events
 
-    N_scaleweights = ak.num(events.LHEScaleWeight, axis=1)
+    n_weights = ak.num(events.LHEScaleWeight, axis=1)
     # For now, make an exception for st_schannel_had dataset; should be fixed with NanoAODv10
-    if ak.any(N_scaleweights != 9):
-        N_scaleweights = N_scaleweights[N_scaleweights != 9]
+    if ak.any(n_weights != 9):
+        n_weights = n_weights[n_weights != 9]
         raise Exception(
-            f"Number of LHEScaleWeights ({N_scaleweights}) is not as expected (9) "
+            f"Number of LHEScaleWeights ({n_weights}) is not as expected (9) "
             f"in dataset {self.dataset_inst.name}",
         )
 
     if ak.any(events.LHEScaleWeight[:, 4] != 1):
         raise Exception("The nominal LHEScaleWeight should always be 1")
 
-    events = set_ak_column(events, "scale_weight", events.LHEScaleWeight[:, 4])
+    events = set_ak_column(events, "murf_envelope_weight", events.LHEScaleWeight[:, 4])
 
     # for the up/down variations, take the max/min value of all possible combinations
     # except mur=2, muf=0.5 (index 2) and mur=0.5, muf=2 (index 6) into account
-    idx_mask = (ak.local_index(events.LHEScaleWeight) != 2) & (ak.local_index(events.LHEScaleWeight) != 6)
-    considered_scale_weights = events.LHEScaleWeight[idx_mask]
-    events = set_ak_column(events, "scale_weight_down", ak.min(considered_scale_weights, axis=1))
-    events = set_ak_column(events, "scale_weight_up", ak.max(considered_scale_weights, axis=1))
+    considered_murf_weights = events.LHEScaleWeight[: [0, 1, 3, 4, 5, 7, 8]]
+    events = set_ak_column(events, "murf_envelope_weight_down", ak.min(considered_murf_weights, axis=1))
+    events = set_ak_column(events, "murf_envelope_weight_up", ak.max(considered_murf_weights, axis=1))
 
     return events

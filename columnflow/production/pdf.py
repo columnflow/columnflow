@@ -32,10 +32,10 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if self.dataset_inst.is_data:
         raise ValueError("attempt to determine pdf variations in data")
 
-    N_pdfweights = ak.num(events.LHEPdfWeight, axis=1)
-    if ak.any(N_pdfweights != 103) or ak.any(N_pdfweights != 101):
+    n_weights = ak.num(events.LHEPdfWeight, axis=1)
+    if ak.any(n_weights != 103) or ak.any(n_weights != 101):
         raise Exception(
-            f"Number of LHEPdfWeights ({N_pdfweights}) is not as expected (103 or 101) "
+            f"Number of LHEPdfWeights ({n_weights}) is not as expected (103 or 101) "
             f"in dataset {self.dataset_inst.name}",
         )
 
@@ -45,15 +45,15 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         print("The first entry of the LHEPdfWeight is not 1 but will be used as the nominal weight.")
 
     # the following 100 LHEPdfWeight values: pdf variations
-    pdfweights = events.LHEPdfWeight[:, 1:101] / pdf_weight_nominal
-    pdfweights = ak.sort(pdfweights)
+    pdfweights = events.LHEPdfWeight[:, 1:101]
+    pdfweights = ak.sort(pdfweights, axis=1)
 
     # PDF uncertainty as 68% CL
-    var = (pdfweights[:, 83] - pdfweights[:, 15]) / 2
+    stddev = (pdfweights[:, 83] - pdfweights[:, 15]) / 2
 
     # NOTE: use mean value as nominal pdf weight? or remove the necessity of adding this nominal weight?
     events = set_ak_column(events, "pdf_weight", pdf_weight_nominal)
-    events = set_ak_column(events, "pdf_weight_down", pdf_weight_nominal + var)
-    events = set_ak_column(events, "pdf_weight_up", pdf_weight_nominal - var)
+    events = set_ak_column(events, "pdf_weight_down", pdf_weight_nominal + stddev)
+    events = set_ak_column(events, "pdf_weight_up", pdf_weight_nominal - stddev)
 
     return events
