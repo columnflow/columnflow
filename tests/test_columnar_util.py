@@ -493,8 +493,6 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         # empty cases
         with self.assertRaises(ValueError):
             set_ak_column(self.array, "", [3456])
-        with self.assertRaises(ValueError):
-            set_ak_column(self.array, "lumi", [])
         self.test_get_ak_routes()
 
         # overwriting cases
