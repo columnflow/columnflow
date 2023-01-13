@@ -682,9 +682,9 @@ def remove_ak_column(
     """
     Removes a *route* from an awkward array *ak_array* and returns a new view with the corresponding
     column removed. When *route* points to a nested field that would be empty after removal, the
-    parent field is removed as all unless *remove_empty* is *False*.
+    parent field is removed completely unless *remove_empty* is *False*.
 
-    Note that *route* can be a :py:class:`Route` instance, a tuple of strings where each string
+    Note that *route* can be a :py:class:`Route` instance, a sequence of strings where each string
     refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``).
     Unless *silent* is *True*, a *ValueError* is raised when the route does not exist.
     """
@@ -2039,7 +2039,6 @@ class DaskArrayReader(object):
         # fill the chunk -> partitions mapping once
         with self.chunk_to_partitions_lock:
             if not self.chunk_to_partitions:
-                self.chunk_to_partitions.clear()
                 divs = self.dak_array.divisions
                 # note: a hare-and-tortoise algorithm could be possible to get the mapping with less
                 # than n^2 complexity, but for our case with ~30 chunks this should be ok (for now)
@@ -2165,7 +2164,8 @@ class ChunkedIOHandler(object):
     the other arguments can be sequences as well with the same length.
 
     During iteration, before chunks are yielded, an optional message *iter_message* is printed when
-    set, receiving the chunk position as the field *pos* for formatting.
+    set, receiving the respective :py:class:`ChunkedIOHandler.ChunkPosition` as the field *pos* for
+    formatting.
     """
 
     # source handler container
@@ -2613,7 +2613,7 @@ class ChunkedIOHandler(object):
     @classmethod
     def read_awkward_parquet(
         cls,
-        source_object: dak.Array,
+        source_object: DaskArrayReader,
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,

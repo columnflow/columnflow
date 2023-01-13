@@ -2,4 +2,4 @@
 
 tensorflow~=2.11
 awkward~=2.0
-dask-awkward~=2022.12
+dask-awkward~=2023.1

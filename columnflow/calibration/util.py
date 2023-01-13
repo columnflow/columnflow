@@ -6,6 +6,8 @@ Useful functions for use by calibrators
 
 from __future__ import annotations
 
+from typing import Callable
+
 from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
 
@@ -14,7 +16,7 @@ ak = maybe_import("awkward")
 
 
 # https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
-def ak_random(*args, rand_func):
+def ak_random(*args, rand_func: Callable) -> ak.Array:
     """
     Return an awkward array filled with random numbers. The *args* must be broadcastable
     awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
