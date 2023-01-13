@@ -110,6 +110,20 @@ class ReduceEvents(
         read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
         read_columns = {Route(c) for c in read_columns}
 
+        # define columns to read for the differently structured selection masks
+        read_sel_columns = {Route("steps.*")}
+        # add event routes
+        read_sel_columns |= {("event" + r) for r in read_columns}
+        # add object masks, depending on the columns to write
+        # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
+        masks_meta = inputs["selection"]["results"].load(formatter="dask_awkward").objects
+        write_columns_toplevel = {Route(r)[0] for r in write_columns}
+        for src_field in masks_meta.fields:
+            for dst_field in masks_meta[src_field].fields:
+                if law.util.multi_match(dst_field, write_columns_toplevel):
+                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+        del masks_meta
+
         # event counters
         n_all = 0
         n_reduced = 0
@@ -132,7 +146,7 @@ class ReduceEvents(
         for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_columns=[read_columns, None] + (len(input_paths) - 2) * [read_columns],
+            read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
         ):
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
