@@ -286,7 +286,10 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         return self.ml_model_inst.sandbox(self)
 
     def requires(self):
-        return {
+        reqs = []
+
+        # require prepared events
+        reqs["events"] = {
             dataset_inst.name: [
                 self.dep_MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
                 for f in range(self.ml_model_inst.folds)
@@ -294,6 +297,11 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
             ]
             for dataset_inst in self.ml_model_inst.used_datasets
         }
+
+        # ml model requirements
+        reqs["model"] = self.ml_model_inst.requires()
+
+        return reqs
 
     def output(self):
         return self.ml_model_inst.output(self)
