@@ -368,7 +368,9 @@ class Route(object, metaclass=RouteMeta):
         self,
         other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> Route:
-        return self.__add__(other)
+        other = Route(other)
+        other.add(self)
+        return other
 
     def __iadd__(
         self,

@@ -195,6 +195,10 @@ class RouteTest(unittest.TestCase):
         # this __add__ should be not inplace
         self.assertFalse(self.empty_route)
 
+        # right-add
+        self.assertEqual("hi" + self.route, ("hi", "i", "like", "trains"))
+        self.assertEqual(("hi", "there") + self.route, ("hi", "there", "i", "like", "trains"))
+
     def test__radd__(self):
         # SHOULD: Add is same for left and right, if left argument add's fails
         self.assertEqual("test_string" + self.route, ("i", "like", "trains", "test_string"))
