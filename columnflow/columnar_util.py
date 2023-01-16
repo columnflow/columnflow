@@ -2083,8 +2083,9 @@ class DaskArrayReader(object):
             parts.append(arr[part_start:part_stop])
             # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
             # make the array non-optional, assuming it is not meant to be optional
-            # TODO: remove this workaround
-            parts[-1] = ak.fill_none(parts[-1], 0)
+            # TODO: remove this workaround once this other workaround is removed as well:
+            # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
+            parts[-1] = ak.drop_none(parts[-1])
             # end workaround
 
         # construct the full array

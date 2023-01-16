@@ -1,6 +1,6 @@
 # version 6
 
-git+https://github.com/CoffeaTeam/coffea.git@7e04dbe#egg=coffea
+git+https://github.com/CoffeaTeam/coffea.git@b9356b9#egg=coffea
 awkward~=2.0
 dask-awkward~=2023.1
 uproot~=5.0
