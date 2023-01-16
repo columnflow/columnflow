@@ -31,7 +31,8 @@ def producer(
         cls_dict.update(kwargs)
 
         # create the subclass
-        subclass = Producer.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+        cls_name = cls_dict.pop("cls_name", func.__name__)
+        subclass = Producer.derive(cls_name, bases=bases, cls_dict=cls_dict)
 
         return subclass
 

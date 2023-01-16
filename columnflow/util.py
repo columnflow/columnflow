@@ -769,14 +769,14 @@ class Derivable(object, metaclass=DerivableMeta):
     """
     Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
 
-    .. py:attribute:: cls_name
+    .. py:classattribute:: cls_name
        type: str
        read-only
 
        A shorthand to access the name of the class.
     """
 
-    @property
-    def cls_name(self) -> str:
+    @classproperty
+    def cls_name(cls) -> str:
         # shorthand to the class name
-        return self.__class__.__name__
+        return cls.__name__
