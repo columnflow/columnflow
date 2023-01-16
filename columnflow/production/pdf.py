@@ -50,7 +50,7 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         )
 
     # the following 100 LHEPdfWeight values: pdf variations
-    pdfweights = events.LHEPdfWeight[:, 1:101]
+    pdfweights = events.LHEPdfWeight[:, 1:101] / events.LHEPdfWeight[:, 0]
     pdfweights = ak.sort(pdfweights, axis=1)
 
     # PDF uncertainty as 68% CL
