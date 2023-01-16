@@ -2085,7 +2085,14 @@ class DaskArrayReader(object):
             # make the array non-optional, assuming it is not meant to be optional
             # TODO: remove this workaround once this other workaround is removed as well:
             # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
-            parts[-1] = ak.drop_none(parts[-1])
+            if ak.any(ak.ravel(ak.is_none(parts[-1]))):
+                logger.warning(
+                    f"None values detected in chunk {chunk_index} of file {self.path} during "
+                    "dask_awkward materialization that were filled with zeros while reading; "
+                    "this is a workaround in columnflow to prevent optional types in arrays; "
+                    "for now, please make sure that files are not written with optional types!",
+                )
+            parts[-1] = ak.fill_none(parts[-1], 0)
             # end workaround
 
         # construct the full array
