@@ -21,6 +21,8 @@ ak = maybe_import("awkward")
 def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Producer that determines the pdf up and down variations on an event-by-event basis.
+    This producer assumes that the nominal entry is always the first LHEPdfWeight value and
+    that the nominal weight is already included in the LHEWeight.
     Can only be called with MC datasets.
 
     Resources:
@@ -40,9 +42,12 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         )
 
     # first LHEPdfWeight value: nominal weight
-    pdf_weight_nominal = events.LHEPdfWeight[:, 0]
-    if ak.any(pdf_weight_nominal != 1):
-        print("The first entry of the LHEPdfWeight is not 1 but will be used as the nominal weight.")
+    if ak.any(events.LHEPdfWeight[:, 0] != 1):
+        print(
+            "The first entry of the LHEPdfWeight is not 1, but it is assumed "
+            "that it is the nominal entry, which is already included in the "
+            "LHEWeight.",
+        )
 
     # the following 100 LHEPdfWeight values: pdf variations
     pdfweights = events.LHEPdfWeight[:, 1:101]
@@ -52,8 +57,8 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     stddev = (pdfweights[:, 83] - pdfweights[:, 15]) / 2
 
     # NOTE: use mean value as nominal pdf weight? or remove the necessity of adding this nominal weight?
-    events = set_ak_column(events, "pdf_weight", pdf_weight_nominal)
-    events = set_ak_column(events, "pdf_weight_down", pdf_weight_nominal + stddev)
-    events = set_ak_column(events, "pdf_weight_up", pdf_weight_nominal - stddev)
+    events = set_ak_column(events, "pdf_weight", ak.ones_like(events.event))
+    events = set_ak_column(events, "pdf_weight_up", 1 + stddev)
+    events = set_ak_column(events, "pdf_weight_down", 1 - stddev)
 
     return events
