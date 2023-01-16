@@ -111,7 +111,9 @@ class ReduceEvents(
         read_columns = {Route(c) for c in read_columns}
 
         # define columns to read for the differently structured selection masks
-        read_sel_columns = {Route("steps.*")}
+        read_sel_columns = set()
+        if self.selector_steps:
+            read_sel_columns.add(Route("steps.*"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
         masks_meta = inputs["selection"]["results"].load(formatter="dask_awkward").objects
