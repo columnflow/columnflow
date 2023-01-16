@@ -148,7 +148,7 @@ def jec(
             ]
         }
 
-    If running on data, the datasets must have an auxiliary key *jec_era* defined, e.g. "RunF" for 2017 data.
+    If running on data, the datasets must have an auxiliary field *era* defined, e.g. "F".
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -342,7 +342,7 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 
     def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
         return [
-            f"{jec.campaign}_{self.dataset_inst.x.jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
+            f"{jec.campaign}_Run{self.dataset_inst.x.era}_{jec.version}_DATA_{name}_{jec.jet_type}"
             if is_data else
             f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
             for name in names
@@ -449,10 +449,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
-    jersf = ak.to_regular(ak.concatenate([
-        ak.singletons(jersf[syst])
-        for syst in ("nom", "up", "down")
-    ], axis=-1), axis=-1)
+    jersf = ak.concatenate(
+        [jersf[syst][..., None] for syst in ("nom", "up", "down")],
+        axis=-1,
+    )
 
     # -- stochastic smearing
 

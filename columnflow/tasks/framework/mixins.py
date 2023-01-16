@@ -6,6 +6,7 @@ Lightweight mixins task classes.
 
 from __future__ import annotations
 
+import gc
 import time
 import itertools
 from typing import Sequence, Any
@@ -878,6 +879,8 @@ class ChunkedIOMixin(AnalysisTask):
         "writing to them to file",
     )
 
+    exclude_params_req = {"check_finite"}
+
     def iter_chunked_io(self, *args, **kwargs):
         from columnflow.columnar_util import ChunkedIOHandler
 
@@ -911,6 +914,10 @@ class ChunkedIOMixin(AnalysisTask):
 
             finally:
                 self.chunked_io = None
+
+        # eager, overly cautious gc
+        del handler
+        gc.collect()
 
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:

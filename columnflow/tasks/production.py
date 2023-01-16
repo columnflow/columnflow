@@ -64,7 +64,7 @@ class ProduceColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -80,19 +80,19 @@ class ProduceColumns(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.producer_inst.used_columns  # noqa
+        # define columns that need to be read
+        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns
+        read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be saved
-        keep_columns = self.producer_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = self.producer_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
         for events, pos in self.iter_chunked_io(
             inputs["events"]["collection"][0].path,
             source_type="awkward_parquet",
-            # TODO: not working yet since parquet columns are nested
-            # open_options={"columns": load_columns},
+            read_columns=read_columns,
         ):
             # invoke the producer
             events = self.producer_inst(events)

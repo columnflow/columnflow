@@ -89,7 +89,7 @@ class PrepareMLEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -104,10 +104,13 @@ class PrepareMLEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
-        # define nano columns that should be loaded and those that should be kept
-        keep_columns = self.ml_model_inst.used_columns
-        load_columns = keep_columns | {"deterministic_seed"}  # noqa
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will to be written
+        write_columns = self.ml_model_inst.used_columns
+        route_filter = RouteFilter(write_columns)
+
+        # define columns that need to be read
+        read_columns = write_columns | {"deterministic_seed"} | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
 
         # stats for logging
         n_events = 0
@@ -120,8 +123,7 @@ class PrepareMLEvents(
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             n_events += len(events)
 
@@ -160,7 +162,7 @@ class PrepareMLEvents(
         self.publish_message(f"total events: {n_events}")
         for f, n in enumerate(n_fold_events):
             r = 100 * safe_div(n, n_events)
-            self.publish_message(f"partition {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
+            self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
 
 # overwrite class defaults
@@ -390,7 +392,7 @@ class MLEvaluation(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -411,10 +413,13 @@ class MLEvaluation(
         # check once if the events were used during trainig
         events_used_in_training = self.events_used_in_training(self.dataset_inst, self.shift_inst)
 
-        # define nano columns that should be loaded and those that should be kept
-        load_columns = self.ml_model_inst.used_columns | {"deterministic_seed"}  # noqa
-        keep_columns = self.ml_model_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that need to be read
+        read_columns = self.ml_model_inst.used_columns | {"deterministic_seed"} | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
+        # define columns that will be written
+        write_columns = self.ml_model_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
@@ -423,8 +428,7 @@ class MLEvaluation(
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             # add additional columns
             events = update_ak_array(events, *columns)

@@ -113,7 +113,7 @@ class DatacardWriter(object):
                 # devide into signal and backgrounds
                 if proc_name not in proc_names:
                     proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
-                    (s_names if proc_obj.signal else b_names).append(proc_name)
+                    (s_names if proc_obj.is_signal else b_names).append(proc_name)
 
                 # fill flat rates
                 flat_rates[(cat_name, proc_name)] = rate
@@ -468,7 +468,7 @@ class DatacardWriter(object):
 
             # dedicated data handling
             cat_obj = self.inference_model_inst.get_category(cat_name)
-            if cat_obj.data_datasets:
+            if cat_obj.config_data_datasets:
                 if "data" not in hists:
                     raise Exception(
                         f"the inference model '{self.inference_model_inst.name}' is configured to "

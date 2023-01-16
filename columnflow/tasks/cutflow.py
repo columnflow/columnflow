@@ -87,6 +87,10 @@ class CreateCutflowHistograms(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
+        # define columns that need to be read
+        read_columns = {"category_ids", "process_id", "normalization_weight"} | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
         # prepare expressions and histograms
         expressions = {}
         histograms = {}
@@ -99,6 +103,8 @@ class CreateCutflowHistograms(
                 if isinstance(expr, str):
                     route = Route(expr)
                     expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                    read_columns.add(route)
+                # TODO: handle variable_inst with custom expressions, can they declare columns?
                 expressions[variable_inst.name] = expr
 
             # create histogram of not already existing
@@ -123,6 +129,7 @@ class CreateCutflowHistograms(
         for arr, pos in self.iter_chunked_io(
             inputs["masks"].path,
             source_type="awkward_parquet",
+            read_columns={("events" + route) for route in read_columns} | {Route("steps.*")},
         ):
             events = arr.events
 

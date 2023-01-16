@@ -89,7 +89,9 @@ class UniteColumns(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        from columnflow.columnar_util import RouteFilter, update_ak_array, sorted_ak_to_parquet
+        from columnflow.columnar_util import (
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
+        )
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -100,10 +102,13 @@ class UniteColumns(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
-        # load_columns = keep_columns | set(mandatory_coffea_columns)
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
+        route_filter = RouteFilter(write_columns)
+
+        # define columns that need to be read
+        read_columns = write_columns | set(mandatory_coffea_columns)
+        read_columns = {Route(c) for c in read_columns}
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
@@ -114,8 +119,7 @@ class UniteColumns(
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             # add additional columns
             events = update_ak_array(events, *columns)

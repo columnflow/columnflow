@@ -419,8 +419,8 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh"
-    local pyv="3.9"
+    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py310_22.11.1-1-Linux-x86_64.sh"
+    local pyv="3.10"
 
     # empty the PYTHONPATH
     export PYTHONPATH=""
@@ -470,17 +470,15 @@ cf_setup_software_stack() {
             if ${conda_missing}; then
                 echo
                 cf_color magenta "installing conda at ${CF_CONDA_BASE}"
-                (
-                    wget "${miniconda_source}" -O setup_miniconda.sh &&
-                    bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
-                    rm setup_miniconda.sh &&
-                    cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+                wget "${miniconda_source}" -O setup_miniconda.sh || return "$?"
+                bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" || return "$?"
+                rm -f setup_miniconda.sh
+                cat << EOF >> "${CF_CONDA_BASE}/.condarc"
 changeps1: false
 channels:
   - conda-forge
   - defaults
 EOF
-                )
             fi
 
             # initialize conda
@@ -492,7 +490,10 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
-                conda install --yes libgcc gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
+                conda install --yes libgcc gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                # TODO: temporary issue with numba and numpy
+                conda install --yes "numpy<1.24" || return "$?"
+                conda cleanup --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -518,14 +519,25 @@ EOF
         }
 
         # source the prod sandbox, potentially skipped in CI jobs
+        local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
             bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
-            [ "$?" = "21" ] && show_version_warning "cf_prod"
+            ret="$?"
+            if [ "${ret}" = "21" ]; then
+                show_version_warning "cf_prod"
+            elif [ "${ret}" != "0" ]; then
+                return "${ret}"
+            fi
         fi
 
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        [ "$?" = "21" ] && show_version_warning "cf_dev"
+        ret="$?"
+        if [ "${ret}" = "21" ]; then
+            show_version_warning "cf_dev"
+        elif [ "${ret}" != "0" ]; then
+            return "${ret}"
+        fi
 
         # initialze submodules
         if [ -e "${CF_BASE}/.git" ]; then

@@ -81,13 +81,13 @@ class CalibrateEvents(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
+        # define columns that need to be read
+        read_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
+        read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be saved
-        keep_columns = self.calibrator_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = self.calibrator_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -100,7 +100,7 @@ class CalibrateEvents(
         for events, pos in self.iter_chunked_io(
             nano_file,
             source_type="coffea_root",
-            read_options={"iteritems_options": {"filter_name": load_columns_nano}},
+            read_columns=read_columns,
         ):
             # just invoke the calibration function
             events = self.calibrator_inst(events)
