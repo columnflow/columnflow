@@ -383,15 +383,16 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def htcondor_job_config(self, config, job_num, branches):
-        # include the voms proxy
-        voms_proxy_file = law.wlcg.get_voms_proxy_file()
-        if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
-            raise Exception("voms proxy not valid, submission aborted")
-        config.input_files["voms_proxy_file"] = law.JobInputFile(
-            voms_proxy_file,
-            share=True,
-            render=False,
-        )
+        # include the voms proxy if not skipped
+        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+            voms_proxy_file = law.wlcg.get_voms_proxy_file()
+            if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
+                raise Exception("voms proxy not valid, submission aborted")
+            config.input_files["voms_proxy_file"] = law.JobInputFile(
+                voms_proxy_file,
+                share=True,
+                render=False,
+            )
 
         # include the wlcg specific tools script in the input sandbox
         config.input_files["wlcg_tools"] = law.JobInputFile(
@@ -576,14 +577,15 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def slurm_job_config(self, config, job_num, branches):
-        # include the voms proxy
-        voms_proxy_file = law.wlcg.get_voms_proxy_file()
-        if os.path.exists(voms_proxy_file):
-            config.input_files["voms_proxy_file"] = law.JobInputFile(
-                voms_proxy_file,
-                share=True,
-                render=False,
-            )
+        # include the voms proxy if not skipped
+        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+            voms_proxy_file = law.wlcg.get_voms_proxy_file()
+            if os.path.exists(voms_proxy_file):
+                config.input_files["voms_proxy_file"] = law.JobInputFile(
+                    voms_proxy_file,
+                    share=True,
+                    render=False,
+                )
 
         # include the kerberos ticket when existing
         if "KRB5CCNAME" in os.environ:
