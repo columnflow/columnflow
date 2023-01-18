@@ -182,7 +182,7 @@ class ReduceEvents(
             for src_name in sel.objects.fields:
                 # get all destination collections, handling those named identically to the
                 # source collection last
-                dst_names = sel["objects", src_name].fields
+                dst_names = list(sel["objects", src_name].fields)
                 if src_name in dst_names:
                     dst_names.remove(src_name)
                     dst_names.append(src_name)
