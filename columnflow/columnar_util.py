@@ -1255,7 +1255,7 @@ class ArrayFunction(Derivable):
     call_func = None
     uses = set()
     produces = set()
-    dependency_sets = {"uses", "produces"}
+    _dependency_sets = {"uses", "produces"}
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1306,7 +1306,7 @@ class ArrayFunction(Derivable):
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             if attr in kwargs:
                 try:
                     deps = set(law.util.make_list(kwargs.get(attr) or []))
@@ -1374,7 +1374,7 @@ class ArrayFunction(Derivable):
         # track dependent classes that are handled in the following
         added_deps = []
 
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             # get the current set of instances, potentially clearing existing ones
             instances = getattr(self, f"{attr}_instances", set())
             instances.clear()
@@ -1393,12 +1393,12 @@ class ArrayFunction(Derivable):
                     added_deps.append(obj.__class__)
                 elif isinstance(obj, self.Flagged):
                     if only_update and obj.wrapped in self.deps:
-                        obj = self.deps[obj.wrapped]
+                        obj = self.Flagged(self.deps[obj.wrapped], obj.io_flag)
                     else:
                         if ArrayFunction.derived_by(obj.wrapped):
                             obj = self.Flagged(instantiate(obj.wrapped), obj.io_flag)
-                        obj = add_dep(obj.wrapped)
-                    added_deps.append(obj.__class__)
+                        add_dep(obj.wrapped)
+                    added_deps.append(obj.wrapped.__class__)
                 else:
                     obj = copy.deepcopy(obj)
                 instances.add(obj)
@@ -1434,7 +1434,7 @@ class ArrayFunction(Derivable):
         """
         deps = set()
 
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             for obj in getattr(self, f"{attr}_instances"):
                 if isinstance(obj, ArrayFunction):
                     deps.add(obj)
@@ -1445,7 +1445,7 @@ class ArrayFunction(Derivable):
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None) -> set[str]:
+    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None, debug=False) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1622,7 +1622,7 @@ class TaskArrayFunction(ArrayFunction):
     sandbox = None
     call_force = None
     shifts = set()
-    dependency_sets = ArrayFunction.dependency_sets | {"shifts"}
+    _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
     @classmethod
     def init(cls, func: Callable[[], None]) -> None:

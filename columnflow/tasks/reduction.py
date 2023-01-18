@@ -184,6 +184,7 @@ class ReduceEvents(
                 # source collection last
                 dst_names = list(sel["objects", src_name].fields)
                 if src_name in dst_names:
+                    # move to the end
                     dst_names.remove(src_name)
                     dst_names.append(src_name)
                 for dst_name in dst_names:

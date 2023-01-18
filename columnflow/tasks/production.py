@@ -80,8 +80,11 @@ class ProduceColumns(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
+        # get shift dependent aliases
+        aliases = self.shift_inst.x("column_aliases", {})
+
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns
+        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns | set(aliases.values())
         read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
