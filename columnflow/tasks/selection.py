@@ -223,6 +223,9 @@ class MergeSelectionStats(
     # default upstream dependency task classes
     dep_SelectEvents = SelectEvents
 
+    # skip receiving some parameters via req
+    exclude_params_req_get = {"workflow"}
+
     @classmethod
     def get_allowed_shifts(cls, config_inst, params):
         shifts = super().get_allowed_shifts(config_inst, params)
