@@ -138,7 +138,7 @@ setup_cmssw() {
         if [ ! -d "${install_path}" ]; then
             echo
             touch "${pending_flag_file}"
-            cf_color cyan "installing ${CF_CMSSW_VERSION} in ${install_base}"
+            cf_color cyan "installing ${CF_CMSSW_VERSION} on ${CF_SCRAM_ARCH} in ${install_base}"
 
             (
                 mkdir -p "${install_base}"
