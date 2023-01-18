@@ -15,7 +15,7 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    used_columns={
+    uses={
         "nMuon", "Muon.pt", "Muon.eta",
     },
     produces={
