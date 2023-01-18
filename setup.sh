@@ -419,8 +419,8 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py310_22.11.1-1-Linux-x86_64.sh"
-    local pyv="3.10"
+    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh"
+    local pyv="3.9"
 
     # empty the PYTHONPATH
     export PYTHONPATH=""
