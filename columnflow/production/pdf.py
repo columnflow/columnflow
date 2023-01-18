@@ -29,34 +29,28 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
        - https://arxiv.org/pdf/1510.03865.pdf
     """
-
     # stop here for data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to determine pdf variations in data")
 
+    # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
-    if ak.any(n_weights != 103) or ak.any(n_weights != 101):
+    bad_mask = (n_weights != 101) & (n_weights != 103)
+    if ak.any(bad_mask):
+        bad_values = set(n_weights[bad_mask])
         raise Exception(
-            f"Number of LHEPdfWeights ({n_weights}) is not as expected (103 or 101) "
-            f"in dataset {self.dataset_inst.name}",
+            "the number of LHEPdfWeights is expected to be 101 or 103, but also found values " +
+            f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
-    # first LHEPdfWeight value: nominal weight
-    if ak.any(events.LHEPdfWeight[:, 0] != 1):
-        print(
-            "The first entry of the LHEPdfWeight is not 1, but it is assumed "
-            "that it is the nominal entry, which is already included in the "
-            "LHEWeight.",
-        )
+    # normalize all weights by the nominal one, assumed to be the first value
+    pdf_weights = events.LHEPdfWeight[:, 1:101] / events.LHEPdfWeight[:, 0]
+    pdf_weights = ak.sort(pdf_weights, axis=1)
 
-    # the following 100 LHEPdfWeight values: pdf variations
-    pdfweights = events.LHEPdfWeight[:, 1:101] / events.LHEPdfWeight[:, 0]
-    pdfweights = ak.sort(pdfweights, axis=1)
+    # PDF uncertainty as half the width of the central 68% CL
+    stddev = (pdf_weights[:, 83] - pdf_weights[:, 15]) / 2
 
-    # PDF uncertainty as 68% CL
-    stddev = (pdfweights[:, 83] - pdfweights[:, 15]) / 2
-
-    # NOTE: use mean value as nominal pdf weight? or remove the necessity of adding this nominal weight?
+    # store columns
     events = set_ak_column(events, "pdf_weight", ak.ones_like(events.event))
     events = set_ak_column(events, "pdf_weight_up", 1 + stddev)
     events = set_ak_column(events, "pdf_weight_down", 1 - stddev)
