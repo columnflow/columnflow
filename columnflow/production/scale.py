@@ -91,7 +91,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
     # for the up/down variations, take the max/min value of all possible combinations
     # except mur=2, muf=0.5 (index 2) and mur=0.5, muf=2 (index 6) into account
-    considered_murf_weights = events.LHEScaleWeight[: [0, 1, 3, 4, 5, 7, 8]]
+    considered_murf_weights = events.LHEScaleWeight[:, [0, 1, 3, 4, 5, 7, 8]]
     events = set_ak_column(events, "murf_envelope_weight_down", ak.min(considered_murf_weights, axis=1))
     events = set_ak_column(events, "murf_envelope_weight_up", ak.max(considered_murf_weights, axis=1))
 
