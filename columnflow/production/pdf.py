@@ -9,7 +9,11 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+import law
+
 ak = maybe_import("awkward")
+
+logger = law.logger.get_logger(__name__)
 
 
 @producer(
@@ -41,6 +45,16 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         raise Exception(
             "the number of LHEPdfWeights is expected to be 101 or 103, but also found values " +
             f"{bad_values} in dataset {self.dataset_inst.name}",
+        )
+
+    # TODO: logger if nominal != 1
+    if ak.any(events.LHEPdfWeight[:, 0] != 1):
+        bad_values = set(events.LHEPdfWeight[:, 0][events.LHEPdfWeight[:, 0] != 1])
+        logger.debug(
+            "The nominal LHEPdfWeight is expected to be 1 but also found values " +
+            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
+            "normalized to the nominal LHEPdfWeight and it is assumed that the nominal " +
+            "weight is already included in the LHEWeight.",
         )
 
     # normalize all weights by the nominal one, assumed to be the first value
