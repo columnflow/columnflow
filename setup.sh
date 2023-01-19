@@ -493,7 +493,7 @@ EOF
                 conda install --yes libgcc gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
                 # TODO: temporary issue with numba and numpy
                 conda install --yes "numpy<1.24" || return "$?"
-                conda cleanup --yes --all
+                conda clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
