@@ -48,6 +48,7 @@ Modules, exported shell functions and environment variables might have a prefix 
 A couple test tasks are listed below.
 They might require a **valid voms proxy** for accessing input data.
 
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) `task graph <https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827>`__.
 
 .. code-block:: bash
 

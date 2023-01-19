@@ -4,16 +4,21 @@
 Column production methods related to the PDF weights.
 """
 
+import functools
+
+import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
-import law
-
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 logger = law.logger.get_logger(__name__)
+
+# helper
+set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
@@ -47,9 +52,10 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
-    # TODO: logger if nominal != 1
-    if ak.any(events.LHEPdfWeight[:, 0] != 1):
-        bad_values = set(events.LHEPdfWeight[:, 0][events.LHEPdfWeight[:, 0] != 1])
+    # log a message if nominal != 1
+    pdf_weight_nominal = events.LHEPdfWeight[:, 0]
+    if ak.any(pdf_weight_nominal != 1):
+        bad_values = set(pdf_weight_nominal[pdf_weight_nominal != 1])
         logger.debug(
             "The nominal LHEPdfWeight is expected to be 1 but also found values " +
             f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
@@ -58,15 +64,15 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         )
 
     # normalize all weights by the nominal one, assumed to be the first value
-    pdf_weights = events.LHEPdfWeight[:, 1:101] / events.LHEPdfWeight[:, 0]
+    pdf_weights = events.LHEPdfWeight[:, 1:101] / pdf_weight_nominal
     pdf_weights = ak.sort(pdf_weights, axis=1)
 
     # PDF uncertainty as half the width of the central 68% CL
     stddev = (pdf_weights[:, 83] - pdf_weights[:, 15]) / 2
 
     # store columns
-    events = set_ak_column(events, "pdf_weight", ak.ones_like(events.event))
-    events = set_ak_column(events, "pdf_weight_up", 1 + stddev)
-    events = set_ak_column(events, "pdf_weight_down", 1 - stddev)
+    events = set_ak_column_f32(events, "pdf_weight", ak.ones_like(events.event))
+    events = set_ak_column_f32(events, "pdf_weight_up", 1 + stddev)
+    events = set_ak_column_f32(events, "pdf_weight_down", 1 - stddev)
 
     return events
