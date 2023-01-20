@@ -16,6 +16,7 @@ from columnflow.plotting.plot_util import (
     remove_residual_axis, apply_variable_settings, get_position,
 )
 
+
 hist = maybe_import("hist")
 np = maybe_import("numpy")
 mpl = maybe_import("matplotlib")

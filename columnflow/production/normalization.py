@@ -9,6 +9,7 @@ from columnflow.production.processes import process_ids
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
 maybe_import("scipy.sparse")

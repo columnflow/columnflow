@@ -33,6 +33,7 @@ from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
 )
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 dak = maybe_import("dask_awkward")
@@ -41,7 +42,6 @@ coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
 pq = maybe_import("pyarrow.parquet")
-
 
 logger = law.logger.get_logger(__name__)
 

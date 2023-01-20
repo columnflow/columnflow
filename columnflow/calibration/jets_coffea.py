@@ -15,6 +15,7 @@ from columnflow.calibration.util import propagate_met, ak_random
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.columnar_util import set_ak_column
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

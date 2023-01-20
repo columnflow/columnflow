@@ -11,6 +11,7 @@ from typing import Callable
 from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
