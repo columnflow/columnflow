@@ -138,8 +138,18 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             lfn_indices = task.branch_data
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
+
+        # prepare the remote fs names to resolve lfns with
         if not remote_fs:
+            # use an optional hook in the config
+            get_remote_fs = self.config_inst.x("get_dataset_lfns_remote_fs", None)
+            if callable(get_remote_fs):
+                remote_fs = get_remote_fs(task.dataset_inst)
+        if not remote_fs:
+            # use the law config
             remote_fs = law.config.get_expanded("outputs", "lfn_sources", split_csv=True)
+        if not remote_fs:
+            raise ValueError("no remote_fs given or found to resolve lfns")
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
