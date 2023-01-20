@@ -23,6 +23,7 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.util import maybe_import
 
+
 ak = maybe_import("awkward")
 
 
@@ -35,14 +36,22 @@ class CalibratorMixin(ConfigTask):
     )
 
     @classmethod
+    def get_default_calibrator(cls, config_inst, calibrator=None) -> str | None:
+        if calibrator not in (None, law.NO_STR):
+            return calibrator
+
+        return config_inst.x("default_calibrator", None)
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default calibrator when empty
-        if "config_inst" in params and params.get("calibrator") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_calibrator", None):
-                params["calibrator"] = config_inst.x.default_calibrator
+        if "config_inst" in params:
+            params["calibrator"] = cls.get_default_calibrator(
+                params["config_inst"],
+                params.get("calibrator"),
+            )
 
         return params
 
@@ -51,9 +60,10 @@ class CalibratorMixin(ConfigTask):
         shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        if params.get("calibrator") not in (None, law.NO_STR):
+        calibrator = cls.get_default_calibrator(config_inst, params.get("calibrator"))
+        if calibrator:
             calibrator_inst = cls.get_calibrator_inst(
-                params["calibrator"],
+                calibrator,
                 cls.get_calibrator_kwargs(**params),
             )
             shifts |= calibrator_inst.all_shifts
@@ -101,13 +111,24 @@ class CalibratorsMixin(ConfigTask):
     )
 
     @classmethod
+    def get_default_calibrators(cls, config_inst, calibrators=None) -> tuple[str]:
+        if calibrators not in (None, law.NO_STR, ()):
+            return calibrators
+
+        if config_inst.x("default_calibrator", None):
+            return (config_inst.x.default_calibrator,)
+
+        return ()
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config_inst" in params and params.get("calibrators") == ():
-            config_inst = params["config_inst"]
-            if config_inst.x("default_calibrator", None):
-                params["calibrators"] = (config_inst.x.default_calibrator,)
+        if "config_inst" in params:
+            params["calibrators"] = cls.get_default_calibrators(
+                params["config_inst"],
+                params.get("calibrators"),
+            )
 
         return params
 
@@ -116,9 +137,10 @@ class CalibratorsMixin(ConfigTask):
         shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
-        if params.get("calibrators") not in (None, law.NO_STR):
+        calibrators = cls.get_default_calibrators(config_inst, params.get("calibrators"))
+        if calibrators:
             calibrator_kwargs = cls.get_calibrator_kwargs(**params)
-            for calibrator in params["calibrators"]:
+            for calibrator in calibrators:
                 calibrator_inst = cls.get_calibrator_inst(calibrator, calibrator_kwargs)
                 shifts |= calibrator_inst.all_shifts
 
@@ -165,14 +187,22 @@ class SelectorMixin(ConfigTask):
     )
 
     @classmethod
+    def get_default_selector(cls, config_inst, selector=None) -> str | None:
+        if selector not in (None, law.NO_STR):
+            return selector
+
+        return config_inst.x("default_selector", None)
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default selector when empty
-        if "config_inst" in params and params.get("selector") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_selector", None):
-                params["selector"] = config_inst.x.default_selector
+        if "config_inst" in params:
+            params["selector"] = cls.get_default_selector(
+                params["config_inst"],
+                params.get("selector"),
+            )
 
         return params
 
@@ -181,9 +211,10 @@ class SelectorMixin(ConfigTask):
         shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        if params.get("selector") not in (None, law.NO_STR):
+        selector = cls.get_default_selector(config_inst, params.get("selector"))
+        if selector:
             selector_inst = cls.get_selector_inst(
-                params["selector"],
+                selector,
                 cls.get_selector_kwargs(**params),
             )
             shifts |= selector_inst.all_shifts
@@ -275,14 +306,22 @@ class ProducerMixin(ConfigTask):
     )
 
     @classmethod
+    def get_default_producer(cls, config_inst, producer=None) -> str | None:
+        if producer not in (None, law.NO_STR):
+            return producer
+
+        return config_inst.x("default_producer", None)
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default producer when empty
-        if "config_inst" in params and params.get("producer") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_producer", None):
-                params["producer"] = config_inst.x.default_producer
+        if "config_inst" in params:
+            params["producer"] = cls.get_default_producer(
+                params["config_inst"],
+                params.get("producer"),
+            )
 
         return params
 
@@ -291,9 +330,10 @@ class ProducerMixin(ConfigTask):
         shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        if params.get("producer") not in (None, law.NO_STR):
+        producer = cls.get_default_producer(config_inst, params.get("producer"))
+        if producer:
             producer_inst = cls.get_producer_inst(
-                params["producer"],
+                producer,
                 cls.get_producer_kwargs(**params),
             )
             shifts |= producer_inst.all_shifts
@@ -341,13 +381,24 @@ class ProducersMixin(ConfigTask):
     )
 
     @classmethod
+    def get_default_producers(cls, config_inst, producers=None) -> tuple[str]:
+        if producers not in (None, law.NO_STR, ()):
+            return producers
+
+        if config_inst.x("default_producer", None):
+            return (config_inst.x.default_producer,)
+
+        return ()
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config_inst" in params and params.get("producers") == ():
-            config_inst = params["config_inst"]
-            if config_inst.x("default_producer", None):
-                params["producers"] = (config_inst.x.default_producer,)
+        if "config_inst" in params:
+            params["producers"] = cls.get_default_producers(
+                params["config_inst"],
+                params.get("producers"),
+            )
 
         return params
 
@@ -356,9 +407,10 @@ class ProducersMixin(ConfigTask):
         shifts = super().get_allowed_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
-        if params.get("producers") not in (None, law.NO_STR):
+        producers = cls.get_default_producers(config_inst, params.get("producers"))
+        if producers:
             producer_kwargs = cls.get_producer_kwargs(**params)
-            for producer in params["producers"]:
+            for producer in producers:
                 producer_inst = cls.get_producer_inst(producer, producer_kwargs)
                 shifts |= producer_inst.all_shifts
 
