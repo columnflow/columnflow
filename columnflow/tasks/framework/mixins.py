@@ -759,11 +759,11 @@ class DatasetsProcessesMixin(ConfigTask):
                     [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
                     for process_inst in map(config_inst.get_process, params["processes"])
                 ), [])
-                datasets = (
+                datasets = [
                     dataset_inst.name
                     for dataset_inst in config_inst.datasets
                     if any(map(dataset_inst.has_process, sub_process_insts))
-                )
+                ]
 
             # complain when no datasets were found
             if not datasets and not cls.allow_empty_datasets:

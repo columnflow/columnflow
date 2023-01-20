@@ -91,9 +91,11 @@ class CreateCutflowHistograms(
         read_columns = {"category_ids", "process_id", "normalization_weight"} | set(aliases.values())
         read_columns = {Route(c) for c in read_columns}
 
-        # prepare expressions and histograms
+        # define steps
+        steps = self.selector_steps
+
+        # prepare expressions
         expressions = {}
-        histograms = {}
         for var_key, var_names in self.variable_tuples.items():
             variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
@@ -107,24 +109,30 @@ class CreateCutflowHistograms(
                 # TODO: handle variable_inst with custom expressions, can they declare columns?
                 expressions[variable_inst.name] = expr
 
-            # create histogram of not already existing
-            if var_key not in histograms:
-                h = (
-                    hist.Hist.new
-                    .IntCat([], name="category", growth=True)
-                    .IntCat([], name="process", growth=True)
-                    .StrCat([], name="step", growth=True)
-                    .IntCat([], name="shift", growth=True)
-                )
-                # add variable axes
-                for variable_inst in variable_insts:
-                    h = h.Var(
-                        variable_inst.bin_edges,
-                        name=variable_inst.name,
-                        label=variable_inst.get_full_x_title(),
+        # prepare histograms
+        histograms = {}
+        def prepare_hists(steps):
+            for var_key, var_names in self.variable_tuples.items():
+                variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+
+                # create histogram of not already existing
+                if var_key not in histograms:
+                    h = (
+                        hist.Hist.new
+                        .IntCat([], name="category", growth=True)
+                        .IntCat([], name="process", growth=True)
+                        .StrCat(steps, name="step")
+                        .IntCat([], name="shift", growth=True)
                     )
-                # enable weights and store it
-                histograms[var_key] = h.Weight()
+                    # add variable axes
+                    for variable_inst in variable_insts:
+                        h = h.Var(
+                            variable_inst.bin_edges,
+                            name=variable_inst.name,
+                            label=variable_inst.get_full_x_title(),
+                        )
+                    # enable weights and store it
+                    histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
             inputs["masks"].path,
@@ -132,6 +140,14 @@ class CreateCutflowHistograms(
             read_columns={("events" + route) for route in read_columns} | {Route("steps.*")},
         ):
             events = arr.events
+
+            # overwrite steps if not defined yet
+            if not steps:
+                steps = arr.steps.fields
+
+            # prepare histograms and exprepssions once
+            if not histograms:
+                prepare_hists(["initial"] + list(steps))
 
             # add aliases
             events = add_ak_aliases(events, aliases, remove_src=True)
@@ -156,10 +172,9 @@ class CreateCutflowHistograms(
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(step="initial", **dict(zip(fill_kwargs, arrays)))
 
                 # fill all other steps
-                steps = self.selector_steps or arr.steps.fields
                 mask = True
                 for step in steps:
                     if step not in arr.steps.fields:
@@ -168,12 +183,8 @@ class CreateCutflowHistograms(
                         )
                     # incrementally update the mask and fill the point
                     mask = mask & arr.steps[step]
-                    if ak.sum(mask) == 0:
-                        # do not try to fill the histogram when all mask entrys are False
-                        break
-
                     fill_kwargs = get_point(mask)
-                    arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                    arrays = [ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values())]
                     histograms[var_key].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
         # dump the histograms

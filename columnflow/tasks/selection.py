@@ -194,6 +194,8 @@ class SelectEvents(
         self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
         self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
+        if not stats["n_events_selected"]:
+            self.publish_message(law.util.colored("no events selected", "red"))
 
 
 # overwrite class defaults
