@@ -33,7 +33,6 @@ class PlotVariablesBase(
     CalibratorsMixin,
     EventWeightMixin,
     CategoriesMixin,
-    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -168,8 +167,8 @@ class PlotVariablesBase(
 
 
 class PlotVariablesBaseSingleShift(
-    ShiftTask,
     PlotVariablesBase,
+    ShiftTask,
 ):
     # default upstream dependency task classes
     dep_MergeHistograms = MergeHistograms
@@ -241,8 +240,8 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
-    ShiftSourcesMixin,
     PlotVariablesBase,
+    ShiftSourcesMixin,
 ):
     legend_title = luigi.Parameter(
         default=law.NO_STR,
@@ -299,8 +298,8 @@ class PlotVariablesBaseMultiShifts(
 
 
 class PlotShiftedVariables1D(
-    PlotVariablesBaseMultiShifts,
     PlotBase1D,
+    PlotVariablesBaseMultiShifts,
 ):
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.example.plot_shifted_variable",

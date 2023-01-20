@@ -21,10 +21,10 @@ ak = maybe_import("awkward")
 
 
 class SelectEvents(
-    DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -214,9 +214,9 @@ SelectEventsWrapper = wrapper_factory(
 
 
 class MergeSelectionStats(
-    DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.tasks.ForestMerge,
 ):
     # recursively merge 20 files into one
@@ -295,9 +295,9 @@ MergeSelectionStatsWrapper = wrapper_factory(
 
 
 class MergeSelectionMasks(
-    DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):

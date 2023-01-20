@@ -25,10 +25,10 @@ ak = maybe_import("awkward")
 
 
 class ReduceEvents(
-    DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -215,7 +215,11 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
+class MergeReductionStats(
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+):
 
     n_inputs = luigi.IntParameter(
         default=10,
@@ -377,9 +381,9 @@ class MergeReducedEventsUser(DatasetTask):
 
 
 class MergeReducedEvents(
-    MergeReducedEventsUser,
     SelectorStepsMixin,
     CalibratorsMixin,
+    MergeReducedEventsUser,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):

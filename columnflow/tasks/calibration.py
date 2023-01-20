@@ -17,9 +17,9 @@ ak = maybe_import("awkward")
 
 
 class CalibrateEvents(
-    DatasetTask,
     CalibratorMixin,
     ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

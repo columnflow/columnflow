@@ -16,11 +16,11 @@ from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
-    MergeReducedEventsUser,
     ProducerMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

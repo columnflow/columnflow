@@ -18,12 +18,12 @@ from columnflow.util import dev_sandbox
 
 
 class UniteColumns(
-    MergeReducedEventsUser,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

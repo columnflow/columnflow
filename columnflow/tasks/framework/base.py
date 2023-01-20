@@ -455,10 +455,7 @@ class ShiftTask(ConfigTask):
         For that, it takes the shifts stored in the config instance and compares it with those
         defined by this class.
         """
-        # the modify_param_values super method must not necessarily be set
-        super_func = super().modify_param_values
-        if callable(super_func):
-            params = super_func(params)
+        params = super().modify_param_values(params)
 
         # get params
         config_inst = params.get("config_inst")

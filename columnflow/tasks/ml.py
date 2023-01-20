@@ -18,12 +18,12 @@ from columnflow.util import dev_sandbox, safe_div
 
 
 class PrepareMLEvents(
-    MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -181,11 +181,11 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    DatasetTask,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -320,12 +320,12 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
 
 
 class MLEvaluation(
-    MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
