@@ -53,11 +53,11 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.ChoiceParameter(
-        choices=("wip", "prelim", "public", "skip"),
+        choices=("wip", "pre", "sim", "simwip", "simpre", "public", "skip"),
         default="wip",
         significant=False,
-        description="Parameter to set the type of CMS logo; choices: wip,prelim,public,skip; "
-        "default: wip",
+        description="Parameter to set the type of CMS logo; choices: "
+        "wip,pre,sim,simwip,simpre,public,skip; default: wip",
     )
 
     def get_plot_parameters(self) -> DotDict:

@@ -120,7 +120,10 @@ def plot_2d(
     if cms_label != "skip":
         label_options = {
             "wip": "Work in progress",
-            "prelim": "Preliminary",
+            "pre": "Preliminary",
+            "sim": "Simulation",
+            "simwip": "Simulation work in progress",
+            "simpre": "Simulation preliminary",
             "public": "",
         }
         cms_label_kwargs = {
@@ -129,9 +132,6 @@ def plot_2d(
             "fontsize": 22,
             "data": False,
         }
-        # add 'Simulation' tag when no data is present
-        if not any([process_inst.is_data for process_inst in hists.keys()]):
-            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)

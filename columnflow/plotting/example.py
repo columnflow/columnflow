@@ -231,7 +231,10 @@ def plot_all(
     if cms_label != "skip":
         label_options = {
             "wip": "Work in progress",
-            "prelim": "Preliminary",
+            "pre": "Preliminary",
+            "sim": "Simulation",
+            "simwip": "Simulation work in progress",
+            "simpre": "Simulation preliminary",
             "public": "",
         }
         cms_label_kwargs = {
@@ -240,8 +243,6 @@ def plot_all(
             "fontsize": 22,
             "data": False,
         }
-        if "data" not in plot_config.keys():
-            cms_label_kwargs["llabel"] = "Simulation" + cms_label_kwargs["llabel"]
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
@@ -507,8 +508,8 @@ def plot_cutflow(
 
     default_style_config = {
         "ax_cfg": {
-            "ylabel": "Selection efficiency" if shape_norm else "Selection yields",
-            "xlabel": "Selection steps",
+            "ylabel": "Selection efficiency" if shape_norm else "Selection yield",
+            "xlabel": "Selection step",
             "xticklabels": xticklabels,
             "yscale": yscale,
         },
