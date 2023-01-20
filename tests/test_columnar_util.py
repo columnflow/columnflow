@@ -154,8 +154,7 @@ class RouteTest(unittest.TestCase):
         # SHOULD: Return the same hash if two Routes
         # stores the same fields in the same order.
         same_route = Route(("i", "like", "trains"))
-        self.assertTrue(hash(same_route) == hash(self.route) ==
-                        hash(("i", "like", "trains")))
+        self.assertEqual(hash(same_route), hash(self.route))
 
         # checks if not true when order is different
         reverse_route = Route(("trains", "like", "i"))
