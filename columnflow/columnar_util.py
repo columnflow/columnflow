@@ -336,7 +336,7 @@ class Route(object, metaclass=RouteMeta):
         return f"<{self.__class__.__name__} '{self}' at {hex(id(self))}>"
 
     def __hash__(self) -> int:
-        return hash(self.fields)
+        return hash(str(self.fields))
 
     def __len__(self) -> int:
         return len(self._fields)
