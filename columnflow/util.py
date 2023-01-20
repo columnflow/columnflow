@@ -340,8 +340,11 @@ def dev_sandbox(sandbox: str) -> str:
     if _type not in ["venv", "bash"]:
         return sandbox
 
-    # create the dev path and check if it exists
-    dev_path = "{}_dev{}".format(*os.path.splitext(path))
+    # create the dev path and check if it exists, with special treatment of the cf_{prod,dev} envs
+    if path == "$CF_BASE/sandboxes/cf_prod.sh":
+        dev_path = "$CF_BASE/sandboxes/cf_dev.sh"
+    else:
+        dev_path = "{}_dev{}".format(*os.path.splitext(path))
     if not os.path.exists(real_path(dev_path)):
         return sandbox
 
