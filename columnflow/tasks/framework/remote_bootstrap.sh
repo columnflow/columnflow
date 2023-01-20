@@ -22,7 +22,11 @@ bootstrap_htcondor_standalone() {
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
-    if [ -z "${CF_SOFTWARE_BASE}" ] || [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
+    if [ -z "${CF_SOFTWARE_BASE}" ]; then
+        export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    elif [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
+        echo "software base directory ${CF_SOFTWARE_BASE} was configured to be shared,"
+        echo "but conda subdirectory is either missing or not accessible"
         export CF_SOFTWARE_BASE="${CF_DATA}/software"
     else
         fetch_software="false"
