@@ -11,7 +11,7 @@ import math
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask
 from columnflow.util import real_path
 
 
@@ -145,8 +145,10 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
     )
     version = None
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream dependencies
+    deps = UpstreamDeps(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -160,7 +162,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         self._checksum = None
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self)
+        return self.deps.BuildBashSandbox.req(self)
 
     @property
     def checksum(self):
@@ -222,8 +224,10 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     exclude = "^src/tmp"
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream dependencies
+    deps = UpstreamDeps(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def __init__(self, *args, **kwargs):
         # cached bash sandbox that wraps the cmssw environment
@@ -232,7 +236,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         super().__init__(*args, **kwargs)
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self)
+        return self.deps.BuildBashSandbox.req(self)
 
     def get_cmssw_path(self):
         # invoking .env will already trigger building the sandbox
@@ -323,22 +327,24 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         "CF_VOMS": "cf_voms",
     }
 
-    # default upstream dependency task classes
-    dep_BundleRepo = BundleRepo
-    dep_BundleSoftware = BundleSoftware
-    dep_BuildBashSandbox = BuildBashSandbox
-    dep_BundleBashSandbox = BundleBashSandbox
-    dep_BundleCMSSWSandbox = BundleCMSSWSandbox
+    # upstream dependencies
+    deps = UpstreamDeps(
+        BundleRepo=BundleRepo,
+        BundleSoftware=BundleSoftware,
+        BuildBashSandbox=BuildBashSandbox,
+        BundleBashSandbox=BundleBashSandbox,
+        BundleCMSSWSandbox=BundleCMSSWSandbox,
+    )
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
         # add the repository bundle
-        reqs["repo"] = self.dep_BundleRepo.req(self)
+        reqs["repo"] = self.deps.BundleRepo.req(self)
 
         # main software stack
         if not self.htcondor_share_software:
-            reqs["software"] = self.dep_BundleSoftware.req(self)
+            reqs["software"] = self.deps.BundleSoftware.req(self)
 
         # get names of pure bash and cmssw sandboxes
         bash_sandboxes = None
@@ -351,7 +357,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
 
         # bash-based sandboxes
-        cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleBashSandbox
+        cls = self.deps.BuildBashSandbox if self.htcondor_share_software else self.deps.BundleBashSandbox
         reqs["bash_sandboxes"] = [
             cls.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
@@ -359,7 +365,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
-            cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleCMSSWSandbox
+            cls = self.deps.BuildBashSandbox if self.htcondor_share_software else self.deps.BundleCMSSWSandbox
             reqs["cmssw_sandboxes"] = [
                 cls.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
@@ -530,8 +536,10 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
     }
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream dependencies
+    deps = UpstreamDeps(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
@@ -548,14 +556,14 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
         # bash-based sandboxes
         reqs["bash_sandboxes"] = [
-            self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+            self.deps.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
         ]
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
             reqs["cmssw_sandboxes"] = [
-                self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                self.deps.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
             ]
 
@@ -631,4 +639,9 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
 
 class RemoteWorkflow(HTCondorWorkflow, SlurmWorkflow):
-    pass
+
+    # upstream dependencies
+    deps = UpstreamDeps(
+        HTCondorWorkflow.deps,
+        SlurmWorkflow.deps,
+    )

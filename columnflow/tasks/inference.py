@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
 )
@@ -32,6 +32,12 @@ class CreateDatacards(
     dep_MergeHistograms = MergeHistograms
     dep_MergeShiftedHistograms = MergeShiftedHistograms
 
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeHistograms=MergeHistograms,
+        MergeShiftedHistograms=MergeShiftedHistograms,
+    )
+
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
@@ -52,7 +58,7 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: self.dep_MergeShiftedHistograms.req(
+                dataset: self.deps.MergeShiftedHistograms.req(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
@@ -70,7 +76,7 @@ class CreateDatacards(
         }
         if cat_obj.config_data_datasets:
             reqs["data"] = {
-                dataset: self.dep_MergeHistograms.req(
+                dataset: self.deps.MergeHistograms.req(
                     self,
                     dataset=dataset,
                     variables=(cat_obj.config_variable,),

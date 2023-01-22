@@ -9,7 +9,7 @@ import functools
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
     ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
@@ -35,17 +35,13 @@ class CreateHistograms(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
-    dep_ProduceColumns = ProduceColumns
-    dep_MLEvaluation = MLEvaluation
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeReducedEventsUser.deps,
+        MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+        MLEvaluation=MLEvaluation,
+    )
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -53,17 +49,17 @@ class CreateHistograms(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.deps.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.dep_ProduceColumns.req(self, producer=p)
+                    self.deps.ProduceColumns.req(self, producer=p)
                     for p in self.producers
                 ]
             if self.ml_models:
                 reqs["ml"] = [
-                    self.dep_MLEvaluation.req(self, ml_model=m)
+                    self.deps.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
                 ]
 
@@ -71,17 +67,17 @@ class CreateHistograms(
 
     def requires(self):
         reqs = {
-            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.deps.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
         if self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.deps.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         if self.ml_models:
             reqs["ml"] = [
-                self.dep_MLEvaluation.req(self, ml_model=m)
+                self.deps.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
 
@@ -219,7 +215,6 @@ class MergeHistograms(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    EventWeightMixin,
     DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -237,14 +232,10 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_CreateHistograms = CreateHistograms
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CreateHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        CreateHistograms=CreateHistograms,
+    )
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
@@ -270,7 +261,7 @@ class MergeHistograms(
             if not variables:
                 return []
 
-        return self.dep_CreateHistograms.req(
+        return self.deps.CreateHistograms.req(
             self,
             branch=-1,
             variables=tuple(variables),
@@ -338,8 +329,10 @@ class MergeShiftedHistograms(
     # allow only running on nominal
     allow_empty_shift_sources = True
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeHistograms=MergeHistograms,
+    )
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
@@ -352,13 +345,13 @@ class MergeShiftedHistograms(
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            reqs[shift] = self.deps.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
     def requires(self):
         return {
-            shift: self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            shift: self.deps.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
             for shift in ["nominal"] + self.shifts
         }
 

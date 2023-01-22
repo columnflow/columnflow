@@ -6,7 +6,7 @@ Tasks related to calibrating events.
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -26,21 +26,19 @@ class CalibrateEvents(
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_GetDatasetLFNs = GetDatasetLFNs
+    # upstream dependencies
+    deps = UpstreamDeps(
+        GetDatasetLFNs=GetDatasetLFNs,
+    )
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_GetDatasetLFNs.get_allowed_shifts(config_inst, params)
-        return shifts
+    register_calibrator_shifts = True
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.deps.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()
@@ -48,7 +46,7 @@ class CalibrateEvents(
         return reqs
 
     def requires(self):
-        reqs = {"lfns": self.dep_GetDatasetLFNs.req(self)}
+        reqs = {"lfns": self.deps.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()

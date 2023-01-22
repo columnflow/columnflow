@@ -35,6 +35,9 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
+    # decibes whether the task itself runs the calibrator and implements its shifts
+    register_calibrator_shifts = False
+
     @classmethod
     def get_default_calibrator(cls, config_inst, calibrator=None) -> str | None:
         if calibrator not in (None, law.NO_STR):
@@ -56,8 +59,8 @@ class CalibratorMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
         calibrator = cls.get_default_calibrator(config_inst, params.get("calibrator"))
@@ -66,9 +69,12 @@ class CalibratorMixin(ConfigTask):
                 calibrator,
                 cls.get_calibrator_kwargs(**params),
             )
-            shifts |= calibrator_inst.all_shifts
+            if cls.register_calibrator_shifts:
+                shifts |= calibrator_inst.all_shifts
+            else:
+                upstream_shifts |= calibrator_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_calibrator_inst(cls, calibrator, inst_dict=None):
@@ -110,6 +116,9 @@ class CalibratorsMixin(ConfigTask):
         brace_expand=True,
     )
 
+    # decibes whether the task itself runs the calibrators and implements their shifts
+    register_calibrators_shifts = False
+
     @classmethod
     def get_default_calibrators(cls, config_inst, calibrators=None) -> tuple[str]:
         if calibrators not in (None, law.NO_STR, ()):
@@ -133,8 +142,8 @@ class CalibratorsMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
         calibrators = cls.get_default_calibrators(config_inst, params.get("calibrators"))
@@ -142,9 +151,12 @@ class CalibratorsMixin(ConfigTask):
             calibrator_kwargs = cls.get_calibrator_kwargs(**params)
             for calibrator in calibrators:
                 calibrator_inst = cls.get_calibrator_inst(calibrator, calibrator_kwargs)
-                shifts |= calibrator_inst.all_shifts
+                if cls.register_calibrators_shifts:
+                    shifts |= calibrator_inst.all_shifts
+                else:
+                    upstream_shifts |= calibrator_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_calibrator_inst(cls, calibrator, inst_dict=None):
@@ -186,6 +198,9 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
+    # decibes whether the task itself runs the selector and implements its shifts
+    register_selector_shifts = False
+
     @classmethod
     def get_default_selector(cls, config_inst, selector=None) -> str | None:
         if selector not in (None, law.NO_STR):
@@ -207,8 +222,8 @@ class SelectorMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
         selector = cls.get_default_selector(config_inst, params.get("selector"))
@@ -217,9 +232,12 @@ class SelectorMixin(ConfigTask):
                 selector,
                 cls.get_selector_kwargs(**params),
             )
-            shifts |= selector_inst.all_shifts
+            if cls.register_selector_shifts:
+                shifts |= selector_inst.all_shifts
+            else:
+                upstream_shifts |= selector_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_selector_inst(cls, selector, inst_dict=None):
@@ -305,6 +323,9 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
+    # decibes whether the task itself runs the producer and implements its shifts
+    register_producer_shifts = False
+
     @classmethod
     def get_default_producer(cls, config_inst, producer=None) -> str | None:
         if producer not in (None, law.NO_STR):
@@ -326,8 +347,8 @@ class ProducerMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
         producer = cls.get_default_producer(config_inst, params.get("producer"))
@@ -336,9 +357,12 @@ class ProducerMixin(ConfigTask):
                 producer,
                 cls.get_producer_kwargs(**params),
             )
-            shifts |= producer_inst.all_shifts
+            if cls.register_producer_shifts:
+                shifts |= producer_inst.all_shifts
+            else:
+                upstream_shifts |= producer_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_producer_inst(cls, producer, inst_dict=None):
@@ -380,6 +404,9 @@ class ProducersMixin(ConfigTask):
         brace_expand=True,
     )
 
+    # decibes whether the task itself runs the producers and implements their shifts
+    register_producers_shifts = False
+
     @classmethod
     def get_default_producers(cls, config_inst, producers=None) -> tuple[str]:
         if producers not in (None, law.NO_STR, ()):
@@ -403,8 +430,8 @@ class ProducersMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
         producers = cls.get_default_producers(config_inst, params.get("producers"))
@@ -412,9 +439,12 @@ class ProducersMixin(ConfigTask):
             producer_kwargs = cls.get_producer_kwargs(**params)
             for producer in producers:
                 producer_inst = cls.get_producer_inst(producer, producer_kwargs)
-                shifts |= producer_inst.all_shifts
+                if cls.register_producers_shifts:
+                    shifts |= producer_inst.all_shifts
+                else:
+                    upstream_shifts |= producer_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_producer_inst(cls, producer, inst_dict=None):
@@ -902,13 +932,13 @@ class ShiftSourcesMixin(ConfigTask):
 class EventWeightMixin(ConfigTask):
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        allowed_shifts = super().get_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # add shifts introduced by event weights
         if config_inst.has_aux("event_weights"):
             for shift_insts in config_inst.x.event_weights.values():
-                allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+                shifts |= {shift_inst.name for shift_inst in shift_insts}
 
         # optionally also for weights defined by a dataset
         if "dataset" in params:
@@ -917,9 +947,9 @@ class EventWeightMixin(ConfigTask):
                 dataset_inst = config_inst.get_dataset(requested_dataset)
                 if dataset_inst.has_aux("event_weights"):
                     for shift_insts in dataset_inst.x.event_weights.values():
-                        allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+                        shifts |= {shift_inst.name for shift_inst in shift_insts}
 
-        return allowed_shifts
+        return shifts, upstream_shifts
 
 
 class ChunkedIOMixin(AnalysisTask):

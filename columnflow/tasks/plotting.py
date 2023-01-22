@@ -10,10 +10,10 @@ from abc import abstractmethod
 import law
 import luigi
 
-from columnflow.tasks.framework.base import ShiftTask
+from columnflow.tasks.framework.base import UpstreamDeps, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
-    CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
+    CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -31,23 +31,18 @@ class PlotVariablesBase(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    EventWeightMixin,
     CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-
     exclude_index = True
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeHistograms=MergeHistograms,
+    )
 
     def store_parts(self):
         parts = super().store_parts()
@@ -170,10 +165,12 @@ class PlotVariablesBaseSingleShift(
     PlotVariablesBase,
     ShiftTask,
 ):
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-
     exclude_index = True
+
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeHistograms=MergeHistograms,
+    )
 
     def create_branch_map(self):
         return [
@@ -184,7 +181,7 @@ class PlotVariablesBaseSingleShift(
 
     def requires(self):
         return {
-            d: self.dep_MergeHistograms.req(
+            d: self.deps.MergeHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -250,10 +247,12 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
-    # default upstream dependency task classes
-    dep_MergeShiftedHistograms = MergeShiftedHistograms
-
     exclude_index = True
+
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeShiftedHistograms=MergeShiftedHistograms,
+    )
 
     def create_branch_map(self):
         return [
@@ -265,7 +264,7 @@ class PlotVariablesBaseMultiShifts(
 
     def requires(self):
         return {
-            d: self.dep_MergeShiftedHistograms.req(
+            d: self.deps.MergeShiftedHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,

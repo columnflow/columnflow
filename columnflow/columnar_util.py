@@ -1760,23 +1760,24 @@ class TaskArrayFunction(ArrayFunction):
         return super().instantiate_dependency(cls, **kwargs)
 
     def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
-        shifts = set()
-
         # init the call cache
         if call_cache is None:
             call_cache = set()
 
-        # consider _this_ call cached
+        # add shifts and consider _this_ call cached
+        shifts = {
+            shift
+            for shift in self.shifts
+            if not isinstance(shift, (ArrayFunction, self.Flagged))
+        }
         call_cache.add(self)
 
         # add shifts of all dependent objects
-        for obj in self.get_dependencies(include_others=True):
+        for obj in self.get_dependencies(include_others=False):
             if isinstance(obj, TaskArrayFunction):
                 if obj not in call_cache:
                     call_cache.add(obj)
                     shifts |= obj._get_all_shifts(call_cache=call_cache)
-            elif isinstance(obj, str):
-                shifts.add(obj)
 
         return shifts
 
