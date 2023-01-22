@@ -6,7 +6,7 @@ Task to unite columns horizontally into a single file for further, possibly exte
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, ChunkedIOMixin,
 )
@@ -29,17 +29,13 @@ class UniteColumns(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
-    dep_ProduceColumns = ProduceColumns
-    dep_MLEvaluation = MLEvaluation
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeReducedEvents.deps,
+        MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+        MLEvaluation=MLEvaluation,
+    )
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -47,17 +43,17 @@ class UniteColumns(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.deps.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.dep_ProduceColumns.req(self, producer=p)
+                    self.deps.ProduceColumns.req(self, producer=p)
                     for p in self.producers
                 ]
             if self.ml_models:
                 reqs["ml"] = [
-                    self.dep_MLEvaluation.req(self, ml_model=m)
+                    self.deps.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
                 ]
 
@@ -65,17 +61,17 @@ class UniteColumns(
 
     def requires(self):
         reqs = {
-            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.deps.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
         if self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.deps.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         if self.ml_models:
             reqs["ml"] = [
-                self.dep_MLEvaluation.req(self, ml_model=m)
+                self.deps.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
 

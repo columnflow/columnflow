@@ -6,6 +6,7 @@ Tools for producing new array columns (e.g. high-level variables).
 
 from __future__ import annotations
 
+import inspect
 from typing import Callable
 
 from columnflow.util import DerivableMeta
@@ -30,9 +31,13 @@ def producer(
         cls_dict = {"call_func": func}
         cls_dict.update(kwargs)
 
+        # get the module name
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+
         # create the subclass
         cls_name = cls_dict.pop("cls_name", func.__name__)
-        subclass = Producer.derive(cls_name, bases=bases, cls_dict=cls_dict)
+        subclass = Producer.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
 
         return subclass
 

@@ -741,6 +741,7 @@ class DerivableMeta(type):
         cls_name: str,
         bases: tuple = (),
         cls_dict: dict | None = None,
+        module: str | None = None,
     ) -> DerivableMeta:
         """
         Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
@@ -753,8 +754,9 @@ class DerivableMeta(type):
         subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})
 
         # overwrite __module__ to point to the module of the calling stack
-        frame = inspect.stack()[1]
-        module = inspect.getmodule(frame[0])
+        if not module:
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
         if module:
             subcls.__module__ = module.__name__
 

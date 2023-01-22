@@ -11,7 +11,9 @@ from abc import abstractmethod
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
+from columnflow.tasks.framework.base import (
+    UpstreamDeps, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
+)
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
 )
@@ -21,7 +23,7 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
-from columnflow.util import dev_sandbox, DotDict
+from columnflow.util import DotDict, dev_sandbox
 
 
 class CreateCutflowHistograms(
@@ -39,14 +41,10 @@ class CreateCutflowHistograms(
 
     default_variables = ("mc_weight", "cf_*")
 
-    # default upstream dependency task classes
-    dep_MergeSelectionMasks = MergeSelectionMasks
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeSelectionMasks.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeSelectionMasks=MergeSelectionMasks,
+    )
 
     def create_branch_map(self):
         # dummy branch map
@@ -57,13 +55,13 @@ class CreateCutflowHistograms(
         if only_super:
             return reqs
 
-        reqs["masks"] = self.dep_MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["masks"] = self.deps.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
 
         return reqs
 
     def requires(self):
         return {
-            "masks": self.dep_MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "masks": self.deps.MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
@@ -215,14 +213,10 @@ class PlotCutflowBase(
 
     selector_steps_order_sensitive = True
 
-    # default upstream dependency task classes
-    dep_CreateCutflowHistograms = CreateCutflowHistograms
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CreateCutflowHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream dependencies
+    deps = UpstreamDeps(
+        CreateCutflowHistograms=CreateCutflowHistograms,
+    )
 
     def store_parts(self):
         parts = super().store_parts()
@@ -258,7 +252,7 @@ class PlotCutflow(
             return reqs
 
         reqs["hists"] = [
-            self.dep_CreateCutflowHistograms.req(
+            self.deps.CreateCutflowHistograms.req(
                 self,
                 dataset=d,
                 variables=("mc_weight",),
@@ -271,7 +265,7 @@ class PlotCutflow(
 
     def requires(self):
         return {
-            d: self.dep_CreateCutflowHistograms.req(
+            d: self.deps.CreateCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
@@ -424,14 +418,14 @@ class PlotCutflowVariablesBase(
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["hists"] = [
-            self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.deps.CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: self.dep_CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.deps.CreateCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 

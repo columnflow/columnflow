@@ -18,7 +18,9 @@ import luigi
 import law
 import order as od
 
-from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import (
+    UpstreamDeps, AnalysisTask, ConfigTask, DatasetTask, wrapper_factory,
+)
 from columnflow.util import wget, safe_div
 
 
@@ -360,11 +362,13 @@ class CreatePileupWeights(ConfigTask):
     )
     version = None
 
-    # default upstream dependency task classes
-    dep_BundleExternalFiles = BundleExternalFiles
+    # upstream dependencies
+    deps = UpstreamDeps(
+        BundleExternalFiles=BundleExternalFiles,
+    )
 
     def requires(self):
-        return self.dep_BundleExternalFiles.req(self)
+        return self.deps.BundleExternalFiles.req(self)
 
     def output(self):
         return self.target(f"weights_from_{self.data_mode}.json")

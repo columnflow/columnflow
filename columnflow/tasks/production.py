@@ -6,7 +6,7 @@ Tasks related to producing new columns.
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
 )
@@ -27,14 +27,13 @@ class ProduceColumns(
     # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
+    # upstream dependencies
+    deps = UpstreamDeps(
+        MergeReducedEventsUser.deps,
+        MergeReducedEvents=MergeReducedEvents,
+    )
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
-        return shifts
+    register_producer_shifts = True
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -42,7 +41,7 @@ class ProduceColumns(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.deps.MergeReducedEvents.req(self, tree_index=-1)
 
         # add producer dependent requirements
         reqs["producer"] = self.producer_inst.run_requires()
@@ -51,7 +50,7 @@ class ProduceColumns(
 
     def requires(self):
         return {
-            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.deps.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
             "producer": self.producer_inst.run_requires(),
         }
 
