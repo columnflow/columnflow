@@ -1,7 +1,7 @@
-# version 5
+# version 6
 # packages might be installed in addition to other requirements
 
-ipython==8.5.*
+ipython==8.8.*
 pytest==7.1.*
 pytest-cov==3.0.*
 flake8==5.0.*
