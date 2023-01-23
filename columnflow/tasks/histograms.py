@@ -9,7 +9,7 @@ import functools
 import luigi
 import law
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
     ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
@@ -35,9 +35,10 @@ class CreateHistograms(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
-        MergeReducedEventsUser.deps,
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
         MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
@@ -49,17 +50,17 @@ class CreateHistograms(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.deps.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.deps.ProduceColumns.req(self, producer=p)
+                    self.reqs.ProduceColumns.req(self, producer=p)
                     for p in self.producers
                 ]
             if self.ml_models:
                 reqs["ml"] = [
-                    self.deps.MLEvaluation.req(self, ml_model=m)
+                    self.reqs.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
                 ]
 
@@ -67,17 +68,17 @@ class CreateHistograms(
 
     def requires(self):
         reqs = {
-            "events": self.deps.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
         if self.producers:
             reqs["producers"] = [
-                self.deps.ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         if self.ml_models:
             reqs["ml"] = [
-                self.deps.MLEvaluation.req(self, ml_model=m)
+                self.reqs.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
 
@@ -232,8 +233,9 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         CreateHistograms=CreateHistograms,
     )
 
@@ -261,7 +263,7 @@ class MergeHistograms(
             if not variables:
                 return []
 
-        return self.deps.CreateHistograms.req(
+        return self.reqs.CreateHistograms.req(
             self,
             branch=-1,
             variables=tuple(variables),
@@ -329,8 +331,9 @@ class MergeShiftedHistograms(
     # allow only running on nominal
     allow_empty_shift_sources = True
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
 
@@ -345,13 +348,13 @@ class MergeShiftedHistograms(
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.deps.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
     def requires(self):
         return {
-            shift: self.deps.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            shift: self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
             for shift in ["nominal"] + self.shifts
         }
 

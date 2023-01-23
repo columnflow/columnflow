@@ -6,7 +6,7 @@ Task to unite columns horizontally into a single file for further, possibly exte
 
 import law
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, ChunkedIOMixin,
 )
@@ -29,9 +29,10 @@ class UniteColumns(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
-        MergeReducedEvents.deps,
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEvents.reqs,
+        RemoteWorkflow.reqs,
         MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
@@ -43,17 +44,17 @@ class UniteColumns(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.deps.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.deps.ProduceColumns.req(self, producer=p)
+                    self.reqs.ProduceColumns.req(self, producer=p)
                     for p in self.producers
                 ]
             if self.ml_models:
                 reqs["ml"] = [
-                    self.deps.MLEvaluation.req(self, ml_model=m)
+                    self.reqs.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
                 ]
 
@@ -61,17 +62,17 @@ class UniteColumns(
 
     def requires(self):
         reqs = {
-            "events": self.deps.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
         if self.producers:
             reqs["producers"] = [
-                self.deps.ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         if self.ml_models:
             reqs["ml"] = [
-                self.deps.MLEvaluation.req(self, ml_model=m)
+                self.reqs.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
 

@@ -10,7 +10,7 @@ from abc import abstractmethod
 import law
 import luigi
 
-from columnflow.tasks.framework.base import UpstreamDeps, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
     CategoriesMixin, ShiftSourcesMixin,
@@ -39,8 +39,9 @@ class PlotVariablesBase(
 
     exclude_index = True
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
 
@@ -167,8 +168,9 @@ class PlotVariablesBaseSingleShift(
 ):
     exclude_index = True
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        PlotVariablesBase.reqs,
         MergeHistograms=MergeHistograms,
     )
 
@@ -181,7 +183,7 @@ class PlotVariablesBaseSingleShift(
 
     def requires(self):
         return {
-            d: self.deps.MergeHistograms.req(
+            d: self.reqs.MergeHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -249,8 +251,9 @@ class PlotVariablesBaseMultiShifts(
 
     exclude_index = True
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        PlotVariablesBase.reqs,
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
 
@@ -264,7 +267,7 @@ class PlotVariablesBaseMultiShifts(
 
     def requires(self):
         return {
-            d: self.deps.MergeShiftedHistograms.req(
+            d: self.reqs.MergeShiftedHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -313,8 +316,14 @@ class PlotShiftedVariablesPerProcess1D(
     # force this one to be a local workflow
     workflow = "local"
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotShiftedVariables1D.reqs,
+        PlotShiftedVariables1D=PlotShiftedVariables1D,
+    )
+
     def requires(self):
         return {
-            process: PlotShiftedVariables1D.req(self, processes=(process,))
+            process: self.reqs.PlotShiftedVariables1D.req(self, processes=(process,))
             for process in self.processes
         }
