@@ -8,21 +8,25 @@ from collections import OrderedDict
 
 import law
 
-from columnflow.tasks.framework.mixins import DatasetProcessesMixin
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 
 from columnflow.tasks.histograms import MergeHistograms
-from colummnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox
 
 
 class CreateYieldTable(
-    DatasetProcessesMixin,
+    DatasetsProcessesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     dep_MergeHistograms = MergeHistograms
+
+    # dummy branch map
+    def create_branch_map(self):
+        return [0]
 
     def requires(self):
         return {
@@ -54,8 +58,7 @@ class CreateYieldTable(
         with self.publish_step("dummy text"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                # TODO: get correct input
-                h_in = inp["collection"][0].load(formatter="pickle")
+                h_in = inp["mc_weight"].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -76,7 +79,7 @@ class CreateYieldTable(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "shift": sum}]
+                    h = h[{"process": sum, "shift": sum, "mc_weight": sum}]
 
                     # add the histogram
                     if process_inst in hists:
@@ -93,6 +96,22 @@ class CreateYieldTable(
                 (process_inst, hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
+
+            yields = OrderedDict()
+
+            for process_inst, h in hists.items():
+                cat_yields = OrderedDict()
+                process_label = process_inst.label
+                for i in h.axes["category"].size:
+                    cat_id = h.axes["category"].bin(i)
+                    value = h[i].value
+                    variance = h[i].variance
+
+                    cat_label = self.config_inst.get_category(cat_id).label
+
+                    cat_yields[cat_label] = (value, variance)
+
+                yields[process_label] = cat_yields
 
             # TODO: create some output
 
