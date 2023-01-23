@@ -26,22 +26,22 @@ default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
 
 
-class UpstreamDeps(DotDict):
+class Requirements(DotDict):
 
     def __init__(self, *others, **kwargs):
         super().__init__()
 
         # add others and kwargs
-        for deps in others + (kwargs,):
-            self.update(deps)
+        for reqs in others + (kwargs,):
+            self.update(reqs)
 
 
 class BaseTask(law.Task):
 
     task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
 
-    # container for upstream dependencies for convenience
-    deps = UpstreamDeps()
+    # container for upstream requirements for convenience
+    reqs = Requirements()
 
 
 class OutputLocation(enum.Enum):
@@ -161,8 +161,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # get shifts from upstream dependencies, consider both their own and upstream shifts as one
         upstream_shifts = set()
-        for dep in cls.deps.values():
-            upstream_shifts |= set.union(*(dep.get_known_shifts(config_inst, params) or (set(),)))
+        for req in cls.reqs.values():
+            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
 
         return set(), upstream_shifts
 

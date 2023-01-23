@@ -12,7 +12,7 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import (
-    UpstreamDeps, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
+    Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
 )
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
@@ -41,8 +41,9 @@ class CreateCutflowHistograms(
 
     default_variables = ("mc_weight", "cf_*")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         MergeSelectionMasks=MergeSelectionMasks,
     )
 
@@ -55,13 +56,13 @@ class CreateCutflowHistograms(
         if only_super:
             return reqs
 
-        reqs["masks"] = self.deps.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["masks"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
 
         return reqs
 
     def requires(self):
         return {
-            "masks": self.deps.MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "masks": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
@@ -213,8 +214,9 @@ class PlotCutflowBase(
 
     selector_steps_order_sensitive = True
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         CreateCutflowHistograms=CreateCutflowHistograms,
     )
 
@@ -236,6 +238,12 @@ class PlotCutflow(
         add_default_to_description=True,
     )
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowBase.reqs,
+        RemoteWorkflow.reqs,
+    )
+
     def create_branch_map(self):
         # one category per branch
         if not self.categories:
@@ -252,7 +260,7 @@ class PlotCutflow(
             return reqs
 
         reqs["hists"] = [
-            self.deps.CreateCutflowHistograms.req(
+            self.reqs.CreateCutflowHistograms.req(
                 self,
                 dataset=d,
                 variables=("mc_weight",),
@@ -265,7 +273,7 @@ class PlotCutflow(
 
     def requires(self):
         return {
-            d: self.deps.CreateCutflowHistograms.req(
+            d: self.reqs.CreateCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
@@ -389,6 +397,12 @@ class PlotCutflowVariablesBase(
 
     exclude_index = True
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowBase.reqs,
+        RemoteWorkflow.reqs,
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -418,14 +432,14 @@ class PlotCutflowVariablesBase(
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["hists"] = [
-            self.deps.CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.reqs.CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: self.deps.CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.reqs.CreateCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 
@@ -664,8 +678,14 @@ class PlotCutflowVariablesPerProcess2D(
     # force this one to be a local workflow
     workflow = "local"
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowVariables2D.reqs,
+        PlotCutflowVariables2D=PlotCutflowVariables2D,
+    )
+
     def requires(self):
         return {
-            process: PlotCutflowVariables2D.req(self, processes=(process,))
+            process: self.reqs.PlotCutflowVariables2D.req(self, processes=(process,))
             for process in self.processes
         }

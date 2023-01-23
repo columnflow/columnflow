@@ -11,7 +11,7 @@ from collections import OrderedDict
 import law
 import luigi
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
 )
@@ -34,8 +34,9 @@ class ReduceEvents(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         GetDatasetLFNs=GetDatasetLFNs,
         CalibrateEvents=CalibrateEvents,
         SelectEvents=SelectEvents,
@@ -46,29 +47,29 @@ class ReduceEvents(
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.deps.GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.deps.CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
-            reqs["selection"] = self.deps.SelectEvents.req(self)
+            reqs["selection"] = self.reqs.SelectEvents.req(self)
         else:
             # pass-through pilot workflow requirements of upstream task
-            t = self.deps.SelectEvents.req(self)
+            t = self.reqs.SelectEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         return reqs
 
     def requires(self):
         return {
-            "lfns": self.deps.GetDatasetLFNs.req(self),
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.deps.CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ],
-            "selection": self.deps.SelectEvents.req(self),
+            "selection": self.reqs.SelectEvents.req(self),
         }
 
     def output(self):
@@ -229,8 +230,8 @@ class MergeReductionStats(
         "value 'reduced_file_size' or 512MB'",
     )
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
         ReduceEvents=ReduceEvents,
     )
 
@@ -248,7 +249,7 @@ class MergeReductionStats(
         return params
 
     def requires(self):
-        return self.deps.ReduceEvents.req(self, branches=((0, self.n_inputs),))
+        return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
         return self.target(f"stats_n{self.n_inputs}.json")
@@ -319,8 +320,8 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 20 files into one
     merge_factor = 20
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
         MergeReductionStats=MergeReductionStats,
     )
 
@@ -341,7 +342,7 @@ class MergeReducedEventsUser(DatasetTask):
         """
         if self._cached_file_merging < 0:
             # check of the merging stats is present and of so, set the cached file merging value
-            output = self.deps.MergeReductionStats.req(self).output()
+            output = self.reqs.MergeReductionStats.req(self).output()
             if output.exists():
                 self._cached_file_merging = output.load(formatter="json")["merge_factor"]
                 self._cache_branches = True
@@ -381,9 +382,10 @@ class MergeReducedEvents(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
-        MergeReducedEventsUser.deps,
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
         ReduceEvents=ReduceEvents,
     )
 
@@ -400,14 +402,14 @@ class MergeReducedEvents(
 
     def merge_workflow_requires(self):
         return {
-            "stats": self.deps.MergeReductionStats.req(self),
-            "events": self.deps.ReduceEvents.req(self, _exclude={"branches"}),
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(self, _exclude={"branches"}),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "stats": self.deps.MergeReductionStats.req(self),
-            "events": self.deps.ReduceEvents.req(
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(
                 self,
                 branches=((start_branch, end_branch),),
                 workflow="local",

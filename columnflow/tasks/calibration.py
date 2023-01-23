@@ -6,7 +6,7 @@ Tasks related to calibrating events.
 
 import law
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -26,8 +26,9 @@ class CalibrateEvents(
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
@@ -38,7 +39,7 @@ class CalibrateEvents(
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.deps.GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()
@@ -46,7 +47,7 @@ class CalibrateEvents(
         return reqs
 
     def requires(self):
-        reqs = {"lfns": self.deps.GetDatasetLFNs.req(self)}
+        reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
         reqs["calibrator"] = self.calibrator_inst.run_requires()

@@ -284,6 +284,8 @@ class SelectorStepsMixin(SelectorMixin):
         brace_expand=True,
     )
 
+    exclude_params_repr_empty = {"selector_steps"}
+
     selector_steps_order_sensitive = False
 
     @classmethod
@@ -488,6 +490,8 @@ class MLModelMixin(ConfigTask):
         "'default_ml_model' config",
     )
 
+    exclude_params_repr_empty = {"ml_model"}
+
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
@@ -539,6 +543,8 @@ class MLModelsMixin(ConfigTask):
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
     )
+
+    exclude_params_repr_empty = {"ml_models"}
 
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:

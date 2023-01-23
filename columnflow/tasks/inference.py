@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import law
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
 )
@@ -28,12 +28,9 @@ class CreateDatacards(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-    dep_MergeShiftedHistograms = MergeShiftedHistograms
-
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
@@ -58,7 +55,7 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: self.deps.MergeShiftedHistograms.req(
+                dataset: self.reqs.MergeShiftedHistograms.req(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
@@ -76,7 +73,7 @@ class CreateDatacards(
         }
         if cat_obj.config_data_datasets:
             reqs["data"] = {
-                dataset: self.deps.MergeHistograms.req(
+                dataset: self.reqs.MergeHistograms.req(
                     self,
                     dataset=dataset,
                     variables=(cat_obj.config_variable,),

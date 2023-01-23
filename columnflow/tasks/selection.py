@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import law
 
-from columnflow.tasks.framework.base import UpstreamDeps, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -31,8 +31,9 @@ class SelectEvents(
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         GetDatasetLFNs=GetDatasetLFNs,
         CalibrateEvents=CalibrateEvents,
     )
@@ -44,16 +45,16 @@ class SelectEvents(
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.deps.GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
             reqs["calib"] = [
-                self.deps.CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
         else:
             # pass-through pilot workflow requirements of upstream task
-            t = self.deps.CalibrateEvents.req(self)
+            t = self.reqs.CalibrateEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
@@ -63,9 +64,9 @@ class SelectEvents(
 
     def requires(self):
         reqs = {
-            "lfns": self.deps.GetDatasetLFNs.req(self),
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.deps.CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ],
         }
@@ -225,8 +226,8 @@ class MergeSelectionStats(
     # skip receiving some parameters via req
     exclude_params_req_get = {"workflow"}
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
         SelectEvents=SelectEvents,
     )
 
@@ -235,10 +236,10 @@ class MergeSelectionStats(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return self.deps.SelectEvents.req(self, _exclude={"branches"})
+        return self.reqs.SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return self.deps.SelectEvents.req(
+        return self.reqs.SelectEvents.req(
             self,
             branches=((start_branch, end_branch),),
             workflow="local",
@@ -302,8 +303,9 @@ class MergeSelectionMasks(
     # recursively merge 8 files into one
     merge_factor = 8
 
-    # upstream dependencies
-    deps = UpstreamDeps(
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
         SelectEvents=SelectEvents,
     )
 
@@ -321,14 +323,14 @@ class MergeSelectionMasks(
 
     def merge_workflow_requires(self):
         return {
-            "selection": self.deps.SelectEvents.req(self, _exclude={"branches"}),
+            "selection": self.reqs.SelectEvents.req(self, _exclude={"branches"}),
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
             "selection": [
-                self.deps.SelectEvents.req(self, branch=b)
+                self.reqs.SelectEvents.req(self, branch=b)
                 for b in range(start_branch, end_branch)
             ],
             "normalization": self.norm_weight_producer.run_requires(),
