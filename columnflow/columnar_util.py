@@ -44,6 +44,7 @@ maybe_import("coffea.nanoevents.methods.base")
 pq = maybe_import("pyarrow.parquet")
 
 logger = law.logger.get_logger(__name__)
+logger_perf = law.logger.get_logger(f"{__name__}-perf")
 
 
 #: Columns that are always required when opening a nano file with coffea.
@@ -2693,6 +2694,8 @@ class ChunkedIOHandler(object):
             # save the source object
             self.source_objects.append(obj)
 
+            logger_perf.debug(f"opening {source} of type {source_handler.type} for reading")
+
     def close(self) -> None:
         """
         Closes all cached, opened files and deletes loaded source objects. Nothing happens if the
@@ -2738,7 +2741,20 @@ class ChunkedIOHandler(object):
 
         # lightweight callabe that wraps all read funcs and comines their return values
         def read(chunk_pos):
-            chunks = [read_func(chunk_pos) for read_func in read_funcs]
+            chunks = []
+            durations = []
+            t1 = time.perf_counter()
+            for read_func in read_funcs:
+                chunks.append(read_func(chunk_pos))
+                durations.append(time.perf_counter() - t1)
+
+            duration = law.util.human_duration(seconds=sum(durations))
+            durations = [law.util.human_duration(seconds=s) for s in durations]
+            logger_perf.debug(
+                f"reading of chunk {chunk_pos.index} from {len(durations)} file(s) took {duration} "
+                f"({', '.join(durations)})",
+            )
+
             return self.ReadResult((chunks if self.is_multi else chunks[0]), chunk_pos)
 
         # create a list of all chunk positions
@@ -2784,9 +2800,18 @@ class ChunkedIOHandler(object):
                     if isinstance(result_obj, self.ReadResult):
                         if self.iter_message:
                             print(self.iter_message.format(pos=result_obj.chunk_pos))
+
                         # probably overly-cautious, but run garbage collection before and after
                         gc.collect()
-                        yield (result_obj.chunk, result_obj.chunk_pos)
+                        t1 = time.perf_counter()
+                        try:
+                            yield (result_obj.chunk, result_obj.chunk_pos)
+                        finally:
+                            duration = time.perf_counter() - t1
+                            logger_perf.debug(
+                                f"processing of chunk {result_obj.chunk_pos.index} took " +
+                                law.util.human_duration(seconds=duration),
+                            )
                         gc.collect()
 
             except:
