@@ -39,6 +39,8 @@ class CreateCutflowHistograms(
 
     selector_steps_order_sensitive = True
 
+    initial_step = "Initial"
+
     default_variables = ("mc_weight", "cf_*")
 
     # upstream requirements
@@ -146,7 +148,7 @@ class CreateCutflowHistograms(
 
             # prepare histograms and exprepssions once
             if not histograms:
-                prepare_hists(["initial"] + list(steps))
+                prepare_hists([self.initial_step] + list(steps))
 
             # add aliases
             events = add_ak_aliases(events, aliases, remove_src=True)
@@ -171,7 +173,7 @@ class CreateCutflowHistograms(
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(step="initial", **dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(step=self.initial_step, **dict(zip(fill_kwargs, arrays)))
 
                 # fill all other steps
                 mask = True
