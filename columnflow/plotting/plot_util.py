@@ -6,6 +6,8 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+import order as od
+
 from collections import OrderedDict
 
 from columnflow.util import maybe_import
@@ -16,35 +18,40 @@ hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
-od = maybe_import("order")
 
 
-def apply_variable_settings(hists: dict, variable_settings: dict | None = None) -> dict:
+def apply_variable_settings(
+        hists: dict,
+        variable_insts: list[od.Variable],
+        variable_settings: dict | None = None,
+) -> dict:
     """
-    applies settings from `variable_settings` dictionary to all histograms in `hists`.
+    applies settings from `variable_settings` dictionary to the `variable_insts`;
+    the `rebin` setting is directly applied to the histograms
     """
     # check if there are variable settings to apply
     if not variable_settings:
         return hists
-    relevant_variables = set(list(hists.values())[0].axes.name).intersection(variable_settings.keys())
-    if not relevant_variables:
-        return hists
 
     # apply all settings
-    for var in relevant_variables:
-        var_settings = variable_settings[var]
+    for var_inst in variable_insts:
+        # check if there are variable settings to apply for this variable
+        if var_inst.name not in variable_settings.keys():
+            continue
+
+        var_settings = variable_settings[var_inst.name]
+
         for key, h in list(hists.items()):
             # apply rebinning setting
-            rebin_factor = int(var_settings.get("rebin", 1))
-            h = h[{var: hist.rebin(rebin_factor)}]
-
-            # apply label setting
-            var_label = var_settings.get("label")
-            if var_label:
-                h.axes[var].label = var_label
+            rebin_factor = int(var_settings.pop("rebin", 1))
+            h = h[{var_inst.name: hist.rebin(rebin_factor)}]
 
             # override the histogram
             hists[key] = h
+
+        # apply all other variable settings to the variable_inst
+        for setting_key, setting_value in var_settings.items():
+            var_inst.__setattr__(setting_key, setting_value)
 
     return hists
 

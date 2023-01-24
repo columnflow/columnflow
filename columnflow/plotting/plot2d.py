@@ -42,7 +42,7 @@ def plot_2d(
     # remove shift axis from histograms
     remove_residual_axis(hists, "shift")
 
-    hists = apply_variable_settings(hists, variable_settings)
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)
@@ -59,6 +59,8 @@ def plot_2d(
             "ylim": (variable_insts[1].x_min, variable_insts[1].x_max),
             "xlabel": variable_insts[0].get_full_x_title(),
             "ylabel": variable_insts[1].get_full_x_title(),
+            "xscale": "log" if variable_insts[0].log_x else "linear",
+            "yscale": "log" if variable_insts[1].log_x else "linear",
         },
         "legend_cfg": {
             "title": "Process" if len(hists.keys()) == 1 else "Processes",

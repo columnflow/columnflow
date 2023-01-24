@@ -265,12 +265,12 @@ def plot_variable_per_process(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-    variable_inst = variable_insts[0]
 
     remove_residual_axis(hists, "shift")
 
     # apply variable_settings
-    hists = apply_variable_settings(hists, variable_settings)
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    variable_inst = variable_insts[0]
 
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
@@ -285,6 +285,7 @@ def plot_variable_per_process(
             "ylabel": variable_inst.get_full_y_title(),
             "xlabel": variable_inst.get_full_x_title(),
             "yscale": yscale,
+            "xscale": "log" if variable_inst.log_x else "linear",
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
@@ -314,11 +315,11 @@ def plot_variable_variants(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-    variable_inst = variable_insts[0]
 
     remove_residual_axis(hists, "shift")
 
-    hists = apply_variable_settings(hists, variable_settings)
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    variable_inst = variable_insts[0]
 
     plot_config = OrderedDict()
 
@@ -379,9 +380,9 @@ def plot_shifted_variable(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-    variable_inst = variable_insts[0]
 
-    hists = apply_variable_settings(hists, variable_settings)
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    variable_inst = variable_insts[0]
 
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
@@ -471,15 +472,12 @@ def plot_cutflow(
     shape_norm: bool = False,
     yscale: str | None = None,
     process_settings: dict | None = None,
-    variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     remove_residual_axis(hists, "shift")
 
     if not process_settings:
         process_settings = {}
-
-    hists = apply_variable_settings(hists, variable_settings)
 
     # setup plotting config
     plot_config = prepare_plot_config(hists, shape_norm, process_settings)
