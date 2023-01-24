@@ -177,8 +177,8 @@ class PlotVariablesBaseSingleShift(
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name})
-            for var_name in self.variables
-            for cat_name in self.categories
+            for var_name in sorted(self.variables)
+            for cat_name in sorted(self.categories)
         ]
 
     def requires(self):
@@ -260,9 +260,9 @@ class PlotVariablesBaseMultiShifts(
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name, "shift_source": source})
-            for var_name in self.variables
-            for cat_name in self.categories
-            for source in self.shift_sources
+            for var_name in sorted(self.variables)
+            for cat_name in sorted(self.categories)
+            for source in sorted(self.shift_sources)
         ]
 
     def requires(self):
