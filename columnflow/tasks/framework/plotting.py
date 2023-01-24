@@ -167,6 +167,11 @@ class PlotBase1D(PlotBase):
         description="when True, no ratio (usually Data/Bkg ratio) is drawn in the lower panel; "
         "default: None",
     )
+    density = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, the number of entries is scaled to the bin width; default: None",
+    )
     yscale = luigi.ChoiceParameter(
         choices=(law.NO_STR, "linear", "log"),
         default=law.NO_STR,
@@ -185,6 +190,7 @@ class PlotBase1D(PlotBase):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "skip_ratio", self.skip_ratio)
+        dict_add_strict(params, "density", self.density)
         dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
