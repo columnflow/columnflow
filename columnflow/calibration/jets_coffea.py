@@ -318,7 +318,7 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
         jec_era = self.dataset_inst.get_aux("jec_era", None)
         # if no special JEC era is specified, infer based on 'era'
         if jec_era is None:
-            jec_era = "Run" + self.dataset_inst.x.get_aux("era")
+            jec_era = "Run" + self.dataset_inst.get_aux("era")
 
         resolve_samples = lambda x: x.data[jec_era]
     else:
