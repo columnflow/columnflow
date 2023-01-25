@@ -342,8 +342,14 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     jec = self.config_inst.x.jec
 
     def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
+        if is_data:
+            jec_era = self.dataset_inst.get_aux("jec_era", None)
+            # if no special JEC era is specified, infer based on 'era'
+            if jec_era is None:
+                jec_era = "Run" + self.dataset_inst.x.get_aux("era")
+
         return [
-            f"{jec.campaign}_{self.dataset_inst.x.jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
+            f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
             if is_data else
             f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
             for name in names
