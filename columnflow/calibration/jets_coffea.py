@@ -315,7 +315,7 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 
     # make selector for JEC text files based on sample type (and era for data)
     if self.dataset_inst.is_data:
-        resolve_samples = lambda x: x.data[self.dataset_inst.x.era]
+        resolve_samples = lambda x: x.data[self.dataset_inst.x.jec_era]
     else:
         resolve_samples = lambda x: x.mc
 
