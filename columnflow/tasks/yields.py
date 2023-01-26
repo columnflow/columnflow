@@ -45,6 +45,7 @@ class CreateYieldTable(
     @law.decorator.log
     def run(self):
         import hist
+        from tabulate import tabulate
 
         process_insts = list(map(self.config_inst.get_process, self.processes))
         sub_process_insts = {
@@ -97,23 +98,25 @@ class CreateYieldTable(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            yields = OrderedDict()
+            yields = []
+            yield_header = ["Process"]
 
             for process_inst, h in hists.items():
-                cat_yields = OrderedDict()
-                process_label = process_inst.label
-                for i in h.axes["category"].size:
-                    cat_id = h.axes["category"].bin(i)
-                    value = h[i].value
-                    variance = h[i].variance
+                row = []
+                row.append(process_inst.label)
 
-                    cat_label = self.config_inst.get_category(cat_id).label
+                for i in range(h.axes["category"].size):
+                    if len(yield_header) <= h.axes["category"].size:
+                        yield_header.append(self.config_inst.get_category(h.axes["category"].bin(i)).label)
+                    row.append(f"{round(h[i].value)} $\pm$ {round(h[i].variance)}")
 
-                    cat_yields[cat_label] = (value, variance)
+                yields.append(row)
 
-                yields[process_label] = cat_yields
+            yield_table = tabulate(yields, headers=yield_header, tablefmt="latex_raw")
 
-            # TODO: create some output
+            # TODO: create some output using something like
+            #
+            # self.output().dump(yield_table, formatter="txt")
 
-            # save the output (TODO)
-            # outp.dump(fig, formatter="txt")
+            with open(self.output().fn, "w") as f:
+                f.write(yield_table)
