@@ -53,7 +53,7 @@ def pu_weight_requires(self: Producer, reqs: dict) -> None:
     if "pu_weights" in reqs:
         return
 
-    from columnflow.tasks.external import CreatePileupWeights
+    from columnflow.tasks.cms.external import CreatePileupWeights
     reqs["pu_weights"] = CreatePileupWeights.req(self.task)
 
 
