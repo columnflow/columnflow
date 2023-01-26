@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import order as od
 
+import functools
+import operator
+
 from collections import OrderedDict
 
 from columnflow.util import maybe_import
@@ -18,6 +21,41 @@ hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
+
+
+def apply_process_settings(
+        hists: dict,
+        process_settings: dict | None = None,
+) -> dict:
+    """
+    applies settings from `variable_settings` dictionary to the `variable_insts`
+    """
+
+    if not process_settings:
+        return hists
+
+    for proc_inst, h in hists.items():
+        # check if there are process settings to apply for this variable
+        if proc_inst.name not in process_settings.keys():
+            continue
+
+        proc_settings = process_settings[proc_inst.name]
+
+        # apply "scale" setting if given
+        if "scale" in proc_settings.keys():
+            scale_factor = proc_settings.pop("scale")
+            h = h * scale_factor
+            # TODO: there might be a prettier way for the label
+            proc_inst.label = f"{proc_inst.label} x{scale_factor}"
+
+        # apply all other process settings to the process_inst
+        for setting_key, setting_value in proc_settings.items():
+            try:
+                setattr(proc_inst, setting_key, setting_value)
+            except AttributeError:
+                proc_inst.set_aux(setting_key, setting_value)
+
+    return hists
 
 
 def apply_variable_settings(
@@ -41,17 +79,37 @@ def apply_variable_settings(
 
         var_settings = variable_settings[var_inst.name]
 
-        for key, h in list(hists.items()):
+        for proc_inst, h in list(hists.items()):
             # apply rebinning setting
             rebin_factor = int(var_settings.pop("rebin", 1))
             h = h[{var_inst.name: hist.rebin(rebin_factor)}]
 
             # override the histogram
-            hists[key] = h
+            hists[proc_inst] = h
 
         # apply all other variable settings to the variable_inst
         for setting_key, setting_value in var_settings.items():
-            var_inst.__setattr__(setting_key, setting_value)
+            try:
+                setattr(var_inst, setting_key, setting_value)
+            except AttributeError:
+                var_inst.set_aux(setting_key, setting_value)
+
+    return hists
+
+
+def apply_density_to_hists(hists: dict, density: bool | None = False) -> dict:
+    """
+    Scales number of histogram entries to bin widths.
+    """
+    if not density:
+        return hists
+
+    for key, hist in hists.items():
+        # bin area safe for multi-dimensional histograms
+        area = functools.reduce(operator.mul, hist.axes.widths)
+
+        # scale hist by bin area
+        hists[key] = hist / area
 
     return hists
 
@@ -67,28 +125,60 @@ def remove_residual_axis(hists: dict, ax_name: str, max_bins: int = 1) -> dict:
             if n_bins > max_bins:
                 raise Exception(
                     f"{ax_name} axis of histogram for key {key} has {n_bins} values whereas at most "
-                    "{max_bins} is expected",
+                    f"{max_bins} is expected",
                 )
             hists[key] = hist[{ax_name: sum}]
 
     return hists
 
 
+def prepare_style_config(
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_inst: od.Variable,
+    density: bool | None = False,
+    shape_norm: bool | None = False,
+    yscale: str | None = "",
+) -> dict:
+    """
+    small helper function that sets up a default style config based on the instances
+    of the config, category and variable
+    """
+
+    if not yscale:
+        yscale = "log" if variable_inst.log_y else "linear"
+
+    style_config = {
+        "ax_cfg": {
+            "xlim": (variable_inst.x_min, variable_inst.x_max),
+            "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
+            "xlabel": variable_inst.get_full_x_title(),
+            "yscale": yscale,
+            "xscale": "log" if variable_inst.log_x else "linear",
+        },
+        "rax_cfg": {
+            "ylabel": "Data / MC",
+            "xlabel": variable_inst.get_full_x_title(),
+        },
+        "legend_cfg": {},
+        "annotate_cfg": {"text": category_inst.label},
+        "cms_label_cfg": {
+            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+        },
+    }
+
+    return style_config
+
+
 def prepare_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
-    process_settings: dict | None = None,
 ) -> OrderedDict:
     """
     Prepares a plot config with one entry to create plots containing a stack of
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
-    `process-settings` (unstack, scale, color, label) and `shape-norm` are applied.
     """
-
-    # process_settings
-    if not process_settings:
-        process_settings = {}
 
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
@@ -96,28 +186,18 @@ def prepare_plot_config(
     data_hists = []
 
     for process_inst, h in hists.items():
-        # get settings for this process
-        settings = process_settings.get(process_inst.name, {})
-        color1 = settings.get("color1", settings.get("color", process_inst.color1))
-        color2 = settings.get("color2", process_inst.color2)
-        label = settings.get("label", process_inst.label)
-
-        if "scale" in settings.keys():
-            h = h * settings["scale"]
-            label = f"{label} x{settings['scale']}"
-
         if process_inst.is_data:
             data_hists.append(h)
         elif process_inst.is_mc:
-            if settings.get("unstack", False):
+            if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
-                line_colors.append(color1)
-                line_labels.append(label)
+                line_colors.append(process_inst.color1)
+                line_labels.append(process_inst.label)
             else:
                 mc_hists.append(h)
-                mc_colors.append(color1)
-                mc_edgecolors.append(color2)
-                mc_labels.append(label)
+                mc_colors.append(process_inst.color1)
+                mc_edgecolors.append(process_inst.color2)
+                mc_labels.append(process_inst.label)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:

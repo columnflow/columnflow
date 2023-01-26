@@ -13,7 +13,13 @@ import law
 
 from columnflow.util import maybe_import, test_float
 from columnflow.plotting.plot_util import (
-    prepare_plot_config, remove_residual_axis, apply_variable_settings, get_position,
+    prepare_plot_config,
+    prepare_style_config,
+    remove_residual_axis,
+    apply_variable_settings,
+    apply_process_settings,
+    get_position,
+    apply_density_to_hists,
 )
 
 
@@ -213,8 +219,6 @@ def plot_all(
     # custom annotation
     annotate_kwargs = {
         "text": "",
-        # "xy": (30, 540),  # this might be quite unstable, e.g. when cms_label=skip, the relative position changes
-        # "xycoords": "axes points",
         "xy": (
             get_position(*ax.get_xlim(), factor=0.05, logscale=False),
             get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
@@ -226,7 +230,7 @@ def plot_all(
         "verticalalignment": "top",
     }
     annotate_kwargs.update(style_config.get("annotate_cfg", {}))
-    plt.annotate(**annotate_kwargs)
+    ax.annotate(**annotate_kwargs)
 
     # cms label
     if cms_label != "skip":
@@ -259,6 +263,7 @@ def plot_variable_per_process(
     category_inst: od.Category,
     variable_insts: list[od.Variable],
     style_config: dict | None = None,
+    density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
     process_settings: dict | None = None,
@@ -268,35 +273,19 @@ def plot_variable_per_process(
 
     remove_residual_axis(hists, "shift")
 
-    # apply variable_settings
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     variable_inst = variable_insts[0]
 
-    # setup plotting config
-    plot_config = prepare_plot_config(hists, shape_norm, process_settings)
+    hists = apply_process_settings(hists, process_settings)
 
-    # setup style config
-    if not yscale:
-        yscale = "log" if variable_inst.log_y else "linear"
+    hists = apply_density_to_hists(hists, density)
 
-    default_style_config = {
-        "ax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
-            "ylabel": variable_inst.get_full_y_title(),
-            "xlabel": variable_inst.get_full_x_title(),
-            "yscale": yscale,
-            "xscale": "log" if variable_inst.log_x else "linear",
-        },
-        "rax_cfg": {
-            "ylabel": "Data / MC",
-            "xlabel": variable_inst.get_full_x_title(),
-        },
-        "legend_cfg": {},
-        "annotate_cfg": {"text": category_inst.label},
-        "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
-        },
-    }
+    plot_config = prepare_plot_config(hists, shape_norm)
+
+    default_style_config = prepare_style_config(
+        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+    )
+
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
@@ -310,6 +299,7 @@ def plot_variable_variants(
     category_inst: od.Category,
     variable_insts: list[od.Variable],
     style_config: dict | None = None,
+    density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
     variable_settings: dict | None = None,
@@ -320,6 +310,8 @@ def plot_variable_variants(
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     variable_inst = variable_insts[0]
+
+    hists = apply_density_to_hists(hists, density)
 
     plot_config = OrderedDict()
 
@@ -337,29 +329,13 @@ def plot_variable_variants(
         }
 
     # setup style config
+    default_style_config = prepare_style_config(
+        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+    )
+    # plot-function specific changes
+    default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
+    default_style_config["rax_cfg"]["ylabel"] = "Step / Initial"
 
-    if not yscale:
-        yscale = "log" if variable_inst.log_y else "linear"
-
-    default_style_config = {
-        "ax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
-            "ylabel": variable_inst.get_full_y_title(),
-            "xlabel": variable_inst.get_full_x_title(),
-            "yscale": yscale,
-        },
-        "rax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
-            "ylim": (0., 1.1),
-            "ylabel": "Step / Initial",
-            "xlabel": variable_inst.get_full_x_title(),
-        },
-        "legend_cfg": {},
-        "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
-        },
-        "annotate_cfg": {"text": category_inst.label},
-    }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
@@ -368,11 +344,12 @@ def plot_variable_variants(
 
 
 def plot_shifted_variable(
-    hists: Sequence[hist.Hist],
+    hists: OrderedDict,
     config_inst: od.Config,
     category_inst: od.Category,
     variable_insts: list[od.Variable],
     style_config: dict | None = None,
+    density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
     legend_title: str | None = None,
@@ -383,6 +360,10 @@ def plot_shifted_variable(
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     variable_inst = variable_insts[0]
+
+    hists = apply_process_settings(hists, process_settings)
+
+    hists = apply_density_to_hists(hists, density)
 
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
@@ -420,16 +401,12 @@ def plot_shifted_variable(
             },
         }
 
-    # setup style config
-    if not process_settings:
-        process_settings = {}
-
     # legend title setting
     if not legend_title:
         if len(hists) == 1:
             # use process label as default if 1 process
             process_inst = list(hists.keys())[0]
-            legend_title = process_settings.get(process_inst.name, {}).get("label", process_inst.label)
+            legend_title = process_inst.label
         else:
             # default to `Background` for multiple processes
             legend_title = "Background"
@@ -437,26 +414,13 @@ def plot_shifted_variable(
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
-    default_style_config = {
-        "ax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
-            "ylabel": variable_inst.get_full_y_title(),
-            "yscale": yscale,
-        },
-        "rax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
-            "ylim": (0.25, 1.75),
-            "ylabel": "Ratio",
-            "xlabel": variable_inst.get_full_x_title(),
-        },
-        "legend_cfg": {
-            "title": legend_title,
-        },
-        "annotate_cfg": {"text": category_inst.label},
-        "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
-        },
-    }
+    default_style_config = prepare_style_config(
+        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+    )
+    default_style_config["rax_cfg"]["ylim"] = (0.25, 1.75)
+    default_style_config["rax_cfg"]["ylabel"] = "Ratio"
+    default_style_config["legend_cfg"]["title"] = legend_title
+
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
@@ -469,18 +433,21 @@ def plot_cutflow(
     config_inst: od.Config,
     category_inst: od.Category,
     style_config: dict | None = None,
+    density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
+
     remove_residual_axis(hists, "shift")
 
-    if not process_settings:
-        process_settings = {}
+    hists = apply_process_settings(hists, process_settings)
+
+    hists = apply_density_to_hists(hists, density)
 
     # setup plotting config
-    plot_config = prepare_plot_config(hists, shape_norm, process_settings)
+    plot_config = prepare_plot_config(hists, shape_norm)
 
     if shape_norm:
         # switch normalization to normalizing to `initial step` bin
