@@ -236,7 +236,7 @@ class PlotCutflow(
     RemoteWorkflow,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_cutflow",
+        default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
     )
 
@@ -540,7 +540,7 @@ class PlotCutflowVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
     per_plot = luigi.ChoiceParameter(
@@ -551,8 +551,8 @@ class PlotCutflowVariables1D(
         "default: processes",
     )
     # TODO: combine these hard-coded plot function name with law parameter
-    plot_function_per_process = "columnflow.plotting.example.plot_variable_per_process"
-    plot_function_per_step = "columnflow.plotting.example.plot_variable_variants"
+    plot_function_per_process = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_per_step = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     def output(self):
         b = self.branch_data
@@ -631,7 +631,7 @@ class PlotCutflowVariables2D(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
 
