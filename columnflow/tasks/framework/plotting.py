@@ -208,6 +208,11 @@ class PlotBase2D(PlotBase):
         description="string parameter to define the z-axis scale of the plot; "
         "choices: NO_STR,linear,log; no default",
     )
+    density = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, the number of entries is scaled to the bin width; default: None",
+    )
     shape_norm = law.OptionalBoolParameter(
         default=None,
         significant=False,
@@ -219,6 +224,7 @@ class PlotBase2D(PlotBase):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "density", self.density)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
 

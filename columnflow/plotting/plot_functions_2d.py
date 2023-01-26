@@ -13,7 +13,11 @@ import law
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.plotting.plot_util import (
-    remove_residual_axis, apply_variable_settings, get_position,
+    remove_residual_axis,
+    apply_variable_settings,
+    apply_process_settings,
+    apply_density_to_hists,
+    get_position,
 )
 
 
@@ -31,11 +35,12 @@ def plot_2d(
     category_inst: od.Category,
     variable_insts: list[od.Variable],
     style_config: dict | None = None,
+    density: bool | None = False,
     shape_norm: bool | None = False,
     zscale: str | None = "",
     skip_legend: bool = False,
     cms_label: str = "wip",
-    process_settings: dict | None = None,  # TODO use
+    process_settings: dict | None = None,
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
@@ -43,6 +48,10 @@ def plot_2d(
     remove_residual_axis(hists, "shift")
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
+
+    hists = apply_process_settings(hists, process_settings)
+
+    hists = apply_density_to_hists(hists, density)
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)
@@ -53,6 +62,7 @@ def plot_2d(
         zscale = "log" if (variable_insts[0].log_y or variable_insts[1].log_y) else "linear"
 
     # setup style config
+    # TODO: some kind of z-label is still missing
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_insts[0].x_min, variable_insts[0].x_max),
@@ -85,12 +95,9 @@ def plot_2d(
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
-    # NOTE: should we separate into multiple functions similar to 1d plotting?
-
     # add all processes into 1 histogram
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
     if shape_norm:
-        # TODO: normalizing in this way changes empty bins (white) to bins with value 0 (colorized)
         h_sum = h_sum / h_sum.sum().value
 
     # set bins without any entries (variance == 0) to EMPTY_FLOAT
