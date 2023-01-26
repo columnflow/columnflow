@@ -7,6 +7,7 @@ Tasks to produce yield tables
 from collections import OrderedDict
 
 import law
+import luigi
 
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -23,6 +24,12 @@ class CreateYieldTable(
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     dep_MergeHistograms = MergeHistograms
+
+    table_format = luigi.Parameter(
+        default="latex_raw",
+        significant=False,
+        description="format of the yield table, takes all fromats taken by the tabulate package; default: latex_raw",
+    )
 
     # dummy branch map
     def create_branch_map(self):
@@ -112,7 +119,7 @@ class CreateYieldTable(
 
                 yields.append(row)
 
-            yield_table = tabulate(yields, headers=yield_header, tablefmt="latex_raw")
+            yield_table = tabulate(yields, headers=yield_header, tablefmt=self.table_format)
 
             # TODO: create some output using something like
             #
