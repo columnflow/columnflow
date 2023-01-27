@@ -84,7 +84,7 @@ class CreatePileupWeights(ConfigTask):
     ) -> list[float]:
         """
         Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and
-        return the pu profile as a list of float probabilities.
+        returns the pu profile as a list of float probabilities.
         """
         probs = []
 
