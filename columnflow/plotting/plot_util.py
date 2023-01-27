@@ -150,7 +150,7 @@ def prepare_style_config(
 
     style_config = {
         "ax_cfg": {
-            "xlim": (variable_inst.x_min, variable_inst.x_max),
+            "xlim": (variable_inst.x("x_min", variable_inst.x_min), variable_inst.x("x_max", variable_inst.x_max)),
             "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
             "xlabel": variable_inst.get_full_x_title(),
             "yscale": yscale,
