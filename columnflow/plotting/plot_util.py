@@ -28,7 +28,8 @@ def apply_process_settings(
         process_settings: dict | None = None,
 ) -> dict:
     """
-    applies settings from `variable_settings` dictionary to the `variable_insts`
+    applies settings from `process_settings` dictionary to the `process_insts`;
+    the `scale` setting is directly applied to the histograms
     """
 
     if not process_settings:
@@ -148,9 +149,11 @@ def prepare_style_config(
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
+    xlim = (variable_inst.x("x_min", variable_inst.x_min), variable_inst.x("x_max", variable_inst.x_max))
+
     style_config = {
         "ax_cfg": {
-            "xlim": (variable_inst.x("x_min", variable_inst.x_min), variable_inst.x("x_max", variable_inst.x_max)),
+            "xlim": xlim,
             "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
             "xlabel": variable_inst.get_full_x_title(),
             "yscale": yscale,
@@ -166,6 +169,13 @@ def prepare_style_config(
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
     }
+
+    # disable minor ticks based on variable_inst
+    if variable_inst.discrete_x:
+        style_config["ax_cfg"]["xticks"] = range(int(xlim[0]), int(xlim[1]) + 1)
+        style_config["ax_cfg"]["minorxticks"] = []
+    if variable_inst.discrete_y:
+        style_config["ax_cfg"]["minoryticks"] = []
 
     return style_config
 

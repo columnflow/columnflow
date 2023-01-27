@@ -110,6 +110,11 @@ def plot_2d(
     if not skip_legend:
         ax.legend(**style_config["legend_cfg"])
 
+    if variable_insts[0].discrete_x:
+        ax.set_xticks([], minor=True)
+    if variable_insts[1].discrete_x:
+        ax.set_yticks([], minor=True)
+
     # annotation of category label
     annotate_kwargs = {
         "text": "",

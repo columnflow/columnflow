@@ -181,7 +181,16 @@ def plot_all(
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
 
+    # ax configs that can not be handled by `ax.set`
+    minorxticks = ax_kwargs.pop("minorxticks", None)
+    minoryticks = ax_kwargs.pop("minoryticks", None)
+
     ax.set(**ax_kwargs)
+
+    if minorxticks is not None:
+        ax.set_xticks(minorxticks, minor=True)
+    if minoryticks is not None:
+        ax.set_xticks(minoryticks, minor=True)
 
     if not skip_ratio:
         # hard-coded line at 1
