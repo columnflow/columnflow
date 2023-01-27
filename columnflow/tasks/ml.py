@@ -295,7 +295,7 @@ class MLTraining(
         return self.ml_model_inst.sandbox(self)
 
     def requires(self):
-        reqs = []
+        reqs = {}
 
         # require prepared events
         reqs["events"] = {
@@ -308,7 +308,7 @@ class MLTraining(
         }
 
         # ml model requirements
-        reqs["model"] = self.ml_model_inst.requires()
+        reqs["model"] = self.ml_model_inst.requires(self)
 
         return reqs
 
