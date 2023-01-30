@@ -9,7 +9,7 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelDataMixin, MLModelMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -18,7 +18,7 @@ from columnflow.util import dev_sandbox, safe_div
 
 
 class PrepareMLEvents(
-    MLModelMixin,
+    MLModelDataMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
@@ -30,7 +30,6 @@ class PrepareMLEvents(
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     allow_empty_ml_model = False
-    use_store_name_from_ml_model = True
 
     # upstream requirements
     reqs = Requirements(
@@ -181,7 +180,7 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    MLModelMixin,
+    MLModelDataMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
@@ -206,7 +205,6 @@ class MergeMLEvents(
     merge_factor = 10
 
     allow_empty_ml_model = False
-    use_store_name_from_ml_model = True
 
     # upstream requirements
     reqs = Requirements(

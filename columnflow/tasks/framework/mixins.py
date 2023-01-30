@@ -482,7 +482,66 @@ class ProducersMixin(ConfigTask):
         return parts
 
 
-class MLModelMixin(ConfigTask):
+class MLModelMixinBase(ConfigTask):
+
+    @classmethod
+    def get_ml_model_inst(cls, ml_model: str, config_inst: od.Config) -> MLModel:
+        return MLModel.get_cls(ml_model)(config_inst)
+
+    def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
+        # evaluate whether the events for the combination of dataset_inst and shift_inst
+        # shall be used in the training
+        return (
+            dataset_inst in self.ml_model_inst.used_datasets and
+            not shift_inst.has_tag("disjoint_from_nominal")
+        )
+
+
+class MLModelDataMixin(MLModelMixinBase):
+
+    ml_model = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="the name of the ML model to the applied; default: value of the "
+        "'default_ml_model' config",
+    )
+    ml_model_store = luigi.Parameter(default=law.NO_STR)
+
+    # skip passing ml_model_store
+    exclude_params_index = {"ml_model_store"}
+    exclude_params_req = {"ml_model_store"}
+    exclude_params_repr = {"ml_model_store"}
+    exclude_params_sandbox = {"ml_model_store"}
+
+    @classmethod
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        # add the default ml model when empty
+        if "config_inst" in params:
+            config_inst = params["config_inst"]
+            if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
+                params["ml_model"] = config_inst.x.default_ml_model
+
+            # initialize it and get the store name
+            model_inst = cls.get_ml_model_inst(params["ml_model"], config_inst)
+            params["ml_model_store"] = model_inst.store_name or model_inst.cls_name
+
+        return params
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # get the ML model instance
+        self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+        parts.insert_before("version", "ml_data", f"ml__{self.ml_model_store}")
+        return parts
+
+
+class MLModelMixin(MLModelMixinBase):
 
     ml_model = luigi.Parameter(
         default=law.NO_STR,
@@ -491,7 +550,6 @@ class MLModelMixin(ConfigTask):
     )
 
     allow_empty_ml_model = True
-    use_store_name_from_ml_model = False
 
     exclude_params_repr_empty = {"ml_model"}
 
@@ -514,10 +572,6 @@ class MLModelMixin(ConfigTask):
 
         return params
 
-    @classmethod
-    def get_ml_model_inst(cls, ml_model: str, config_inst: od.Config) -> MLModel:
-        return MLModel.get_cls(ml_model)(config_inst)
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -526,21 +580,10 @@ class MLModelMixin(ConfigTask):
         if self.ml_model != law.NO_STR:
             self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
 
-    def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
-        # evaluate whether the events for the combination of dataset_inst and shift_inst
-        # shall be used in the training
-        return (
-            dataset_inst in self.ml_model_inst.used_datasets and
-            not shift_inst.has_tag("disjoint_from_nominal")
-        )
-
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if self.ml_model_inst:
-            name = self.ml_model_inst.store_name
-            if not name or not self.use_store_name_from_ml_model:
-                name = self.ml_model_inst.cls_name
-            parts.insert_before("version", "ml_model", f"ml__{name}")
+            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
         return parts
 
 
