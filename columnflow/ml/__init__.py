@@ -76,6 +76,10 @@ class MLModel(Derivable):
     # default number of folds
     folds = 2
 
+    # default name for storing e.g. input data
+    # falls back to cls_name if None
+    store_name = None
+
     def __init__(
         self,
         config_inst: od.Config,
