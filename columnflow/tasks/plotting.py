@@ -143,7 +143,7 @@ class PlotVariablesBase(
 
             # sort hists by process order
             hists = OrderedDict(
-                (process_inst, hists[process_inst])
+                (process_inst.copy(), hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
@@ -152,8 +152,8 @@ class PlotVariablesBase(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
-                variable_insts=variable_insts,
+                category_inst=category_inst.copy(),
+                variable_insts=[var_inst.copy() for var_inst in variable_insts],
                 **self.get_plot_parameters(),
             )
 
@@ -209,7 +209,7 @@ class PlotVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
 
@@ -219,7 +219,7 @@ class PlotVariables2D(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
 
@@ -304,7 +304,7 @@ class PlotShiftedVariables1D(
     PlotVariablesBaseMultiShifts,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_shifted_variable",
+        default="columnflow.plotting.plot_functions_1d.plot_shifted_variable",
         add_default_to_description=True,
     )
 

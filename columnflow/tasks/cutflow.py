@@ -236,7 +236,7 @@ class PlotCutflow(
     RemoteWorkflow,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_cutflow",
+        default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
     )
 
@@ -356,7 +356,7 @@ class PlotCutflow(
 
             # sort hists by process order
             hists = OrderedDict(
-                (process_inst, hists[process_inst])
+                (process_inst.copy(), hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
@@ -365,7 +365,7 @@ class PlotCutflow(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
+                category_inst=category_inst.copy(),
                 **self.get_plot_parameters(),
             )
 
@@ -540,7 +540,7 @@ class PlotCutflowVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
     per_plot = luigi.ChoiceParameter(
@@ -551,8 +551,8 @@ class PlotCutflowVariables1D(
         "default: processes",
     )
     # TODO: combine these hard-coded plot function name with law parameter
-    plot_function_per_process = "columnflow.plotting.example.plot_variable_per_process"
-    plot_function_per_step = "columnflow.plotting.example.plot_variable_variants"
+    plot_function_per_process = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_per_step = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     def output(self):
         b = self.branch_data
@@ -584,7 +584,7 @@ class PlotCutflowVariables1D(
         if self.per_plot == "processes":
             for step in self.chosen_steps:
                 step_hists = OrderedDict(
-                    (process_inst, h[{"step": hist.loc(step)}])
+                    (process_inst.copy(), h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
                 )
 
@@ -593,8 +593,8 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
-                    category_inst=category_inst,
-                    variable_insts=variable_insts,
+                    category_inst=category_inst.copy(),
+                    variable_insts=[var_inst.copy() for var_inst in variable_insts],
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
@@ -615,8 +615,8 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
-                    category_inst=category_inst,
-                    variable_insts=variable_insts,
+                    category_inst=category_inst.copy(),
+                    variable_insts=[var_inst.copy() for var_inst in variable_insts],
                     style_config={"legend_cfg": {"title": process_inst.label}},
                     **self.get_plot_parameters(),
                 )
@@ -631,7 +631,7 @@ class PlotCutflowVariables2D(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
 
@@ -653,7 +653,7 @@ class PlotCutflowVariables2D(
 
         for step in self.chosen_steps:
             step_hists = OrderedDict(
-                (process_inst, h[{"step": hist.loc(step)}])
+                (process_inst.copy(), h[{"step": hist.loc(step)}])
                 for process_inst, h in hists.items()
             )
 
@@ -662,8 +662,8 @@ class PlotCutflowVariables2D(
                 self.plot_function,
                 hists=step_hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
-                variable_insts=variable_insts,
+                category_inst=category_inst.copy(),
+                variable_insts=[var_inst.copy() for var_inst in variable_insts],
                 style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                 **self.get_plot_parameters(),
             )
