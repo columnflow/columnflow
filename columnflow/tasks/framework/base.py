@@ -865,6 +865,10 @@ def wrapper_factory(
                 f"'{','.join(known_features)}'",
             )
 
+    # treat base_cls as a tuple
+    base_classes = law.util.make_tuple(base_cls)
+    base_cls = base_classes[0]
+
     # define wrapper feature flags
     has_configs = "configs" in enable
     has_skip_configs = has_configs and "skip_configs" in enable
@@ -900,7 +904,7 @@ def wrapper_factory(
         check_class_compatibility("datasets", DatasetTask, ShiftTask)
 
     # create the class
-    class Wrapper(base_cls, law.WrapperTask):
+    class Wrapper(*base_classes, law.WrapperTask):
 
         if has_configs:
             configs = law.CSVParameter(
