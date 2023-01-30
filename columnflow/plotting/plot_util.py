@@ -257,7 +257,7 @@ def prepare_plot_config(
             "method": "draw_errorbars",
             "hist": h_data,
             "kwargs": {"norm": data_norm, "label": "Data"},
-            "ratio_kwargs": {"norm": h_mc.values()},
+            "ratio_kwargs": {"norm": h_mc.values() * data_norm / mc_norm},
         }
 
     return plot_config

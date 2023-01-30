@@ -9,7 +9,7 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelDataMixin, MLModelMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -18,7 +18,7 @@ from columnflow.util import dev_sandbox, safe_div
 
 
 class PrepareMLEvents(
-    MLModelMixin,
+    MLModelDataMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
@@ -28,6 +28,8 @@ class PrepareMLEvents(
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    allow_empty_ml_model = False
 
     # upstream requirements
     reqs = Requirements(
@@ -178,7 +180,7 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    MLModelMixin,
+    MLModelDataMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
@@ -201,6 +203,8 @@ class MergeMLEvents(
 
     # in each step, merge 10 into 1
     merge_factor = 10
+
+    allow_empty_ml_model = False
 
     # upstream requirements
     reqs = Requirements(
@@ -274,6 +278,8 @@ class MLTraining(
         "the number of folds defined in the ML model; default: 0",
     )
 
+    allow_empty_ml_model = False
+
     # upstream requirements
     reqs = Requirements(
         MergeMLEvents=MergeMLEvents,
@@ -337,6 +343,8 @@ class MLEvaluation(
     RemoteWorkflow,
 ):
     sandbox = None
+
+    allow_empty_ml_model = False
 
     # upstream requirements
     reqs = Requirements(
