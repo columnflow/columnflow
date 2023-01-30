@@ -18,12 +18,15 @@ bootstrap_htcondor_standalone() {
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_VOMS="{{cf_voms}}"
-    export CF_TASK_NAMESPACE="{{cf_task_namespace}}"
-    export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
+    [ ! -z "{{voms_proxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
-    if [ -z "${CF_SOFTWARE_BASE}" ] || [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
+    if [ -z "${CF_SOFTWARE_BASE}" ]; then
+        export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    elif [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
+        echo "software base directory ${CF_SOFTWARE_BASE} was configured to be shared,"
+        echo "but conda subdirectory is either missing or not accessible"
         export CF_SOFTWARE_BASE="${CF_DATA}/software"
     else
         fetch_software="false"
@@ -84,8 +87,8 @@ bootstrap_slurm() {
     export CF_REMOTE_JOB="1"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
-    export X509_USER_PROXY="{{voms_proxy_file}}"
     export KRB5CCNAME="FILE:{{kerberos_proxy_file}}"
+    [ ! -z "{{voms_proxy_file}}" ] && export X509_USER_PROXY="{{voms_proxy_file}}"
 
     # optional custom command before the setup is sourced
     {{cf_pre_setup_command}}

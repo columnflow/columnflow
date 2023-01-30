@@ -6,11 +6,13 @@ Lightweight mixins task classes.
 
 from __future__ import annotations
 
+import gc
 import time
+import itertools
 from typing import Sequence, Any
 
-import law
 import luigi
+import law
 import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask
@@ -19,6 +21,10 @@ from columnflow.selection import Selector
 from columnflow.production import Producer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
+from columnflow.util import maybe_import
+
+
+ak = maybe_import("awkward")
 
 
 class CalibratorMixin(ConfigTask):
@@ -29,31 +35,46 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
+    # decibes whether the task itself runs the calibrator and implements its shifts
+    register_calibrator_shifts = False
+
+    @classmethod
+    def get_default_calibrator(cls, config_inst, calibrator=None) -> str | None:
+        if calibrator not in (None, law.NO_STR):
+            return calibrator
+
+        return config_inst.x("default_calibrator", None)
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default calibrator when empty
-        if "config_inst" in params and params.get("calibrator") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_calibrator", None):
-                params["calibrator"] = config_inst.x.default_calibrator
+        if "config_inst" in params:
+            params["calibrator"] = cls.get_default_calibrator(
+                params["config_inst"],
+                params.get("calibrator"),
+            )
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        if params.get("calibrator") not in (None, law.NO_STR):
+        calibrator = cls.get_default_calibrator(config_inst, params.get("calibrator"))
+        if calibrator:
             calibrator_inst = cls.get_calibrator_inst(
-                params["calibrator"],
+                calibrator,
                 cls.get_calibrator_kwargs(**params),
             )
-            shifts |= calibrator_inst.all_shifts
+            if cls.register_calibrator_shifts:
+                shifts |= calibrator_inst.all_shifts
+            else:
+                upstream_shifts |= calibrator_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_calibrator_inst(cls, calibrator, inst_dict=None):
@@ -95,29 +116,47 @@ class CalibratorsMixin(ConfigTask):
         brace_expand=True,
     )
 
+    # decibes whether the task itself runs the calibrators and implements their shifts
+    register_calibrators_shifts = False
+
+    @classmethod
+    def get_default_calibrators(cls, config_inst, calibrators=None) -> tuple[str]:
+        if calibrators not in (None, law.NO_STR, ()):
+            return calibrators
+
+        if config_inst.x("default_calibrator", None):
+            return (config_inst.x.default_calibrator,)
+
+        return ()
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config_inst" in params and params.get("calibrators") == ():
-            config_inst = params["config_inst"]
-            if config_inst.x("default_calibrator", None):
-                params["calibrators"] = (config_inst.x.default_calibrator,)
+        if "config_inst" in params:
+            params["calibrators"] = cls.get_default_calibrators(
+                params["config_inst"],
+                params.get("calibrators"),
+            )
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
-        if params.get("calibrators") not in (None, law.NO_STR):
+        calibrators = cls.get_default_calibrators(config_inst, params.get("calibrators"))
+        if calibrators:
             calibrator_kwargs = cls.get_calibrator_kwargs(**params)
-            for calibrator in params["calibrators"]:
+            for calibrator in calibrators:
                 calibrator_inst = cls.get_calibrator_inst(calibrator, calibrator_kwargs)
-                shifts |= calibrator_inst.all_shifts
+                if cls.register_calibrators_shifts:
+                    shifts |= calibrator_inst.all_shifts
+                else:
+                    upstream_shifts |= calibrator_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_calibrator_inst(cls, calibrator, inst_dict=None):
@@ -159,31 +198,46 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
+    # decibes whether the task itself runs the selector and implements its shifts
+    register_selector_shifts = False
+
+    @classmethod
+    def get_default_selector(cls, config_inst, selector=None) -> str | None:
+        if selector not in (None, law.NO_STR):
+            return selector
+
+        return config_inst.x("default_selector", None)
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default selector when empty
-        if "config_inst" in params and params.get("selector") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_selector", None):
-                params["selector"] = config_inst.x.default_selector
+        if "config_inst" in params:
+            params["selector"] = cls.get_default_selector(
+                params["config_inst"],
+                params.get("selector"),
+            )
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        if params.get("selector") not in (None, law.NO_STR):
+        selector = cls.get_default_selector(config_inst, params.get("selector"))
+        if selector:
             selector_inst = cls.get_selector_inst(
-                params["selector"],
+                selector,
                 cls.get_selector_kwargs(**params),
             )
-            shifts |= selector_inst.all_shifts
+            if cls.register_selector_shifts:
+                shifts |= selector_inst.all_shifts
+            else:
+                upstream_shifts |= selector_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_selector_inst(cls, selector, inst_dict=None):
@@ -230,6 +284,8 @@ class SelectorStepsMixin(SelectorMixin):
         brace_expand=True,
     )
 
+    exclude_params_repr_empty = {"selector_steps"}
+
     selector_steps_order_sensitive = False
 
     @classmethod
@@ -269,31 +325,46 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
+    # decibes whether the task itself runs the producer and implements its shifts
+    register_producer_shifts = False
+
+    @classmethod
+    def get_default_producer(cls, config_inst, producer=None) -> str | None:
+        if producer not in (None, law.NO_STR):
+            return producer
+
+        return config_inst.x("default_producer", None)
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         # add the default producer when empty
-        if "config_inst" in params and params.get("producer") == law.NO_STR:
-            config_inst = params["config_inst"]
-            if config_inst.x("default_producer", None):
-                params["producer"] = config_inst.x.default_producer
+        if "config_inst" in params:
+            params["producer"] = cls.get_default_producer(
+                params["config_inst"],
+                params.get("producer"),
+            )
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        if params.get("producer") not in (None, law.NO_STR):
+        producer = cls.get_default_producer(config_inst, params.get("producer"))
+        if producer:
             producer_inst = cls.get_producer_inst(
-                params["producer"],
+                producer,
                 cls.get_producer_kwargs(**params),
             )
-            shifts |= producer_inst.all_shifts
+            if cls.register_producer_shifts:
+                shifts |= producer_inst.all_shifts
+            else:
+                upstream_shifts |= producer_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_producer_inst(cls, producer, inst_dict=None):
@@ -335,29 +406,47 @@ class ProducersMixin(ConfigTask):
         brace_expand=True,
     )
 
+    # decibes whether the task itself runs the producers and implements their shifts
+    register_producers_shifts = False
+
+    @classmethod
+    def get_default_producers(cls, config_inst, producers=None) -> tuple[str]:
+        if producers not in (None, law.NO_STR, ()):
+            return producers
+
+        if config_inst.x("default_producer", None):
+            return (config_inst.x.default_producer,)
+
+        return ()
+
     @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
-        if "config_inst" in params and params.get("producers") == ():
-            config_inst = params["config_inst"]
-            if config_inst.x("default_producer", None):
-                params["producers"] = (config_inst.x.default_producer,)
+        if "config_inst" in params:
+            params["producers"] = cls.get_default_producers(
+                params["config_inst"],
+                params.get("producers"),
+            )
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
-        if params.get("producers") not in (None, law.NO_STR):
+        producers = cls.get_default_producers(config_inst, params.get("producers"))
+        if producers:
             producer_kwargs = cls.get_producer_kwargs(**params)
-            for producer in params["producers"]:
+            for producer in producers:
                 producer_inst = cls.get_producer_inst(producer, producer_kwargs)
-                shifts |= producer_inst.all_shifts
+                if cls.register_producers_shifts:
+                    shifts |= producer_inst.all_shifts
+                else:
+                    upstream_shifts |= producer_inst.all_shifts
 
-        return shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_producer_inst(cls, producer, inst_dict=None):
@@ -400,6 +489,8 @@ class MLModelMixin(ConfigTask):
         description="the name of the ML model to the applied; default: value of the "
         "'default_ml_model' config",
     )
+
+    exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -452,6 +543,8 @@ class MLModelsMixin(ConfigTask):
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
     )
+
+    exclude_params_repr_empty = {"ml_models"}
 
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -612,13 +705,40 @@ class VariablesMixin(ConfigTask):
 
             # resolve them
             if params["variables"]:
-                # resolve variable names
+                # first, split into single- and multi-dimensional variables
+                single_vars = []
+                multi_var_parts = []
+                for variable in params["variables"]:
+                    parts = cls.split_multi_variable(variable)
+                    if len(parts) == 1:
+                        single_vars.append(variable)
+                    else:
+                        multi_var_parts.append(parts)
+
+                # resolve single variables
                 variables = cls.find_config_objects(
-                    params["variables"],
+                    single_vars,
                     config_inst,
                     od.Variable,
                     config_inst.x("variable_groups", {}),
                 )
+
+                # for each multi-variable, resolve each part separately and create the full
+                # combinatorics of all possibly pattern-resolved parts
+                for parts in multi_var_parts:
+                    resolved_parts = [
+                        cls.find_config_objects(
+                            part,
+                            config_inst,
+                            od.Variable,
+                            config_inst.x("variable_groups", {}),
+                        )
+                        for part in parts
+                    ]
+                    variables.extend([
+                        cls.join_multi_variable(_parts)
+                        for _parts in itertools.product(*resolved_parts)
+                    ])
             else:
                 # fallback to using all known variables
                 variables = config_inst.variables.names()
@@ -630,6 +750,31 @@ class VariablesMixin(ConfigTask):
             params["variables"] = tuple(variables)
 
         return params
+
+    @classmethod
+    def split_multi_variable(cls, variable: str) -> tuple[str]:
+        """
+        Splits a multi-dimensional *variable* given in the format ``"var_a[-var_b[-...]]"`` into
+        separate variable names using a delimiter (``"-"``) and returns a tuple.
+        """
+        return tuple(variable.split("-"))
+
+    @classmethod
+    def join_multi_variable(cls, variables: Sequence[str]) -> str:
+        """
+        Joins the name of multiple *variables* using a delimiter (``"-"``) into a single string
+        that represents a multi-dimensional variable and returns it.
+        """
+        return "-".join(map(str, variables))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # if enabled, split names of multi-dimensional parameters into tuples
+        self.variable_tuples = {
+            var_name: self.split_multi_variable(var_name)
+            for var_name in self.variables
+        }
 
     @property
     def variables_repr(self):
@@ -702,11 +847,11 @@ class DatasetsProcessesMixin(ConfigTask):
                     [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
                     for process_inst in map(config_inst.get_process, params["processes"])
                 ), [])
-                datasets = (
+                datasets = [
                     dataset_inst.name
                     for dataset_inst in config_inst.datasets
                     if any(map(dataset_inst.has_process, sub_process_insts))
-                )
+                ]
 
             # complain when no datasets were found
             if not datasets and not cls.allow_empty_datasets:
@@ -793,13 +938,13 @@ class ShiftSourcesMixin(ConfigTask):
 class EventWeightMixin(ConfigTask):
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # add shifts introduced by event weights
         if config_inst.has_aux("event_weights"):
             for shift_insts in config_inst.x.event_weights.values():
-                allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+                shifts |= {shift_inst.name for shift_inst in shift_insts}
 
         # optionally also for weights defined by a dataset
         if "dataset" in params:
@@ -808,33 +953,42 @@ class EventWeightMixin(ConfigTask):
                 dataset_inst = config_inst.get_dataset(requested_dataset)
                 if dataset_inst.has_aux("event_weights"):
                     for shift_insts in dataset_inst.x.event_weights.values():
-                        allowed_shifts |= {shift_inst.name for shift_inst in shift_insts}
+                        shifts |= {shift_inst.name for shift_inst in shift_insts}
 
-        return allowed_shifts
+        return shifts, upstream_shifts
 
 
-class ChunkedReaderMixin(AnalysisTask):
+class ChunkedIOMixin(AnalysisTask):
 
-    def iter_chunked_reader(self, *args, **kwargs):
-        from columnflow.columnar_util import ChunkedReader
+    check_finite = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, checks whether output arrays only contain finite values before "
+        "writing to them to file",
+    )
 
-        # get the chunked reader from first arg or create a new one with all args
-        if len(args) == 1 and isinstance(args[0], ChunkedReader):
-            reader = args[0]
+    exclude_params_req = {"check_finite"}
+
+    def iter_chunked_io(self, *args, **kwargs):
+        from columnflow.columnar_util import ChunkedIOHandler
+
+        # get the chunked io handler from first arg or create a new one with all args
+        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
+            handler = args[0]
         else:
-            reader = ChunkedReader(*args, **kwargs)
+            handler = ChunkedIOHandler(*args, **kwargs)
 
-        # iterate in the reader context
-        with reader:
-            self.chunked_reader = reader
-            msg = f"iterate through {reader.n_entries} events in {reader.n_chunks} chunks ..."
+        # iterate in the handler context
+        with handler:
+            self.chunked_io = handler
+            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes without IO
                 loop_durations = []
-                for obj in self.iter_progress(reader, reader.n_chunks, msg=msg):
+                for obj in self.iter_progress(handler, handler.n_chunks, msg=msg):
                     t1 = time.perf_counter()
 
-                    # yield the object provided by the chunked reader
+                    # yield the object provided by the handler
                     yield obj
 
                     # save the runtime
@@ -847,4 +1001,21 @@ class ChunkedReaderMixin(AnalysisTask):
                 )
 
             finally:
-                self.chunked_reader = None
+                self.chunked_io = None
+
+        # eager, overly cautious gc
+        del handler
+        gc.collect()
+
+    @classmethod
+    def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
+        import numpy as np
+        import awkward as ak
+        from columnflow.columnar_util import get_ak_routes
+
+        for route in get_ak_routes(ak_array):
+            if ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None))):
+                raise ValueError(
+                    f"found one or more non-finite values in column '{route.column}' "
+                    f"of array {ak_array}",
+                )

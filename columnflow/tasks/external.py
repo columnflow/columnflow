@@ -16,9 +16,12 @@ from typing import Sequence
 
 import luigi
 import law
+import order as od
 
-from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
-from columnflow.util import ensure_proxy, wget, safe_div
+from columnflow.tasks.framework.base import (
+    Requirements, AnalysisTask, ConfigTask, DatasetTask, wrapper_factory,
+)
+from columnflow.util import wget, safe_div
 
 
 logger = law.logger.get_logger(__name__)
@@ -26,19 +29,34 @@ logger = law.logger.get_logger(__name__)
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
-    sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
-
     replicas = luigi.IntParameter(
         default=5,
         description="number of replicas to generate; default: 5",
     )
-    skip_check = luigi.BoolParameter(
-        default=True,  # set to True as long as we are doing tests with reduced n_files in datasets
+    validate = law.OptionalBoolParameter(
+        default=None,  # set to True as long as we are doing tests with reduced n_files in datasets
         significant=False,
-        description="whether to skip the check of the number of obtained LFNs vs. expected ones; "
-        "default: False",
+        description="when True, complains if the number of obtained LFNs does not match the value "
+        "expected from the dataset info; default: obtained from 'validate_dataset_lfns' auxiliary "
+        "entry in config",
     )
     version = None
+
+    @classmethod
+    def modify_param_values(cls, params):
+        params = super().modify_param_values(params)
+
+        # add the default calibrator when empty
+        if "config_inst" in params and params.get("validate") is None:
+            config_inst = params["config_inst"]
+            params["validate"] = config_inst.x("validate_dataset_lfns", False)
+
+        return params
+
+    @property
+    def sandbox(self):
+        sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
+        return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
@@ -46,27 +64,51 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         return self.target(f"lfns_{h}.json")
 
     @law.decorator.log
-    @ensure_proxy
     def run(self):
+        # prepare the lfn getter
+        get_dataset_lfns = self.config_inst.x("get_dataset_lfns", None)
+        msg = "via custom config function"
+        if not callable(get_dataset_lfns):
+            get_dataset_lfns = self.get_dataset_lfns_dasgoclient
+            msg = "via dasgoclient"
+
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
-            self.logger.info("get lfns for key {}".format(key))
-            cmd = f"dasgoclient --query='file dataset={key}' --limit=0"
-            code, out, _ = law.util.interruptable_popen(cmd, shell=True, stdout=subprocess.PIPE,
-                executable="/bin/bash")
-            if code != 0:
-                raise Exception(f"dasgoclient query failed:\n{out}")
-            lfns.extend(out.strip().split("\n"))
+            self.logger.info(f"get lfns for dataset key {key} {msg}")
+            lfns.extend(get_dataset_lfns(self.dataset_inst, self.shift_inst, key))
 
-        if not self.skip_check and len(lfns) != self.dataset_info_inst.n_files:
-            raise ValueError("number of lfns does not match number of files "
-                f"for dataset {self.dataset_inst.name}")
+        if self.validate and len(lfns) != self.dataset_info_inst.n_files:
+            raise ValueError(
+                f"number of obtained lfns ({len(lfns)}) does not match number of files "
+                f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
+            )
 
         self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
+
+    def get_dataset_lfns_dasgoclient(
+        self,
+        dataset_inst: od.Dataset,
+        shift_inst: od.Shift,
+        dataset_key: str,
+    ) -> list[str]:
+        code, out, _ = law.util.interruptable_popen(
+            f"dasgoclient --query='file dataset={dataset_key}' --limit=0",
+            shell=True,
+            stdout=subprocess.PIPE,
+            executable="/bin/bash",
+        )
+        if code != 0:
+            raise Exception(f"dasgoclient query failed:\n{out}")
+
+        return [
+            line.strip()
+            for line in out.strip().split("\n")
+            if line.strip().endswith(".root")
+        ]
 
     def iter_nano_files(
         self,
@@ -98,8 +140,18 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             lfn_indices = task.branch_data
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
+
+        # prepare the remote fs names to resolve lfns with
         if not remote_fs:
+            # use an optional hook in the config
+            get_remote_fs = self.config_inst.x("get_dataset_lfns_remote_fs", None)
+            if callable(get_remote_fs):
+                remote_fs = get_remote_fs(task.dataset_inst)
+        if not remote_fs:
+            # use the law config
             remote_fs = law.config.get_expanded("outputs", "lfn_sources", split_csv=True)
+        if not remote_fs:
+            raise ValueError("no remote_fs given or found to resolve lfns")
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
@@ -129,7 +181,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
                 # measure the time required to perform the stat query
                 logger.debug(f"checking fs {fs} for lfn {lfn}")
-                input_file = target_cls(lfn, fs=fs)
+                input_file = target_cls(lfn.lstrip(os.sep) if is_local else lfn, fs=fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
@@ -310,11 +362,13 @@ class CreatePileupWeights(ConfigTask):
     )
     version = None
 
-    # default upstream dependency task classes
-    dep_BundleExternalFiles = BundleExternalFiles
+    # upstream requirements
+    reqs = Requirements(
+        BundleExternalFiles=BundleExternalFiles,
+    )
 
     def requires(self):
-        return self.dep_BundleExternalFiles.req(self)
+        return self.reqs.BundleExternalFiles.req(self)
 
     def output(self):
         return self.target(f"weights_from_{self.data_mode}.json")

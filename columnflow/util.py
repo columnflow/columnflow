@@ -340,8 +340,11 @@ def dev_sandbox(sandbox: str) -> str:
     if _type not in ["venv", "bash"]:
         return sandbox
 
-    # create the dev path and check if it exists
-    dev_path = "{}_dev{}".format(*os.path.splitext(path))
+    # create the dev path and check if it exists, with special treatment of the cf_{prod,dev} envs
+    if path == "$CF_BASE/sandboxes/cf_prod.sh":
+        dev_path = "$CF_BASE/sandboxes/cf_dev.sh"
+    else:
+        dev_path = "{}_dev{}".format(*os.path.splitext(path))
     if not os.path.exists(real_path(dev_path)):
         return sandbox
 
@@ -486,6 +489,16 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
             index.add(process, overwrite=True)
 
     return index
+
+
+def dict_add_strict(d: dict, key: str, value: Any) -> None:
+    """
+    Adds key-value pair to dictionary, but only if it does not change an existing value;
+    Raises KeyError otherwise.
+    """
+    if key in d.keys() and d[key] != value:
+        raise KeyError(f"'{d.__class__.__name__}' object already has key {key}")
+    d[key] = value
 
 
 class DotDict(OrderedDict):
@@ -728,6 +741,7 @@ class DerivableMeta(type):
         cls_name: str,
         bases: tuple = (),
         cls_dict: dict | None = None,
+        module: str | None = None,
     ) -> DerivableMeta:
         """
         Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
@@ -740,8 +754,9 @@ class DerivableMeta(type):
         subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})
 
         # overwrite __module__ to point to the module of the calling stack
-        frame = inspect.stack()[1]
-        module = inspect.getmodule(frame[0])
+        if not module:
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
         if module:
             subcls.__module__ = module.__name__
 
@@ -759,14 +774,14 @@ class Derivable(object, metaclass=DerivableMeta):
     """
     Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
 
-    .. py:attribute:: cls_name
+    .. py:classattribute:: cls_name
        type: str
        read-only
 
        A shorthand to access the name of the class.
     """
 
-    @property
-    def cls_name(self) -> str:
+    @classproperty
+    def cls_name(cls) -> str:
         # shorthand to the class name
-        return self.__class__.__name__
+        return cls.__name__

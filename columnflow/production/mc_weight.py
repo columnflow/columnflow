@@ -8,6 +8,7 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, has_ak_column
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -29,9 +30,9 @@ def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     [1] https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookNanoAOD?rev=99#Weigths
     """
-    # skip real data
+    # fail when running on data
     if self.dataset_inst.is_data:
-        return events
+        raise ValueError("attempt to compute mc_weight in data")
 
     # determine the mc_weight
     mc_weight = events.genWeight
@@ -39,6 +40,6 @@ def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         mc_weight = events.LHEWeight.originalXWGTUP
 
     # store the column
-    events = set_ak_column(events, "mc_weight", mc_weight)
+    events = set_ak_column(events, "mc_weight", mc_weight, value_type=np.float32)
 
     return events

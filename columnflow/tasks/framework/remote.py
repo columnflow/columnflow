@@ -11,13 +11,8 @@ import math
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask
+from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.util import real_path
-
-
-_default_htcondor_flavor = os.getenv("CF_HTCONDOR_FLAVOR", "naf")
-_default_slurm_flavor = os.getenv("CF_SLURM_FLAVOR", "maxwell")
-_default_slurm_partition = os.getenv("CF_SLURM_PARTITION", "cms-uhh")
 
 
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
@@ -150,8 +145,10 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
     )
     version = None
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream requirements
+    reqs = Requirements(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -165,7 +162,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         self._checksum = None
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self)
+        return self.reqs.BuildBashSandbox.req(self)
 
     @property
     def checksum(self):
@@ -227,8 +224,10 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     exclude = "^src/tmp"
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream requirements
+    reqs = Requirements(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def __init__(self, *args, **kwargs):
         # cached bash sandbox that wraps the cmssw environment
@@ -237,7 +236,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         super().__init__(*args, **kwargs)
 
     def requires(self):
-        return self.dep_BuildBashSandbox.req(self)
+        return self.reqs.BuildBashSandbox.req(self)
 
     def get_cmssw_path(self):
         # invoking .env will already trigger building the sandbox
@@ -266,6 +265,10 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
+
+
+_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", "cern")
+_default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 
 
 class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
@@ -301,14 +304,16 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         f"naf,cern; default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
-        default=False,
+        default=_default_htcondor_share_software,
         significant=False,
         description="when True, do not bundle and download software plus sandboxes but instruct "
-        "jobs to use the software in the current CF_SOFTWARE_BASE if accessible; default: False",
+        "jobs to use the software in the current CF_SOFTWARE_BASE if accessible; default: "
+        f"{_default_htcondor_share_software}",
     )
 
     exclude_params_branch = {
-        "max_runtime", "htcondor_cpus", "htcondor_flavor", "htcondor_share_software",
+        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_flavor",
+        "htcondor_share_software",
     }
 
     # mapping of environment variables to render variables that are forwarded
@@ -320,25 +325,26 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
         "CF_VOMS": "cf_voms",
-        "CF_TASK_NAMESPACE": "cf_task_namespace",
     }
 
-    # default upstream dependency task classes
-    dep_BundleRepo = BundleRepo
-    dep_BundleSoftware = BundleSoftware
-    dep_BuildBashSandbox = BuildBashSandbox
-    dep_BundleBashSandbox = BundleBashSandbox
-    dep_BundleCMSSWSandbox = BundleCMSSWSandbox
+    # upstream requirements
+    reqs = Requirements(
+        BundleRepo=BundleRepo,
+        BundleSoftware=BundleSoftware,
+        BuildBashSandbox=BuildBashSandbox,
+        BundleBashSandbox=BundleBashSandbox,
+        BundleCMSSWSandbox=BundleCMSSWSandbox,
+    )
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
         # add the repository bundle
-        reqs["repo"] = self.dep_BundleRepo.req(self)
+        reqs["repo"] = self.reqs.BundleRepo.req(self)
 
         # main software stack
         if not self.htcondor_share_software:
-            reqs["software"] = self.dep_BundleSoftware.req(self)
+            reqs["software"] = self.reqs.BundleSoftware.req(self)
 
         # get names of pure bash and cmssw sandboxes
         bash_sandboxes = None
@@ -351,7 +357,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
 
         # bash-based sandboxes
-        cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleBashSandbox
+        cls = self.reqs.BuildBashSandbox if self.htcondor_share_software else self.reqs.BundleBashSandbox
         reqs["bash_sandboxes"] = [
             cls.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
@@ -359,7 +365,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
-            cls = self.dep_BuildBashSandbox if self.htcondor_share_software else self.dep_BundleCMSSWSandbox
+            cls = self.reqs.BuildBashSandbox if self.htcondor_share_software else self.reqs.BundleCMSSWSandbox
             reqs["cmssw_sandboxes"] = [
                 cls.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
@@ -383,15 +389,16 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def htcondor_job_config(self, config, job_num, branches):
-        # include the voms proxy
-        voms_proxy_file = law.wlcg.get_voms_proxy_file()
-        if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
-            raise Exception("voms proxy not valid, submission aborted")
-        config.input_files["voms_proxy_file"] = law.JobInputFile(
-            voms_proxy_file,
-            share=True,
-            render=False,
-        )
+        # include the voms proxy if not skipped
+        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+            voms_proxy_file = law.wlcg.get_voms_proxy_file()
+            if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
+                raise Exception("voms proxy not valid, submission aborted")
+            config.input_files["voms_proxy_file"] = law.JobInputFile(
+                voms_proxy_file,
+                share=True,
+                render=False,
+            )
 
         # include the wlcg specific tools script in the input sandbox
         config.input_files["wlcg_tools"] = law.JobInputFile(
@@ -487,6 +494,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         return True
 
 
+_default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
+_default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
+
+
 class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
     transfer_logs = luigi.BoolParameter(
@@ -525,8 +536,10 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
     }
 
-    # default upstream dependency task classes
-    dep_BuildBashSandbox = BuildBashSandbox
+    # upstream requirements
+    reqs = Requirements(
+        BuildBashSandbox=BuildBashSandbox,
+    )
 
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
@@ -543,14 +556,14 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
         # bash-based sandboxes
         reqs["bash_sandboxes"] = [
-            self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+            self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
             for sandbox_file in bash_sandboxes
         ]
 
         # optional cmssw sandboxes
         if cmssw_sandboxes:
             reqs["cmssw_sandboxes"] = [
-                self.dep_BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
                 for sandbox_file in cmssw_sandboxes
             ]
 
@@ -572,14 +585,15 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def slurm_job_config(self, config, job_num, branches):
-        # include the voms proxy
-        voms_proxy_file = law.wlcg.get_voms_proxy_file()
-        if os.path.exists(voms_proxy_file):
-            config.input_files["voms_proxy_file"] = law.JobInputFile(
-                voms_proxy_file,
-                share=True,
-                render=False,
-            )
+        # include the voms proxy if not skipped
+        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+            voms_proxy_file = law.wlcg.get_voms_proxy_file()
+            if os.path.exists(voms_proxy_file):
+                config.input_files["voms_proxy_file"] = law.JobInputFile(
+                    voms_proxy_file,
+                    share=True,
+                    render=False,
+                )
 
         # include the kerberos ticket when existing
         if "KRB5CCNAME" in os.environ:
@@ -625,4 +639,9 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
 
 class RemoteWorkflow(HTCondorWorkflow, SlurmWorkflow):
-    pass
+
+    # upstream requirements
+    reqs = Requirements(
+        HTCondorWorkflow.reqs,
+        SlurmWorkflow.reqs,
+    )

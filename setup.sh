@@ -92,8 +92,6 @@ setup_columnflow() {
     #   CF_CERN_USER_FIRSTCHAR
     #       The first character of the user's CERN / WLCG name. Derived from $CF_CERN_USER. Used in
     #       law.cfg.
-    #   CF_TASK_NAMESPACE
-    #       The prefix (namespace) of tasks in columnflow. Set to "cf" when not already defined.
     #   CF_LOCAL_SCHEDULER
     #       Either "true" or "false", deciding whether the process-local luigi scheduler should be
     #       used by default. Queried during the interactive setup. Used in law.cfg.
@@ -158,14 +156,6 @@ setup_columnflow() {
     # (CF = columnflow)
     #
 
-    # lang defaults
-    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
-    export LANG="${LANG:-en_US.UTF-8}"
-    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
-
-    # proxy
-    export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
-
     # start exporting variables
     export CF_BASE="${this_dir}"
     export CF_SETUP_NAME="${setup_name}"
@@ -185,7 +175,6 @@ setup_columnflow() {
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
             query CF_VOMS "Virtual-organization" "cms"
-            export_and_save CF_TASK_NAMESPACE "${CF_TASK_NAMESPACE:-cf}"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
@@ -209,20 +198,6 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
-    # overwrite some variables in remote and ci jobs
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
-        export CF_WLCG_USE_CACHE="true"
-        export CF_WLCG_CACHE_CLEANUP="true"
-        export CF_WORKER_KEEP_ALIVE="false"
-    elif [ "${CF_CI_JOB}" = "1" ]; then
-        export CF_WORKER_KEEP_ALIVE="false"
-    fi
-
-    # some variable defaults
-    export CF_WORKER_KEEP_ALIVE="${CF_WORKER_KEEP_ALIVE:-false}"
-    export CF_SCHEDULER_HOST="${CF_SCHEDULER_HOST:-127.0.0.1}"
-    export CF_SCHEDULER_PORT="${CF_SCHEDULER_PORT:-8082}"
-
 
     #
     # minimal local software setup
@@ -232,24 +207,10 @@ setup_columnflow() {
 
 
     #
-    # detect host-dependent variables
+    # common variables
     #
 
-    # default job flavor settings, used by tasks/framework/remote.py
-    local hname="$( hostname 2> /dev/null )"
-    if [ "$?" = "0" ]; then
-        # start with naf / maxwell cluster defaults
-        local cf_htcondor_flavor_default="naf"
-        local cf_slurm_flavor_default="maxwell"
-        local cf_slurm_partition_default="cms-uhh"
-        # lxplus
-        if [[ "${hname}" == lx*.cern.ch ]]; then
-            cf_htcondor_flavor_default="cern"
-        fi
-        export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
-        export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
-        export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
-    fi
+    cf_setup_common_variables || return "$?"
 
 
     #
@@ -269,6 +230,49 @@ setup_columnflow() {
 
     # finalize
     export CF_SETUP="1"
+}
+
+cf_setup_common_variables() {
+    # Exports variables that might be commonly used across analyses, such as host and job
+    # environment variables (or their defaults).
+
+    # lang defaults
+    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
+    export LANG="${LANG:-en_US.UTF-8}"
+    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
+
+    # proxy
+    export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
+
+    # overwrite some variables in remote and ci jobs
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+        export CF_WLCG_USE_CACHE="true"
+        export CF_WLCG_CACHE_CLEANUP="true"
+        export CF_WORKER_KEEP_ALIVE="false"
+    elif [ "${CF_CI_JOB}" = "1" ]; then
+        export CF_WORKER_KEEP_ALIVE="false"
+    fi
+
+    # luigi worker and scheduler defaults (assigned in law.cfg)
+    export CF_WORKER_KEEP_ALIVE="${CF_WORKER_KEEP_ALIVE:-false}"
+    export CF_SCHEDULER_HOST="${CF_SCHEDULER_HOST:-127.0.0.1}"
+    export CF_SCHEDULER_PORT="${CF_SCHEDULER_PORT:-8082}"
+
+    # default job flavor settings (starting with naf / maxwell cluster defaults)
+    # used by law.cfg and, in turn, tasks/framework/remote.py
+    local cf_htcondor_flavor_default="naf"
+    local cf_slurm_flavor_default="maxwell"
+    local cf_slurm_partition_default="cms-uhh"
+    local hname="$( hostname 2> /dev/null )"
+    if [ "$?" = "0" ]; then
+        # lxplus
+        if [[ "${hname}" == lx*.cern.ch ]]; then
+            cf_htcondor_flavor_default="cern"
+        fi
+    fi
+    export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
+    export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
+    export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
 }
 
 cf_setup_interactive() {
@@ -415,7 +419,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh"
+    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh"
     local pyv="3.9"
 
     # empty the PYTHONPATH
@@ -466,17 +470,15 @@ cf_setup_software_stack() {
             if ${conda_missing}; then
                 echo
                 cf_color magenta "installing conda at ${CF_CONDA_BASE}"
-                (
-                    wget "${miniconda_source}" -O setup_miniconda.sh &&
-                    bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
-                    rm setup_miniconda.sh &&
-                    cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+                wget "${miniconda_source}" -O setup_miniconda.sh || return "$?"
+                bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" || return "$?"
+                rm -f setup_miniconda.sh
+                cat << EOF >> "${CF_CONDA_BASE}/.condarc"
 changeps1: false
 channels:
   - conda-forge
   - defaults
 EOF
-                )
             fi
 
             # initialize conda
@@ -488,7 +490,10 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
-                conda install --yes libgcc gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
+                conda install --yes libgcc gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                # TODO: temporary issue with numba and numpy
+                conda install --yes "numpy<1.24" || return "$?"
+                conda clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -514,14 +519,25 @@ EOF
         }
 
         # source the prod sandbox, potentially skipped in CI jobs
+        local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
             bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
-            [ "$?" = "21" ] && show_version_warning "cf_prod"
+            ret="$?"
+            if [ "${ret}" = "21" ]; then
+                show_version_warning "cf_prod"
+            elif [ "${ret}" != "0" ]; then
+                return "${ret}"
+            fi
         fi
 
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        [ "$?" = "21" ] && show_version_warning "cf_dev"
+        ret="$?"
+        if [ "${ret}" = "21" ]; then
+            show_version_warning "cf_dev"
+        elif [ "${ret}" != "0" ]; then
+            return "${ret}"
+        fi
 
         # initialze submodules
         if [ -e "${CF_BASE}/.git" ]; then

@@ -4,6 +4,7 @@
 Main entry point for top-level settings and fixes before anything else is imported.
 """
 
+import re
 import logging
 
 import law
@@ -18,6 +19,10 @@ from columnflow.__version__ import (  # noqa
     __status__, __version__,
 )
 
+
+# version info
+m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
+version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
 # load contrib packages
 law.contrib.load(
@@ -38,37 +43,41 @@ from columnflow.util import maybe_import
 
 import columnflow.production  # noqa
 if law.config.has_option("analysis", "production_modules"):
-    for mod in law.config.get_expanded("analysis", "production_modules", split_csv=True):
-        logger.debug(f"loading production module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.get_expanded("analysis", "production_modules", split_csv=True):
+        logger.debug(f"loading production module '{m}'")
+        maybe_import(m.strip())
 
 import columnflow.calibration  # noqa
 if law.config.has_option("analysis", "calibration_modules"):
-    for mod in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
-        logger.debug(f"loading calibration module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
+        logger.debug(f"loading calibration module '{m}'")
+        maybe_import(m.strip())
 
 import columnflow.selection  # noqa
 if law.config.has_option("analysis", "selection_modules"):
-    for mod in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
-        logger.debug(f"loading selection module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
+        logger.debug(f"loading selection module '{m}'")
+        maybe_import(m.strip())
 
 import columnflow.ml  # noqa
 if law.config.has_option("analysis", "ml_modules"):
-    for mod in law.config.get_expanded("analysis", "ml_modules", split_csv=True):
-        logger.debug(f"loading ml module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.get_expanded("analysis", "ml_modules", split_csv=True):
+        logger.debug(f"loading ml module '{m}'")
+        maybe_import(m.strip())
 
 import columnflow.inference  # noqa
 if law.config.has_option("analysis", "inference_modules"):
-    for mod in law.config.get_expanded("analysis", "inference_modules", split_csv=True):
-        logger.debug(f"loading inference module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.get_expanded("analysis", "inference_modules", split_csv=True):
+        logger.debug(f"loading inference module '{m}'")
+        maybe_import(m.strip())
 
 
 # preload all task modules so that task parameters are globally known and accepted
 if law.config.has_section("modules"):
-    for mod in law.config.options("modules"):
-        logger.debug(f"loading task module '{mod}'")
-        maybe_import(mod.strip())
+    for m in law.config.options("modules"):
+        logger.debug(f"loading task module '{m}'")
+        maybe_import(m.strip())
+
+
+# cleanup
+del m

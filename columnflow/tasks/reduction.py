@@ -4,15 +4,16 @@
 Tasks related to reducing events for use on further tasks.
 """
 
+import math
 import functools
 from collections import OrderedDict
 
 import law
 import luigi
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -24,45 +25,51 @@ ak = maybe_import("awkward")
 
 
 class ReduceEvents(
-    DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts | SelectEvents.shifts
-
-    # default upstream dependency task classes
-    dep_GetDatasetLFNs = GetDatasetLFNs
-    dep_CalibrateEvents = CalibrateEvents
-    dep_SelectEvents = SelectEvents
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        GetDatasetLFNs=GetDatasetLFNs,
+        CalibrateEvents=CalibrateEvents,
+        SelectEvents=SelectEvents,
+    )
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calibrations"] = [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
-            reqs["selection"] = self.dep_SelectEvents.req(self)
+            reqs["selection"] = self.reqs.SelectEvents.req(self)
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.reqs.SelectEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+
         return reqs
 
     def requires(self):
         return {
-            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ],
-            "selection": self.dep_SelectEvents.req(self),
+            "selection": self.reqs.SelectEvents.req(self),
         }
 
     def output(self):
@@ -90,11 +97,27 @@ class ReduceEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
-        # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
-        load_columns = keep_columns | set(mandatory_coffea_columns)
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
+        route_filter = RouteFilter(write_columns)
+
+        # define columns that need to be read
+        read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
+        # define columns to read for the differently structured selection masks
+        read_sel_columns = set()
+        # open either selector steps of the full event selection mask
+        read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
+        # add object masks, depending on the columns to write
+        # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
+        masks_meta = inputs["selection"]["results"].load(formatter="dask_awkward").objects
+        write_columns_toplevel = {Route(r)[0] for r in write_columns}
+        for src_field in masks_meta.fields:
+            for dst_field in masks_meta[src_field].fields:
+                if law.util.multi_match(dst_field, write_columns_toplevel):
+                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+        del masks_meta
 
         # event counters
         n_all = 0
@@ -115,10 +138,10 @@ class ReduceEvents(
             input_paths.append(inputs["selection"]["columns"].path)
 
         # iterate over chunks of events and diffs
-        for (events, sel, *diffs), pos in self.iter_chunked_reader(
+        for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
+            read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
         ):
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
@@ -152,8 +175,9 @@ class ReduceEvents(
             for src_name in sel.objects.fields:
                 # get all destination collections, handling those named identically to the
                 # source collection last
-                dst_names = sel["objects", src_name].fields
+                dst_names = list(sel["objects", src_name].fields)
                 if src_name in dst_names:
+                    # move to the end
                     dst_names.remove(src_name)
                     dst_names.append(src_name)
                 for dst_name in dst_names:
@@ -167,7 +191,7 @@ class ReduceEvents(
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # some logs
         self.publish_message(
@@ -186,7 +210,11 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
+class MergeReductionStats(
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+):
 
     n_inputs = luigi.IntParameter(
         default=10,
@@ -202,10 +230,10 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         "value 'reduced_file_size' or 512MB'",
     )
 
-    shifts = set(ReduceEvents.shifts)
-
-    # default upstream dependency task classes
-    dep_ReduceEvents = ReduceEvents
+    # upstream requirements
+    reqs = Requirements(
+        ReduceEvents=ReduceEvents,
+    )
 
     @classmethod
     def modify_param_values(cls, params):
@@ -221,7 +249,7 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         return params
 
     def requires(self):
-        return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
+        return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
         return self.target(f"stats_n{self.n_inputs}.json")
@@ -248,41 +276,36 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
             return avg, std
 
         # compute some stats
-        max_size_merged = self.merged_size * 1024**2
         tot_size = sum(sizes)
         avg_size, std_size = get_avg_std(sizes)
         std_size = (sum((s - avg_size)**2 for s in sizes) / n)**0.5
-        merge_factor = max(1, int(round(max_size_merged / avg_size)))
-        merged_sizes = [sum(chunk) for chunk in law.util.iter_chunks(sizes, merge_factor)]
-        n_merged = len(merged_sizes)
-        avg_size_merged, std_size_merged = get_avg_std(merged_sizes)
+        max_size_merged = self.merged_size * 1024**2
+        merge_factor = int(round(max_size_merged / avg_size))
+        merge_factor = min(max(1, merge_factor), self.dataset_info_inst.n_files)
+        n_merged = int(math.ceil(self.dataset_info_inst.n_files / merge_factor))
 
         # save them
         stats = OrderedDict([
-            ("n_files", n),
+            ("n_test_files", n),
             ("tot_size", tot_size),
             ("avg_size", avg_size),
             ("std_size", std_size),
             ("max_size_merged", max_size_merged),
             ("merge_factor", merge_factor),
-            ("n_merged_files", n_merged),
-            ("avg_size_merged", avg_size_merged),
-            ("std_size_merged", std_size_merged),
         ])
         self.output().dump(stats, indent=4, formatter="json")
 
         # print them
-        self.publish_message(" files before merging ".center(40, "-"))
-        self.publish_message(f"# files  : {n}")
+        self.publish_message(f" stats of {n} input files ".center(40, "-"))
         self.publish_message(f"tot. size: {law.util.human_bytes(tot_size, fmt=True)}")
         self.publish_message(f"avg. size: {law.util.human_bytes(avg_size, fmt=True)}")
         self.publish_message(f"std. size: {law.util.human_bytes(std_size, fmt=True)}")
-        self.publish_message(" files after merging ".center(40, "-"))
-        self.publish_message(f"merging  : {merge_factor} into 1")
-        self.publish_message(f"# files  : {n_merged}")
-        self.publish_message(f"max. size: {law.util.human_bytes(max_size_merged, fmt=True)}")
-        self.publish_message(f"avg. size: {law.util.human_bytes(avg_size_merged, fmt=True)}")
-        self.publish_message(f"std. size: {law.util.human_bytes(std_size_merged, fmt=True)}")
+        self.publish_message(" merging info ".center(40, "-"))
+        self.publish_message(f"target size : {self.merged_size} MB")
+        self.publish_message(f"merging     : {merge_factor} into 1")
+        self.publish_message(f"files before: {self.dataset_info_inst.n_files}")
+        self.publish_message(f"files after : {n_merged}")
+        self.publish_message(40 * "-")
 
 
 MergeReductionStatsWrapper = wrapper_factory(
@@ -297,8 +320,10 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 20 files into one
     merge_factor = 20
 
-    # default upstream dependency task classes
-    dep_MergeReductionStats = MergeReductionStats
+    # upstream requirements
+    reqs = Requirements(
+        MergeReductionStats=MergeReductionStats,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -317,7 +342,7 @@ class MergeReducedEventsUser(DatasetTask):
         """
         if self._cached_file_merging < 0:
             # check of the merging stats is present and of so, set the cached file merging value
-            output = self.dep_MergeReductionStats.req(self).output()
+            output = self.reqs.MergeReductionStats.req(self).output()
             if output.exists():
                 self._cached_file_merging = output.load(formatter="json")["merge_factor"]
                 self._cache_branches = True
@@ -349,20 +374,27 @@ class MergeReducedEventsUser(DatasetTask):
 
 
 class MergeReducedEvents(
-    MergeReducedEventsUser,
     SelectorStepsMixin,
     CalibratorsMixin,
+    MergeReducedEventsUser,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = ReduceEvents.shifts | MergeReductionStats.shifts
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        ReduceEvents=ReduceEvents,
+    )
 
-    # default upstream dependency task classes
-    dep_MergeReductionStats = MergeReductionStats
-    dep_ReduceEvents = ReduceEvents
+    def is_sandboxed(self):
+        # when the task is a merge forest, consider it sandboxed
+        if self.is_forest():
+            return True
+
+        return super().is_sandboxed()
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
@@ -370,14 +402,14 @@ class MergeReducedEvents(
 
     def merge_workflow_requires(self):
         return {
-            "stats": self.dep_MergeReductionStats.req(self),
-            "events": self.dep_ReduceEvents.req(self, _exclude={"branches"}),
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(self, _exclude={"branches"}),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "stats": self.dep_MergeReductionStats.req(self),
-            "events": self.dep_ReduceEvents.req(
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(
                 self,
                 branches=((start_branch, end_branch),),
                 workflow="local",

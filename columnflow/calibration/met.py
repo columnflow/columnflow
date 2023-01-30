@@ -8,6 +8,7 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -23,13 +24,13 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     .. code-block:: python
 
-        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/cms-met/metphi_corrs_all.json.gz", "v1")
+        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz", "v1")  # noqa
 
     as well as an auxiliary entry in the config to refer to the name of the correction set such as
 
     .. code-block:: python
 
-        cfg.x.met_phi_correction_set = "metphicorr_{variable}_pfmet_{data_source}_2017"
+        cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
     where "variable" and "data_source" are placeholders that are inserted in the calibrator setup.
     """
@@ -42,8 +43,8 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     corr_pt = self.met_pt_corrector.evaluate(*args)
     corr_phi = self.met_phi_corrector.evaluate(*args)
 
-    events = set_ak_column(events, "MET.pt", corr_pt)
-    events = set_ak_column(events, "MET.phi", corr_phi)
+    events = set_ak_column(events, "MET.pt", corr_pt, value_type=np.float32)
+    events = set_ak_column(events, "MET.phi", corr_phi, value_type=np.float32)
 
     return events
 

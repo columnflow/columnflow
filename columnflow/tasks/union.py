@@ -1,22 +1,25 @@
 # coding: utf-8
 
 """
-Tasks related to producing new columns.
+Task to unite columns horizontally into a single file for further, possibly external processing.
 """
 
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.production import ProduceColumns
+from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 
 
-class ProduceColumns(
-    ProducerMixin,
+class UniteColumns(
+    MLModelsMixin,
+    ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
@@ -24,17 +27,16 @@ class ProduceColumns(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        MergeReducedEvents.reqs,
         RemoteWorkflow.reqs,
         MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+        MLEvaluation=MLEvaluation,
     )
-
-    register_producer_shifts = True
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
@@ -44,61 +46,80 @@ class ProduceColumns(
         # require the full merge forest
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
-        # add producer dependent requirements
-        reqs["producer"] = self.producer_inst.run_requires()
+        if not self.pilot:
+            if self.producers:
+                reqs["producers"] = [
+                    self.reqs.ProduceColumns.req(self, producer=p)
+                    for p in self.producers
+                ]
+            if self.ml_models:
+                reqs["ml"] = [
+                    self.reqs.MLEvaluation.req(self, ml_model=m)
+                    for m in self.ml_models
+                ]
 
         return reqs
 
     def requires(self):
-        return {
+        reqs = {
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-            "producer": self.producer_inst.run_requires(),
         }
+
+        if self.producers:
+            reqs["producers"] = [
+                self.reqs.ProduceColumns.req(self, producer=p)
+                for p in self.producers
+            ]
+        if self.ml_models:
+            reqs["ml"] = [
+                self.reqs.MLEvaluation.req(self, ml_model=m)
+                for m in self.ml_models
+            ]
+
+        return reqs
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"columns_{self.branch}.parquet")
+        return self.target(f"data_{self.branch}.parquet")
 
     @law.decorator.log
-    @law.decorator.localize
+    @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
         inputs = self.input()
         output = self.output()
         output_chunks = {}
-
-        # run the producer setup
-        self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
-
-        # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
-
         # define columns that will be written
-        write_columns = self.producer_inst.produced_columns
+        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
         route_filter = RouteFilter(write_columns)
 
+        # define columns that need to be read
+        read_columns = write_columns | set(mandatory_coffea_columns)
+        read_columns = {Route(c) for c in read_columns}
+
         # iterate over chunks of events and diffs
-        for events, pos in self.iter_chunked_io(
-            inputs["events"]["collection"][0].path,
-            source_type="awkward_parquet",
-            read_columns=read_columns,
+        files = [inputs["events"]["collection"][0].path]
+        if self.producers:
+            files.extend([inp.path for inp in inputs["producers"]])
+        if self.ml_models:
+            files.extend([inp.path for inp in inputs["ml"]])
+        for (events, *columns), pos in self.iter_chunked_io(
+            files,
+            source_type=len(files) * ["awkward_parquet"],
+            read_columns=len(files) * [read_columns],
         ):
-            # invoke the producer
-            events = self.producer_inst(events)
+            # add additional columns
+            events = update_ak_array(events, *columns)
 
             # remove columns
             events = route_filter(events)
@@ -119,14 +140,14 @@ class ProduceColumns(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-ProduceColumns.check_finite = ChunkedIOMixin.check_finite.copy(
-    default=ProduceColumns.task_family in check_finite_tasks,
+UniteColumns.check_finite = ChunkedIOMixin.check_finite.copy(
+    default=UniteColumns.task_family in check_finite_tasks,
     add_default_to_description=True,
 )
 
 
-ProduceColumnsWrapper = wrapper_factory(
+UniteColumnsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
-    require_cls=ProduceColumns,
+    require_cls=UniteColumns,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )

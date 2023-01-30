@@ -15,6 +15,7 @@ from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 from columnflow.production.processes import process_ids
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

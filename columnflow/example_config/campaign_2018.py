@@ -150,7 +150,7 @@ campaign_2018.add_dataset(
     name="tt_sl",
     id=14235437,
     processes=[process_tt_sl],
-    aux={"has_top": True, "is_ttbar": True, "event_weights": ["top_pt_weight"]},
+    aux={"has_top": True, "is_ttbar": True},
     info=dict(
         nominal=DatasetInfo(
             keys=[

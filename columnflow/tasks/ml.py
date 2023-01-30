@@ -7,9 +7,9 @@ Tasks related to ML workflows.
 import law
 import luigi
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedReaderMixin,
+    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -18,23 +18,24 @@ from columnflow.util import dev_sandbox, safe_div
 
 
 class PrepareMLEvents(
-    MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
-
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
-    dep_ProduceColumns = ProduceColumns
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -53,21 +54,21 @@ class PrepareMLEvents(
             return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot and self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
 
         return reqs
 
     def requires(self):
-        reqs = {"events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
+        reqs = {"events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
         if self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         return reqs
@@ -85,7 +86,7 @@ class PrepareMLEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -100,10 +101,13 @@ class PrepareMLEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases", {})
 
-        # define nano columns that should be loaded and those that should be kept
-        keep_columns = self.ml_model_inst.used_columns
-        load_columns = keep_columns | {"deterministic_seed"}  # noqa
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will to be written
+        write_columns = self.ml_model_inst.used_columns
+        route_filter = RouteFilter(write_columns)
+
+        # define columns that need to be read
+        read_columns = write_columns | {"deterministic_seed"} | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
 
         # stats for logging
         n_events = 0
@@ -113,11 +117,10 @@ class PrepareMLEvents(
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_reader(
+        for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             n_events += len(events)
 
@@ -133,6 +136,10 @@ class PrepareMLEvents(
             # remove columns
             events = route_filter(events)
 
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(events)
+
             # loop over folds, use indices to generate masks and project into files
             for f in range(self.ml_model_inst.folds):
                 fold_events = events[fold_indices == f]
@@ -141,7 +148,7 @@ class PrepareMLEvents(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
                 output_chunks[f][pos.index] = chunk
-                self.chunked_reader.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs.targets):
@@ -152,7 +159,15 @@ class PrepareMLEvents(
         self.publish_message(f"total events: {n_events}")
         for f, n in enumerate(n_fold_events):
             r = 100 * safe_div(n, n_events)
-            self.publish_message(f"partition {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
+            self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
+
+
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+PrepareMLEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+    default=PrepareMLEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
 
 
 PrepareMLEventsWrapper = wrapper_factory(
@@ -163,22 +178,21 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    DatasetTask,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     fold = luigi.IntParameter(
         default=0,
         description="the fold index of the prepared ML events to use; must be compatible with the "
         "number of folds defined in the ML model; default: 0",
     )
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # disable the shift parameter
     shift = None
@@ -188,8 +202,11 @@ class MergeMLEvents(
     # in each step, merge 10 into 1
     merge_factor = 10
 
-    # default upstream dependency task classes
-    dep_PrepareMLEvents = PrepareMLEvents
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        PrepareMLEvents=PrepareMLEvents,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -209,7 +226,7 @@ class MergeMLEvents(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        req = self.dep_PrepareMLEvents.req(self, _exclude={"branches"})
+        req = self.reqs.PrepareMLEvents.req(self, _exclude={"branches"})
 
         # if the merging stats exist, allow the forest to be cached
         self._cache_forest = req.merging_stats_exist
@@ -218,7 +235,7 @@ class MergeMLEvents(
 
     def merge_requires(self, start_leaf, end_leaf):
         return [
-            self.dep_PrepareMLEvents.req(self, branch=i)
+            self.reqs.PrepareMLEvents.req(self, branch=i)
             for i in range(start_leaf, end_leaf)
         ]
 
@@ -244,7 +261,12 @@ MergeMLEventsWrapper = wrapper_factory(
 )
 
 
-class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
+class MLTraining(
+    MLModelMixin,
+    ProducersMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+):
 
     fold = luigi.IntParameter(
         default=0,
@@ -252,8 +274,10 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         "the number of folds defined in the ML model; default: 0",
     )
 
-    # default upstream dependency task classes
-    dep_MergeMLEvents = MergeMLEvents
+    # upstream requirements
+    reqs = Requirements(
+        MergeMLEvents=MergeMLEvents,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -271,14 +295,22 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
         return self.ml_model_inst.sandbox(self)
 
     def requires(self):
-        return {
+        reqs = {}
+
+        # require prepared events
+        reqs["events"] = {
             dataset_inst.name: [
-                self.dep_MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
+                self.reqs.MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
                 for f in range(self.ml_model_inst.folds)
                 if f != self.fold
             ]
             for dataset_inst in self.ml_model_inst.used_datasets
         }
+
+        # ml model requirements
+        reqs["model"] = self.ml_model_inst.requires(self)
+
+        return reqs
 
     def output(self):
         return self.ml_model_inst.output(self)
@@ -295,24 +327,25 @@ class MLTraining(MLModelMixin, ProducersMixin, SelectorMixin, CalibratorsMixin):
 
 
 class MLEvaluation(
-    MergeReducedEventsUser,
     MLModelMixin,
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = None
 
-    shifts = MergeReducedEvents.shifts | ProduceColumns.shifts
-
-    # default upstream dependency task classes
-    dep_MLTraining = MLTraining
-    dep_MergeReducedEvents = MergeReducedEvents
-    dep_ProduceColumns = ProduceColumns
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        MLTraining=MLTraining,
+        MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -321,19 +354,19 @@ class MLEvaluation(
         self.sandbox = self.ml_model_inst.sandbox(self)
 
     def workflow_requires(self, only_super: bool = False):
-        reqs = super(MLEvaluation, self).workflow_requires()
+        reqs = super().workflow_requires()
         if only_super:
             return reqs
 
         reqs["models"] = [
-            self.dep_MLTraining.req(self, fold=f)
+            self.reqs.MLTraining.req(self, fold=f)
             for f in range(self.ml_model_inst.folds)
         ]
 
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, _exclude={"branches"})
         if not self.pilot and self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
 
@@ -341,14 +374,14 @@ class MLEvaluation(
 
     def requires(self):
         reqs = {"models": [
-            self.dep_MLTraining.req(self, fold=f)
+            self.reqs.MLTraining.req(self, fold=f)
             for f in range(self.ml_model_inst.folds)
         ]}
 
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})
         if self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
 
@@ -363,7 +396,7 @@ class MLEvaluation(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
+            Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
         )
 
         # prepare inputs and outputs
@@ -384,20 +417,22 @@ class MLEvaluation(
         # check once if the events were used during trainig
         events_used_in_training = self.events_used_in_training(self.dataset_inst, self.shift_inst)
 
-        # define nano columns that should be loaded and those that should be kept
-        load_columns = self.ml_model_inst.used_columns | {"deterministic_seed"}  # noqa
-        keep_columns = self.ml_model_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that need to be read
+        read_columns = self.ml_model_inst.used_columns | {"deterministic_seed"} | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
+        # define columns that will be written
+        write_columns = self.ml_model_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
             files.extend([inp.path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_reader(
+        for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             # add additional columns
             events = update_ak_array(events, *columns)
@@ -420,14 +455,25 @@ class MLEvaluation(
             # remove columns
             events = route_filter(events)
 
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(events)
+
             # save as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+
+
+# overwrite class defaults
+MLEvaluation.check_finite = ChunkedIOMixin.check_finite.copy(
+    default=MLEvaluation.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
 
 
 MLEvaluationWrapper = wrapper_factory(

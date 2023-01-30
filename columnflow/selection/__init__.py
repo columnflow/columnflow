@@ -6,6 +6,7 @@ Object and event selection tools.
 
 from __future__ import annotations
 
+import inspect
 from typing import Callable
 
 import law
@@ -13,6 +14,7 @@ import order as od
 
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
+
 
 ak = maybe_import("awkward")
 
@@ -45,8 +47,13 @@ def selector(
         cls_dict = {"call_func": func}
         cls_dict.update(kwargs)
 
+        # get the module name
+        frame = inspect.stack()[1]
+        module = inspect.getmodule(frame[0])
+
         # create the subclass
-        subclass = Selector.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+        cls_name = cls_dict.pop("cls_name", func.__name__)
+        subclass = Selector.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
 
         return subclass
 

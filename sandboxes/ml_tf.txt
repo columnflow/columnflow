@@ -1,4 +1,5 @@
-# version 3
+# version 4
 
-tensorflow==2.10.*
-awkward==1.10.*
+tensorflow~=2.11
+awkward~=2.0
+dask-awkward~=2023.1

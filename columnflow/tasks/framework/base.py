@@ -18,10 +18,30 @@ import luigi
 import law
 import order as od
 
+from columnflow.util import DotDict
+
 
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
+class Requirements(DotDict):
+
+    def __init__(self, *others, **kwargs):
+        super().__init__()
+
+        # add others and kwargs
+        for reqs in others + (kwargs,):
+            self.update(reqs)
+
+
+class BaseTask(law.Task):
+
+    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
+
+    # container for upstream requirements for convenience
+    reqs = Requirements()
 
 
 class OutputLocation(enum.Enum):
@@ -32,11 +52,6 @@ class OutputLocation(enum.Enum):
     config = "config"
     local = "local"
     wlcg = "wlcg"
-
-
-class BaseTask(law.Task):
-
-    task_namespace = os.getenv("CF_TASK_NAMESPACE")
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -50,6 +65,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     allow_empty_sandbox = True
     sandbox = None
 
+    message_cache_size = 25
     local_workflow_require_branches = False
     output_collection_cls = law.SiblingFileCollection
 
@@ -96,7 +112,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
         _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
-        _prefer_cli |= {"version", "workflow"}
+        _prefer_cli |= {
+            "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
+            "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
+            "htcondor_gpus", "htcondor_pool",
+        }
         kwargs["_prefer_cli"] = _prefer_cli
 
         # when cls accepts a version, but non was actively requested, use the version map to assign it
@@ -134,9 +154,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return ()
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        # implemented only for simplified mro control
-        return set()
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """
+        Returns two sets of shifts in a tuple: shifts implemented by _this_ task, and depdenent
+        shifts implemented by upstream tasks.
+        """
+        # get shifts from upstream dependencies, consider both their own and upstream shifts as one
+        upstream_shifts = set()
+        for req in cls.reqs.values():
+            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
+
+        return set(), upstream_shifts
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
@@ -211,7 +239,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         object_names = []
         patterns = []
-        lookup = list(names)
+        lookup = law.util.make_list(names)
         while lookup:
             name = lookup.pop(0)
             if has_obj(name):
@@ -429,9 +457,6 @@ class ShiftTask(ConfigTask):
     )
     effective_shift = luigi.Parameter(default=law.NO_STR)
 
-    # shifts implemented by this task or one of its requirements
-    shifts = set()
-
     # skip passing effective_shift to cli completion, req params and sandboxing
     exclude_params_index = {"effective_shift"}
     exclude_params_req = {"effective_shift"}
@@ -453,10 +478,7 @@ class ShiftTask(ConfigTask):
         For that, it takes the shifts stored in the config instance and compares it with those
         defined by this class.
         """
-        # the modify_param_values super method must not necessarily be set
-        super_func = super().modify_param_values
-        if callable(super_func):
-            params = super_func(params)
+        params = super().modify_param_values(params)
 
         # get params
         config_inst = params.get("config_inst")
@@ -468,69 +490,77 @@ class ShiftTask(ConfigTask):
         if requested_effective_shift in no_values:
             params["effective_shift"] = "nominal"
 
-        # do nothing when the effective shift is already set and no config is defined
+        # do nothing when the effective shift is already set or no config is defined
         if requested_effective_shift not in no_values or config_inst in no_values:
             return params
 
         # shift must be set
         if requested_shift in no_values:
             if cls.allow_empty_shift:
+                params["shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
 
         # complain when the requested shift is not known
         if requested_shift not in config_inst.shifts:
-            raise ValueError(f"unknown shift: {requested_shift}")
+            raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
-        # determine the allowed shifts for this class
-        allowed_shifts = cls.determine_allowed_shifts(config_inst, params)
+        # determine the known shifts for this class
+        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
-        # when allowed, add it to the task parameters
-        if requested_shift in allowed_shifts:
+        # actual shift resolution: compare the requested shift to known ones
+        if requested_shift in shifts:
+            params["shift"] = requested_shift
             params["effective_shift"] = requested_shift
+        elif requested_shift in upstream_shifts:
+            params["effective_shift"] = "nominal"
+        else:
+            params["shift"] = "nominal"
+            params["effective_shift"] = "nominal"
 
         # store references
-        params["shift_inst"] = config_inst.get_shift(requested_shift)
+        params["requested_shift_inst"] = config_inst.get_shift(params["shift"])
         params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
 
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        # for the basic shift task, only the shifts implemented by this task class are allowed
-        # still call super for simplified mro control
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
-
-        # add class level shifts
-        allowed_shifts |= cls.shifts
-
-        return allowed_shifts
-
-    @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
         if task:
-            if task.shift_inst:
-                kwargs["shift_inst"] = task.shift_inst
+            if task.effective_shift_inst:
+                kwargs["shift_inst"] = task.effective_shift_inst
         elif "effective_shift" in params and "config_inst" in kwargs:
-            if params["effective_shift"] != law.NO_STR:
+            if params["effective_shift"] not in (None, law.NO_STR):
                 kwargs["shift_inst"] = kwargs["config_inst"].get_shift(params["effective_shift"])
         return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # store a reference to the effective shift instance
-        self.shift_inst = None
-        if self.effective_shift and self.effective_shift != law.NO_STR:
-            self.shift_inst = self.config_inst.get_shift(self.effective_shift)
+        # store references to the shift instances
+        self.requested_shift_inst = None
+        self.effective_shift_inst = None
+        if self.shift not in (None, law.NO_STR) and self.effective_shift not in (None, law.NO_STR):
+            self.requested_shift_inst = self.config_inst.get_shift(self.shift)
+            self.effective_shift_inst = self.config_inst.get_shift(self.effective_shift)
+
+    @property
+    def requested_shift(self):
+        # shorthand
+        return self.shift
+
+    @property
+    def shift_inst(self):
+        # shorthand
+        return self.effective_shift_inst
 
     def store_parts(self):
         parts = super().store_parts()
 
         # add the shift name
-        if self.shift_inst:
-            parts.insert_after("config", "shift", self.shift_inst.name)
+        if self.requested_shift_inst:
+            parts.insert_after("config", "shift", self.requested_shift_inst.name)
 
         return parts
 
@@ -564,22 +594,21 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
-    def determine_allowed_shifts(cls, config_inst, params):
-        # dataset can have shifts, so extend the set of allowed shifts
-        allowed_shifts = super().determine_allowed_shifts(config_inst, params)
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        # dataset can have shifts, that are considered as upstream shifts
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
-        # dataset must be set
-        if "dataset" in params:
-            requested_dataset = params.get("dataset")
-            if requested_dataset not in (None, law.NO_STR):
-                dataset_inst = config_inst.get_dataset(requested_dataset)
-                # clear shifts for data and extend with dataset variations for mc
-                if dataset_inst.is_data:
-                    allowed_shifts.clear()
-                else:
-                    allowed_shifts |= set(dataset_inst.info.keys())
+        if params.get("dataset") not in (None, law.NO_STR):
+            dataset_inst = config_inst.get_dataset(params["dataset"])
+            if dataset_inst.is_data:
+                # clear all shifts for data
+                shifts.clear()
+                upstream_shifts.clear()
+            else:
+                # extend with dataset variations for mc
+                upstream_shifts |= set(dataset_inst.info.keys())
 
-        return allowed_shifts
+        return shifts, upstream_shifts
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
@@ -646,6 +675,7 @@ class DatasetTask(ShiftTask):
         """
         Hook to modify the additional info printed along logs of the htcondor workflow.
         """
+        info.append(self.config_inst.name)
         info.append(self.dataset_inst.name)
         if self.shift_inst and self.shift_inst.name != "nominal":
             info.append(self.shift_inst.name)

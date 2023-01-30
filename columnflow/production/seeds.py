@@ -10,6 +10,7 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, primes
 from columnflow.columnar_util import Route, set_ak_column
 
+
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

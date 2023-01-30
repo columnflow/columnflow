@@ -9,6 +9,7 @@ from columnflow.production.processes import process_ids
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
@@ -25,12 +26,12 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     obtained through :py:class:`category_ids` and the sum of event weights from the
     py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
+    # fail when running on data
+    if self.dataset_inst.is_data:
+        raise ValueError("attempt to compute normalization weights in data")
+
     # add process ids
     events = self[process_ids](events, **kwargs)
-
-    # stop here for data
-    if self.dataset_inst.is_data:
-        return events
 
     # get the lumi
     lumi = self.config_inst.x.luminosity.nominal
@@ -44,7 +45,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
 
     # compute the weight and store it
     norm_weight = events.mc_weight * lumi * xs / sum_weights
-    events = set_ak_column(events, "normalization_weight", norm_weight)
+    events = set_ak_column(events, "normalization_weight", norm_weight, value_type=np.float32)
 
     return events
 
@@ -58,10 +59,6 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     # TODO: for actual sample stitching, we don't need the selection stats for that dataset, but
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
-    # do nothing for data
-    if self.dataset_inst.is_data:
-        return
-
     from columnflow.tasks.selection import MergeSelectionStats
     reqs["selection_stats"] = MergeSelectionStats.req(
         self.task,
@@ -83,12 +80,6 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
         - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
           processes known to the config of the task, with keys being process ids.
     """
-    self.sum_weights_table = None
-    self.xs_table = None
-
-    if self.dataset_inst.is_data:
-        return
-
     # load the selection stats
     selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
 

@@ -8,6 +8,8 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
@@ -29,6 +31,6 @@ def process_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     process_id = self.dataset_inst.processes.get_first().id
 
     # store the column
-    events = set_ak_column(events, "process_id", len(events) * [process_id])
+    events = set_ak_column(events, "process_id", len(events) * [process_id], value_type=np.int32)
 
     return events

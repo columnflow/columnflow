@@ -136,25 +136,26 @@ setup_cmssw() {
         fi
 
         if [ ! -d "${install_path}" ]; then
-            local ret
             echo
             touch "${pending_flag_file}"
-            cf_color cyan "installing ${CF_CMSSW_VERSION} in ${install_base}"
+            cf_color cyan "installing ${CF_CMSSW_VERSION} on ${CF_SCRAM_ARCH} in ${install_base}"
 
             (
-                mkdir -p "${install_base}" || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
+                mkdir -p "${install_base}"
                 cd "${install_base}"
-                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" ""
                 export SCRAM_ARCH="${CF_SCRAM_ARCH}"
-                scramv1 project CMSSW "${CF_CMSSW_VERSION}" || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
+                scramv1 project CMSSW "${CF_CMSSW_VERSION}"
                 cd "${CF_CMSSW_VERSION}/src"
-                eval "$( scramv1 runtime -sh )" || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
-                scram b || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
+                eval "$( scramv1 runtime -sh )"
+                scram b
 
                 # write the flag into a file
                 echo "version ${CF_CMSSW_FLAG}" > "${CF_SANDBOX_FLAG_FILE}"
                 rm -f "${pending_flag_file}"
-            ) || ( ret="$?" && rm -f "${pending_flag_file}" && return "${ret}" )
+            )
+            local ret="$?"
+            [ "${ret}" != "0" ] && rm -f "${pending_flag_file}" && return "${ret}"
         fi
     else
         # at this point, we are in a remote job so fetch, unpack and setup the bundle

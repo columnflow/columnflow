@@ -8,8 +8,8 @@ from collections import defaultdict
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedReaderMixin
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
@@ -21,35 +21,41 @@ ak = maybe_import("awkward")
 
 
 class SelectEvents(
-    DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedReaderMixin,
+    ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    shifts = GetDatasetLFNs.shifts | CalibrateEvents.shifts
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        GetDatasetLFNs=GetDatasetLFNs,
+        CalibrateEvents=CalibrateEvents,
+    )
 
-    # default upstream dependency task classes
-    dep_GetDatasetLFNs = GetDatasetLFNs
-    dep_CalibrateEvents = CalibrateEvents
+    register_selector_shifts = True
 
     def workflow_requires(self, only_super: bool = False):
-        # workflow super classes might already define requirements, so extend them
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
+
         if not self.pilot:
             reqs["calib"] = [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.reqs.CalibrateEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
@@ -58,9 +64,9 @@ class SelectEvents(
 
     def requires(self):
         reqs = {
-            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ],
         }
@@ -111,13 +117,13 @@ class SelectEvents(
         # get shift dependent aliases
         aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.selector_inst.used_columns
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
+        # define columns that need to be read
+        read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be saved
-        keep_columns = self.selector_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = self.selector_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -128,10 +134,10 @@ class SelectEvents(
 
         # iterate over chunks of events and diffs
         n_calib = len(inputs["calibrations"])
-        for (events, *diffs), pos in self.iter_chunked_reader(
+        for (events, *diffs), pos in self.iter_chunked_io(
             [nano_file] + [inp.path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + n_calib * [None],
+            read_columns=(1 + n_calib) * [read_columns],
         ):
             # apply the calibrated diffs
             events = update_ak_array(events, *diffs)
@@ -141,27 +147,36 @@ class SelectEvents(
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
+            results_array = results.to_ak()
+
+            # optional check for finite values
+            if self.check_finite:
+                self.raise_if_not_finite(results_array)
 
             # save results as parquet via a thread in the same pool
             chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
             result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_reader.queue(sorted_ak_to_parquet, (results.to_ak(), chunk.path))
+            self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
 
             # remove columns
-            if keep_columns:
+            if write_columns:
                 events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite:
+                    self.raise_if_not_finite(events)
 
                 # save additional columns as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
                 column_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_reader.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
 
         # merge the column files
-        if keep_columns:
+        if write_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
 
@@ -177,6 +192,16 @@ class SelectEvents(
         self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
         self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
+        if not stats["n_events_selected"]:
+            self.publish_message(law.util.colored("no events selected", "red"))
+
+
+# overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+SelectEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+    default=SelectEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
 
 
 SelectEventsWrapper = wrapper_factory(
@@ -186,25 +211,35 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(DatasetTask, SelectorMixin, CalibratorsMixin, law.tasks.ForestMerge):
-
-    shifts = set(SelectEvents.shifts)
-
+class MergeSelectionStats(
+    SelectorMixin,
+    CalibratorsMixin,
+    DatasetTask,
+    law.tasks.ForestMerge,
+):
     # recursively merge 20 files into one
     merge_factor = 20
 
     # default upstream dependency task classes
     dep_SelectEvents = SelectEvents
 
+    # skip receiving some parameters via req
+    exclude_params_req_get = {"workflow"}
+
+    # upstream requirements
+    reqs = Requirements(
+        SelectEvents=SelectEvents,
+    )
+
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return self.dep_SelectEvents.req(self, _exclude={"branches"})
+        return self.reqs.SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return self.dep_SelectEvents.req(
+        return self.reqs.SelectEvents.req(
             self,
             branches=((start_branch, end_branch),),
             workflow="local",
@@ -257,22 +292,22 @@ MergeSelectionStatsWrapper = wrapper_factory(
 
 
 class MergeSelectionMasks(
-    DatasetTask,
     SelectorMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    shifts = set(SelectEvents.shifts)
 
     # recursively merge 8 files into one
     merge_factor = 8
 
-    # default upstream dependency task classes
-    dep_SelectEvents = SelectEvents
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        SelectEvents=SelectEvents,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -288,14 +323,14 @@ class MergeSelectionMasks(
 
     def merge_workflow_requires(self):
         return {
-            "selection": self.dep_SelectEvents.req(self, _exclude={"branches"}),
+            "selection": self.reqs.SelectEvents.req(self, _exclude={"branches"}),
             "normalization": self.norm_weight_producer.run_requires(),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
             "selection": [
-                self.dep_SelectEvents.req(self, branch=b)
+                self.reqs.SelectEvents.req(self, branch=b)
                 for b in range(start_branch, end_branch)
             ],
             "normalization": self.norm_weight_producer.run_requires(),
@@ -310,11 +345,6 @@ class MergeSelectionMasks(
     def merge_output(self):
         return self.target("masks.parquet")
 
-    @law.decorator.log
-    @law.decorator.localize
-    def run(self):
-        return super().run()
-
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first
         if self.is_leaf():
@@ -323,7 +353,7 @@ class MergeSelectionMasks(
             tmp_dir.touch()
             inputs = self.zip_results_and_columns(inputs, tmp_dir)
 
-        law.pyarrow.merge_parquet_task(self, inputs, output, local=True)
+        law.pyarrow.merge_parquet_task(self, inputs, output)
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         import awkward as ak
@@ -337,9 +367,9 @@ class MergeSelectionMasks(
             self.input()["forest_merge"]["normalization"],
         )
 
-        # get columns to keep
-        keep_columns = set(self.config_inst.x.keep_columns[self.task_family])
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = set(self.config_inst.x.keep_columns[self.task_family])
+        route_filter = RouteFilter(write_columns)
 
         for inp in inputs:
             events = inp["columns"].load(formatter="awkward")

@@ -16,17 +16,17 @@ def example(self):
 
     self.add_category(
         "cat1",
-        category="1e",
-        variable="ht",
+        config_category="1e",
+        config_variable="ht",
+        config_data_datasets=["data_mu_a"],
         mc_stats=True,
-        data_datasets=["data_mu_a"],
     )
     self.add_category(
         "cat2",
-        category="1e",  # note: same category as above == double counting
-        variable="jet1_pt",
+        config_category="1e",  # note: same category as above == double counting
+        config_variable="jet1_pt",
+        config_data_datasets=["data_mu_a"],
         mc_stats=True,
-        data_datasets=["data_mu_a"],
     )
 
     #
@@ -35,15 +35,14 @@ def example(self):
 
     self.add_process(
         "ST",
-        process="st_tchannel_t",
-        signal=True,
-        mc_datasets=["st_tchannel_t"],
+        is_signal=True,
+        config_process="st_tchannel_t",
+        config_mc_datasets=["st_tchannel_t"],
     )
     self.add_process(
         "TT",
-        process="tt_sl",
-        mc_datasets=["tt_sl"],
-
+        config_process="tt_sl",
+        config_mc_datasets=["tt_sl"],
     )
 
     #
@@ -68,7 +67,7 @@ def example(self):
     self.add_parameter(
         "CMS_pileup",
         type=ParameterType.shape,
-        shift_source="minbias_xs",
+        config_shift_source="minbias_xs",
     )
     self.add_parameter_to_group("CMS_pileup", "experiment")
 
@@ -77,7 +76,7 @@ def example(self):
         "CMS_pileup2",
         type=ParameterType.rate_uniform,
         transformations=[ParameterTransformation.effect_from_shape, ParameterTransformation.symmetrize],
-        shift_source="minbias_xs",
+        config_shift_source="minbias_xs",
     )
     self.add_parameter_to_group("CMS_pileup2", "experiment")
 

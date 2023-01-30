@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
 )
@@ -26,12 +26,14 @@ class CreateDatacards(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-    dep_MergeShiftedHistograms = MergeShiftedHistograms
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeHistograms=MergeHistograms,
+        MergeShiftedHistograms=MergeShiftedHistograms,
+    )
 
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
@@ -53,39 +55,39 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: self.dep_MergeShiftedHistograms.req(
+                dataset: self.reqs.MergeShiftedHistograms.req(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
-                        param_obj.shift_source
+                        param_obj.config_shift_source
                         for param_obj in proc_obj.parameters
                         if self.inference_model_inst.require_shapes_for_parameter(param_obj)
                     ),
-                    variables=(cat_obj.variable,),
+                    variables=(cat_obj.config_variable,),
                     branch=-1,
                     _exclude={"branches"},
                 )
-                for dataset in proc_obj.mc_datasets
+                for dataset in proc_obj.config_mc_datasets
             }
             for proc_obj in cat_obj.processes
         }
-        if cat_obj.data_datasets:
+        if cat_obj.config_data_datasets:
             reqs["data"] = {
-                dataset: self.dep_MergeHistograms.req(
+                dataset: self.reqs.MergeHistograms.req(
                     self,
                     dataset=dataset,
-                    variables=(cat_obj.variable,),
+                    variables=(cat_obj.config_variable,),
                     branch=-1,
                     _exclude={"branches"},
                 )
-                for dataset in cat_obj.data_datasets
+                for dataset in cat_obj.config_data_datasets
             }
 
         return reqs
 
     def output(self):
         cat_obj = self.branch_data
-        basename = lambda name, ext: f"{name}__cat_{cat_obj.category}__var_{cat_obj.variable}.{ext}"
+        basename = lambda name, ext: f"{name}__cat_{cat_obj.config_category}__var_{cat_obj.config_variable}.{ext}"
 
         return {
             "card": self.target(basename("datacard", "txt")),
@@ -103,8 +105,8 @@ class CreateDatacards(
 
         # prepare config objects
         cat_obj = self.branch_data
-        category_inst = self.config_inst.get_category(cat_obj.category)
-        variable_inst = self.config_inst.get_variable(cat_obj.variable)
+        category_inst = self.config_inst.get_category(cat_obj.config_category)
+        variable_inst = self.config_inst.get_variable(cat_obj.config_variable)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process
@@ -117,7 +119,7 @@ class CreateDatacards(
                     process_inst = self.config_inst.get_process("data")
                 else:
                     proc_obj = self.inference_model_inst.get_process(proc_obj_name, category=cat_obj.name)
-                    process_inst = self.config_inst.get_process(proc_obj.process)
+                    process_inst = self.config_inst.get_process(proc_obj.config_process)
                 sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
                 h_proc = None
@@ -179,7 +181,7 @@ class CreateDatacards(
                         # store the varied hists
                         hists[proc_obj_name][param_obj.name] = {}
                         for d in ["up", "down"]:
-                            shift_inst = self.config_inst.get_shift(f"{param_obj.shift_source}_{d}")
+                            shift_inst = self.config_inst.get_shift(f"{param_obj.config_shift_source}_{d}")
                             hists[proc_obj_name][param_obj.name][d] = h_proc[
                                 {"shift": hist.loc(shift_inst.id)}
                             ]

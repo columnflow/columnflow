@@ -1,6 +1,8 @@
-# version 5
+# version 6
 
-coffea==0.7.*
-awkward==1.10.*
-uproot==4.3.*
-tabulate==0.8.*
+git+https://github.com/CoffeaTeam/coffea.git@b9356b9#egg=coffea
+awkward~=2.0
+dask-awkward~=2023.1
+uproot~=5.0
+correctionlib~=2.2
+tabulate~=0.9

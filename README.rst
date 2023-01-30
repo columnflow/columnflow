@@ -24,10 +24,20 @@
    :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
    :alt: License
 
-Backend for vectorized, columnar HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
+Backend for columnar, fully orchestrated HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
 
 
 .. marker-after-header
+
+
+Note on current development
+---------------------------
+
+This project is currently in a beta phase.
+The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
+At this point (December 2022), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
+The first released version is expected in early 2023.
+However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
 
 
 Quickstart
@@ -38,6 +48,7 @@ Modules, exported shell functions and environment variables might have a prefix 
 A couple test tasks are listed below.
 They might require a **valid voms proxy** for accessing input data.
 
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) `task graph <https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827>`__.
 
 .. code-block:: bash
 
@@ -58,13 +69,13 @@ They might require a **valid voms proxy** for accessing input data.
         --branch 0
 
     # create a plot
-    law run cf.PlotVariables \
+    # (if "imgcat" is installed for your shell, add ``--view-cmd imgcat``)
+    law run cf.PlotVariables1D \
         --version v1 \
         --datasets st_tchannel_t \
         --producers example \
         --variables jet1_pt \
-        --categories 1e \
-        --branch 0
+        --categories incl
 
     # create a (test) datacard (CMS-style)
     law run cf.CreateDatacards \
@@ -77,11 +88,11 @@ They might require a **valid voms proxy** for accessing input data.
 Projects using columnflow
 -------------------------
 
-- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
 - `hh2bbtautau <https://github.com/uhh-cms/hh2bbtautau>`__: HH → bb𝜏𝜏 analysis with CMS.
 - `hh2bbww <https://github.com/uhh-cms/hh2bbww>`__: HH → bbWW analysis with CMS.
 - `topmass <https://github.com/uhh-cms/topmass>`__: Top quark mass measurement with CMS.
 - `mttbar <https://github.com/uhh-cms/mttbar>`__: Search for heavy resonances in ttbar events with CMS.
+- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
 
 
 Development
@@ -89,6 +100,5 @@ Development
 
 - Source hosted at `GitHub <https://github.com/uhh-cms/columnflow>`__
 - Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/columnflow/issues>`__
-
 
 .. marker-after-body

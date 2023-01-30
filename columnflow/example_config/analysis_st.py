@@ -97,6 +97,10 @@ config_2018.x.selector_step_groups = {
     "example": ["Jet"],
 }
 
+# custom method and sandbox for determining dataset lfns
+config_2018.x.get_dataset_lfns = None
+config_2018.x.get_dataset_lfns_sandbox = None
+
 # 2018 luminosity with values in inverse pb and uncertainties taken from
 # https://twiki.cern.ch/twiki/bin/view/CMS/TWikiLUM?rev=171#LumiComb
 config_2018.x.luminosity = Number(59740, {
