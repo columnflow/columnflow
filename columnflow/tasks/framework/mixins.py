@@ -490,6 +490,9 @@ class MLModelMixin(ConfigTask):
         "'default_ml_model' config",
     )
 
+    allow_empty_ml_model = True
+    use_store_name_from_ml_model = False
+
     exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
@@ -506,6 +509,8 @@ class MLModelMixin(ConfigTask):
             # add objects to the config itself
             if params.get("ml_model") not in (law.NO_STR, None):
                 cls.get_ml_model_inst(params["ml_model"], config_inst)
+            elif not cls.allow_empty_ml_model:
+                raise Exception(f"no ml_model configured for {cls.task_family}")
 
         return params
 
@@ -532,7 +537,10 @@ class MLModelMixin(ConfigTask):
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if self.ml_model_inst:
-            parts.insert_before("version", "ml_model", f"ml__{self.ml_model}")
+            name = self.ml_model_inst.store_name
+            if not name or not self.use_store_name_from_ml_model:
+                name = self.ml_model_inst.cls_name
+            parts.insert_before("version", "ml_model", f"ml__{name}")
         return parts
 
 
@@ -543,6 +551,8 @@ class MLModelsMixin(ConfigTask):
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
     )
+
+    allow_empty_ml_models = True
 
     exclude_params_repr_empty = {"ml_models"}
 
@@ -559,6 +569,8 @@ class MLModelsMixin(ConfigTask):
             if params.get("ml_models"):
                 for ml_model in params["ml_models"]:
                     MLModelMixin.get_ml_model_inst(ml_model, config_inst)
+            elif not cls.allow_empty_ml_models:
+                raise Exception(f"no ml_models configured for {cls.task_family}")
 
         return params
 

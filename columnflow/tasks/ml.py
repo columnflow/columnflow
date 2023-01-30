@@ -29,6 +29,9 @@ class PrepareMLEvents(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
+    allow_empty_ml_model = False
+    use_store_name_from_ml_model = True
+
     # upstream requirements
     reqs = Requirements(
         MergeReducedEventsUser.reqs,
@@ -202,6 +205,9 @@ class MergeMLEvents(
     # in each step, merge 10 into 1
     merge_factor = 10
 
+    allow_empty_ml_model = False
+    use_store_name_from_ml_model = True
+
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
@@ -274,6 +280,8 @@ class MLTraining(
         "the number of folds defined in the ML model; default: 0",
     )
 
+    allow_empty_ml_model = False
+
     # upstream requirements
     reqs = Requirements(
         MergeMLEvents=MergeMLEvents,
@@ -337,6 +345,8 @@ class MLEvaluation(
     RemoteWorkflow,
 ):
     sandbox = None
+
+    allow_empty_ml_model = False
 
     # upstream requirements
     reqs = Requirements(
