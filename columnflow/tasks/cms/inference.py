@@ -98,7 +98,7 @@ class CreateDatacards(
     @law.decorator.safe_output
     def run(self):
         import hist
-        from columnflow.inference.datacard import DatacardWriter
+        from columnflow.inference.cms.datacard import DatacardWriter
 
         # prepare inputs
         inputs = self.input()

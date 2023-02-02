@@ -543,7 +543,7 @@ def get_ak_routes(
     lookup = [(ak_array, ())]
     while lookup:
         arr, fields = lookup.pop(0)
-        if arr.fields and (max_depth <= 0 or len(fields) < max_depth):
+        if getattr(arr, "fields", None) and (max_depth <= 0 or len(fields) < max_depth):
             # extend the lookup with nested fields
             lookup.extend([
                 (getattr(arr, field), fields + (field,))
@@ -2640,7 +2640,7 @@ class ChunkedIOHandler(object):
             chunk_pos.index,
             chunk_pos.entry_start,
             chunk_pos.entry_stop,
-            chunk_pos.max_chunk_size,
+            chunk_pos.max_entries,
         )
 
     @property
@@ -2749,10 +2749,10 @@ class ChunkedIOHandler(object):
                 durations.append(time.perf_counter() - t1)
 
             duration = law.util.human_duration(seconds=sum(durations))
-            durations = [law.util.human_duration(seconds=s) for s in durations]
+            durations = [f"{s:.1f}" for s in durations]
             logger_perf.debug(
                 f"reading of chunk {chunk_pos.index} from {len(durations)} file(s) took {duration} "
-                f"({', '.join(durations)})",
+                f"({'+'.join(durations)}s)",
             )
 
             return self.ReadResult((chunks if self.is_multi else chunks[0]), chunk_pos)

@@ -6,7 +6,6 @@ Example production methods
 
 from columnflow.production import Producer, producer
 from columnflow.production.normalization import normalization_weights
-from columnflow.production.pileup import pu_weight
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
 
@@ -24,7 +23,6 @@ ak = maybe_import("awkward")
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if self.dataset_inst.is_mc:
         events = self[normalization_weights](events, **kwargs)
-        events = self[pu_weight](events, **kwargs)
 
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1))
@@ -38,9 +36,8 @@ def example_init(self: Producer) -> None:
         return None
 
     # mc only producers
-    producers = {normalization_weights, pu_weight}
-    self.uses |= producers
-    self.produces |= producers
+    self.uses |= {normalization_weights}
+    self.produces |= {normalization_weights}
 
 
 @producer(

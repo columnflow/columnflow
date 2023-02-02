@@ -7,8 +7,6 @@ Exemplary selection methods.
 from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
-from columnflow.production.mc_weight import mc_weight
-from columnflow.production.seeds import deterministic_seeds
 from columnflow.production.categories import category_ids
 from columnflow.production.example import cutflow_features
 from columnflow.util import maybe_import
@@ -131,12 +129,10 @@ def increment_stats(
 
 @selector(
     uses={
-        jet_selection_test, deterministic_seeds, mc_weight, category_ids, process_ids,
-        increment_stats, cutflow_features,
+        jet_selection_test, category_ids, process_ids, increment_stats, cutflow_features,
     },
     produces={
-        jet_selection_test, deterministic_seeds, mc_weight, category_ids, process_ids,
-        increment_stats, cutflow_features,
+        jet_selection_test, category_ids, process_ids, increment_stats, cutflow_features,
     },
     exposed=True,
 )
@@ -166,12 +162,6 @@ def example(
         # can be AND-combined with additional steps
     )
     results.main["event"] = event_sel
-
-    # add the mc weight
-    events = self[mc_weight](events, **kwargs)
-
-    # add deterministic seeds
-    events = self[deterministic_seeds](events, **kwargs)
 
     # build categories
     events = self[category_ids](events, **kwargs)
