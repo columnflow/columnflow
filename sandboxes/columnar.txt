@@ -1,4 +1,4 @@
-# version 6
+# version 7
 
 git+https://github.com/CoffeaTeam/coffea.git@b9356b9#egg=coffea
 awkward~=2.0
@@ -6,3 +6,6 @@ dask-awkward~=2023.1
 uproot~=5.0
 correctionlib~=2.2
 tabulate~=0.9
+zstandard~=0.19
+lz4~=4.3
+xxhash~=3.2
