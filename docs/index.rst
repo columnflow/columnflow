@@ -5,6 +5,7 @@
 .. toctree::
    :maxdepth: 1
 
+   start
    practices
    api/index
 

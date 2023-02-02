@@ -94,9 +94,12 @@ create_analysis() {
     query_input "ca_module_name" "Name of the python module in the analysis directory" "${ca_analysis_name,,}"
     query_input "ca_prefix" "Short prefix for environment variables" - "no default"
     query_input "ca_use_ssh" "Use ssh for git submodules" "True"
+    echo
 
     # post-changes
-    ca_prefix="${ca_prefix%_}_"
+    export ca_prefix="${ca_prefix%_}"
+    export ca_prefix_lc="${ca_prefix,,}"
+    export ca_prefix_uc="${ca_prefix^^}"
 
 
     #
@@ -104,26 +107,61 @@ create_analysis() {
     #
 
     local ca_analysis_base="${this_dir}/${ca_analysis_name}"
+
+    echo "checking out analysis tempate to ${ca_analysis_base}"
+
     mkdir "${ca_analysis_base}" || return "$?"
     # mkdir "${this_dir}/.cf_analysis_setup" || return "$?"
     # cd "${this_dir}/.cf_analysis_setup"
     # curl -L -s -k https://github.com/uhh-cms/columnflow/tarball/feature/template_analysis | tar -xz || return "$?"
-    # mv uhh-cms-columnflow-*/analysis_template/* "${ca_analysis_base}" || return "$?"
+    # mv uhh-cms-columnflow-*/analysis_template/default/* "${ca_analysis_base}" || return "$?"
     # cd "${ca_analysis_base}" || return "$?"
     # rm -rf "${this_dir}/.cf_analysis_setup"
 
     # dev
-    cp -r /afs/desy.de/user/r/riegerma/repos/uhh-cms/hh2bbtautau/modules/columnflow/analysis_template/* "${ca_analysis_base}"
+    cp -r /afs/desy.de/user/r/riegerma/repos/uhh-cms/hh2bbtautau/modules/columnflow/analysis_template/default/* "${ca_analysis_base}"
     cd "${ca_analysis_base}" || return "$?"
     # dev end
+
+    echo "done"
+    echo
+
+
+    #
+    # insert variables
+    #
+
+    # rename files
+    echo "renaming files"
+    find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv -i "$1" "${1//__cf_analysis_name__/'${ca_analysis_name}'}"' bash {} \;
+    find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv -i "$1" "${1//__cf_module_name__/'${ca_module_name}'}"' bash {} \;
+    find . -depth -name '*__cf_prefix_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_prefix_lc__/'${ca_prefix_lc}'}"' bash {} \;
+    find . -depth -name '*__cf_prefix_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_prefix_uc__/'${ca_prefix_uc}'}"' bash {} \;
+    echo "done"
+
+    echo
+
+    # update files
+    echo "inserting placeholders"
+    find . -type f -exec sed -i 's/__cf_analysis_name__/'${ca_analysis_name}'/g' {} +
+    find . -type f -exec sed -i 's/__cf_module_name__/'${ca_module_name}'/g' {} +
+    find . -type f -exec sed -i 's/__cf_prefix_lc__/'${ca_prefix_lc}'/g' {} +
+    find . -type f -exec sed -i 's/__cf_prefix_uc__/'${ca_prefix_uc}'/g' {} +
+    echo "done"
 
 
     #
     # setup git and submodules
     #
 
-    git init
+    echo
+    echo "setup git repository"
+    git init -b master
+    echo "done"
 
+    echo
+
+    echo "setup submodules"
     mkdir -p modules
     if [ "${ca_use_ssh}" ]; then
         git submodule add git@github.com:uhh-cms/columnflow.git modules/columnflow
@@ -133,21 +171,27 @@ create_analysis() {
         git submodule add https://github.com/uhh-cms/cmsdb.git modules/cmsdb
     fi
     git submodule update --init --recursive
+    echo "done"
 
 
     #
-    # replace variables
+    # minimal setup instructions
     #
 
-    # rename files
-    find . -depth -name '*plc2hldr*' -execdir bash -c 'mv -i "$1" "${1//plc2hldr/'$repository_name'}"' bash {} \;
-    find . -depth -name '*plhld*' -execdir bash -c 'mv -i "$1" "${1//plhld/'$analysis_name'}"' bash {} \;
-    find . -depth -name '*PLHLD*' -execdir bash -c 'mv -i "$1" "${1//PLHLD/'$ANALYSIS_NAME'}"' bash {} \;
+    echo
+    echo "Setup successfull! The next steps are:"
 
-    # replace variables in files
-    find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/plc2hldr/'$repository_name'/g' {} +
-    find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/plhld/'$analysis_name'/g' {} +
-    find . \( -name .git -o -name modules \) -prune -o -type f -exec sed -i 's/PLHLD/'$ANALYSIS_NAME'/g' {} +
+    echo
+
+    echo "1. Setup the repository and install the environment:"
+    echo "  > source setup.sh [optional_setup_name]"
+
+    echo
+
+    echo "2. Checkout the 'Getting started' guide to run your first tasks:"
+    echo "  https://columnflow.readthedocs.io/en/master/start.html"
+
+    echo
 }
 
 create_analysis "$@"
