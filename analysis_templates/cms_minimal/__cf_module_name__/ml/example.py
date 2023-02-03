@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Exemplary ML model.
+Test model definition.
 """
 
 from __future__ import annotations
@@ -19,57 +19,56 @@ from columnflow.columnar_util import Route, set_ak_column
 ak = maybe_import("awkward")
 tf = maybe_import("tensorflow")
 
+law.contrib.load("tensorflow")
+
 
 class ExampleModel(MLModel):
 
     def __init__(self, *args, folds: int | None = None, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # class- to instance-level attributes
+        # class-to-instance-level attributes
         # (before being set, self.folds refers to a class-level attribute)
         self.folds = folds or self.folds
 
         # dynamically add variables for the quantities produced by this model
-        if f"{self.cls_name}.n_muon" not in self.config_inst.variables:
+        if f"{self.cls_name}.output" not in self.config_inst.variables:
             self.config_inst.add_variable(
-                name=f"{self.cls_name}.n_muon",
+                name=f"{self.cls_name}.output",
                 null_value=-1,
-                binning=(4, -1.5, 2.5),
-                x_title="Predicted number of muons",
-            )
-            self.config_inst.add_variable(
-                name=f"{self.cls_name}.n_electron",
-                null_value=-1,
-                binning=(4, -1.5, 2.5),
-                x_title="Predicted number of electrons",
+                binning=(20, -1.0, 1.0),
+                x_title=f"{self.cls_name} DNN output",
             )
 
     def sandbox(self, task: law.Task) -> str:
-        return dev_sandbox("bash::$CF_BASE/sandboxes/venv_ml_tf.sh")
+        return dev_sandbox("bash::$__cf_short_name_uc___BASE/sandboxes/example.sh")
 
     def datasets(self) -> set[od.Dataset]:
         return {
-            self.config_inst.get_dataset("st_tchannel_t"),
-            self.config_inst.get_dataset("tt_sl"),
+            self.config_inst.get_dataset("st_tchannel_t_powheg"),
+            self.config_inst.get_dataset("tt_sl_powheg"),
         }
 
     def uses(self) -> set[Route | str]:
-        return {"ht", "n_jet", "n_muon", "n_electron", "normalization_weight"}
+        return {
+            "Jet.pt", "Muon.pt",
+        }
 
     def produces(self) -> set[Route | str]:
-        return {f"{self.cls_name}.n_muon", f"{self.cls_name}.n_electron"}
+        return {
+            f"{self.cls_name}.ouptut",
+        }
 
     def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
         return task.target(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
 
-    def open_model(self, target: law.LocalDirectoryTarget) -> tf.keras.models.Model:
-        return tf.keras.models.load_model(target.path)
+    def open_model(self, target: law.FileSystemDirectoryTarget) -> tf.keras.models.Model:
+        return target.load(formatter="tf_keras_model")
 
     def train(
         self,
         task: law.Task,
-        input: Any,
-        output: law.LocalDirectoryTarget,
+        input: dict[str, list[law.FileSystemFileTarget]],
+        output: law.FileSystemDirectoryTarget,
     ) -> None:
         # define a dummy NN
         x = tf.keras.Input(shape=(2,))
@@ -78,8 +77,7 @@ class ExampleModel(MLModel):
         model = tf.keras.Model(inputs=x, outputs=y)
 
         # the output is just a single directory target
-        output.parent.touch()
-        model.save(output.path)
+        output.dump(model, formatter="tf_keras_model")
 
     def evaluate(
         self,
@@ -90,11 +88,10 @@ class ExampleModel(MLModel):
         events_used_in_training: bool = False,
     ) -> ak.Array:
         # fake evaluation
-        events = set_ak_column(events, f"{self.cls_name}.n_muon", 1)
-        events = set_ak_column(events, f"{self.cls_name}.n_electron", 1)
+        events = set_ak_column(events, f"{self.cls_name}.output", 0.5)
 
         return events
 
 
 # usable derivations
-example = ExampleModel.derive("example", cls_dict={"folds": 3})
+example = ExampleModel.derive("example", cls_dict={"folds": 2})
