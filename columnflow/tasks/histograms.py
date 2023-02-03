@@ -153,7 +153,7 @@ class CreateHistograms(
                         weight = weight * Route(column).apply(events)
                     else:
                         self.logger.warning_once(
-                            "missing_dataset_weight",
+                            f"missing_dataset_weight_{column}",
                             f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                         )
 
