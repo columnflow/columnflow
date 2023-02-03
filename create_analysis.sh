@@ -196,6 +196,12 @@ create_analysis() {
 
     echo
 
+    echo "enable lfs"
+    git lfs install
+    echo "done"
+
+    echo
+
     echo "setup submodules"
     mkdir -p modules
     if [ "${cf_use_ssh}" ]; then
