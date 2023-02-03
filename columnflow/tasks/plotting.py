@@ -201,7 +201,7 @@ class PlotVariablesBaseSingleShift(
         ]
 
     def get_plot_shifts(self):
-        return [self.shift_inst]
+        return [self.requested_shift_inst]
 
 
 class PlotVariables1D(
@@ -288,8 +288,11 @@ class PlotVariablesBaseMultiShifts(
 
     def get_plot_shifts(self):
         return [
-            self.config_inst.get_shift(s) for s in
-            ["nominal", f"{self.branch_data.shift_source}_up", f"{self.branch_data.shift_source}_down"]
+            self.config_inst.get_shift(s) for s in [
+                "nominal",
+                f"{self.branch_data.shift_source}_up",
+                f"{self.branch_data.shift_source}_down",
+            ]
         ]
 
     def get_plot_parameters(self):

@@ -178,7 +178,7 @@ class MLModel(Derivable):
         """
         Returns required tasks that should be performed beforehand and whose outputs are needed.
         """
-        return None
+        return {}
 
     def output(self, task: law.Task) -> Any:
         """
