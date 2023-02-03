@@ -6,7 +6,7 @@
 # > curl https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh | bash
 #
 # A few variables are queried at the beginning of the project creation and inserted into a template
-# analysis. For more insights, checkout the "analysis_template" directory.
+# analysis. For more insights, checkout the "analysis_templates" directory.
 
 create_analysis() {
     #
@@ -147,13 +147,13 @@ create_analysis() {
     echo "checking out analysis tempate to ${cf_analysis_base}"
 
     if ${debug}; then
-        cp -r "${this_dir}/analysis_template/${cf_analysis_flavor}/"* "${cf_analysis_base}"
+        cp -r "${this_dir}/analysis_templates/${cf_analysis_flavor}/"* "${cf_analysis_base}"
         cd "${cf_analysis_base}" || return "$?"
     else
         mkdir "${exec_dir}/.cf_analysis_setup" || return "$?"
         cd "${exec_dir}/.cf_analysis_setup"
         curl -L -s -k "https://github.com/uhh-cms/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
-        mv uhh-cms-columnflow-*/analysis_template/${cf_analysis_flavor}/* "${cf_analysis_base}" || return "$?"
+        mv uhh-cms-columnflow-*/analysis_templates/${cf_analysis_flavor}/* "${cf_analysis_base}" || return "$?"
         cd "${cf_analysis_base}" || return "$?"
         rm -rf "${exec_dir}/.cf_analysis_setup"
     fi
