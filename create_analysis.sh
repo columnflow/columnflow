@@ -9,8 +9,17 @@
 # analysis. For more insights, checkout the "analysis_template" directory.
 
 create_analysis() {
+    #
+    # locals
+    #
+
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
-    local this_dir="$( pwd )"
+    local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
+    local exec_dir="$( pwd )"
+    local debug="false"
+    local fetch_cf_branch="feature/template_analysis"
+    local fetch_cmsdb_branch="master"
 
 
     #
@@ -28,38 +37,48 @@ create_analysis() {
         local varname="$1"
         local text="$2"
         local default="$3"
-        local default_text="${4:-$default}"
+        local choices="$4"
+
+        # build the query text
+        local input_line="${text}"
+        local opened_parenthesis="false"
+        if [ "${default}" != "-" ]; then
+            opened_parenthesis="true"
+            input_line="${input_line} (default: '${default}'"
+        fi
+        if [ ! -z "${choices}" ]; then
+            ${opened_parenthesis} && input_line="${input_line}, " || input_line="${input_line} ("
+            opened_parenthesis="true"
+            input_line="${input_line}choices: '${choices}'"
+        fi
+        ${opened_parenthesis} && input_line="${input_line})"
+        input_line="${input_line}: "
 
         # first query
-        local input_line="${text}"
-        [ "${default}" != "-" ] && input_line="${input_line} (default: '${default_text}')"
-        input_line="${input_line}:  "
         printf "${input_line}"
         read query_response
 
         # input checks
         while true; do
-            # re-query empty values without defaults
-            if [ "${default}" = "-" ] && [ "${query_response}" = "" ]; then
-                echo "this setting requires a value"
+            # handle empty responses
+            if [ "${query_response}" = "" ]; then
+                # re-query empty values without defaults
+                if [ "${default}" = "-" ]; then
+                    echo "a value is required"
+                    printf "${input_line}"
+                    read query_response
+                    continue
+                else
+                    query_response="${default}"
+                fi
+            fi
+
+            # compare to choices when given
+            if [ ! -z "${choices}" ] && [[ ! ",${choices}," =~ ",${query_response}," ]]; then
+                echo "invalid choice"
                 printf "${input_line}"
                 read query_response
                 continue
-            fi
-
-            # re-query bools in wrong format
-            if [ "${default}" = "True" ] || [ "${default}" = "False" ]; then
-                if [ "${query_response}" = "" ]; then
-                    query_response="${default}"
-                elif [ "${query_response,,}" = "true" ]; then
-                    query_response="True"
-                elif [ "${query_response,,}" = "false" ]; then
-                    query_response="False"
-                else
-                    printf "please enter either True or False:  "
-                    read query_response
-                    continue
-                fi
             fi
 
             # check characters
@@ -90,38 +109,54 @@ create_analysis() {
     echo "start creating columnflow-based analysis in local directory"
     echo
 
-    query_input "ca_analysis_name" "Name of the analysis" - "no default"
-    query_input "ca_module_name" "Name of the python module in the analysis directory" "${ca_analysis_name,,}"
-    query_input "ca_prefix" "Short prefix for environment variables" - "no default"
-    query_input "ca_use_ssh" "Use ssh for git submodules" "True"
+    query_input "cf_analysis_name" "Name of the analysis" "-"
+    echo
+    query_input "cf_module_name" "Name of the python module in the analysis directory" "${cf_analysis_name,,}"
+    echo
+    query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "-"
+    echo
+    query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "cms_minimal" "cms_minimal"
+    echo
+    query_input "cf_use_ssh" "Use ssh for git submodules" "True" "True,False"
     echo
 
-    # post-changes
-    export ca_prefix="${ca_prefix%_}"
-    export ca_prefix_lc="${ca_prefix,,}"
-    export ca_prefix_uc="${ca_prefix^^}"
+    # changes
+    export cf_short_name="${cf_short_name%_}"
+    export cf_short_name_lc="${cf_short_name,,}"
+    export cf_short_name_uc="${cf_short_name^^}"
+
+    # debug output
+    if ${debug}; then
+        echo "analysis name  : ${cf_analysis_name}"
+        echo "module name    : ${cf_module_name}"
+        echo "short name lc  : ${cf_short_name_lc}"
+        echo "short name uc  : ${cf_short_name_uc}"
+        echo "analysis flavor: ${cf_analysis_flavor}"
+        echo "use ssh        : ${cf_use_ssh}"
+        echo
+    fi
 
 
     #
     # checkout the analysis template
     #
 
-    local ca_analysis_base="${this_dir}/${ca_analysis_name}"
+    local cf_analysis_base="${exec_dir}/${cf_analysis_name}"
+    mkdir "${cf_analysis_base}" || return "$?"
 
-    echo "checking out analysis tempate to ${ca_analysis_base}"
+    echo "checking out analysis tempate to ${cf_analysis_base}"
 
-    mkdir "${ca_analysis_base}" || return "$?"
-    # mkdir "${this_dir}/.cf_analysis_setup" || return "$?"
-    # cd "${this_dir}/.cf_analysis_setup"
-    # curl -L -s -k https://github.com/uhh-cms/columnflow/tarball/feature/template_analysis | tar -xz || return "$?"
-    # mv uhh-cms-columnflow-*/analysis_template/default/* "${ca_analysis_base}" || return "$?"
-    # cd "${ca_analysis_base}" || return "$?"
-    # rm -rf "${this_dir}/.cf_analysis_setup"
-
-    # dev
-    cp -r /afs/desy.de/user/r/riegerma/repos/uhh-cms/hh2bbtautau/modules/columnflow/analysis_template/default/* "${ca_analysis_base}"
-    cd "${ca_analysis_base}" || return "$?"
-    # dev end
+    if ${debug}; then
+        cp -r "${this_dir}/analysis_template/${cf_analysis_flavor}/"* "${cf_analysis_base}"
+        cd "${cf_analysis_base}" || return "$?"
+    else
+        mkdir "${exec_dir}/.cf_analysis_setup" || return "$?"
+        cd "${exec_dir}/.cf_analysis_setup"
+        curl -L -s -k "https://github.com/uhh-cms/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
+        mv uhh-cms-columnflow-*/analysis_template/${cf_analysis_flavor}/* "${cf_analysis_base}" || return "$?"
+        cd "${cf_analysis_base}" || return "$?"
+        rm -rf "${exec_dir}/.cf_analysis_setup"
+    fi
 
     echo "done"
     echo
@@ -133,20 +168,20 @@ create_analysis() {
 
     # rename files
     echo "renaming files"
-    find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv -i "$1" "${1//__cf_analysis_name__/'${ca_analysis_name}'}"' bash {} \;
-    find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv -i "$1" "${1//__cf_module_name__/'${ca_module_name}'}"' bash {} \;
-    find . -depth -name '*__cf_prefix_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_prefix_lc__/'${ca_prefix_lc}'}"' bash {} \;
-    find . -depth -name '*__cf_prefix_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_prefix_uc__/'${ca_prefix_uc}'}"' bash {} \;
+    find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv "$1" "${1//__cf_analysis_name__/'${cf_analysis_name}'}"' bash {} \;
+    find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv "$1" "${1//__cf_module_name__/'${cf_module_name}'}"' bash {} \;
+    find . -depth -name '*__cf_short_name_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_lc__/'${cf_short_name_lc}'}"' bash {} \;
+    find . -depth -name '*__cf_short_name_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_uc__/'${cf_short_name_uc}'}"' bash {} \;
     echo "done"
 
     echo
 
     # update files
     echo "inserting placeholders"
-    find . -type f -exec sed -i 's/__cf_analysis_name__/'${ca_analysis_name}'/g' {} +
-    find . -type f -exec sed -i 's/__cf_module_name__/'${ca_module_name}'/g' {} +
-    find . -type f -exec sed -i 's/__cf_prefix_lc__/'${ca_prefix_lc}'/g' {} +
-    find . -type f -exec sed -i 's/__cf_prefix_uc__/'${ca_prefix_uc}'/g' {} +
+    find . -type f -execdir sed -i 's/__cf_analysis_name__/'${cf_analysis_name}'/g' {} \;
+    find . -type f -execdir sed -i 's/__cf_module_name__/'${cf_module_name}'/g' {} \;
+    find . -type f -execdir sed -i 's/__cf_short_name_lc__/'${cf_short_name_lc}'/g' {} \;
+    find . -type f -execdir sed -i 's/__cf_short_name_uc__/'${cf_short_name_uc}'/g' {} \;
     echo "done"
 
 
@@ -163,12 +198,16 @@ create_analysis() {
 
     echo "setup submodules"
     mkdir -p modules
-    if [ "${ca_use_ssh}" ]; then
-        git submodule add git@github.com:uhh-cms/columnflow.git modules/columnflow
-        git submodule add git@github.com:uhh-cms/cmsdb.git modules/cmsdb
+    if [ "${cf_use_ssh}" ]; then
+        git submodule add -b "${fetch_cf_branch}" git@github.com:uhh-cms/columnflow.git modules/columnflow
+        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+            git submodule add -b "${fetch_cmsdb_branch}" git@github.com:uhh-cms/cmsdb.git modules/cmsdb
+        fi
     else
-        git submodule add https://github.com/uhh-cms/columnflow.git modules/columnflow
-        git submodule add https://github.com/uhh-cms/cmsdb.git modules/cmsdb
+        git submodule add -b "${fetch_cf_branch}" https://github.com/uhh-cms/columnflow.git modules/columnflow
+        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+            git submodule add "${fetch_cmsdb_branch}" https://github.com/uhh-cms/cmsdb.git modules/cmsdb
+        fi
     fi
     git submodule update --init --recursive
     echo "done"
