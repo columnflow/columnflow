@@ -17,9 +17,9 @@ create_analysis() {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local exec_dir="$( pwd )"
-    local debug="false"
-    local fetch_cf_branch="feature/template_analysis"
+    local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
+    local debug="true"
 
 
     #
@@ -227,8 +227,49 @@ create_analysis() {
 
     echo
 
-    echo "2. Checkout the 'Getting started' guide to run your first tasks:"
+    echo "2. Run local tests & linting checks to verify that the analysis is setup correctly:"
+    echo "  > ./tests/run_all"
+
+    echo
+
+    echo "3. Create a GRID proxy if you intend to run tasks that need one:"
+    if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+        echo "  > voms-proxy-init -voms cms -rfc -valid 196:00"
+    else
+        echo "  > voms-proxy-init -rfc -valid 196:00"
+    fi
+
+    echo
+
+    echo "4. Checkout the 'Getting started' guide to run your first tasks:"
     echo "  https://columnflow.readthedocs.io/en/master/start.html"
+
+    echo
+
+    echo "  Suggestions for tasks to run:"
+    echo
+
+    echo "  a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the"
+    echo "     default dataset using the default calibrator and default selector"
+    echo "     (enter the command below and 'tab-tab' to see all arguments or add --help for help)"
+    echo "    > law run cf.ReduceEvents --version dev1 --branch 0"
+
+    echo
+
+    echo "  b) Create the jet1_pt distribution for the single top dataset:"
+    echo "    > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt"
+
+    echo
+
+    echo "  c) Include the ttbar dataset and also plot jet1_eta:"
+    echo "    > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta"
+
+    if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+        echo
+
+        echo "  d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py:"
+        echo "    > law run cf.CreateDatacards --version dev1 --inference-model example"
+    fi
 
     echo
 }
