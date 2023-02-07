@@ -1026,7 +1026,7 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
         raise TypeError(f"unhandled type of data array {data_array}")
 
     # infer the offsets
-    if not getattr(layout_array, "layout", None):
+    if not hasattr(layout_array, "layout"):
         raise ValueError(f"layout array {layout_array} does not have a valid layout")
     if getattr(layout_array.layout, "offsets", None):
         offsets = layout_array.layout.offsets
@@ -2102,14 +2102,16 @@ class DaskArrayReader(object):
                 divs = self.dak_array.divisions
                 # note: a hare-and-tortoise algorithm could be possible to get the mapping with less
                 # than n^2 complexity, but for our case with ~30 chunks this should be ok (for now)
-                for _chunk_index in range(int(math.ceil(len(self) / max_chunk_size))):
+                for _chunk_index in range(max(1, int(math.ceil(len(self) / max_chunk_size)))):
                     _entry_start = _chunk_index * max_chunk_size
                     _entry_stop = min(_entry_start + max_chunk_size, len(self))
                     partitions = []
                     for p, (p_start, p_stop) in enumerate(zip(divs[:-1], divs[1:])):
-                        if p_stop <= _entry_start:
+                        # note: check strict increase of chunk size
+                        # to accommodate zero-length size
+                        if p_stop <= _entry_start < _entry_stop:
                             continue
-                        if p_start >= _entry_stop:
+                        if p_start >= _entry_stop > _entry_start:
                             break
                         partitions.append(p)
                         self.partition_cache[p].chunks.append(_chunk_index)
@@ -2143,6 +2145,9 @@ class DaskArrayReader(object):
             # make the array non-optional, assuming it is not meant to be optional
             # TODO: remove this workaround once this other workaround is removed as well:
             # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
+            # skip null-filling for completely empty arrays
+            if not parts[-1].layout.contents:
+                continue
             if getattr(parts[-1], "fields", None) and ak.any(ak.ravel(ak.is_none(parts[-1]))):
                 logger.warning(
                     f"None values detected in chunk {chunk_index} of file {self.path} during "
@@ -2155,6 +2160,7 @@ class DaskArrayReader(object):
 
         # construct the full array
         arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
+
         del parts
         gc.collect()
 
@@ -2708,7 +2714,7 @@ class ChunkedIOHandler(object):
         """
         if self.n_entries is None:
             raise AttributeError("cannot determine number of chunks before open()")
-        return int(math.ceil(self.n_entries / self.chunk_size))
+        return max(1, int(math.ceil(self.n_entries / self.chunk_size)))
 
     @property
     def closed(self) -> bool:
