@@ -111,13 +111,14 @@ class ReduceEvents(
         read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
-        masks_meta = inputs["selection"]["results"].load(formatter="dask_awkward").objects
         write_columns_toplevel = {Route(r)[0] for r in write_columns}
-        for src_field in masks_meta.fields:
-            for dst_field in masks_meta[src_field].fields:
-                if law.util.multi_match(dst_field, write_columns_toplevel):
-                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
-        del masks_meta
+        sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
+        if "objects" in sel_results.fields:
+            for src_field in sel_results.objects.fields:
+                for dst_field in sel_results.objects[src_field].fields:
+                    if law.util.multi_match(dst_field, write_columns_toplevel):
+                        read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+        del sel_results
 
         # event counters
         n_all = 0
@@ -172,18 +173,19 @@ class ReduceEvents(
 
             # loop through all object selection, go through their masks
             # and create new collections if required
-            for src_name in sel.objects.fields:
-                # get all destination collections, handling those named identically to the
-                # source collection last
-                dst_names = list(sel["objects", src_name].fields)
-                if src_name in dst_names:
-                    # move to the end
-                    dst_names.remove(src_name)
-                    dst_names.append(src_name)
-                for dst_name in dst_names:
-                    object_mask = sel.objects[src_name, dst_name][event_mask]
-                    dst_collection = events[src_name][object_mask]
-                    events = set_ak_column(events, dst_name, dst_collection)
+            if hasattr(sel, "objects"):
+                for src_name in sel.objects.fields:
+                    # get all destination collections, handling those named identically to the
+                    # source collection last
+                    dst_names = list(sel["objects", src_name].fields)
+                    if src_name in dst_names:
+                        # move to the end
+                        dst_names.remove(src_name)
+                        dst_names.append(src_name)
+                    for dst_name in dst_names:
+                        object_mask = sel.objects[src_name, dst_name][event_mask]
+                        dst_collection = events[src_name][object_mask]
+                        events = set_ak_column(events, dst_name, dst_collection)
 
             # remove columns
             events = route_filter(events)
