@@ -22,6 +22,8 @@ ak = maybe_import("awkward")
     produces={
         "muon_weight", "muon_weight_up", "muon_weight_down",
     },
+    # only run on mc
+    mc_only=True,
 )
 def muon_weights(
     self: Producer,
@@ -50,10 +52,6 @@ def muon_weights(
     Optionally, a *muon_mask* can be supplied to compute the scale factor weight
     based only on a subset of muons.
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute muon weights in data")
-
     # get year string
     sf_year = self.config_inst.x.muon_sf_names[1]
 

@@ -372,6 +372,10 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     }
 
 
+# custom jec calibrator that only runs nominal correction
+jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
+
+
 #
 # jet energy resolution smearing
 #
@@ -393,6 +397,8 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     },
     # toggle for propagation to MET
     propagate_met=True,
+    # only run on mc
+    mc_only=True,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -640,8 +646,8 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 #
 
 @calibrator(
-    uses={jec},
-    produces={jec},
+    uses={jec, jer},
+    produces={jec, jer},
     # toggle for propagation to MET
     propagate_met=True,
 )
@@ -658,9 +664,6 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator) -> None:
+    # forward the propagate_met argument to the producers
     self.deps_kwargs[jec] = {"propagate_met": self.propagate_met}
-
-    if getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc:
-        self.uses |= {jer}
-        self.produces |= {jer}
-        self.deps_kwargs[jer] = {"propagate_met": self.propagate_met}
+    self.deps_kwargs[jer] = {"propagate_met": self.propagate_met}

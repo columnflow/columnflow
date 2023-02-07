@@ -19,7 +19,8 @@ ak = maybe_import("awkward")
     uses={
         "Jet.hadronFlavour", "Jet.eta", "Jet.pt", "Jet.btagDeepFlavB",
     },
-    # produced columns are defined in the init function below
+    # only run on mc
+    mc_only=True,
 )
 def btag_weights(
     self: Producer,
@@ -51,10 +52,6 @@ def btag_weights(
        - https://twiki.cern.ch/twiki/bin/view/CMS/BTagShapeCalibration?rev=26
        - https://indico.cern.ch/event/1096988/contributions/4615134/attachments/2346047/4000529/Nov21_btaggingSFjsons.pdf
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute btag weights in data")
-
     # get the total number of jets in the chunk
     n_jets_all = ak.sum(ak.num(events.Jet, axis=1))
 

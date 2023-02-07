@@ -377,6 +377,10 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     ]
 
 
+# custom jec calibrator that only runs nominal correction
+jec_coffea_nominal = jec_coffea.derive("jec_coffea_nominal", cls_dict={"uncertainty_sources": []})
+
+
 #
 # Jet energy resolution smearing
 #
@@ -398,16 +402,14 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     },
     # toggle for propagation to MET
     propagate_met=True,
+    # only run on mc
+    mc_only=True,
 )
 def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
     Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
     """
-    # complain when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to apply jet energy resolution smearing in data")
-
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, "Jet.pt_unsmeared", events.Jet.pt)
     events = set_ak_column_f32(events, "Jet.mass_unsmeared", events.Jet.mass)
@@ -636,8 +638,8 @@ def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 #
 
 @calibrator(
-    uses={jec_coffea},
-    produces={jec_coffea},
+    uses={jec_coffea, jer_coffea},
+    produces={jec_coffea, jer_coffea},
     # toggle for propagation to MET
     propagate_met=True,
 )
@@ -654,9 +656,6 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets_coffea.init
 def jets_coffea_init(self: Calibrator) -> None:
+    # forward the propagate_met argument to the producers
     self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}
-
-    if getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc:
-        self.uses |= {jer_coffea}
-        self.produces |= {jer_coffea}
-        self.deps_kwargs[jer_coffea] = {"propagate_met": self.propagate_met}
+    self.deps_kwargs[jer_coffea] = {"propagate_met": self.propagate_met}

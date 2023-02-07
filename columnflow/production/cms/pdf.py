@@ -27,6 +27,8 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
     produces={
         "pdf_weight", "pdf_weight_up", "pdf_weight_down",
     },
+    # only run on mc
+    mc_only=True,
 )
 def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -39,10 +41,6 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
        - https://arxiv.org/pdf/1510.03865.pdf
     """
-    # stop here for data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to determine pdf variations in data")
-
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
     bad_mask = (n_weights != 101) & (n_weights != 103)
