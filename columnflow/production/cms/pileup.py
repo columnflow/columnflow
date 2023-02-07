@@ -21,6 +21,8 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 @producer(
     uses={"PV.npvs"},
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
+    # only run on mc
+    mc_only=True,
 )
 def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -28,10 +30,6 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     of pileup ratios at the py:attr:`pu_weights` attribute provided by the requires and setup
     functions below.
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute pileup weights in data")
-
     # compute the indices for looking up weights
     indices = events.PV.npvs.to_numpy() - 1
     max_bin = len(self.pu_weights) - 1

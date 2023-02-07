@@ -19,6 +19,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={process_ids, "mc_weight"},
     produces={process_ids, "normalization_weight"},
+    # only run on mc
+    mc_only=True,
 )
 def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -26,10 +28,6 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     obtained through :py:class:`category_ids` and the sum of event weights from the
     py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute normalization weights in data")
-
     # add process ids
     events = self[process_ids](events, **kwargs)
 

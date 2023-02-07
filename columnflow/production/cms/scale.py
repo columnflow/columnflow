@@ -29,6 +29,8 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
         "muf_weight", "muf_weight_up", "muf_weight_down",
         "murmuf_weight", "murmuf_weight_up", "murmuf_weight_down",
     },
+    # only run on mc
+    mc_only=True,
 )
 def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -40,10 +42,6 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     Resources:
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
-    # stop here for data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to read out mur/muf weights in data")
-
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
     if ak.any(n_weights != 9):
         bad_values = set(n_weights[n_weights != 9])
@@ -84,6 +82,8 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 @producer(
     uses={"LHEScaleWeight"},
     produces={"murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down"},
+    # only run on mc
+    mc_only=True,
 )
 def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -95,10 +95,6 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     Resources:
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
-    # stop here for data
-    if self.dataset_inst.is_data:
-        return events
-
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
     if ak.any(n_weights != 9):
         bad_values = set(n_weights[n_weights != 9])

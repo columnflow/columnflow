@@ -16,6 +16,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={"genWeight", "LHEWeight.originalXWGTUP"},
     produces={"mc_weight"},
+    # only run on mc
+    mc_only=True,
 )
 def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -30,10 +32,6 @@ def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     [1] https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookNanoAOD?rev=99#Weigths
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute mc_weight in data")
-
     # determine the mc_weight
     mc_weight = events.genWeight
     if has_ak_column(events, "LHEWeight.originalXWGTUP") and ak.all(events.genWeight == 1.0):

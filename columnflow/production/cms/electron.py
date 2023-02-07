@@ -22,6 +22,8 @@ ak = maybe_import("awkward")
     produces={
         "electron_weight", "electron_weight_up", "electron_weight_down",
     },
+    # only run on mc
+    mc_only=True,
 )
 def electron_weights(
     self: Producer,
@@ -47,10 +49,6 @@ def electron_weights(
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight
     based only on a subset of electrons.
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute electron weights in data")
-
     # get year string and working point name
     sf_year, wp = self.config_inst.x.electron_sf_names[1:]
 
