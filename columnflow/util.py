@@ -11,7 +11,7 @@ __all__ = [
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
     "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
     "safe_div", "test_float", "is_pattern", "is_regex", "pattern_matcher",
-    "get_root_processes_from_campaign",
+    "get_root_processes_from_campaign", "dict_add_strict", "get_source_code",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
@@ -499,6 +499,27 @@ def dict_add_strict(d: dict, key: str, value: Any) -> None:
     if key in d.keys() and d[key] != value:
         raise KeyError(f"'{d.__class__.__name__}' object already has key {key}")
     d[key] = value
+
+
+def get_source_code(obj: Any, indent: str | int = None) -> str:
+    """
+    Returns the source code of any object *obj* as a string. When *indent* is not *None*, the code
+    indentation is first removed and then re-applied with *indent* if it is a string, or by that
+    many spaces in case it is an integer.
+    """
+    code = inspect.getsource(obj)
+
+    if indent is not None:
+        code = code.replace("\t", "    ")
+        lines = code.split("\n")
+        n_old_indent = len(lines[0]) - len(lines[0].lstrip(" "))
+        new_indent = (" " * indent) if isinstance(indent, int) else indent
+        code = "\n".join(
+            (new_indent + line[n_old_indent:]) if line.strip() else ""
+            for line in lines
+        )
+
+    return code
 
 
 class DotDict(OrderedDict):
