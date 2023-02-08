@@ -1,28 +1,14 @@
-.. figure:: https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png
-   :width: 480
-   :target: https://github.com/uhh-cms/columnflow
-   :align: center
-   :alt: columnflow logo
+<center>
+    <a href="https://github.com/uhh-cms/columnflow">
+        <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
+    </a>
+</center>
 
-.. image:: https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg
-   :target: https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml
-   :alt: Build status
-
-.. image:: https://img.shields.io/pypi/v/columnflow.svg?style=flat
-   :target: https://pypi.python.org/pypi/columnflow
-   :alt: Package version
-
-.. image:: https://readthedocs.org/projects/columnflow/badge/?version=master
-   :target: http://columnflow.readthedocs.io
-   :alt: Documentation status
-
-.. image:: https://codecov.io/gh/uhh-cms/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP
-   :target: https://codecov.io/gh/uhh-cms/columnflow
-   :alt: Code coverge
-
-.. image:: https://img.shields.io/github/license/uhh-cms/columnflow.svg
-   :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
-   :alt: License
+[![Build status](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml)
+[![Package version](https://img.shields.io/pypi/v/columnflow.svg?style=flat)](https://pypi.python.org/pypi/columnflow)
+[![Documentation status](https://readthedocs.org/projects/columnflow/badge/?version=master)](http://columnflow.readthedocs.io)
+[![Code coverge](https://codecov.io/gh/uhh-cms/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP)](https://codecov.io/gh/uhh-cms/columnflow)
+[![License](https://img.shields.io/github/license/uhh-cms/columnflow.svg)](https://github.com/uhh-cms/columnflow/blob/master/LICENSE)
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
@@ -107,7 +93,7 @@ For a better overview of the tasks that are triggered by the commands below, che
 
 ## Development
 
-- Source hosted at [GitHub[(https://github.com/uhh-cms/columnflow)
+- Source hosted at [GitHub](https://github.com/uhh-cms/columnflow)
 - Report issues, questions, feature requests on [GitHub Issues](https://github.com/uhh-cms/columnflow/issues)
 
 <!-- marker-after-body -->
