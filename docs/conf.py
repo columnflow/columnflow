@@ -59,6 +59,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.autosectionlabel",
     "autodocsumm",
+    "myst_parser",
     "pydomain_patch",
 ]
 
