@@ -1,4 +1,7 @@
 <center>
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
     <a href="https://github.com/uhh-cms/columnflow">
         <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
     </a>
@@ -82,6 +85,20 @@ For a better overview of the tasks that are triggered by the commands below, che
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="http://marcelrieger.com"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel R."/><br /><sub><b>Marcel R.</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
 
