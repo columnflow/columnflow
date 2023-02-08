@@ -31,7 +31,7 @@ classifiers = [
 
 
 # read the readme file
-with open(os.path.join(this_dir, "README.rst"), "r") as f:
+with open(os.path.join(this_dir, "README.md"), "r") as f:
     long_description = f.read()
 
 
