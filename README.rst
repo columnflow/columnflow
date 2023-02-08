@@ -43,7 +43,7 @@ However, if you would like to join early on, contribute or just give it a spin, 
 Quickstart
 ----------
 
-To create an analysis using columnflow, it is recommended to start from a predefined template (located in ).
+To create an analysis using columnflow, it is recommended to start from a predefined template (located in `analysis_templates <./analysis_templates>`__).
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 .. code-block:: bash
