@@ -9,9 +9,6 @@
 [![Documentation status](https://readthedocs.org/projects/columnflow/badge/?version=master)](http://columnflow.readthedocs.io)
 [![Code coverge](https://codecov.io/gh/uhh-cms/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP)](https://codecov.io/gh/uhh-cms/columnflow)
 [![License](https://img.shields.io/github/license/uhh-cms/columnflow.svg)](https://github.com/uhh-cms/columnflow/blob/master/LICENSE)
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors)
- <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
@@ -97,23 +94,18 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/nprouvost"><img src="https://avatars.githubusercontent.com/u/49162277?v=4?s=100" width="100px;" alt="nprouvost"/><br /><sub><b>nprouvost</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Bogdan-Wiederspan"><img src="https://avatars.githubusercontent.com/u/79155113?v=4?s=100" width="100px;" alt="Bogdan-Wiederspan"/><br /><sub><b>Bogdan-Wiederspan</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=kramerto" title="Code">💻</a></td>
+    </tr>
+    <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mschrode" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
-
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
-
 <!-- ALL-CONTRIBUTORS-LIST:END -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
 
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
 
 
 ## Development
