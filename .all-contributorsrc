@@ -8,14 +8,24 @@
   "contributors": [
     {
       "login": "riga",
-      "name": "Marcel R.",
+      "name": "Marcel Rieger",
       "avatar_url": "https://avatars.githubusercontent.com/u/1908734?v=4",
-      "profile": "http://marcelrieger.com",
+      "profile": "https://github.com/riga",
       "contributions": [
         "code",
         "review",
         "doc",
         "test"
+      ]
+    },
+    {
+      "login": "mafrahm",
+      "name": "Mathis Frahm",
+      "avatar_url": "https://avatars.githubusercontent.com/u/49306645?v=4",
+      "profile": "https://github.com/mafrahm",
+      "contributions": [
+        "code",
+        "review"
       ]
     },
     {
