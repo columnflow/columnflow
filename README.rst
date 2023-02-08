@@ -97,6 +97,23 @@ Projects using columnflow
 - `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
 
 
+Contributors
+------------
+
+.. raw:: html
+
+    <embed>
+        <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+        <!-- prettier-ignore-start -->
+        <!-- markdownlint-disable -->
+
+        <!-- markdownlint-restore -->
+        <!-- prettier-ignore-end -->
+
+        <!-- ALL-CONTRIBUTORS-LIST:END -->
+    </embed>
+
+
 Development
 -----------
 
