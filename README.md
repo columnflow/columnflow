@@ -24,14 +24,12 @@
    :target: https://github.com/uhh-cms/columnflow/blob/master/LICENSE
    :alt: License
 
-Backend for columnar, fully orchestrated HEP analyses with pure Python, `law <https://github.com/riga/law>`__ and `order <https://github.com/riga/order>`__.
+Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
+
+<!-- marker-after-header -->
 
 
-.. marker-after-header
-
-
-Note on current development
----------------------------
+## Note on current development
 
 This project is currently in a beta phase.
 The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
@@ -40,20 +38,18 @@ The first released version is expected in early 2023.
 However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
 
 
-Quickstart
-----------
+## Quickstart
 
-To create an analysis using columnflow, it is recommended to start from a predefined template (located in `analysis_templates <./analysis_templates>`__).
+To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](./analysis_templates).
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
-.. code-block:: bash
-
+```shell
     bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
+```
 
 At the end of the setup, you will see further instructions and suggestions to run your first analysis tasks (example below).
 
-.. code-block:: bash
-
+```
     Setup successfull! The next steps are:
 
     1. Setup the repository and install the environment.
@@ -83,41 +79,35 @@ At the end of the setup, you will see further instructions and suggestions to ru
 
       d) Create cms-style datacards for the example model in hgg/inference/example.py:
         > law run cf.CreateDatacards --version dev1 --inference-model example
+```
 
-For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) `task graph <https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827>`__.
-
-
-Projects using columnflow
--------------------------
-
-- `hh2bbtautau <https://github.com/uhh-cms/hh2bbtautau>`__: HH → bb𝜏𝜏 analysis with CMS.
-- `hh2bbww <https://github.com/uhh-cms/hh2bbww>`__: HH → bbWW analysis with CMS.
-- `topmass <https://github.com/uhh-cms/topmass>`__: Top quark mass measurement with CMS.
-- `mttbar <https://github.com/uhh-cms/mttbar>`__: Search for heavy resonances in ttbar events with CMS.
-- `analysis playground <https://github.com/uhh-cms/analysis_playground>`__: A testing playground for HEP analyses.
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827).
 
 
-Contributors
-------------
+## Projects using columnflow
 
-.. raw:: html
-
-    <embed>
-        <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-        <!-- prettier-ignore-start -->
-        <!-- markdownlint-disable -->
-
-        <!-- markdownlint-restore -->
-        <!-- prettier-ignore-end -->
-
-        <!-- ALL-CONTRIBUTORS-LIST:END -->
-    </embed>
+- [hh2bbtautau](https://github.com/uhh-cms/hh2bbtautau): HH → bb𝜏𝜏 analysis with CMS.
+- [hh2bbww](https://github.com/uhh-cms/hh2bbww): HH → bbWW analysis with CMS.
+- [topmass](https://github.com/uhh-cms/topmass): Top quark mass measurement with CMS.
+- [mttbar](https://github.com/uhh-cms/mttbar): Search for heavy resonances in ttbar events with CMS.
+- [analysis playground](https://github.com/uhh-cms/analysis_playground): A testing playground for HEP analyses.
 
 
-Development
------------
+## Contributors
 
-- Source hosted at `GitHub <https://github.com/uhh-cms/columnflow>`__
-- Report issues, questions, feature requests on `GitHub Issues <https://github.com/uhh-cms/columnflow/issues>`__
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 
-.. marker-after-body
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+
+## Development
+
+- Source hosted at [GitHub[(https://github.com/uhh-cms/columnflow)
+- Report issues, questions, feature requests on [GitHub Issues](https://github.com/uhh-cms/columnflow/issues)
+
+<!-- marker-after-body -->
