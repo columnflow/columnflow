@@ -1,10 +1,7 @@
 <center>
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
-    <a href="https://github.com/uhh-cms/columnflow">
-        <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
-    </a>
+  <a href="https://github.com/uhh-cms/columnflow">
+    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
+  </a>
 </center>
 
 [![Build status](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml)
@@ -33,41 +30,41 @@ To create an analysis using columnflow, it is recommended to start from a predef
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 ```shell
-    bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
+bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
 ```
 
 At the end of the setup, you will see further instructions and suggestions to run your first analysis tasks (example below).
 
 ```
-    Setup successfull! The next steps are:
+Setup successfull! The next steps are:
 
-    1. Setup the repository and install the environment.
-      > source setup.sh [optional_setup_name]
+  1. Setup the repository and install the environment.
+    > source setup.sh [optional_setup_name]
 
-    2. Run local tests & linting checks to verify that the analysis is setup correctly.
-      > ./tests/run_all
+  2. Run local tests & linting checks to verify that the analysis is setup correctly.
+    > ./tests/run_all
 
-    3. Create a GRID proxy if you intend to run tasks that need one
-      > voms-proxy-init -voms cms -rfc -valid 196:00
+  3. Create a GRID proxy if you intend to run tasks that need one
+    > voms-proxy-init -voms cms -rfc -valid 196:00
 
-    4. Checkout the 'Getting started' guide to run your first tasks.
-      https://columnflow.readthedocs.io/en/master/start.html
+  4. Checkout the 'Getting started' guide to run your first tasks.
+    https://columnflow.readthedocs.io/en/master/start.html
 
-      Suggestions for tasks to run:
+    Suggestions for tasks to run:
 
-      a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
-         default dataset using the default calibrator and default selector
-         (enter the command below and 'tab-tab' to see all arguments or add --help for help)
-        > law run cf.ReduceEvents --version dev1 --branch 0
+    a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
+       default dataset using the default calibrator and default selector
+       (enter the command below and 'tab-tab' to see all arguments or add --help for help)
+      > law run cf.ReduceEvents --version dev1 --branch 0
 
-      b) Create the jet1_pt distribution for the single top dataset:
-        > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
+    b) Create the jet1_pt distribution for the single top dataset:
+      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
 
-      c) Include the ttbar dataset and also plot jet1_eta:
-        > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
+    c) Include the ttbar dataset and also plot jet1_eta:
+      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
 
-      d) Create cms-style datacards for the example model in hgg/inference/example.py:
-        > law run cf.CreateDatacards --version dev1 --inference-model example
+    d) Create cms-style datacards for the example model in hgg/inference/example.py:
+      > law run cf.CreateDatacards --version dev1 --inference-model example
 ```
 
 For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827).
@@ -93,21 +90,22 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="http://marcelrieger.com"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel R."/><br /><sub><b>Marcel R.</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mafrahm"><img src="https://avatars.githubusercontent.com/u/49306645?v=4?s=100" width="100px;" alt="Mathis Frahm"/><br /><sub><b>Mathis Frahm</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mafrahm" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Amafrahm" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/dsavoiu"><img src="https://avatars.githubusercontent.com/u/17005255?v=4?s=100" width="100px;" alt="Daniel Savoiu"/><br /><sub><b>Daniel Savoiu</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=dsavoiu" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Adsavoiu" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/nprouvost"><img src="https://avatars.githubusercontent.com/u/49162277?v=4?s=100" width="100px;" alt="nprouvost"/><br /><sub><b>nprouvost</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Bogdan-Wiederspan"><img src="https://avatars.githubusercontent.com/u/79155113?v=4?s=100" width="100px;" alt="Bogdan-Wiederspan"/><br /><sub><b>Bogdan-Wiederspan</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=kramerto" title="Code">💻</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mschrode" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
-
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
-
 <!-- ALL-CONTRIBUTORS-LIST:END -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
 
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
 
 
 ## Development

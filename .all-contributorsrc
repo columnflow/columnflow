@@ -1,10 +1,16 @@
 {
-  "files": [
-    "README.md"
-  ],
+  "projectName": "columnflow",
+  "projectOwner": "uhh-cms",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "contributorsPerLine": 7,
+  "skipCi": true,
   "imageSize": 100,
   "commit": false,
   "commitConvention": "angular",
+  "files": [
+    "README.md"
+  ],
   "contributors": [
     {
       "login": "riga",
@@ -37,12 +43,63 @@
         "code",
         "review"
       ]
+    },
+    {
+      "login": "pkausw",
+      "name": "pkausw",
+      "avatar_url": "https://avatars.githubusercontent.com/u/26219567?v=4",
+      "profile": "https://github.com/pkausw",
+      "contributions": [
+        "code",
+        "review"
+      ]
+    },
+    {
+      "login": "nprouvost",
+      "name": "nprouvost",
+      "avatar_url": "https://avatars.githubusercontent.com/u/49162277?v=4",
+      "profile": "https://github.com/nprouvost",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "Bogdan-Wiederspan",
+      "name": "Bogdan-Wiederspan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/79155113?v=4",
+      "profile": "https://github.com/Bogdan-Wiederspan",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "kramerto",
+      "name": "Tobias Kramer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/18616159?v=4",
+      "profile": "https://github.com/kramerto",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "mschrode",
+      "name": "Matthias Schroeder",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5065234?v=4",
+      "profile": "https://github.com/mschrode",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "BalduinLetzer",
+      "name": "BalduinLetzer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/70058868?v=4",
+      "profile": "https://github.com/BalduinLetzer",
+      "contributions": [
+        "code"
+      ]
     }
-  ],
-  "contributorsPerLine": 7,
-  "skipCi": true,
-  "repoType": "github",
-  "repoHost": "https://github.com",
-  "projectName": "columnflow",
-  "projectOwner": "uhh-cms"
+  ]
 }
