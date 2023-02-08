@@ -1,0 +1,28 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "riga",
+      "name": "Marcel R.",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1908734?v=4",
+      "profile": "http://marcelrieger.com",
+      "contributions": [
+        "code",
+        "review",
+        "doc",
+        "test"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "projectName": "columnflow",
+  "projectOwner": "uhh-cms"
+}
