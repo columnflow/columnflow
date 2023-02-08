@@ -3,7 +3,7 @@
 # Script that creates a minimal analysis project based on columnflow.
 #
 # Execute as (e.g.)
-# > curl https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh | bash
+# > bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
 #
 # A few variables are queried at the beginning of the project creation and inserted into a template
 # analysis. For more insights, checkout the "analysis_templates" directory.
@@ -19,7 +19,7 @@ create_analysis() {
     local exec_dir="$( pwd )"
     local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
-    local debug="true"
+    local debug="false"
 
 
     #
@@ -31,6 +31,35 @@ create_analysis() {
         local value="$2"
 
         export $varname="$( eval "echo ${value}" )"
+    }
+
+    echo_color() {
+        local color="$1"
+        local msg="${@:2}"
+
+        case "${color}" in
+            red)
+                echo -e "\x1b[0;49;31m${msg}\x1b[0m"
+                ;;
+            green)
+                echo -e "\x1b[0;49;32m${msg}\x1b[0m"
+                ;;
+            yellow)
+                echo -e "\x1b[0;49;33m${msg}\x1b[0m"
+                ;;
+            cyan)
+                echo -e "\x1b[0;49;36m${msg}\x1b[0m"
+                ;;
+            bright)
+                echo -e "\x1b[1;49;39m${msg}\x1b[0m"
+                ;;
+            green_bright)
+                echo -e "\x1b[1;49;32m${msg}\x1b[0m"
+                ;;
+            *)
+                echo "${msg}"
+                ;;
+        esac
     }
 
     query_input() {
@@ -64,7 +93,7 @@ create_analysis() {
             if [ "${query_response}" = "" ]; then
                 # re-query empty values without defaults
                 if [ "${default}" = "-" ]; then
-                    echo "a value is required"
+                    echo_color yellow "a value is required"
                     printf "${input_line}"
                     read query_response
                     continue
@@ -75,7 +104,7 @@ create_analysis() {
 
             # compare to choices when given
             if [ ! -z "${choices}" ] && [[ ! ",${choices}," =~ ",${query_response}," ]]; then
-                echo "invalid choice"
+                echo_color yellow "invalid choice"
                 printf "${input_line}"
                 read query_response
                 continue
@@ -83,7 +112,7 @@ create_analysis() {
 
             # check characters
             if [[ ! "${query_response}" =~ ^[a-zA-Z0-9_]*$ ]]; then
-                echo "only alpha-numeric characters and underscores are allowed"
+                echo_color yellow "only alpha-numeric characters and underscores are allowed"
                 printf "${input_line}"
                 read query_response
                 continue
@@ -106,7 +135,7 @@ create_analysis() {
     # queries
     #
 
-    echo "start creating columnflow-based analysis in local directory"
+    echo_color bright "start creating columnflow-based analysis in local directory"
     echo
 
     query_input "cf_analysis_name" "Name of the analysis" "-"
@@ -144,7 +173,7 @@ create_analysis() {
     local cf_analysis_base="${exec_dir}/${cf_analysis_name}"
     mkdir "${cf_analysis_base}" || return "$?"
 
-    echo "checking out analysis tempate to ${cf_analysis_base}"
+    echo_color cyan "checking out analysis tempate to ${cf_analysis_base}"
 
     if ${debug}; then
         cp -r "${this_dir}/analysis_templates/${cf_analysis_flavor}/"* "${cf_analysis_base}"
@@ -158,7 +187,7 @@ create_analysis() {
         rm -rf "${exec_dir}/.cf_analysis_setup"
     fi
 
-    echo "done"
+    echo_color green "done"
     echo
 
 
@@ -167,22 +196,22 @@ create_analysis() {
     #
 
     # rename files
-    echo "renaming files"
+    echo_color cyan "renaming files"
     find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv "$1" "${1//__cf_analysis_name__/'${cf_analysis_name}'}"' bash {} \;
     find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv "$1" "${1//__cf_module_name__/'${cf_module_name}'}"' bash {} \;
     find . -depth -name '*__cf_short_name_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_lc__/'${cf_short_name_lc}'}"' bash {} \;
     find . -depth -name '*__cf_short_name_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_uc__/'${cf_short_name_uc}'}"' bash {} \;
-    echo "done"
+    echo_color green "done"
 
     echo
 
     # update files
-    echo "inserting placeholders"
+    echo_color cyan "inserting placeholders"
     find . -type f -execdir sed -i 's/__cf_analysis_name__/'${cf_analysis_name}'/g' {} \;
     find . -type f -execdir sed -i 's/__cf_module_name__/'${cf_module_name}'/g' {} \;
     find . -type f -execdir sed -i 's/__cf_short_name_lc__/'${cf_short_name_lc}'/g' {} \;
     find . -type f -execdir sed -i 's/__cf_short_name_uc__/'${cf_short_name_uc}'/g' {} \;
-    echo "done"
+    echo_color green "done"
 
 
     #
@@ -190,19 +219,19 @@ create_analysis() {
     #
 
     echo
-    echo "setup git repository"
+    echo_color cyan "setup git repository"
     git init -b master
-    echo "done"
+    echo_color green "done"
 
     echo
 
-    echo "enable lfs"
+    echo_color cyan "enable lfs"
     git lfs install
-    echo "done"
+    echo_color green "done"
 
     echo
 
-    echo "setup submodules"
+    echo_color cyan "setup submodules"
     mkdir -p modules
     if [ "${cf_use_ssh}" ]; then
         git submodule add -b "${fetch_cf_branch}" git@github.com:uhh-cms/columnflow.git modules/columnflow
@@ -216,7 +245,7 @@ create_analysis() {
         fi
     fi
     git submodule update --init --recursive
-    echo "done"
+    echo_color green "done"
 
 
     #
@@ -224,21 +253,21 @@ create_analysis() {
     #
 
     echo
-    echo "Setup successfull! The next steps are:"
+    echo_color green_bright "Setup successfull! The next steps are:"
 
     echo
 
-    echo "1. Setup the repository and install the environment:"
+    echo_color bright "1. Setup the repository and install the environment."
     echo "  > source setup.sh [optional_setup_name]"
 
     echo
 
-    echo "2. Run local tests & linting checks to verify that the analysis is setup correctly:"
+    echo_color bright "2. Run local tests & linting checks to verify that the analysis is setup correctly."
     echo "  > ./tests/run_all"
 
     echo
 
-    echo "3. Create a GRID proxy if you intend to run tasks that need one:"
+    echo_color bright "3. Create a GRID proxy if you intend to run tasks that need one"
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
         echo "  > voms-proxy-init -voms cms -rfc -valid 196:00"
     else
@@ -247,7 +276,7 @@ create_analysis() {
 
     echo
 
-    echo "4. Checkout the 'Getting started' guide to run your first tasks:"
+    echo_color bright "4. Checkout the 'Getting started' guide to run your first tasks."
     echo "  https://columnflow.readthedocs.io/en/master/start.html"
 
     echo

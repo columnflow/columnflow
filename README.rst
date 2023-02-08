@@ -43,46 +43,48 @@ However, if you would like to join early on, contribute or just give it a spin, 
 Quickstart
 ----------
 
-Modules, exported shell functions and environment variables might have a prefix ``CF`` or ``cf`` to express their connection to this project.
-
-A couple test tasks are listed below.
-They might require a **valid voms proxy** for accessing input data.
-
-For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) `task graph <https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827>`__.
+To create an analysis using columnflow, it is recommended to start from a predefined template (located in ).
+The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 .. code-block:: bash
 
-    # clone the project
-    git clone --recursive git@github.com:uhh-cms/columnflow.git
-    cd columnflow
+    bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
 
-    # source the setup and store decisions in .setups/dev.sh (arbitrary name)
-    source setup.sh dev
+At the end of the setup, you will see further instructions and suggestions to run your first analysis tasks (example below).
 
-    # index existing tasks once to enable auto-completion for "law run"
-    law index --verbose
+.. code-block:: bash
 
-    # run your first task
-    law run cf.ReduceEvents \
-        --version v1 \
-        --dataset st_tchannel_t \
-        --branch 0
+    Setup successfull! The next steps are:
 
-    # create a plot
-    # (if "imgcat" is installed for your shell, add ``--view-cmd imgcat``)
-    law run cf.PlotVariables1D \
-        --version v1 \
-        --datasets st_tchannel_t \
-        --producers example \
-        --variables jet1_pt \
-        --categories incl
+    1. Setup the repository and install the environment.
+      > source setup.sh [optional_setup_name]
 
-    # create a (test) datacard (CMS-style)
-    law run cf.CreateDatacards \
-        --version v1 \
-        --producers example \
-        --inference-model example \
-        --workers 3
+    2. Run local tests & linting checks to verify that the analysis is setup correctly.
+      > ./tests/run_all
+
+    3. Create a GRID proxy if you intend to run tasks that need one
+      > voms-proxy-init -voms cms -rfc -valid 196:00
+
+    4. Checkout the 'Getting started' guide to run your first tasks.
+      https://columnflow.readthedocs.io/en/master/start.html
+
+      Suggestions for tasks to run:
+
+      a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
+         default dataset using the default calibrator and default selector
+         (enter the command below and 'tab-tab' to see all arguments or add --help for help)
+        > law run cf.ReduceEvents --version dev1 --branch 0
+
+      b) Create the jet1_pt distribution for the single top dataset:
+        > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
+
+      c) Include the ttbar dataset and also plot jet1_eta:
+        > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
+
+      d) Create cms-style datacards for the example model in hgg/inference/example.py:
+        > law run cf.CreateDatacards --version dev1 --inference-model example
+
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) `task graph <https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827>`__.
 
 
 Projects using columnflow
