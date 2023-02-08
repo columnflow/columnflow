@@ -174,19 +174,19 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
     @classmethod
-    def get_calibrator_kwargs(cls, task=None, **params):
+    def get_calibrator_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_selector_kwargs(cls, task=None, **params):
+    def get_selector_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_producer_kwargs(cls, task=None, **params):
+    def get_producer_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
     def find_config_objects(
@@ -461,6 +461,7 @@ class ShiftTask(ConfigTask):
     exclude_params_index = {"effective_shift"}
     exclude_params_req = {"effective_shift"}
     exclude_params_sandbox = {"effective_shift"}
+    exclude_params_remote_workflow = {"effective_shift"}
 
     allow_empty_shift = False
 
@@ -490,18 +491,16 @@ class ShiftTask(ConfigTask):
         if requested_effective_shift in no_values:
             params["effective_shift"] = "nominal"
 
-        # do nothing when the effective shift is already set or no config is defined
-        if requested_effective_shift not in no_values or config_inst in no_values:
+        # require that the config is set
+        if config_inst in no_values:
             return params
 
-        # shift must be set
+        # require that the shift is set and known
         if requested_shift in no_values:
             if cls.allow_empty_shift:
                 params["shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
-
-        # complain when the requested shift is not known
         if requested_shift not in config_inst.shifts:
             raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
@@ -509,14 +508,15 @@ class ShiftTask(ConfigTask):
         shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
         # actual shift resolution: compare the requested shift to known ones
-        if requested_shift in shifts:
-            params["shift"] = requested_shift
-            params["effective_shift"] = requested_shift
-        elif requested_shift in upstream_shifts:
-            params["effective_shift"] = "nominal"
-        else:
-            params["shift"] = "nominal"
-            params["effective_shift"] = "nominal"
+        if not requested_effective_shift or requested_effective_shift == law.NO_STR:
+            if requested_shift in shifts:
+                params["shift"] = requested_shift
+                params["effective_shift"] = requested_shift
+            elif requested_shift in upstream_shifts:
+                params["effective_shift"] = "nominal"
+            else:
+                params["shift"] = "nominal"
+                params["effective_shift"] = "nominal"
 
         # store references
         params["requested_shift_inst"] = config_inst.get_shift(params["shift"])
