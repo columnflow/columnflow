@@ -6,13 +6,17 @@ Configuration of the __cf_analysis_name__ analysis.
 
 import os
 import re
+import functools
 
 import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict, get_root_processes_from_campaign
+from columnflow.util import DotDict
 from columnflow.columnar_util import EMPTY_FLOAT
+from columnflow.config_util import (
+    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources,
+)
 
 
 #
@@ -158,24 +162,6 @@ cfg.x.luminosity = Number(41480, {
 # (used in the muon producer)
 cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}_UL")
 
-
-# helper to add column aliases for both shifts of a source
-def add_aliases(
-    shift_source: str,
-    aliases: dict,
-    selection_dependent: bool = False,
-):
-    aux_key = "column_aliases" + ("_selection_dependent" if selection_dependent else "")
-    for direction in ["up", "down"]:
-        shift = cfg.get_shift(od.Shift.join_name(shift_source, direction))
-        _aliases = shift.x(aux_key, {})
-        # format keys and values
-        inject_shift = lambda s: re.sub(r"\{([^_])", r"{_\1", s).format(**shift.__dict__)
-        _aliases.update({inject_shift(key): inject_shift(value) for key, value in aliases.items()})
-        # extend existing or register new column aliases
-        shift.set_aux(aux_key, _aliases)
-
-
 # register shifts
 cfg.add_shift(name="nominal", id=0)
 
@@ -188,7 +174,8 @@ cfg.add_shift(name="tune_down", id=2, type="shape", tags={"disjoint_from_nominal
 # affect columns that might change the output of the event selection
 cfg.add_shift(name="jec_up", id=20, type="shape")
 cfg.add_shift(name="jec_down", id=21, type="shape")
-add_aliases(
+add_shift_aliases(
+    cfg,
     "jec",
     {
         "Jet.pt": "Jet.pt_{name}",
@@ -202,7 +189,7 @@ add_aliases(
 # event weights due to muon scale factors
 cfg.add_shift(name="mu_up", id=10, type="shape")
 cfg.add_shift(name="mu_down", id=11, type="shape")
-add_aliases("mu", {"muon_weight": "muon_weight_{direction}"})
+add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
 json_mirror = "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-849c6a6e"
@@ -242,10 +229,11 @@ cfg.x.keep_columns = DotDict.wrap({
 })
 
 # event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
-get_shifts = lambda *keys: sum(([cfg.get_shift(f"{k}_up"), cfg.get_shift(f"{k}_down")] for k in keys), [])
-cfg.x.event_weights = DotDict()
-cfg.x.event_weights["normalization_weight"] = []
-cfg.x.event_weights["muon_weight"] = get_shifts("mu")
+get_shifts = functools.partial(get_shifts_from_sources, cfg)
+cfg.x.event_weights = DotDict({
+    "normalization_weight": [],
+    "muon_weight": get_shifts("mu"),
+})
 
 # versions per task family and optionally also dataset and shift
 # None can be used as a key to define a default value
