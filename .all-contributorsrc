@@ -10,7 +10,7 @@
       "login": "riga",
       "name": "Marcel Rieger",
       "avatar_url": "https://avatars.githubusercontent.com/u/1908734?v=4",
-      "profile": "http://marcelrieger.com",
+      "profile": "https://github.com/riga",
       "contributions": [
         "code",
         "review",
@@ -23,6 +23,16 @@
       "name": "Mathis Frahm",
       "avatar_url": "https://avatars.githubusercontent.com/u/49306645?v=4",
       "profile": "https://github.com/mafrahm",
+      "contributions": [
+        "code",
+        "review"
+      ]
+    },
+    {
+      "login": "dsavoiu",
+      "name": "Daniel Savoiu",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17005255?v=4",
+      "profile": "https://github.com/dsavoiu",
       "contributions": [
         "code",
         "review"
