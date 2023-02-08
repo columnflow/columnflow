@@ -173,7 +173,7 @@ class ReduceEvents(
 
             # loop through all object selection, go through their masks
             # and create new collections if required
-            if hasattr(sel, "objects"):
+            if "objects" in sel.fields:
                 for src_name in sel.objects.fields:
                     # get all destination collections, handling those named identically to the
                     # source collection last
