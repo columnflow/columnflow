@@ -40,10 +40,15 @@ class CalibratorMixin(ConfigTask):
 
     @classmethod
     def get_default_calibrator(cls, config_inst, calibrator=None) -> str | None:
-        if calibrator not in (None, law.NO_STR):
+        if calibrator and calibrator != law.NO_STR:
             return calibrator
 
         return config_inst.x("default_calibrator", None)
+
+    @classmethod
+    def get_calibrator_inst(cls, calibrator, kwargs=None):
+        inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
+        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     @classmethod
     def modify_param_values(cls, params):
@@ -51,10 +56,11 @@ class CalibratorMixin(ConfigTask):
 
         # add the default calibrator when empty
         if "config_inst" in params:
-            params["calibrator"] = cls.get_default_calibrator(
-                params["config_inst"],
-                params.get("calibrator"),
-            )
+            params["calibrator"] = cls.get_default_calibrator(params["config_inst"], params.get("calibrator"))
+
+            # add the calibrator_inst to params for faster lookups
+            if not params.get("calibrator_inst"):
+                params["calibrator_inst"] = cls.get_calibrator_inst(params["calibrator"], params)
 
         return params
 
@@ -63,22 +69,16 @@ class CalibratorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        calibrator = cls.get_default_calibrator(config_inst, params.get("calibrator"))
-        if calibrator:
-            calibrator_inst = cls.get_calibrator_inst(
-                calibrator,
-                cls.get_calibrator_kwargs(**params),
-            )
+        inst = params.get("calibrator_inst")
+        if not inst and (calibrator := cls.get_default_calibrator(config_inst, params.get("calibrator"))):
+            inst = params["calibrator_inst"] = cls.get_calibrator_inst(calibrator, params)
+        if inst:
             if cls.register_calibrator_shifts:
-                shifts |= calibrator_inst.all_shifts
+                shifts |= inst.all_shifts
             else:
-                upstream_shifts |= calibrator_inst.all_shifts
+                upstream_shifts |= inst.all_shifts
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_calibrator_inst(cls, calibrator, inst_dict=None):
-        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,11 +89,7 @@ class CalibratorMixin(ConfigTask):
     @property
     def calibrator_inst(self):
         if self._calibrator_inst is None:
-            # store a calibrator instance
-            self._calibrator_inst = self.get_calibrator_inst(
-                self.calibrator,
-                self.get_calibrator_kwargs(self),
-            )
+            self._calibrator_inst = self.get_calibrator_inst(self.calibrator, {"task": self})
 
             # overwrite the sandbox when set
             if self._calibrator_inst.sandbox:
@@ -121,7 +117,7 @@ class CalibratorsMixin(ConfigTask):
 
     @classmethod
     def get_default_calibrators(cls, config_inst, calibrators=None) -> tuple[str]:
-        if calibrators not in (None, law.NO_STR, ()):
+        if calibrators and calibrators != law.NO_STR:
             return calibrators
 
         if config_inst.x("default_calibrator", None):
@@ -130,14 +126,23 @@ class CalibratorsMixin(ConfigTask):
         return ()
 
     @classmethod
+    def get_calibrator_insts(cls, calibrators, kwargs=None):
+        inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
+        return [
+            Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
+            for calibrator in calibrators
+        ]
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         if "config_inst" in params:
-            params["calibrators"] = cls.get_default_calibrators(
-                params["config_inst"],
-                params.get("calibrators"),
-            )
+            params["calibrators"] = cls.get_default_calibrators(params["config_inst"], params.get("calibrators"))
+
+            # add the calibrator_insts to params for faster lookups
+            if not params.get("calibrator_insts"):
+                params["calibrator_insts"] = cls.get_calibrator_insts(params["calibrators"], params)
 
         return params
 
@@ -146,21 +151,16 @@ class CalibratorsMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
-        calibrators = cls.get_default_calibrators(config_inst, params.get("calibrators"))
-        if calibrators:
-            calibrator_kwargs = cls.get_calibrator_kwargs(**params)
-            for calibrator in calibrators:
-                calibrator_inst = cls.get_calibrator_inst(calibrator, calibrator_kwargs)
-                if cls.register_calibrators_shifts:
-                    shifts |= calibrator_inst.all_shifts
-                else:
-                    upstream_shifts |= calibrator_inst.all_shifts
+        insts = params.get("calibrator_insts")
+        if not insts and (calibrators := cls.get_default_calibrators(config_inst, params.get("calibrators"))):
+            insts = params["calibrator_insts"] = cls.get_calibrator_insts(calibrators, params)
+        for inst in insts or []:
+            if cls.register_calibrators_shifts:
+                shifts |= inst.all_shifts
+            else:
+                upstream_shifts |= inst.all_shifts
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_calibrator_inst(cls, calibrator, inst_dict=None):
-        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -171,12 +171,7 @@ class CalibratorsMixin(ConfigTask):
     @property
     def calibrator_insts(self):
         if self._calibrator_insts is None:
-            # store instances of all calibrators
-            calibrator_kwargs = self.get_calibrator_kwargs(self)
-            self._calibrator_insts = [
-                self.get_calibrator_inst(calibrator, calibrator_kwargs)
-                for calibrator in self.calibrators
-            ]
+            self._calibrator_insts = self.get_calibrator_insts(self.calibrators, {"task": self})
         return self._calibrator_insts
 
     def store_parts(self):
@@ -203,10 +198,20 @@ class SelectorMixin(ConfigTask):
 
     @classmethod
     def get_default_selector(cls, config_inst, selector=None) -> str | None:
-        if selector not in (None, law.NO_STR):
+        if selector and selector != law.NO_STR:
             return selector
 
         return config_inst.x("default_selector", None)
+
+    @classmethod
+    def get_selector_inst(cls, selector, kwargs=None):
+        selector_cls = Selector.get_cls(selector)
+
+        if not selector_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
+
+        inst_dict = cls.get_selector_kwargs(**kwargs) if kwargs else None
+        return selector_cls(inst_dict=inst_dict)
 
     @classmethod
     def modify_param_values(cls, params):
@@ -214,10 +219,11 @@ class SelectorMixin(ConfigTask):
 
         # add the default selector when empty
         if "config_inst" in params:
-            params["selector"] = cls.get_default_selector(
-                params["config_inst"],
-                params.get("selector"),
-            )
+            params["selector"] = cls.get_default_selector(params["config_inst"], params.get("selector"))
+
+            # add the selector_inst to params for faster lookups
+            if not params.get("selector_inst"):
+                params["selector_inst"] = cls.get_selector_inst(params["selector"], params)
 
         return params
 
@@ -226,27 +232,16 @@ class SelectorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        selector = cls.get_default_selector(config_inst, params.get("selector"))
-        if selector:
-            selector_inst = cls.get_selector_inst(
-                selector,
-                cls.get_selector_kwargs(**params),
-            )
+        inst = params.get("selector_inst")
+        if not inst and (selector := cls.get_default_selector(config_inst, params.get("selector"))):
+            inst = params["selector_inst"] = cls.get_selector_inst(selector, params)
+        if inst:
             if cls.register_selector_shifts:
-                shifts |= selector_inst.all_shifts
+                shifts |= inst.all_shifts
             else:
-                upstream_shifts |= selector_inst.all_shifts
+                upstream_shifts |= inst.all_shifts
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_selector_inst(cls, selector, inst_dict=None):
-        selector_cls = Selector.get_cls(selector)
-
-        if not selector_cls.exposed:
-            raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
-
-        return selector_cls(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -257,11 +252,7 @@ class SelectorMixin(ConfigTask):
     @property
     def selector_inst(self):
         if self._selector_inst is None:
-            # store a selector instance
-            self._selector_inst = self.get_selector_inst(
-                self.selector,
-                self.get_selector_kwargs(self),
-            )
+            self._selector_inst = self.get_selector_inst(self.selector, {"task": self})
 
             # overwrite the sandbox when set
             if self._selector_inst.sandbox:
@@ -330,10 +321,15 @@ class ProducerMixin(ConfigTask):
 
     @classmethod
     def get_default_producer(cls, config_inst, producer=None) -> str | None:
-        if producer not in (None, law.NO_STR):
+        if producer and producer != law.NO_STR:
             return producer
 
         return config_inst.x("default_producer", None)
+
+    @classmethod
+    def get_producer_inst(cls, producer, kwargs=None):
+        inst_dict = cls.get_producer_kwargs(**kwargs) if kwargs else None
+        return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     @classmethod
     def modify_param_values(cls, params):
@@ -341,10 +337,11 @@ class ProducerMixin(ConfigTask):
 
         # add the default producer when empty
         if "config_inst" in params:
-            params["producer"] = cls.get_default_producer(
-                params["config_inst"],
-                params.get("producer"),
-            )
+            params["producer"] = cls.get_default_producer(params["config_inst"], params.get("producer"))
+
+            # add the producer_inst to params for faster lookups
+            if not params.get("producer_inst"):
+                params["producer_inst"] = cls.get_producer_inst(params["producer"], params)
 
         return params
 
@@ -353,22 +350,16 @@ class ProducerMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        producer = cls.get_default_producer(config_inst, params.get("producer"))
-        if producer:
-            producer_inst = cls.get_producer_inst(
-                producer,
-                cls.get_producer_kwargs(**params),
-            )
+        inst = params.get("producer_inst")
+        if not inst and (producer := cls.get_default_producer(config_inst, params.get("producer"))):
+            inst = params["producer_inst"] = cls.get_producer_inst(producer, params)
+        if inst:
             if cls.register_producer_shifts:
-                shifts |= producer_inst.all_shifts
+                shifts |= inst.all_shifts
             else:
-                upstream_shifts |= producer_inst.all_shifts
+                upstream_shifts |= inst.all_shifts
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_producer_inst(cls, producer, inst_dict=None):
-        return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -379,11 +370,7 @@ class ProducerMixin(ConfigTask):
     @property
     def producer_inst(self):
         if self._producer_inst is None:
-            # store a producer instance
-            self._producer_inst = self.get_producer_inst(
-                self.producer,
-                self.get_producer_kwargs(self),
-            )
+            self._producer_inst = self.get_producer_inst(self.producer, {"task": self})
 
             # overwrite the sandbox when set
             if self._producer_inst.sandbox:
@@ -411,7 +398,7 @@ class ProducersMixin(ConfigTask):
 
     @classmethod
     def get_default_producers(cls, config_inst, producers=None) -> tuple[str]:
-        if producers not in (None, law.NO_STR, ()):
+        if producers and producers != law.NO_STR:
             return producers
 
         if config_inst.x("default_producer", None):
@@ -420,14 +407,23 @@ class ProducersMixin(ConfigTask):
         return ()
 
     @classmethod
+    def get_producer_insts(cls, producers, kwargs=None):
+        inst_dict = cls.get_producer_kwargs(**kwargs) if kwargs else None
+        return [
+            Producer.get_cls(producer)(inst_dict=inst_dict)
+            for producer in producers
+        ]
+
+    @classmethod
     def modify_param_values(cls, params):
         params = super().modify_param_values(params)
 
         if "config_inst" in params:
-            params["producers"] = cls.get_default_producers(
-                params["config_inst"],
-                params.get("producers"),
-            )
+            params["producers"] = cls.get_default_producers(params["config_inst"], params.get("producers"))
+
+            # add the producer_insts to params for faster lookups
+            if not params.get("producer_insts"):
+                params["producer_insts"] = cls.get_producer_insts(params["producers"], params)
 
         return params
 
@@ -436,21 +432,16 @@ class ProducersMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
-        producers = cls.get_default_producers(config_inst, params.get("producers"))
-        if producers:
-            producer_kwargs = cls.get_producer_kwargs(**params)
-            for producer in producers:
-                producer_inst = cls.get_producer_inst(producer, producer_kwargs)
-                if cls.register_producers_shifts:
-                    shifts |= producer_inst.all_shifts
-                else:
-                    upstream_shifts |= producer_inst.all_shifts
+        insts = params.get("producer_insts")
+        if not insts and (producers := cls.get_default_producers(config_inst, params.get("producers"))):
+            insts = params["producer_insts"] = cls.get_producer_insts(producers, params)
+        for inst in insts or []:
+            if cls.register_producers_shifts:
+                shifts |= inst.all_shifts
+            else:
+                upstream_shifts |= inst.all_shifts
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_producer_inst(cls, producer, inst_dict=None):
-        return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -461,12 +452,7 @@ class ProducersMixin(ConfigTask):
     @property
     def producer_insts(self):
         if self._producer_insts is None:
-            # store instances of all producers
-            producer_kwargs = self.get_producer_kwargs(self)
-            self._producer_insts = [
-                self.get_producer_inst(producer, producer_kwargs)
-                for producer in self.producers
-            ]
+            self._producer_insts = self.get_producer_insts(self.producers, {"task": self})
         return self._producer_insts
 
     def store_parts(self):
