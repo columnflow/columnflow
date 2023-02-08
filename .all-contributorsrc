@@ -17,6 +17,16 @@
         "doc",
         "test"
       ]
+    },
+    {
+      "login": "dsavoiu",
+      "name": "Daniel Savoiu",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17005255?v=4",
+      "profile": "https://github.com/dsavoiu",
+      "contributions": [
+        "code",
+        "review"
+      ]
     }
   ],
   "contributorsPerLine": 7,
