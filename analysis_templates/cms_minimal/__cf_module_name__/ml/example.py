@@ -59,7 +59,7 @@ class ExampleModel(MLModel):
         }
 
     def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
-        return task.target(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
+        return task.target(f"mlmodel_f{task.branch}of{self.folds}", dir=True)
 
     def open_model(self, target: law.FileSystemDirectoryTarget) -> tf.keras.models.Model:
         return target.load(formatter="tf_keras_model")
