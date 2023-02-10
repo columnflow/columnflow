@@ -133,7 +133,7 @@ def btag_weights_init(self: Producer) -> None:
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
-    if not getattr(self, "dataset_inst", None):
+    if not getattr(self, "shift_inst", None):
         return
 
     # to handle this efficiently in one spot, store jec information

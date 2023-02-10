@@ -33,6 +33,7 @@ from typing import Callable, Any, Sequence, Union
 from types import ModuleType
 
 import law
+import luigi
 
 
 #: Placeholder for an unset value.
@@ -785,3 +786,37 @@ class Derivable(object, metaclass=DerivableMeta):
     def cls_name(cls) -> str:
         # shorthand to the class name
         return cls.__name__
+
+
+class KeyValueMessage(luigi.worker.SchedulerMessage):
+
+    # compile expression for key - value parsing of scheduler messages
+    message_cre = re.compile(r"^\s*([^\=\:]+)\s*(\=|\:)\s*(.*)\s*$")
+
+    @classmethod
+    def from_message(cls, message: luigi.worker.SchedulerMessage) -> KeyValueMessage | None:
+        """
+        Takes a
+        """
+        m = cls.message_cre.match(message.content)
+        if not m:
+            return None
+
+        return cls(
+            message._scheduler,
+            message._task_id,
+            message._message_id,
+            message.content,
+            m.group(1),
+            m.group(3),
+            **message.payload,
+        )
+
+    def __init__(self, *args, key, value, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.key = key
+        self.value = value
+
+    def __str__(self) -> str:
+        return str(self.value)

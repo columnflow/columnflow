@@ -578,14 +578,16 @@ def jer_coffea_init(self: Calibrator) -> None:
     """
     Initialization of dynamic components of the jer calibrator.
     """
-    if self.propagate_met:
-        self.uses |= {
-            "MET.pt", "MET.phi",
-        }
-        self.produces |= {
-            "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
-        }
+    if not self.propagate_met:
+        return
+
+    self.uses |= {
+        "MET.pt", "MET.phi",
+    }
+    self.produces |= {
+        "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
+        "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
+    }
 
 
 @jer_coffea.requires
