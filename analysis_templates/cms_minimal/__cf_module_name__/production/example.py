@@ -37,12 +37,12 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={
-        category_ids,
+        mc_weight, category_ids,
         # nano columns
         "Jet.pt", "Jet.eta", "Jet.phi",
     },
     produces={
-        category_ids,
+        mc_weight, category_ids,
         # new columns
         "cutflow.jet1_pt",
     },
@@ -58,19 +58,9 @@ def cutflow_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@cutflow_features.init
-def cutflow_features_init(self: Producer) -> None:
-    if not getattr(self, "dataset_inst", None) or self.dataset_inst.is_data:
-        return
-
-    # mc only producers
-    self.uses |= {mc_weight}
-    self.produces |= {mc_weight}
-
-
 @producer(
-    uses={features, category_ids},
-    produces={features, category_ids},
+    uses={features, category_ids, normalization_weights, muon_weights},
+    produces={features, category_ids, normalization_weights, muon_weights},
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # features
@@ -91,13 +81,3 @@ def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         events = self[muon_weights](events, **kwargs)
 
     return events
-
-
-@example.init
-def example_init(self: Producer) -> None:
-    if not getattr(self, "dataset_inst", None) or self.dataset_inst.is_data:
-        return
-
-    # my only producers
-    self.uses |= {normalization_weights, muon_weights}
-    self.produces |= {normalization_weights, muon_weights}
