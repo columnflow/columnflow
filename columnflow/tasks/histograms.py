@@ -184,7 +184,7 @@ class CreateHistograms(
                 fill_kwargs = {
                     "category": events.category_ids,
                     "process": events.process_id,
-                    "shift": self.shift_inst.id,
+                    "shift": self.effective_shift_inst.id,
                     "weight": weight,
                 }
                 for variable_inst in variable_insts:

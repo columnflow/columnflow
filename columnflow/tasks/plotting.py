@@ -201,7 +201,7 @@ class PlotVariablesBaseSingleShift(
         ]
 
     def get_plot_shifts(self):
-        return [self.requested_shift_inst]
+        return [self.effective_shift_inst]
 
 
 class PlotVariables1D(

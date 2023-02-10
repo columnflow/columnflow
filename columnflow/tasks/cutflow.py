@@ -163,7 +163,7 @@ class CreateCutflowHistograms(
                     point = {
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
-                        "shift": self.shift_inst.id,
+                        "shift": self.effective_shift_inst.id,
                         "weight": events.normalization_weight[mask],
                     }
                     for var_name in var_names:

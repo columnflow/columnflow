@@ -459,13 +459,13 @@ class ShiftTask(ConfigTask):
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
         "default: 'nominal'",
     )
-    effective_shift = luigi.Parameter(default=law.NO_STR)
+    task_shift = luigi.Parameter(default=law.NO_STR)
 
-    # skip passing effective_shift to cli completion, req params and sandboxing
-    exclude_params_index = {"effective_shift"}
-    exclude_params_req = {"effective_shift"}
-    exclude_params_sandbox = {"effective_shift"}
-    exclude_params_remote_workflow = {"effective_shift"}
+    # skip passing task_shift to cli completion, req params and sandboxing
+    exclude_params_index = {"task_shift"}
+    exclude_params_req = {"task_shift"}
+    exclude_params_sandbox = {"task_shift"}
+    exclude_params_remote_workflow = {"task_shift"}
 
     allow_empty_shift = False
 
@@ -498,21 +498,17 @@ class ShiftTask(ConfigTask):
         # get params
         config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
-        requested_effective_shift = params.get("effective_shift")
-
-        # initialize the effective shift when not set
-        no_values = (None, law.NO_STR)
-        if requested_effective_shift in no_values:
-            params["effective_shift"] = "nominal"
+        requested_task_shift = params.get("task_shift")
 
         # require that the config is set
-        if config_inst in no_values:
+        if config_inst in (None, law.NO_STR):
             return params
 
         # require that the shift is set and known
-        if requested_shift in no_values:
+        if requested_shift in (None, law.NO_STR):
             if cls.allow_empty_shift:
                 params["shift"] = law.NO_STR
+                params["task_shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
         if requested_shift not in config_inst.shifts:
@@ -522,19 +518,23 @@ class ShiftTask(ConfigTask):
         shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
         # actual shift resolution: compare the requested shift to known ones
-        if not requested_effective_shift or requested_effective_shift == law.NO_STR:
+        # task_shift -> the requested shift if implemented by the task itself, else nominal
+        # shift      -> the requested shift if implemented by this task
+        #               or an upsteam task (== effective shift), else nominal
+        if requested_task_shift in (None, law.NO_STR):
             if requested_shift in shifts:
                 params["shift"] = requested_shift
-                params["effective_shift"] = requested_shift
+                params["task_shift"] = requested_shift
             elif requested_shift in upstream_shifts:
-                params["effective_shift"] = "nominal"
+                params["shift"] = requested_shift
+                params["task_shift"] = "nominal"
             else:
                 params["shift"] = "nominal"
-                params["effective_shift"] = "nominal"
+                params["task_shift"] = "nominal"
 
-        # store references
-        params["requested_shift_inst"] = config_inst.get_shift(params["shift"])
-        params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
+        # store references (not the meaning of effective and task shifts here)
+        params["effective_shift_inst"] = config_inst.get_shift(params["shift"])
+        params["shift_inst"] = config_inst.get_shift(params["task_shift"])
 
         return params
 
@@ -543,17 +543,15 @@ class ShiftTask(ConfigTask):
         kwargs = super().get_array_function_kwargs(task=task, **params)
 
         if task:
-            if task.requested_shift_inst:
-                kwargs["requested_shift_inst"] = task.requested_shift_inst
+            if task.shift_inst:
+                kwargs["shift_inst"] = task.shift_inst
             if task.effective_shift_inst:
                 kwargs["effective_shift_inst"] = task.effective_shift_inst
-                kwargs["shift_inst"] = task.effective_shift_inst
         else:
-            if "requested_shift_inst" in params:
-                kwargs["requested_shift_inst"] = params["requested_shift_inst"]
+            if "shift_inst" in params:
+                kwargs["shift_inst"] = params["shift_inst"]
             if "effective_shift_inst" in params:
                 kwargs["effective_shift_inst"] = params["effective_shift_inst"]
-                kwargs["shift_inst"] = params["effective_shift_inst"]
 
         return kwargs
 
@@ -561,28 +559,18 @@ class ShiftTask(ConfigTask):
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
-        self.requested_shift_inst = None
+        self.shift_inst = None
         self.effective_shift_inst = None
-        if self.shift not in (None, law.NO_STR) and self.effective_shift not in (None, law.NO_STR):
-            self.requested_shift_inst = self.config_inst.get_shift(self.shift)
-            self.effective_shift_inst = self.config_inst.get_shift(self.effective_shift)
-
-    @property
-    def requested_shift(self):
-        # shorthand
-        return self.shift
-
-    @property
-    def shift_inst(self):
-        # shorthand
-        return self.effective_shift_inst
+        if self.shift not in (None, law.NO_STR) and self.task_shift not in (None, law.NO_STR):
+            self.effective_shift_inst = self.config_inst.get_shift(self.shift)
+            self.shift_inst = self.config_inst.get_shift(self.task_shift)
 
     def store_parts(self):
         parts = super().store_parts()
 
         # add the shift name
-        if self.requested_shift_inst:
-            parts.insert_after("config", "shift", self.requested_shift_inst.name)
+        if self.effective_shift_inst:
+            parts.insert_after("config", "shift", self.effective_shift_inst.name)
 
         return parts
 
@@ -648,7 +636,7 @@ class DatasetTask(ShiftTask):
         self.dataset_inst = self.config_inst.get_dataset(self.dataset)
 
         # store dataset info for the effective shift
-        key = self.effective_shift if self.effective_shift in self.dataset_inst.info else "nominal"
+        key = self.shift if self.shift in self.dataset_inst.info else "nominal"
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
     def store_parts(self):
@@ -699,8 +687,8 @@ class DatasetTask(ShiftTask):
         """
         info.append(self.config_inst.name)
         info.append(self.dataset_inst.name)
-        if self.shift_inst and self.shift_inst.name != "nominal":
-            info.append(self.shift_inst.name)
+        if self.effective_shift_inst not in (None, law.NO_STR, "nominal"):
+            info.append(self.effective_shift_inst.name)
         return info
 
 

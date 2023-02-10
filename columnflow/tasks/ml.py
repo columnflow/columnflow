@@ -43,11 +43,11 @@ class PrepareMLEvents(
         super().__init__(*args, **kwargs)
 
         # complain when this task is run for events that are not needed for training
-        if not self.events_used_in_training(self.dataset_inst, self.shift_inst):
+        if not self.events_used_in_training(self.dataset_inst, self.effective_shift_inst):
             raise Exception(
                 f"for ML model '{self.ml_model_inst.cls_name}', the dataset "
-                f"'{self.dataset_inst.name}' with shift '{self.shift_inst.name}' is not intended "
-                f"to be run by {self.__class__.__name__}",
+                f"'{self.dataset_inst.name}' with shift '{self.effective_shift_inst.name}' is not "
+                f"intended to be run by {self.__class__.__name__}",
             )
 
     def workflow_requires(self, only_super: bool = False):
@@ -423,7 +423,10 @@ class MLEvaluation(
         aliases = self.shift_inst.x("column_aliases", {})
 
         # check once if the events were used during trainig
-        events_used_in_training = self.events_used_in_training(self.dataset_inst, self.shift_inst)
+        events_used_in_training = self.events_used_in_training(
+            self.dataset_inst,
+            self.effective_shift_inst,
+        )
 
         # define columns that need to be read
         read_columns = self.ml_model_inst.used_columns | {"deterministic_seed"} | set(aliases.values())
