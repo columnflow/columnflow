@@ -12,7 +12,7 @@ from typing import Any
 import law
 import order as od
 
-from columnflow.util import maybe_import, Derivable
+from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
 from columnflow.columnar_util import Route
 
 
@@ -149,6 +149,15 @@ class MLModel(Derivable):
             self._produced_columns = set(self.produces())
         return self._produced_columns
 
+    @property
+    def accepts_scheduler_messages(self) -> bool:
+        """
+        Whether the training or evaluation loop expects and works with messages sent from a central
+        luigi scheduler through the active worker to the underlying task. See
+        :py:meth:`get_scheduler_messages` for more info.
+        """
+        return True
+
     def sandbox(self, task: law.Task) -> str:
         """
         Given a *task*, teturns the name of a sandbox that is needed to perform model training and
@@ -220,3 +229,22 @@ class MLModel(Derivable):
         *events_used_in_training*. To be implemented in subclasses.
         """
         raise NotImplementedError()
+
+    def get_scheduler_messages(self, task: law.Task) -> DotDict[str, KeyValueMessage]:
+        """
+        Checks if the *task* obtained messages from a central luigi scheduler, parses them expecting
+        key - value pairs, and returns them in an ordered :py:class:`DotDict`. All values are
+        :py:class:`KeyValueMessage` objects (with ``key``, ``value`` and ``respond()`` members).
+
+        Scheduler messages are only sent while the task is actively running, so it most likely only
+        makes sense to expect and react to messages during training and evaluation loops.
+        """
+        messages = DotDict()
+
+        if task.accepts_messages and task.scheduler_messages:
+            while not self.scheduler_messages.empty():
+                msg = KeyValueMessage.from_message(self.scheduler_messages.get())
+                if msg:
+                    messages[msg.key] = msg
+
+        return messages
