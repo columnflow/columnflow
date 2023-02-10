@@ -291,6 +291,10 @@ class MLTraining(
     def accepts_messages(self):
         return self.ml_model_inst.accepts_scheduler_messages
 
+    @property
+    def fold(self):
+        return self.branch if self.is_branch() else None
+
     def create_branch_map(self):
         # each fold to train corresponds to one branch
         return list(range(self.ml_model_inst.folds))
@@ -380,7 +384,7 @@ class MLEvaluation(
             return reqs
 
         reqs["models"] = [
-            self.reqs.MLTraining.req(self, fold=f)
+            self.reqs.MLTraining.req(self, branch=f)
             for f in range(self.ml_model_inst.folds)
         ]
 
@@ -395,7 +399,7 @@ class MLEvaluation(
 
     def requires(self):
         reqs = {"models": [
-            self.reqs.MLTraining.req(self, fold=f)
+            self.reqs.MLTraining.req(self, branch=f)
             for f in range(self.ml_model_inst.folds)
         ]}
 
