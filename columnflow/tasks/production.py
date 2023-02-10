@@ -91,8 +91,6 @@ class ProduceColumns(
         write_columns = self.producer_inst.produced_columns
         route_filter = RouteFilter(write_columns)
 
-        from IPython import embed; embed()
-
         # iterate over chunks of events and diffs
         for events, pos in self.iter_chunked_io(
             inputs["events"]["collection"][0].path,
