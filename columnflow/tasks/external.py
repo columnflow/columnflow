@@ -39,8 +39,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     version = None
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default calibrator when empty
         if "config_inst" in params and params.get("validate") is None:

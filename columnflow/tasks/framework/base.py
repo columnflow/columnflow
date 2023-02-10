@@ -75,13 +75,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
-
+    def resolve_param_values(cls, params: dict) -> dict:
         # store a reference to the analysis inst
-        if "analysis" in params:
+        if "analysis_inst" not in params and "analysis" in params:
             params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
 
+        return params
+
+    @classmethod
+    def modify_param_values(cls, params: dict) -> dict:
+        params = super().modify_param_values(params)
+        params = cls.resolve_param_values(params)
         return params
 
     @classmethod
@@ -408,11 +412,11 @@ class ConfigTask(AnalysisTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
 
         # store a reference to the config inst
-        if "analysis_inst" in params and "config" in params:
+        if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
 
         return params
@@ -473,6 +477,16 @@ class ShiftTask(ConfigTask):
         return params
 
     @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
+
+        return params
+
+    @classmethod
     def modify_param_values(cls, params):
         """
         When "config" and "shift" are set, this method evaluates them to set the effecitve shift.
@@ -527,12 +541,20 @@ class ShiftTask(ConfigTask):
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
+            if task.requested_shift_inst:
+                kwargs["requested_shift_inst"] = task.requested_shift_inst
             if task.effective_shift_inst:
+                kwargs["effective_shift_inst"] = task.effective_shift_inst
                 kwargs["shift_inst"] = task.effective_shift_inst
-        elif "effective_shift" in params and "config_inst" in kwargs:
-            if params["effective_shift"] not in (None, law.NO_STR):
-                kwargs["shift_inst"] = kwargs["config_inst"].get_shift(params["effective_shift"])
+        else:
+            if "requested_shift_inst" in params:
+                kwargs["requested_shift_inst"] = params["requested_shift_inst"]
+            if "effective_shift_inst" in params:
+                kwargs["effective_shift_inst"] = params["effective_shift_inst"]
+                kwargs["shift_inst"] = params["effective_shift_inst"]
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
@@ -575,22 +597,13 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # store a reference to the dataset inst
-        if "config_inst" in params and "dataset" in params:
+        if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:
             params["dataset_inst"] = params["config_inst"].get_dataset(params["dataset"])
 
-        return params
-
-    @classmethod
-    def get_version_params(cls):
-        params = super().get_version_params()
-        if cls.shift:
-            params = params[:-1] + ("dataset", "shift")
-        else:
-            params += ("dataset",)
         return params
 
     @classmethod
@@ -598,8 +611,8 @@ class DatasetTask(ShiftTask):
         # dataset can have shifts, that are considered as upstream shifts
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
-        if params.get("dataset") not in (None, law.NO_STR):
-            dataset_inst = config_inst.get_dataset(params["dataset"])
+        dataset_inst = params.get("dataset_inst")
+        if dataset_inst:
             if dataset_inst.is_data:
                 # clear all shifts for data
                 shifts.clear()
@@ -609,6 +622,15 @@ class DatasetTask(ShiftTask):
                 upstream_shifts |= set(dataset_inst.info.keys())
 
         return shifts, upstream_shifts
+
+    @classmethod
+    def get_version_params(cls):
+        params = super().get_version_params()
+        if cls.shift:
+            params = params[:-1] + ("dataset", "shift")
+        else:
+            params += ("dataset",)
+        return params
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):

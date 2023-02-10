@@ -60,6 +60,34 @@ class PlotBase(ConfigTask):
         "wip,pre,sim,simwip,simpre,public,skip; default: wip",
     )
 
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve variable_settings
+        if "general_settings" in params:
+            settings = params["general_settings"]
+            # when empty and default general_settings are defined, use them instead
+            if not settings and config_inst.x("default_general_settings", ()):
+                settings = config_inst.x("default_general_settings", ())
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
+
+            # when general_settings are a key to a general_settings_groups, use them instead
+            groups = config_inst.x("general_settings_groups", {})
+            if settings and list(settings.keys())[0] in groups.keys():
+                settings = groups[list(settings.keys())[0]]
+                if isinstance(settings, tuple):
+                    settings = cls.general_settings.parse(settings)
+
+            params["general_settings"] = settings
+
+        return params
+
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = DotDict()
@@ -128,32 +156,6 @@ class PlotBase(ConfigTask):
             kwargs.setdefault(key, value)
 
         return kwargs
-
-    @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
-        if "config_inst" not in params:
-            return params
-        config_inst = params["config_inst"]
-
-        # resolve variable_settings
-        if "general_settings" in params:
-            settings = params["general_settings"]
-            # when empty and default general_settings are defined, use them instead
-            if not settings and config_inst.x("default_general_settings", ()):
-                settings = config_inst.x("default_general_settings", ())
-                if isinstance(settings, tuple):
-                    settings = cls.general_settings.parse(settings)
-
-            # when general_settings are a key to a general_settings_groups, use them instead
-            groups = config_inst.x("general_settings_groups", {})
-            if settings and list(settings.keys())[0] in groups.keys():
-                settings = groups[list(settings.keys())[0]]
-                if isinstance(settings, tuple):
-                    settings = cls.general_settings.parse(settings)
-
-            params["general_settings"] = settings
-        return params
 
 
 class PlotBase1D(PlotBase):
@@ -247,16 +249,10 @@ class ProcessPlotSettingMixin(
         brace_expand=True,
     )
 
-    def get_plot_parameters(self) -> DotDict:
-        # convert parameters to usable values during plotting
-        params = super().get_plot_parameters()
-        dict_add_strict(params, "process_settings", self.process_settings)
-
-        return params
-
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
         if "config_inst" not in params:
             return params
         config_inst = params["config_inst"]
@@ -272,13 +268,20 @@ class ProcessPlotSettingMixin(
 
             # when process_settings are a key to a process_settings_groups, use them instead
             groups = config_inst.x("process_settings_groups", {})
-
             if settings and cls.process_settings.serialize(settings) in groups.keys():
                 settings = groups[cls.process_settings.serialize(settings)]
                 if isinstance(settings, tuple):
                     settings = cls.process_settings.parse(settings)
 
             params["process_settings"] = settings
+
+        return params
+
+    def get_plot_parameters(self) -> DotDict:
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "process_settings", self.process_settings)
+
         return params
 
 
@@ -300,16 +303,10 @@ class VariablePlotSettingMixin(
         brace_expand=True,
     )
 
-    def get_plot_parameters(self) -> DotDict:
-        # convert parameters to usable values during plotting
-        params = super().get_plot_parameters()
-        dict_add_strict(params, "variable_settings", self.variable_settings)
-
-        return params
-
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
         if "config_inst" not in params:
             return params
         config_inst = params["config_inst"]
@@ -325,11 +322,18 @@ class VariablePlotSettingMixin(
 
             # when variable_settings are a key to a variable_settings_groups, use them instead
             groups = config_inst.x("variable_settings_groups", {})
-
             if settings and cls.variable_settings.serialize(settings) in groups.keys():
                 settings = groups[cls.variable_settings.serialize(settings)]
                 if isinstance(settings, tuple):
                     settings = cls.variable_settings.parse(settings)
 
             params["variable_settings"] = settings
+
+        return params
+
+    def get_plot_parameters(self) -> DotDict:
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "variable_settings", self.variable_settings)
+
         return params

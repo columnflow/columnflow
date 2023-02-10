@@ -108,17 +108,14 @@ class BuildBashSandbox(AnalysisTask):
     exclude_params_index = {"sandbox"}
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # resolve the sandbox file relative to $CF_BASE/sandboxes
         if "sandbox_file" in params:
             path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
             abs_path = real_path(path)
-            if os.path.exists(abs_path):
-                path = abs_path
-            else:
-                path = os.path.join("$CF_BASE", "sandboxes", path)
+            path = abs_path if os.path.exists(abs_path) else os.path.join("$CF_BASE", "sandboxes", path)
             params["sandbox_file"] = path
             params["sandbox"] = law.Sandbox.join_key("bash", path)
 

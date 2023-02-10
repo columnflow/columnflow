@@ -51,16 +51,13 @@ class CalibratorMixin(ConfigTask):
         return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default calibrator when empty
         if "config_inst" in params:
             params["calibrator"] = cls.get_default_calibrator(params["config_inst"], params.get("calibrator"))
-
-            # add the calibrator_inst to params for faster lookups
-            if not params.get("calibrator_inst"):
-                params["calibrator_inst"] = cls.get_calibrator_inst(params["calibrator"], params)
+            params["calibrator_inst"] = cls.get_calibrator_inst(params["calibrator"], params)
 
         return params
 
@@ -69,14 +66,12 @@ class CalibratorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        inst = params.get("calibrator_inst")
-        if not inst and (calibrator := cls.get_default_calibrator(config_inst, params.get("calibrator"))):
-            inst = params["calibrator_inst"] = cls.get_calibrator_inst(calibrator, params)
-        if inst:
+        calibrator_inst = params.get("calibrator_inst")
+        if calibrator_inst:
             if cls.register_calibrator_shifts:
-                shifts |= inst.all_shifts
+                shifts |= calibrator_inst.all_shifts
             else:
-                upstream_shifts |= inst.all_shifts
+                upstream_shifts |= calibrator_inst.all_shifts
 
         return shifts, upstream_shifts
 
@@ -134,15 +129,12 @@ class CalibratorsMixin(ConfigTask):
         ]
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" in params:
             params["calibrators"] = cls.get_default_calibrators(params["config_inst"], params.get("calibrators"))
-
-            # add the calibrator_insts to params for faster lookups
-            if not params.get("calibrator_insts"):
-                params["calibrator_insts"] = cls.get_calibrator_insts(params["calibrators"], params)
+            params["calibrator_insts"] = cls.get_calibrator_insts(params["calibrators"], params)
 
         return params
 
@@ -151,14 +143,12 @@ class CalibratorsMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
-        insts = params.get("calibrator_insts")
-        if not insts and (calibrators := cls.get_default_calibrators(config_inst, params.get("calibrators"))):
-            insts = params["calibrator_insts"] = cls.get_calibrator_insts(calibrators, params)
-        for inst in insts or []:
+        calibrator_insts = params.get("calibrator_insts")
+        for calibrator_inst in calibrator_insts or []:
             if cls.register_calibrators_shifts:
-                shifts |= inst.all_shifts
+                shifts |= calibrator_inst.all_shifts
             else:
-                upstream_shifts |= inst.all_shifts
+                upstream_shifts |= calibrator_inst.all_shifts
 
         return shifts, upstream_shifts
 
@@ -214,16 +204,13 @@ class SelectorMixin(ConfigTask):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default selector when empty
         if "config_inst" in params:
             params["selector"] = cls.get_default_selector(params["config_inst"], params.get("selector"))
-
-            # add the selector_inst to params for faster lookups
-            if not params.get("selector_inst"):
-                params["selector_inst"] = cls.get_selector_inst(params["selector"], params)
+            params["selector_inst"] = cls.get_selector_inst(params["selector"], params)
 
         return params
 
@@ -232,14 +219,12 @@ class SelectorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        inst = params.get("selector_inst")
-        if not inst and (selector := cls.get_default_selector(config_inst, params.get("selector"))):
-            inst = params["selector_inst"] = cls.get_selector_inst(selector, params)
-        if inst:
+        selector_inst = params.get("selector_inst")
+        if selector_inst:
             if cls.register_selector_shifts:
-                shifts |= inst.all_shifts
+                shifts |= selector_inst.all_shifts
             else:
-                upstream_shifts |= inst.all_shifts
+                upstream_shifts |= selector_inst.all_shifts
 
         return shifts, upstream_shifts
 
@@ -332,16 +317,13 @@ class ProducerMixin(ConfigTask):
         return Producer.get_cls(producer)(inst_dict=inst_dict)
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default producer when empty
         if "config_inst" in params:
             params["producer"] = cls.get_default_producer(params["config_inst"], params.get("producer"))
-
-            # add the producer_inst to params for faster lookups
-            if not params.get("producer_inst"):
-                params["producer_inst"] = cls.get_producer_inst(params["producer"], params)
+            params["producer_inst"] = cls.get_producer_inst(params["producer"], params)
 
         return params
 
@@ -350,14 +332,12 @@ class ProducerMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        inst = params.get("producer_inst")
-        if not inst and (producer := cls.get_default_producer(config_inst, params.get("producer"))):
-            inst = params["producer_inst"] = cls.get_producer_inst(producer, params)
-        if inst:
+        producer_inst = params.get("producer_inst")
+        if producer_inst:
             if cls.register_producer_shifts:
-                shifts |= inst.all_shifts
+                shifts |= producer_inst.all_shifts
             else:
-                upstream_shifts |= inst.all_shifts
+                upstream_shifts |= producer_inst.all_shifts
 
         return shifts, upstream_shifts
 
@@ -415,15 +395,12 @@ class ProducersMixin(ConfigTask):
         ]
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" in params:
             params["producers"] = cls.get_default_producers(params["config_inst"], params.get("producers"))
-
-            # add the producer_insts to params for faster lookups
-            if not params.get("producer_insts"):
-                params["producer_insts"] = cls.get_producer_insts(params["producers"], params)
+            params["producer_insts"] = cls.get_producer_insts(params["producers"], params)
 
         return params
 
@@ -432,14 +409,12 @@ class ProducersMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
-        insts = params.get("producer_insts")
-        if not insts and (producers := cls.get_default_producers(config_inst, params.get("producers"))):
-            insts = params["producer_insts"] = cls.get_producer_insts(producers, params)
-        for inst in insts or []:
+        producer_insts = params.get("producer_insts")
+        for producer_inst in producer_insts or []:
             if cls.register_producers_shifts:
-                shifts |= inst.all_shifts
+                shifts |= producer_inst.all_shifts
             else:
-                upstream_shifts |= inst.all_shifts
+                upstream_shifts |= producer_inst.all_shifts
 
         return shifts, upstream_shifts
 
@@ -498,20 +473,22 @@ class MLModelDataMixin(MLModelMixinBase):
     exclude_params_req = {"ml_model_store"}
     exclude_params_repr = {"ml_model_store"}
     exclude_params_sandbox = {"ml_model_store"}
+    exclude_params_remote_workflow = {"ml_model_store"}
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
 
         # add the default ml model when empty
         if "config_inst" in params:
             config_inst = params["config_inst"]
-            if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
+            if params.get("ml_model") in (None, law.NO_STR) and config_inst.x("default_ml_model", None):
                 params["ml_model"] = config_inst.x.default_ml_model
 
             # initialize it and get the store name
-            model_inst = cls.get_ml_model_inst(params["ml_model"], config_inst)
-            params["ml_model_store"] = model_inst.store_name or model_inst.cls_name
+            if params.get("ml_model") not in (None, law.NO_STR):
+                model_inst = cls.get_ml_model_inst(params["ml_model"], config_inst)
+                params["ml_model_store"] = model_inst.store_name or model_inst.cls_name
 
         return params
 
@@ -540,18 +517,18 @@ class MLModelMixin(MLModelMixinBase):
     exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
 
         # add the default ml model when empty
         if "config_inst" in params:
             config_inst = params["config_inst"]
-            if params.get("ml_model") == law.NO_STR and config_inst.x("default_ml_model", None):
+            if params.get("ml_model") in (None, law.NO_STR) and config_inst.x("default_ml_model", None):
                 params["ml_model"] = config_inst.x.default_ml_model
 
             # initialize it once to trigger its set_config hook which might, in turn,
             # add objects to the config itself
-            if params.get("ml_model") not in (law.NO_STR, None):
+            if params.get("ml_model") not in (None, law.NO_STR):
                 cls.get_ml_model_inst(params["ml_model"], config_inst)
             elif not cls.allow_empty_ml_model:
                 raise Exception(f"no ml_model configured for {cls.task_family}")
@@ -586,12 +563,12 @@ class MLModelsMixin(ConfigTask):
     exclude_params_repr_empty = {"ml_models"}
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
 
         if "config_inst" in params:
             config_inst = params["config_inst"]
-            if params.get("ml_models") == () and config_inst.x("default_ml_model", None):
+            if not params.get("ml_models") and config_inst.x("default_ml_model", None):
                 params["ml_models"] = (config_inst.x.default_ml_model,)
 
             # special case: initialize them once to trigger their set_config hook
@@ -629,13 +606,13 @@ class InferenceModelMixin(ConfigTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
 
         # add the default inference model when empty
         if "config_inst" in params:
             config_inst = params["config_inst"]
-            if params.get("inference_model") == law.NO_STR and config_inst.x("default_inference_model", None):
+            if params.get("inference_model") in (None, law.NO_STR) and config_inst.x("default_inference_model", None):
                 params["inference_model"] = config_inst.x.default_inference_model
 
         return params
@@ -671,8 +648,8 @@ class CategoriesMixin(ConfigTask):
     allow_empty_categories = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" not in params:
             return params
@@ -727,8 +704,8 @@ class VariablesMixin(ConfigTask):
     allow_empty_variables = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" not in params:
             return params
@@ -847,8 +824,8 @@ class DatasetsProcessesMixin(ConfigTask):
     allow_empty_processes = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" not in params:
             return params
@@ -872,6 +849,7 @@ class DatasetsProcessesMixin(ConfigTask):
                 raise ValueError(f"no processes found matching {params['processes']}")
 
             params["processes"] = tuple(processes)
+            params["process_insts"] = [config_inst.get_process(p) for p in params["processes"]]
 
         # resolve datasets
         if "datasets" in params:
@@ -899,8 +877,20 @@ class DatasetsProcessesMixin(ConfigTask):
                 raise ValueError(f"no datasets found matching {params['datasets']}")
 
             params["datasets"] = tuple(datasets)
+            params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
 
         return params
+
+    @classmethod
+    def get_known_shifts(cls, config_inst, params):
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+
+        # add shifts of all datasets to upstream ones
+        for dataset_inst in params.get("dataset_insts") or []:
+            if dataset_inst.is_mc:
+                upstream_shifts |= set(dataset_inst.info.keys())
+
+        return shifts, upstream_shifts
 
     @property
     def datasets_repr(self):
@@ -929,8 +919,8 @@ class ShiftSourcesMixin(ConfigTask):
     allow_empty_shift_sources = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         if "config_inst" not in params:
             return params
