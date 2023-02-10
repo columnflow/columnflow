@@ -64,7 +64,7 @@ class ProduceColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, add_ak_aliases, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -91,14 +91,20 @@ class ProduceColumns(
         write_columns = self.producer_inst.produced_columns
         route_filter = RouteFilter(write_columns)
 
+        from IPython import embed; embed()
+
         # iterate over chunks of events and diffs
         for events, pos in self.iter_chunked_io(
             inputs["events"]["collection"][0].path,
             source_type="awkward_parquet",
             read_columns=read_columns,
         ):
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
+
             # invoke the producer
-            events = self.producer_inst(events)
+            if len(events):
+                events = self.producer_inst(events)
 
             # remove columns
             events = route_filter(events)
