@@ -34,8 +34,8 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         cat_mask = self[selector](events, **kwargs)
 
         # covert to nullable array with the category ids or none, then apply ak.singletons
-        cat_ids = ak.singletons(ak.Array(np.where(np.asarray(cat_mask), cat_inst.id, None)))
-        category_ids.append(cat_ids)
+        ids = ak.where(cat_mask, np.float32(cat_inst.id), np.float32(np.nan))
+        category_ids.append(ak.singletons(ak.nan_to_none(ids)))
 
     category_ids = ak.concatenate(category_ids, axis=1)
     events = set_ak_column(events, "category_ids", category_ids, value_type=np.int32)
