@@ -274,12 +274,6 @@ class MLTraining(
     RemoteWorkflow,
 ):
 
-    folds = law.CSVParameter(
-        default=(0, ),
-        description="the fold indinces of the prepared ML events to _skip_ for that training; "
-        "must be compatible with the number of folds defined in the ML model; default: (0, )",
-    )
-
     allow_empty_ml_model = False
 
     # upstream requirements
@@ -288,36 +282,33 @@ class MLTraining(
         MergeMLEvents=MergeMLEvents,
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # verify the fold
-        for fold in self.folds:
-            fold = int(fold)
-            if not (0 <= fold < self.ml_model_inst.folds):
-                raise ValueError(
-                    "the fold index {fold} is incompatible with the number of folds "
-                    f"({self.ml_model_inst.fold}) for the ML model '{self.ml_model}'",
-                )
-
     @property
     def sandbox(self):
         # determine the sandbox dynamically based on the response of the model
         return self.ml_model_inst.sandbox(self)
 
+    @property
+    def accepts_messages(self):
+        return self.ml_model_inst.accepts_scheduler_messages
+
     def create_branch_map(self):
-        return [int(fold) for fold in self.folds]
+        # each fold to train corresponds to one branch
+        return list(range(self.ml_model_inst.folds))
 
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["events"] = [
-            self.reqs.MergeMLEvents.req(self, fold=fold, tree_index=-1)
-            for fold in range(self.ml_model_inst.folds)
-        ]
+        reqs["events"] = {
+            dataset_inst.name: [
+                self.reqs.MergeMLEvents.req(self, dataset=dataset_inst.name, fold=fold, tree_index=-1)
+                for fold in range(self.ml_model_inst.folds)
+            ]
+            for dataset_inst in self.ml_model_inst.used_datasets
+        }
 
+        # ml model requirements
         reqs["model"] = self.ml_model_inst.requires(self)
 
         return reqs
@@ -325,14 +316,12 @@ class MLTraining(
     def requires(self):
         reqs = {}
 
-        fold = self.branch
-
         # require prepared events
         reqs["events"] = {
             dataset_inst.name: [
                 self.reqs.MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
                 for f in range(self.ml_model_inst.folds)
-                if f != fold
+                if f != self.branch
             ]
             for dataset_inst in self.ml_model_inst.used_datasets
         }
