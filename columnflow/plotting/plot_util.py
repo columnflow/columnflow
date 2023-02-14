@@ -214,7 +214,9 @@ def prepare_plot_config(
         h_data = sum(data_hists[1:], data_hists[0].copy())
     if mc_hists:
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
-        h_mc_stack = hist.Stack(*mc_hists)
+        # reverse hists when building MC stack so that the
+        # first process is on top
+        h_mc_stack = hist.Stack(*mc_hists[::-1])
 
     # setup plotting configs
     plot_config = OrderedDict()
@@ -227,10 +229,10 @@ def prepare_plot_config(
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": mc_norm,
-                "label": mc_labels,
-                "color": mc_colors,
-                "edgecolor": mc_edgecolors,
-                "linewidth": [(0 if c is None else 1) for c in line_colors],
+                "label": mc_labels[::-1],
+                "color": mc_colors[::-1],
+                "edgecolor": mc_edgecolors[::-1],
+                "linewidth": [(0 if c is None else 1) for c in mc_colors[::-1]],
             },
         }
         plot_config["mc_uncert"] = {

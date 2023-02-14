@@ -207,12 +207,34 @@ def plot_all(
 
     # legend
     if not skip_legend:
+        # resolve legend kwargs
         legend_kwargs = {
             "ncol": 1,
             "loc": "upper right",
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
-        ax.legend(**legend_kwargs)
+
+        # retrieve the legend handles and their labels
+        handles, labels = ax.get_legend_handles_labels()
+
+        # assume all `StepPatch` objects are part of MC stack
+        in_stack = [
+            isinstance(handle, mpl.patches.StepPatch)
+            for handle in handles
+        ]
+
+        # reverse order of entries that are part of the stack
+        if any(in_stack):
+            def shuffle(entries, mask):
+                entries = np.array(entries, dtype=object)
+                entries[mask] = entries[mask][::-1]
+                return list(entries)
+
+            handles = shuffle(handles, in_stack)
+            labels = shuffle(labels, in_stack)
+
+        # make legend using ordered handles/labels
+        ax.legend(handles, labels, **legend_kwargs)
 
     # custom annotation
     annotate_kwargs = {
