@@ -1026,7 +1026,7 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
         raise TypeError(f"unhandled type of data array {data_array}")
 
     # infer the offsets
-    if not getattr(layout_array, "layout", None):
+    if getattr(layout_array, "layout", None) is None:
         raise ValueError(f"layout array {layout_array} does not have a valid layout")
     if getattr(layout_array.layout, "offsets", None):
         offsets = layout_array.layout.offsets
@@ -2094,7 +2094,7 @@ class DaskArrayReader(object):
             - use chunk info to determine which partitions need to be read
             - guard each read operation of a partition by locks
             - add materialized partitions that might overlap with another chunk in a temporary cache
-            -
+            - remove cached partitions eagerly once it becomes clear that no chunk will need it
         """
         # fill the chunk -> partitions mapping once
         with self.chunk_to_partitions_lock:
@@ -2102,14 +2102,17 @@ class DaskArrayReader(object):
                 divs = self.dak_array.divisions
                 # note: a hare-and-tortoise algorithm could be possible to get the mapping with less
                 # than n^2 complexity, but for our case with ~30 chunks this should be ok (for now)
-                for _chunk_index in range(int(math.ceil(len(self) / max_chunk_size))):
+                n_chunks = int(math.ceil(len(self) / max_chunk_size))
+                # in case there are no entries, ensure that at least one empty chunk is created
+                for _chunk_index in range(max(n_chunks, 1)):
                     _entry_start = _chunk_index * max_chunk_size
                     _entry_stop = min(_entry_start + max_chunk_size, len(self))
                     partitions = []
                     for p, (p_start, p_stop) in enumerate(zip(divs[:-1], divs[1:])):
-                        if p_stop <= _entry_start:
+                        # note: check strict increase of chunk size to accommodate zero-length size
+                        if p_stop <= _entry_start < _entry_stop:
                             continue
-                        if p_start >= _entry_stop:
+                        if p_start >= _entry_stop > _entry_start:
                             break
                         partitions.append(p)
                         self.partition_cache[p].chunks.append(_chunk_index)
@@ -2143,6 +2146,9 @@ class DaskArrayReader(object):
             # make the array non-optional, assuming it is not meant to be optional
             # TODO: remove this workaround once this other workaround is removed as well:
             # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
+            # skip null-filling for completely empty arrays
+            if not parts[-1].layout.contents:
+                continue
             if getattr(parts[-1], "fields", None) and ak.any(ak.ravel(ak.is_none(parts[-1]))):
                 logger.warning(
                     f"None values detected in chunk {chunk_index} of file {self.path} during "
@@ -2155,6 +2161,7 @@ class DaskArrayReader(object):
 
         # construct the full array
         arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
+
         del parts
         gc.collect()
 
@@ -2344,8 +2351,12 @@ class ChunkedIOHandler(object):
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
         # determine the start of stop of this chunk
-        entry_start = chunk_index * chunk_size
-        entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
+        if n_entries == 0:
+            entry_start = 0
+            entry_stop = 0
+        else:
+            entry_start = chunk_index * chunk_size
+            entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
 
         return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size)
 
@@ -2816,7 +2827,7 @@ class ChunkedIOHandler(object):
         # create a list of all chunk positions
         chunk_positions = [
             self.create_chunk_position(self.n_entries, self.chunk_size, chunk_index)
-            for chunk_index in range(self.n_chunks)
+            for chunk_index in range(max(self.n_chunks, 1))
         ]
 
         # fill the list of tasks the pool has to work through

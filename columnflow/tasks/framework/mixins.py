@@ -1024,9 +1024,9 @@ class ChunkedIOMixin(AnalysisTask):
             self.chunked_io = handler
             msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
             try:
-                # measure runtimes without IO
+                # measure runtimes excluding IO
                 loop_durations = []
-                for obj in self.iter_progress(handler, handler.n_chunks, msg=msg):
+                for obj in self.iter_progress(handler, max(handler.n_chunks, 1), msg=msg):
                     t1 = time.perf_counter()
 
                     # yield the object provided by the handler

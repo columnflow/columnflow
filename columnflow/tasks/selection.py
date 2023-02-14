@@ -143,7 +143,7 @@ class SelectEvents(
             events = update_ak_array(events, *diffs)
 
             # add aliases
-            events = add_ak_aliases(events, aliases)
+            events = add_ak_aliases(events, aliases, remove_src=True)
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
