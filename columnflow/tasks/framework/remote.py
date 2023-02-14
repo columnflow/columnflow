@@ -296,6 +296,13 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         description="number of GPUs to request; empty value leads to the cluster default setting; "
         "empty default",
     )
+    htcondor_memory = law.BytesParameter(
+        default=law.NO_FLOAT,
+        unit="MB",
+        significant=False,
+        description="requested memeory in MB; empty value leads to the cluster default setting; "
+        "empty default",
+    )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
         choices=("naf", "cern"),
@@ -312,8 +319,8 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
     )
 
     exclude_params_branch = {
-        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_flavor",
-        "htcondor_share_software",
+        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
+        "htcondor_flavor", "htcondor_share_software",
     }
 
     # mapping of environment variables to render variables that are forwarded
@@ -431,6 +438,10 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
             # TODO: the exact setting might be flavor dependent in the future
             # e.g. https://confluence.desy.de/display/IS/GPU+on+NAF
             config.custom_content.append(("Request_GPUs", self.htcondor_gpus))
+
+        # request memory
+        if self.htcondor_memory > 0:
+            config.custom_content.append(("Request_Memory", self.htcondor_memory))
 
         # helper to return uris and a file pattern for replicated bundles
         reqs = self.htcondor_workflow_requires()
