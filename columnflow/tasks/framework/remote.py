@@ -296,8 +296,9 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         description="number of GPUs to request; empty value leads to the cluster default setting; "
         "empty default",
     )
-    htcondor_memory = luigi.FloatParameter(
+    htcondor_memory = law.BytesParameter(
         default=law.NO_FLOAT,
+        unit="MB",
         significant=False,
         description="requested memeory in MB; empty value leads to the cluster default setting; "
         "empty default",
