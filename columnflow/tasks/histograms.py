@@ -4,8 +4,6 @@
 Task to produce and merge histograms.
 """
 
-import functools
-
 import luigi
 import law
 
@@ -126,6 +124,9 @@ class CreateHistograms(
             read_columns |= {Route(column) for column in self.dataset_inst.x("event_weights", [])}
         read_columns = {Route(c) for c in read_columns}
 
+        # empty float array to use when input files have no entries
+        empty_f32 = ak.Array(np.array([], dtype=np.float32))
+
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0].path]
         if self.producers:
@@ -145,7 +146,7 @@ class CreateHistograms(
 
             # build the full event weight
             weight = ak.Array(np.ones(len(events)))
-            if self.dataset_inst.is_mc:
+            if self.dataset_inst.is_mc and len(events):
                 for column in self.config_inst.x.event_weights:
                     weight = weight * Route(column).apply(events)
                 for column in self.dataset_inst.x("event_weights", []):
@@ -192,7 +193,10 @@ class CreateHistograms(
                     expr = variable_inst.expression
                     if isinstance(expr, str):
                         route = Route(expr)
-                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                        def expr(events, *args, **kwargs):
+                            if len(events) == 0 and not has_ak_column(events, route):
+                                return empty_f32
+                            return route.apply(events, null_value=variable_inst.null_value)
                     # apply it
                     fill_kwargs[variable_inst.name] = expr(events)
                 # broadcast and fill
