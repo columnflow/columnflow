@@ -23,6 +23,8 @@ At this point (December 2022), four large-scale analyses based upon columnflow a
 The first released version is expected in early 2023.
 However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
 
+![Columnflow analytics](https://repobeats.axiom.co/api/embed/bb5150c6a379b852d6c8f9eca3e2620bbcb23c4b.svg "Columnflow analytics")
+
 
 ## Quickstart
 
