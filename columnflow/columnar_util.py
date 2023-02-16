@@ -726,7 +726,7 @@ def add_ak_alias(
     src_route: Route | Sequence[str] | str,
     dst_route: Route | Sequence[str] | str,
     remove_src: bool = False,
-    missing_strategy: str = "original",
+    missing_strategy: str = "remove",
 ) -> ak.Array:
     """
     Adds an alias to an awkward array *ak_array* pointing the array at *src_route* to *dst_route*
