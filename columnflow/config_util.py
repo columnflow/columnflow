@@ -39,14 +39,10 @@ def add_shift_aliases(
     config: od.Config,
     shift_source: str,
     aliases: dict,
-    selection_dependent: bool = False,
 ) -> None:
     """
     Extracts the two up and down shift instances from a *config* corresponding to a *shift_source*
     (i.e. the name of a shift without directions) and assigns *aliases* to their auxiliary data.
-
-    To mark whether these aliases influence variables that are used during the selection, the
-    *selection_dependent* flag can be set.
 
     Aliases should be given in a dictionary, mapping alias targets (keys) to sources (values). In
     both strings, template variables are injected with fields corresponding to all
@@ -60,15 +56,14 @@ def add_shift_aliases(
         # adds {"pdf_weight": "pdf_weight_up"} to the "pdf_up" shift in "config"
         # plus {"pdf_weight": "pdf_weight_down"} to the "pdf_down" shift in "config"
     """
-    aux_key = "column_aliases" + ("_selection_dependent" if selection_dependent else "")
     for direction in ["up", "down"]:
         shift = config.get_shift(od.Shift.join_name(shift_source, direction))
-        _aliases = shift.x(aux_key, {})
+        _aliases = shift.x("column_aliases", {})
         # format keys and values
         inject_shift = lambda s: re.sub(r"\{([^_])", r"{_\1", s).format(**shift.__dict__)
         _aliases.update({inject_shift(key): inject_shift(value) for key, value in aliases.items()})
         # extend existing or register new column aliases
-        shift.set_aux(aux_key, _aliases)
+        shift.x.column_aliases = _aliases
 
 
 def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.Shift]:

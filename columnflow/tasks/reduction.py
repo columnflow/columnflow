@@ -95,7 +95,7 @@ class ReduceEvents(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
+        aliases = self.shift_inst.x("column_aliases", {})
 
         # define columns that will be written
         write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
