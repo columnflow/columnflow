@@ -624,12 +624,14 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         )
         self.test_get_ak_routes()
 
-        # error handling
+        # handling missing sources
+        arr = add_ak_alias(self.array, "Muon.pt", "Muon_pt")
+        arr2 = add_ak_alias(arr, "not_existing", "Muon_pt", missing_strategy="original")
+        self.assertTrue(has_ak_column(arr2, "Muon_pt"))
+        arr2 = add_ak_alias(arr, "not_existing", "Muon_pt", missing_strategy="remove")
+        self.assertFalse(has_ak_column(arr2, "Muon_pt"))
         with self.assertRaises(ValueError):
-            add_ak_alias(self.array, "not_existing", "")
-        with self.assertRaises(ValueError):
-            add_ak_alias(self.array, "not_existing", "Muon_pt")
-        add_ak_alias(self.array, "Jet.pt", "Jet_pt")
+            add_ak_alias(arr, "not_existing", "dst", missing_strategy="raise")
 
     def test_update_ak_array(self):
         # define additional content
