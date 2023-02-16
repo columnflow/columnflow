@@ -106,7 +106,7 @@ class CreateHistograms(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
         read_columns = {"category_ids", "process_id"} | set(aliases.values())
@@ -185,7 +185,7 @@ class CreateHistograms(
                 fill_kwargs = {
                     "category": events.category_ids,
                     "process": events.process_id,
-                    "shift": self.effective_shift_inst.id,
+                    "shift": self.global_shift_inst.id,
                     "weight": weight,
                 }
                 for variable_inst in variable_insts:

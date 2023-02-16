@@ -459,13 +459,13 @@ class ShiftTask(ConfigTask):
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
         "default: 'nominal'",
     )
-    task_shift = luigi.Parameter(default=law.NO_STR)
+    local_shift = luigi.Parameter(default=law.NO_STR)
 
-    # skip passing task_shift to cli completion, req params and sandboxing
-    exclude_params_index = {"task_shift"}
-    exclude_params_req = {"task_shift"}
-    exclude_params_sandbox = {"task_shift"}
-    exclude_params_remote_workflow = {"task_shift"}
+    # skip passing local_shift to cli completion, req params and sandboxing
+    exclude_params_index = {"local_shift"}
+    exclude_params_req = {"local_shift"}
+    exclude_params_sandbox = {"local_shift"}
+    exclude_params_remote_workflow = {"local_shift"}
 
     allow_empty_shift = False
 
@@ -489,7 +489,7 @@ class ShiftTask(ConfigTask):
     @classmethod
     def modify_param_values(cls, params):
         """
-        When "config" and "shift" are set, this method evaluates them to set the effecitve shift.
+        When "config" and "shift" are set, this method evaluates them to set the global shift.
         For that, it takes the shifts stored in the config instance and compares it with those
         defined by this class.
         """
@@ -498,7 +498,7 @@ class ShiftTask(ConfigTask):
         # get params
         config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
-        requested_task_shift = params.get("task_shift")
+        requested_local_shift = params.get("local_shift")
 
         # require that the config is set
         if config_inst in (None, law.NO_STR):
@@ -508,7 +508,7 @@ class ShiftTask(ConfigTask):
         if requested_shift in (None, law.NO_STR):
             if cls.allow_empty_shift:
                 params["shift"] = law.NO_STR
-                params["task_shift"] = law.NO_STR
+                params["local_shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
         if requested_shift not in config_inst.shifts:
@@ -518,23 +518,23 @@ class ShiftTask(ConfigTask):
         shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
         # actual shift resolution: compare the requested shift to known ones
-        # task_shift -> the requested shift if implemented by the task itself, else nominal
-        # shift      -> the requested shift if implemented by this task
-        #               or an upsteam task (== effective shift), else nominal
-        if requested_task_shift in (None, law.NO_STR):
+        # local_shift -> the requested shift if implemented by the task itself, else nominal
+        # shift       -> the requested shift if implemented by this task
+        #                or an upsteam task (== global shift), else nominal
+        if requested_local_shift in (None, law.NO_STR):
             if requested_shift in shifts:
                 params["shift"] = requested_shift
-                params["task_shift"] = requested_shift
+                params["local_shift"] = requested_shift
             elif requested_shift in upstream_shifts:
                 params["shift"] = requested_shift
-                params["task_shift"] = "nominal"
+                params["local_shift"] = "nominal"
             else:
                 params["shift"] = "nominal"
-                params["task_shift"] = "nominal"
+                params["local_shift"] = "nominal"
 
-        # store references (not the meaning of effective and task shifts here)
-        params["effective_shift_inst"] = config_inst.get_shift(params["shift"])
-        params["shift_inst"] = config_inst.get_shift(params["task_shift"])
+        # store references
+        params["global_shift_inst"] = config_inst.get_shift(params["shift"])
+        params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
 
         return params
 
@@ -543,15 +543,15 @@ class ShiftTask(ConfigTask):
         kwargs = super().get_array_function_kwargs(task=task, **params)
 
         if task:
-            if task.shift_inst:
-                kwargs["shift_inst"] = task.shift_inst
-            if task.effective_shift_inst:
-                kwargs["effective_shift_inst"] = task.effective_shift_inst
+            if task.local_shift_inst:
+                kwargs["shift_inst"] = task.local_shift_inst
+            if task.global_shift_inst:
+                kwargs["global_shift_inst"] = task.global_shift_inst
         else:
-            if "shift_inst" in params:
-                kwargs["shift_inst"] = params["shift_inst"]
-            if "effective_shift_inst" in params:
-                kwargs["effective_shift_inst"] = params["effective_shift_inst"]
+            if "local_shift_inst" in params:
+                kwargs["local_shift_inst"] = params["local_shift_inst"]
+            if "global_shift_inst" in params:
+                kwargs["global_shift_inst"] = params["global_shift_inst"]
 
         return kwargs
 
@@ -559,18 +559,18 @@ class ShiftTask(ConfigTask):
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
-        self.shift_inst = None
-        self.effective_shift_inst = None
-        if self.shift not in (None, law.NO_STR) and self.task_shift not in (None, law.NO_STR):
-            self.effective_shift_inst = self.config_inst.get_shift(self.shift)
-            self.shift_inst = self.config_inst.get_shift(self.task_shift)
+        self.local_shift_inst = None
+        self.global_shift_inst = None
+        if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
+            self.global_shift_inst = self.config_inst.get_shift(self.shift)
+            self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
 
     def store_parts(self):
         parts = super().store_parts()
 
         # add the shift name
-        if self.effective_shift_inst:
-            parts.insert_after("config", "shift", self.effective_shift_inst.name)
+        if self.global_shift_inst:
+            parts.insert_after("config", "shift", self.global_shift_inst.name)
 
         return parts
 
@@ -635,8 +635,12 @@ class DatasetTask(ShiftTask):
         # store references to the dataset instance
         self.dataset_inst = self.config_inst.get_dataset(self.dataset)
 
-        # store dataset info for the effective shift
-        key = self.shift if self.shift in self.dataset_inst.info else "nominal"
+        # store dataset info for the global shift
+        key = (
+            self.global_shift_inst.name
+            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info else
+            "nominal"
+        )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
     def store_parts(self):
@@ -687,8 +691,8 @@ class DatasetTask(ShiftTask):
         """
         info.append(self.config_inst.name)
         info.append(self.dataset_inst.name)
-        if self.effective_shift_inst not in (None, law.NO_STR, "nominal"):
-            info.append(self.effective_shift_inst.name)
+        if self.global_shift_inst not in (None, law.NO_STR, "nominal"):
+            info.append(self.global_shift_inst.name)
         return info
 
 
