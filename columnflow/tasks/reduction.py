@@ -95,7 +95,7 @@ class ReduceEvents(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will be written
         write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
@@ -238,11 +238,11 @@ class MergeReductionStats(
     )
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # check for the default merged size
-        if "merged_size" in params and params["merged_size"] == law.NO_FLOAT:
+        if "merged_size" in params and params["merged_size"] in (None, law.NO_FLOAT):
             merged_size = 512.0
             if "config_inst" in params:
                 merged_size = params["config_inst"].x("reduced_file_size", merged_size)

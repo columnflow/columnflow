@@ -115,7 +115,7 @@ class SelectEvents(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
         read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
