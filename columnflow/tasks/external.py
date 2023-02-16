@@ -39,8 +39,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     version = None
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default calibrator when empty
         if "config_inst" in params and params.get("validate") is None:
@@ -71,7 +71,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info(f"get lfns for dataset key {key} {msg}")
-            lfns.extend(get_dataset_lfns(self.dataset_inst, self.shift_inst, key))
+            lfns.extend(get_dataset_lfns(self.dataset_inst, self.global_shift_inst, key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(

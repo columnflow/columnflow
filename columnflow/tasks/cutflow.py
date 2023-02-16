@@ -86,7 +86,7 @@ class CreateCutflowHistograms(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
         read_columns = {"category_ids", "process_id", "normalization_weight"} | set(aliases.values())
@@ -163,7 +163,7 @@ class CreateCutflowHistograms(
                     point = {
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
-                        "shift": self.shift_inst.id,
+                        "shift": self.global_shift_inst.id,
                         "weight": events.normalization_weight[mask],
                     }
                     for var_name in var_names:
