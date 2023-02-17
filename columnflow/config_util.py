@@ -88,6 +88,7 @@ def create_category_combinations(
     categories: dict[str, list[od.Categories]],
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict],
+    skip_existing: bool = True,
 ) -> int:
     """
     TODO.
@@ -106,6 +107,9 @@ def create_category_combinations(
                     group_name: cat.name
                     for group_name, cat in root_cats.items()
                 })
+                if skip_existing and config.get_category(cat_name, default=None):
+                    continue
+
                 cat = od.Category(name=cat_name, **kwargs_fn(root_cats))
                 n_created_categories += 1
 
