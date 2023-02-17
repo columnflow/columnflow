@@ -32,8 +32,8 @@ pygments_style = "sphinx"
 add_module_names = False
 
 html_title = project + " Documentation"
-html_logo = "_static/assets/logo_dark.png"
-html_favicon = "_static/assets/fav_bright.png"
+html_logo = "_static/logo_dark.png"
+html_favicon = "_static/fav_bright.png"
 html_theme = "sphinx_book_theme"
 html_theme_options = {}
 if html_theme == "sphinx_rtd_theme":
