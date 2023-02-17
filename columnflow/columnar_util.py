@@ -1289,23 +1289,11 @@ class ArrayFunction(Derivable):
 
        The registered function defining what to update, or *None*.
 
-    .. py:attribute:: init
-       typpe: callable (decorator)
-
-       A decorator that can be used to dynamically assign an initialization function
-       (:py:attr:`init_func`) to this instance.
-
     .. py:attribute: skip_func
        type: callable
 
        The registered function defining when to skip this instance while building dependencies of
        other instances.
-
-    .. py:attribute:: skip
-       typpe: callable (decorator)
-
-       A decorator that can be used to dynamically assign a skip function (:py:attr:`skip_func`) to
-       this instance.
     """
 
     # class-level attributes as defaults
@@ -1701,22 +1689,10 @@ class TaskArrayFunction(ArrayFunction):
 
        The registered function defining requirements, or *None*.
 
-    .. py:attribute:: requires
-       typpe: callable (decorator)
-
-       A decorator that can be used to dynamically assign a requirement function
-       (:py:attr:`requires_func`) to this instance.
-
     .. py:attribute:: setup_func
        type: callable
 
        The registered function performing the custom setup step, or *None*.
-
-    .. py:attribute:: setup
-       typpe: callable (decorator)
-
-       A decorator that can be used to dynamically assign a setup function (:py:attr:`setup_func`)
-       to this instance.
 
     .. py:attribute:: sandbox
        type: str, None

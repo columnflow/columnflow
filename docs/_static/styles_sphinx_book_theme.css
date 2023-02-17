@@ -1,0 +1,11 @@
+/* sphinx_book_theme styles */
+
+div#site-navigation img.logo {
+    width: 240px !important;
+    height: 118px !important;
+    max-height: none !important;
+}
+
+div#site-navigation div.navbar_extra_footer {
+    display: none;
+}
