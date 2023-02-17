@@ -27,11 +27,11 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    CategoriesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -143,7 +143,7 @@ class PlotVariablesBase(
 
             # sort hists by process order
             hists = OrderedDict(
-                (process_inst.copy(), hists[process_inst])
+                (process_inst.copy_shallow(), hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
@@ -152,8 +152,8 @@ class PlotVariablesBase(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst.copy(),
-                variable_insts=[var_inst.copy() for var_inst in variable_insts],
+                category_inst=category_inst.copy_shallow(),
+                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                 **self.get_plot_parameters(),
             )
 

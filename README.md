@@ -1,8 +1,12 @@
 <center>
   <a href="https://github.com/uhh-cms/columnflow">
-    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
+    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/docs/_static/logo_dark.png" width="480" />
   </a>
 </center>
+
+
+<!-- marker-after-logo -->
+
 
 [![Build status](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml)
 [![Package version](https://img.shields.io/pypi/v/columnflow.svg?style=flat)](https://pypi.python.org/pypi/columnflow)
@@ -11,6 +15,7 @@
 [![License](https://img.shields.io/github/license/uhh-cms/columnflow.svg)](https://github.com/uhh-cms/columnflow/blob/master/LICENSE)
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
+
 
 <!-- marker-after-header -->
 
@@ -28,7 +33,7 @@ However, if you would like to join early on, contribute or just give it a spin, 
 
 ## Quickstart
 
-To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](./analysis_templates).
+To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](https://github.com/uhh-cms/columnflow/tree/master/analysis_templates).
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 ```shell
@@ -114,5 +119,6 @@ This project follows the [all-contributors](https://github.com/all-contributors/
 
 - Source hosted at [GitHub](https://github.com/uhh-cms/columnflow)
 - Report issues, questions, feature requests on [GitHub Issues](https://github.com/uhh-cms/columnflow/issues)
+
 
 <!-- marker-after-body -->
