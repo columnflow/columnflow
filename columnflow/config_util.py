@@ -8,9 +8,12 @@ from __future__ import annotations
 
 __all__ = [
     "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
+    "create_category_combinations",
 ]
 
 import re
+import itertools
+from typing import Callable, Any
 
 import order as od
 
@@ -78,3 +81,41 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
         ),
         [],
     )
+
+
+def create_category_combinations(
+    config: od.Config,
+    categories: dict[str, list[od.Categories]],
+    name_fn: Callable[[Any], str],
+    kwargs_fn: Callable[[Any], dict],
+) -> int:
+    """
+    TODO.
+    """
+    n_groups = len(categories)
+    group_names = list(categories.keys())
+    assert n_groups > 1
+
+    n_created_categories = 0
+    for _n_groups in range(2, n_groups + 1):
+        for _group_names in itertools.combinations(group_names, _n_groups):
+            _categories = [categories[group_name] for group_name in _group_names]
+            for root_cats in itertools.product(*_categories):
+                root_cats = dict(zip(_group_names, root_cats))
+                cat_name = name_fn(**{
+                    group_name: cat.name
+                    for group_name, cat in root_cats.items()
+                })
+                cat = od.Category(name=cat_name, **kwargs_fn(root_cats))
+                n_created_categories += 1
+
+                # find direct parents
+                for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
+                    parent_cat_name = name_fn(**{
+                        group_name: root_cats[group_name].name
+                        for group_name in _parent_group_names
+                    })
+                    parent_cat = config.get_category(parent_cat_name, deep=True)
+                    parent_cat.add_category(cat)
+
+    return n_created_categories
