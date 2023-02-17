@@ -1,6 +1,6 @@
 <center>
   <a href="https://github.com/uhh-cms/columnflow">
-    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
+    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/docs/_static/logo_dark.png" width="480" />
   </a>
 </center>
 
