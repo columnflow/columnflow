@@ -27,11 +27,11 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    CategoriesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
