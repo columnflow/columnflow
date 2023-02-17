@@ -6,7 +6,7 @@ columnflow
 Columnar analysis backed by law and order.
 """
 
-__author__ = "columnflow Team"
+__author__ = "The Columnflow Team"
 __email__ = "todo@uni-hamburg.de"
 __copyright__ = "Copyright 2022-2023"
 __credits__ = [
