@@ -726,6 +726,7 @@ def add_ak_alias(
     src_route: Route | Sequence[str] | str,
     dst_route: Route | Sequence[str] | str,
     remove_src: bool = False,
+    missing_strategy: str = "remove",
 ) -> ak.Array:
     """
     Adds an alias to an awkward array *ak_array* pointing the array at *src_route* to *dst_route*
@@ -733,23 +734,37 @@ def add_ak_alias(
 
     Note that existing columns referred to by *dst_route* might be overwritten. When *remove_src* is
     *True*, a view of the input array is returned with the column referred to by *src_route*
-    missing.
+    missing. Both routes can be :py:class:`Route` instances, a tuple of strings where each string
+    refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``).
 
-    Both routes can be a :py:class:`Route` instance, a tuple of strings where each string refers to
-    a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``). A
-    *ValueError* is raised when *src_route* does not exist.
+    In case *src_route* does not exist, *missing_strategy* is applied:
+
+        - ``"original"``: If existing, *dst_route* remains unchanged.
+        - ``"remove"``: If existing, *dst_route* is removed.
+        - ``"raise"``: A *ValueError* is raised.
     """
+    # check the strategy
+    strategies = ("original", "remove", "raise")
+    if missing_strategy not in strategies:
+        raise ValueError(
+            f"unknown missing_strategy '{missing_strategy}', valid values are {strategies}",
+        )
+
+    # convert to routes
     src_route = Route(src_route)
     dst_route = Route(dst_route)
 
     # check that the src exists
-    if not has_ak_column(ak_array, src_route):
-        raise ValueError(f"no column found in array for route '{src_route}'")
+    if has_ak_column(ak_array, src_route):
+        # add the alias, potentially overwriting existing columns
+        ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
+    else:
+        if missing_strategy == "raise":
+            raise ValueError(f"no column found in array for route '{src_route}'")
+        if missing_strategy == "remove":
+            ak_array = remove_ak_column(ak_array, dst_route)
 
-    # add the alias, potentially overwriting existing columns
-    ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
-
-    # create a view without the source if requested
+    # remove the source column
     if remove_src:
         ak_array = remove_ak_column(ak_array, src_route)
 
@@ -759,22 +774,21 @@ def add_ak_alias(
 def add_ak_aliases(
     ak_array: ak.Array,
     aliases: dict[Route | Sequence[str] | str, Route | Sequence[str], str],
-    remove_src: bool = False,
+    **kwargs: dict[str, Any],
 ) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
     an awkward array *ak_array* and returns a new view with the aliases applied.
 
-    When *remove_src* is *True*, a view of the input array is returned with all source columns
-    missing.
-
     Each column in this dictionary can be referred to by a :py:class:`Route` instance, a tuple of
     strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot
-    format (e.g. ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
+    format (e.g. ``"Jet.pt"``).
+
+    All additional *kwargs* are forwarded to :py:func:`add_ak_aliases`.
     """
     # add all aliases
     for dst_route, src_route in aliases.items():
-        ak_array = add_ak_alias(ak_array, src_route, dst_route, remove_src=remove_src)
+        ak_array = add_ak_alias(ak_array, src_route, dst_route, **kwargs)
 
     return ak_array
 
