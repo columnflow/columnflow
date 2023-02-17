@@ -183,7 +183,6 @@ add_shift_aliases(
         "MET.pt": "MET.pt_{name}",
         "MET.phi": "MET.phi_{name}",
     },
-    selection_dependent=True,
 )
 
 # event weights due to muon scale factors
