@@ -66,6 +66,7 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "autodocsumm",
     "myst_parser",
+    "sphinx_lfs_content",
     "pydomain_patch",
 ]
 
