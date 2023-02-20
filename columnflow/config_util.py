@@ -8,9 +8,12 @@ from __future__ import annotations
 
 __all__ = [
     "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
+    "create_category_combinations",
 ]
 
 import re
+import itertools
+from typing import Callable, Any
 
 import order as od
 
@@ -78,3 +81,93 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
         ),
         [],
     )
+
+
+def create_category_combinations(
+    config: od.Config,
+    categories: dict[str, list[od.Categories]],
+    name_fn: Callable[[Any], str],
+    kwargs_fn: Callable[[Any], dict],
+    skip_existing: bool = True,
+) -> int:
+    """
+    Given a *config* object and sequences of *categories* in a dict, creates all combinations of
+    possible leaf categories at different depths, connects them with parent - child relations
+    (see :py:class:`order.Category`) and returns the number of newly created categories.
+
+    *categories* should be a dictionary that maps string names to sequences of categories that
+    should be combined. The names are used as keyword arguments in a callable *name_fn* that is
+    supposed to return the name of newly created categories (see example below).
+
+    Each newly created category is instantiated with this name as well as arbitrary keyword
+    arguments as returned by *kwargs_fn*. This function is called with the categories (in a
+    dictionary, mapped to the sequence names as given in *categories*) that contribute to the newly
+    created category and should return a dictionary with at least one field ``"id"``.
+
+    If the name of a new category is already known to *config* it skipped unless *skip_existing* is
+    *False*.
+
+    Example:
+
+    .. code-block:: python
+
+        categories = {
+            "lepton": [cfg.get_category("e"), cfg.get_category("mu")],
+            "n_jets": [cfg.get_category("1j"), cfg.get_category("2j")],
+            "n_tags": [cfg.get_category("0t"), cfg.get_category("1t")],
+        }
+
+        def name_fn(lepton=None, n_jets=None, n_tags=None):
+            # simple implementation: join names in defined order if existing
+            parts = [lepton, n_jets, n_tags]
+            return "__".join(part for part in parts if part is not None)
+
+        def kwargs_fn(categories):
+            # return arguments that are forwarded to the category init
+            # (use id "+" here which simply increments the last taken id, see order.Category)
+            return {"id": "+"}
+
+        create_category_combinations(cfg, category, name_fn, kwargs_fn)
+    """
+    n_created_categories = 0
+    n_groups = len(categories)
+    group_names = list(categories.keys())
+
+    # nothing to do when there are less than 2 groups
+    if n_groups < 2:
+        return n_created_categories
+
+    # start combining, considering one additional groups for combinatorics at a time
+    for _n_groups in range(2, n_groups + 1):
+
+        # build all group combinations
+        for _group_names in itertools.combinations(group_names, _n_groups):
+
+            # build the product of all categories for the given groups
+            _categories = [categories[group_name] for group_name in _group_names]
+            for root_cats in itertools.product(*_categories):
+                # build the name
+                root_cats = dict(zip(_group_names, root_cats))
+                cat_name = name_fn(**{
+                    group_name: cat.name
+                    for group_name, cat in root_cats.items()
+                })
+
+                # skip when already existing
+                if skip_existing and config.has_category(cat_name, deep=True):
+                    continue
+
+                # create the new category
+                cat = od.Category(name=cat_name, **kwargs_fn(root_cats))
+                n_created_categories += 1
+
+                # find direct parents and connect them
+                for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
+                    parent_cat_name = name_fn(**{
+                        group_name: root_cats[group_name].name
+                        for group_name in _parent_group_names
+                    })
+                    parent_cat = config.get_category(parent_cat_name, deep=True)
+                    parent_cat.add_category(cat)
+
+    return n_created_categories
