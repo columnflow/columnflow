@@ -202,8 +202,8 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 class PlotCutflowBase(
     SelectorStepsMixin,
-    CalibratorsMixin,
     CategoriesMixin,
+    CalibratorsMixin,
     PlotBase,
     ShiftTask,
     law.LocalWorkflow,
