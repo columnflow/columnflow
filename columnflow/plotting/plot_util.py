@@ -192,7 +192,7 @@ def prepare_plot_config(
 
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
-    line_hists, line_colors, line_labels = [], [], []
+    line_hists, line_colors, line_labels, line_draw_errors = [], [], [], []
     data_hists = []
 
     for process_inst, h in hists.items():
@@ -203,6 +203,10 @@ def prepare_plot_config(
                 line_hists.append(h)
                 line_colors.append(process_inst.color1)
                 line_labels.append(process_inst.label)
+                # semantics: None == default (errors are drawn)
+                line_draw_errors.append(
+                    None if getattr(process_inst, "draw_errors", True) else False,
+                )
             else:
                 mc_hists.append(h)
                 mc_colors.append(process_inst.color1)
@@ -243,12 +247,16 @@ def prepare_plot_config(
         }
     # draw lines
     for i, h in enumerate(line_hists):
-        label = line_labels[i]
         line_norm = sum(h.values()) if shape_norm else 1
         plot_config[f"line_{i}"] = {
             "method": "draw_hist",
             "hist": h,
-            "kwargs": {"norm": line_norm, "label": label, "color": line_colors[i]},
+            "kwargs": {
+                "norm": line_norm,
+                "label": line_labels[i],
+                "color": line_colors[i],
+                "yerr": line_draw_errors[i],
+            },
             # "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
         }
 
