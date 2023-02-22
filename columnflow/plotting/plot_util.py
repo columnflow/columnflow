@@ -183,6 +183,7 @@ def prepare_style_config(
 def prepare_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
+    hide_errors: bool | None = None,
 ) -> OrderedDict:
     """
     Prepares a plot config with one entry to create plots containing a stack of
@@ -192,21 +193,25 @@ def prepare_plot_config(
 
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
-    line_hists, line_colors, line_labels, line_draw_errors = [], [], [], []
-    data_hists = []
+    line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
+    data_hists, data_hide_errors = [], []
 
     for process_inst, h in hists.items():
+        # if given, per-process setting overrides task parameter
+        proc_hide_errors = (
+            phe
+            if (phe := getattr(process_inst, "hide_errors", None)) is not None
+            else hide_errors
+        )
         if process_inst.is_data:
             data_hists.append(h)
+            data_hide_errors.append(proc_hide_errors)
         elif process_inst.is_mc:
             if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
                 line_colors.append(process_inst.color1)
                 line_labels.append(process_inst.label)
-                # semantics: None == default (errors are drawn)
-                line_draw_errors.append(
-                    None if getattr(process_inst, "draw_errors", True) else False,
-                )
+                line_hide_errors.append(proc_hide_errors)
             else:
                 mc_hists.append(h)
                 mc_colors.append(process_inst.color1)
@@ -239,12 +244,13 @@ def prepare_plot_config(
                 "linewidth": [(0 if c is None else 1) for c in mc_colors[::-1]],
             },
         }
-        plot_config["mc_uncert"] = {
-            "method": "draw_error_bands",
-            "hist": h_mc,
-            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-            "ratio_kwargs": {"norm": h_mc.values()},
-        }
+        if not hide_errors:
+            plot_config["mc_uncert"] = {
+                "method": "draw_error_bands",
+                "hist": h_mc,
+                "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+                "ratio_kwargs": {"norm": h_mc.values()},
+            }
     # draw lines
     for i, h in enumerate(line_hists):
         line_norm = sum(h.values()) if shape_norm else 1
@@ -255,9 +261,13 @@ def prepare_plot_config(
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
-                "yerr": line_draw_errors[i],
+                "yerr": False if line_hide_errors[i] else None,
             },
-            # "ratio_kwargs": {"norm": h.values(), "color": line_colors[i]},
+            # "ratio_kwargs": {
+            #     "norm": h.values(),
+            #     "color": line_colors[i],
+            #     "yerr": False if line_hide_errors[i] else None,
+            # },
         }
 
     # draw data
@@ -266,8 +276,15 @@ def prepare_plot_config(
         plot_config["data"] = {
             "method": "draw_errorbars",
             "hist": h_data,
-            "kwargs": {"norm": data_norm, "label": "Data"},
-            "ratio_kwargs": {"norm": h_mc.values() * data_norm / mc_norm},
+            "kwargs": {
+                "norm": data_norm,
+                "label": "Data",
+                "yerr": False if data_hide_errors[i] else None,
+            },
+            "ratio_kwargs": {
+                "norm": h_mc.values() * data_norm / mc_norm,
+                "yerr": False if data_hide_errors[i] else None,
+            },
         }
 
     return plot_config

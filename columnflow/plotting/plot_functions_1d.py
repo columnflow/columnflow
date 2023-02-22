@@ -40,6 +40,7 @@ def plot_variable_per_process(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
+    hide_errors: bool | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
     **kwargs,
@@ -54,7 +55,11 @@ def plot_variable_per_process(
 
     hists = apply_density_to_hists(hists, density)
 
-    plot_config = prepare_plot_config(hists, shape_norm)
+    plot_config = prepare_plot_config(
+        hists,
+        shape_norm=shape_norm,
+        hide_errors=hide_errors,
+    )
 
     default_style_config = prepare_style_config(
         config_inst, category_inst, variable_inst, density, shape_norm, yscale,
@@ -76,6 +81,7 @@ def plot_variable_variants(
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
+    hide_errors: bool | None = None,
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
@@ -98,8 +104,15 @@ def plot_variable_variants(
         plot_config[f"hist_{label}"] = {
             "method": "draw_hist",
             "hist": h,
-            "kwargs": {"norm": norm, "label": selector_step_labels.get(label, label)},
-            "ratio_kwargs": {"norm": hists["Initial"].values()},
+            "kwargs": {
+                "norm": norm,
+                "label": selector_step_labels.get(label, label),
+                "yerr": False if hide_errors else None,
+            },
+            "ratio_kwargs": {
+                "norm": hists["Initial"].values(),
+                "yerr": False if hide_errors else None,
+            },
         }
 
     # setup style config
@@ -126,6 +139,7 @@ def plot_shifted_variable(
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
+    hide_errors: bool | None = None,
     legend_title: str | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
@@ -168,10 +182,12 @@ def plot_shifted_variable(
                 "norm": sum(h.values()) if shape_norm else 1,
                 "label": label,
                 "color": colors[shift_inst.direction],
+                "yerr": False if hide_errors else None,
             },
             "ratio_kwargs": {
                 "norm": ratio_norm,
                 "color": colors[shift_inst.direction],
+                "yerr": False if hide_errors else None,
             },
         }
 
@@ -210,6 +226,7 @@ def plot_cutflow(
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
+    hide_errors: bool | None = None,
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
@@ -221,7 +238,11 @@ def plot_cutflow(
     hists = apply_density_to_hists(hists, density)
 
     # setup plotting config
-    plot_config = prepare_plot_config(hists, shape_norm)
+    plot_config = prepare_plot_config(
+        hists,
+        shape_norm=shape_norm,
+        hide_errors=hide_errors,
+    )
 
     if shape_norm:
         # switch normalization to normalizing to `initial step` bin
