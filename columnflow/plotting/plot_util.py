@@ -35,7 +35,7 @@ def apply_process_settings(
     if not process_settings:
         return hists
 
-    for proc_inst, h in hists.items():
+    for proc_inst, h in list(hists.items()):
         # check if there are process settings to apply for this variable
         if proc_inst.name not in process_settings.keys():
             continue
@@ -45,7 +45,7 @@ def apply_process_settings(
         # apply "scale" setting if given
         if "scale" in proc_settings.keys():
             scale_factor = proc_settings.pop("scale")
-            h = h * scale_factor
+            hists[proc_inst] = h * scale_factor
             # TODO: there might be a prettier way for the label
             proc_inst.label = f"{proc_inst.label} x{scale_factor}"
 
