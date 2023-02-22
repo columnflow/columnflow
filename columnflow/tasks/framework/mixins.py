@@ -265,8 +265,8 @@ class SelectorStepsMixin(SelectorMixin):
     selector_steps_order_sensitive = False
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
 
         # expand selector step groups
         if "config_inst" in params and len(params.get("selector_steps", ())) == 1:
