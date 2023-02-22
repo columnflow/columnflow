@@ -26,7 +26,7 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     category_ids = []
 
     # TODO: we maybe don't want / need to loop through all leaf categories
-    for cat_inst in set(self.config_inst.get_leaf_categories()):
+    for cat_inst in self.config_inst.get_leaf_categories():
         # get the selector class
         selector = self.category_to_selector[cat_inst]
 
