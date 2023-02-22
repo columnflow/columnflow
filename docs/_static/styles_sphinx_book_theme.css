@@ -7,5 +7,11 @@ div#site-navigation img.logo {
 }
 
 div#site-navigation div.navbar_extra_footer {
-    display: none;
+    display: none !important;
+}
+
+section#module-columnflow\.util h3,
+section#module-columnflow\.config_util h3,
+section#module-columnflow\.columnar_util h3 {
+    display: none !important;
 }
