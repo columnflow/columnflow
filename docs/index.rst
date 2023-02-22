@@ -9,8 +9,8 @@
 .. toctree::
    :maxdepth: 1
 
-   start
-   practices
+   start.md
+   practices.md
    api/index
 
 .. include:: ../README.md

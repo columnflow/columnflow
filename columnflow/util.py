@@ -789,6 +789,20 @@ class Derivable(object, metaclass=DerivableMeta):
 
 
 class KeyValueMessage(luigi.worker.SchedulerMessage):
+    """
+    Subclass of :py:class:`luigi.worker.SchedulerMessage` that adds :py:attr:`key` and
+    :py:attr:`value` attributes, parsed from the incoming message assuming a format ``key = value``.
+
+    .. py:attribute: key
+       type: str
+
+       The key of the message.
+
+    .. py:attribute: value
+       type: str
+
+       The value of the message.
+    """
 
     # compile expression for key - value parsing of scheduler messages
     message_cre = re.compile(r"^\s*([^\=\:]+)\s*(\=|\:)\s*(.*)\s*$")
@@ -796,7 +810,9 @@ class KeyValueMessage(luigi.worker.SchedulerMessage):
     @classmethod
     def from_message(cls, message: luigi.worker.SchedulerMessage) -> KeyValueMessage | None:
         """
-        Takes a
+        Factory for :py:class:`KeyValueMessage` instances that takes an existing *message* object
+        and splits its content into a key value pair. The instance is returned if the parsing is
+        successful, and *None* otherwise.
         """
         m = cls.message_cre.match(message.content)
         if not m:

@@ -53,6 +53,7 @@ elif html_theme == "sphinx_book_theme":
         "logo_only": True,
         "home_page_in_toc": True,
         "show_navbar_depth": 2,
+        "show_toc_level": 2,
         "repository_url": "https://github.com/uhh-cms/columnflow",
         "use_repository_button": True,
         "use_issues_button": True,
