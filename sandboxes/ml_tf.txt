@@ -1,7 +1,7 @@
 # version 5
 
 tensorflow~=2.11
-git+https://github.com/CoffeaTeam/coffea.git@3769a4d#egg=coffea
+git+https://github.com/CoffeaTeam/coffea.git@efd0907#egg=coffea
 awkward~=2.0
 dask-awkward~=2023.1
 tabulate~=0.9

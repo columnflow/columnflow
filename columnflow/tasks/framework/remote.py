@@ -417,14 +417,16 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
 
         # use cc7 at CERN (https://batchdocs.web.cern.ch/local/submit.html)
         if self.htcondor_flavor == "cern":
-            config.custom_content.append(("requirements", '(OpSysAndVer =?= "CentOS7")'))
+            config.custom_content.append(("requirements", "(OpSysAndVer =?= \"CentOS7\")"))
 
         # same on naf with case insensitive comparison (https://confluence.desy.de/display/IS/BIRD)
         if self.htcondor_flavor == "naf":
-            config.custom_content.append(("requirements", '(OpSysAndVer == "CentOS7")'))
+            config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
 
-        # max runtime
-        config.custom_content.append(("+MaxRuntime", int(math.floor(self.max_runtime * 3600)) - 1))
+        # maximum runtime, compatible with multiple batch systems
+        max_runtime = int(math.floor(self.max_runtime * 3600)) - 1
+        config.custom_content.append(("+MaxRuntime", max_runtime))
+        config.custom_content.append(("+RequestRuntime", max_runtime))
 
         # request cpus
         if self.htcondor_cpus > 0:
@@ -616,7 +618,7 @@ class SlurmWorkflow(law.slurm.SlurmWorkflow):
 
         # set job time and nodes
         job_time = law.util.human_duration(
-            seconds=law.util.parse_duration(self.max_runtime, input_unit="h") - 1,
+            seconds=int(math.floor(self.max_runtime * 3600)) - 1,
             colon_format=True,
         )
         config.custom_content.append(("time", job_time))

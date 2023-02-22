@@ -1,6 +1,6 @@
 <center>
   <a href="https://github.com/uhh-cms/columnflow">
-    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/docs/_static/logo_dark.png" width="480" />
+    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
   </a>
 </center>
 
@@ -104,6 +104,7 @@ For a better overview of the tasks that are triggered by the commands below, che
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mschrode" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=jolange" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
     </tr>
   </tbody>

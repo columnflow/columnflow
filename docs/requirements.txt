@@ -14,7 +14,7 @@ scinum~=1.4
 six~=1.16
 
 # sandbox packages
-git+https://github.com/CoffeaTeam/coffea.git@3769a4d#egg=coffea
+git+https://github.com/CoffeaTeam/coffea.git@efd0907#egg=coffea
 awkward~=2.0
 dask-awkward~=2023.1
 uproot~=5.0
