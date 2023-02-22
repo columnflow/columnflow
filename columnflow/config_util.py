@@ -127,7 +127,7 @@ def create_category_combinations(
             # (use id "+" here which simply increments the last taken id, see order.Category)
             return {"id": "+"}
 
-        create_category_combinations(cfg, category, name_fn, kwargs_fn)
+        create_category_combinations(cfg, categories, name_fn, kwargs_fn)
     """
     n_created_categories = 0
     n_groups = len(categories)
