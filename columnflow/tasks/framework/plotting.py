@@ -187,6 +187,11 @@ class PlotBase1D(PlotBase):
         description="when True, each process is normalized on it's integral in the upper panel; "
         "default: None",
     )
+    hide_errors = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, no error bars/bands on histograms are drawn; default: None",
+    )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
@@ -195,6 +200,7 @@ class PlotBase1D(PlotBase):
         dict_add_strict(params, "density", self.density)
         dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
         dict_add_strict(params, "shape_norm", self.shape_norm)
+        dict_add_strict(params, "hide_errors", self.hide_errors)
         return params
 
 
