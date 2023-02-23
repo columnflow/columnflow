@@ -236,7 +236,7 @@ class MergeSelectionStats(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return self.reqs.SelectEvents.req(self, _exclude={"branches"})
+        return self.reqs.SelectEvents.req(self, _exclude={"branches"}, _prefer_cli={"workflow"})
 
     def merge_requires(self, start_branch, end_branch):
         return self.reqs.SelectEvents.req(
