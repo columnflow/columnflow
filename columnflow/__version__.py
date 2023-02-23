@@ -19,8 +19,9 @@ __credits__ = [
     "Bogdan Wiederspan",
     "Tobias Kramer",
     "Matthias Schroeder",
+    "Johannes Lange",
 ]
 __contact__ = "https://github.com/uhh-cms/columnflow"
 __license__ = "BSD-3-Clause"
 __status__ = "Development"
-__version__ = "0.1.3"
+__version__ = "0.2.0"
