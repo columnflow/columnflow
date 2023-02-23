@@ -87,7 +87,7 @@ def create_category_combinations(
     config: od.Config,
     categories: dict[str, list[od.Categories]],
     name_fn: Callable[[Any], str],
-    kwargs_fn: Callable[[Any], dict],
+    kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
 ) -> int:
     """
@@ -102,7 +102,9 @@ def create_category_combinations(
     Each newly created category is instantiated with this name as well as arbitrary keyword
     arguments as returned by *kwargs_fn*. This function is called with the categories (in a
     dictionary, mapped to the sequence names as given in *categories*) that contribute to the newly
-    created category and should return a dictionary with at least one field ``"id"``.
+    created category and should return a dictionary. If the fields ``"id"`` and ``"selection"`` are
+    missing, they are filled with reasonable defaults leading to an auto-incremented id and a list
+    of all parent selection statements.
 
     If the name of a new category is already known to *config* it skipped unless *skip_existing* is
     *False*.
@@ -125,6 +127,7 @@ def create_category_combinations(
         def kwargs_fn(categories):
             # return arguments that are forwarded to the category init
             # (use id "+" here which simply increments the last taken id, see order.Category)
+            # (note that this is also the default)
             return {"id": "+"}
 
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
@@ -136,6 +139,12 @@ def create_category_combinations(
     # nothing to do when there are less than 2 groups
     if n_groups < 2:
         return n_created_categories
+
+    # check functions
+    if not callable(name_fn):
+        raise TypeError(f"name_fn must be a function, but got {name_fn}")
+    if kwargs_fn and not callable(kwargs_fn):
+        raise TypeError(f"when set, kwargs_fn must be a function, but got {kwargs_fn}")
 
     # start combining, considering one additional groups for combinatorics at a time
     for _n_groups in range(2, n_groups + 1):
@@ -157,8 +166,13 @@ def create_category_combinations(
                 if skip_existing and config.has_category(cat_name, deep=True):
                     continue
 
+                # create arguments for the new category
+                kwargs = kwargs_fn(root_cats) if callable(kwargs_fn) else {}
+                kwargs.setdefault("id", "+")
+                kwargs.setdefault("selection", [c.selection for c in root_cats.values()])
+
                 # create the new category
-                cat = od.Category(name=cat_name, **kwargs_fn(root_cats))
+                cat = od.Category(name=cat_name, **kwargs)
                 n_created_categories += 1
 
                 # find direct parents and connect them
