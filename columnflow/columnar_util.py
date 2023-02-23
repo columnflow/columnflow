@@ -1455,25 +1455,33 @@ class ArrayFunction(Derivable):
         *instance_cache* is a dictionary that is serves as a cache to prevent same classes being
         instantiated multiple times.
         """
-        def instantiate(cls):
-            if cls not in instance_cache:
-                # create the instance first without its deps, then cache it and
-                # finally create its deps
-                inst = self.instantiate_dependency(cls, deferred_init=False)
-                instance_cache[cls] = inst
-                inst.deferred_init(instance_cache)
-            return instance_cache[cls]
-
         def add_dep(cls_or_inst):
             is_cls = ArrayFunction.derived_by(cls_or_inst)
             cls = cls_or_inst if is_cls else cls_or_inst.__class__
             if not only_update or cls not in self.deps:
-                inst = instantiate(cls) if is_cls else cls_or_inst
+                # create or get the instance
+                if is_cls:
+                    # use the cache
+                    if cls not in instance_cache:
+                        # create the instance first without its deps, then cache it but do not
+                        # create its own deps yet within the deferred init
+                        inst = self.instantiate_dependency(cls, deferred_init=False)
+                        instance_cache[cls] = inst
+                    inst = instance_cache[cls]
+                else:
+                    inst = cls_or_inst
+
                 # optionally skip the instance
                 if callable(inst.skip_func) and inst.skip_func():
                     self.deps.pop(cls, None)
                     return None
+
+                # run the deferred init that creates its own deps
+                inst.deferred_init(instance_cache)
+
+                # store it
                 self.deps[cls] = inst
+
             return self.deps[cls]
 
         # track dependent classes that are handled in the following
