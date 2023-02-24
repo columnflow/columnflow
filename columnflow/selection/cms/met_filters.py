@@ -46,11 +46,9 @@ def met_filters(
 
     Returns a bool array containing the logical AND of all input columns.
     """
-    met_filters = set(self.config_inst.x.met_filters)
-
     result = ak.ones_like(events.event, dtype=bool)
 
-    for route in met_filters:
+    for route in self.met_filters:
         # interpret column values as booleans
         vals = Route(route).apply(events)
         vals = ak.values_astype(vals, bool)
@@ -67,5 +65,13 @@ def met_filters_init(self: Selector) -> None:
     """
     Read MET filters from config and add them as input columns.
     """
-    met_filters = set(self.config_inst.x.met_filters)
-    self.uses |= met_filters
+    met_filters = self.config_inst.x.met_filters
+    if isinstance(met_filters, dict):
+        # do nothing when no dataset_inst is known
+        if not getattr(self, "dataset_inst", None):
+            return
+        met_filters = met_filters[self.dataset_inst.data_source]
+
+    # store filters as an attribute for faster lookup
+    self.met_filters = set(met_filters)
+    self.uses |= self.met_filters
