@@ -53,7 +53,7 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.ChoiceParameter(
-        choices=("wip", "pre", "sim", "simwip", "simpre", "public", "skip"),
+        choices=("wip", "pre", "pw", "sim", "simwip", "simpre", "simpw", "public", "skip"),
         default="wip",
         significant=False,
         description="Parameter to set the type of CMS logo; choices: "
