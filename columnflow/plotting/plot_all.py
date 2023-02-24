@@ -257,9 +257,11 @@ def plot_all(
         label_options = {
             "wip": "Work in progress",
             "pre": "Preliminary",
+            "pw": "Private work",
             "sim": "Simulation",
             "simwip": "Simulation work in progress",
             "simpre": "Simulation preliminary",
+            "simpw": "Simulation private work",
             "public": "",
         }
         cms_label_kwargs = {

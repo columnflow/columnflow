@@ -57,7 +57,7 @@ class PlotBase(ConfigTask):
         default="wip",
         significant=False,
         description="Parameter to set the type of CMS logo; choices: "
-        "wip,pre,sim,simwip,simpre,public,skip; default: wip",
+        "wip,pre,pw,sim,simwip,simpre,simpw,public,skip; default: wip",
     )
 
     @classmethod
