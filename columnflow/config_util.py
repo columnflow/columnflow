@@ -177,10 +177,13 @@ def create_category_combinations(
 
                 # find direct parents and connect them
                 for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
-                    parent_cat_name = name_fn(**{
-                        group_name: root_cats[group_name].name
-                        for group_name in _parent_group_names
-                    })
+                    if len(_parent_group_names) == 1:
+                        parent_cat_name = root_cats[_parent_group_names[0]].name
+                    else:
+                        parent_cat_name = name_fn(**{
+                            group_name: root_cats[group_name].name
+                            for group_name in _parent_group_names
+                        })
                     parent_cat = config.get_category(parent_cat_name, deep=True)
                     parent_cat.add_category(cat)
 
