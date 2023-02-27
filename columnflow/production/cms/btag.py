@@ -22,9 +22,9 @@ ak = maybe_import("awkward")
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_btag_file=(lambda external_files: external_files.btag_sf_corr),
+    get_btag_file=(lambda self, external_files: external_files.btag_sf_corr),
     # function to determine the muon weight config
-    get_btag_config=(lambda config_inst: config_inst.x.btag_sf),
+    get_btag_config=(lambda self: self.config_inst.x.btag_sf),
 )
 def btag_weights(
     self: Producer,
@@ -151,7 +151,7 @@ def btag_weights_init(self: Producer) -> None:
     btag_sf_jec_source = "" if self.jec_source == "Total" else self.jec_source
     self.shift_is_known_jec_source = (
         self.jec_source and
-        btag_sf_jec_source in self.get_btag_config(self.config_inst)[1]
+        btag_sf_jec_source in self.get_btag_config()[1]
     )
 
     # save names of method-intrinsic uncertainties
@@ -202,5 +202,5 @@ def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_btag_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name = self.get_btag_config(self.config_inst)[0]
+    corrector_name = self.get_btag_config()[0]
     self.btag_sf_corrector = correction_set[corrector_name]

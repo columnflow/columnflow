@@ -19,7 +19,7 @@ maybe_import("scipy.sparse")
 @selector(
     uses={"run", "luminosityBlock"},
     # function to determine the golden lumi file
-    get_lumi_file=(lambda external_files: external_files.lumi.golden),
+    get_lumi_file=(lambda self, external_files: external_files.lumi.golden),
 )
 def json_filter(
     self: Selector,

@@ -25,9 +25,9 @@ ak = maybe_import("awkward")
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_muon_file=(lambda external_files: external_files.muon_sf),
+    get_muon_file=(lambda self, external_files: external_files.muon_sf),
     # function to determine the muon weight config
-    get_muon_config=(lambda config_inst: config_inst.x.muon_sf_names),
+    get_muon_config=(lambda self: self.config_inst.x.muon_sf_names),
 )
 def muon_weights(
     self: Producer,
@@ -103,5 +103,5 @@ def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name, self.year = self.get_muon_config(self.config_inst)
+    corrector_name, self.year = self.get_muon_config()
     self.muon_sf_corrector = correction_set[corrector_name]

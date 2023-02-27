@@ -17,9 +17,9 @@ ak = maybe_import("awkward")
     uses={"run", "PV.npvs", "MET.pt", "MET.phi"},
     produces={"MET.pt", "MET.phi"},
     # function to determine the correction file
-    get_met_file=(lambda external_files: external_files.met_phi_corr),
+    get_met_file=(lambda self, external_files: external_files.met_phi_corr),
     # function to determine met correction config
-    get_met_config=(lambda config_inst: config_inst.x.met_phi_correction_set),
+    get_met_config=(lambda self: self.config_inst.x.met_phi_correction_set),
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -78,7 +78,7 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_met_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    name_tmpl = self.get_met_correction_set(self.config_inst)
+    name_tmpl = self.get_met_config()
     self.met_pt_corrector = correction_set[name_tmpl.format(
         variable="pt",
         data_source=self.dataset_inst.data_source,

@@ -25,9 +25,9 @@ ak = maybe_import("awkward")
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_electron_file=(lambda external_files: external_files.eletron_sf),
+    get_electron_file=(lambda self, external_files: external_files.electron_sf),
     # function to determine the electron weight config
-    get_electron_config=(lambda config_inst: config_inst.x.electron_sf_names),
+    get_electron_config=(lambda self: self.config_inst.x.electron_sf_names),
 )
 def electron_weights(
     self: Producer,
@@ -107,5 +107,5 @@ def electron_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name, self.year, self.wp = self.get_electron_config(self.config_inst)
+    corrector_name, self.year, self.wp = self.get_electron_config()
     self.electron_sf_corrector = correction_set[corrector_name]

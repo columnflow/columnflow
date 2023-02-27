@@ -17,7 +17,7 @@ ak = maybe_import("awkward")
 @selector(
     uses={"event", "nFlag"},
     # function to obtain met filters from the config
-    get_met_filters=(lambda config_inst: config_inst.x.met_filters),
+    get_met_filters=(lambda self: self.config_inst.x.met_filters),
 )
 def met_filters(
     self: Selector,
@@ -70,7 +70,7 @@ def met_filters_init(self: Selector) -> None:
     """
     Read MET filters from config and add them as input columns.
     """
-    met_filters = self.get_met_filters(self.config_inst)
+    met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):
         # do nothing when no dataset_inst is known
         if not getattr(self, "dataset_inst", None):

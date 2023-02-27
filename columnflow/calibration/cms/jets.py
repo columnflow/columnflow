@@ -110,9 +110,9 @@ def ak_evaluate(evaluator, *args):
     # toggle for propagation to MET
     propagate_met=True,
     # function to determine the correction file
-    get_jec_file=(lambda external_files: external_files.jet_jerc),
+    get_jec_file=(lambda self, external_files: external_files.jet_jerc),
     # function to determine the jec configuration dict
-    get_jec_config=(lambda config_inst: config_inst.x.jec),
+    get_jec_config=(lambda self: self.config_inst.x.jec),
 )
 def jec(
     self: Calibrator,
@@ -304,11 +304,11 @@ def jec_init(self: Calibrator) -> None:
     """
     Add JEC uncertainty shifts to the list of produced columns.
     """
-    jec = self.get_jec_config(self.config_inst)
+    jec_cfg = self.get_jec_config()
 
     sources = self.uncertainty_sources
     if sources is None:
-        sources = jec.uncertainty_sources
+        sources = jec_cfg.uncertainty_sources
 
     # add shifted jet variables
     self.produces |= {
@@ -352,9 +352,9 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     )
 
     # compute JEC keys from config information
-    jec = self.get_jec_config(self.config_inst)
+    jec_cfg = self.get_jec_config()
 
-    def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
+    def make_jme_keys(names, jec=jec_cfg, is_data=self.dataset_inst.is_data):
         if is_data:
             jec_era = self.dataset_inst.get_aux("jec_era", None)
             # if no special JEC era is specified, infer based on 'era'
@@ -371,10 +371,10 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # take sources from constructor or config
     sources = self.uncertainty_sources
     if sources is None:
-        sources = jec.uncertainty_sources
+        sources = jec_cfg.uncertainty_sources
 
-    jec_keys = make_jme_keys(jec.levels)
-    jec_keys_subset_type1_met = make_jme_keys(jec.levels_for_type1_met)
+    jec_keys = make_jme_keys(jec_cfg.levels)
+    jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
     junc_keys = make_jme_keys(sources, is_data=False)  # uncertainties only stored as MC keys
 
     # store the evaluators
@@ -413,9 +413,9 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_jer_file=(lambda external_files: external_files.jet_jerc),
+    get_jer_file=(lambda self, external_files: external_files.jet_jerc),
     # function to determine the jer configuration dict
-    get_jer_config=(lambda config_inst: config_inst.x.jer),
+    get_jer_config=(lambda self: self.config_inst.x.jer),
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -656,10 +656,10 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     )
 
     # compute JER keys from config information
-    jer = self.get_jer_config(self.config_inst)
+    jer_cfg = self.get_jer_config()
     jer_keys = {
-        "jer": f"{jer.campaign}_{jer.version}_MC_PtResolution_{jer.jet_type}",
-        "sf": f"{jer.campaign}_{jer.version}_MC_ScaleFactor_{jer.jet_type}",
+        "jer": f"{jer_cfg.campaign}_{jer_cfg.version}_MC_PtResolution_{jer_cfg.jet_type}",
+        "sf": f"{jer_cfg.campaign}_{jer_cfg.version}_MC_ScaleFactor_{jer_cfg.jet_type}",
     }
 
     # store the evaluators
