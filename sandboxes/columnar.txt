@@ -1,9 +1,9 @@
 # version 7
 
-git+https://github.com/CoffeaTeam/coffea.git@b84ccee#egg=coffea
 awkward~=2.0
-dask-awkward~=2023.2
 uproot~=5.0
+git+https://github.com/CoffeaTeam/coffea.git@efd0907#egg=coffea
+dask-awkward~=2023.2
 correctionlib~=2.2
 tabulate~=0.9
 zstandard~=0.20
