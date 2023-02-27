@@ -109,6 +109,10 @@ def ak_evaluate(evaluator, *args):
     uncertainty_sources=None,
     # toggle for propagation to MET
     propagate_met=True,
+    # function to determine the correction file
+    get_jec_file=(lambda external_files: external_files.jet_jerc),
+    # function to determine the jec configuration dict
+    get_jec_config=(lambda config_inst: config_inst.x.jec),
 )
 def jec(
     self: Calibrator,
@@ -121,14 +125,19 @@ def jec(
     Performs the jet energy corrections and uncertainty shifts using the correctionlib, optionally
     propagating the changes to the MET.
 
-    Requires an external file in the config, for instance:
+    Requires an external file in the config under ``jet_jerc``:
 
     .. code-block:: python
 
-        "jet_jerc": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz", "v1")  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+        })
 
-    An auxiliary entry in the config specifying the jet energy correction details is also
-    required, e.g.:
+    *get_jec_file* can be adapted in a subclass in case it is stored differently in the
+    external files
+
+    The jec configuration should be an auxiliary entry in the config, specifying the correction
+    details under "jec":
 
     .. code-block:: python
 
@@ -148,7 +157,10 @@ def jec(
             ]
         }
 
-    If running on data, the datasets must have an auxiliary field *jec_era* defined, e.g. "RunF".
+    *get_jec_config* can be adapted in a subclass in case it is stored differently in the config.
+
+    If running on data, the datasets must have an auxiliary field *jec_era* defined, e.g. "RunF",
+    or an auxiliary field *era*, e.g. "F".
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -292,9 +304,11 @@ def jec_init(self: Calibrator) -> None:
     """
     Add JEC uncertainty shifts to the list of produced columns.
     """
+    jec = self.get_jec_config(self.config_inst)
+
     sources = self.uncertainty_sources
     if sources is None:
-        sources = self.config_inst.x.jec.uncertainty_sources
+        sources = jec.uncertainty_sources
 
     # add shifted jet variables
     self.produces |= {
@@ -334,11 +348,11 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # import the correction sets from the external file
     import correctionlib
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.jet_jerc.load(formatter="gzip").decode("utf-8"),
+        self.get_jec_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
     # compute JEC keys from config information
-    jec = self.config_inst.x.jec
+    jec = self.get_jec_config(self.config_inst)
 
     def make_jme_keys(names, jec=jec, is_data=self.dataset_inst.is_data):
         if is_data:
@@ -398,19 +412,30 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
     propagate_met=True,
     # only run on mc
     mc_only=True,
+    # function to determine the correction file
+    get_jer_file=(lambda external_files: external_files.jet_jerc),
+    # function to determine the jer configuration dict
+    get_jer_config=(lambda config_inst: config_inst.x.jer),
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty shifts
-    using the correctionlib, following the recommendations given in
+    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty
+    shifts using the correctionlib, following the recommendations given in
     https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
-    Requires an external file in the config as (e.g.)
+
+    Requires an external file in the config under ``jet_jerc``:
 
     .. code-block:: python
 
-        "jet_jerc": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz", "v1")  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+        })
 
-    as well as an auxiliary entry in the config specifying the jet energy resolution details, e.g.:
+    *get_jer_file* can be adapted in a subclass in case it is stored differently in the
+    external files
+
+    The jer configuration should be an auxiliary entry in the config, specifying the correction
+    details under ``jer``:
 
     .. code-block:: python
 
@@ -419,6 +444,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             "version": "JRV2",
             "jet_type": "AK4PFchs",
         },
+
+    *get_jer_config* can be adapted in a subclass in case it is stored differently in the config.
 
     Throws an error if running on data.
     """
@@ -625,11 +652,11 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # import the correction sets from the external file
     import correctionlib
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.jet_jerc.load(formatter="gzip").decode("utf-8"),
+        self.get_jer_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
     # compute JER keys from config information
-    jer = self.config_inst.x.jer
+    jer = self.get_jer_config(self.config_inst)
     jer_keys = {
         "jer": f"{jer.campaign}_{jer.version}_MC_PtResolution_{jer.jet_type}",
         "sf": f"{jer.campaign}_{jer.version}_MC_ScaleFactor_{jer.jet_type}",
@@ -650,7 +677,12 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     uses={jec, jer},
     produces={jec, jer},
     # toggle for propagation to MET
-    propagate_met=True,
+    propagate_met=None,
+    # functions to determine configs and files
+    get_jec_file=None,
+    get_jec_config=None,
+    get_jer_file=None,
+    get_jer_config=None,
 )
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # apply jet energy corrections
@@ -665,6 +697,15 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator) -> None:
-    # forward the propagate_met argument to the producers
-    self.deps_kwargs[jec] = {"propagate_met": self.propagate_met}
-    self.deps_kwargs[jer] = {"propagate_met": self.propagate_met}
+    # forward argument to the producers
+    if self.propagate_met is not None:
+        self.deps_kwargs[jec]["propagate_met"] = self.propagate_met
+        self.deps_kwargs[jer]["propagate_met"] = self.propagate_met
+    if self.get_jec_file is not None:
+        self.deps_kwargs[jec]["get_jec_file"] = self.get_jec_file
+    if self.get_jec_config is not None:
+        self.deps_kwargs[jec]["get_jec_config"] = self.get_jec_config
+    if self.get_jer_file is not None:
+        self.deps_kwargs[jer]["get_jer_file"] = self.get_jer_file
+    if self.get_jer_config is not None:
+        self.deps_kwargs[jer]["get_jer_config"] = self.get_jer_config

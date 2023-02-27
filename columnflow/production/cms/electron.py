@@ -24,6 +24,10 @@ ak = maybe_import("awkward")
     },
     # only run on mc
     mc_only=True,
+    # function to determine the correction file
+    get_electron_file=(lambda external_files: external_files.eletron_sf),
+    # function to determine the electron weight config
+    get_electron_config=(lambda config_inst: config_inst.x.electron_sf_names),
 )
 def electron_weights(
     self: Producer,
@@ -32,26 +36,31 @@ def electron_weights(
     **kwargs,
 ) -> ak.Array:
     """
-    Electron scale factor producer. Requires an external file in the config as (e.g.)
+    Creates electron weights using the correctionlib. Requires an external file in the config under
+    ``electron_sf``:
 
     .. code-block:: python
 
-        "electron_sf": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/EGM/2017_UL/electron.json.gz", "v1"),  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "electron_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/EGM/2017_UL/electron.json.gz",  # noqa
+        })
 
-    as well as an auxiliary entry in the config to refer to three values in a tuple, i.e., the name
-    of the correction set, a year string to be used as a correctionlib input, and the name of the
-    selection working point.
+    *get_electron_file* can be adapted in a subclass in case it is stored differently in the
+    external files.
+
+    The name of the correction set, the year string for the weight evaluation, and the name of the
+    working point should be given as an auxiliary entry in the config:
 
     .. code-block:: python
 
         cfg.x.electron_sf_names = ("UL-Electron-ID-SF", "2017", "wp80iso")
 
+    *get_electron_config* can be adapted in a subclass in case it is stored differently in the
+    config.
+
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight
     based only on a subset of electrons.
     """
-    # get year string and working point name
-    sf_year, wp = self.config_inst.x.electron_sf_names[1:]
-
     # flat super cluster eta and pt views
     sc_eta = flat_np_view((
         events.Electron.eta[electron_mask] +
@@ -65,7 +74,7 @@ def electron_weights(
         ("sfup", "_up"),
         ("sfdown", "_down"),
     ]:
-        sf_flat = self.electron_sf_corrector(sf_year, syst, wp, sc_eta, pt)
+        sf_flat = self.electron_sf_corrector(self.year, syst, self.wp, sc_eta, pt)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
@@ -96,7 +105,7 @@ def electron_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.electron_sf.load(formatter="gzip").decode("utf-8"),
+        self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name = self.config_inst.x.electron_sf_names[0]
+    corrector_name, self.year, self.wp = self.get_electron_config(self.config_inst)
     self.electron_sf_corrector = correction_set[corrector_name]

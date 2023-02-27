@@ -21,6 +21,10 @@ ak = maybe_import("awkward")
     },
     # only run on mc
     mc_only=True,
+    # function to determine the correction file
+    get_btag_file=(lambda external_files: external_files.btag_sf_corr),
+    # function to determine the muon weight config
+    get_btag_config=(lambda config_inst: config_inst.x.btag_sf),
 )
 def btag_weights(
     self: Producer,
@@ -29,23 +33,29 @@ def btag_weights(
     **kwargs,
 ) -> ak.Array:
     """
-    B-tag scale factor weight producer. Requires an external file in the config as (e.g.)
+    B-tag scale factor weight producer. Requires an external file in the config as under
+    ``btag_sf_corr``:
 
     .. code-block:: python
 
-        "btag_sf_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/BTV/2017_UL/btagging.json.gz", "v1"),  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "btag_sf_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/BTV/2017_UL/btagging.json.gz",  # noqa
+        })
 
-    as well as an auxiliary entry in the config to refer to the b-tag correction set.
+    *get_btag_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
+
+    The name of the correction set as well as a list of JEC uncertainty sources which should be
+    propagated through the weight calculation should be given as an auxiliary entry in the config:
 
     .. code-block:: python
 
-        cfg.x.btag_sf_correction_set = "deepJet_shape"
+        cfg.x.btag_sf = ("deepJet_shape", ["Absolute", "FlavorQCD", ...])
 
-    In addition, JEC uncertainty sources are propagated and weight columns are written if an
-    auxiliary config entry ``btag_sf_jec_sources`` exists.
+    *get_btag_config* can be adapted in a subclass in case it is stored differently in the config.
 
-    Optionally, a *jet_mask* can be supplied to compute the scale factor weight
-    based only on a subset of jets.
+    Optionally, a *jet_mask* can be supplied to compute the scale factor weight based only on a
+    subset of jets.
 
     Resources:
 
@@ -141,7 +151,7 @@ def btag_weights_init(self: Producer) -> None:
     btag_sf_jec_source = "" if self.jec_source == "Total" else self.jec_source
     self.shift_is_known_jec_source = (
         self.jec_source and
-        btag_sf_jec_source in self.config_inst.x("btag_sf_jec_sources", [])
+        btag_sf_jec_source in self.get_btag_config(self.config_inst)[1]
     )
 
     # save names of method-intrinsic uncertainties
@@ -190,6 +200,7 @@ def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.btag_sf_corr.load(formatter="gzip").decode("utf-8"),
+        self.get_btag_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    self.btag_sf_corrector = correction_set[self.config_inst.x.btag_sf_correction_set]
+    corrector_name = self.get_btag_config(self.config_inst)[0]
+    self.btag_sf_corrector = correction_set[corrector_name]

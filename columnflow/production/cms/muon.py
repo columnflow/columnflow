@@ -24,6 +24,10 @@ ak = maybe_import("awkward")
     },
     # only run on mc
     mc_only=True,
+    # function to determine the correction file
+    get_muon_file=(lambda external_files: external_files.muon_sf),
+    # function to determine the muon weight config
+    get_muon_config=(lambda config_inst: config_inst.x.muon_sf_names),
 )
 def muon_weights(
     self: Producer,
@@ -32,29 +36,30 @@ def muon_weights(
     **kwargs,
 ) -> ak.Array:
     """
-    Reads the muon scale factor from the external file given in the config,
-    using the keys from the corresponding auxiliary entry in the config.
-    As of 10.2022, external files originating from a specific commit of
-    https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/tree/master/POG/MUO
-
-    Example of external file in config:
+    Creates muon weights using the correctionlib. Requires an external file in the config under
+    ``muon_sf``:
 
     .. code-block:: python
 
-        "muon_sf": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/MUO/2017_UL/muon_z.json.gz", "v1"),  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "muon_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
+        })
 
-    Example of the corresponding auxiliary entry to read the correct sets from the json file:
+    *get_muon_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
+
+    The name of the correction set and the year string for the weight evaluation should be given as
+    an auxiliary entry in the config:
 
     .. code-block:: python
 
         cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", "2017_UL")
 
-    Optionally, a *muon_mask* can be supplied to compute the scale factor weight
-    based only on a subset of muons.
-    """
-    # get year string
-    sf_year = self.config_inst.x.muon_sf_names[1]
+    *get_muon_config* can be adapted in a subclass in case it is stored differently in the config.
 
+    Optionally, a *muon_mask* can be supplied to compute the scale factor weight based only on a
+    subset of muons.
+    """
     # flat absolute eta and pt views
     abs_eta = flat_np_view(abs(events.Muon.eta[muon_mask]), axis=1)
     pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
@@ -65,7 +70,7 @@ def muon_weights(
         ("systup", "_up"),
         ("systdown", "_down"),
     ]:
-        sf_flat = self.muon_sf_corrector(sf_year, abs_eta, pt, syst)
+        sf_flat = self.muon_sf_corrector(self.year, abs_eta, pt, syst)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
@@ -96,7 +101,7 @@ def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.muon_sf.load(formatter="gzip").decode("utf-8"),
+        self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name = self.config_inst.x.muon_sf_names[0]
+    corrector_name, self.year = self.get_muon_config(self.config_inst)
     self.muon_sf_corrector = correction_set[corrector_name]
