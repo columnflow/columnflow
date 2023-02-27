@@ -18,6 +18,8 @@ maybe_import("scipy.sparse")
 
 @selector(
     uses={"run", "luminosityBlock"},
+    # function to determine the golden lumi file
+    get_lumi_file=(lambda self, external_files: external_files.lumi.golden),
 )
 def json_filter(
     self: Selector,
@@ -26,17 +28,22 @@ def json_filter(
     **kwargs,
 ) -> ak.Array:
     """
-    Select only events from certified luminosity blocks included in the "golden" JSON. This filter can only be applied in recorded data.
+    Select only events from certified luminosity blocks included in the "golden" JSON. This filter
+    can only be applied in recorded data.
 
-    The JSON file must specified in the config as an external file under "lumi.golden":
+    By default, the JSON file should specified in the config as an external file under
+    ``lumi.golden``:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "lumi": {
-                "golden": "/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt"  # noqa
+                "golden": "/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",  # noqa
             },
         })
+
+    *get_lumi_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
     """
     lookup_result = self.run_ls_lookup[events.run, events.luminosityBlock].todense()
     return np.squeeze(np.array(lookup_result))
@@ -62,7 +69,7 @@ def json_filter_setup(self: Selector, reqs: dict, inputs: dict) -> None:
     bundle = reqs["external_files"]
 
     # import the correction sets from the external file
-    json = bundle.files.lumi.golden.load(formatter="json")
+    json = self.get_lumi_file(bundle.files).load(formatter="json")
 
     # determine range of run/luminosity block values
     max_ls = max(ls for ls_ranges in json.values() for ls in ak.ravel(ls_ranges))

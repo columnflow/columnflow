@@ -16,23 +16,34 @@ ak = maybe_import("awkward")
 @calibrator(
     uses={"run", "PV.npvs", "MET.pt", "MET.phi"},
     produces={"MET.pt", "MET.phi"},
+    # function to determine the correction file
+    get_met_file=(lambda self, external_files: external_files.met_phi_corr),
+    # function to determine met correction config
+    get_met_config=(lambda self: self.config_inst.x.met_phi_correction_set),
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
     Performs the MET phi (type II) correction using the correctionlib. Requires an external file in
-    the config as (e.g.)
+    the config under ``met_phi_corr``:
 
     .. code-block:: python
 
-        "met_phi_corr": ("/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz", "v1")  # noqa
+        cfg.x.external_files = DotDict.wrap({
+            "met_phi_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz",  # noqa
+        })
 
-    as well as an auxiliary entry in the config to refer to the name of the correction set such as
+    *get_met_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
+
+    The name of the correction set should be present as an auxiliary entry in the config:
 
     .. code-block:: python
 
         cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
     where "variable" and "data_source" are placeholders that are inserted in the calibrator setup.
+    *get_met_correction_set* can be adapted in a subclass in case it is stored differently in the
+    config.
     """
     args = (
         events.MET.pt,
@@ -65,13 +76,14 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     # create the pt and phi correctors
     import correctionlib
     correction_set = correctionlib.CorrectionSet.from_string(
-        bundle.files.met_phi_corr.load(formatter="gzip").decode("utf-8"),
+        self.get_met_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    self.met_pt_corrector = correction_set[self.config_inst.x.met_phi_correction_set.format(
+    name_tmpl = self.get_met_config()
+    self.met_pt_corrector = correction_set[name_tmpl.format(
         variable="pt",
         data_source=self.dataset_inst.data_source,
     )]
-    self.met_phi_corrector = correction_set[self.config_inst.x.met_phi_correction_set.format(
+    self.met_phi_corrector = correction_set[name_tmpl.format(
         variable="phi",
         data_source=self.dataset_inst.data_source,
     )]
