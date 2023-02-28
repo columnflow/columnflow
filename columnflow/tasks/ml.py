@@ -378,17 +378,29 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
 
+    def req_training(self, **kwargs) -> MLTraining:
+        # add dedicated training calibrators, selector and producers
+        # (not via setdefault to prevent hooks from being unnecessarily called)
+        if "calibrators" not in kwargs:
+            calibrators = self.ml_model_inst.training_calibrators(list(self.calibrators))
+            kwargs["calibrators"] = tuple(calibrators)
+        if "selector" not in kwargs:
+            kwargs["selector"] = self.ml_model_inst.training_selector(self.selector)
+        if "producers" not in kwargs:
+            producers = self.ml_model_inst.training_producers(list(self.producers))
+            kwargs["producers"] = tuple(producers)
+
+        return self.reqs.MLTraining.req(self, **kwargs)
+
     def workflow_requires(self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
 
-        reqs["models"] = [
-            self.reqs.MLTraining.req(self, branch=f)
-            for f in range(self.ml_model_inst.folds)
-        ]
+        reqs["models"] = self.req_training(_exclude={"branches"})
 
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, _exclude={"branches"})
+
         if not self.pilot and self.producers:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=p)
@@ -398,12 +410,11 @@ class MLEvaluation(
         return reqs
 
     def requires(self):
-        reqs = {"models": [
-            self.reqs.MLTraining.req(self, branch=f)
-            for f in range(self.ml_model_inst.folds)
-        ]}
+        reqs = {
+            "models": self.req_training(_exclude={"branch"}),
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+        }
 
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})
         if self.producers:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=p)
