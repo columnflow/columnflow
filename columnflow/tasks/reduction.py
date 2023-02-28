@@ -42,10 +42,8 @@ class ReduceEvents(
         SelectEvents=SelectEvents,
     )
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 

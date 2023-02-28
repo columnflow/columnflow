@@ -50,10 +50,8 @@ class PrepareMLEvents(
                 f"intended to be run by {self.__class__.__name__}",
             )
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # require the full merge forest
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
@@ -299,10 +297,8 @@ class MLTraining(
         # each fold to train corresponds to one branch
         return list(range(self.ml_model_inst.folds))
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["events"] = {
             dataset_inst.name: [
@@ -378,10 +374,8 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["models"] = [
             self.reqs.MLTraining.req(self, branch=f)

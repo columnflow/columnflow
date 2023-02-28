@@ -38,10 +38,8 @@ class CreateDatacards(
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # simply require the requirements of all branch tasks right now
         reqs["merged_hists"] = set(sum((
