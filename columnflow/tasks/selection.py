@@ -40,10 +40,8 @@ class SelectEvents(
 
     register_selector_shifts = True
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
@@ -236,7 +234,7 @@ class MergeSelectionStats(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return self.reqs.SelectEvents.req(self, _exclude={"branches"}, _prefer_cli={"workflow"})
+        return self.reqs.SelectEvents.req(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
         return self.reqs.SelectEvents.req(

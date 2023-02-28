@@ -42,10 +42,8 @@ class CreateHistograms(
         MLEvaluation=MLEvaluation,
     )
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # require the full merge forest
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
@@ -247,10 +245,8 @@ class MergeHistograms(
         # create a dummy branch map so that this task could as a job
         return {0: None}
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["hists"] = self.as_branch().requires()
 
@@ -345,10 +341,8 @@ class MergeShiftedHistograms(
         # create a dummy branch map so that this task could as a job
         return {0: None}
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
