@@ -22,8 +22,13 @@
 # Optional arguments:
 # 1. mode
 #      The setup mode. Different values are accepted:
-#        - '' (default): The virtual environment is installed when not existing yet and sourced.
-#        - reinstall:    The virtual environment is removed first, then reinstalled and sourced.
+#        - ''/install:  The virtual environment is installed when not existing yet and sourced.
+#        - reinstall:   The virtual environment is removed first, then reinstalled and sourced.
+#        - update:      The virtual environment is removed first in case it is outdated, then
+#                       reinstalled and sourced.
+#      Please note that if the mode is empty ('') and the environment variable CF_VENV_SETUP_MODE is
+#      defined, its value is used instead.
+#
 # 2. versioncheck
 #      When "yes", perform a version check, print a warning in case of a mismatch and set a specific
 #      exit code (21). When "no", the check is skipped alltogether. When "silent", no warning is
@@ -57,7 +62,18 @@ setup_venv() {
 
     local mode="${1:-}"
     local versioncheck="${2:-warn}"
-    if [ ! -z "${mode}" ] && [ "${mode}" != "reinstall" ]; then
+
+    # default mode
+    if [ -z "${mode}" ]; then
+        if [ ! -z "${CF_VENV_SETUP_MODE}" ]; then
+            mode="${CF_VENV_SETUP_MODE}"
+        else
+            mode="install"
+        fi
+    fi
+
+    # value checks
+    if [ "${mode}" != "install" ] && [ "${mode}" != "reinstall" ] && [ "${mode}" != "update" ]; then
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
     fi
@@ -109,6 +125,7 @@ setup_venv() {
     #
 
     local install_path="${CF_VENV_BASE}/${CF_VENV_NAME}"
+    local install_path_repr="\$CF_VENV_BASE/${CF_VENV_NAME}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}"
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
@@ -125,11 +142,11 @@ setup_venv() {
     # possible return value
     local ret="0"
 
-    # only continue outside remote jobs
+    # handle local environments
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
         # optionally remove the current installation
         if [ "${mode}" = "reinstall" ]; then
-            echo "removing current installation at $install_path (mode '${mode}')"
+            echo "removing current installation at ${install_path_repr} (mode '${mode}')"
             rm -rf "${install_path}"
         fi
 
@@ -159,9 +176,48 @@ setup_venv() {
             done
         fi
 
-        # install or fetch when not existing
+        # create the pending_flag to express that the venv state might be changing
+        touch "${pending_flag_file}"
+
+        # checks to be performed if the venv already exists
+        if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            # get the current version
+            local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            if [ -z "${curr_version}" ]; then
+                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
+                return "20"
+            fi
+
+            if [ "${curr_version}" != "${venv_version}" ]; then
+                if [ "${mode}" = "update" ]; then
+                    # remove the venv in case an update is requested
+                    echo "removing current installation at ${install_path_repr} (mode '${mode}', installed version ${curr_version}, requested version ${venv_version})"
+                    rm -rf "${install_path}"
+
+                elif [ "${versioncheck}" != "no" ]; then
+                    # complain about the version mismatch
+                    if [ "${versioncheck}" != "warn" ]; then
+                        ret="21"
+                    fi
+                    if [ "${versioncheck}" != "silent" ]; then
+                        >&2 echo ""
+                        >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' (installed version ${curr_version}, requested version ${venv_version}) located at"
+                        >&2 echo "WARNING: ${install_path_repr}"
+                        >&2 echo "WARNING: please consider updating it by adding 'update' to the source command"
+                        >&2 echo "WARNING: or by setting the environment variable 'CF_VENV_SETUP_MODE=update'"
+                        >&2 echo ""
+                    fi
+                fi
+            fi
+
+            # activate it if stilll existing
+            if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+                source "${install_path}/bin/activate" "" || return "$?"
+            fi
+        fi
+
+        # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            touch "${pending_flag_file}"
             cf_color cyan "installing venv at ${install_path}"
 
             rm -rf "${install_path}"
@@ -199,33 +255,14 @@ setup_venv() {
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
             echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
-            rm -f "${pending_flag_file}"
-        else
-            # get the current version
-            local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
-            if [ -z "${curr_version}" ]; then
-                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
-                return "20"
-            fi
-
-            # complain when the version is outdated
-            if [ "${curr_version}" != "${venv_version}" ] && [ "${versioncheck}" != "no" ]; then
-                if [ "${versioncheck}" != "warn" ]; then
-                    ret="21"
-                fi
-                if [ "${versioncheck}" != "silent" ]; then
-                    >&2 echo ""
-                    >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' located at"
-                    >&2 echo "WARNING: ${install_path}"
-                    >&2 echo "WARNING: please consider updating it by adding 'reinstall' to the source command"
-                    >&2 echo ""
-                fi
-            fi
-
-            # activate it
-            source "${install_path}/bin/activate" "" || return "$?"
         fi
-    else
+
+        # remove the pending_flag
+        rm -f "${pending_flag_file}"
+    fi
+
+    # handle remote job environments
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then

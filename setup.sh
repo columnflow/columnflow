@@ -50,6 +50,9 @@ setup_columnflow() {
     #   CF_JOB_BASE
     #       The directory where job files from batch system submissions are kept. Used in law.cfg.
     #       Might point to $CF_DATA/jobs. Queried during the interactive setup.
+    #   CF_VENV_SETUP_MODE
+    #       The default mode for setting up virtual envs. Queried during the interactive setup. See
+    #       sandboxes/_setup_venv.sh for more info.
     #   CF_STORE_NAME
     #       The name (not path) of store directories that will be created to contain output targets,
     #       potentially both locally and remotely. Queried during the interactive setup.
@@ -174,6 +177,9 @@ setup_columnflow() {
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
+            query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
+            [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
+            unset CF_VENV_SETUP_MODE_UPDATE
             query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
