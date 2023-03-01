@@ -386,6 +386,11 @@ class MLEvaluation(
             producers = self.ml_model_inst.training_producers(list(self.producers))
             kwargs["producers"] = tuple(producers)
 
+        # always prioritize cli parameters
+        prefer_cli = set(kwargs.get("_prefer_cli", []))
+        prefer_cli |= {"calibrators", "selector", "selector_steps", "producers"}
+        kwargs["_prefer_cli"] = prefer_cli
+
         return self.reqs.MLTraining.req(self, **kwargs)
 
     def workflow_requires(self):
