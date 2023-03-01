@@ -133,7 +133,7 @@ def plot_all(
     "cms_label_cfg": dict,
     """
     # available plot methods mapped to their names
-    plot_methods = {  # noqa
+    plot_methods = {
         func.__name__: func
         for func in [draw_error_bands, draw_stack, draw_hist, draw_errorbars]
     }
