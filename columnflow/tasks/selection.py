@@ -17,6 +17,7 @@ from columnflow.production import Producer
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
@@ -310,29 +311,39 @@ class MergeSelectionMasks(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # store the normalization weight producer
-        self.norm_weight_producer = Producer.get_cls("normalization_weights")(
-            inst_dict=self.get_producer_kwargs(self),
-        )
+        # store the normalization weight producer for MC
+        self.norm_weight_producer = None
+        if self.dataset_inst.is_mc:
+            self.norm_weight_producer = Producer.get_cls("normalization_weights")(
+                inst_dict=self.get_producer_kwargs(self),
+            )
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return {
+        reqs = {
             "selection": self.reqs.SelectEvents.req(self, _exclude={"branches"}),
-            "normalization": self.norm_weight_producer.run_requires(),
         }
 
+        if self.dataset_inst.is_mc:
+            reqs["normalization"] = self.norm_weight_producer.run_requires()
+
+        return reqs
+
     def merge_requires(self, start_branch, end_branch):
-        return {
+        reqs = {
             "selection": [
                 self.reqs.SelectEvents.req(self, branch=b)
                 for b in range(start_branch, end_branch)
             ],
-            "normalization": self.norm_weight_producer.run_requires(),
         }
+
+        if self.dataset_inst.is_mc:
+            reqs["normalization"] = self.norm_weight_producer.run_requires()
+
+        return reqs
 
     def trace_merge_workflow_inputs(self, inputs):
         return super().trace_merge_workflow_inputs(inputs["selection"])
@@ -354,16 +365,16 @@ class MergeSelectionMasks(
         law.pyarrow.merge_parquet_task(self, inputs, output)
 
     def zip_results_and_columns(self, inputs, tmp_dir):
-        import awkward as ak
-        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet
+        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, set_ak_column
 
         chunks = []
 
         # setup the normalization weights producer
-        self.norm_weight_producer.run_setup(
-            self.requires()["forest_merge"]["normalization"],
-            self.input()["forest_merge"]["normalization"],
-        )
+        if self.dataset_inst.is_mc:
+            self.norm_weight_producer.run_setup(
+                self.requires()["forest_merge"]["normalization"],
+                self.input()["forest_merge"]["normalization"],
+            )
 
         # define columns that will be written
         write_columns = set(self.config_inst.x.keep_columns[self.task_family])
@@ -373,8 +384,11 @@ class MergeSelectionMasks(
             events = inp["columns"].load(formatter="awkward")
             steps = inp["results"].load(formatter="awkward").steps
 
-            # add normalization weight
-            events = self.norm_weight_producer(events)
+            # add normalization weight, create a fake weight for data
+            if self.dataset_inst.is_mc:
+                events = self.norm_weight_producer(events)
+            else:
+                events = set_ak_column(events, "mc_weight", np.ones(len(events), dtype=np.float32))
 
             # remove columns
             events = route_filter(events)
