@@ -1,7 +1,7 @@
 # version 5
 
 awkward~=2.0
-git+https://github.com/CoffeaTeam/coffea.git@efd0907#egg=coffea
+git+https://github.com/CoffeaTeam/coffea.git@36fa8ac#egg=coffea
 dask-awkward~=2023.2
 tabulate~=0.9
 zstandard~=0.20
