@@ -87,7 +87,9 @@ class CreateCutflowHistograms(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = {"category_ids", "process_id", "normalization_weight"} | set(aliases.values())
+        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        if self.dataset_inst.is_mc:
+            read_columns |= {"normalization_weight"}
         read_columns = {Route(c) for c in read_columns}
 
         # define steps
@@ -162,7 +164,11 @@ class CreateCutflowHistograms(
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
                         "shift": self.global_shift_inst.id,
-                        "weight": events.normalization_weight[mask] if self.dataset_inst.is_mc else 1,
+                        "weight": (
+                            events.normalization_weight[mask]
+                            if self.dataset_inst.is_mc
+                            else 1.0
+                        ),
                     }
                     for var_name in var_names:
                         point[var_name] = expressions[var_name](events)[mask]
