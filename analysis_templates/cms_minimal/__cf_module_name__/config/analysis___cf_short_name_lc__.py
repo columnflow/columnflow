@@ -5,7 +5,6 @@ Configuration of the __cf_analysis_name__ analysis.
 """
 
 import os
-import re
 import functools
 
 import law
