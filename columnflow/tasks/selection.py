@@ -120,8 +120,8 @@ class SelectEvents(
         read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
         read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be written
-        write_columns = self.selector_inst.produced_columns
+        # define columns that will be written, including the event number as required for cutflows
+        write_columns = self.selector_inst.produced_columns | {"event"}
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -365,7 +365,7 @@ class MergeSelectionMasks(
         law.pyarrow.merge_parquet_task(self, inputs, output)
 
     def zip_results_and_columns(self, inputs, tmp_dir):
-        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, set_ak_column
+        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet
 
         chunks = []
 
@@ -376,19 +376,17 @@ class MergeSelectionMasks(
                 self.input()["forest_merge"]["normalization"],
             )
 
-        # define columns that will be written
-        write_columns = set(self.config_inst.x.keep_columns[self.task_family])
+        # define columns that will be written, including the event number as required for cutflows
+        write_columns = set(self.config_inst.x.keep_columns[self.task_family]) | {"event"}
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:
             events = inp["columns"].load(formatter="awkward")
             steps = inp["results"].load(formatter="awkward").steps
 
-            # add normalization weight, create a fake weight for data
+            # add normalization weight
             if self.dataset_inst.is_mc:
                 events = self.norm_weight_producer(events)
-            else:
-                events = set_ak_column(events, "mc_weight", np.ones(len(events), dtype=np.float32))
 
             # remove columns
             events = route_filter(events)

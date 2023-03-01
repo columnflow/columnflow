@@ -220,7 +220,7 @@ cfg.x.keep_columns = DotDict.wrap({
         "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
     },
     "cf.MergeSelectionMasks": {
-        "mc_weight", "normalization_weight", "process_id", "category_ids", "cutflow.*",
+        "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
     "cf.UniteColumns": {
         "*",
@@ -261,6 +261,14 @@ cfg.add_category(
 )
 
 # add variables
+# (the "event" variable is required for some cutflow plotting task)
+cfg.add_variable(
+    name="event",
+    expression="event",
+    binning=(100, 0.0, 1.0e9),
+    x_title="Event number",
+    discrete_x=True,
+)
 cfg.add_variable(
     name="n_jet",
     expression="n_jet",
