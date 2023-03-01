@@ -38,6 +38,11 @@ class MLModel(Derivable):
 
     See their documentation below for more info.
 
+    There are several optional hooks that allow for a fine-grained configuration of additional
+    training requirements (:py:meth:`requires`), diverging training and evaluation phase spaces
+    (:py:meth:`training_calibrators`, :py:meth:`training_selector`, :py:meth:`training_producers`),
+    or how hyper-paramaters are string encoded for output declarations (:py:meth:`parameter_pairs`).
+
     .. py:classattribute:: folds
        type: int
 
@@ -158,6 +163,41 @@ class MLModel(Derivable):
         """
         return True
 
+    def training_calibrators(self, evaluation_calibrators: list[str]) -> list[str]:
+        """
+        Given a sequence of requested *evaluation_calibrators*, which are, as the name suggests,
+        meant for model evaluation, this method can alter and/or replace them to define a different
+        set of calibrators for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
+        """
+        return evaluation_calibrators
+
+    def training_selector(self, evaluation_selector: str) -> str:
+        """
+        Given a requested *evaluation_selector*, which is, as the name suggests, meant for model
+        evaluation, this method can change it to define a different selector for the preprocessing
+        and training pipeline. This can be helpful in cases where training and evaluation phase
+        spaces, as well as the required input columns are intended to diverge.
+        """
+        return evaluation_selector
+
+    def training_producers(self, evaluation_producers: list[str]) -> list[str]:
+        """
+        Given a sequence of requested *evaluation_producers*, which are, as the name suggests,
+        meant for model evaluation, this method can alter and/or replace them to define a different
+        set of producers for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
+        """
+        return evaluation_producers
+
+    def requires(self, task: law.Task) -> Any:
+        """
+        Returns tasks that are required for the training to run and whose outputs are needed.
+        """
+        return {}
+
     def sandbox(self, task: law.Task) -> str:
         """
         Given a *task*, teturns the name of a sandbox that is needed to perform model training and
@@ -182,12 +222,6 @@ class MLModel(Derivable):
         Returns a set of all produced columns. To be implemented in subclasses.
         """
         raise NotImplementedError()
-
-    def requires(self, task: law.Task) -> Any:
-        """
-        Returns required tasks that should be performed beforehand and whose outputs are needed.
-        """
-        return {}
 
     def output(self, task: law.Task) -> Any:
         """
