@@ -254,9 +254,9 @@ class SelectorMixin(ConfigTask):
 class SelectorStepsMixin(SelectorMixin):
 
     selector_steps = law.CSVParameter(
-        default=("default",),
+        default=(),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "default: (default,)",
+        "empty default",
         brace_expand=True,
     )
 
