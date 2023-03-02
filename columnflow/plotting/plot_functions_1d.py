@@ -50,6 +50,7 @@ def plot_variable_per_process(
     """
     remove_residual_axis(hists, "shift")
 
+    variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
@@ -61,7 +62,7 @@ def plot_variable_per_process(
     )
 
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_insts[0], density, shape_norm, yscale,
+        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
     )
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
@@ -89,6 +90,7 @@ def plot_variable_variants(
     """
     remove_residual_axis(hists, "shift")
 
+    variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_density_to_hists(hists, density)
 
@@ -116,7 +118,7 @@ def plot_variable_variants(
 
     # setup style config
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_insts[0], density, shape_norm, yscale,
+        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
