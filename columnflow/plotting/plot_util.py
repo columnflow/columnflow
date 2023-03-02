@@ -284,12 +284,12 @@ def prepare_plot_config(
                 "label": "Data",
                 "yerr": False if any(data_hide_errors) else None,
             },
-            # "ratio_kwargs": {
-            if h_mc:
-                plot_config["ratio_kwargs"]["norm"] = h_mc.values() * data_norm / mc_norm
-            #     "yerr": False if data_hide_errors[0] else None,
-            # },
         }
+        if h_mc:
+            plot_config["ratio_kwargs"] = {
+                "norm": h_mc.values() * data_norm / mc_norm,
+                "yerr": False if any(data_hide_errors) else None,
+            }
 
     return plot_config
 
