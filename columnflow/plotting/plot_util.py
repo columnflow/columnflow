@@ -282,7 +282,7 @@ def prepare_plot_config(
             "kwargs": {
                 "norm": data_norm,
                 "label": "Data",
-                "yerr": False if data_hide_errors[0] else None,
+                "yerr": False if any(data_hide_errors) else None,
             },
             # "ratio_kwargs": {
             if h_mc:
