@@ -17,6 +17,7 @@ __all__ = [
 ]
 
 import os
+import abc
 import uuid
 import queue
 import threading
@@ -657,7 +658,7 @@ def classproperty(func: Callable) -> ClassPropertyDescriptor:
     return ClassPropertyDescriptor(func)
 
 
-class DerivableMeta(type):
+class DerivableMeta(abc.ABCMeta):
     """
     Meta class for :py:class:`Derivable` objects providing class-level features such as improved
     tracing and lookup of subclasses, and single-line subclassing for partial-like overwriting of

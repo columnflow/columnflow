@@ -444,7 +444,10 @@ class MLEvaluation(
         tmp_dir.touch()
 
         # open all model files
-        models = [self.ml_model_inst.open_model(inp) for inp in inputs["models"]]
+        models = [
+            self.ml_model_inst.open_model(inp)
+            for inp in inputs["models"]["collection"].targets.values()
+        ]
 
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
