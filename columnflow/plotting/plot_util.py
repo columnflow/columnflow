@@ -145,11 +145,13 @@ def prepare_style_config(
     small helper function that sets up a default style config based on the instances
     of the config, category and variable
     """
-
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
-    xlim = (variable_inst.x("x_min", variable_inst.x_min), variable_inst.x("x_max", variable_inst.x_max))
+    xlim = (
+        variable_inst.x("x_min", variable_inst.x_min),
+        variable_inst.x("x_max", variable_inst.x_max),
+    )
 
     style_config = {
         "ax_cfg": {
@@ -172,7 +174,8 @@ def prepare_style_config(
 
     # disable minor ticks based on variable_inst
     if variable_inst.discrete_x:
-        style_config["ax_cfg"]["xticks"] = range(int(xlim[0]), int(xlim[1]) + 1)
+        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
+        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
         style_config["ax_cfg"]["minorxticks"] = []
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
@@ -231,7 +234,7 @@ def prepare_plot_config(
     plot_config = OrderedDict()
 
     # draw stack + error bands
-    if h_mc_stack:
+    if h_mc_stack is not None:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
         plot_config["mc_stack"] = {
             "method": "draw_stack",
@@ -279,13 +282,14 @@ def prepare_plot_config(
             "kwargs": {
                 "norm": data_norm,
                 "label": "Data",
-                "yerr": False if data_hide_errors[i] else None,
-            },
-            "ratio_kwargs": {
-                "norm": h_mc.values() * data_norm / mc_norm,
-                "yerr": False if data_hide_errors[i] else None,
+                "yerr": False if any(data_hide_errors) else None,
             },
         }
+        if h_mc is not None:
+            plot_config["ratio_kwargs"] = {
+                "norm": h_mc.values() * data_norm / mc_norm,
+                "yerr": False if any(data_hide_errors) else None,
+            }
 
     return plot_config
 

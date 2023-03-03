@@ -45,14 +45,14 @@ def plot_variable_per_process(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-
+    """
+    TODO.
+    """
     remove_residual_axis(hists, "shift")
 
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
     variable_inst = variable_insts[0]
-
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
-
     hists = apply_density_to_hists(hists, density)
 
     plot_config = prepare_plot_config(
@@ -85,12 +85,13 @@ def plot_variable_variants(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-
+    """
+    TODO.
+    """
     remove_residual_axis(hists, "shift")
 
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
     variable_inst = variable_insts[0]
-
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_density_to_hists(hists, density)
 
     plot_config = OrderedDict()
@@ -145,12 +146,12 @@ def plot_shifted_variable(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    """
+    TODO.
+    """
     variable_inst = variable_insts[0]
-
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
-
     hists = apply_density_to_hists(hists, density)
 
     # create the sum of histograms over all processes
@@ -230,11 +231,12 @@ def plot_cutflow(
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-
+    """
+    TODO.
+    """
     remove_residual_axis(hists, "shift")
 
     hists = apply_process_settings(hists, process_settings)
-
     hists = apply_density_to_hists(hists, density)
 
     # setup plotting config
