@@ -120,8 +120,8 @@ class SelectEvents(
         read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
         read_columns = {Route(c) for c in read_columns}
 
-        # define columns that will be written, including the event number as required for cutflows
-        write_columns = self.selector_inst.produced_columns | {"event"}
+        # define columns that will be written
+        write_columns = mandatory_coffea_columns | self.selector_inst.produced_columns
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
@@ -365,7 +365,7 @@ class MergeSelectionMasks(
         law.pyarrow.merge_parquet_task(self, inputs, output)
 
     def zip_results_and_columns(self, inputs, tmp_dir):
-        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet
+        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
 
         chunks = []
 
@@ -376,8 +376,8 @@ class MergeSelectionMasks(
                 self.input()["forest_merge"]["normalization"],
             )
 
-        # define columns that will be written, including the event number as required for cutflows
-        write_columns = set(self.config_inst.x.keep_columns[self.task_family]) | {"event"}
+        # define columns that will be written
+        write_columns = mandatory_coffea_columns | set(self.config_inst.x.keep_columns[self.task_family])
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:

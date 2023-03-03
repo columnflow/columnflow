@@ -260,12 +260,27 @@ cfg.add_category(
 )
 
 # add variables
-# (the "event" variable is required for some cutflow plotting task)
+# (the "event", "run" and "lumi" variables are required for some cutflow plotting task,
+# and also correspond to the minimal set of columns that coffea's nano scheme requires)
 cfg.add_variable(
     name="event",
     expression="event",
     binning=(1, 0.0, 1.0e9),
     x_title="Event number",
+    discrete_x=True,
+)
+cfg.add_variable(
+    name="run",
+    expression="run",
+    binning=(1, 100000.0, 500000.0),
+    x_title="Run number",
+    discrete_x=True,
+)
+cfg.add_variable(
+    name="lumi",
+    expression="luminosityBlock",
+    binning=(1, 0.0, 5000.0),
+    x_title="Luminosity block",
     discrete_x=True,
 )
 cfg.add_variable(

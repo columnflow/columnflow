@@ -243,6 +243,12 @@ class PlotCutflow(
         default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
     )
+    variable = luigi.Parameter(
+        default=CreateCutflowHistograms.default_variables[0],
+        significant=False,
+        description="name of the variable to use for obtaining event counts; "
+        f"default: '{CreateCutflowHistograms.default_variables[0]}'",
+    )
 
     # upstream requirements
     reqs = Requirements(
@@ -267,7 +273,7 @@ class PlotCutflow(
             self.reqs.CreateCutflowHistograms.req(
                 self,
                 dataset=d,
-                variables=("event",),
+                variables=(self.variable,),
                 _exclude={"branches"},
             )
             for d in self.datasets
@@ -280,7 +286,7 @@ class PlotCutflow(
                 self,
                 branch=0,
                 dataset=d,
-                variables=("event",),
+                variables=(self.variable,),
             )
             for d in self.datasets
         }
@@ -311,7 +317,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["event"].load(formatter="pickle")
+                h_in = inp[self.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -342,7 +348,7 @@ class PlotCutflow(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "event": sum}]
+                    h = h[{"process": sum, "category": sum, self.variable: sum}]
 
                     # add the histogram
                     if process_inst in hists:
