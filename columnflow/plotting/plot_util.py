@@ -234,7 +234,7 @@ def prepare_plot_config(
     plot_config = OrderedDict()
 
     # draw stack + error bands
-    if h_mc_stack:
+    if h_mc_stack is not None:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
         plot_config["mc_stack"] = {
             "method": "draw_stack",
@@ -285,7 +285,7 @@ def prepare_plot_config(
                 "yerr": False if any(data_hide_errors) else None,
             },
         }
-        if h_mc:
+        if h_mc is not None:
             plot_config["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
                 "yerr": False if any(data_hide_errors) else None,
