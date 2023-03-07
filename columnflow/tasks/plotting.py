@@ -137,7 +137,11 @@ class PlotVariablesBase(
 
             # there should be hists to plot
             if not hists:
-                raise Exception("no histograms found to plot")
+                raise Exception(
+                    "no histograms found to plot; possible reasons:\n" +
+                    "  - requested variable requires columns that were missing during histogramming\n" +
+                    "  - selected --processes did not match any value on the process axis of the input histogram",
+                )
 
             # sort hists by process order
             hists = OrderedDict(
