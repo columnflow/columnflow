@@ -77,8 +77,8 @@ setup_venv() {
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
     fi
-    if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -z "${mode}" ]; then
-        >&2 echo "the venv setup mode must be empty in remote jobs, but got '${mode}'"
+    if [ "${CF_REMOTE_JOB}" = "1" ] && [ "${mode}" != "install" ]; then
+        >&2 echo "the venv setup mode must be 'install' or empty in remote jobs, but got '${mode}'"
         return "2"
     fi
     if [ "${versioncheck}" != "yes" ] && [ "${versioncheck}" != "no" ] && [ "${versioncheck}" != "silent" ] && [ "${versioncheck}" != "warn" ]; then
