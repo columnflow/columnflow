@@ -17,6 +17,6 @@ action() {
     export CF_CMSSW_ENV_NAME="$( basename "${this_file%.sh}" )"
     export CF_CMSSW_FLAG="1"  # increment when content changed
 
-    source "$this_dir/_setup_cmssw.sh" "$@"
+    source "${this_dir}/_setup_cmssw.sh" "$@"
 }
 action "$@"
