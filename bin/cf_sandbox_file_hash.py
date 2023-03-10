@@ -5,10 +5,11 @@
 Standalone script that takes the path to a sandbox file and returns a unique hash based on its path
 relative to certain environment variables.
 
-- If it is found to be relative to CF_REPO_BASE, the path to hash will relative to $CF_REPO_BASE. In
-  case an alias is defined (usually by an upstream analysis repository), this alias is used instead.
 - If it is found to be relative to CF_BASE, the path will be relative to $CF_BASE.
-- In case none of the above applies, the requestd path is used unchanged.
+- If it is found to be relative to CF_REPO_BASE, the path to hash will be relative to $CF_REPO_BASE.
+  In case an alias is defined (usually by an upstream analysis repository), this alias is used
+  instead.
+- If none of the above applies, the requestd path is used unchanged.
 
 
 Example 1:
