@@ -48,8 +48,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         self.bundle(bundle)
 
         # log the size
-        size, unit = law.util.human_bytes(bundle.stat().st_size)
-        self.publish_message(f"size is {size:.2f} {unit}")
+        self.publish_message(f"size is {law.util.human_bytes(bundle.stat().st_size, fmt=True)}")
 
         # transfer the bundle
         self.transfer(bundle)
@@ -151,9 +150,12 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         super().__init__(*args, **kwargs)
 
         # get the name and install path of the sandbox
+        from cf_sandbox_file_hash import create_sandbox_file_hash
         sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
         self.venv_name = os.path.splitext(os.path.basename(sandbox_file))[0]
-        self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name)
+        self.venv_name_hashed = f"{self.venv_name}_{self.sandbox_file_hash}"
+        self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name_hashed)
 
         # checksum cache
         self._checksum = None
@@ -177,7 +179,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
     def single_output(self):
         checksum = self.checksum or "TO_BE_INSTALLED"
-        return self.target(f"{self.venv_name}.{checksum}.tgz")
+        return self.target(f"{self.venv_name_hashed}.{checksum}.tgz")
 
     def get_file_pattern(self):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
@@ -200,8 +202,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
             bundle.dump(self.venv_path, add_kwargs={"filter": _filter}, formatter="tar")
 
         # log the size
-        size, unit = law.util.human_bytes(bundle.stat().st_size)
-        self.publish_message(f"size is {size:.2f} {unit}")
+        self.publish_message(f"size is {law.util.human_bytes(bundle.stat().st_size, fmt=True)}")
 
         # transfer the bundle
         self.transfer(bundle)
@@ -227,10 +228,14 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
     )
 
     def __init__(self, *args, **kwargs):
-        # cached bash sandbox that wraps the cmssw environment
-        self._cmssw_sandbox = None
-
         super().__init__(*args, **kwargs)
+
+        # get the name and install path of the sandbox
+        from cf_sandbox_file_hash import create_sandbox_file_hash
+        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
+        self.cmssw_env_name = os.path.splitext(os.path.basename(sandbox_file))[0]
+        self.cmssw_env_name_hashed = f"{self.cmssw_env_name}_{self.sandbox_file_hash}"
 
     def requires(self):
         return self.reqs.BuildBashSandbox.req(self)
@@ -239,16 +244,16 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         # invoking .env will already trigger building the sandbox
         return self.requires().sandbox_inst.env["CMSSW_BASE"]
 
-    def get_file_pattern(self):
-        path = os.path.expandvars(os.path.expanduser(self.single_output().path))
-        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
-
     def single_output(self):
         cmssw_path = os.path.basename(self.get_cmssw_path())
-        return self.target(f"{cmssw_path}.{self.checksum}.tgz")
+        return self.target(f"{self.cmssw_env_name_hashed}_{cmssw_path}.{self.checksum}.tgz")
 
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
+
+    def get_file_pattern(self):
+        path = os.path.expandvars(os.path.expanduser(self.single_output().path))
+        return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
     @law.decorator.log
     def run(self):
@@ -257,8 +262,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         self.bundle(bundle)
 
         # log the size
-        size, unit = law.util.human_bytes(bundle.stat().st_size)
-        self.publish_message(f"size is {size:.2f} {unit}")
+        self.publish_message(f"size is {law.util.human_bytes(bundle.stat().st_size, fmt=True)}")
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
@@ -446,7 +450,7 @@ class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
         reqs = self.htcondor_workflow_requires()
         join_bash = lambda seq: " ".join(map('"{}"'.format, seq))
         def get_bundle_info(task):
-            uris = task.output().dir.uri(cmd="filecopy", return_all=True)
+            uris = task.output().dir.uri(base_name="filecopy", return_all=True)
             pattern = os.path.basename(task.get_file_pattern())
             return ",".join(uris), pattern
 

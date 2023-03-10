@@ -4,26 +4,34 @@
 # depending on whether the installation is already present, and whether the script is called as part
 # of a remote (law) job (CF_REMOTE_JOB=1).
 #
-# Five environment variables are expected to be set before this script is called:
-#   - CF_SCRAM_ARCH:
+# Six environment variables are expected to be set before this script is called:
+#   CF_SANDBOX_FILE
+#       The path of the file that contained the sandbox definition and that sourced _this_ script.
+#       It is used to derive a hash for defining the installation directory and to set the value of
+#       the LAW_SANDBOX variable.
+#   CF_SCRAM_ARCH
 #       The scram architecture string.
-#   - CF_CMSSW_VERSION:
+#   CF_CMSSW_VERSION
 #       The desired CMSSW version to setup.
-#   - CF_CMSSW_BASE:
+#   CF_CMSSW_BASE
 #       The location where the CMSSW environment should be installed.
-#   - CF_CMSSW_ENV_NAME:
+#   CF_CMSSW_ENV_NAME
 #       The name of the environment to prevent collisions between multiple environments using the
 #       same CMSSW version.
-#   - CF_CMSSW_FLAG:
+#   CF_CMSSW_FLAG
 #       An incremental integer value stored in the installed CMSSW environment to detect whether it
 #       needs to be updated.
 #
 # Arguments:
-# 1. mode: The setup mode. Different values are accepted:
-#   - '' (default): The CMSSW environment is installed when not existing yet and sourced.
-#   - clear:        The CMSSW environment is removed when existing.
-#   - reinstall:    The CMSSW environment is removed first, then reinstalled and sourced.
-#   - install_only: The CMSSW environment is installed when not existing yet but not sourced.
+#   1. mode
+#      The setup mode. Different values are accepted:
+#        - ''/install: The CMSSW environment is installed when not existing yet and sourced.
+#        - clear:      The CMSSW environment is removed when existing.
+#        - reinstall:  The CMSSW environment is removed first, then reinstalled and sourced.
+#        - update:     The CMSSW environment is removed first in case it is outdated, then
+#                      reinstalled and sourced.
+#      Please note that if the mode is empty ('') and the environment variable CF_SANDBOX_SETUP_MODE
+#      is defined, its value is used instead.
 #
 # Note on remote jobs:
 # When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
@@ -45,9 +53,22 @@ setup_cmssw() {
     #
 
     local mode="${1:-}"
-    [ "${CF_REMOTE_JOB}" = "1" ] && mode=""
-    if [ ! -z "${mode}" ] && [ "${mode}" != "clear" ] && [ "${mode}" != "reinstall" ] && [ "${mode}" != "install_only" ]; then
-        >&2 echo "unknown CMSSW source mode '${mode}'"
+
+    # default mode
+    if [ -z "${mode}" ]; then
+        if [ ! -z "${CF_SANDBOX_SETUP_MODE}" ]; then
+            mode="${CF_SANDBOX_SETUP_MODE}"
+        else
+            mode="install"
+        fi
+    fi
+
+    # force install mode for remote jobs
+    [ "${CF_REMOTE_JOB}" = "1" ] && mode="install"
+
+    # value checks
+    if [ "${mode}" != "install" ] && [ "${mode}" != "clear" ] && [ "${mode}" != "reinstall" ] && [ "${mode}" != "update" ]; then
+        >&2 echo "unknown CMSSW setup mode '${mode}'"
         return "1"
     fi
 
@@ -56,25 +77,31 @@ setup_cmssw() {
     # check required global variables
     #
 
+    local sandbox_file="${CF_SANDBOX_FILE}"
+    unset CF_SANDBOX_FILE
+    if [ -z "${sandbox_file}" ]; then
+        >&2 echo "CF_SANDBOX_FILE is not set but required by ${this_file}"
+        return "10"
+    fi
     if [ -z "${CF_SCRAM_ARCH}" ]; then
         >&2 echo "CF_SCRAM_ARCH is not set but required by ${this_file} to setup CMSSW"
-        return "2"
+        return "11"
     fi
     if [ -z "${CF_CMSSW_VERSION}" ]; then
         >&2 echo "CF_CMSSW_VERSION is not set but required by ${this_file} to setup CMSSW"
-        return "3"
+        return "12"
     fi
     if [ -z "${CF_CMSSW_BASE}" ]; then
         >&2 echo "CF_CMSSW_BASE is not set but required by ${this_file} to setup CMSSW"
-        return "4"
+        return "13"
     fi
     if [ -z "${CF_CMSSW_ENV_NAME}" ]; then
         >&2 echo "CF_CMSSW_ENV_NAME is not set but required by ${this_file} to setup CMSSW"
-        return "5"
+        return "14"
     fi
     if [ -z "${CF_CMSSW_FLAG}" ]; then
         >&2 echo "CF_CMSSW_FLAG is not set but required by ${this_file} to setup CMSSW"
-        return "6"
+        return "15"
     fi
 
 
@@ -90,9 +117,12 @@ setup_cmssw() {
     # start the setup
     #
 
-    local install_base="${CF_CMSSW_BASE}/${CF_CMSSW_ENV_NAME}"
+    local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
+    local cmssw_env_name_hashed="${CF_CMSSW_ENV_NAME}_${install_hash}"
+    local install_base="${CF_CMSSW_BASE}/${cmssw_env_name_hashed}"
     local install_path="${install_base}/${CF_CMSSW_VERSION}"
-    local pending_flag_file="${CF_CMSSW_BASE}/pending_${CF_CMSSW_ENV_NAME}_${CF_CMSSW_VERSION}"
+    local install_path_repr="\$CF_CMSSW_BASE/${cmssw_env_name_hashed}/${CF_CMSSW_VERSION}"
+    local pending_flag_file="${CF_CMSSW_BASE}/pending_${cmssw_env_name_hashed}_${CF_CMSSW_VERSION}"
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
     # ensure CF_CMSSW_BASE exists
@@ -101,7 +131,7 @@ setup_cmssw() {
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
         # optionally remove the current installation
         if [ "${mode}" = "clear" ] || [ "${mode}" = "reinstall" ]; then
-            echo "removing current installation at $install_path (mode '${mode}')"
+            echo "removing current installation at ${install_path} (mode '${mode}')"
             rm -rf "${install_path}"
 
             # optionally stop here
@@ -128,16 +158,50 @@ setup_cmssw() {
                 sleep_counter="$(( $sleep_counter + 1 ))"
                 if [ "${sleep_counter}" -ge 120 ]; then
                     >&2 echo "cmssw ${CF_CMSSW_VERSION} is setup in different process, but number of sleeps exceeded"
-                    return "7"
+                    return "20"
                 fi
                 cf_color yellow "cmssw ${CF_CMSSW_VERSION} already being setup in different process, sleep ${sleep_counter} / 120"
                 sleep 10
             done
         fi
 
+        # create the pending_flag to express that the venv state might be changing
+        touch "${pending_flag_file}"
+        clear_pending() {
+            rm -f "${pending_flag_file}"
+        }
+
+        # checks to be performed if the venv already exists
+        if [ -d "${install_path}" ]; then
+            # get the current version
+            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            if [ -z "${current_version}" ]; then
+                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
+                clear_pending
+                return "21"
+            fi
+
+            if [ "${current_version}" != "${CF_CMSSW_FLAG}" ]; then
+                if [ "${mode}" = "update" ]; then
+                    # remove the venv in case an update is requested
+                    echo "removing current installation at ${install_path_repr}"
+                    echo "(mode '${mode}', installed version ${current_version}, requested version ${CF_CMSSW_FLAG})"
+                    rm -rf "${install_path}"
+                else
+                    >&2 echo
+                    >&2 echo "WARNING: outdated CMSSW environment '${cmssw_env_name_hashed}'"
+                    >&2 echo "WARNING: (installed version ${current_version}, requested version ${CF_CMSSW_FLAG})"
+                    >&2 echo "WARNING: located at ${install_path_repr}"
+                    >&2 echo "WARNING: please consider updating it by adding 'update' to the source command"
+                    >&2 echo "WARNING: or by setting the environment variable 'CF_SANDBOX_SETUP_MODE=update'"
+                    >&2 echo
+                fi
+            fi
+        fi
+
+        # install when missing
         if [ ! -d "${install_path}" ]; then
             echo
-            touch "${pending_flag_file}"
             cf_color cyan "installing ${CF_CMSSW_VERSION} on ${CF_SCRAM_ARCH} in ${install_base}"
 
             (
@@ -155,10 +219,16 @@ setup_cmssw() {
                 rm -f "${pending_flag_file}"
             )
             local ret="$?"
-            [ "${ret}" != "0" ] && rm -f "${pending_flag_file}" && return "${ret}"
+            [ "${ret}" != "0" ] && clear_pending && return "${ret}"
         fi
-    else
-        # at this point, we are in a remote job so fetch, unpack and setup the bundle
+
+        # remove the pending_flag
+        clear_pending
+    fi
+
+    # handle remote job environments
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+        # fetch, unpack and setup the bundle
         if [ ! -d "${install_path}" ]; then
             # fetch the bundle and unpack it
             echo "looking for cmssw sandbox bundle for${CF_CMSSW_ENV_NAME}"
@@ -180,7 +250,7 @@ setup_cmssw() {
             done
             if ! ${found_sandbox}; then
                 >&2 echo "cmssw sandbox ${CF_CMSSW_ENV_NAME} not found in job configuration, stopping"
-                return "8"
+                return "22"
             fi
 
             # create a new cmssw checkout, unpack the bundle on top and rebuild python symlinks
@@ -206,19 +276,8 @@ setup_cmssw() {
     # at this point, the src path must exist
     if [ ! -d "${install_path}/src" ]; then
         >&2 echo "src directory not found in CMSSW installation at ${install_path}"
-        return "9"
+        return "30"
     fi
-
-    # check the flag and show a warning when there was an update
-    if [ "$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )" != "${CF_CMSSW_FLAG}" ]; then
-        >&2 echo ""
-        >&2 echo "WARNING: the CMSSW software environment ${CF_CMSSW_ENV_NAME} seems to be outdated"
-        >&2 echo "WARNING: please consider removing (mode 'clear') or updating it (mode 'reinstall')"
-        >&2 echo ""
-    fi
-
-    # optionally stop here
-    [ "${mode}" = "install_only" ] && return "0"
 
     # source it
     source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" || return "$?"
@@ -238,6 +297,8 @@ setup_cmssw() {
     export PYTHONPATH="${venv_site_packages}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
-    export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_CMSSW_ENV_NAME}.sh"
+    export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"
+
+    return "0"
 }
 setup_cmssw "$@"
