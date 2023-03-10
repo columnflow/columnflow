@@ -167,8 +167,7 @@ def expand_path(*path: str) -> str:
 
 def real_path(*path: str) -> str:
     """
-    Takes *path* fragments and returns the joined,  real and absolute location with all variables
-    expanded.
+    Takes *path* fragments and returns the real, absolute location with all variables expanded.
     """
     return os.path.realpath(expand_path(*path))
 
