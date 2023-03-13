@@ -12,6 +12,7 @@ action() {
     local os_version="$( cat /etc/os-release | grep VERSION_ID | sed -E 's/VERSION_ID="([0-9]+)"/\1/' )"
 
     # set variables and source the generic CMSSW setup
+    export CF_SANDBOX_FILE="${CF_SANDBOX_FILE:-${this_file}}"
     export CF_SCRAM_ARCH="$( [ "${os_version}" = "8" ] && echo "el8" || echo "slc7" )_amd64_gcc10"
     export CF_CMSSW_VERSION="CMSSW_12_6_2"
     export CF_CMSSW_ENV_NAME="$( basename "${this_file%.sh}" )"
