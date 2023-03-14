@@ -47,13 +47,22 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         "cutflow.jet1_pt",
     },
 )
-def cutflow_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def cutflow_features(
+    self: Producer,
+    events: ak.Array,
+    object_masks: dict[str, dict[str, ak.Array]],
+    **kwargs,
+) -> ak.Array:
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
 
     events = self[category_ids](events, **kwargs)
 
-    events = set_ak_column(events, "cutflow.jet1_pt", Route("Jet.pt[:,0]").apply(events, EMPTY_FLOAT))
+    # apply some per-object selections
+    # (here shown for default jets as done in selection.example.jet_selection)
+    selected_jet = events.Jet[object_masks["Jet"]["Jet"]]
+
+    events = set_ak_column(events, "cutflow.jet1_pt", Route("pt[:,0]").apply(selected_jet, EMPTY_FLOAT))
 
     return events
 

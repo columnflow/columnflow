@@ -203,12 +203,12 @@ def example(
     # create process ids
     events = self[process_ids](events, **kwargs)
 
-    # add cutflow features
-    events = self[cutflow_features](events, **kwargs)
-
     # add the mc weight
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
+
+    # add cutflow features, passing per-object masks
+    events = self[cutflow_features](events, results.objects, **kwargs)
 
     # increment stats
     self[increment_stats](events, results, stats, **kwargs)

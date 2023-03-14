@@ -66,7 +66,10 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        return {var: self.target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
+        return {
+            var: self.target(f"cutflow_hist__{var}.pickle")
+            for var in self.variables
+        }
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -110,6 +113,9 @@ class CreateCutflowHistograms(
                 # TODO: handle variable_inst with custom expressions, can they declare columns?
                 expressions[variable_inst.name] = expr
 
+        # prepare columns to load
+        load_columns = {("events" + route) for route in read_columns} | {Route("steps.*")}
+
         # prepare histograms
         histograms = {}
         def prepare_hists(steps):
@@ -138,7 +144,7 @@ class CreateCutflowHistograms(
         for arr, pos in self.iter_chunked_io(
             inputs["masks"].path,
             source_type="awkward_parquet",
-            read_columns={("events" + route) for route in read_columns} | {Route("steps.*")},
+            read_columns=load_columns,
         ):
             events = arr.events
 
