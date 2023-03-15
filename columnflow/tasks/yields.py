@@ -6,9 +6,12 @@ Tasks to produce yield tables
 
 from collections import OrderedDict
 
+import math
+
 import law
 import luigi
 
+from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin,
     DatasetsProcessesMixin, CategoriesMixin,
@@ -22,15 +25,21 @@ from columnflow.util import dev_sandbox
 class CreateYieldTable(
     DatasetsProcessesMixin,
     CategoriesMixin,
-    law.LocalWorkflow,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     dep_MergeHistograms = MergeHistograms
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeHistograms=MergeHistograms,
+    )
 
     table_format = luigi.Parameter(
         default="latex_raw",
@@ -50,7 +59,7 @@ class CreateYieldTable(
 
     def requires(self):
         return {
-            d: self.dep_MergeHistograms.req(
+            d: self.reqs.MergeHistograms.req(
                 self,
                 dataset=d,
                 variables=("event",),
@@ -58,6 +67,21 @@ class CreateYieldTable(
             )
             for d in self.datasets
         }
+
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        reqs["merged_hists"] = [
+            self.reqs.MergeHistograms.req(
+                self,
+                dataset=d,
+                variables=("event",),
+                _exclude={"branches"},
+            )
+            for d in self.datasets
+        ]
+
+        return reqs
 
     def output(self):
         return self.target("yields.txt")
@@ -122,8 +146,6 @@ class CreateYieldTable(
             yields = []
             yield_header = ["Process"] + [category_inst.label for category_inst in category_insts]
 
-
-
             for process_inst, h in hists.items():
                 row = []
                 row.append(process_inst.label)
@@ -139,11 +161,13 @@ class CreateYieldTable(
                     h_cat = h_cat[{"category": sum}]
 
                     value = h_cat.value
-                    variance = h_cat.variance
-                    # TODO: rounding should be less arbitrary, e.g. always round to 4 significant
+                    stddev = math.sqrt(h_cat.variance)
+
+                    # TODO: rounding should be less arbitrary, e.g. always round to 4 significant digits
+                    # TODO: allow normalizing per process or per category (or both?)
                     row.append(
                         f"{value:.1f}" if self.skip_variance else
-                        rf"${value:.1f} \pm {variance:.1f}$"
+                        rf"${value:.1f} \pm {stddev:.1f}$",
                     )
 
                 yields.append(row)
