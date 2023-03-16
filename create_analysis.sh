@@ -220,7 +220,7 @@ create_analysis() {
 
     echo
     echo_color cyan "setup git repository"
-    git init -b master
+    git init
     echo_color green "done"
 
     echo
@@ -277,7 +277,7 @@ create_analysis() {
     echo
 
     echo_color bright "4. Checkout the 'Getting started' guide to run your first tasks."
-    echo "  https://columnflow.readthedocs.io/en/master/start.html"
+    echo "  https://columnflow.readthedocs.io/en/stable/start.html"
 
     echo
 
