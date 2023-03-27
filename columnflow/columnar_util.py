@@ -1911,6 +1911,7 @@ class TaskArrayFunction(ArrayFunction):
         *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
         when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
         """
+
         # call caching
         if call_cache is not False:
             # setup a new call cache when not present yet
@@ -1929,7 +1930,17 @@ class TaskArrayFunction(ArrayFunction):
         # stack all kwargs
         kwargs = {"call_cache": call_cache, **kwargs}
 
-        return super().__call__(*args, **kwargs)
+        do_timing = (
+            law.config.get_expanded_boolean("analysis", "time_task_array_functions", False)
+        )
+
+        if do_timing:
+            t0 = time.time()
+            output = super().__call__(*args, **kwargs)
+            logger.info(f"{self.cls_name}, Time: {(time.time() - t0):.3f} seconds")
+            return output
+        else:
+            return super().__call__(*args, **kwargs)
 
 
 class NoThreadPool(object):
