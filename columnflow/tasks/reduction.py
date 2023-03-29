@@ -6,7 +6,7 @@ Tasks related to reducing events for use on further tasks.
 
 import math
 import functools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import luigi
@@ -96,8 +96,17 @@ class ReduceEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will be written
-        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
+        write_columns = {
+            Route(c)
+            for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"])
+        }
         route_filter = RouteFilter(write_columns)
+
+        # map routes to write to their top level column
+        write_columns_groups = defaultdict(set)
+        for route in write_columns:
+            if len(route) > 1:
+                write_columns_groups[route[0]].add(route)
 
         # define columns that need to be read
         read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
@@ -109,13 +118,22 @@ class ReduceEvents(
         read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
-        write_columns_toplevel = {Route(r)[0] for r in write_columns}
         sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
         if "objects" in sel_results.fields:
             for src_field in sel_results.objects.fields:
                 for dst_field in sel_results.objects[src_field].fields:
-                    if law.util.multi_match(dst_field, write_columns_toplevel):
-                        read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+                    # nothing to do in case the top level column does not need to be loaded
+                    if not law.util.multi_match(dst_field, write_columns_groups.keys()):
+                        continue
+                    # register the object masks
+                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+                    # in case new collections are created and configured to be written, make sure
+                    # that the corresponding columns of the source collection are loaded
+                    if src_field != dst_field:
+                        read_columns |= {
+                            src_field + route[1:]
+                            for route in write_columns_groups[dst_field]
+                        }
         del sel_results
 
         # event counters
