@@ -394,9 +394,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
-    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
