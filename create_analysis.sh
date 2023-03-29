@@ -21,6 +21,11 @@ create_analysis() {
     local fetch_cmsdb_branch="master"
     local debug="false"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        setopt globdots
+    fi
+
 
     #
     # helpers
@@ -71,14 +76,14 @@ create_analysis() {
         # build the query text
         local input_line="${text}"
         local opened_parenthesis="false"
-        if [ "${default}" != "-" ]; then
-            opened_parenthesis="true"
-            input_line="${input_line} (default: '${default}'"
-        fi
         if [ ! -z "${choices}" ]; then
+            opened_parenthesis="true"
+            input_line="${input_line} (choices: '${choices}'"
+        fi
+        if [ "${default}" != "-" ]; then
             ${opened_parenthesis} && input_line="${input_line}, " || input_line="${input_line} ("
             opened_parenthesis="true"
-            input_line="${input_line}choices: '${choices}'"
+            input_line="${input_line}default: '${default}'"
         fi
         ${opened_parenthesis} && input_line="${input_line})"
         input_line="${input_line}: "
@@ -171,18 +176,23 @@ create_analysis() {
     #
 
     local cf_analysis_base="${exec_dir}/${cf_analysis_name}"
-    mkdir "${cf_analysis_base}" || return "$?"
+
+    if [ -d "${cf_analysis_base}" ]; then
+        >&2 echo "directory '${cf_analysis_base}' already exists, please remove it and start again"
+        return "1"
+    fi
 
     echo_color cyan "checking out analysis tempate to ${cf_analysis_base}"
 
     if ${debug}; then
-        cp -r "${this_dir}/analysis_templates/${cf_analysis_flavor}/." "${cf_analysis_base}"
+        cp -r "${this_dir}/analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}"
         cd "${cf_analysis_base}" || return "$?"
     else
-        mkdir "${exec_dir}/.cf_analysis_setup" || return "$?"
+        rm -rf "${exec_dir}/.cf_analysis_setup"
+        mkdir -p "${exec_dir}/.cf_analysis_setup" || return "$?"
         cd "${exec_dir}/.cf_analysis_setup"
         curl -L -s -k "https://github.com/uhh-cms/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
-        mv uhh-cms-columnflow-*/analysis_templates/${cf_analysis_flavor}/{.[!.],}* "${cf_analysis_base}" || return "$?"
+        mv uhh-cms-columnflow-*/"analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}" || return "$?"
         cd "${cf_analysis_base}" || return "$?"
         rm -rf "${exec_dir}/.cf_analysis_setup"
     fi
