@@ -1303,6 +1303,7 @@ class ArrayFunction(Derivable):
     uses = set()
     produces = set()
     _dependency_sets = {"uses", "produces"}
+    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1363,6 +1364,7 @@ class ArrayFunction(Derivable):
         skip_func: Callable | None = law.no_value,
         deferred_init: bool | None = True,
         instance_cache: dict | None = None,
+        log_runtime: bool | None = None,
         **kwargs,
     ):
         super().__init__()
@@ -1374,6 +1376,8 @@ class ArrayFunction(Derivable):
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if log_runtime is not None:
+            self.log_runtime = log_runtime
 
         # when a custom funcs are passed, bind them to this instance
         if call_func:
@@ -1610,7 +1614,15 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
-        return self.call_func(*args, **kwargs)
+        t1 = time.perf_counter()
+        try:
+            return self.call_func(*args, **kwargs)
+        finally:
+            if self.log_runtime:
+                duration = time.perf_counter() - t1
+                logger_perf.info(
+                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                )
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -1911,7 +1923,6 @@ class TaskArrayFunction(ArrayFunction):
         *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
         when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
         """
-
         # call caching
         if call_cache is not False:
             # setup a new call cache when not present yet
@@ -1930,17 +1941,7 @@ class TaskArrayFunction(ArrayFunction):
         # stack all kwargs
         kwargs = {"call_cache": call_cache, **kwargs}
 
-        do_timing = (
-            law.config.get_expanded_boolean("analysis", "time_task_array_functions", False)
-        )
-
-        if do_timing:
-            t0 = time.time()
-            output = super().__call__(*args, **kwargs)
-            logger.info(f"{self.cls_name}, Time: {(time.time() - t0):.3f} seconds")
-            return output
-        else:
-            return super().__call__(*args, **kwargs)
+        return super().__call__(*args, **kwargs)
 
 
 class NoThreadPool(object):
