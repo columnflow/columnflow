@@ -55,7 +55,7 @@ Setup successfull! The next steps are:
     > voms-proxy-init -voms cms -rfc -valid 196:00
 
   4. Checkout the 'Getting started' guide to run your first tasks.
-    https://columnflow.readthedocs.io/en/master/start.html
+    https://columnflow.readthedocs.io/en/stable/start.html
 
     Suggestions for tasks to run:
 
