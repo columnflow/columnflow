@@ -204,3 +204,6 @@ def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     )
     corrector_name = self.get_btag_config()[0]
     self.btag_sf_corrector = correction_set[corrector_name]
+
+    # check versions
+    assert self.btag_sf_corrector.version in [3]

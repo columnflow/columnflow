@@ -109,3 +109,6 @@ def electron_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     )
     corrector_name, self.year, self.wp = self.get_electron_config()
     self.electron_sf_corrector = correction_set[corrector_name]
+
+    # check versions
+    assert self.electron_sf_corrector.version in [2]
