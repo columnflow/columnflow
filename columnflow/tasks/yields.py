@@ -57,10 +57,10 @@ class CreateYieldTable(
         ),
     )
 
-    skip_variance = luigi.BoolParameter(
+    skip_uncert = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, variances are not displayed in the table; default: False",
+        description="when True, uncertainties are not displayed in the table; default: False",
     )
 
     # dummy branch map
@@ -94,7 +94,7 @@ class CreateYieldTable(
         return reqs
 
     def output(self):
-        return self.target("yields.txt")
+        return self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}.txt")
 
     @law.decorator.log
     def run(self):
@@ -173,7 +173,7 @@ class CreateYieldTable(
                     value = Number(h_cat.value, math.sqrt(h_cat.variance))
 
                     # TODO: allow normalizing per process or per category (or both?)
-                    if self.skip_variance:
+                    if self.skip_uncert:
                         value_str = value.str(format=self.number_format).split(" +- ")[0]
                     else:
                         value_str = value.str(
