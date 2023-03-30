@@ -68,7 +68,11 @@ def selector(
                 raise Exception(f"selector {cls_name} received custom skip_func, but mc_only or data_only are set")
 
             def skip_func(self):
-                return getattr(self, "dataset_inst", None) and self.dataset_inst.is_mc != bool(mc_only)
+                # never skip when there is not dataset
+                if not getattr(self, "dataset_inst", None):
+                    return False
+
+                return self.dataset_inst.is_mc != bool(mc_only)
 
             cls_dict["skip_func"] = skip_func
 
