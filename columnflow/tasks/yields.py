@@ -10,6 +10,7 @@ import math
 
 import law
 import luigi
+from scinum import Number
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
@@ -44,13 +45,22 @@ class CreateYieldTable(
     table_format = luigi.Parameter(
         default="latex_raw",
         significant=False,
-        description="format of the yield table, takes all fromats taken by the tabulate package; default: latex_raw",
+        description="format of the yield table, takes all formats taken by the tabulate package; default: latex_raw",
+    )
+
+    number_format = luigi.Parameter(
+        default="pdg",
+        significant=False,
+        description=(
+            "format of each number in the yield table, takes all formats taken by "
+            "Number.str, e.g. 'pdg', 'publication' or '%.1f'; default: pdg"
+        ),
     )
 
     skip_variance = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="wether to skip variance or not; default: False",
+        description="when True, variances are not displayed in the table; default: False",
     )
 
     # dummy branch map
@@ -160,15 +170,18 @@ class CreateYieldTable(
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 
-                    value = h_cat.value
-                    stddev = math.sqrt(h_cat.variance)
+                    value = Number(h_cat.value, math.sqrt(h_cat.variance))
 
-                    # TODO: rounding should be less arbitrary, e.g. always round to 4 significant digits
                     # TODO: allow normalizing per process or per category (or both?)
-                    row.append(
-                        f"{value:.1f}" if self.skip_variance else
-                        rf"${value:.1f} \pm {stddev:.1f}$",
-                    )
+                    if self.skip_variance:
+                        value_str = value.str(format=self.number_format).split(" +- ")[0]
+                    else:
+                        value_str = value.str(
+                            format=self.number_format,
+                            style="latex" if "latex" in self.table_format else "plain",
+                        )
+
+                    row.append(value_str)
 
                 yields.append(row)
 
