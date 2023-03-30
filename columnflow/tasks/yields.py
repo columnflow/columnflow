@@ -4,7 +4,7 @@
 Tasks to produce yield tables
 """
 
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 
 import math
 
@@ -48,16 +48,21 @@ class CreateYieldTable(
     number_format = luigi.Parameter(
         default="pdg",
         significant=False,
-        description=(
-            "format of each number in the yield table, takes all formats taken by "
-            "Number.str, e.g. 'pdg', 'publication', '%.1f' or an integer (number of "
-            "signficant digits); default: pdg"
-        ),
+        description="format of each number in the yield table, takes all formats "
+        "taken by Number.str, e.g. 'pdg', 'publication', '%.1f' or an integer "
+        "(number of signficant digits); default: pdg",
     )
     skip_uncertainties = luigi.BoolParameter(
         default=False,
         significant=False,
         description="when True, uncertainties are not displayed in the table; default: False",
+    )
+    normalize_yields = luigi.ChoiceParameter(
+        choices=(law.NO_STR, "per_process", "per_category", "all"),
+        default=law.NO_STR,
+        significant=False,
+        description="string parameter to define the normalization of the yields; "
+        "choices: NO_STR, per_process, per_category, all; no default",
     )
 
     # dummy branch map
@@ -160,12 +165,11 @@ class CreateYieldTable(
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
-            yields = []
-            yield_header = ["Process"] + [category_inst.label for category_inst in category_insts]
+            yields, processes = defaultdict(list), []
 
+            # read out yields per category and per process
             for process_inst, h in hists.items():
-                row = []
-                row.append(process_inst.label)
+                processes.append(process_inst.label)
 
                 for category_inst in category_insts:
                     leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
@@ -182,17 +186,43 @@ class CreateYieldTable(
                         Number(h_cat.value, math.sqrt(h_cat.variance))
                     )
 
-                    # TODO: allow normalizing per process or per category or both
-                    value_str = value.str(
+                    yields[category_inst.label].append(value)
+
+            # obtain normalizaton factors
+            norm_factors = 1
+            if self.normalize_yields == "all":
+                norm_factors = sum(sum(category_yields) for category_yields in yields.values())
+            elif self.normalize_yields == "per_process":
+                norm_factors = [
+                    sum(yields[category][i] for category in yields.keys())
+                    for i in range(len(yields[category_insts[0].label]))
+                ]
+            elif self.normalize_yields == "per_category":
+                norm_factors = {
+                    category: sum(category_yields) for category, category_yields in yields.items()
+                }
+
+            yields_str = defaultdict(list, {"Process": processes})
+
+            # apply normalization and format
+            for category, category_yields in yields.items():
+                for i, value in enumerate(category_yields):
+                    # get correct norm factor per category and process
+                    if self.normalize_yields == "per_process":
+                        norm_factor = norm_factors[i]
+                    elif self.normalize_yields == "per_category":
+                        norm_factor = norm_factors[category]
+                    else:
+                        norm_factor = norm_factors
+
+                    # format yields into strings
+                    yields_str[category].append((value / norm_factor).str(
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
-                    )
+                    ))
 
-                    row.append(value_str)
-
-                yields.append(row)
-
-            yield_table = tabulate(yields, headers=yield_header, tablefmt=self.table_format)
+            # create, print and save the yield table
+            yield_table = tabulate(yields_str, headers="keys", tablefmt=self.table_format)
             self.publish_message(yield_table)
 
             self.output().dump(yield_table, formatter="text")
