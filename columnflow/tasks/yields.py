@@ -4,9 +4,8 @@
 Tasks to produce yield tables
 """
 
-from collections import defaultdict, OrderedDict
-
 import math
+from collections import defaultdict, OrderedDict
 
 import law
 import luigi
@@ -18,7 +17,6 @@ from columnflow.tasks.framework.mixins import (
     DatasetsProcessesMixin, CategoriesMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
-
 from columnflow.tasks.histograms import MergeHistograms
 from columnflow.util import dev_sandbox, test_int
 
@@ -34,22 +32,17 @@ class CreateYieldTable(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeHistograms=MergeHistograms,
-    )
-
     table_format = luigi.Parameter(
-        default="latex_raw",
+        default="fancy_grid",
         significant=False,
-        description="format of the yield table, takes all formats taken by the tabulate package; default: latex_raw",
+        description="format of the yield table; accepts all formats of the tabulate package; "
+        "default: fancy_grid",
     )
     number_format = luigi.Parameter(
         default="pdg",
         significant=False,
-        description="format of each number in the yield table, takes all formats "
-        "taken by Number.str, e.g. 'pdg', 'publication', '%.1f' or an integer "
+        description="rounding format of each number in the yield table; accepts all formats "
+        "understood by scinum.Number.str(), e.g. 'pdg', 'publication', '%.1f' or an integer "
         "(number of signficant digits); default: pdg",
     )
     skip_uncertainties = luigi.BoolParameter(
@@ -62,7 +55,13 @@ class CreateYieldTable(
         default=law.NO_STR,
         significant=False,
         description="string parameter to define the normalization of the yields; "
-        "choices: NO_STR, per_process, per_category, all; no default",
+        "choices: '', per_process, per_category, all; empty default",
+    )
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeHistograms=MergeHistograms,
     )
 
     # dummy branch map
@@ -181,17 +180,22 @@ class CreateYieldTable(
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 
-                    value = (
-                        Number(h_cat.value) if self.skip_uncertainties else
-                        Number(h_cat.value, math.sqrt(h_cat.variance))
-                    )
-
+                    value = Number(h_cat.value)
+                    if not self.skip_uncertainties:
+                        # set a unique uncertainty name for correct propagation below
+                        value.set_uncertainty(
+                            f"mcstat_{process_inst.name}_{category_inst.name}",
+                            math.sqrt(h_cat.variance),
+                        )
                     yields[category_inst.label].append(value)
 
             # obtain normalizaton factors
             norm_factors = 1
             if self.normalize_yields == "all":
-                norm_factors = sum(sum(category_yields) for category_yields in yields.values())
+                norm_factors = sum(
+                    sum(category_yields)
+                    for category_yields in yields.values()
+                )
             elif self.normalize_yields == "per_process":
                 norm_factors = [
                     sum(yields[category][i] for category in yields.keys())
@@ -199,7 +203,8 @@ class CreateYieldTable(
                 ]
             elif self.normalize_yields == "per_category":
                 norm_factors = {
-                    category: sum(category_yields) for category, category_yields in yields.items()
+                    category: sum(category_yields)
+                    for category, category_yields in yields.items()
                 }
 
             yields_str = defaultdict(list, {"Process": processes})
@@ -217,6 +222,7 @@ class CreateYieldTable(
 
                     # format yields into strings
                     yields_str[category].append((value / norm_factor).str(
+                        combine_uncs="all",
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
                     ))
