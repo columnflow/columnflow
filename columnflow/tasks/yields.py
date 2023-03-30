@@ -20,7 +20,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.remote import RemoteWorkflow
 
 from columnflow.tasks.histograms import MergeHistograms
-from columnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox, test_int
 
 
 class CreateYieldTable(
@@ -34,8 +34,6 @@ class CreateYieldTable(
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    dep_MergeHistograms = MergeHistograms
-
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
@@ -47,17 +45,16 @@ class CreateYieldTable(
         significant=False,
         description="format of the yield table, takes all formats taken by the tabulate package; default: latex_raw",
     )
-
     number_format = luigi.Parameter(
         default="pdg",
         significant=False,
         description=(
             "format of each number in the yield table, takes all formats taken by "
-            "Number.str, e.g. 'pdg', 'publication' or '%.1f'; default: pdg"
+            "Number.str, e.g. 'pdg', 'publication', '%.1f' or an integer (number of "
+            "signficant digits); default: pdg"
         ),
     )
-
-    skip_uncert = luigi.BoolParameter(
+    skip_uncertainties = luigi.BoolParameter(
         default=False,
         significant=False,
         description="when True, uncertainties are not displayed in the table; default: False",
@@ -92,6 +89,16 @@ class CreateYieldTable(
         ]
 
         return reqs
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        if "number_format" in params and test_int(params["number_format"]):
+            # convert 'number_format' in integer if possible
+            params["number_format"] = int(params["number_format"])
+
+        return params
 
     def output(self):
         return self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}.txt")
@@ -170,22 +177,22 @@ class CreateYieldTable(
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 
-                    value = Number(h_cat.value, math.sqrt(h_cat.variance))
+                    value = (
+                        Number(h_cat.value) if self.skip_uncertainties else
+                        Number(h_cat.value, math.sqrt(h_cat.variance))
+                    )
 
-                    # TODO: allow normalizing per process or per category (or both?)
-                    if self.skip_uncert:
-                        value_str = value.str(format=self.number_format).split(" +- ")[0]
-                    else:
-                        value_str = value.str(
-                            format=self.number_format,
-                            style="latex" if "latex" in self.table_format else "plain",
-                        )
+                    # TODO: allow normalizing per process or per category or both
+                    value_str = value.str(
+                        format=self.number_format,
+                        style="latex" if "latex" in self.table_format else "plain",
+                    )
 
                     row.append(value_str)
 
                 yields.append(row)
 
             yield_table = tabulate(yields, headers=yield_header, tablefmt=self.table_format)
-            print(yield_table)
+            self.publish_message(yield_table)
 
-            self.output().dump(yield_table)
+            self.output().dump(yield_table, formatter="text")
