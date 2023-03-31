@@ -500,7 +500,6 @@ cf_setup_software_stack() {
 changeps1: false
 channels:
   - conda-forge
-  - defaults
 EOF
             fi
 
