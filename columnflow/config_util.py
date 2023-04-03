@@ -12,7 +12,6 @@ __all__ = [
 ]
 
 import re
-import math
 import itertools
 from typing import Callable, Any
 
