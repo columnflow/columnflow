@@ -63,6 +63,11 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         # instead, initialize the nominal weights as ones.
         # Additionally, we need to shift the last couple of weight indices
         # down by 1
+        logger.debug(
+            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always " +
+            "8 instead of the expected 9. It is assumed, that the missing entry is the " +
+            "nominal one and all other entries are in correct order",
+        )
         murf_nominal = ak.ones_like(events.event)
         mur_nom_muf_up -= 1
         mur_up_muf_down -= 1
