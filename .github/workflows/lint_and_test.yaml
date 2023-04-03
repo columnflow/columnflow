@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  Setup_software_basis_py310_latest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
@@ -21,9 +21,44 @@ jobs:
           python-version: "3.9"
 
       - name: Install dependencies ☕️
+        id: cache-software-basis
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-software-basis
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: |
+            GITHUB_WORKSPACE/columnflow/data/software/venvs/*
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('requirements*.txt', 'sandboxes/cf_*.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+      - if: ${{ steps.cache-software-basis.outputs.cache-hit != 'true' }}
+        name: List the state of node modules
+        continue-on-error: true
         run: |
           source setup.sh ""
+  
+  lint:
+    runs-on: ubuntu-latest
+    # steps:
+    #   - name: Checkout ⬇️
+    #     uses: actions/checkout@master
+    #     with:
+    #       persist-credentials: false
+    #       submodules: recursive
 
+    #   - name: Setup python 🐍
+    #     uses: actions/setup-python@v4
+    #     with:
+    #       python-version: "3.10"
+
+    #   - name: Install dependencies ☕️
+    #     run: |
+    #       source setup.sh ""
+    needs: Setup_software_basis_py310_latest
+    steps:
       - name: Lint 🔍
         run: |
           source setup.sh ""
