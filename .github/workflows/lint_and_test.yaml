@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  Setup_software_basis_py310_latest:
+  Setup_software_basis_py310_latest: &setup_software_basis_py310_latest
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
@@ -28,8 +28,8 @@ jobs:
         with:
           # npm cache files are stored in `~/.npm` on Linux/macOS
           path: |
-            GITHUB_WORKSPACE/columnflow/data/software/venvs/*
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('requirements*.txt', 'sandboxes/cf_*.sh') }}
+            **/columnflow/data/software/venvs/*
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/requirements_prod.txt', '**/requirements_prod.txt', '**/sandboxes/cf_*.sh') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
@@ -42,12 +42,14 @@ jobs:
   
   lint:
     runs-on: ubuntu-latest
-    # steps:
-    #   - name: Checkout ⬇️
-    #     uses: actions/checkout@master
-    #     with:
-    #       persist-credentials: false
-    #       submodules: recursive
+    needs: Setup_software_basis_py310_latest
+    steps:
+      # - <: *setup_software_basis_py310_latest
+      - name: Checkout ⬇️
+        uses: actions/checkout@master
+        with:
+          persist-credentials: false
+          submodules: recursive
 
     #   - name: Setup python 🐍
     #     uses: actions/setup-python@v4
@@ -57,8 +59,7 @@ jobs:
     #   - name: Install dependencies ☕️
     #     run: |
     #       source setup.sh ""
-    needs: Setup_software_basis_py310_latest
-    steps:
+    # steps:
       - name: Lint 🔍
         run: |
           source setup.sh ""
