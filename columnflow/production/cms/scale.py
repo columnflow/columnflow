@@ -43,14 +43,39 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
-    if ak.any(n_weights != 9):
-        bad_values = set(n_weights[n_weights != 9])
+    # define indices for individual weights
+    mur_down_muf_down = 0
+    mur_down_muf_nom = 1
+    # mur_down_muf_up = 2
+    mur_nom_muf_down = 3
+    # skip nominal weight for now
+    mur_nom_muf_up = 5
+    mur_up_muf_down = 6
+    mur_up_muf_nom = 7
+    mur_up_muf_up = 8
+    murf_nominal = None
+    if ak.all(n_weights == 9):
+        # if we have 9 weights, the indices above are correct, just need
+        # to load the nominal weights
+        murf_nominal = events.LHEScaleWeight[:, 4]
+    elif ak.all(n_weights == 8):
+        # if we just have 8 weights, there is no nominal LHEScale weight
+        # instead, initialize the nominal weights as ones.
+        # Additionally, we need to shift the last couple of weight indices
+        # down by 1
+        murf_nominal = ak.ones_like(events.event)
+        mur_nom_muf_up -= 1
+        mur_up_muf_down -= 1
+        mur_up_muf_nom -= 1
+        mur_up_muf_up -= 1
+    else:
+
+        bad_values = set(n_weights[any(n_weights != x for x in [8, 9])])
         raise Exception(
             "the number of LHEScaleWeights is expected to be 9, but also found values " +
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
-    murf_nominal = events.LHEScaleWeight[:, 4]
     if ak.any(murf_nominal != 1):
         bad_values = set(murf_nominal[murf_nominal != 1])
         logger.debug(
@@ -64,17 +89,53 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     murf_weights = events.LHEScaleWeight / murf_nominal
 
     # decorrelated weights
-    events = set_ak_column_f32(events, "mur_weight", ak.ones_like(events.event))
-    events = set_ak_column_f32(events, "mur_weight_up", murf_weights[:, 7])
-    events = set_ak_column_f32(events, "mur_weight_down", murf_weights[:, 1])
-    events = set_ak_column_f32(events, "muf_weight", ak.ones_like(events.event))
-    events = set_ak_column_f32(events, "muf_weight_up", murf_weights[:, 5])
-    events = set_ak_column_f32(events, "muf_weight_down", murf_weights[:, 3])
+    events = set_ak_column_f32(
+        events,
+        "mur_weight",
+        ak.ones_like(events.event),
+    )
+    events = set_ak_column_f32(
+        events,
+        "mur_weight_up",
+        murf_weights[:, mur_up_muf_nom],
+    )
+    events = set_ak_column_f32(
+        events,
+        "mur_weight_down",
+        murf_weights[:, mur_down_muf_nom],
+    )
+    events = set_ak_column_f32(
+        events,
+        "muf_weight",
+        ak.ones_like(events.event),
+    )
+    events = set_ak_column_f32(
+        events,
+        "muf_weight_up",
+        murf_weights[:, mur_nom_muf_up],
+    )
+    events = set_ak_column_f32(
+        events,
+        "muf_weight_down",
+        murf_weights[:, mur_nom_muf_down],
+    )
 
     # fully correlated weights
-    events = set_ak_column_f32(events, "murmuf_weight", ak.ones_like(events.event))
-    events = set_ak_column_f32(events, "murmuf_weight_up", murf_weights[:, 0])
-    events = set_ak_column_f32(events, "murmuf_weight_down", murf_weights[:, 8])
+    events = set_ak_column_f32(
+        events,
+        "murmuf_weight",
+        ak.ones_like(events.event),
+    )
+    events = set_ak_column_f32(
+        events,
+        "murmuf_weight_up",
+        murf_weights[:, mur_up_muf_up],
+    )
+    events = set_ak_column_f32(
+        events,
+        "murmuf_weight_down",
+        murf_weights[:, mur_down_muf_down],
+    )
 
     return events
 
