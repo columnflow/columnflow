@@ -12,6 +12,7 @@ __all__ = [
 ]
 
 import re
+import math
 import itertools
 from typing import Callable, Any
 
@@ -87,15 +88,24 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
 def create_category_id(
     config: od.Config,
     category_name: str,
-    hash_len: int = 7,
+    hash_len: int = 8,
+    salt: Any = None,
 ) -> int:
     """
     Creates a unique id for a :py:class:`order.Category` named *category_name* in a
     :py:class:`order.Config` object *config* and returns it. Internally,
-    :py:func:`law.util.create_hash` is used which receives *hash_len*.
+    :py:func:`law.util.create_hash` is used which receives *hash_len*. In case of an unintentional
+    (yet unlikely) collision of two ids, there is the option to add a custom *salt* value.
     """
-    h = law.util.create_hash((config.name, config.id, category_name), l=hash_len)
-    return int(h, base=16)
+    # create the hash
+    h = law.util.create_hash((config.name, config.id, category_name, salt), l=hash_len)
+    h = int(h, base=16)
+
+    # take the last number and add it to the front to ensure that are hashes are above a threshold
+    digits = len(str(int("F" * hash_len, base=16)))
+    h += max(h % 10, 1) * 10 ** digits
+
+    return h
 
 
 def add_category(config: od.Config, **kwargs) -> od.Category:
