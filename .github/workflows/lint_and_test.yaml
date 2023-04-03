@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  Setup_software_basis_py310_latest: &setup_software_basis_py310_latest
+  Setup_software_basis_py310_latest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
