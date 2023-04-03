@@ -100,9 +100,9 @@ def create_category_id(
     h = law.util.create_hash((config.name, config.id, category_name, salt), l=hash_len)
     h = int(h, base=16)
 
-    # take the last number and add it to the front to ensure that are hashes are above a threshold
+    # add an offset to ensure that are hashes are above a threshold
     digits = len(str(int("F" * hash_len, base=16)))
-    h += max(h % 10, 1) * 10 ** digits
+    h += int(10 ** digits)
 
     return h
 
