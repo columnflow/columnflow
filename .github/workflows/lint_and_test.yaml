@@ -6,8 +6,21 @@ on:
   pull_request:
 
 jobs:
-  Setup_software_basis_py310_latest:
+  full_matrix:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - test: "./tests/run_linting"
+            name: "Lint 🔍"
+
+          - test: "./tests/run_tests"
+            name: Test 🎢
+
+          - test: "./tests/run_coverage"
+            name: Run coverage 🎢
+            do-ls: true
+            upload-files: true
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
@@ -26,29 +39,42 @@ jobs:
         env:
           cache-name: cache-software-basis
         with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
           path: |
-            /home/runner/work/columnflow/columnflow/data/software/venvs
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/requirements_prod.txt', '**/requirements_prod.txt', '**/sandboxes/cf_*.sh') }}
+            GITHUB_WORKSPACE/columnflow/data/software/venvs/*
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('requirements*.txt', 'sandboxes/cf_*.sh') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
-      - name: Install basic software stack
-        if: ${{ steps.cache-software-basis.outputs.cache-hit != 'true' }}
+      - if: ${{ steps.cache-software-basis.outputs.cache-hit != 'true' }}
+        name: List the state of node modules
         continue-on-error: true
         run: |
           source setup.sh ""
-          echo "github_workdir" ${GITHUB_WORKSPACE}
-  
-  lint:
-    runs-on: ubuntu-latest
-    needs: Setup_software_basis_py310_latest
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
+      - name: ${{ matrix.name }}
+        run: |
+          source setup.sh ""
+          ${{ matrix.test }}
+      - if: ${{ matrix.upload-files }}
+        name: Upload report 🔝
+        uses: codecov/codecov-action@v2
         with:
-          persist-credentials: false
-          submodules: recursive
+          flags: unittests
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
+          verbose: true
+
+        
+
+  # lint:
+  #   runs-on: ubuntu-latest
+  #   needs: Setup_software_basis_py310_latest
+  #   steps:
+  #     - name: Checkout ⬇️
+  #       uses: actions/checkout@master
+  #       with:
+  #         persist-credentials: false
+  #         submodules: recursive
 
     #   - name: Setup python 🐍
     #     uses: actions/setup-python@v4
@@ -59,33 +85,33 @@ jobs:
     #     run: |
     #       source setup.sh ""
     # steps:
-      - name: Lint 🔍
-        run: |
-          source setup.sh ""
-          ./tests/run_linting
+      # - name: Lint 🔍
+      #   run: |
+      #     source setup.sh ""
+      #     ./tests/run_linting
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout ⬇️
+  #       uses: actions/checkout@master
+  #       with:
+  #         persist-credentials: false
+  #         submodules: recursive
 
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
+  #     - name: Setup python 🐍
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: "3.9"
 
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
+  #     - name: Install dependencies ☕️
+  #       run: |
+  #         source setup.sh ""
 
-      - name: Test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_tests
+  #     - name: Test 🎢
+  #       run: |
+  #         source setup.sh ""
+  #         ./tests/run_tests
 
   pypi:
     runs-on: ubuntu-latest
@@ -112,35 +138,35 @@ jobs:
       - name: Check setup 🚦
         run: twine check "dist/$( python setup.py --fullname ).tar.gz"
 
-  coverage:
-    runs-on: ubuntu-latest
-    env:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
+  # coverage:
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  #   steps:
+  #     - name: Checkout ⬇️
+  #       uses: actions/checkout@master
+  #       with:
+  #         persist-credentials: false
+  #         submodules: recursive
 
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
+  #     - name: Setup python 🐍
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: "3.9"
 
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
+  #     - name: Install dependencies ☕️
+  #       run: |
+  #         source setup.sh ""
 
-      - name: Run coverage test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_coverage
-          ls -al
+  #     - name: Run coverage test 🎢
+  #       run: |
+  #         source setup.sh ""
+  #         ./tests/run_coverage
+  #         ls -al
 
-      - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
-        with:
-          flags: unittests
-          files: coverage_test_util.xml,coverage_test_columnar_util.xml
-          verbose: true
+  #     - name: Upload report 🔝
+  #       uses: codecov/codecov-action@v2
+  #       with:
+  #         flags: unittests
+  #         files: coverage_test_util.xml,coverage_test_columnar_util.xml
+  #         verbose: true
