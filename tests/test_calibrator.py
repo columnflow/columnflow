@@ -3,7 +3,7 @@ __all__ = ["CalibratorUtilTest"]
 import unittest
 
 from columnflow.util import maybe_import
-from columnflow.calibration import util as calib_util
+# from columnflow.calibration import util as calib_util
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
