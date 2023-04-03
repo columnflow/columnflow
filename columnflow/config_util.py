@@ -8,13 +8,14 @@ from __future__ import annotations
 
 __all__ = [
     "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
-    "create_category_combinations",
+    "create_category_id", "add_category", "create_category_combinations",
 ]
 
 import re
 import itertools
 from typing import Callable, Any
 
+import law
 import order as od
 
 
@@ -83,6 +84,45 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
     )
 
 
+def create_category_id(
+    config: od.Config,
+    category_name: str,
+    hash_len: int = 8,
+    salt: Any = None,
+) -> int:
+    """
+    Creates a unique id for a :py:class:`order.Category` named *category_name* in a
+    :py:class:`order.Config` object *config* and returns it. Internally,
+    :py:func:`law.util.create_hash` is used which receives *hash_len*. In case of an unintentional
+    (yet unlikely) collision of two ids, there is the option to add a custom *salt* value.
+    """
+    # create the hash
+    h = law.util.create_hash((config.name, config.id, category_name, salt), l=hash_len)
+    h = int(h, base=16)
+
+    # add an offset to ensure that are hashes are above a threshold
+    digits = len(str(int("F" * hash_len, base=16)))
+    h += int(10 ** digits)
+
+    return h
+
+
+def add_category(config: od.Config, **kwargs) -> od.Category:
+    """
+    Creates a :py:class:`order.Category` instance by forwarding all *kwargs* to its constructor,
+    adds it to a :py:class:`order.Config` object *config* and returns it. When *kwargs* do not
+    contain a field *id*, :py:func:`create_category_id` is used to create one.
+    """
+    if "name" not in kwargs:
+        fields = ",".join(map(str, kwargs))
+        raise ValueError(f"a field 'name' is required to create a category, got '{fields}'")
+
+    if "id" not in kwargs:
+        kwargs["id"] = create_category_id(config, kwargs["name"])
+
+    return config.add_category(**kwargs)
+
+
 def create_category_combinations(
     config: od.Config,
     categories: dict[str, list[od.Categories]],
@@ -103,11 +143,11 @@ def create_category_combinations(
     arguments as returned by *kwargs_fn*. This function is called with the categories (in a
     dictionary, mapped to the sequence names as given in *categories*) that contribute to the newly
     created category and should return a dictionary. If the fields ``"id"`` and ``"selection"`` are
-    missing, they are filled with reasonable defaults leading to an auto-incremented id and a list
-    of all parent selection statements.
+    missing, they are filled with reasonable defaults leading to a auto-generated, deterministic id
+    and a list of all parent selection statements.
 
-    If the name of a new category is already known to *config* it skipped unless *skip_existing* is
-    *False*.
+    If the name of a new category is already known to *config* it is skipped unless *skip_existing*
+    is *False*.
 
     Example:
 
@@ -168,8 +208,10 @@ def create_category_combinations(
 
                 # create arguments for the new category
                 kwargs = kwargs_fn(root_cats) if callable(kwargs_fn) else {}
-                kwargs.setdefault("id", "+")
-                kwargs.setdefault("selection", [c.selection for c in root_cats.values()])
+                if "id" not in kwargs:
+                    kwargs["id"] = create_category_id(config, cat_name)
+                if "selection" not in kwargs:
+                    kwargs["selection"] = [c.selection for c in root_cats.values()]
 
                 # create the new category
                 cat = od.Category(name=cat_name, **kwargs)

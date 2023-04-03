@@ -14,7 +14,7 @@ from scinum import Number
 from columnflow.util import DotDict
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.config_util import (
-    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources,
+    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
 )
 
 
@@ -244,17 +244,17 @@ cfg.x.versions = {
 # (just one for now)
 cfg.add_channel(name="mutau", id=1)
 
-# add categories
+# add categories using the "add_category" tool which adds auto-generated ids
 # the "selection" entries refer to names of selectors, e.g. in selection/example.py
-cfg.add_category(
+add_category(
+    cfg,
     name="incl",
-    id=1,
     selection="sel_incl",
     label="inclusive",
 )
-cfg.add_category(
+add_category(
+    cfg,
     name="2j",
-    id=2,
     selection="sel_2j",
     label="2 jets",
 )
