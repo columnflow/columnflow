@@ -18,3 +18,4 @@ import columnflow as cf  # noqa
 # import all tests
 from .test_util import *
 from .test_columnar_util import *
+from .test_calibrator import *
