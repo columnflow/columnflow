@@ -27,7 +27,6 @@ jobs:
         env:
           cache-name: cache-software-basis
         with:
-          # npm cache files are stored in `~/.npm` on Linux/macOS
           path: |
             /home/runner/work/columnflow/columnflow/data/software/venvs
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/requirements*.txt', '**/sandboxes/cf_*.sh') }}
@@ -56,6 +55,7 @@ jobs:
             name: Run coverage 🎢
             do-ls: true
             upload-files: true
+            ns-version: 16
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
