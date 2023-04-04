@@ -1,0 +1,37 @@
+inputs:
+  job-runs-on:
+    description: 'OS version to run on'
+    default: ubuntu-latest
+
+runs:
+  using: "composite"
+  name: Checkout ⬇️
+        uses: actions/checkout@master
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+  - name: Setup python 🐍
+    uses: actions/setup-python@v4
+    with:
+      python-version: "3.10"
+
+  - name: Install dependencies ☕️
+    id: cache-software-basis
+    uses: actions/cache@v3
+    env:
+      cache-name: cache-software-basis
+    with:
+      # npm cache files are stored in `~/.npm` on Linux/macOS
+      path: |
+        /home/runner/work/columnflow/columnflow/data/software/venvs
+      key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/requirements*.txt', '**/sandboxes/cf_*.sh') }}
+      restore-keys: |
+        ${{ runner.os }}-build-${{ env.cache-name }}-
+        ${{ runner.os }}-build-
+        ${{ runner.os }}-
+  - if: ${{ steps.cache-software-basis.outputs.cache-hit != 'true' }}
+    name: List the state of node modules
+    continue-on-error: true
+    run: |
+      source setup.sh ""
