@@ -42,6 +42,7 @@ uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
+coffea_nanoaod = maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
 logger = law.logger.get_logger(__name__)
@@ -993,8 +994,9 @@ def attach_behavior(
     By default, all subfields of *ak_array* are kept. For further control, *skip_fields* can contain
     names or name patterns of fields that are filtered.
     """
+
     if behavior is None:
-        behavior = getattr(ak_array, "behavior", None)
+        behavior = getattr(ak_array, "behavior") or coffea_nanoaod.behavior
         if behavior is None:
             raise ValueError(
                 f"behavior for type '{type_name}' is not set and not existing in input array",
