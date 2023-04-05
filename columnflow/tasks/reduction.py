@@ -71,7 +71,7 @@ class ReduceEvents(
         }
 
     def output(self):
-        return self.target(f"events_{self.branch}.parquet")
+        return {"events": self.target(f"events_{self.branch}.parquet")}
 
     @ensure_proxy
     @law.decorator.localize
@@ -150,7 +150,7 @@ class ReduceEvents(
         # collect input paths
         input_paths = [nano_file]
         input_paths.append(inputs["selection"]["results"].path)
-        input_paths.extend([inp.path for inp in inputs["calibrations"]])
+        input_paths.extend([inp["calibration"].path for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
             input_paths.append(inputs["selection"]["columns"].path)
 
@@ -218,7 +218,7 @@ class ReduceEvents(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
 
 
 ReduceEventsWrapper = wrapper_factory(
@@ -278,7 +278,7 @@ class MergeReductionStats(
         coll = self.input()["collection"]
         n = len(coll)
         sizes = [
-            inp.stat().st_size
+            inp["events"].stat().st_size
             for inp in self.iter_progress(coll.targets.values(), n, msg=f"loading {n} stats ...")
         ]
 
@@ -439,7 +439,9 @@ class MergeReducedEvents(
         return super().trace_merge_workflow_inputs(inputs["events"])
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["events"]["collection"].targets.values())
+        return super().trace_merge_inputs([
+            inp["events"] for inp in inputs["events"]["collection"].targets.values()
+        ])
 
     def reduced_dummy_output(self):
         # mark the dummy output as a placeholder for the ForestMerge task
