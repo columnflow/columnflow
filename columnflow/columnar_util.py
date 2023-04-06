@@ -996,7 +996,7 @@ def attach_behavior(
     """
 
     if behavior is None:
-        behavior = getattr(ak_array, "behavior") or coffea_nanoaod.behavior
+        behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
             raise ValueError(
                 f"behavior for type '{type_name}' is not set and not existing in input array",
