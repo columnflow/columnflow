@@ -42,7 +42,7 @@ uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
-coffea_nanoaod = maybe_import("coffea.nanoevents.methods.nanoaod")
+maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
 logger = law.logger.get_logger(__name__)
