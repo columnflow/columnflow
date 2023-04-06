@@ -1,4 +1,4 @@
-# __cf_anaylsis_name__ Analysis
+# __cf_analysis_name__ Analysis
 
 
 ### Resources

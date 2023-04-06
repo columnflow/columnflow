@@ -105,3 +105,6 @@ def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     )
     corrector_name, self.year = self.get_muon_config()
     self.muon_sf_corrector = correction_set[corrector_name]
+
+    # check versions
+    assert self.muon_sf_corrector.version in [1]

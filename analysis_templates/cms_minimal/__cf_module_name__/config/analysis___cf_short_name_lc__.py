@@ -5,7 +5,6 @@ Configuration of the __cf_analysis_name__ analysis.
 """
 
 import os
-import re
 import functools
 
 import law
@@ -15,7 +14,7 @@ from scinum import Number
 from columnflow.util import DotDict
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.config_util import (
-    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources,
+    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
 )
 
 
@@ -220,7 +219,7 @@ cfg.x.keep_columns = DotDict.wrap({
         "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
     },
     "cf.MergeSelectionMasks": {
-        "mc_weight", "normalization_weight", "process_id", "category_ids", "cutflow.*",
+        "normalization_weight", "process_id", "category_ids", "cutflow.*",
     },
     "cf.UniteColumns": {
         "*",
@@ -245,22 +244,45 @@ cfg.x.versions = {
 # (just one for now)
 cfg.add_channel(name="mutau", id=1)
 
-# add categories
+# add categories using the "add_category" tool which adds auto-generated ids
 # the "selection" entries refer to names of selectors, e.g. in selection/example.py
-cfg.add_category(
+add_category(
+    cfg,
     name="incl",
-    id=1,
     selection="sel_incl",
     label="inclusive",
 )
-cfg.add_category(
+add_category(
+    cfg,
     name="2j",
-    id=2,
     selection="sel_2j",
     label="2 jets",
 )
 
 # add variables
+# (the "event", "run" and "lumi" variables are required for some cutflow plotting task,
+# and also correspond to the minimal set of columns that coffea's nano scheme requires)
+cfg.add_variable(
+    name="event",
+    expression="event",
+    binning=(1, 0.0, 1.0e9),
+    x_title="Event number",
+    discrete_x=True,
+)
+cfg.add_variable(
+    name="run",
+    expression="run",
+    binning=(1, 100000.0, 500000.0),
+    x_title="Run number",
+    discrete_x=True,
+)
+cfg.add_variable(
+    name="lumi",
+    expression="luminosityBlock",
+    binning=(1, 0.0, 5000.0),
+    x_title="Luminosity block",
+    discrete_x=True,
+)
 cfg.add_variable(
     name="n_jet",
     expression="n_jet",

@@ -87,3 +87,7 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
         variable="phi",
         data_source=self.dataset_inst.data_source,
     )]
+
+    # check versions
+    assert self.met_pt_corrector.version in [1]
+    assert self.met_phi_corrector.version in [1]

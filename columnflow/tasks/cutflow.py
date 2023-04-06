@@ -41,7 +41,7 @@ class CreateCutflowHistograms(
 
     initial_step = "Initial"
 
-    default_variables = ("mc_weight", "cf_*")
+    default_variables = ("event", "cf_*")
 
     # upstream requirements
     reqs = Requirements(
@@ -66,7 +66,10 @@ class CreateCutflowHistograms(
         }
 
     def output(self):
-        return {var: self.target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
+        return {
+            var: self.target(f"cutflow_hist__{var}.pickle")
+            for var in self.variables
+        }
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -87,7 +90,9 @@ class CreateCutflowHistograms(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = {"category_ids", "process_id", "normalization_weight"} | set(aliases.values())
+        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        if self.dataset_inst.is_mc:
+            read_columns |= {"normalization_weight"}
         read_columns = {Route(c) for c in read_columns}
 
         # define steps
@@ -107,6 +112,9 @@ class CreateCutflowHistograms(
                     read_columns.add(route)
                 # TODO: handle variable_inst with custom expressions, can they declare columns?
                 expressions[variable_inst.name] = expr
+
+        # prepare columns to load
+        load_columns = {("events" + route) for route in read_columns} | {Route("steps.*")}
 
         # prepare histograms
         histograms = {}
@@ -136,7 +144,7 @@ class CreateCutflowHistograms(
         for arr, pos in self.iter_chunked_io(
             inputs["masks"].path,
             source_type="awkward_parquet",
-            read_columns={("events" + route) for route in read_columns} | {Route("steps.*")},
+            read_columns=load_columns,
         ):
             events = arr.events
 
@@ -162,7 +170,11 @@ class CreateCutflowHistograms(
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
                         "shift": self.global_shift_inst.id,
-                        "weight": events.normalization_weight[mask],
+                        "weight": (
+                            events.normalization_weight[mask]
+                            if self.dataset_inst.is_mc
+                            else 1.0
+                        ),
                     }
                     for var_name in var_names:
                         point[var_name] = expressions[var_name](events)[mask]
@@ -237,6 +249,12 @@ class PlotCutflow(
         default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
     )
+    variable = luigi.Parameter(
+        default=CreateCutflowHistograms.default_variables[0],
+        significant=False,
+        description="name of the variable to use for obtaining event counts; "
+        f"default: '{CreateCutflowHistograms.default_variables[0]}'",
+    )
 
     # upstream requirements
     reqs = Requirements(
@@ -261,8 +279,7 @@ class PlotCutflow(
             self.reqs.CreateCutflowHistograms.req(
                 self,
                 dataset=d,
-                variables=("mc_weight",),
-                _prefer_cli={"variables"},
+                variables=(self.variable,),
                 _exclude={"branches"},
             )
             for d in self.datasets
@@ -275,8 +292,7 @@ class PlotCutflow(
                 self,
                 branch=0,
                 dataset=d,
-                variables=("mc_weight",),
-                _prefer_cli={"variables"},
+                variables=(self.variable,),
             )
             for d in self.datasets
         }
@@ -307,7 +323,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["mc_weight"].load(formatter="pickle")
+                h_in = inp[self.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -338,7 +354,7 @@ class PlotCutflow(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "mc_weight": sum}]
+                    h = h[{"process": sum, "category": sum, self.variable: sum}]
 
                     # add the histogram
                     if process_inst in hists:
@@ -378,9 +394,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
-    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -574,7 +590,7 @@ class PlotCutflowVariables1D(
         import hist
 
         if len(variable_insts) != 1:
-            raise Exception(f"Task {self.task_family} is only working for single variables.")
+            raise Exception(f"task {self.task_family} is only viable for single variables")
 
         outputs = self.output()
         if self.per_plot == "processes":

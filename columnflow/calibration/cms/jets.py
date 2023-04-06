@@ -36,9 +36,9 @@ def get_evaluators(correction_set, names):
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
     missing_keys = set(names) - available_keys
     if missing_keys:
-        raise RuntimeError("Corrections not found:" + "".join(
+        raise RuntimeError("corrections not found:" + "".join(
             f"\n  - {name}" for name in names if name in missing_keys
-        ) + "\nAvailable:" + "".join(
+        ) + "\navailable:" + "".join(
             f"\n  - {name}" for name in sorted(available_keys)
         ))
 

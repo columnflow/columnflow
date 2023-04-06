@@ -133,7 +133,7 @@ def plot_all(
     "cms_label_cfg": dict,
     """
     # available plot methods mapped to their names
-    plot_methods = {  # noqa
+    plot_methods = {
         func.__name__: func
         for func in [draw_error_bands, draw_stack, draw_hist, draw_errorbars]
     }
@@ -237,10 +237,11 @@ def plot_all(
         ax.legend(handles, labels, **legend_kwargs)
 
     # custom annotation
+    log_x = style_config.get("ax_cfg", {}).get("xscale", "linear") == "log"
     annotate_kwargs = {
         "text": "",
         "xy": (
-            get_position(*ax.get_xlim(), factor=0.05, logscale=False),
+            get_position(*ax.get_xlim(), factor=0.05, logscale=log_x),
             get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
         ),
         "xycoords": "data",

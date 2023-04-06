@@ -42,6 +42,7 @@ uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
+maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
 logger = law.logger.get_logger(__name__)
@@ -993,8 +994,9 @@ def attach_behavior(
     By default, all subfields of *ak_array* are kept. For further control, *skip_fields* can contain
     names or name patterns of fields that are filtered.
     """
+
     if behavior is None:
-        behavior = getattr(ak_array, "behavior", None)
+        behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
             raise ValueError(
                 f"behavior for type '{type_name}' is not set and not existing in input array",
@@ -1303,6 +1305,7 @@ class ArrayFunction(Derivable):
     uses = set()
     produces = set()
     _dependency_sets = {"uses", "produces"}
+    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1363,6 +1366,7 @@ class ArrayFunction(Derivable):
         skip_func: Callable | None = law.no_value,
         deferred_init: bool | None = True,
         instance_cache: dict | None = None,
+        log_runtime: bool | None = None,
         **kwargs,
     ):
         super().__init__()
@@ -1374,6 +1378,8 @@ class ArrayFunction(Derivable):
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if log_runtime is not None:
+            self.log_runtime = log_runtime
 
         # when a custom funcs are passed, bind them to this instance
         if call_func:
@@ -1610,7 +1616,15 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
-        return self.call_func(*args, **kwargs)
+        t1 = time.perf_counter()
+        try:
+            return self.call_func(*args, **kwargs)
+        finally:
+            if self.log_runtime:
+                duration = time.perf_counter() - t1
+                logger_perf.info(
+                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                )
 
 
 class TaskArrayFunction(ArrayFunction):

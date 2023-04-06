@@ -79,7 +79,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
             )
 
-        self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
+        self.logger.info(f"found {len(lfns)} lfn(s) for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")

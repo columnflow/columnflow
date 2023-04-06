@@ -269,11 +269,14 @@ class SelectorStepsMixin(SelectorMixin):
         params = super().resolve_param_values(params)
 
         # expand selector step groups
-        if "config_inst" in params and len(params.get("selector_steps", ())) == 1:
+        if "config_inst" in params and len(params.get("selector_steps", [])) == 1:
             config_inst = params["config_inst"]
             step_group = params["selector_steps"][0]
-            if step_group in config_inst.x("selector_step_groups", {}):
-                params["selector_steps"] = tuple(config_inst.x.selector_step_groups[step_group])
+            params["selector_steps"] = (
+                tuple(config_inst.x.selector_step_groups[step_group])
+                if step_group in config_inst.x("selector_step_groups", {}) else
+                tuple()
+            )
 
         # sort selector steps when the order does not matter
         if not cls.selector_steps_order_sensitive and "selector_steps" in params:
