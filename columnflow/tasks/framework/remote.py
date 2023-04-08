@@ -272,7 +272,7 @@ _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor"
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 
 
-class HTCondorWorkflow(law.htcondor.HTCondorWorkflow):
+class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -512,7 +512,7 @@ _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "max
 _default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
 
 
-class SlurmWorkflow(law.slurm.SlurmWorkflow):
+class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
