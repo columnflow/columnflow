@@ -11,6 +11,7 @@ import law
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import DotDict
 
 
 np = maybe_import("numpy")
@@ -43,21 +44,14 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
-    # define indices for individual weights
-    mur_down_muf_down = 0
-    mur_down_muf_nom = 1
-    # mur_down_muf_up = 2
-    mur_nom_muf_down = 3
-    # skip nominal weight for now
-    mur_nom_muf_up = 5
-    mur_up_muf_down = 6
-    mur_up_muf_nom = 7
-    mur_up_muf_up = 8
+
     murf_nominal = None
+    indices = DotDict()
     if ak.all(n_weights == 9):
         # if we have 9 weights, the indices above are correct, just need
         # to load the nominal weights
         murf_nominal = events.LHEScaleWeight[:, 4]
+        indices = self.indices_9
     elif ak.all(n_weights == 8):
         # if we just have 8 weights, there is no nominal LHEScale weight
         # instead, initialize the nominal weights as ones.
@@ -69,10 +63,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             "nominal one and all other entries are in correct order",
         )
         murf_nominal = ak.ones_like(events.event)
-        mur_nom_muf_up -= 1
-        mur_up_muf_down -= 1
-        mur_up_muf_nom -= 1
-        mur_up_muf_up -= 1
+        indices = self.indices_8
     else:
 
         bad_values = set(n_weights[any(n_weights != x for x in [8, 9])])
@@ -93,7 +84,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # normalize all weights by the nominal one, assumed to be the 5th value
     murf_weights = events.LHEScaleWeight / murf_nominal
 
-    # decorrelated weights
+    # setup nominal weights
     events = set_ak_column_f32(
         events,
         "mur_weight",
@@ -101,28 +92,8 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     )
     events = set_ak_column_f32(
         events,
-        "mur_weight_up",
-        murf_weights[:, mur_up_muf_nom],
-    )
-    events = set_ak_column_f32(
-        events,
-        "mur_weight_down",
-        murf_weights[:, mur_down_muf_nom],
-    )
-    events = set_ak_column_f32(
-        events,
         "muf_weight",
         ak.ones_like(events.event),
-    )
-    events = set_ak_column_f32(
-        events,
-        "muf_weight_up",
-        murf_weights[:, mur_nom_muf_up],
-    )
-    events = set_ak_column_f32(
-        events,
-        "muf_weight_down",
-        murf_weights[:, mur_nom_muf_down],
     )
 
     # fully correlated weights
@@ -131,18 +102,61 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         "murmuf_weight",
         ak.ones_like(events.event),
     )
-    events = set_ak_column_f32(
-        events,
-        "murmuf_weight_up",
-        murf_weights[:, mur_up_muf_up],
-    )
-    events = set_ak_column_f32(
-        events,
-        "murmuf_weight_down",
-        murf_weights[:, mur_down_muf_down],
-    )
+
+    # now loop through the clear names and save the respective normalized
+    # LHEScaleWeights
+    for colname, indexname in self.clearnames.items():
+        index = indices.get(indexname)
+        # throw an error in case something went wrong with the
+        # assignment of clear names for the weight columns
+        if index is None:
+            raise ValueError(f"Could not retrieve index for weight set {indexname}")
+        events = set_ak_column_f32(
+            events,
+            colname,
+            murf_weights[:, index],
+        )
 
     return events
+
+
+@murmuf_weights.setup
+def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict):
+    # define indices in case there are 9 LHEScaleWeights in total
+    self.indices_9 = DotDict(
+        # define indices for individual weights
+        mur_down_muf_down=0,
+        mur_down_muf_nom=1,
+        mur_down_muf_up=2,
+        mur_nom_muf_down=3,
+        # skip nominal weight for now
+        mur_nom_muf_up=5,
+        mur_up_muf_down=6,
+        mur_up_muf_nom=7,
+        mur_up_muf_up=8,
+    )
+
+    # if there are only 8, the nominal weight at index 4 is missing
+    # in this case, initialize an index where all indices > 4 are shifted
+    # down by one
+    self.indices_8 = DotDict({
+        key: index if index <= 4 else index - 1
+        for key, index in self.indices_9.items()
+    })
+
+    # for convenience, declare some meaningful clear names for the weights
+    # here instead of the very technical names like mur_nom_muf_up
+    self.clearnames = DotDict(
+        # decorrelated weights
+        mur_up="mur_up_muf_nom",
+        mur_down="mur_down_muf_nom",
+        muf_up="mur_nom_muf_up",
+        muf_down="mur_nom_muf_down",
+
+        # fully-correlated names
+        murmuf_weight_up="mur_up_muf_up",
+        murmuf_weight_down="mur_down_muf_down",
+    )
 
 
 @producer(
