@@ -132,7 +132,7 @@ class CreateHistograms(
         if self.producers:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_models:
-            files.extend([inp.path for inp in inputs["ml"]])
+            files.extend([inp["mlcols"].path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],

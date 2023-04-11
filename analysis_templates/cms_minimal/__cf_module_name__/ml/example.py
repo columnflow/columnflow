@@ -65,7 +65,7 @@ class ExampleModel(MLModel):
     def train(
         self,
         task: law.Task,
-        input: dict[str, list[law.FileSystemFileTarget]],
+        input: dict[str, list[dict[str, law.FileSystemFileTarget]]],
         output: law.FileSystemDirectoryTarget,
     ) -> None:
         # define a dummy NN

@@ -87,10 +87,10 @@ class PrepareMLEvents(
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
         k = self.ml_model_inst.folds
-        return law.SiblingFileCollection([
+        return {"mlevents": law.SiblingFileCollection([
             self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
             for f in range(k)
-        ])
+        ])}
 
     @law.decorator.log
     @law.decorator.localize
@@ -125,9 +125,9 @@ class PrepareMLEvents(
         n_fold_events = self.ml_model_inst.folds * [0]
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -162,7 +162,7 @@ class PrepareMLEvents(
                 self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
 
         # merge output files of all folds
-        for _output_chunks, output in zip(output_chunks, outputs.targets):
+        for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
             sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
             law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
@@ -253,18 +253,18 @@ class MergeMLEvents(
         ]
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs([inp[self.fold] for inp in inputs])
+        return super().trace_merge_inputs([inp["mlevents"][self.fold] for inp in inputs])
 
     def merge_output(self):
         k = self.ml_model_inst.folds
-        return self.target(f"mlevents_f{self.fold}of{k}.parquet")
+        return {"mlevents": self.target(f"mlevents_f{self.fold}of{k}.parquet")}
 
     @law.decorator.log
     def run(self):
         return super().run()
 
     def merge(self, inputs, output):
-        law.pyarrow.merge_parquet_task(self, inputs, output)
+        law.pyarrow.merge_parquet_task(self, inputs, output["mlevents"])
 
 
 MergeMLEventsWrapper = wrapper_factory(
@@ -462,7 +462,7 @@ class MLEvaluation(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"mlcols_{self.branch}.pickle")
+        return {"mlcols": self.target(f"mlcols_{self.branch}.pickle")}
 
     @law.decorator.log
     @law.decorator.localize
@@ -507,9 +507,9 @@ class MLEvaluation(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -547,7 +547,7 @@ class MLEvaluation(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["mlcols"], local=True)
 
 
 # overwrite class defaults
