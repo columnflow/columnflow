@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import abc
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Sequence
 
 import law
 import order as od
@@ -229,7 +229,7 @@ class MLModel(Derivable):
 
         return messages
 
-    def _setup(self, configs: list[str | od.Config]) -> None:
+    def _set_configs(self, configs: list[str | od.Config]) -> None:
         # complain when only a single config is accepted
         if self.single_config and len(configs) > 1:
             raise Exception(
@@ -248,6 +248,11 @@ class MLModel(Derivable):
                 else self.analysis_inst.get_config(config)
             )
             self.config_insts.append(config_inst)
+
+    def _setup(self, configs: list[str | od.Config] | None = None) -> None:
+        # setup configs
+        if configs:
+            self._set_configs(configs)
 
         # setup hook
         self.setup()
@@ -291,58 +296,55 @@ class MLModel(Derivable):
 
     def training_configs(
         self,
-        evaluation_configs: list[str],
+        requested_configs: Sequence[str],
     ) -> list[str]:
         """
         Given a sequence of names of requested :py:class:`order.Config` objects,
-        *evaluation_configs*, which are, as the name suggests, meant for model evaluation, this
-        method can alter and/or replace them to define a different (set of) config(s) for the
-        preprocessing and training pipeline. This can be helpful in cases where training and
-        evaluation phase spaces, as well as the required input datasets and/or columns are intended
-        to diverge.
+        *requested_configs*, this method can alter and/or replace them to define a different (set
+        of) config(s) for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input datasets and/or
+        columns are intended to diverge.
         """
-        return evaluation_configs
+        return list(requested_configs)
 
     def training_calibrators(
         self,
         config_inst: od.Config,
-        evaluation_calibrators: list[str],
+        requested_calibrators: Sequence[str],
     ) -> list[str]:
         """
-        Given a sequence of requested *evaluation_calibrators* for a *config_inst*, which are, as
-        the name suggests, meant for model evaluation, this method can alter and/or replace them to
-        define a different set of calibrators for the preprocessing and training pipeline. This can
-        be helpful in cases where training and evaluation phase spaces, as well as the required
-        input columns are intended to diverge.
+        Given a sequence of *requested_calibrators* for a *config_inst*, this method can alter
+        and/or replace them to define a different set of calibrators for the preprocessing and
+        training pipeline. This can be helpful in cases where training and evaluation phase spaces,
+        as well as the required input columns are intended to diverge.
         """
-        return evaluation_calibrators
+        return list(requested_calibrators)
 
     def training_selector(
         self,
         config_inst: od.Config,
-        evaluation_selector: str,
+        requested_selector: str,
     ) -> str:
         """
-        Given a requested *evaluation_selector* for a *config_inst*, which is, as the name suggests,
-        meant for model evaluation, this method can change it to define a different selector for the
-        preprocessing and training pipeline. This can be helpful in cases where training and
-        evaluation phase spaces, as well as the required input columns are intended to diverge.
+        Given a *requested_selector* for a *config_inst*, this method can change it to define a
+        different selector for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
         """
-        return evaluation_selector
+        return requested_selector
 
     def training_producers(
         self,
         config_inst: od.Config,
-        evaluation_producers: list[str],
+        requested_producers: Sequence[str],
     ) -> list[str]:
         """
-        Given a sequence of requested *evaluation_producers* for a *config_inst*, which are, as the
-        name suggests, meant for model evaluation, this method can alter and/or replace them to
-        define a different set of producers for the preprocessing and training pipeline. This can be
-        helpful in cases where training and evaluation phase spaces, as well as the required input
-        columns are intended to diverge.
+        Given a sequence of *requested_producers* for a *config_inst*, this method can alter and/or
+        replace them to define a different set of producers for the preprocessing and training
+        pipeline. This can be helpful in cases where training and evaluation phase spaces, as well
+        as the required input columns are intended to diverge.
         """
-        return evaluation_producers
+        return list(requested_producers)
 
     @abc.abstractmethod
     def sandbox(self, task: law.Task) -> str:

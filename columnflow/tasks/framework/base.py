@@ -172,9 +172,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
+        if task:
+            analysis_inst = task.analysis_inst
+        elif "analysis_inst" in params:
+            analysis_inst = params["analysis_inst"]
+        else:
+            analysis_inst = cls.get_analysis_inst(params["analysis"])
+
         return {
             "task": task,
-            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(params["analysis"]),
+            "analysis_inst": analysis_inst,
         }
 
     @classmethod
@@ -431,10 +438,14 @@ class ConfigTask(AnalysisTask):
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
             kwargs["config_inst"] = task.config_inst
+        elif "config_inst" in params:
+            kwargs["config_inst"] = params["config_inst"]
         elif "config" in params and "analysis_inst" in kwargs:
             kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
@@ -623,10 +634,14 @@ class DatasetTask(ShiftTask):
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
             kwargs["dataset_inst"] = task.dataset_inst
+        elif "dataset_inst" in params:
+            kwargs["dataset_inst"] = params["dataset_inst"]
         elif "dataset" in params and "config_inst" in kwargs:
             kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
