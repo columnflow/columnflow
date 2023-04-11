@@ -53,7 +53,7 @@ class CalibrateEvents(
         return reqs
 
     def output(self):
-        return {"calibration": self.target(f"calib_{self.branch}.parquet")}
+        return {"columns": self.target(f"calib_{self.branch}.parquet")}
 
     @law.decorator.log
     @ensure_proxy
@@ -115,7 +115,7 @@ class CalibrateEvents(
             self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
-        with output["calibration"].localize("w") as outp:
+        with output["columns"].localize("w") as outp:
             sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
             law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
 

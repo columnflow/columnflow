@@ -150,7 +150,7 @@ class ReduceEvents(
         # collect input paths
         input_paths = [nano_file]
         input_paths.append(inputs["selection"]["results"].path)
-        input_paths.extend([inp["calibration"].path for inp in inputs["calibrations"]])
+        input_paths.extend([inp["columns"].path for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
             input_paths.append(inputs["selection"]["columns"].path)
 

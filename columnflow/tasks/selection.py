@@ -134,7 +134,7 @@ class SelectEvents(
         # iterate over chunks of events and diffs
         n_calib = len(inputs["calibrations"])
         for (events, *diffs), pos in self.iter_chunked_io(
-            [nano_file] + [inp["calibration"].path for inp in inputs["calibrations"]],
+            [nano_file] + [inp["columns"].path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_columns=(1 + n_calib) * [read_columns],
         ):
