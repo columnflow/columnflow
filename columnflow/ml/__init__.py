@@ -29,7 +29,7 @@ class MLModel(Derivable):
 
         - :py:meth:`sandbox`
         - :py:meth:`datasets`
-        - :py:meth:`uses`,
+        - :py:meth:`uses`
         - :py:meth:`produces`
         - :py:meth:`output`
         - :py:meth:`open_model`

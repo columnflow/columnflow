@@ -31,7 +31,7 @@ class CalibratorMixin(ConfigTask):
 
     calibrator = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the calibrator to the applied; default: value of the "
+        description="the name of the calibrator to be applied; default: value of the "
         "'default_calibrator' config",
     )
 
@@ -179,7 +179,7 @@ class SelectorMixin(ConfigTask):
 
     selector = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the selector to the applied; default: value of the "
+        description="the name of the selector to be applied; default: value of the "
         "'default_selector' config",
     )
 
@@ -300,7 +300,7 @@ class ProducerMixin(ConfigTask):
 
     producer = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the producer to the applied; default: value of the "
+        description="the name of the producer to be applied; default: value of the "
         "'default_producer' config",
     )
 
@@ -449,7 +449,7 @@ class ProducersMixin(ConfigTask):
 class MLModelMixinBase(AnalysisTask):
 
     ml_model = luigi.Parameter(
-        description="the name of the ML model to the applied",
+        description="the name of the ML model to be applied",
     )
 
     exclude_params_repr_empty = {"ml_model"}
@@ -691,7 +691,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
 
     ml_model = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the ML model to the applied; default: value of the "
+        description="the name of the ML model to be applied; default: value of the "
         "'default_ml_model' config",
     )
 
@@ -822,7 +822,7 @@ class InferenceModelMixin(ConfigTask):
 
     inference_model = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the inference model to the used; default: value of the "
+        description="the name of the inference model to be used; default: value of the "
         "'default_inference_model' config",
     )
 
