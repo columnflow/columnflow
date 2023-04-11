@@ -177,7 +177,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
 
     if ak.all(n_weights == 9):
-        murf_nominal = events.LHEScaleWeight[:, 4]
+        murf_nominal = events.LHEScaleWeight[:, self.indices_9.mur_nom_muf_nom]
         envelope_indices = self.envelope_indices_9
 
         # perform an additional check to see of the nominal value is ever != 1
@@ -220,7 +220,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 @murmuf_envelope_weights.setup
 def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     # define the indices of weights to consider for the envelope construction
-    all_indices_9 = DotDict(
+    self.indices_9 = DotDict(
         mur_down_muf_down=0,
         mur_down_muf_nom=1,
         mur_down_muf_up=2,
@@ -235,7 +235,7 @@ def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> N
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [
         index
-        for name, index in all_indices_9.items()
+        for name, index in self.indices_9.items()
         if name not in ["mur_down_muf_up", "mur_up_muf_down"]
     ]
 
@@ -243,6 +243,6 @@ def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> N
     # is missing and the entries above are shifted down by one
     self.envelope_indices_8 = [
         index if index <= 4 else index - 1
-        for name, index in all_indices_9.items()
+        for name, index in self.indices_9.items()
         if name not in ["mur_down_muf_up", "mur_up_muf_down", "mur_nom_muf_nom"]
     ]
