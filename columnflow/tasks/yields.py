@@ -105,12 +105,18 @@ class CreateYieldTable(
         return params
 
     def output(self):
-        return self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}.txt")
+        # TODO: add a "yield" output that gives the raw numbers, e.g. as a csv
+        return {
+            "table": self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}.txt"),
+        }
 
     @law.decorator.log
     def run(self):
         import hist
         from tabulate import tabulate
+
+        inputs = self.input()
+        outputs = self.output()
 
         category_insts = list(map(self.config_inst.get_category, self.categories))
         process_insts = list(map(self.config_inst.get_process, self.processes))
@@ -123,9 +129,11 @@ class CreateYieldTable(
         hists = {}
 
         with self.publish_step(f"Creating yields for processes {self.processes}, categories {self.categories}"):
-            for dataset, inp in self.input().items():
+            for dataset, inp in inputs.items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["event"].load(formatter="pickle")
+
+                # load the histogram of the variable named "event"
+                h_in = inp["hists"]["event"].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -222,7 +230,7 @@ class CreateYieldTable(
 
                     # format yields into strings
                     yields_str[category].append((value / norm_factor).str(
-                        combine_uncs="all",
+                        # combine_uncs="all",  # TODO
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
                     ))
@@ -231,4 +239,4 @@ class CreateYieldTable(
             yield_table = tabulate(yields_str, headers="keys", tablefmt=self.table_format)
             self.publish_message(yield_table)
 
-            self.output().dump(yield_table, formatter="text")
+            outputs["table"].dump(yield_table, formatter="text")
