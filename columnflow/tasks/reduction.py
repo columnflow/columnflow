@@ -270,7 +270,7 @@ class MergeReductionStats(
         return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
-        return self.target(f"stats_n{self.n_inputs}.json")
+        return {"stats": self.target(f"stats_n{self.n_inputs}.json")}
 
     @law.decorator.safe_output
     def run(self):
@@ -311,7 +311,7 @@ class MergeReductionStats(
             ("max_size_merged", max_size_merged),
             ("merge_factor", merge_factor),
         ])
-        self.output().dump(stats, indent=4, formatter="json")
+        self.output()["stats"].dump(stats, indent=4, formatter="json")
 
         # print them
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
@@ -361,8 +361,8 @@ class MergeReducedEventsUser(DatasetTask):
         if self._cached_file_merging < 0:
             # check of the merging stats is present and of so, set the cached file merging value
             output = self.reqs.MergeReductionStats.req(self).output()
-            if output.exists():
-                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
+            if output["stats"].exists():
+                self._cached_file_merging = output["stats"].load(formatter="json")["merge_factor"]
                 self._cache_branches = True
 
         return self._cached_file_merging
@@ -378,7 +378,7 @@ class MergeReducedEventsUser(DatasetTask):
     @classmethod
     def maybe_dummy(cls, func):
         # meant to wrap output methods of tasks depending on merging stats
-        # to inject a dummy output in case the status are not there yet
+        # to inject a dummy output in case the stats are not there yet
         @functools.wraps(func)
         def wrapper(self):
             # when the merging stats do not exist yet, return a dummy target
@@ -454,12 +454,12 @@ class MergeReducedEvents(
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))
         return law.SiblingFileCollection([
-            self.target(f"events_{i}.parquet")
+            {"events": self.target(f"events_{i}.parquet")}
             for i in range(n_merged)
         ])
 
     def merge(self, inputs, output):
-        law.pyarrow.merge_parquet_task(self, inputs, output)
+        law.pyarrow.merge_parquet_task(self, inputs, output["events"])
 
 
 MergeReducedEventsWrapper = wrapper_factory(

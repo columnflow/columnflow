@@ -82,7 +82,9 @@ class CreateHistograms(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")
+        return {
+            "hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle"),
+        }
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -126,9 +128,9 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_models:
             files.extend([inp.path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
@@ -202,7 +204,7 @@ class CreateHistograms(
                 histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
-        self.output().dump(histograms, formatter="pickle")
+        self.output()["hists"].dump(histograms, formatter="pickle")
 
 
 CreateHistogramsWrapper = wrapper_factory(
@@ -272,10 +274,10 @@ class MergeHistograms(
         )
 
     def output(self):
-        return law.SiblingFileCollection({
+        return {"hists": law.SiblingFileCollection({
             variable_name: self.target(f"hist__{variable_name}.pickle")
             for variable_name in self.variables
-        })
+        })}
 
     @law.decorator.log
     def run(self):
@@ -285,7 +287,7 @@ class MergeHistograms(
 
         # load input histograms
         hists = [
-            inp.load(formatter="pickle")
+            inp["hists"].load(formatter="pickle")
             for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
         ]
 
@@ -296,7 +298,7 @@ class MergeHistograms(
 
             variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outputs[variable_name].dump(merged, formatter="pickle")
+            outputs["hists"][variable_name].dump(merged, formatter="pickle")
 
         # optionally remove inputs
         if self.remove_previous:
@@ -362,23 +364,23 @@ class MergeShiftedHistograms(
         return parts
 
     def output(self):
-        return law.SiblingFileCollection({
+        return {"hists": law.SiblingFileCollection({
             variable_name: self.target(f"shifted_hist__{variable_name}.pickle")
             for variable_name in self.variables
-        })
+        })}
 
     @law.decorator.log
     def run(self):
         # preare inputs and outputs
         inputs = self.input()
-        outputs = self.output().targets
+        outputs = self.output()["hists"].targets
 
         for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
             self.publish_message(f"merging histograms for '{variable_name}'")
 
             # load hists
             variable_hists = [
-                coll.targets[variable_name].load(formatter="pickle")
+                coll["hists"].targets[variable_name].load(formatter="pickle")
                 for coll in inputs.values()
             ]
 
