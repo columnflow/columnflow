@@ -45,40 +45,40 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
 
-    murf_nominal = None
-    indices = DotDict()
     if ak.all(n_weights == 9):
         # if we have 9 weights, the indices above are correct, just need
         # to load the nominal weights
-        murf_nominal = events.LHEScaleWeight[:, 4]
         indices = self.indices_9
+        murf_nominal = events.LHEScaleWeight[:, indices.mur_nom_muf_nom]
+
+        # perform an additional check to see of the nominal value is ever != 1
+        if ak.any(murf_nominal != 1):
+            bad_values = set(murf_nominal[murf_nominal != 1])
+            logger.debug(
+                "The nominal LHEScaleWeight is expected to be 1, but also found values " +
+                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
+                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
+                "weight is already included in the LHEWeight.",
+            )
     elif ak.all(n_weights == 8):
         # if we just have 8 weights, there is no nominal LHEScale weight
         # instead, initialize the nominal weights as ones.
         # Additionally, we need to shift the last couple of weight indices
         # down by 1
+        indices = self.indices_8
+        murf_nominal = 1
+
+        # additional debug log
         logger.debug(
             f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always " +
             "8 instead of the expected 9. It is assumed, that the missing entry is the " +
             "nominal one and all other entries are in correct order",
         )
-        murf_nominal = ak.ones_like(events.event)
-        indices = self.indices_8
     else:
-
         bad_values = set(n_weights[any(n_weights != x for x in [8, 9])])
         raise Exception(
             "the number of LHEScaleWeights is expected to be 9, but also found values " +
             f"{bad_values} in dataset {self.dataset_inst.name}",
-        )
-
-    if ak.any(murf_nominal != 1):
-        bad_values = set(murf_nominal[murf_nominal != 1])
-        logger.debug(
-            "The nominal LHEScaleWeight is expected to be 1, but also found values " +
-            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-            "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
-            "weight is already included in the LHEWeight.",
         )
 
     # normalize all weights by the nominal one, assumed to be the 5th value
@@ -121,15 +121,14 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @murmuf_weights.setup
-def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict):
+def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     # define indices in case there are 9 LHEScaleWeights in total
     self.indices_9 = DotDict(
-        # define indices for individual weights
         mur_down_muf_down=0,
         mur_down_muf_nom=1,
         mur_down_muf_up=2,
         mur_nom_muf_down=3,
-        # skip nominal weight for now
+        mur_nom_muf_nom=4,
         mur_nom_muf_up=5,
         mur_up_muf_down=6,
         mur_up_muf_nom=7,
@@ -142,6 +141,7 @@ def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict):
     self.indices_8 = DotDict({
         key: index if index <= 4 else index - 1
         for key, index in self.indices_9.items()
+        if key != "mur_nom_muf_nom"
     })
 
     # for convenience, declare some meaningful clear names for the weights
@@ -152,7 +152,6 @@ def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict):
         mur_down="mur_down_muf_nom",
         muf_up="mur_nom_muf_up",
         muf_down="mur_nom_muf_down",
-
         # fully-correlated names
         murmuf_weight_up="mur_up_muf_up",
         murmuf_weight_down="mur_down_muf_down",
@@ -176,26 +175,39 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
-    if ak.any(n_weights != 9):
+
+    if ak.all(n_weights == 9):
+        murf_nominal = events.LHEScaleWeight[:, 4]
+        envelope_indices = self.envelope_indices_9
+
+        # perform an additional check to see of the nominal value is ever != 1
+        if ak.any(murf_nominal != 1):
+            bad_values = set(murf_nominal[murf_nominal != 1])
+            logger.debug(
+                "The nominal LHEScaleWeight is expected to be 1, but also found values " +
+                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
+                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
+                "weight is already included in the LHEWeight.",
+            )
+    elif ak.all(n_weights == 8):
+        murf_nominal = 1
+        envelope_indices = self.envelope_indices_8
+
+        # additional debug log
+        logger.debug(
+            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always " +
+            "8 instead of the expected 9. It is assumed, that the missing entry is the " +
+            "nominal one and all other entries are in correct order",
+        )
+    else:
         bad_values = set(n_weights[n_weights != 9])
         raise Exception(
             "the number of LHEScaleWeights is expected to be 9, but also found values " +
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
-    murf_nominal = events.LHEScaleWeight[:, 4]
-    if ak.any(murf_nominal != 1):
-        bad_values = set(murf_nominal[murf_nominal != 1])
-        logger.debug(
-            "The nominal LHEScaleWeight is expected to be 1, but also found values " +
-            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-            "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
-            "weight is already included in the LHEWeight.",
-        )
-
-    # for the up/down variations, take the max/min value of all possible combinations
-    # except mur=2, muf=0.5 (index 2) and mur=0.5, muf=2 (index 6) into account
-    considered_murf_weights = (events.LHEScaleWeight / murf_nominal)[:, [0, 1, 3, 4, 5, 7, 8]]
+    # take the max/min value of all considered variations
+    considered_murf_weights = (events.LHEScaleWeight / murf_nominal)[:, envelope_indices]
 
     # store columns
     events = set_ak_column_f32(events, "murf_envelope_weight", ak.ones_like(events.event))
@@ -203,3 +215,34 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     events = set_ak_column_f32(events, "murf_envelope_weight_up", ak.max(considered_murf_weights, axis=1))
 
     return events
+
+
+@murmuf_envelope_weights.setup
+def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+    # define the indices of weights to consider for the envelope construction
+    all_indices_9 = DotDict(
+        mur_down_muf_down=0,
+        mur_down_muf_nom=1,
+        mur_down_muf_up=2,
+        mur_nom_muf_down=3,
+        mur_nom_muf_nom=4,
+        mur_nom_muf_up=5,
+        mur_up_muf_down=6,
+        mur_up_muf_nom=7,
+        mur_up_muf_up=8,
+    )
+
+    # create a flat list if indices, skipping those for crossed variations
+    self.envelope_indices_9 = [
+        index
+        for name, index in all_indices_9.items()
+        if name not in ["mur_down_muf_up", "mur_up_muf_down"]
+    ]
+
+    # as in the murmuf_weights_setup above, in case there are only 8 weights, the nominal one
+    # is missing and the entries above are shifted down by one
+    self.envelope_indices_8 = [
+        index if index <= 4 else index - 1
+        for name, index in all_indices_9.items()
+        if name not in ["mur_down_muf_up", "mur_up_muf_down", "mur_nom_muf_nom"]
+    ]
