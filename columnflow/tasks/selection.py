@@ -134,7 +134,7 @@ class SelectEvents(
         # iterate over chunks of events and diffs
         n_calib = len(inputs["calibrations"])
         for (events, *diffs), pos in self.iter_chunked_io(
-            [nano_file] + [inp.path for inp in inputs["calibrations"]],
+            [nano_file] + [inp["columns"].path for inp in inputs["calibrations"]],
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_columns=(1 + n_calib) * [read_columns],
         ):
@@ -246,7 +246,7 @@ class MergeSelectionStats(
         )
 
     def merge_output(self):
-        return self.target("stats.json")
+        return {"stats": self.target("stats.json")}
 
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs(
@@ -265,7 +265,7 @@ class MergeSelectionStats(
             self.merge_counts(merged_stats, stats)
 
         # write the output
-        output.dump(merged_stats, indent=4, formatter="json", cache=False)
+        output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
@@ -352,7 +352,7 @@ class MergeSelectionMasks(
         return super().trace_merge_inputs(inputs["selection"])
 
     def merge_output(self):
-        return self.target("masks.parquet")
+        return {"masks": self.target("masks.parquet")}
 
     def merge(self, inputs, output):
         # in the lowest (leaf) stage, zip selection results with additional columns first
@@ -362,7 +362,7 @@ class MergeSelectionMasks(
             tmp_dir.touch()
             inputs = self.zip_results_and_columns(inputs, tmp_dir)
 
-        law.pyarrow.merge_parquet_task(self, inputs, output)
+        law.pyarrow.merge_parquet_task(self, inputs, output["masks"])
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns

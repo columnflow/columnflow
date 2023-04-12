@@ -78,7 +78,7 @@ class UniteColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"data_{self.branch}.parquet")
+        return {"columns": self.target(f"data_{self.branch}.parquet")}
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -106,11 +106,11 @@ class UniteColumns(
         read_columns = {Route(c) for c in read_columns}
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_models:
-            files.extend([inp.path for inp in inputs["ml"]])
+            files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -133,7 +133,7 @@ class UniteColumns(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
 
 
 # overwrite class defaults
