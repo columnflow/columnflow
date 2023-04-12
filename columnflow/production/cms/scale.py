@@ -148,10 +148,10 @@ def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
     # here instead of the very technical names like mur_nom_muf_up
     self.clearnames = DotDict(
         # decorrelated weights
-        mur_up="mur_up_muf_nom",
-        mur_down="mur_down_muf_nom",
-        muf_up="mur_nom_muf_up",
-        muf_down="mur_nom_muf_down",
+        mur_weight_up="mur_up_muf_nom",
+        mur_weight_down="mur_down_muf_nom",
+        muf_weight_up="mur_nom_muf_up",
+        muf_weight_down="mur_nom_muf_down",
         # fully-correlated names
         murmuf_weight_up="mur_up_muf_up",
         murmuf_weight_down="mur_down_muf_down",
