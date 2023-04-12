@@ -34,7 +34,7 @@ runs:
       with:
         path: |
           /home/runner/work/columnflow/columnflow/data/software/venvs
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles( ${{ inputs.filesForHash }} ) }}
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles(inputs.filesForHash) }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
