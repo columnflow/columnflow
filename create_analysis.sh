@@ -3,7 +3,7 @@
 # Script that creates a minimal analysis project based on columnflow.
 #
 # Execute as (e.g.)
-# > bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
+# > bash -c "$(curl -Ls https://raw.githubusercontent.com/columnflow/columnflow/master/create_analysis.sh)"
 #
 # A few variables are queried at the beginning of the project creation and inserted into a template
 # analysis. For more insights, checkout the "analysis_templates" directory.
@@ -191,8 +191,8 @@ create_analysis() {
         rm -rf "${exec_dir}/.cf_analysis_setup"
         mkdir -p "${exec_dir}/.cf_analysis_setup" || return "$?"
         cd "${exec_dir}/.cf_analysis_setup"
-        curl -L -s -k "https://github.com/uhh-cms/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
-        mv uhh-cms-columnflow-*/"analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}" || return "$?"
+        curl -L -s -k "https://github.com/columnflow/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
+        mv columnflow-columnflow-*/"analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}" || return "$?"
         cd "${cf_analysis_base}" || return "$?"
         rm -rf "${exec_dir}/.cf_analysis_setup"
     fi
@@ -244,12 +244,12 @@ create_analysis() {
     echo_color cyan "setup submodules"
     mkdir -p modules
     if [ "${cf_use_ssh}" ]; then
-        git submodule add -b "${fetch_cf_branch}" git@github.com:uhh-cms/columnflow.git modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" git@github.com:columnflow/columnflow.git modules/columnflow
         if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
             git submodule add -b "${fetch_cmsdb_branch}" git@github.com:uhh-cms/cmsdb.git modules/cmsdb
         fi
     else
-        git submodule add -b "${fetch_cf_branch}" https://github.com/uhh-cms/columnflow.git modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" https://github.com/columnflow/columnflow.git modules/columnflow
         if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
             git submodule add "${fetch_cmsdb_branch}" https://github.com/uhh-cms/cmsdb.git modules/cmsdb
         fi
