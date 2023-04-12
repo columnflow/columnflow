@@ -56,13 +56,13 @@ class CreateCutflowHistograms(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["masks"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
 
         return reqs
 
     def requires(self):
         return {
-            "masks": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
@@ -142,7 +142,7 @@ class CreateCutflowHistograms(
                     histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
-            inputs["masks"]["masks"].path,
+            inputs["selection"]["masks"].path,
             source_type="awkward_parquet",
             read_columns=load_columns,
         ):

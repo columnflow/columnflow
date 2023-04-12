@@ -462,7 +462,7 @@ class MLEvaluation(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"mlcols": self.target(f"mlcols_{self.branch}.pickle")}
+        return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.pickle")}
 
     @law.decorator.log
     @law.decorator.localize
@@ -547,7 +547,7 @@ class MLEvaluation(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["mlcols"], local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["mlcolumns"], local=True)
 
 
 # overwrite class defaults
