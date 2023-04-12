@@ -10,8 +10,9 @@ jobs:
   Setup_software_basis_py310_latest:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - id: "setup_basic_software"
-        uses: actions/columnflow@v1
+        uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
   full_matrix:
@@ -32,8 +33,9 @@ jobs:
             upload-files: true
             ns-version: 16
     steps:
+      - uses: actions/checkout@v3
       - id: "setup_basic_software"
-        uses: actions/columnflow@v1
+        uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
       - name: ${{ matrix.name }}
