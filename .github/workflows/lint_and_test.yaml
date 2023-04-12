@@ -15,9 +15,15 @@ jobs:
         uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
+  
+  setup_all_venvs:
+    uses: ./.github/workflows/setup_venvs.yaml
+    needs: Setup_software_basis_py310_latest
+    with:
+      os: ubuntu-latest
   full_matrix:
     runs-on: ubuntu-latest
-    needs: Setup_software_basis_py310_latest
+    needs: setup_all_venvs
     strategy:
       matrix:
         include:
@@ -26,9 +32,19 @@ jobs:
 
           - test: "./tests/run_tests"
             name: Test 🎢
+            venv: columnar
+            hashFiles: |
+              "**/sandboxes/venv_columnar*.sh"
+              "**/sandboxes/columnar.txt"
+              "**/sandboxes/_setup_venv.sh"
 
           - test: "./tests/run_coverage"
             name: Run coverage 🎢
+            venv: columnar
+            hashFiles: |
+              "**/sandboxes/venv_columnar*.sh"
+              "**/sandboxes/columnar.txt"
+              "**/sandboxes/_setup_venv.sh"
             do-ls: true
             upload-files: true
             ns-version: 16
@@ -38,6 +54,17 @@ jobs:
         uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
+      - if: ${{ matrix.venv }}
+        name: "load venv ${{ matrix.venv }}"
+        uses: ./.github/actions/setup_software
+        with:
+          cache-name: "cache-${{ matrix.venv }}"
+          run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
+          cache_paths: |
+            /home/runner/work/columnflow/columnflow/data/software/venvs/venv_${{ matrix.venv }}_dev
+          hashFiles: |
+            ${{ matrix.hashFiles }}
+            setup.sh
       - name: ${{ matrix.name }}
         run: |
           source setup.sh ""

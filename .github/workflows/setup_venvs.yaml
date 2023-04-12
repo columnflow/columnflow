@@ -1,0 +1,50 @@
+name: Setup virtual environments
+on: 
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+        default: ubuntu-latest
+    
+
+jobs:
+
+  venv_matrix:
+    runs-on: ${{ inputs.os }}
+    strategy:
+      matrix:
+        include:
+          - venv: "columnar"
+            name: "columnar"
+            hashFiles: |
+              "**/sandboxes/venv_columnar*.sh"
+              "**/sandboxes/columnar.txt"
+              "**/sandboxes/_setup_venv.sh"
+          - venv: "docs"
+            name: "docs"
+            hashFiles: |
+              "**/sandboxes/venv_docs*.sh"
+              "**/sandboxes/_setup_venv.sh"
+          - venv: ml_tf
+            name: "ML (TensorFlow)"
+            hashFiles: |
+              "**/sandboxes/_setup_venv.sh"
+              "**/sandboxes/venv_ml_tf*.sh"
+              "**/sandboxes/ml_tf.txt"
+    steps:
+      - uses: actions/checkout@v3
+      - id: "setup_basic_software"
+        uses: ./.github/actions/setup_software
+        with:
+          cache-name: "cache-software-basis"
+      - name: ${{ matrix.name }}
+        uses: ./.github/actions/setup_software
+        with:
+          cache-name: "cache-${{ matrix.venv }}"
+          run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
+          cache_paths: |
+            /home/runner/work/columnflow/columnflow/data/software/venvs/venv_${{ matrix.venv }}_dev
+          hashFiles: |
+            ${{ matrix.hashFiles }}
+            setup.sh
