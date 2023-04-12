@@ -79,7 +79,7 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
           processes known to the config of the task, with keys being process ids.
     """
     # load the selection stats
-    selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
+    selection_stats = inputs["selection_stats"]["collection"][0]["stats"].load(formatter="json")
 
     # for the lookup tables below, determine the maximum process id
     process_insts = [

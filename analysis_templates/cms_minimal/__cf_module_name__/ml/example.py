@@ -24,12 +24,10 @@ law.contrib.load("tensorflow")
 
 class ExampleModel(MLModel):
 
-    def __init__(self, *args, folds: int | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        # class-to-instance-level attributes
-        # (before being set, self.folds refers to a class-level attribute)
-        self.folds = folds or self.folds
+    # mark the model as accepting only a single config
+    single_config = True
 
+    def setup(self):
         # dynamically add variables for the quantities produced by this model
         if f"{self.cls_name}.output" not in self.config_inst.variables:
             self.config_inst.add_variable(
@@ -42,18 +40,18 @@ class ExampleModel(MLModel):
     def sandbox(self, task: law.Task) -> str:
         return dev_sandbox("bash::$__cf_short_name_uc___BASE/sandboxes/example.sh")
 
-    def datasets(self) -> set[od.Dataset]:
+    def datasets(self, config_inst: od.Config) -> set[od.Dataset]:
         return {
-            self.config_inst.get_dataset("st_tchannel_t_powheg"),
-            self.config_inst.get_dataset("tt_sl_powheg"),
+            config_inst.get_dataset("st_tchannel_t_powheg"),
+            config_inst.get_dataset("tt_sl_powheg"),
         }
 
-    def uses(self) -> set[Route | str]:
+    def uses(self, config_inst: od.Config) -> set[Route | str]:
         return {
             "Jet.pt", "Muon.pt",
         }
 
-    def produces(self) -> set[Route | str]:
+    def produces(self, config_inst: od.Config) -> set[Route | str]:
         return {
             f"{self.cls_name}.ouptut",
         }
@@ -67,7 +65,7 @@ class ExampleModel(MLModel):
     def train(
         self,
         task: law.Task,
-        input: dict[str, list[law.FileSystemFileTarget]],
+        input: dict[str, list[dict[str, law.FileSystemFileTarget]]],
         output: law.FileSystemDirectoryTarget,
     ) -> None:
         # define a dummy NN

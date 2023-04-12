@@ -31,7 +31,7 @@ class CalibratorMixin(ConfigTask):
 
     calibrator = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the calibrator to the applied; default: value of the "
+        description="the name of the calibrator to be applied; default: value of the "
         "'default_calibrator' config",
     )
 
@@ -179,7 +179,7 @@ class SelectorMixin(ConfigTask):
 
     selector = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the selector to the applied; default: value of the "
+        description="the name of the selector to be applied; default: value of the "
         "'default_selector' config",
     )
 
@@ -300,7 +300,7 @@ class ProducerMixin(ConfigTask):
 
     producer = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the producer to the applied; default: value of the "
+        description="the name of the producer to be applied; default: value of the "
         "'default_producer' config",
     )
 
@@ -446,52 +446,233 @@ class ProducersMixin(ConfigTask):
         return parts
 
 
-class MLModelMixinBase(ConfigTask):
+class MLModelMixinBase(AnalysisTask):
+
+    ml_model = luigi.Parameter(
+        description="the name of the ML model to be applied",
+    )
+
+    exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
-    def get_ml_model_inst(cls, ml_model: str, config_inst: od.Config) -> MLModel:
-        return MLModel.get_cls(ml_model)(config_inst)
+    def get_ml_model_inst(
+        cls,
+        ml_model: str,
+        analysis_inst: od.Analysis,
+        requested_configs: list[str] | None = None,
+        **kwargs,
+    ) -> MLModel:
+        ml_model_inst = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
 
-    def events_used_in_training(self, dataset_inst: od.Dataset, shift_inst: od.Shift) -> bool:
+        if requested_configs:
+            configs = ml_model_inst.training_configs(list(requested_configs))
+            if configs:
+                ml_model_inst._setup(configs)
+
+        return ml_model_inst
+
+    def events_used_in_training(
+        self,
+        config_inst: od.Config,
+        dataset_inst: od.Dataset,
+        shift_inst: od.Shift,
+    ) -> bool:
         # evaluate whether the events for the combination of dataset_inst and shift_inst
         # shall be used in the training
         return (
-            dataset_inst in self.ml_model_inst.used_datasets and
+            dataset_inst in self.ml_model_inst.datasets(config_inst) and
             not shift_inst.has_tag("disjoint_from_nominal")
         )
 
 
-class MLModelDataMixin(MLModelMixinBase):
+class MLModelTrainingMixin(MLModelMixinBase):
 
-    ml_model = luigi.Parameter(
-        default=law.NO_STR,
-        significant=False,
-        description="the name of the ML model to the applied; default: value of the "
-        "'default_ml_model' config",
+    configs = law.CSVParameter(
+        default=(),
+        description="comma-separated names of analysis config to use; should only contain a single "
+        "name in case the ml model is bound to a single config; when empty, the ml model is "
+        "expected to fully define the configs it uses; empty default",
     )
-    ml_model_store = luigi.Parameter(default=law.NO_STR)
+    calibrators = law.MultiCSVParameter(
+        default=(),
+        description="multiple comma-separated sequences of names of calibrators to apply, "
+        "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
+        "'default_calibrator' setting of each config is used if set, or the model is expected to "
+        "fully define the calibrators it requires upstream; empty default",
+    )
+    selectors = law.CSVParameter(
+        default=(),
+        description="comma-separated names of selectors to apply; each selector corresponds to a "
+        "config in --configs; when empty, the 'default_selector' setting of each config is used if "
+        "set, or the ml model is expected to fully define the selector it uses requires upstream; "
+        "empty default",
+    )
+    producers = law.MultiCSVParameter(
+        default=(),
+        description="multiple comma-separated sequences of names of producers to apply, "
+        "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
+        "'default_producer' setting of each config is used if set, or ml model is expected to "
+        "fully define the producers it requires upstream; empty default",
+    )
 
-    # skip passing ml_model_store
-    exclude_params_index = {"ml_model_store"}
-    exclude_params_req = {"ml_model_store"}
-    exclude_params_repr = {"ml_model_store"}
-    exclude_params_sandbox = {"ml_model_store"}
-    exclude_params_remote_workflow = {"ml_model_store"}
+    @classmethod
+    def resolve_calibrators(
+        cls,
+        ml_model_inst: MLModel,
+        params: dict[str, Any],
+    ) -> tuple[tuple[str]]:
+        calibrators = params.get("calibrators", ())
+
+        # use config defaults in case each config has one
+        if not calibrators:
+            defaults = tuple(
+                CalibratorsMixin.get_default_calibrators(config_inst)
+                for config_inst in ml_model_inst.config_insts
+            )
+            if all(defaults):
+                calibrators = defaults
+
+        # broadcast to configs
+        n_configs = len(ml_model_inst.config_insts)
+        if len(calibrators) == 1 and n_configs != 1:
+            calibrators = tuple(calibrators * n_configs)
+
+        # validate number of sequences
+        if len(calibrators) != n_configs:
+            raise Exception(
+                f"MLModel '{ml_model_inst.cls_name}' uses {n_configs} configs but received "
+                f"{len(calibrators)} calibrator sequences",
+            )
+
+        # final check by model
+        calibrators = tuple(
+            tuple(ml_model_inst.training_calibrators(config_inst, list(_calibrators)))
+            for config_inst, _calibrators in zip(ml_model_inst.config_insts, calibrators)
+        )
+
+        # instantiate them once
+        for config_inst, _calibrators in zip(ml_model_inst.config_insts, calibrators):
+            init_kwargs = law.util.merge_dicts(params, {"config_inst": config_inst})
+            for calibrator in _calibrators:
+                CalibratorMixin.get_calibrator_inst(calibrator, kwargs=init_kwargs)
+
+        return calibrators
+
+    @classmethod
+    def resolve_selectors(
+        cls,
+        ml_model_inst: MLModel,
+        params: dict[str, Any],
+    ) -> tuple[str]:
+        selectors = params.get("selectors", ())
+
+        # use config defaults in case each config has one
+        if not selectors:
+            defaults = tuple(
+                SelectorMixin.get_default_selector(config_inst)
+                for config_inst in ml_model_inst.config_insts
+            )
+            if all(defaults):
+                selectors = defaults
+
+        # broadcast to configs
+        n_configs = len(ml_model_inst.config_insts)
+        if len(selectors) == 1 and n_configs != 1:
+            selectors = tuple(selectors * n_configs)
+
+        # validate sequence length
+        if len(selectors) != n_configs:
+            raise Exception(
+                f"MLModel '{ml_model_inst.cls_name}' uses {n_configs} configs but received "
+                f"{len(selectors)} selectors",
+            )
+
+        # final check by model
+        selectors = tuple(
+            ml_model_inst.training_selector(config_inst, selector)
+            for config_inst, selector in zip(ml_model_inst.config_insts, selectors)
+        )
+
+        # instantiate them once
+        for config_inst, selector in zip(ml_model_inst.config_insts, selectors):
+            init_kwargs = law.util.merge_dicts(params, {"config_inst": config_inst})
+            SelectorMixin.get_selector_inst(selector, kwargs=init_kwargs)
+
+        return selectors
+
+    @classmethod
+    def resolve_producers(
+        cls,
+        ml_model_inst: MLModel,
+        params: dict[str, Any],
+    ) -> tuple[tuple[str]]:
+        producers = params.get("producers", ())
+
+        # use config defaults in case each config has one
+        if not producers:
+            defaults = tuple(
+                ProducersMixin.get_default_producers(config_inst)
+                for config_inst in ml_model_inst.config_insts
+            )
+            if all(defaults):
+                producers = defaults
+
+        # broadcast to configs
+        n_configs = len(ml_model_inst.config_insts)
+        if len(producers) == 1 and n_configs != 1:
+            producers = tuple(producers * n_configs)
+
+        # validate number of sequences
+        if len(producers) != n_configs:
+            raise Exception(
+                f"MLModel '{ml_model_inst.cls_name}' uses {n_configs} configs but received "
+                f"{len(producers)} producer sequences",
+            )
+
+        # final check by model
+        producers = tuple(
+            tuple(ml_model_inst.training_producers(config_inst, list(_producers)))
+            for config_inst, _producers in zip(ml_model_inst.config_insts, producers)
+        )
+
+        # instantiate them once
+        for config_inst, _producers in zip(ml_model_inst.config_insts, producers):
+            init_kwargs = law.util.merge_dicts(params, {"config_inst": config_inst})
+            for producer in _producers:
+                ProducerMixin.get_producer_inst(producer, kwargs=init_kwargs)
+
+        return producers
 
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        # add the default ml model when empty
-        if "config_inst" in params:
-            config_inst = params["config_inst"]
-            if params.get("ml_model") in (None, law.NO_STR) and config_inst.x("default_ml_model", None):
-                params["ml_model"] = config_inst.x.default_ml_model
+        if "analysis_inst" in params and "ml_model" in params:
+            analysis_inst = params["analysis_inst"]
+            ml_model_inst = cls.get_ml_model_inst(params["ml_model"], analysis_inst)
+            params["ml_model_inst"] = ml_model_inst
 
-            # initialize it and get the store name
-            if params.get("ml_model") not in (None, law.NO_STR):
-                model_inst = cls.get_ml_model_inst(params["ml_model"], config_inst)
-                params["ml_model_store"] = model_inst.store_name or model_inst.cls_name
+            # resolve configs
+            _configs = params.get("configs", ())
+            params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
+            if not params["configs"]:
+                raise Exception(
+                    f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
+                    "training configs, but did not define any",
+                )
+            ml_model_inst._set_configs(params["configs"])
+
+            # resolve calibrators
+            params["calibrators"] = cls.resolve_calibrators(ml_model_inst, params)
+
+            # resolve selectors
+            params["selectors"] = cls.resolve_selectors(ml_model_inst, params)
+
+            # resolve producers
+            params["producers"] = cls.resolve_producers(ml_model_inst, params)
+
+            # call the model's setup hook
+            ml_model_inst._setup()
 
         return params
 
@@ -499,19 +680,18 @@ class MLModelDataMixin(MLModelMixinBase):
         super().__init__(*args, **kwargs)
 
         # get the ML model instance
-        self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
+        self.ml_model_inst = self.get_ml_model_inst(
+            self.ml_model,
+            self.analysis_inst,
+            configs=list(self.configs),
+        )
 
-    def store_parts(self) -> law.util.InsertableDict:
-        parts = super().store_parts()
-        parts.insert_before("version", "ml_data", f"ml__{self.ml_model_store}")
-        return parts
 
-
-class MLModelMixin(MLModelMixinBase):
+class MLModelMixin(ConfigTask, MLModelMixinBase):
 
     ml_model = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the ML model to the applied; default: value of the "
+        description="the name of the ML model to be applied; default: value of the "
         "'default_ml_model' config",
     )
 
@@ -524,15 +704,23 @@ class MLModelMixin(MLModelMixinBase):
         params = super().resolve_param_values(params)
 
         # add the default ml model when empty
-        if "config_inst" in params:
+        if "analysis_inst" in params and "config_inst" in params:
+            analysis_inst = params["analysis_inst"]
             config_inst = params["config_inst"]
-            if params.get("ml_model") in (None, law.NO_STR) and config_inst.x("default_ml_model", None):
+            if (
+                params.get("ml_model") in (None, law.NO_STR) and
+                config_inst.x("default_ml_model", None)
+            ):
                 params["ml_model"] = config_inst.x.default_ml_model
 
             # initialize it once to trigger its set_config hook which might, in turn,
             # add objects to the config itself
             if params.get("ml_model") not in (None, law.NO_STR):
-                cls.get_ml_model_inst(params["ml_model"], config_inst)
+                params["ml_model_inst"] = cls.get_ml_model_inst(
+                    params["ml_model"],
+                    analysis_inst,
+                    requested_configs=[config_inst],
+                )
             elif not cls.allow_empty_ml_model:
                 raise Exception(f"no ml_model configured for {cls.task_family}")
 
@@ -544,12 +732,31 @@ class MLModelMixin(MLModelMixinBase):
         # get the ML model instance
         self.ml_model_inst = None
         if self.ml_model != law.NO_STR:
-            self.ml_model_inst = self.get_ml_model_inst(self.ml_model, self.config_inst)
+            self.ml_model_inst = self.get_ml_model_inst(
+                self.ml_model,
+                self.analysis_inst,
+                requested_configs=[self.config_inst],
+            )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if self.ml_model_inst:
             parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+        return parts
+
+
+class MLModelDataMixin(MLModelMixin):
+
+    allow_empty_ml_model = False
+
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+
+        # replace the ml_model entry
+        store_name = self.ml_model_inst.store_name or self.ml_model_inst.cls_name
+        parts.insert_before("ml_model", "ml_data", f"ml__{store_name}")
+        parts.pop("ml_model")
+
         return parts
 
 
@@ -569,15 +776,22 @@ class MLModelsMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if "config_inst" in params:
+        if "analysis_inst" in params and "config_inst" in params:
+            analysis_inst = params["analysis_inst"]
             config_inst = params["config_inst"]
             if not params.get("ml_models") and config_inst.x("default_ml_model", None):
                 params["ml_models"] = (config_inst.x.default_ml_model,)
 
             # special case: initialize them once to trigger their set_config hook
             if params.get("ml_models"):
-                for ml_model in params["ml_models"]:
-                    MLModelMixin.get_ml_model_inst(ml_model, config_inst)
+                params["ml_model_insts"] = [
+                    MLModelMixinBase.get_ml_model_inst(
+                        ml_model,
+                        analysis_inst,
+                        requested_configs=[config_inst],
+                    )
+                    for ml_model in params["ml_models"]
+                ]
             elif not cls.allow_empty_ml_models:
                 raise Exception(f"no ml_models configured for {cls.task_family}")
 
@@ -588,7 +802,11 @@ class MLModelsMixin(ConfigTask):
 
         # get the ML model instances
         self.ml_model_insts = [
-            MLModelMixin.get_ml_model_inst(ml_model, self.config_inst)
+            MLModelMixinBase.get_ml_model_inst(
+                ml_model,
+                self.analysis_inst,
+                requested_configs=[self.config_inst],
+            )
             for ml_model in self.ml_models
         ]
 
@@ -604,7 +822,7 @@ class InferenceModelMixin(ConfigTask):
 
     inference_model = luigi.Parameter(
         default=law.NO_STR,
-        description="the name of the inference model to the used; default: value of the "
+        description="the name of the inference model to be used; default: value of the "
         "'default_inference_model' config",
     )
 

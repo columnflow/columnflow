@@ -9,7 +9,13 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, ProducersMixin, MLModelDataMixin, MLModelMixin, ChunkedIOMixin,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelDataMixin,
+    MLModelTrainingMixin,
+    MLModelMixin,
+    ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -43,11 +49,16 @@ class PrepareMLEvents(
         super().__init__(*args, **kwargs)
 
         # complain when this task is run for events that are not needed for training
-        if not self.events_used_in_training(self.dataset_inst, self.global_shift_inst):
+        if not self.events_used_in_training(
+            self.config_inst,
+            self.dataset_inst,
+            self.global_shift_inst,
+        ):
             raise Exception(
                 f"for ML model '{self.ml_model_inst.cls_name}', the dataset "
-                f"'{self.dataset_inst.name}' with shift '{self.global_shift_inst.name}' is not "
-                f"intended to be run by {self.__class__.__name__}",
+                f"'{self.dataset_inst.name}' of config '{self.config_inst.name}' with shift "
+                f"'{self.global_shift_inst.name}' is not intended to be run by "
+                f"{self.__class__.__name__}",
             )
 
     def workflow_requires(self):
@@ -76,10 +87,10 @@ class PrepareMLEvents(
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
         k = self.ml_model_inst.folds
-        return law.SiblingFileCollection([
+        return {"mlevents": law.SiblingFileCollection([
             self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
             for f in range(k)
-        ])
+        ])}
 
     @law.decorator.log
     @law.decorator.localize
@@ -102,7 +113,7 @@ class PrepareMLEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will to be written
-        write_columns = self.ml_model_inst.used_columns
+        write_columns = set.union(*self.ml_model_inst.used_columns.values())
         route_filter = RouteFilter(write_columns)
 
         # define columns that need to be read
@@ -114,9 +125,9 @@ class PrepareMLEvents(
         n_fold_events = self.ml_model_inst.folds * [0]
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -151,7 +162,7 @@ class PrepareMLEvents(
                 self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
 
         # merge output files of all folds
-        for _output_chunks, output in zip(output_chunks, outputs.targets):
+        for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
             sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
             law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
 
@@ -242,18 +253,18 @@ class MergeMLEvents(
         ]
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs([inp[self.fold] for inp in inputs])
+        return super().trace_merge_inputs([inp["mlevents"][self.fold] for inp in inputs])
 
     def merge_output(self):
         k = self.ml_model_inst.folds
-        return self.target(f"mlevents_f{self.fold}of{k}.parquet")
+        return {"mlevents": self.target(f"mlevents_f{self.fold}of{k}.parquet")}
 
     @law.decorator.log
     def run(self):
         return super().run()
 
     def merge(self, inputs, output):
-        law.pyarrow.merge_parquet_task(self, inputs, output)
+        law.pyarrow.merge_parquet_task(self, inputs, output["mlevents"])
 
 
 MergeMLEventsWrapper = wrapper_factory(
@@ -264,10 +275,7 @@ MergeMLEventsWrapper = wrapper_factory(
 
 
 class MLTraining(
-    MLModelMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
+    MLModelTrainingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -301,11 +309,27 @@ class MLTraining(
         reqs = super().workflow_requires()
 
         reqs["events"] = {
-            dataset_inst.name: [
-                self.reqs.MergeMLEvents.req(self, dataset=dataset_inst.name, fold=fold, tree_index=-1)
-                for fold in range(self.ml_model_inst.folds)
-            ]
-            for dataset_inst in self.ml_model_inst.used_datasets
+            config_inst.name: {
+                dataset_inst.name: [
+                    self.reqs.MergeMLEvents.req(
+                        self,
+                        config=config_inst.name,
+                        dataset=dataset_inst.name,
+                        calibrators=_calibrators,
+                        selector=_selector,
+                        producers=_producers,
+                        fold=fold,
+                        tree_index=-1)
+                    for fold in range(self.ml_model_inst.folds)
+                ]
+                for dataset_inst in dataset_insts
+            }
+            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
+                self.ml_model_inst.used_datasets.items(),
+                self.calibrators,
+                self.selectors,
+                self.producers,
+            )
         }
 
         # ml model requirements
@@ -318,12 +342,28 @@ class MLTraining(
 
         # require prepared events
         reqs["events"] = {
-            dataset_inst.name: [
-                self.reqs.MergeMLEvents.req(self, dataset=dataset_inst.name, fold=f)
-                for f in range(self.ml_model_inst.folds)
-                if f != self.branch
-            ]
-            for dataset_inst in self.ml_model_inst.used_datasets
+            config_inst.name: {
+                dataset_inst.name: [
+                    self.reqs.MergeMLEvents.req(
+                        self,
+                        config=config_inst.name,
+                        dataset=dataset_inst.name,
+                        calibrators=_calibrators,
+                        selector=_selector,
+                        producers=_producers,
+                        fold=f,
+                    )
+                    for f in range(self.ml_model_inst.folds)
+                    if f != self.branch
+                ]
+                for dataset_inst in dataset_insts
+            }
+            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
+                self.ml_model_inst.used_datasets.items(),
+                self.calibrators,
+                self.selectors,
+                self.producers,
+            )
         }
 
         # ml model requirements
@@ -374,31 +414,18 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
 
-    def req_training(self, **kwargs) -> MLTraining:
-        # add dedicated training calibrators, selector and producers
-        # (not via setdefault to prevent hooks from being unnecessarily called)
-        if "calibrators" not in kwargs:
-            calibrators = self.ml_model_inst.training_calibrators(list(self.calibrators))
-            kwargs["calibrators"] = tuple(calibrators)
-        if "selector" not in kwargs:
-            kwargs["selector"] = self.ml_model_inst.training_selector(self.selector)
-        if "producers" not in kwargs:
-            producers = self.ml_model_inst.training_producers(list(self.producers))
-            kwargs["producers"] = tuple(producers)
-
-        # always prioritize cli parameters
-        prefer_cli = set(kwargs.get("_prefer_cli", []))
-        prefer_cli |= {"calibrators", "selector", "selector_steps", "producers"}
-        kwargs["_prefer_cli"] = prefer_cli
-
-        return self.reqs.MLTraining.req(self, **kwargs)
-
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["models"] = self.req_training(_exclude={"branches"})
+        reqs["models"] = self.reqs.MLTraining.req_different_branching(
+            self,
+            configs=(self.config_inst.name,),
+            calibrators=(self.calibrators,),
+            selectors=(self.selector,),
+            producers=(self.producers,),
+        )
 
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, _exclude={"branches"})
+        reqs["events"] = self.reqs.MergeReducedEvents.req_different_branching(self)
 
         if not self.pilot and self.producers:
             reqs["producers"] = [
@@ -410,8 +437,19 @@ class MLEvaluation(
 
     def requires(self):
         reqs = {
-            "models": self.req_training(_exclude={"branch"}),
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "models": self.reqs.MLTraining.req_different_branching(
+                self,
+                configs=(self.config_inst.name,),
+                calibrators=(self.calibrators,),
+                selectors=(self.selector,),
+                producers=(self.producers,),
+                branch=-1,
+            ),
+            "events": self.reqs.MergeReducedEvents.req_different_branching(
+                self,
+                tree_index=self.branch,
+                branch=-1,
+            ),
         }
 
         if self.producers:
@@ -424,7 +462,7 @@ class MLEvaluation(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"mlcols_{self.branch}.pickle")
+        return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.pickle")}
 
     @law.decorator.log
     @law.decorator.localize
@@ -444,29 +482,34 @@ class MLEvaluation(
         tmp_dir.touch()
 
         # open all model files
-        models = [self.ml_model_inst.open_model(inp) for inp in inputs["models"]]
+        models = [
+            self.ml_model_inst.open_model(inp)
+            for inp in inputs["models"]["collection"].targets.values()
+        ]
 
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # check once if the events were used during trainig
         events_used_in_training = self.events_used_in_training(
+            self.config_inst,
             self.dataset_inst,
             self.global_shift_inst,
         )
 
         # define columns that need to be read
-        read_columns = self.ml_model_inst.used_columns | {"deterministic_seed"} | set(aliases.values())
+        read_columns = {"deterministic_seed"} | set(aliases.values())
+        read_columns |= set.union(*self.ml_model_inst.used_columns.values())
         read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
-        write_columns = self.ml_model_inst.produced_columns
+        write_columns = set.union(*self.ml_model_inst.produced_columns.values())
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -504,7 +547,7 @@ class MLEvaluation(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["mlcolumns"], local=True)
 
 
 # overwrite class defaults

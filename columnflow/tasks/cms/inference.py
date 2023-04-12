@@ -134,7 +134,7 @@ class CreateDatacards(
                         continue
 
                     # open the histogram and work on a copy
-                    h = _inp["collection"][0][variable_inst.name].load(formatter="pickle").copy()
+                    h = _inp["collection"][0]["hists"][variable_inst.name].load(formatter="pickle").copy()
 
                     # axis selections
                     h = h[{

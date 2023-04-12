@@ -96,7 +96,7 @@ class PlotVariablesBase(
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].targets[self.branch_data.variable].load(formatter="pickle")
+                h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -160,7 +160,7 @@ class PlotVariablesBase(
             )
 
             # save the plot
-            for outp in self.output():
+            for outp in self.output()["plots"]:
                 outp.dump(fig, formatter="mpl")
 
 
@@ -197,10 +197,10 @@ class PlotVariablesBaseSingleShift(
 
     def output(self):
         b = self.branch_data
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}")
-        ]
+        ]}
 
     def get_plot_shifts(self):
         return [self.global_shift_inst]
@@ -281,12 +281,12 @@ class PlotVariablesBaseMultiShifts(
 
     def output(self):
         b = self.branch_data
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(
                 f"plot__proc_{self.processes_repr}__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}",
             )
-        ]
+        ]}
 
     def get_plot_shifts(self):
         return [

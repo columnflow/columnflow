@@ -55,7 +55,7 @@ class ProduceColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"columns_{self.branch}.parquet")
+        return {"columns": self.target(f"columns_{self.branch}.parquet")}
 
     @law.decorator.log
     @law.decorator.localize
@@ -91,7 +91,7 @@ class ProduceColumns(
 
         # iterate over chunks of events and diffs
         for events, pos in self.iter_chunked_io(
-            inputs["events"]["collection"][0].path,
+            inputs["events"]["collection"][0]["events"].path,
             source_type="awkward_parquet",
             read_columns=read_columns,
         ):
@@ -116,7 +116,7 @@ class ProduceColumns(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
 
 
 # overwrite class defaults

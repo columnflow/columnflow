@@ -56,13 +56,13 @@ class CreateCutflowHistograms(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["masks"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
 
         return reqs
 
     def requires(self):
         return {
-            "masks": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
@@ -142,7 +142,7 @@ class CreateCutflowHistograms(
                     histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
-            inputs["masks"].path,
+            inputs["selection"]["masks"].path,
             source_type="awkward_parquet",
             read_columns=load_columns,
         ):
@@ -298,10 +298,10 @@ class PlotCutflow(
         }
 
     def output(self):
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(f"cutflow__cat_{self.branch_data}")
-        ]
+        ]}
 
     @law.decorator.log
     @view_output_plots
@@ -382,7 +382,7 @@ class PlotCutflow(
             )
 
             # save the plot
-            for outp in self.output():
+            for outp in self.output()["plots"]:
                 outp.dump(fig, formatter="mpl")
 
 
@@ -569,22 +569,22 @@ class PlotCutflowVariables1D(
     def output(self):
         b = self.branch_data
         if self.per_plot == "processes":
-            return law.SiblingFileCollection({
+            return {"plots": law.SiblingFileCollection({
                 s: [
                     self.local_target(name) for name in self.get_plot_names(
                         f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}",
                     )
                 ]
                 for i, s in enumerate(self.chosen_steps)
-            })
+            })}
         else:  # per_plot == "steps"
-            return law.SiblingFileCollection({
+            return {"plots": law.SiblingFileCollection({
                 p: [
                     self.local_target(name)
                     for name in self.get_plot_names(f"plot__proc_{p}__cat_{b.category}__var_{b.variable}")
                 ]
                 for p in self.processes
-            })
+            })}
 
     def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
@@ -592,7 +592,7 @@ class PlotCutflowVariables1D(
         if len(variable_insts) != 1:
             raise Exception(f"task {self.task_family} is only viable for single variables")
 
-        outputs = self.output()
+        outputs = self.output()["plots"]
         if self.per_plot == "processes":
             for step in self.chosen_steps:
                 step_hists = OrderedDict(
@@ -649,19 +649,19 @@ class PlotCutflowVariables2D(
 
     def output(self):
         b = self.branch_data
-        return law.SiblingFileCollection({
+        return {"plots": law.SiblingFileCollection({
             s: [
                 self.local_target(name) for name in self.get_plot_names(
                     f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}",
                 )
             ]
             for i, s in enumerate(self.chosen_steps)
-        })
+        })}
 
     def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
 
-        outputs = self.output()
+        outputs = self.output()["plots"]
 
         for step in self.chosen_steps:
             step_hists = OrderedDict(

@@ -6,8 +6,9 @@ Definition of basic objects for describing and creating ML models.
 
 from __future__ import annotations
 
+import abc
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Sequence
 
 import law
 import order as od
@@ -22,15 +23,14 @@ ak = maybe_import("awkward")
 class MLModel(Derivable):
     """
     Minimal interface to ML models with connections to config objects (such as
-    py:class:`order.Config` or :py:class:`order.Dataset`) and, on an optional basis, to tasks.
+    py:class:`order.Config` or a :py:class:`order.Dataset`) and, on an optional basis, to tasks.
 
     Inheriting classes need to overwrite eight methods:
 
         - :py:meth:`sandbox`
         - :py:meth:`datasets`
-        - :py:meth:`uses`,
+        - :py:meth:`uses`
         - :py:meth:`produces`
-        - :py:meth:`requires`
         - :py:meth:`output`
         - :py:meth:`open_model`
         - :py:meth:`train`
@@ -38,45 +38,76 @@ class MLModel(Derivable):
 
     See their documentation below for more info.
 
-    There are several optional hooks that allow for a fine-grained configuration of additional
-    training requirements (:py:meth:`requires`), diverging training and evaluation phase spaces
-    (:py:meth:`training_calibrators`, :py:meth:`training_selector`, :py:meth:`training_producers`),
-    or how hyper-paramaters are string encoded for output declarations (:py:meth:`parameter_pairs`).
+    There are several optional hooks that allow for a custom setup after config objects were
+    assigned (:py:meth:`setup`), a fine-grained configuration of additional training requirements
+    (:py:meth:`requires`), diverging training and evaluation phase spaces
+    (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
+    :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
+    declarations (:py:meth:`parameter_pairs`).
+
+    .. py:classattribute:: single_config
+
+        type: bool
+
+        The default flag that marks whether this model only accepts a single config object in case
+        no value is passed in the constructor. Converted into an instance attribute upon
+        instantiation.
 
     .. py:classattribute:: folds
-       type: int
 
-       The number of folds for the k-fold cross-validation.
+        type: int
 
-    .. py:attribute:: config_inst
-       type: order.Config
+        The default number of folds for the k-fold cross-validation in case no value is passed in
+        the constructor. Converted into an instance attribute upon instantiation.
 
-       Reference to the :py:class:`order.Config` object.
+    .. py:classattribute:: store_name
+
+        type: str, None
+
+        The default name for storing input data in case no value is passed in the constructor. When
+        *None*, the name of the model class is used instead. Converted into an instance attribute
+        upon instantiation.
+
+    .. py:attribute:: analysis_inst
+
+        type: order.Analysis
+
+        Reference to the :py:class:`order.Analysis` object.
 
     .. py:attribute:: parameters
-       type: OrderedDict
 
-       A dictionary mapping parameter names to arbitrary values, such as
-       ``{"layers": 5, "units": 128}``.
+        type: OrderedDict
+
+        A dictionary mapping parameter names to arbitrary values, such as
+        ``{"layers": 5, "units": 128}``.
 
     .. py:attribute:: used_datasets
-       type: set
-       read-only
 
-       :py:class:`order.Dataset` instances that are used by the model training.
+        type: dict
+        read-only
+
+        Sets of :py:class:`order.Dataset` instances that are used by the model training, mapped to
+        their corresponding :py:class:`order.Config` instances.
 
     .. py:attribute:: used_columns
-       type: set
-       read-only
 
-       Column names or :py:class:`Route`'s that are used by this model.
+        type: set
+        read-only
+
+        Column names or :py:class:`Route`'s that are used by this model, mapped to
+        :py:class:`order.Config` instances they belong to.
 
     .. py:attribute:: produced_columns
-       type: set
-       read-only
 
-       Column names or :py:class:`Route`'s that are produces by this model.
+        type: set
+        read-only
+
+        Column names or :py:class:`Route`'s that are produces by this model, mapped to
+        :py:class:`order.Config` instances they belong to.
     """
+
+    # default setting mark whether this model accepts only a single config
+    single_config = False
 
     # default number of folds
     folds = 2
@@ -85,22 +116,56 @@ class MLModel(Derivable):
     # falls back to cls_name if None
     store_name = None
 
+    # names of attributes that are automatically extracted from init kwargs and
+    # fall back to classmembers in case they are missing
+    init_attributes = ["single_config", "folds", "store_name"]
+
     def __init__(
         self,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         *,
         parameters: OrderedDict | None = None,
+        **kwargs,
     ):
         super().__init__()
 
         # store attributes
-        self.config_inst = config_inst
+        self.analysis_inst = analysis_inst
         self.parameters = OrderedDict(parameters or {})
 
-        # cache for attributes that need to be defined in inheriting classes
-        self._used_datasets = None
-        self._used_columns = None
-        self._produced_columns = None
+        # set instance members based on registered init attributes
+        for attr in self.init_attributes:
+            # get the class-level attribute
+            value = getattr(self, attr)
+            # get the value from kwargs
+            _value = kwargs.get(attr, law.no_value)
+            if _value != law.no_value:
+                value = _value
+            # set the instance-level attribute
+            setattr(self, attr, value)
+
+        # list of config instances
+        self.config_insts = []
+        if "configs" in kwargs:
+            self._setup(kwargs["configs"])
+
+    @property
+    def config_inst(self):
+        if self.single_config and len(self.config_insts) != 1:
+            raise Exception(
+                f"the config_inst property requires MLModel '{self.cls_name}' to have the "
+                "single_config enabled to to contain exactly one config instance, but found "
+                f"{len(self.config_insts)}",
+            )
+
+        return self.config_insts[0]
+
+    def _assert_configs(self, msg: str) -> None:
+        """
+        Raises an exception showing *msg* in case this model's :py:attr:`config_insts` is empty.
+        """
+        if not self.config_insts:
+            raise Exception(f"MLModel '{self.cls_name}' has no config instances, {msg}")
 
     def _format_value(self, value: Any) -> str:
         """
@@ -137,24 +202,6 @@ class MLModel(Derivable):
         return list(self.parameters.items())
 
     @property
-    def used_datasets(self) -> set[od.Dataset]:
-        if self._used_datasets is None:
-            self._used_datasets = set(self.datasets())
-        return self._used_datasets
-
-    @property
-    def used_columns(self) -> set[Route | str]:
-        if self._used_columns is None:
-            self._used_columns = set(self.uses())
-        return self._used_columns
-
-    @property
-    def produced_columns(self) -> set[Route | str]:
-        if self._produced_columns is None:
-            self._produced_columns = set(self.produces())
-        return self._produced_columns
-
-    @property
     def accepts_scheduler_messages(self) -> bool:
         """
         Whether the training or evaluation loop expects and works with messages sent from a central
@@ -162,107 +209,6 @@ class MLModel(Derivable):
         :py:meth:`get_scheduler_messages` for more info.
         """
         return True
-
-    def training_calibrators(self, evaluation_calibrators: list[str]) -> list[str]:
-        """
-        Given a sequence of requested *evaluation_calibrators*, which are, as the name suggests,
-        meant for model evaluation, this method can alter and/or replace them to define a different
-        set of calibrators for the preprocessing and training pipeline. This can be helpful in cases
-        where training and evaluation phase spaces, as well as the required input columns are
-        intended to diverge.
-        """
-        return evaluation_calibrators
-
-    def training_selector(self, evaluation_selector: str) -> str:
-        """
-        Given a requested *evaluation_selector*, which is, as the name suggests, meant for model
-        evaluation, this method can change it to define a different selector for the preprocessing
-        and training pipeline. This can be helpful in cases where training and evaluation phase
-        spaces, as well as the required input columns are intended to diverge.
-        """
-        return evaluation_selector
-
-    def training_producers(self, evaluation_producers: list[str]) -> list[str]:
-        """
-        Given a sequence of requested *evaluation_producers*, which are, as the name suggests,
-        meant for model evaluation, this method can alter and/or replace them to define a different
-        set of producers for the preprocessing and training pipeline. This can be helpful in cases
-        where training and evaluation phase spaces, as well as the required input columns are
-        intended to diverge.
-        """
-        return evaluation_producers
-
-    def requires(self, task: law.Task) -> Any:
-        """
-        Returns tasks that are required for the training to run and whose outputs are needed.
-        """
-        return {}
-
-    def sandbox(self, task: law.Task) -> str:
-        """
-        Given a *task*, teturns the name of a sandbox that is needed to perform model training and
-        evaluation.
-        """
-        raise NotImplementedError()
-
-    def datasets(self) -> set[od.Dataset]:
-        """
-        Returns a set of all required datasets. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def uses(self) -> set[Route | str]:
-        """
-        Returns a set of all required columns. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def produces(self) -> set[Route | str]:
-        """
-        Returns a set of all produced columns. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def output(self, task: law.Task) -> Any:
-        """
-        Returns a structure of output targets. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def open_model(self, target: Any) -> Any:
-        """
-        Implemenents the opening of a trained model from *target* (corresponding to the structure
-        returned by :py:meth:`output`). To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def train(
-        self,
-        task: law.Task,
-        input: Any,
-        output: Any,
-    ) -> None:
-        """
-        Performs the creation and training of a model, being passed a *task* and its *input* and
-        *output*. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
-
-    def evaluate(
-        self,
-        task: law.Task,
-        events: ak.Array,
-        models: list[Any],
-        fold_indices: ak.Array,
-        events_used_in_training: bool = False,
-    ) -> ak.Array:
-        """
-        Performs the model evaluation for a *task* on a chunk of *events* and returns them. The list
-        of *models* corresponds to the number of folds generated by this model, and the already
-        evaluated *fold_indices* for this event chunk that might used depending on
-        *events_used_in_training*. To be implemented in subclasses.
-        """
-        raise NotImplementedError()
 
     def get_scheduler_messages(self, task: law.Task) -> DotDict[str, KeyValueMessage]:
         """
@@ -282,3 +228,197 @@ class MLModel(Derivable):
                     messages[msg.key] = msg
 
         return messages
+
+    def _set_configs(self, configs: list[str | od.Config]) -> None:
+        # complain when only a single config is accepted
+        if self.single_config and len(configs) > 1:
+            raise Exception(
+                f"MLModel '{self.cls_name}' only accepts a single config but received "
+                f"{len(configs)}: {','.join(map(str, configs))}",
+            )
+
+        # remove existing config instances
+        del self.config_insts[:]
+
+        # add them one by one
+        for config in configs:
+            config_inst = (
+                config
+                if isinstance(config, od.Config)
+                else self.analysis_inst.get_config(config)
+            )
+            self.config_insts.append(config_inst)
+
+    def _setup(self, configs: list[str | od.Config] | None = None) -> None:
+        # setup configs
+        if configs:
+            self._set_configs(configs)
+
+        # setup hook
+        self.setup()
+
+    @property
+    def used_columns(self) -> dict[od.Config, set[Route | str]]:
+        self._assert_configs("cannot determined used columns")
+        return {
+            config_inst: set(self.uses(config_inst))
+            for config_inst in self.config_insts
+        }
+
+    @property
+    def produced_columns(self) -> dict[od.Config, set[Route | str]]:
+        self._assert_configs("cannot determined produced columns")
+        return {
+            config_inst: set(self.produces(config_inst))
+            for config_inst in self.config_insts
+        }
+
+    @property
+    def used_datasets(self) -> dict[od.Config, set[od.Dataset]]:
+        self._assert_configs("cannot determined used datasets")
+        return {
+            config_inst: set(self.datasets(config_inst))
+            for config_inst in self.config_insts
+        }
+
+    def setup(self) -> None:
+        """
+        Hook that is called after the model has been setup and its :py:attr:`config_insts` were
+        assigned.
+        """
+        return
+
+    def requires(self, task: law.Task) -> Any:
+        """
+        Returns tasks that are required for the training to run and whose outputs are needed.
+        """
+        return {}
+
+    def training_configs(
+        self,
+        requested_configs: Sequence[str],
+    ) -> list[str]:
+        """
+        Given a sequence of names of requested :py:class:`order.Config` objects,
+        *requested_configs*, this method can alter and/or replace them to define a different (set
+        of) config(s) for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input datasets and/or
+        columns are intended to diverge.
+        """
+        return list(requested_configs)
+
+    def training_calibrators(
+        self,
+        config_inst: od.Config,
+        requested_calibrators: Sequence[str],
+    ) -> list[str]:
+        """
+        Given a sequence of *requested_calibrators* for a *config_inst*, this method can alter
+        and/or replace them to define a different set of calibrators for the preprocessing and
+        training pipeline. This can be helpful in cases where training and evaluation phase spaces,
+        as well as the required input columns are intended to diverge.
+        """
+        return list(requested_calibrators)
+
+    def training_selector(
+        self,
+        config_inst: od.Config,
+        requested_selector: str,
+    ) -> str:
+        """
+        Given a *requested_selector* for a *config_inst*, this method can change it to define a
+        different selector for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
+        """
+        return requested_selector
+
+    def training_producers(
+        self,
+        config_inst: od.Config,
+        requested_producers: Sequence[str],
+    ) -> list[str]:
+        """
+        Given a sequence of *requested_producers* for a *config_inst*, this method can alter and/or
+        replace them to define a different set of producers for the preprocessing and training
+        pipeline. This can be helpful in cases where training and evaluation phase spaces, as well
+        as the required input columns are intended to diverge.
+        """
+        return list(requested_producers)
+
+    @abc.abstractmethod
+    def sandbox(self, task: law.Task) -> str:
+        """
+        Given a *task*, returns the name of a sandbox that is needed to perform model training and
+        evaluation.
+        """
+        return
+
+    @abc.abstractmethod
+    def datasets(self, config_inst: od.Config) -> set[od.Dataset]:
+        """
+        Returns a set of all required datasets for a certain *config_inst*. To be implemented in
+        subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def uses(self, config_inst: od.Config) -> set[Route | str]:
+        """
+        Returns a set of all required columns for a certain *config_inst*. To be implemented in
+        subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def produces(self, config_inst: od.Config) -> set[Route | str]:
+        """
+        Returns a set of all produced columns for a certain *config_inst*. To be implemented in
+        subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def output(self, task: law.Task) -> Any:
+        """
+        Returns a structure of output targets. To be implemented in subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def open_model(self, target: Any) -> Any:
+        """
+        Implemenents the opening of a trained model from *target* (corresponding to the structure
+        returned by :py:meth:`output`). To be implemented in subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def train(
+        self,
+        task: law.Task,
+        input: Any,
+        output: Any,
+    ) -> None:
+        """
+        Performs the creation and training of a model, being passed a *task* and its *input* and
+        *output*. To be implemented in subclasses.
+        """
+        return
+
+    @abc.abstractmethod
+    def evaluate(
+        self,
+        task: law.Task,
+        events: ak.Array,
+        models: list[Any],
+        fold_indices: ak.Array,
+        events_used_in_training: bool = False,
+    ) -> ak.Array:
+        """
+        Performs the model evaluation for a *task* on a chunk of *events* and returns them. The list
+        of *models* corresponds to the number of folds generated by this model, and the already
+        evaluated *fold_indices* for this event chunk that might used depending on
+        *events_used_in_training*. To be implemented in subclasses.
+        """
+        return
