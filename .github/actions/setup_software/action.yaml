@@ -11,6 +11,14 @@ inputs:
     default: |
       '**/requirements*.txt'
       '**/sandboxes/cf_prod.sh'
+  run_additional:
+    description: "path to additional shell script to source"
+  cache_paths:
+    description: "paths to include in the caching"
+    required: true
+    default: |
+      /home/runner/work/columnflow/columnflow/data/software/conda
+      /home/runner/work/columnflow/columnflow/data/software/venvs/cf_*
 
 runs:
   using: "composite"
@@ -33,7 +41,7 @@ runs:
         cache-name: ${{ inputs.cache-name }}
       with:
         path: |
-          /home/runner/work/columnflow/columnflow/data/software/venvs
+          ${{ inputs.cache_paths }}
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles(inputs.filesForHash) }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
@@ -44,4 +52,10 @@ runs:
       continue-on-error: true
       run: |
         source setup.sh ""
+      shell: bash
+    - if: ${{ inputs.run_additional }}
+      name: Install additional software
+      run: |
+        source setup.sh ""
+        source ${{ inputs.run_additional }}
       shell: bash
