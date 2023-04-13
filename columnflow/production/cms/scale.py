@@ -65,7 +65,9 @@ class _ScaleWeightBase(Producer):
 
 
 @_ScaleWeightBase.producer(
-    uses={"LHEScaleWeight"},
+    uses={
+        "nLHEScaleWeight", "LHEScaleWeight",
+    },
     produces={
         "mur_weight", "mur_weight_up", "mur_weight_down",
         "muf_weight", "muf_weight_up", "muf_weight_down",
@@ -162,8 +164,12 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @_ScaleWeightBase.producer(
-    uses={"LHEScaleWeight"},
-    produces={"murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down"},
+    uses={
+        "nLHEScaleWeight", "LHEScaleWeight",
+    },
+    produces={
+        "murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down",
+    },
     # only run on mc
     mc_only=True,
 )
