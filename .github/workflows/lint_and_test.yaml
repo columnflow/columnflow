@@ -2,9 +2,9 @@ name: Lint and test
 
 on:
   workflow_dispatch:
-  push:
-  pull_request:
-    types: [review_requested, ready_for_review]
+  # push:
+  # pull_request:
+  #   types: [review_requested, ready_for_review]
 
 jobs:
 
