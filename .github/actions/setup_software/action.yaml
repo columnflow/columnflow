@@ -8,9 +8,7 @@ inputs:
   filesForHash:
     description: 'List of files to be used for cache hash generation'
     required: true
-    default: |
-      '**/requirements*.txt'
-      '**/sandboxes/cf_prod.sh'
+    default: '**/requirements*.txt'
   run_additional:
     description: "path to additional shell script to source"
   cache_paths:
