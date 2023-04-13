@@ -46,6 +46,6 @@ jobs:
           run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
           cache_paths: |
             /home/runner/work/columnflow/columnflow/data/software/venvs/venv_${{ matrix.venv }}*
-          hashFiles: |
+          filesForHash: |
             ${{ matrix.hashFiles }}
             setup.sh
