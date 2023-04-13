@@ -10,6 +10,7 @@ inputs:
     required: true
     default: |
       **/requirements*.txt
+      **/sandboxes/cf_*.sh
   run_additional:
     description: "path to additional shell script to source"
   cache_paths:
