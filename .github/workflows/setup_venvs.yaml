@@ -8,13 +8,11 @@ on:
         default: ubuntu-latest
   workflow_dispatch:
   push:
-    
-    
 
 jobs:
 
   venv_matrix:
-    runs-on: ${{ inputs.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
