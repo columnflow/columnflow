@@ -8,6 +8,8 @@ inputs:
   filesForHash:
     description: 'List of files to be used for cache hash generation'
     required: true
+    # define default. IMPORTANT: This is already a multiline string
+    # so DO NOT use any quotes!
     default: |
       **/requirements*.txt
       **/sandboxes/cf_*.sh
@@ -16,6 +18,8 @@ inputs:
   cache_paths:
     description: "paths to include in the caching"
     required: true
+    # define default. IMPORTANT: This is already a multiline string
+    # so DO NOT use any quotes!
     default: |
       /home/runner/work/columnflow/columnflow/data/software/conda
       /home/runner/work/columnflow/columnflow/data/software/venvs/cf_*
