@@ -246,9 +246,7 @@ class MergeSelectionStats(
         return {"stats": self.target("stats.json")}
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(
-            inp["stats"] for inp in inputs["collection"].targets.values()
-        )
+        return super().trace_merge_inputs(inputs["collection"].targets.values())
 
     @law.decorator.log
     def run(self):
@@ -258,7 +256,7 @@ class MergeSelectionStats(
         # merge input stats
         merged_stats = defaultdict(float)
         for inp in inputs:
-            stats = inp.load(formatter="json", cache=False)
+            stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
         # write the output
