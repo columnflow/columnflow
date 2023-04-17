@@ -21,8 +21,8 @@ inputs:
     # define default. IMPORTANT: This is already a multiline string
     # so DO NOT use any quotes!
     default: |
-      /home/runner/work/columnflow/columnflow/data/software/conda
-      /home/runner/work/columnflow/columnflow/data/software/venvs/cf_*
+      ${CF_SOFTWARE_BASE}/conda
+      ${CF_SOFTWARE_BASE}/venvs/cf_*
 
 runs:
   using: "composite"
