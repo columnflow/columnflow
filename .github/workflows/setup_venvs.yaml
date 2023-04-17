@@ -13,6 +13,8 @@ jobs:
 
   venv_matrix:
     runs-on: ubuntu-latest
+    env:
+      CF_SOFTWARE_BASE: ./
     strategy:
       matrix:
         include:
@@ -41,8 +43,7 @@ jobs:
           cache-name: "cache-software-basis"
       - name: ${{ matrix.name }}
         uses: ./.github/actions/setup_software
-        env:
-          CF_SOFTWARE_BASE: ./
+
         with:
           cache-name: "cache-${{ matrix.venv }}"
           run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
