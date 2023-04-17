@@ -7,14 +7,18 @@ on:
         type: string
         default: ubuntu-latest
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows:
+      - Setup basic software environment
+    types:
+      - completed
 
 jobs:
 
   venv_matrix:
     runs-on: ubuntu-latest
-    env:
-      CF_SOFTWARE_BASE: ./
+    # env:
+    #   CF_SOFTWARE_BASE: ./
     strategy:
       matrix:
         include:
@@ -48,7 +52,7 @@ jobs:
           cache-name: "cache-${{ matrix.venv }}"
           run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
           cache_paths: |
-            ${CF_SOFTWARE_BASE}/venvs/venv_${{ matrix.venv }}*
+            data/software/venvs/venv_${{ matrix.venv }}*
           filesForHash: |
             ${{ matrix.hashFiles }}
             setup.sh
