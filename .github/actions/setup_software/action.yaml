@@ -1,5 +1,5 @@
 name: 'Install software'
-description: 'Greet someone'
+description: 'Install software packages'
 inputs:
   cache-name:  # id of input
     description: 'Name to generate the full cache name'
@@ -21,8 +21,8 @@ inputs:
     # define default. IMPORTANT: This is already a multiline string
     # so DO NOT use any quotes!
     default: |
-      ${CF_SOFTWARE_BASE}/conda
-      ${CF_SOFTWARE_BASE}/venvs/cf_*
+      data/software/conda
+      data/software/venvs/cf_*
 
 runs:
   using: "composite"
@@ -51,15 +51,21 @@ runs:
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
           ${{ runner.os }}-
-    - if: ${{ steps.cache-software-basis.outputs.cache-hit != 'true' }}
-      name: Install software stack
+    - if: ${{ (steps.cache-software-basis.outputs.cache-hit != 'true') && inputs.run_additional }}
+      name: Install additional software
+      continue-on-error: true
+      run: |
+        source setup.sh ""
+        source ${{ inputs.run_additional }}
+      shell: bash
+    - if: ${{ (steps.cache-software-basis.outputs.cache-hit != 'true') && inputs.run_additional == false }}
+      name: "Install basic software"
       continue-on-error: true
       run: |
         source setup.sh ""
       shell: bash
-    - if: ${{ inputs.run_additional }}
-      name: Install additional software
+    - if: ${{ steps.cache-software-basis.outputs.cache-hit == 'true' }}
+      name: "Move software to correct destination"
       run: |
-        source setup.sh ""
-        source ${{ inputs.run_additional }}
+        source ./.move_software.sh
       shell: bash
