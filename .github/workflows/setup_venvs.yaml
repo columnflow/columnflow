@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - id: "setup_basic_software"
-        uses: ./.github/workflows/setup_basic_software
+        uses: ./.github/workflows/setup_basic_software.yaml
         
         # with:
         #   cache-name: "cache-software-basis"
