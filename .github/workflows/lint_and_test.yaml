@@ -10,6 +10,7 @@ jobs:
 
   Setup_software_basis_py310_latest:
     runs-on: ubuntu-latest
+    environment: Build Software
     steps:
       - uses: actions/checkout@v3
         with:
@@ -27,6 +28,7 @@ jobs:
   full_matrix:
     runs-on: ubuntu-latest
     needs: setup_all_venvs
+    environment: Tests
     strategy:
       matrix:
         include:
@@ -37,17 +39,17 @@ jobs:
             name: Test 🎢
             venv: columnar
             hashFiles: |
-              "**/sandboxes/venv_columnar*.sh"
-              "**/sandboxes/columnar.txt"
-              "**/sandboxes/_setup_venv.sh"
+              **/sandboxes/venv_columnar*.sh
+              **/sandboxes/columnar.txt
+              **/sandboxes/_setup_venv.sh
 
           - test: "./tests/run_coverage"
             name: Run coverage 🎢
             venv: columnar
             hashFiles: |
-              "**/sandboxes/venv_columnar*.sh"
-              "**/sandboxes/columnar.txt"
-              "**/sandboxes/_setup_venv.sh"
+              **/sandboxes/venv_columnar*.sh
+              **/sandboxes/columnar.txt
+              **/sandboxes/_setup_venv.sh
             do-ls: true
             upload-files: true
             ns-version: 16
@@ -139,6 +141,7 @@ jobs:
 
   pypi:
     runs-on: ubuntu-latest
+    environment: Pypi tests
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
