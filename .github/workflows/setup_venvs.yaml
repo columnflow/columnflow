@@ -12,9 +12,9 @@ on:
       - Setup basic software environment
     types:
       - completed
-  push:
-  pull_request:
-    types: [review_requested, ready_for_review]
+  # push:
+  # pull_request:
+  #   types: [review_requested, ready_for_review]
 
 jobs:
 

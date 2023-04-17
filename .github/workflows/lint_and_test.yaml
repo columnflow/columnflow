@@ -2,9 +2,9 @@ name: Lint and test
 
 on:
   workflow_dispatch:
-  # push:
-  # pull_request:
-  #   types: [review_requested, ready_for_review]
+  push:
+  pull_request:
+    types: [review_requested, ready_for_review]
 
 jobs:
 
@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          clean: false
       - id: "setup_basic_software"
         uses: ./.github/actions/setup_software
         with:
@@ -51,6 +53,10 @@ jobs:
             ns-version: 16
     steps:
       - uses: actions/checkout@v3
+        with:
+          clean: false
+          persist-credentials: false
+          submodules: recursive
       - id: "setup_basic_software"
         uses: ./.github/actions/setup_software
         with:
