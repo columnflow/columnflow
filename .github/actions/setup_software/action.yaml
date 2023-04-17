@@ -32,6 +32,7 @@ runs:
       with:
         persist-credentials: false
         submodules: recursive
+        clean: false
 
     - name: Setup python 🐍
       uses: actions/setup-python@v4
