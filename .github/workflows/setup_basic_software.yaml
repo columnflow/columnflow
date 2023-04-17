@@ -15,6 +15,7 @@ jobs:
 
   setup-base:
     runs-on: ubuntu-latest
+    environment: Software Build
     steps:
       - uses: actions/checkout@v3
       - id: "setup_basic_software"

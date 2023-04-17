@@ -19,18 +19,17 @@ on:
 jobs:
 
   Setup_software_basis_py310_latest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - id: "setup_basic_software"
-        uses: ./.github/workflows/setup_basic_software.yaml
-        
-        # with:
-        #   cache-name: "cache-software-basis"
+    uses: ./.github/workflows/setup_basic_software.yaml
+    with:
+      os: ubuntu-latest
+      
+      # with:
+      #   cache-name: "cache-software-basis"
 
   venv_matrix:
     runs-on: ubuntu-latest
     needs: Setup_software_basis_py310_latest
+    environment: Software Build
     strategy:
       matrix:
         include:
