@@ -12,13 +12,25 @@ on:
       - Setup basic software environment
     types:
       - completed
+  push:
+  pull_request:
+    types: [review_requested, ready_for_review]
 
 jobs:
 
+  Setup_software_basis_py310_latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - id: "setup_basic_software"
+        uses: ./.github/workflows/setup_basic_software
+        
+        # with:
+        #   cache-name: "cache-software-basis"
+
   venv_matrix:
     runs-on: ubuntu-latest
-    # env:
-    #   CF_SOFTWARE_BASE: ./
+    needs: Setup_software_basis_py310_latest
     strategy:
       matrix:
         include:
