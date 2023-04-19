@@ -219,9 +219,6 @@ class MergeSelectionStats(
     # recursively merge 20 files into one
     merge_factor = 20
 
-    # default upstream dependency task classes
-    dep_SelectEvents = SelectEvents
-
     # skip receiving some parameters via req
     exclude_params_req_get = {"workflow"}
 
@@ -249,9 +246,7 @@ class MergeSelectionStats(
         return {"stats": self.target("stats.json")}
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(
-            inp["stats"] for inp in inputs["collection"].targets.values()
-        )
+        return super().trace_merge_inputs(inputs["collection"].targets.values())
 
     @law.decorator.log
     def run(self):
@@ -261,7 +256,7 @@ class MergeSelectionStats(
         # merge input stats
         merged_stats = defaultdict(float)
         for inp in inputs:
-            stats = inp.load(formatter="json", cache=False)
+            stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
         # write the output
@@ -361,6 +356,8 @@ class MergeSelectionMasks(
             tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
             tmp_dir.touch()
             inputs = self.zip_results_and_columns(inputs, tmp_dir)
+        else:
+            inputs = [inp["masks"] for inp in inputs]
 
         law.pyarrow.merge_parquet_task(self, inputs, output["masks"])
 

@@ -264,6 +264,9 @@ class MergeMLEvents(
         return super().run()
 
     def merge(self, inputs, output):
+        if not self.is_leaf():
+            inputs = [inp["mlevents"] for inp in inputs]
+
         law.pyarrow.merge_parquet_task(self, inputs, output["mlevents"])
 
 
