@@ -63,14 +63,14 @@ jobs:
         uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
-      - if: ${{ matrix.venv }}
-        name: "load venv ${{ matrix.venv }}"
+      - name: ${{ matrix.name }}
         uses: ./.github/actions/setup_software
+
         with:
           cache-name: "cache-${{ matrix.venv }}"
           run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
           cache_paths: |
-            /home/runner/work/columnflow/columnflow/data/software/venvs/venv_${{ matrix.venv }}_dev
+            data/software/venvs/venv_${{ matrix.venv }}*
           filesForHash: |
             ${{ matrix.hashFiles }}
             setup.sh
