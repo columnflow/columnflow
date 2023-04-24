@@ -6,8 +6,8 @@ columnflow
 Columnar analysis backed by law and order.
 """
 
-__author__ = "The Columnflow Team"
-__email__ = "todo@uni-hamburg.de"
+__author__ = "The columnflow team"
+__email__ = "github.riga@icloud.com"
 __copyright__ = "Copyright 2022-2023"
 __credits__ = [
     "Marcel Rieger",
@@ -21,7 +21,7 @@ __credits__ = [
     "Matthias Schroeder",
     "Johannes Lange",
 ]
-__contact__ = "https://github.com/uhh-cms/columnflow"
+__contact__ = "https://github.com/columnflow/columnflow"
 __license__ = "BSD-3-Clause"
 __status__ = "Development"
-__version__ = "0.2.0"
+__version__ = "0.2.1"

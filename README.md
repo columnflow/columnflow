@@ -1,6 +1,6 @@
 <center>
-  <a href="https://github.com/uhh-cms/columnflow">
-    <img src="https://media.githubusercontent.com/media/uhh-cms/columnflow/master/assets/logo_dark.png" width="480" />
+  <a href="https://github.com/columnflow/columnflow">
+    <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_dark.png" width="480" />
   </a>
 </center>
 
@@ -8,11 +8,11 @@
 <!-- marker-after-logo -->
 
 
-[![Build status](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/uhh-cms/columnflow/actions/workflows/lint_and_test.yaml)
+[![Build status](https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml)
 [![Package version](https://img.shields.io/pypi/v/columnflow.svg?style=flat)](https://pypi.python.org/pypi/columnflow)
 [![Documentation status](https://readthedocs.org/projects/columnflow/badge/?version=stable)](http://columnflow.readthedocs.io)
-[![Code coverge](https://codecov.io/gh/uhh-cms/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP)](https://codecov.io/gh/uhh-cms/columnflow)
-[![License](https://img.shields.io/github/license/uhh-cms/columnflow.svg)](https://github.com/uhh-cms/columnflow/blob/master/LICENSE)
+[![Code coverge](https://codecov.io/gh/columnflow/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP)](https://codecov.io/gh/columnflow/columnflow)
+[![License](https://img.shields.io/github/license/columnflow/columnflow.svg)](https://github.com/columnflow/columnflow/blob/master/LICENSE)
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
@@ -28,16 +28,16 @@ At this point (December 2022), four large-scale analyses based upon columnflow a
 The first released version is expected in early 2023.
 However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
 
-![Columnflow analytics](https://repobeats.axiom.co/api/embed/bb5150c6a379b852d6c8f9eca3e2620bbcb23c4b.svg "Columnflow analytics")
+![Columnflow analytics](https://repobeats.axiom.co/api/embed/b6ebc5ba41019de55eb48e195eecb438890442c8.svg "Columnflow analytics")
 
 
 ## Quickstart
 
-To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](https://github.com/uhh-cms/columnflow/tree/master/analysis_templates)).
+To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](https://github.com/columnflow/columnflow/tree/master/analysis_templates)).
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 ```shell
-bash -c "$(curl -Ls https://raw.githubusercontent.com/uhh-cms/columnflow/master/create_analysis.sh)"
+bash -c "$(curl -Ls https://raw.githubusercontent.com/columnflow/columnflow/master/create_analysis.sh)"
 ```
 
 At the end of the setup, you will see further instructions and suggestions to run your first analysis tasks (example below).
@@ -74,7 +74,7 @@ Setup successfull! The next steps are:
       > law run cf.CreateDatacards --version dev1 --inference-model example
 ```
 
-For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/uhh-cms/columnflow/issues/25#issue-1258137827).
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/issues/25#issue-1258137827).
 
 
 ## Projects using columnflow
@@ -94,18 +94,18 @@ For a better overview of the tasks that are triggered by the commands below, che
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mafrahm"><img src="https://avatars.githubusercontent.com/u/49306645?v=4?s=100" width="100px;" alt="Mathis Frahm"/><br /><sub><b>Mathis Frahm</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mafrahm" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Amafrahm" title="Reviewed Pull Requests">👀</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/dsavoiu"><img src="https://avatars.githubusercontent.com/u/17005255?v=4?s=100" width="100px;" alt="Daniel Savoiu"/><br /><sub><b>Daniel Savoiu</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=dsavoiu" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Adsavoiu" title="Reviewed Pull Requests">👀</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/nprouvost"><img src="https://avatars.githubusercontent.com/u/49162277?v=4?s=100" width="100px;" alt="nprouvost"/><br /><sub><b>nprouvost</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=nprouvost" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Bogdan-Wiederspan"><img src="https://avatars.githubusercontent.com/u/79155113?v=4?s=100" width="100px;" alt="Bogdan-Wiederspan"/><br /><sub><b>Bogdan-Wiederspan</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Code">💻</a> <a href="https://github.com/uhh-cms/columnflow/commits?author=Bogdan-Wiederspan" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=kramerto" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mafrahm"><img src="https://avatars.githubusercontent.com/u/49306645?v=4?s=100" width="100px;" alt="Mathis Frahm"/><br /><sub><b>Mathis Frahm</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mafrahm" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Amafrahm" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/dsavoiu"><img src="https://avatars.githubusercontent.com/u/17005255?v=4?s=100" width="100px;" alt="Daniel Savoiu"/><br /><sub><b>Daniel Savoiu</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=dsavoiu" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Adsavoiu" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/nprouvost"><img src="https://avatars.githubusercontent.com/u/49162277?v=4?s=100" width="100px;" alt="nprouvost"/><br /><sub><b>nprouvost</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=nprouvost" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/commits?author=nprouvost" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Bogdan-Wiederspan"><img src="https://avatars.githubusercontent.com/u/79155113?v=4?s=100" width="100px;" alt="Bogdan-Wiederspan"/><br /><sub><b>Bogdan-Wiederspan</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=Bogdan-Wiederspan" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/commits?author=Bogdan-Wiederspan" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=kramerto" title="Code">💻</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=mschrode" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=jolange" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/uhh-cms/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mschrode" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jolange" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
@@ -118,8 +118,8 @@ This project follows the [all-contributors](https://github.com/all-contributors/
 
 ## Development
 
-- Source hosted at [GitHub](https://github.com/uhh-cms/columnflow)
-- Report issues, questions, feature requests on [GitHub Issues](https://github.com/uhh-cms/columnflow/issues)
+- Source hosted at [GitHub](https://github.com/columnflow/columnflow)
+- Report issues, questions, feature requests on [GitHub Issues](https://github.com/columnflow/columnflow/issues)
 
 
 <!-- marker-after-body -->
