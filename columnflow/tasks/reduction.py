@@ -439,9 +439,7 @@ class MergeReducedEvents(
         return super().trace_merge_workflow_inputs(inputs["events"])
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs([
-            inp["events"] for inp in inputs["events"]["collection"].targets.values()
-        ])
+        return super().trace_merge_inputs(inputs["events"]["collection"].targets.values())
 
     def reduced_dummy_output(self):
         # mark the dummy output as a placeholder for the ForestMerge task
@@ -459,6 +457,7 @@ class MergeReducedEvents(
         ])
 
     def merge(self, inputs, output):
+        inputs = [inp["events"] for inp in inputs]
         law.pyarrow.merge_parquet_task(self, inputs, output["events"])
 
 
