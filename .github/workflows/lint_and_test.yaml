@@ -83,7 +83,7 @@ jobs:
           ${{ matrix.test }}
       - if: ${{ matrix.upload-files }}
         name: Upload report 🔝
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           flags: unittests
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
