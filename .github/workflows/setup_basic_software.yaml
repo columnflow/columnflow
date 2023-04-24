@@ -14,7 +14,7 @@ on:
 jobs:
 
   setup-base:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.os }}
     environment: Software Build
     steps:
       - uses: actions/checkout@v3

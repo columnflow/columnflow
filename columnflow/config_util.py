@@ -264,7 +264,7 @@ def create_category_id(
 
         Please note that the size of the returned id depends on *hash_len*. When storing the id
         subsequently in an array, please be aware that values 8 or more require a ``np.int64``.
-    """
+    """ # noqa
     # create the hash
     h = law.util.create_hash((config.name, config.id, category_name, salt), l=hash_len)
     h = int(h, base=16)
