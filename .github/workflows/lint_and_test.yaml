@@ -63,7 +63,7 @@ jobs:
         uses: ./.github/actions/setup_software
         with:
           cache-name: "cache-software-basis"
-      - name: ${{ matrix.name }}
+      - name: setup venv ${{ matrix.venv }}
         uses: ./.github/actions/setup_software
 
         with:
@@ -75,8 +75,7 @@ jobs:
             ${{ matrix.hashFiles }}
             setup.sh
       - name: ${{ matrix.name }}
-        # env:
-        #   CF_SOFTWARE_BASE: ./
+
         continue-on-error: true
         run: |
           source setup.sh ""
@@ -84,8 +83,6 @@ jobs:
       - if: ${{ matrix.upload-files }}
         name: Upload report 🔝
         uses: codecov/codecov-action@v2
-        # env:
-        #   CF_SOFTWARE_BASE: ./
         with:
           flags: unittests
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
