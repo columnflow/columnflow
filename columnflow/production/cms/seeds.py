@@ -18,8 +18,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={
         # global columns for event seed
-        "run", "luminosityBlock", "event", "nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon",
-        "nElectron", "nTau", "nSV",
+        "run", "luminosityBlock", "event", "nGenJet", "nGenPart", "nPhoton",
+        "nSV",
         # first-object columns for event seed
         "Tau.jetIdx", "Tau.decayMode",
         "Muon.jetIdx", "Muon.nStations",
@@ -85,7 +85,7 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict) ->
 
 
 @producer(
-    uses={deterministic_event_seeds, "nJet"},
+    uses={deterministic_event_seeds},
     produces={"Jet.deterministic_seed"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:

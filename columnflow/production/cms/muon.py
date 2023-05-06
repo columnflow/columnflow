@@ -17,7 +17,7 @@ ak = maybe_import("awkward")
 
 @producer(
     uses={
-        "nMuon", "Muon.pt", "Muon.eta",
+        "Muon.pt", "Muon.eta",
     },
     produces={
         "muon_weight", "muon_weight_up", "muon_weight_down",

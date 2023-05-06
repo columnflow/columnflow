@@ -2596,6 +2596,22 @@ class ChunkedIOHandler(object):
             "filter_name" not in read_options["iteritems_options"]
         ):
             filter_name = [Route(s).string_nano_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s).fields[0] for s in read_columns}
+            filter_name.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+                # adding `nGenPart` leads to a ValueError when loading the array
+                # this is likely due to a bug in coffea when handling
+                # `GenPart_distinctChildrenDeepIdxG`, which has a different type
+                # `ListOffsetArray64` instead of `ListOffsetArray` like the other
+                # global indices
+                if field != "GenPart"
+            )
+
+            # filter on these column names when reading
             read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
 
         # read the events chunk into memory

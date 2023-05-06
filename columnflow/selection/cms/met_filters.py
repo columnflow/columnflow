@@ -15,7 +15,7 @@ ak = maybe_import("awkward")
 
 
 @selector(
-    uses={"event", "nFlag"},
+    uses={"event"},
     # function to obtain met filters from the config
     get_met_filters=(lambda self: self.config_inst.x.met_filters),
 )
