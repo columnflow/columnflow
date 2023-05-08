@@ -85,7 +85,7 @@ def plot_2d(
         "plot2d_cfg": {
             "norm": mpl.colors.LogNorm() if zscale == "log" else None,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
-            "cmin": EMPTY_FLOAT + 1,  # display zero-entries as white points
+            "cmin": 0,  # display zero entries as white points
             "cbar": True,
             "cbarextend": True,
         },
