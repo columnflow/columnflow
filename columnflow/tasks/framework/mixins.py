@@ -686,6 +686,21 @@ class MLModelTrainingMixin(MLModelMixinBase):
             configs=list(self.configs),
         )
 
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+        # since MLTraining is no CalibratorsMixin, SelectorMixin, ProducerMixin, ConfigTask,
+        # all these parts are missing in the `store_parts`
+
+        configs_repr = "__".join(self.configs)
+        parts.insert_after("task_family", "configs", configs_repr)
+
+        # TODO: parts for calib, sel, prod
+
+        if self.ml_model_inst:
+            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+
+        return parts
+
 
 class MLModelMixin(ConfigTask, MLModelMixinBase):
 
