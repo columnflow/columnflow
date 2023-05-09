@@ -11,7 +11,6 @@ from collections import OrderedDict
 import law
 
 from columnflow.util import maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.plotting.plot_util import (
     remove_residual_axis,
     apply_variable_settings,
@@ -62,8 +61,62 @@ def plot_2d(
     if not zscale:
         zscale = "log" if (variable_insts[0].log_y or variable_insts[1].log_y) else "linear"
 
+    # add all processes into 1 histogram
+    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+    if shape_norm:
+        h_sum = h_sum / h_sum.sum().value
+
+    # mask bins without any entries (variance == 0)
+    h_view = h_sum.view()
+    h_view.value[h_view.variance == 0] = np.nan
+
+    h_sum[...] = h_view
+
+    # check histogram value range
+    vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
+    vmin, vmax = np.nan_to_num([vmin, vmax], 0)
+    has_pos_neg = np.sign(vmin * vmax) < 0
+
     # default color map
-    default_cmap = "viridis"
+    default_cmap = "twilight_r" if has_pos_neg else "viridis"
+
+    # choose appropriate colorbar normalization
+    # based on scale type and histogram content
+
+    # log scale
+    if zscale == "log" and vmin >= 0:
+        # use standard LogNorm if values are nonnegative
+        cbar_norm = mpl.colors.LogNorm(
+            vmin=vmin,
+            vmax=vmax,
+        )
+
+    # log scale with negative values
+    elif zscale == "log":
+        # use diverging colormap centered at zero
+        # use SymLogNorm to correctly handle both positive and negative values
+        cbar_norm = mpl.colors.SymLogNorm(
+            vmin=vmin,
+            vmax=vmax,
+            linthresh=max(0.05 * min(abs(vmin), abs(vmax)), 1e-6),
+        )
+
+    # linear scale (both positive and negative values)
+    elif has_pos_neg:
+        # use TwoSlopeNorm to scale positive and negative
+        # parts of thecolorbar independently
+        cbar_norm = mpl.colors.TwoSlopeNorm(
+            vmin=vmin,
+            vmax=vmax,
+            vcenter=0.0,
+        )
+
+    # linear scale (purely positive/negative values)
+    else:
+        cbar_norm = mpl.colors.Normalize(
+            vmin=vmin,
+            vmax=vmax,
+        )
 
     # setup style config
     # TODO: some kind of z-label is still missing
@@ -87,10 +140,9 @@ def plot_2d(
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
         },
         "plot2d_cfg": {
-            "norm": mpl.colors.LogNorm() if zscale == "log" else None,
+            "norm": cbar_norm,
             "cmap": colormap or default_cmap,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
-            "cmin": 0,  # display zero entries as white points
             "cbar": True,
             "cbarextend": True,
         },
@@ -99,16 +151,6 @@ def plot_2d(
         },
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
-
-    # add all processes into 1 histogram
-    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
-    if shape_norm:
-        h_sum = h_sum / h_sum.sum().value
-
-    # set bins without any entries (variance == 0) to EMPTY_FLOAT
-    h_view = h_sum.view()
-    h_view.value[h_view.variance == 0] = EMPTY_FLOAT
-    h_sum[...] = h_view
 
     # apply style_config
     ax.set(**style_config["ax_cfg"])
