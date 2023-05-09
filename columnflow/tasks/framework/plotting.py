@@ -227,11 +227,18 @@ class PlotBase2D(PlotBase):
         description="when True, the overall bin content is normalized on its integral; "
         "default: None",
     )
+    colormap = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="name of the matplotlib colormap to use for the colorbar; "
+        "if not set, an appropriate colormap will be chosen by the plotting function",
+    )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "colormap", None if self.colormap == law.NO_STR else self.colormap)
         dict_add_strict(params, "density", self.density)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         return params

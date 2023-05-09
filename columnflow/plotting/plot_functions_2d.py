@@ -38,6 +38,7 @@ def plot_2d(
     density: bool | None = False,
     shape_norm: bool | None = False,
     zscale: str | None = "",
+    colormap: str | None = "",
     skip_legend: bool = False,
     cms_label: str = "wip",
     process_settings: dict | None = None,
@@ -60,6 +61,9 @@ def plot_2d(
     # how to handle yscale information from 2 variable insts?
     if not zscale:
         zscale = "log" if (variable_insts[0].log_y or variable_insts[1].log_y) else "linear"
+
+    # default color map
+    default_cmap = "viridis"
 
     # setup style config
     # TODO: some kind of z-label is still missing
@@ -84,6 +88,7 @@ def plot_2d(
         },
         "plot2d_cfg": {
             "norm": mpl.colors.LogNorm() if zscale == "log" else None,
+            "cmap": colormap or default_cmap,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
             "cmin": 0,  # display zero entries as white points
             "cbar": True,
