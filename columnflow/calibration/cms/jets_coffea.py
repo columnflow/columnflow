@@ -14,7 +14,7 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import propagate_met, ak_random
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.columnar_util import set_ak_column
-
+from typing import Iterable, Callable, Type
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -31,9 +31,16 @@ coffea_txt_converters = maybe_import("coffea.lookup_tools.txt_converters")
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-def get_basenames(struct):
-    """
-    Replace full file paths in an arbitrary struct by the file basenames.
+def get_basenames(struct: Iterable) -> Iterable:
+    """Replace full file paths in an arbitrary struct by the file basenames.
+
+    Args:
+        struct (Iterable):  Iterable of arbitrary nested structure containing
+                            full file paths
+
+    Returns:
+        Iterable:           Iterable of same structure as *struct* containing
+                            only basenames of paths.
     """
     return law.util.map_struct(
         lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
@@ -42,9 +49,13 @@ def get_basenames(struct):
 
 
 @memoize
-def get_lookup_provider(files, conversion_func, provider_cls, names=None):
-    """
-    Create a coffea helper object for looking up information in files of various formats.
+def get_lookup_provider(
+    files: list,
+    conversion_func: Callable,
+    provider_cls: Type,
+    names: list[str or tuple[str, str]] = None,
+) -> Type:
+    """Create a coffea helper object for looking up information in files of various formats.
 
     This function reads in the *files* containing lookup tables (e.g. JEC text files), extracts
     the table of values ("weights") using the conversion function *conversion_func* implemented
@@ -63,6 +74,29 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
 
     The user must ensure that the *files* can be parsed by the *conversion_func* supplied, and that
     the information contained in the files is meaningful in connection with the *provider_cls*.
+
+    Args:
+        files (list): List of files containing lookup tables (e.g. JEC text files).
+        conversion_func (Callable): Callable that extracts the table of weights
+                                    from the files in *files*. Must return an
+                                    Iterable that provides and :py:meth:`items` method
+                                    that returns a structure like (name, type), value
+        provider_cls (Type): Class method that is used to construct the *provider*
+                                instance that finally provides the weights for the events.
+                                Examples: :py:class:`FactorizedJetCorrector`,
+                                :py:class:`JetCorrectionUncertainty`
+        names (list[str or tuple[str, str]], optional): Optional list of weight names.
+                                                        to include, see text above.
+                                                        Defaults to None.
+
+    Raises:
+        ValueError: If *names* contains weight names that are not present in
+                    the source file
+
+    Returns:
+        Type: helper class that provides the weights for the events of same
+                type as *provider_cls* (e.g. :py:class:`FactorizedJetCorrector`,
+                                :py:class:`JetCorrectionUncertainty`)
     """
     # the extractor reads the information contained in the files
     extractor = coffea_extractor.extractor()
@@ -90,6 +124,11 @@ def get_lookup_provider(files, conversion_func, provider_cls, names=None):
                 f"no weight tables found for the following names: {unknown_names}, "
                 f"available: {available}",
             )
+        # TODO: I don't think the code works correctly if *names* is a list of
+        # strings, since further down below the code explicitly needs a tuple
+        # structure. We will probably need something like the following here
+
+        # names = src_dst_names
     else:
         names = [(n, n) for n in all_names]
 
