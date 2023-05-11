@@ -23,7 +23,7 @@ import enum
 import threading
 import multiprocessing
 import multiprocessing.pool
-from functools import partial
+from functools import partial, wraps
 from collections import namedtuple, OrderedDict, defaultdict
 from typing import Sequence, Callable, Any
 
@@ -1346,7 +1346,11 @@ class ArrayFunction(Derivable):
 
         The decorator does not return the wrapped function.
         """
-        cls.init_func = func
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> None:
+            cls.init_func = func
+            return func
+        return wrapper(func)
 
     @classmethod
     def skip(cls, func: Callable[[], bool]) -> None:
@@ -1357,7 +1361,11 @@ class ArrayFunction(Derivable):
 
         The function should not accept positional arguments and return a boolean.
         """
-        cls.skip_func = func
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> None:
+            cls.skip_func = func
+            return func
+        return wrapper(func)
 
     def __init__(
         self,
@@ -1756,7 +1764,11 @@ class TaskArrayFunction(ArrayFunction):
             :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
             distinguish the cases.
         """
-        cls.requires_func = func
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> None:
+            cls.requires_func = func
+            return func
+        return wrapper(func)
 
     @classmethod
     def setup(cls, func: Callable[[dict], None]) -> None:
@@ -1771,7 +1783,11 @@ class TaskArrayFunction(ArrayFunction):
 
         The decorator does not return the wrapped function.
         """
-        cls.setup_func = func
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> None:
+            cls.setup_func = func
+            return func
+        return wrapper(func)
 
     def __init__(
         self,
