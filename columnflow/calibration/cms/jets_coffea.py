@@ -170,8 +170,43 @@ def jec_coffea(
     max_eta_met_prop: float = 5.2,
     **kwargs,
 ) -> ak.Array:
-    """
-    Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
+    """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
+
+    This :py:class:`Calibrator` instance is setup with the following kwargs
+
+    uses: "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
+        "Jet.jetId", "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
+        :py:class:`attach_coffea_behavior`
+
+    produces: "Jet.pt", "Jet.mass", "Jet.rawFactor". If *propagate_met* is *True*,
+                also produces columns for the original MET values (RawMET)
+                and corrected MET (MET). Additionally produces columns
+                corresponding to JEC up and down variations for all previously
+                mentioned columns except for Jet.rawFactor
+
+    uncertainy_source: None
+
+    propagate_met: True
+
+    Args:
+        self (Calibrator): :py:class:`Calibrator` class in which this function is embedded
+        events (ak.Array): awkward array containing events to process
+        min_pt_met_prop (float, optional): If *propagate_met* variable is *True*
+                                            propagate the updated jet values to
+                                            the missing transverse energy (MET)
+                                            using :py:meth:`propagate_met` for events
+                                            where met.pt > min_pt_met_prop. Defaults to *15.0*.
+        max_eta_met_prop (float, optional): If *propagate_met* variable is *True*
+                                            propagate the updated jet values to
+                                            the missing transverse energy (MET)
+                                            using :py:meth:`propagate_met` for events
+                                            where met.eta > min_eta_met_prop. Defaults to 5.2.
+
+    Returns:
+        ak.Array: awkward array containing new columns with corrected Jet.pt and
+                    Jet.mass, as well as the relative difference between raw and
+                    corrected pt Jet.rawFactor. Additionally contains columns
+                    for JEC up and down variations, see produces section
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -302,8 +337,17 @@ def jec_coffea(
 
 @jec_coffea.init
 def jec_coffea_init(self: Calibrator) -> None:
-    """
-    Add JEC uncertainty shifts to the list of produced columns.
+    """:py:meth:`init` function for jec_coffea Calibrator.
+    Adds JEC uncertainty shifts to the list of produced columns.
+
+    If member variable *uncertainty_source* is *None*, load the full list 
+    of jec uncertainties from the associated *config* instance.
+
+    If the member variable *propagate_met* is *True*, add also MET and RawMET 
+    as well as the corresponding jec variations to the set of columns to be produced.
+
+    Args:
+        self (Calibrator): :py:class:`Calibrator` instance
     """
     sources = self.uncertainty_sources
     if sources is None:
@@ -333,8 +377,13 @@ def jec_coffea_init(self: Calibrator) -> None:
 
 @jec_coffea.requires
 def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
-    """
-    Add external files bundle (for JEC text files) to dependencies.
+    """Add external files bundle (for JEC text files) to dependencies.
+    Adds the requirements for task :py:class:`BundleExternalFiles` as
+    keyword *external_files* to the dictionary of requirements *reqs*
+
+    Args:
+        self (Calibrator): :py:class:`Calibrator` instance
+        reqs (dict): Requirement dictionary for this :py:class:`Calibrator` instance
     """
     if "external_files" in reqs:
         return
@@ -345,9 +394,16 @@ def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
 
 @jec_coffea.setup
 def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """
-    Determine correct JEC files for task based on config/dataset and inject them
+    """Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
+
+    Args:
+        self (Calibrator): This :py:class:`Calibrator` instance
+        reqs (dict): Requirement dictionary for this :py:class:`Calibrator` instance
+        inputs (dict): Additional inputs, currently not used
+
+    Raises:
+        ValueError: If module is provided with more than one JEC uncertainty source file
     """
     # get external files bundle that contains JEC text files
     bundle = reqs["external_files"]
