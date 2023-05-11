@@ -14,12 +14,13 @@ jobs:
       - name: Sphinx build
         run: |
           source setup.sh
-          ./tests/run_docs clean
+          cd ./tests
+          ./run_docs clean
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         with:
           publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/
+          publish_dir: docs/_build/html
           force_orphan: true
