@@ -44,8 +44,8 @@ if html_theme == "sphinx_rtd_theme":
     })
 elif html_theme == "alabaster":
     html_theme_options.update({
-        "github_user": "uhh-cms",
-        "github_repo": "analysis_playground",
+        "github_user": "columnflow",
+        "github_repo": "columnflow",
     })
 elif html_theme == "sphinx_book_theme":
     copyright = copyright.split(",", 1)[0]
@@ -54,7 +54,7 @@ elif html_theme == "sphinx_book_theme":
         "home_page_in_toc": True,
         "show_navbar_depth": 2,
         "show_toc_level": 2,
-        "repository_url": "https://github.com/uhh-cms/columnflow",
+        "repository_url": "https://github.com/columnflow/columnflow",
         "use_repository_button": True,
         "use_issues_button": True,
         "use_edit_page_button": True,
