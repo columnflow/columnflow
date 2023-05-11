@@ -23,7 +23,7 @@ def ak_random(*args, rand_func: Callable) -> ak.Array:
     random numbers.
 
     Args:
-        positional arguments:   must be bradcastable awkward arrays that are 
+        positional arguments:   must be bradcastable awkward arrays that are
                                 passed on to *rand_func*.
         rand_func (Callable):   Callable to generate random numbers from
                                 awkward arrays in *args*.
@@ -54,7 +54,7 @@ def propagate_met(
     met_phi1: ak.Array,
 ) -> tuple[ak.Array, ak.Array]:
     """Helper function to compute new MET based on per-jet pts and phis
-    before and after a correction. Since the pts and phis parameterize the 
+    before and after a correction. Since the pts and phis parameterize the
     individual jets, the dimensions of the arrays (*jet_pt1*, *jet_phi1*) as
     well as (*jet_pt2*, *jet_phi2*) must be the same. The pt values are
     decomposed into their x and y components, which are then propagated to
@@ -74,7 +74,7 @@ def propagate_met(
                                     azimuthal angle phi
 
     Raises:
-        AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and 
+        AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and
                         (*jet_pt2*, *jet_phi2*) have different dimensions.
     """
 
