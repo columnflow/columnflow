@@ -340,10 +340,10 @@ def jec_coffea_init(self: Calibrator) -> None:
     """:py:meth:`init` function for jec_coffea Calibrator.
     Adds JEC uncertainty shifts to the list of produced columns.
 
-    If member variable *uncertainty_source* is *None*, load the full list 
+    If member variable *uncertainty_source* is *None*, load the full list
     of jec uncertainties from the associated *config* instance.
 
-    If the member variable *propagate_met* is *True*, add also MET and RawMET 
+    If the member variable *propagate_met* is *True*, add also MET and RawMET
     as well as the corresponding jec variations to the set of columns to be produced.
 
     Args:
