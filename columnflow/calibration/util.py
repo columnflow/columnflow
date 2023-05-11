@@ -18,10 +18,18 @@ ak = maybe_import("awkward")
 
 # https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
 def ak_random(*args, rand_func: Callable) -> ak.Array:
-    """
-    Return an awkward array filled with random numbers. The *args* must be broadcastable
+    """Return an awkward array filled with random numbers. The *args* must be broadcastable
     awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
     random numbers.
+
+    Args:
+        positional arguments:   must be bradcastable awkward arrays that are 
+                                passed on to *rand_func*.
+        rand_func (Callable):   Callable to generate random numbers from
+                                awkward arrays in *args*.
+
+    Returns:
+        ak.Array: awkward array filled with random numbers.
     """
     args = ak.broadcast_arrays(*args)
 
@@ -45,9 +53,29 @@ def propagate_met(
     met_pt1: ak.Array,
     met_phi1: ak.Array,
 ) -> tuple[ak.Array, ak.Array]:
-    """
-    Helper function to compute new MET based on per-jet pts and phis
-    before and after a correction.
+    """Helper function to compute new MET based on per-jet pts and phis
+    before and after a correction. Since the pts and phis parameterize the 
+    individual jets, the dimensions of the arrays (*jet_pt1*, *jet_phi1*) as
+    well as (*jet_pt2*, *jet_phi2*) must be the same. The pt values are
+    decomposed into their x and y components, which are then propagated to
+    the corresponding contributions to the MET vector
+
+    Args:
+        jet_pt1 (ak.Array): transverse momentum of first jet(s)
+        jet_phi1 (ak.Array): azimuthal angle of first jet(s)
+        jet_pt2 (ak.Array): transverse momentum of second jet(s)
+        jet_phi2 (ak.Array): azimuthal angle of second jet(s)
+        met_pt1 (ak.Array): missing transverse momentum (MET)
+        met_phi1 (ak.Array): azimuthal angle of MET vector
+
+    Returns:
+        tuple[ak.Array, ak.Array]:  updated values of MET vector, i.e.
+                                    missing transverse momentum and corresponding
+                                    azimuthal angle phi
+
+    Raises:
+        AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and 
+                        (*jet_pt2*, *jet_phi2*) have different dimensions.
     """
 
     # avoid unwanted broadcasting
