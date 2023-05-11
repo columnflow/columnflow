@@ -14,8 +14,7 @@ jobs:
       - name: Sphinx build
         run: |
           source setup.sh
-          cd ./tests
-          ./run_docs clean
+          ./tests/run_docs ""
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
