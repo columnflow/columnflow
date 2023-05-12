@@ -15,6 +15,12 @@ from columnflow.columnar_util import TaskArrayFunction
 
 
 class Calibrator(TaskArrayFunction):
+    """Base class for all calibrations
+
+    :param TaskArrayFunction: Base class :py:class:`TaskArrayFunction`
+    :type TaskArrayFunction: :py:class:`TaskArrayFunction`
+    :raises Exception: if errors occur within the decorator, see :py:meth:`calibrator`
+    """
 
     @classmethod
     def calibrator(
@@ -68,7 +74,7 @@ class Calibrator(TaskArrayFunction):
 
                 # create the subclass
                 subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
-
+                subclass.__doc__ = func.__doc__
                 return subclass
             return wrapper(func, **kwargs)
 
