@@ -8,4 +8,7 @@ Summary
 
 .. autosummary::
 
-.. include:: jets_coffea.rst
+.. toctree:: 
+    
+    jets_coffea
+    jets
