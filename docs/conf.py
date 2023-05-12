@@ -76,7 +76,11 @@ autodoc_default_options = {
     "show-inheritance": True,
 }
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "coffea": ("https://coffeateam.github.io/coffea", None),
+    "law": ("https://law.readthedocs.io/en/latest/", None),
+}
 
 
 # setup the app
