@@ -181,7 +181,7 @@ def jec_coffea(
 ) -> ak.Array:
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
 
-    This :py:class:`~columnflow.calibration.Calibrator` instance is setup with the following kwargs
+    This :class:`~columnflow.calibration.Calibrator` instance is setup with the following kwargs
 
     :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
         ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``,
@@ -348,7 +348,7 @@ def jec_coffea(
 
 @jec_coffea.init
 def jec_coffea_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for py:func:`~columnflow.calibration.cms.jets_coffea.jec_coffea`
+    """:py:meth:`init` function for py:func:`~.jec_coffea`
     :py:class:`~columnflow.calibration.Calibrator`.
     Adds JEC uncertainty shifts to the list of produced columns.
 
