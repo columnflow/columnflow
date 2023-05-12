@@ -1693,8 +1693,9 @@ class TaskArrayFunction(ArrayFunction):
         The above example uses explicit subclassing, mixed with decorator usage to extend the class.
         This is most certainly never used in practice. Instead, please either consider defining the
         class the normal way, or use a decorator to wrap the main callable first and by that
-        creating the class as done by the :py:class:`Calibrator`, :py:class:`Selector` and
-        :py:class:`Producer` interfaces.
+        creating the class as done by the :py:class:`~columnflow.calibration.base.Calibrator`,
+        :py:class:`~columnflow.selection.Selector` and
+        :py:class:`~columnflow.production.Producer` interfaces.
 
     .. py:classattribute:: shifts
        type: set
