@@ -177,23 +177,23 @@ def jec_coffea(
 ) -> ak.Array:
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
 
-    This py:class:`~columnflow.calibration.base.Calibrator` instance is setup
+    This :py:class:`~columnflow.calibration.base.Calibrator` instance is setup
     with the following kwargs.
 
-    :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
+    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
         ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``,
         ``"Rho.fixedGridRhoFastjetAll"``, ``"fixedGridRhoFastjetAll"``,
         :py:func:`~columnflow.production.util.attach_coffea_behavior`
 
-    :produces: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
+    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
         If *propagate_met* is ``True``, also produces columns for the original
         MET values (RawMET) and corrected MET (MET). Additionally produces columns
         corresponding to JEC up and down variations for all previously
         mentioned columns except for Jet.rawFactor.
 
-    :uncertainy_source: ``None``
+    :*uncertainy_source*: ``None``
 
-    :propagate_met: ``True``
+    :*propagate_met*: ``True``
 
     :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
         this function is embedded
@@ -525,16 +525,16 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     The module applies the scale factors associated to the JER and performs the
     stochastic smearing to make the energy resolution in simulation more realistic.
 
-    This py:class:`~columnflow.calibration.base.Calibrator` instance is setup
+    This :py:class:`~columnflow.calibration.base.Calibrator` instance is setup
     with the following kwargs.
 
-    :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
+    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
         ``""Jet.genJetIdx""``, ``"Rho.fixedGridRhoFastjetAll"``,
         ``"fixedGridRhoFastjetAll"``, ``"nGenJet"``, ``"GenJet.pt"``,
         ``"GenJet.eta"``, ``"GenJet.phi"``, ``"MET.pt"``, ``"MET.phi"``,
         :py:func:`~columnflow.production.util.attach_coffea_behavior`
 
-    :produces: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.pt_unsmeared"``,
+    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.pt_unsmeared"``,
         ``"Jet.mass_unsmeared"``.
         If *propagate_met* is ``True``, also produces columns for the original
         MET values (``MET.pt_unsmeared``) and corrected MET (MET).
@@ -542,9 +542,9 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         corresponding to JEC up and down variations for all previously
         mentioned columns.
 
-    :mc_only: ``True``
+    :*mc_only*: ``True``
 
-    :propagate_met: ``True``
+    :*propagate_met*: ``True``
 
     :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
         this function is embedded
@@ -827,12 +827,12 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     This instance of :py:class:`~columnflow.calibration.base.Calibrator` is
     initialized with the following parameters by default:
 
-    :uses: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
+    :*uses*: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
         and :py:func:`~.jer_coffea`.
-    :produces: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
+    :*produces*: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
         and :py:func:`~.jer_coffea`.
 
-    :propagate_met: ``True``
+    :*propagate_met*: ``True``
 
     :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
         this function is embedded
