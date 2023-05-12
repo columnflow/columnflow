@@ -7,6 +7,8 @@ Example 2d plot functions.
 from __future__ import annotations
 
 from collections import OrderedDict
+from functools import partial
+from unittest.mock import patch
 
 import law
 
@@ -17,6 +19,7 @@ from columnflow.plotting.plot_util import (
     apply_process_settings,
     apply_density_to_hists,
     get_position,
+    reduce_with,
 )
 
 
@@ -26,6 +29,7 @@ mpl = maybe_import("matplotlib")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 od = maybe_import("order")
+mticker = maybe_import("matplotlib.ticker")
 
 
 def plot_2d(
@@ -37,6 +41,12 @@ def plot_2d(
     density: bool | None = False,
     shape_norm: bool | None = False,
     zscale: str | None = "",
+    # z axis range
+    zlim: tuple | None = None,
+    # how to handle bins with values outside the z range
+    extremes: str | None = "",
+    # colors to use for marking out-of-bounds values
+    extreme_colors: tuple[str] | None = None,
     colormap: str | None = "",
     skip_legend: bool = False,
     cms_label: str = "wip",
@@ -61,6 +71,10 @@ def plot_2d(
     if not zscale:
         zscale = "log" if (variable_insts[0].log_y or variable_insts[1].log_y) else "linear"
 
+    # how to handle bin values outside plot range
+    if not extremes:
+        extremes = "color"
+
     # add all processes into 1 histogram
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
     if shape_norm:
@@ -70,52 +84,65 @@ def plot_2d(
     h_view = h_sum.view()
     h_view.value[h_view.variance == 0] = np.nan
 
-    h_sum[...] = h_view
-
     # check histogram value range
     vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
     vmin, vmax = np.nan_to_num([vmin, vmax], 0)
-    has_pos_neg = np.sign(vmin * vmax) < 0
 
-    # default color map
-    default_cmap = "twilight_r" if has_pos_neg else "viridis"
+    # default to full z range
+    if zlim is None:
+        zlim = ("min", "max")
+
+    # resolve string specifiers like "min", "max", etc.
+    zlim = tuple(reduce_with(lim, h_sum.values()) for lim in zlim)
+
+    # if requested, hide or clip bins outside specified plot range
+    if extremes == "hide":
+        h_view.value[h_view.value < zlim[0]] = np.nan
+        h_view.value[h_view.value > zlim[1]] = np.nan
+    elif extremes == "clip":
+        h_view.value[h_view.value < zlim[0]] = zlim[0]
+        h_view.value[h_view.value > zlim[1]] = zlim[1]
+
+    # update histogram values from view
+    h_sum[...] = h_view
 
     # choose appropriate colorbar normalization
     # based on scale type and histogram content
 
-    # log scale
-    if zscale == "log" and vmin >= 0:
-        # use standard LogNorm if values are nonnegative
-        cbar_norm = mpl.colors.LogNorm(
-            vmin=vmin,
-            vmax=vmax,
-        )
-
-    # log scale with negative values
-    elif zscale == "log":
-        # use diverging colormap centered at zero
+    # log scale (turning linear for low values)
+    if zscale == "log":
         # use SymLogNorm to correctly handle both positive and negative values
         cbar_norm = mpl.colors.SymLogNorm(
-            vmin=vmin,
-            vmax=vmax,
-            linthresh=max(0.05 * min(abs(vmin), abs(vmax)), 1e-6),
+            vmin=zlim[0],
+            vmax=zlim[1],
+            # TODO: better heuristics?
+            linscale=1.0,
+            linthresh=max(0.05 * min(abs(zlim[0]), abs(zlim[1])), 1e-3),
         )
 
-    # linear scale (both positive and negative values)
-    elif has_pos_neg:
-        # use TwoSlopeNorm to scale positive and negative
-        # parts of thecolorbar independently
-        cbar_norm = mpl.colors.TwoSlopeNorm(
-            vmin=vmin,
-            vmax=vmax,
-            vcenter=0.0,
-        )
-
-    # linear scale (purely positive/negative values)
+    # linear scale
     else:
         cbar_norm = mpl.colors.Normalize(
-            vmin=vmin,
-            vmax=vmax,
+            vmin=zlim[0],
+            vmax=zlim[1],
+        )
+
+    # obtain colormap
+    cmap = plt.get_cmap(colormap or "viridis")
+
+    # use dark and light gray to mark extreme values
+    if extremes == "color":
+        # choose light/dark order depending on the
+        # lightness of first/last colormap color
+        if not extreme_colors:
+            extreme_colors = ["#444444", "#bbbbbb"]
+            if sum(cmap(0.0)[:3]) > sum(cmap(1.0)[:3]):
+                extreme_colors = extreme_colors[::-1]
+
+        # copy if colormap with extreme colors set
+        cmap = cmap.with_extremes(
+            under=extreme_colors[0],
+            over=extreme_colors[1],
         )
 
     # setup style config
@@ -141,7 +168,7 @@ def plot_2d(
         },
         "plot2d_cfg": {
             "norm": cbar_norm,
-            "cmap": colormap or default_cmap,
+            "cmap": cmap,
             # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
             "cbar": True,
             "cbarextend": True,
@@ -198,7 +225,35 @@ def plot_2d(
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
 
-    h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
+    # decide at which ends of the colorbar to draw symbols
+    # indicating that there are values outside the range
+    if extremes == "hide":
+        extend = "neither"
+    elif vmax > zlim[1] and vmin < zlim[0]:
+        extend = "both"
+    elif vmin < zlim[0]:
+        extend = "min"
+    elif vmax > zlim[1]:
+        extend = "max"
+    else:
+        extend = "neither"
+
+    # call plot method, patching the colorbar function
+    # called internally by mplhep to draw the extension symbols
+    with patch.object(plt, "colorbar", partial(plt.colorbar, extend=extend)):
+        h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
+
+    # fix color bar minor ticks with SymLogNorm
+    cbar = ax.collections[-1].colorbar
+    if isinstance(cbar_norm, mpl.colors.SymLogNorm):
+        _scale = cbar.ax.yaxis._scale
+        _scale.subs = [2, 3, 4, 5, 6, 7, 8, 9]
+        cbar.ax.yaxis.set_minor_locator(
+            mticker.SymmetricalLogLocator(_scale.get_transform(), subs=_scale.subs),
+        )
+        cbar.ax.yaxis.set_minor_formatter(
+            mticker.LogFormatterSciNotation(_scale.base),
+        )
 
     plt.tight_layout()
 
