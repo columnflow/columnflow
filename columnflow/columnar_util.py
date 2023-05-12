@@ -1888,7 +1888,7 @@ class TaskArrayFunction(ArrayFunction):
         reqs: dict,
         inputs: dict,
         call_cache: set | None = None,
-    ) -> None:
+    ) -> None | Sequence[str]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
@@ -1898,15 +1898,23 @@ class TaskArrayFunction(ArrayFunction):
         if call_cache is None:
             call_cache = set()
 
+        outp = None
+
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(reqs, inputs)
+            # allow optional output from setup function (expected to be paths to parquet files)
+            outp = self.setup_func(reqs, inputs)
+
+            if isinstance(outp, str):
+                outp = [outp]
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
             if dep not in call_cache:
                 call_cache.add(dep)
                 dep.run_setup(reqs, inputs, call_cache=call_cache)
+
+        return outp
 
     def __call__(
         self,

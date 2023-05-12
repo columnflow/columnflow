@@ -62,7 +62,8 @@ class ProduceColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, add_ak_aliases, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -72,7 +73,7 @@ class ProduceColumns(
         output_chunks = {}
 
         # run the producer setup
-        self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        column_files = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -90,11 +91,14 @@ class ProduceColumns(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
-        for events, pos in self.iter_chunked_io(
-            inputs["events"]["collection"][0]["events"].path,
-            source_type="awkward_parquet",
-            read_columns=read_columns,
+        for (events, *cols), pos in self.iter_chunked_io(
+            [inputs["events"]["collection"][0]["events"].path] + column_files,
+            source_type=["awkward_parquet"] * (len(column_files) + 1),
+            read_columns=[read_columns] * (len(column_files) + 1),
         ):
+            # apply the optional columns from custom requirements
+            events = update_ak_array(events, *cols)
+
             # add aliases
             events = add_ak_aliases(events, aliases, remove_src=True)
 
