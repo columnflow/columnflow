@@ -85,16 +85,16 @@ def get_lookup_provider(
     :param files: List of files containing lookup tables (e.g. JEC text files).
     :type files: list
 
-    :param conversion_func:  Callable that extracts the table of weights from the files in *files*.
+    :param conversion_func:  ``Callable`` that extracts the table of weights from the files in *files*.
         Must return an *Iterable* that provides a :py:meth:`items` method
         that returns a structure like (name, type), value
-    :type conversion_func: Callable
+    :type conversion_func: ``Callable``
 
     :param provider_cls: Class method that is used to construct the *provider* instance that
         finally provides the weights for the events.
         Examples: :external+coffea:py:class:`FactorizedJetCorrector <coffea.jetmet_tools.FactorizedJetCorrector>`,
         :external+coffea:py:class:`JetCorrectionUncertainty <coffea.jetmet_tools.JetCorrectionUncertainty>`
-    :type provider_cls: Type
+    :type provider_cls: ``Type``
 
     :param names: Optional list of weight names to include, see text above. Defaults to None.
     :type names: list[str or tuple[str, str]], optional
@@ -104,7 +104,7 @@ def get_lookup_provider(
             *provider_cls* (e.g.
             :external+coffea:py:class:`FactorizedJetCorrector <coffea.jetmet_tools.FactorizedJetCorrector>`,
             :external+coffea:py:class:`JetCorrectionUncertainty <coffea.jetmet_tools.JetCorrectionUncertainty>`)
-    :rtype: Type
+    :rtype: ``Type``
     """
     # the extractor reads the information contained in the files
     extractor = coffea_extractor.extractor()
