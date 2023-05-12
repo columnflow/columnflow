@@ -67,8 +67,9 @@ def get_lookup_provider(
     This function reads in the *files* containing lookup tables (e.g. JEC text files), extracts
     the table of values ("weights") using the conversion function *conversion_func* implemented
     in coffea, and uses them to construct a helper object of type *provider_cls* that can be
-    passed event data to yield the lookup values (e.g. a :external+coffea:py:class:`FactorizedJetCorrector <coffea.jetmet_tools.FactorizedJetCorrector>` or
-    :external+coffea:py:class:`JetCorrectionUncertainty <coffea.jetmet_tools.JetCorrectionUncertainty>`).
+    passed event data to yield the lookup values (e.g. a
+    :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector` or
+    :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`).
 
     Optionally, a list of *names* can be supplied to select only a subset of weight tables
     for constructing the provider object (the default is to use all of them). This is intended
@@ -92,8 +93,8 @@ def get_lookup_provider(
 
     :param provider_cls: Class method that is used to construct the *provider* instance that
         finally provides the weights for the events.
-        Examples: :external+coffea:py:class:`FactorizedJetCorrector <coffea.jetmet_tools.FactorizedJetCorrector>`,
-        :external+coffea:py:class:`JetCorrectionUncertainty <coffea.jetmet_tools.JetCorrectionUncertainty>`
+        Examples: :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector`,
+        :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`
     :type provider_cls: ``Type``
 
     :param names: Optional list of weight names to include, see text above. Defaults to None.
@@ -102,8 +103,8 @@ def get_lookup_provider(
     :raises ValueError: If *names* contains weight names that are not present in the source file
     :return: helper class that provides the weights for the events of same type as
             *provider_cls* (e.g.
-            :external+coffea:py:class:`FactorizedJetCorrector <coffea.jetmet_tools.FactorizedJetCorrector>`,
-            :external+coffea:py:class:`JetCorrectionUncertainty <coffea.jetmet_tools.JetCorrectionUncertainty>`)
+            :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector`,
+            :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`)
     :rtype: ``Type``
     """
     # the extractor reads the information contained in the files
