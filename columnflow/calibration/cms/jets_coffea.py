@@ -183,7 +183,7 @@ def jec_coffea(
     :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
         ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``,
         ``"Rho.fixedGridRhoFastjetAll"``, ``"fixedGridRhoFastjetAll"``,
-        :py:class:`~columnflow.production.util.attach_coffea_behavior`
+        :py:func:`~columnflow.production.util.attach_coffea_behavior`
 
     :produces: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
         If *propagate_met* is ``True``, also produces columns for the original
@@ -517,9 +517,48 @@ jec_coffea_nominal = jec_coffea.derive("jec_coffea_nominal", cls_dict={"uncertai
     mc_only=True,
 )
 def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    """
-    Apply jet energy resolution smearing and calculate shifts for JER scale factor variations.
+    """Apply jet energy resolution smearing and calculate shifts for
+    Jet Enery Resolution (JER) scale factor variations.
+
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
+
+    The module applies the scale factors associated to the JER and performs the
+    stochastic smearing to make the energy resolution in simulation more realistic.
+
+    This py:class:`~columnflow.calibration.base.Calibrator` instance is setup
+    with the following kwargs.
+
+    :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
+        ``""Jet.genJetIdx""``, ``"Rho.fixedGridRhoFastjetAll"``,
+        ``"fixedGridRhoFastjetAll"``, ``"nGenJet"``, ``"GenJet.pt"``,
+        ``"GenJet.eta"``, ``"GenJet.phi"``, ``"MET.pt"``, ``"MET.phi"``,
+        :py:func:`~columnflow.production.util.attach_coffea_behavior`
+
+    :produces: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.pt_unsmeared"``,
+        ``"Jet.mass_unsmeared"``.
+        If *propagate_met* is ``True``, also produces columns for the original
+        MET values (``MET.pt_unsmeared``) and corrected MET (MET).
+        Additionally produces columns
+        corresponding to JEC up and down variations for all previously
+        mentioned columns.
+
+    :mc_only: ``True``
+
+    :propagate_met: ``True``
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
+        this function is embedded
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+
+    :param events: awkward array containing events to process
+    :type events: :external+ak:py:class:`ak.Array`
+
+    :return: awkward array containing new columns with corrected ``Jet.pt`` and
+        ``Jet.mass``, as well as the original values before the smearing
+        procedure using the suffix ``unsmeared`` (e.g. ``Jet.pt_unsmeared``).
+        Additionally contains columns for JEC up and down variations,
+        see produces section
+    :rtype: :external+ak:py:class:`ak.Array`
     """
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, "Jet.pt_unsmeared", events.Jet.pt)
@@ -686,8 +725,14 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jer_coffea.init
 def jer_coffea_init(self: Calibrator) -> None:
-    """
-    Initialization of dynamic components of the jer calibrator.
+    """Initialization of dynamic components of the jer calibrator.
+
+    If *propagate_met* is ``True``, add the relevant MET columns to the
+    ``uses`` and ``produces`` sets, see documentation of :py:func:`~.jer_coffea`
+    Calibrator.
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
     """
     if not self.propagate_met:
         return
@@ -703,8 +748,16 @@ def jer_coffea_init(self: Calibrator) -> None:
 
 @jer_coffea.requires
 def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
-    """
-    Add external files bundle (for JR text files) to dependencies.
+    """Add external files bundle (for JER text files) to dependencies.
+
+    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
+    as keyword ``external_files`` to the dictionary of requirements *reqs*.
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param reqs: Requirement dictionary for this
+        :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -715,9 +768,19 @@ def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
 
 @jer_coffea.setup
 def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """
-    Determine correct JR files for task based on config/dataset and inject them
+    """ Determine correct JER files for task based on config/dataset and inject them
     into the calibrator function call.
+
+    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param reqs: Requirement dictionary for this
+        :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type reqs: dict
+    :param inputs: Additional inputs, currently not used
+    :type inputs: dict
+
+    :raises ValueError: If module is provided with more than one JER uncertainty
+        source file
     """
     # get external files bundle that contains JR text files
     bundle = reqs["external_files"]
