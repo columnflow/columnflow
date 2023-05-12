@@ -36,7 +36,7 @@ Calibrators
 -----------
 
 ``jets_coffea``
-++++++++++++++
++++++++++++++++
 .. autofunction:: jets_coffea
 
 .. autofunction:: jets_coffea_init
