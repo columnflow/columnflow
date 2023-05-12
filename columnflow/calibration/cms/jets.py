@@ -12,9 +12,11 @@ from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, layout_ak_array
 
+from typing import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+correctionlib = maybe_import("correctionlib")
 
 
 #
@@ -24,13 +26,23 @@ ak = maybe_import("awkward")
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-def get_evaluators(correction_set, names):
-    """
-    Helper function to get a list of correction evaluators from a correctionlib
-    *CorrectionSet* object given a list of *names*. The *names* can refer to either
-    simple or compound corrections.
+def get_evaluators(
+    correction_set: correctionlib.highlevel.CorrectionSet,
+    names: list[str],
+) -> list[Any]:
+    """Helper function to get a list of correction evaluators from a
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` object given
+    a list of *names*. The *names* can refer to either simple or compound
+    corrections.
 
-    Throws a *KeyError* if any of the *names* are not found.
+    :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
+    :type correction_set: :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    :param names: List of names of corrections to be applied
+    :type names: list
+    :raises RuntimeError: If a requested correction in *names* is not available
+    :return: List of compounded corrections, see
+        :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    :rtype: list[Any]
     """
     # raise nice error if keys not found
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
@@ -51,9 +63,15 @@ def get_evaluators(correction_set, names):
     ]
 
 
-def ak_evaluate(evaluator, *args):
-    """
-    Evaluate a correctionlib *Correction* using one or more awkward arrays as inputs.
+def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
+    """Evaluate a :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
+    using one or more :external+ak:py:class:`awkward arrays <ak.Array>` as inputs.
+
+    :param evaluator: Evaluator instance
+    :type evaluator: :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
+    :raises ValueError: If no :external+ak:py:class:`awkward arrays <ak.Array>` are provided
+    :return: The correction factor derived from the input arrays
+    :rtype: float
     """
     # fail if no arguments
     if not args:
