@@ -82,6 +82,7 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "coffea": ("https://coffeateam.github.io/coffea", None),
     "law": ("https://law.readthedocs.io/en/latest/", None),
+    "order": ("https://python-order.readthedocs.io/en/latest/", None),
     "ak": ("https://awkward-array.org/doc/main", None),
 }
 
