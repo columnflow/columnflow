@@ -1,7 +1,11 @@
 # coding: utf-8
 
+# """
+# Calibration methods for jets using :coffea:module:`coffea` functions
+# """
+
 """
-Calibration methods for jets using :coffea:module:`coffea` functions
+Calibration methods for jets using :external+coffea:doc:coffea functions
 """
 
 import os
@@ -36,7 +40,7 @@ def get_basenames(struct: Iterable) -> Iterable:
 
     The function loops through the structure and extracts the base name
     using a combination of :py:func:`os.path.splitext` and :py:func:`os.path.basename`.
-    The loop itself is done using the :external+law:law:func:`law.util.map_struct` function.
+    The loop itself is done using the :external+law:py:func:`law.util.map_struct` function.
 
     :param struct: Iterable of arbitrary nested structure containing full file paths
     :type struct: Iterable
