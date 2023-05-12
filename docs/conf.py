@@ -84,6 +84,7 @@ intersphinx_mapping = {
     "law": ("https://law.readthedocs.io/en/latest/", None),
     "order": ("https://python-order.readthedocs.io/en/latest/", None),
     "ak": ("https://awkward-array.org/doc/main", None),
+    "correctionlib": ("https://cms-nanoaod.github.io/correctionlib", None),
 }
 
 
