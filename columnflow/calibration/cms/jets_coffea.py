@@ -5,7 +5,7 @@
 # """
 
 """
-Calibration methods for jets using :external+coffea:doc:coffea functions
+Calibration methods for jets using :external+coffea:doc:`coffea` functions
 """
 
 import os
