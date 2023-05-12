@@ -820,6 +820,34 @@ def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     propagate_met=True,
 )
 def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    """Instance of :py:class:`~columnflow.calibration.base.Calibrator` that
+    does all relevant calibrations for jets, i.e. JEC and JER.
+    For more information, see :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
+
+    This instance of :py:class:`~columnflow.calibration.base.Calibrator` is
+    initialized with the following parameters by default:
+
+    :uses: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
+        and :py:func:`~.jer_coffea`.
+    :produces: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
+        and :py:func:`~.jer_coffea`.
+
+    :propagate_met: ``True``
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
+        this function is embedded
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+
+    :param events: awkward array containing events to process
+    :type events: :external+ak:py:class:`ak.Array`
+
+    :return: awkward array containing new columns with corrected ``Jet.pt`` and
+        ``Jet.mass``, as well as the original values before the smearing
+        procedure using the suffix ``unsmeared`` (e.g. ``Jet.pt_unsmeared``).
+        Additionally contains columns for JEC up and down variations,
+        see produces section
+    :rtype: :external+ak:py:class:`ak.Array`
+    """
     # apply jet energy corrections
     events = self[jec_coffea](events, **kwargs)
 
@@ -832,6 +860,14 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets_coffea.init
 def jets_coffea_init(self: Calibrator) -> None:
+    """:py:meth:`init` function for :py:func:`~.jets_coffea`
+    :py:class:`~columnflow.calibration.base.Calibrator`.
+    Forwards the *propagate_met* setting to the underyling Calibrators
+    :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
+    """
     # forward the propagate_met argument to the producers
     self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}
     self.deps_kwargs[jer_coffea] = {"propagate_met": self.propagate_met}
