@@ -180,42 +180,43 @@ def jec_coffea(
 ) -> ak.Array:
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
 
-    This :py:class:`Calibrator` instance is setup with the following kwargs
+    This :py:class:`~columnflow.calibration.Calibrator` instance is setup with the following kwargs
 
-    uses: "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
-        "Jet.jetId", "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
-        :py:class:`attach_coffea_behavior`
+    :uses: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
+        ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``,
+        ``"Rho.fixedGridRhoFastjetAll"``, ``"fixedGridRhoFastjetAll"``,
+        :py:class:`~columnflow.production.util.attach_coffea_behavior`
 
-    produces: "Jet.pt", "Jet.mass", "Jet.rawFactor". If *propagate_met* is *True*,
-                also produces columns for the original MET values (RawMET)
-                and corrected MET (MET). Additionally produces columns
-                corresponding to JEC up and down variations for all previously
-                mentioned columns except for Jet.rawFactor
+    :produces: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
+        If *propagate_met* is ``True``, also produces columns for the original
+        MET values (RawMET) and corrected MET (MET). Additionally produces columns
+        corresponding to JEC up and down variations for all previously
+        mentioned columns except for Jet.rawFactor.
 
-    uncertainy_source: None
+    :uncertainy_source: ``None``
 
-    propagate_met: True
+    :propagate_met: ``True``
 
     :param self: :py:class:`Calibrator` class in which this function is embedded
     :type self: :py:class:`Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: ak.Array
-    :param min_pt_met_prop: If *propagate_met* variable is *True* propagate the
+    :type events: :external+ak:py:class:`ak.Array`
+    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
         updated jet values to the missing transverse energy (MET) using
-        :py:meth:`propagate_met` for events where met.pt > min_pt_met_prop.
-        Defaults to *15.0*.
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
     :type min_pt_met_prop: float, optional
-    :param max_eta_met_prop: If *propagate_met* variable is *True* propagate
+    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
         the updated jet values to the missing transverse energy (MET) using
-        :py:meth:`propagate_met` for events where met.eta > min_eta_met_prop.
-        Defaults to 5.2.
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.eta > *min_eta_met_prop*``. Defaults to ``5.2``.
 
-    :return: awkward array containing new columns with corrected Jet.pt and
-        Jet.mass, as well as the relative difference between raw and corrected
-        pt Jet.rawFactor. Additionally contains columns for JEC up and down
+    :return: awkward array containing new columns with corrected ``Jet.pt`` and
+        ``Jet.mass``, as well as the relative difference between raw and corrected
+        pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
         variations, see produces section
-    :rtype: ak.Array
+    :rtype: :external+ak:py:class:`ak.Array`
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -346,17 +347,18 @@ def jec_coffea(
 
 @jec_coffea.init
 def jec_coffea_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for jec_coffea Calibrator.
+    """:py:meth:`init` function for py:func:`~columnflow.calibration.cms.jets_coffea.jec_coffea`
+    :py:class:`~columnflow.calibration.Calibrator`.
     Adds JEC uncertainty shifts to the list of produced columns.
 
-    If member variable *uncertainty_source* is *None*, load the full list
-    of jec uncertainties from the associated *config* instance.
+    If member variable *uncertainty_source* is ``None``, load the full list
+    of jec uncertainties from the associated ``config`` instance.
 
-    If the member variable *propagate_met* is *True*, add also MET and RawMET
+    If the member variable *propagate_met* is ``True``, add also MET and RawMET
     as well as the corresponding jec variations to the set of columns to be produced.
 
-    :param self: :py:class:`Calibrator` instance
-    :type self:  :py:class:`Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     sources = self.uncertainty_sources
     if sources is None:
@@ -388,11 +390,11 @@ def jec_coffea_init(self: Calibrator) -> None:
 def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
     """Add external files bundle (for JEC text files) to dependencies.
 
-    Adds the requirements for task :py:class:`BundleExternalFiles` as
-    keyword *external_files* to the dictionary of requirements *reqs*
+    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
+    as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`Calibrator` instance
-    :type self: :py:class:`Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this :py:class:`Calibrator` instance
     :type reqs:  dict
     """
@@ -408,9 +410,10 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     """Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
 
-    :param self: This :py:class:`Calibrator` instance
-    :type self: :py:class:`Calibrator`
-    :param reqs: Requirement dictionary for this :py:class:`Calibrator` instance
+    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
+    :param reqs: Requirement dictionary for this
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
