@@ -34,6 +34,10 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 def get_basenames(struct: Iterable) -> Iterable:
     """Replace full file paths in an arbitrary struct by the file basenames.
 
+    The function loops through the structure and extracts the base name
+    using a combination of :py:func:`os.path.splitext` and :py:func:`os.path.basename`.
+    The loop itself is done using the :law:func:`law.util.map_struct` function.
+
     :param struct: Iterable of arbitrary nested structure containing full file paths
     :type struct: Iterable
 
