@@ -1905,7 +1905,7 @@ class TaskArrayFunction(ArrayFunction):
             # allow optional output from setup function (expected to be paths to parquet files)
             outp = self.setup_func(reqs, inputs)
 
-            if isinstance(outp, str):
+            if outp and not isinstance(outp, Sequence):
                 outp = [outp]
 
         # run the setup of all dependent objects
@@ -1914,7 +1914,7 @@ class TaskArrayFunction(ArrayFunction):
                 call_cache.add(dep)
                 dep.run_setup(reqs, inputs, call_cache=call_cache)
 
-        return outp
+        return [] if outp is None else outp
 
     def __call__(
         self,
