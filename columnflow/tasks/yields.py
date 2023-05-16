@@ -230,7 +230,7 @@ class CreateYieldTable(
 
                     # format yields into strings
                     yields_str[category].append((value / norm_factor).str(
-                        # combine_uncs="all",  # TODO
+                        combine_uncs="all",
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
                     ))
