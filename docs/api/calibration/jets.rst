@@ -1,4 +1,4 @@
-``columnflow.calibration.cms.jets``
+``jets``
 ===================================
 .. automodule:: columnflow.calibration.cms.jets
 .. currentmodule:: columnflow.calibration.cms.jets

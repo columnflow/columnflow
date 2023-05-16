@@ -1,4 +1,4 @@
-``columnflow.calibration.cms.jets_coffea``
+``jets_coffea``
 ==========================================
 .. automodule:: columnflow.calibration.cms.jets_coffea
 .. currentmodule:: columnflow.calibration.cms.jets_coffea
