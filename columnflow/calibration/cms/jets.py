@@ -139,8 +139,7 @@ def jec(
     max_eta_met_prop: float = 5.2,
     **kwargs,
 ) -> ak.Array:
-    """
-    Performs the jet energy corrections and uncertainty shifts using the correctionlib, optionally
+    """Performs the jet energy corrections and uncertainty shifts using the correctionlib, optionally
     propagating the changes to the MET.
 
     Requires an external file in the config under ``jet_jerc``:
@@ -179,6 +178,47 @@ def jec(
 
     If running on data, the datasets must have an auxiliary field *jec_era* defined, e.g. "RunF",
     or an auxiliary field *era*, e.g. "F".
+
+    This instance of :py:class:`~columnflow.calibration.base.Calibrator` is
+    initialized with the following parameters by default:
+
+    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
+        ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``, ``"fixedGridRhoFastjetAll"``,
+        ``"Rho.fixedGridRhoFastjetAll"``,
+        :py:func:`~columnflow.production.util.attach_coffea_behavior`
+    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
+        If *propagate_met* is ``True``, also produces columns for the original
+        MET values (RawMET) and corrected MET (MET). Additionally produces columns
+        corresponding to JEC up and down variations for all previously
+        mentioned columns except for Jet.rawFactor.
+
+    :uncertainty_sources: None,
+
+    :propagate_met: ``True``
+    
+    :get_jec_file: (lambda self, external_files: external_files.jet_jerc)
+    :get_jec_config: (lambda self: self.config_inst.x.jec)
+    
+    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    
+    :param events: awkward array containing events to process
+    :type events: :external+ak:py:class:`ak.Array`
+
+    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
+        updated jet values to the missing transverse energy (MET) using
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
+    :type min_pt_met_prop: float, optional
+    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
+        the updated jet values to the missing transverse energy (MET) using
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.eta > *min_eta_met_prop*``. Defaults to ``5.2``.
+    :return: awkward array containing new columns with corrected ``Jet.pt`` and
+        ``Jet.mass``, as well as the relative difference between raw and corrected
+        pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
+        variations, see produces section
+    :rtype: :external+ak:py:class:`ak.Array`
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -319,8 +359,18 @@ def jec(
 
 @jec.init
 def jec_init(self: Calibrator) -> None:
-    """
-    Add JEC uncertainty shifts to the list of produced columns.
+    """:py:meth:`init` function for :py:func:`~.jec`
+    :py:class:`~columnflow.calibration.base.Calibrator`.
+    Adds JEC uncertainty shifts to the list of produced columns.
+
+    If member variable *uncertainty_source* is ``None``, load the full list
+    of jec uncertainties from the associated ``config`` instance.
+
+    If the member variable *propagate_met* is ``True``, add also MET and RawMET
+    as well as the corresponding jec variations to the set of columns to be produced.
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
     """
     jec_cfg = self.get_jec_config()
 
@@ -352,6 +402,17 @@ def jec_init(self: Calibrator) -> None:
 
 @jec.requires
 def jec_requires(self: Calibrator, reqs: dict) -> None:
+    """Add external files bundle (for JEC text files) to dependencies.
+
+    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
+    as keyword ``external_files`` to the dictionary of requirements *reqs*.
+
+    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param reqs: Requirement dictionary for this
+        :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type reqs:  dict
+    """
     if "external_files" in reqs:
         return
 
@@ -361,6 +422,18 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 @jec.setup
 def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+    """Load the correct jec files using the
+    :external+correctionlib:py:func:`correctionlib.highlevel.CorrectionSet.from_string`
+    function and apply the corrections as needed.
+
+    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param reqs: Requirement dictionary for this
+        :py:class:`~columnflow.calibration.base.Calibrator` instance
+    :type reqs: dict
+    :param inputs: Additional inputs, currently not used
+    :type inputs: dict
+    """
     bundle = reqs["external_files"]
 
     # import the correction sets from the external file
