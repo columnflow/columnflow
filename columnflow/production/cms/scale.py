@@ -109,7 +109,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         # Additionally, we need to shift the last couple of weight indices
         # down by 1
         indices = self.indices_8
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
 
         # additional debug log
         logger.debug(
@@ -199,7 +199,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
                 "weight is already included in the LHEWeight.",
             )
     elif ak.all(n_weights == 8):
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
         envelope_indices = self.envelope_indices_8
 
         # additional debug log

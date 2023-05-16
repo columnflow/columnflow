@@ -227,11 +227,58 @@ class PlotBase2D(PlotBase):
         description="when True, the overall bin content is normalized on its integral; "
         "default: None",
     )
+    colormap = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="name of the matplotlib colormap to use for the colorbar; "
+        "if not set, an appropriate colormap will be chosen by the plotting function",
+    )
+    zlim = law.CSVParameter(
+        default=("min", "max"),
+        significant=False,
+        min_len=2,
+        max_len=2,
+        description="the range of values covered by the colorbar; this optional CSV parameter "
+        "accepts exactly two values, indicating the lower and upper bound of the colorbar. The special "
+        "specifiers 'min' and 'max' can be used in place of floats to indicate the minimum or maximum value "
+        "of the data. Similarly, 'maxabs' and 'minabs' indicate the minimum and maximum of the absolute "
+        "value of the data. A hyphen ('-') may be prepended to any specifier to indicate the negative of the "
+        "corresponding value. If no 'zlim' is given, the limits are inferred from the data (equivalent to 'min,max').",
+    )
+    extremes = luigi.ChoiceParameter(
+        default="color",
+        choices=("color", "clip", "hide"),
+        significant=False,
+        description="how to handle extreme values outside `zlim`; valid choices are: 'color' (extreme values are "
+        "shown in a different color), 'clip' (extreme values are clipped to the closest allowed values) and 'hide' "
+        "(extreme values are treated as missing); default: 'color'",
+    )
+    extreme_colors = law.CSVParameter(
+        default=(),
+        significant=False,
+        description="the colors to use for marking extreme values; this optional CSV parameter accepts exactly two "
+        "values, indicating the color to use for values below and above the range covered by the colorbar.",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params: dict) -> dict:
+        params = super().modify_param_values(params)
+
+        params["zlim"] = tuple(
+            float(v) if law.util.is_float(v) else v
+            for v in params["zlim"]
+        )
+
+        return params
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "zscale", None if self.zscale == law.NO_STR else self.zscale)
+        dict_add_strict(params, "zlim", None if not self.zlim else self.zlim)
+        dict_add_strict(params, "extremes", self.extremes)
+        dict_add_strict(params, "extreme_colors", None if not self.extreme_colors else self.extreme_colors)
+        dict_add_strict(params, "colormap", None if self.colormap == law.NO_STR else self.colormap)
         dict_add_strict(params, "density", self.density)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         return params
