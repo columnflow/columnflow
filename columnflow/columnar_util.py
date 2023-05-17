@@ -1887,34 +1887,35 @@ class TaskArrayFunction(ArrayFunction):
         self,
         reqs: dict,
         inputs: dict,
+        columns: dict[str, law.FileSystemTarget] | None = None,
         call_cache: set | None = None,
-    ) -> None | Sequence[str]:
+    ) -> dict[str, law.FileSystemTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
-        outputs.
+        outputs. *columns* defaults to an empty dictionary which should be filled to store targets
+        of columnar data that are to be included in an event chunk loop
         """
+        # default column targets
+        if columns is None:
+            columns = {}
+
         # create the call cache
         if call_cache is None:
             call_cache = set()
 
-        outp = None
-
         # run this instance's setup function
         if callable(self.setup_func):
-            # allow optional output from setup function (expected to be paths to parquet files)
-            outp = self.setup_func(reqs, inputs)
-
-            if outp and not isinstance(outp, Sequence):
-                outp = [outp]
+            self.setup_func(reqs, inputs, columns)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
             if dep not in call_cache:
                 call_cache.add(dep)
-                dep.run_setup(reqs, inputs, call_cache=call_cache)
 
-        return [] if outp is None else outp
+                dep.run_setup(reqs, inputs, columns, call_cache=call_cache)
+
+        return columns
 
     def __call__(
         self,

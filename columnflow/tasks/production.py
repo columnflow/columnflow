@@ -92,7 +92,7 @@ class ProduceColumns(
 
         # iterate over chunks of events and diffs
         for (events, *cols), pos in self.iter_chunked_io(
-            [inputs["events"]["collection"][0]["events"].path] + [inp.path for inp in column_targets],
+            [inputs["events"]["collection"][0]["events"].path] + [inp.path for inp in column_targets.values()],
             source_type=["awkward_parquet"] * (len(column_targets) + 1),
             read_columns=[read_columns] * (len(column_targets) + 1),
         ):
