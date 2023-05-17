@@ -46,7 +46,7 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     *get_met_correction_set* can be adapted in a subclass in case it is stored
     differently in the config.
 
-    This instance of :py:class:`~columnflow.calibration.base.Calibrator` is
+    This instance of :py:class:`~columnflow.calibration.Calibrator` is
     initialized with the following parameters by default:
 
     :*uses*: ``"run"``, ``"PV.npvs"``, ``"MET.pt"``, ``"MET.phi"``
@@ -63,8 +63,8 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
             lambda self: self.config_inst.x.met_phi_correction_set
 
-    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
@@ -95,10 +95,10 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs:  dict
     """
     if "external_files" in reqs:
@@ -116,10 +116,10 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 
     Additionally, the version of the met pt and phi corrections are checked.
 
-    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict

@@ -2,16 +2,18 @@
 ==========================
 
 .. automodule:: columnflow.calibration
+   :autosummary:
+   :members:
+
 .. currentmodule:: columnflow.calibration
 
 Summary
 -------
-.. :autoclass:: columnflow.calibration.base.Calibrator
+.. :autoclass:: Calibrator
    :members:
 
 .. toctree::
    :maxdepth: 2
 
-   base
    util
    cms
