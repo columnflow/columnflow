@@ -712,7 +712,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
             else:
                 # when functions differ between configs, flatten
                 n_fct_per_config = "".join(str(len(x)) for x in fct_names)
-                fct_names = sum(fct_names[1:], fct_names[0])
+                fct_names = tuple(fct_name for fct_names_cfg in fct_names for fct_name in fct_names_cfg)
 
             part = "_".join(fct_names[:2])
 
