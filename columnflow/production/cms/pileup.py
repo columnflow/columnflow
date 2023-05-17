@@ -56,7 +56,7 @@ def pu_weight_requires(self: Producer, reqs: dict) -> None:
 
 
 @pu_weight.setup
-def pu_weight_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def pu_weight_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     """
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.

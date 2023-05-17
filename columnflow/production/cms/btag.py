@@ -193,7 +193,7 @@ def btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @btag_weights.setup
-def btag_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     bundle = reqs["external_files"]
 
     # create the btag sf corrector

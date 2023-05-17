@@ -94,7 +94,7 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @muon_weights.setup
-def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector

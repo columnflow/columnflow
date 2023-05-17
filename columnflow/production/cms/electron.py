@@ -98,7 +98,7 @@ def electron_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @electron_weights.setup
-def electron_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def electron_weights_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector

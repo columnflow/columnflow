@@ -71,7 +71,7 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
 
 
 @deterministic_event_seeds.setup
-def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     """
     Setup function that defines the vectorized seed creation function once and stores it in the
     py:attr:`create_seed` attribute.

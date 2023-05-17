@@ -28,7 +28,7 @@ class _ScaleWeightBase(Producer):
     Common base class for the scale weight producers below that join a setup function.
     """
 
-    def setup_func(self, reqs: dict, inputs: dict) -> None:
+    def setup_func(self, reqs: dict, inputs: dict, columns: dict) -> None:
         # named weight indices
         self.indices_9 = DotDict(
             mur_down_muf_down=0,
@@ -227,9 +227,9 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
 
 @murmuf_envelope_weights.setup
-def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
     # call the super func
-    super(murmuf_envelope_weights, self).setup_func(reqs, inputs)
+    super(murmuf_envelope_weights, self).setup_func(reqs, inputs, columns)
 
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [

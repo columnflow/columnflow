@@ -342,7 +342,7 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jec.setup
-def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jec_setup(self: Calibrator, reqs: dict, inputs: dict, columns: dict) -> None:
     bundle = reqs["external_files"]
 
     # import the correction sets from the external file
@@ -642,7 +642,7 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jer.setup
-def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jer_setup(self: Calibrator, reqs: dict, inputs: dict, columns: dict) -> None:
     """
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.

@@ -62,7 +62,7 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 
 @json_filter.setup
-def json_filter_setup(self: Selector, reqs: dict, inputs: dict) -> None:
+def json_filter_setup(self: Selector, reqs: dict, inputs: dict, columns: dict) -> None:
     """
     Load golden JSON and set up run/luminosity block lookup table.
     """

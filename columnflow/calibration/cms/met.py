@@ -70,7 +70,7 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @met_phi.setup
-def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, columns: dict) -> None:
     bundle = reqs["external_files"]
 
     # create the pt and phi correctors
