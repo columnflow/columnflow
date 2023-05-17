@@ -714,7 +714,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
                 n_fct_per_config = "".join(str(len(x)) for x in fct_names)
                 fct_names = tuple(fct_name for fct_names_cfg in fct_names for fct_name in fct_names_cfg)
 
-            part = "_".join(fct_names[:2])
+            part = "__".join(fct_names[:2])
 
             if len(fct_names) > 2:
                 part += f"_{n_fct_per_config}_{law.util.create_hash(fct_names[2:])}"
