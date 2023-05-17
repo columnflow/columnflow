@@ -25,29 +25,29 @@ Functions
 Calibrators
 -----------
 
-.. ``jets_coffea``
-.. ++++++++++++++
-.. .. autofunction:: jets_coffea
+``jets``
+++++++++++++++
+.. autofunction:: jets
 
-.. .. autofunction:: jets_coffea_init
+.. autofunction:: jets_init
 
 
-.. ``jec_coffea``
-.. ++++++++++++++
-.. .. autofunction:: jec_coffea
+``jec``
+++++++++++++++
+.. autofunction:: jec
 
-.. .. autofunction:: jec_coffea_init
+.. autofunction:: jec_init
 
-.. .. autofunction:: jec_coffea_requires
+.. autofunction:: jec_requires
 
-.. .. autofunction:: jec_coffea_setup
+.. autofunction:: jec_setup
 
-.. ``jer_coffea``
-.. ++++++++++++++
-.. .. autofunction:: jer_coffea
+``jer``
+++++++++++++++
+.. autofunction:: jer
 
-.. .. autofunction:: jer_coffea_init
+.. autofunction:: jer_init
 
-.. .. autofunction:: jer_coffea_requires
+.. autofunction:: jer_requires
 
-.. .. autofunction:: jer_coffea_setup
+.. autofunction:: jer_setup
