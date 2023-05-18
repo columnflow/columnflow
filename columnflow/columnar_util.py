@@ -1392,6 +1392,8 @@ class ArrayFunction(Derivable):
 
         if self.check_columns_present is None:
             self.check_columns_present = self._dependency_sets
+        elif not self.check_columns_present:
+            self.check_columns_present = set()
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
