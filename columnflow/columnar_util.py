@@ -2663,12 +2663,6 @@ class ChunkedIOHandler(object):
             filter_name.extend(
                 f"n{field}"
                 for field in maybe_jagged_fields
-                # adding `nGenPart` leads to a ValueError when loading the array
-                # this is likely due to a bug in coffea when handling
-                # `GenPart_distinctChildrenDeepIdxG`, which has a different type
-                # `ListOffsetArray64` instead of `ListOffsetArray` like the other
-                # global indices
-                if field != "GenPart"
             )
 
             # filter on these column names when reading
