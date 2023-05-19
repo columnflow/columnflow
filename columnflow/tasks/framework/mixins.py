@@ -703,7 +703,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
             ("sel", tuple((sel,) for sel in self.selectors)),
             ("prod", self.producers),
         ]:
-            if len(set(fct_names)) == 1:
+            if not fct_names or not any(fct_names):
+                fct_names = ["none"]
+            elif len(set(fct_names)) == 1:
                 # when functions are the same per config, only use them once
                 fct_names = fct_names[0]
                 n_fct_per_config = str(len(fct_names))
