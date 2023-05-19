@@ -2418,8 +2418,8 @@ class ChunkedIOHandler(object):
                     # priotize coffea nano events
                     source_type = "coffea_root"
                 elif source.endswith(".parquet"):
-                    # priotize coffea nano events
-                    source_type = "coffea_parquet"
+                    # priotize awkward nano events
+                    source_type = "awkward_parquet"
 
             if not source_type:
                 raise Exception(f"could not determine source_type from source '{source}'")
