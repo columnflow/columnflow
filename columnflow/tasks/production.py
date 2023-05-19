@@ -93,6 +93,7 @@ class ProduceColumns(
         # prepare inputs for localization
         with law.localize_file_targets(
             [inputs["events"]["collection"][0]["events"], *reader_targets.values()],
+            mode="r",
         ) as inps:
             # iterate over chunks of events and diffs
             for (events, *cols), pos in self.iter_chunked_io(
