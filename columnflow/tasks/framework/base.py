@@ -448,6 +448,35 @@ class ConfigTask(AnalysisTask):
 
         return kwargs
 
+    @classmethod
+    def resolve_config_parameter(
+        cls,
+        config_inst: od.Config,
+        param: tuple[str] | None = None,
+        param_name: str | None = None,
+    ) -> tuple[str]:
+        """
+        Resolves tuple of inputs *param* by using groups defined in the *config_inst*
+        that map a string to a tuple of strings. If *param* is empty, the default
+        defined in the config is returned.
+        """
+        if param and param != law.NO_STR:
+            param = law.util.make_list(param)
+
+            # expand to param group
+            param_group = config_inst.x(f"{param_name}_groups", {})
+            if param_group:
+                outp = []
+                for val in param:
+                    outp.extend(param_group.get(val, [val]))
+            return tuple(outp)
+
+        # use default if available and no param is set
+        if outp := config_inst.x(f"default_{param_name}", None):
+            return outp if isinstance(outp, tuple) else (outp,)
+
+        return ()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
