@@ -34,6 +34,7 @@ from typing import Callable, Any, Sequence, Union
 from types import ModuleType
 
 import law
+from law.util import InsertableDict  # noqa
 import luigi
 
 
