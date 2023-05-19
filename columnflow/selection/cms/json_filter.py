@@ -7,7 +7,7 @@ Selectors for applying golden JSON in data.
 from __future__ import annotations
 
 from columnflow.selection import Selector, selector
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 
 
 ak = maybe_import("awkward")
@@ -62,7 +62,7 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 
 @json_filter.setup
-def json_filter_setup(self: Selector, reqs: dict, inputs: dict, columns: dict) -> None:
+def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
     Load golden JSON and set up run/luminosity block lookup table.
     """

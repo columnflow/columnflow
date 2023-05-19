@@ -7,7 +7,7 @@ Producers for btag scale factor weights.
 from __future__ import annotations
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 
@@ -193,7 +193,7 @@ def btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @btag_weights.setup
-def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, columns: dict) -> None:
+def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     bundle = reqs["external_files"]
 
     # create the btag sf corrector
