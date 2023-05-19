@@ -18,6 +18,7 @@ ak = maybe_import("awkward")
     produces={"mc_weight"},
     # only run on mc
     mc_only=True,
+    check_columns_present={"produces"},  # some used columns optional
 )
 def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
