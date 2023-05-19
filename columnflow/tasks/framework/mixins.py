@@ -698,14 +698,12 @@ class MLModelTrainingMixin(MLModelMixinBase):
 
         parts.insert_after("task_family", "configs", configs_repr)
 
-        task_array_functions = {
-            "calib": self.calibrators,
-            "sel": tuple((sel,) for sel in self.selectors),
-            "prod": self.producers,
-        }
-
-        for label, fct_names in task_array_functions.items():
-            if all(map(lambda x: x == fct_names[0], fct_names)):
+        for label, fct_names in [
+            ("calib", self.calibrators),
+            ("sel", tuple((sel,) for sel in self.selectors)),
+            ("prod", self.producers),
+        ]:
+            if len(set(fct_names)) == 1:
                 # when functions are the same per config, only use them once
                 fct_names = fct_names[0]
                 n_fct_per_config = str(len(fct_names))
