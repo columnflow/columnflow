@@ -86,6 +86,7 @@ intersphinx_mapping = {
     "ak": ("https://awkward-array.org/doc/main", None),
     "correctionlib": ("https://cms-nanoaod.github.io/correctionlib", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "uproot": ("https://uproot.readthedocs.io/en/latest/", None),
 }
 
 
