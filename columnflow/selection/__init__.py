@@ -24,7 +24,7 @@ ak = maybe_import("awkward")
 class Selector(TaskArrayFunction):
     """Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
     that handles selections.
-    
+
     :py:class:`~.Selector` s are designed to apply
     arbitrary selection criteria. These critera can be based on already existing
     nano AOD columns, but can also involve the output of any other module,

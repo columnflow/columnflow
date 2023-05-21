@@ -862,7 +862,7 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     This instance of :py:class:`~columnflow.calibration.Calibrator` is
     initialized with the following parameters by default:
 
-    :*uses*: Same as the two base Calibrators, see :py:func:`~.jec` 
+    :*uses*: Same as the two base Calibrators, see :py:func:`~.jec`
         and :py:func:`~.jer`.
     :*produces*: Same as the two base Calibrators, see :py:func:`~.jec`
         and :py:func:`~.jer`.
@@ -899,11 +899,11 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 def jets_init(self: Calibrator) -> None:
     """:py:meth:`init` function for :py:func:`~.jets`
     :py:class:`~columnflow.calibration.Calibrator`.
-    
+
     If *propagate_met*, *get_jec_file*, *get_jec_config*, *get_jec_file*,
     *get_jec_config* are set (i.e. not ``None``), propagate these settings
     to the underlying :py:func:`~.jec` and :py:func:`~.jer` Calibrators.
-    Otherwise, use their defaults. 
+    Otherwise, use their defaults.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     :type self:  :py:class:`~columnflow.calibration.Calibrator`
