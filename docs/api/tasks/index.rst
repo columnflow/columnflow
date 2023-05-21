@@ -12,3 +12,4 @@
 
    selection
    external
+   reduction
