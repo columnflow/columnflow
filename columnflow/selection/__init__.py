@@ -167,7 +167,7 @@ class Selector(TaskArrayFunction):
         the selector is skipped and not considered by other calibrators,
         selectors and producers in case they are evalauted on an
         :external+order:py:class:`order.dataset.Dataset` whose ``is_mc``
-        attribute is ``False`` (``True``).
+        attribute is ``True`` (``False``).
 
         All additional *kwargs* are added as class members of the new subclasses.
 
@@ -233,13 +233,11 @@ class SelectionResult(od.AuxDataMixin):
     """Lightweight class that wraps selection decisions (e.g. event and object
     selection steps).
 
-    Basis: :py:class:`~order.AuxDataMixin`
-
     Additionally, this class provides convenience methods to merge them or to dump
     them into an awkward array. Arbitrary, auxiliary information
     (additional arrays, or other objects) that should not be stored in dumped
     akward arrays can be placed in the *aux* dictionary
-    (see :py:class:`order.AuxDataMixin`).
+    (see :py:class:`~order.mixins.AuxDataMixin`).
 
     The resulting structure looks like the following example:
 
@@ -314,6 +312,24 @@ class SelectionResult(od.AuxDataMixin):
         objects: DotDict | dict | None = None,
         aux: DotDict | dict | None = None,
     ):
+        """Init for :py:class:`~.SelectionResult` class. Initializes the
+        manditory *main*, *steps* and *objects* dictionaries as well as the
+        optional *aux* dictionary as
+        :py:class:`~columnflow.util.DotDict`
+
+        :param main: :py:class:`dictionary` containing event-level selection
+            decisions, defaults to None
+        :type main: DotDict | dict | None, optional
+        :param steps: :py:class:`dictionary` containing event-level selection
+            decisions for individual selection steps, defaults to None
+        :type steps: DotDict | dict | None, optional
+        :param objects: :py:class:`dictionary` containing object indices for
+            new collections, defaults to None
+        :type objects: DotDict | dict | None, optional
+        :param aux: Optional :py:class:`dictionary` containing auxiliary
+            information that is not safed to disk, defaults to None
+        :type aux: DotDict | dict | None, optional
+        """
         super().__init__(aux=aux)
 
         # store fields
@@ -322,9 +338,17 @@ class SelectionResult(od.AuxDataMixin):
         self.objects = DotDict.wrap(objects or {})
 
     def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
-        """
-        Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
-        unchanged.
+        """Adds the field of an *other* instance in-place.
+
+        When *None*, *this* instance is returned unchanged.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :type other: SelectionResult | None
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
+        :rtype: SelectionResult
         """
         # do nothing if the other instance is none
         if other is None:
@@ -345,9 +369,18 @@ class SelectionResult(od.AuxDataMixin):
         return self
 
     def __add__(self, other: SelectionResult | None) -> SelectionResult:
-        """
-        Returns a new instance with all fields of *this* and an *other* instance merged. When
-        *None*, a copy of *this* instance is returned.
+        """Returns a new instance with all fields of *this* and an *other*
+        instance merged.
+
+        When *None*, a copy of *this* instance is returned.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :type other: SelectionResult | None
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
+        :rtype: SelectionResult
         """
         inst = self.__class__()
 
@@ -363,8 +396,13 @@ class SelectionResult(od.AuxDataMixin):
         return inst
 
     def to_ak(self) -> ak.Array:
-        """
-        Converts the contained fields into a nested awkward array and returns it.
+        """Converts the contained fields into a nested awkward array and returns it.
+
+        The conversion is performed with multiple calls of
+        :external+ak:py:func:`ak.zip`.
+
+        :return: Transformed :py:class:`~.SelectionResult`
+        :rtype: ak.Array
         """
         to_merge = {}
         if self.steps:
