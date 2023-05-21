@@ -230,47 +230,81 @@ selector = Selector.selector
 
 
 class SelectionResult(od.AuxDataMixin):
-    """
-    Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
-    provides convenience methods to merge them or to dump them into an awkward array. The resulting
-    structure looks like the following example:
+    """Lightweight class that wraps selection decisions (e.g. event and object
+    selection steps).
+
+    Basis: :py:class:`~order.AuxDataMixin`
+
+    Additionally, this class provides convenience methods to merge them or to dump
+    them into an awkward array. Arbitrary, auxiliary information
+    (additional arrays, or other objects) that should not be stored in dumped
+    akward arrays can be placed in the *aux* dictionary
+    (see :py:class:`order.AuxDataMixin`).
+
+    The resulting structure looks like the following example:
 
     .. code-block:: python
 
-        {
+        results = {
             # arbitrary, top-level main fields
             ...
 
             "steps": {
                 # event selection decisions from certain steps
-                "jet": array,
-                "muon": array,
-                ...
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...,
             },
 
             "objects": {
                 # object selection decisions or indices
-                "jet": array,
-                "muon": array,
-                ...
+                # define type of this field here, define that `jet` is of
+                # type `Jet`
+                "Jet": {
+                    "jet": array_of_jet_indices,
+                },
+                "Muon": {
+                    "muon": array_of_muon_indices,
+                },
+                ...,
             },
+            # additionally, you can also save auxiliary data, e.g.
+            "aux": {
+                # save the per-object jet selection masks
+                "jet": array_of_jet_object_masks,
+                # save number of jets
+                "n_passed_jets": ak.num(array_of_jet_indices, axis=1),
+                ...,
+            },
+            ...
         }
 
-    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
-    following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects*
+    keyword arguments. The following example creates the structure above.
 
     .. code-block:: python
 
+        # combined event selection after all steps
+        event_sel = reduce(and_, results.steps.values())
         res = SelectionResult(
-            main={...},
-            steps={"jet": array, "muon": array, ...}
-            objects={"jet": array, "muon": array, ...}
+            main={
+                "event": event_sel,
+            },
+            steps={
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...
+            },
+            objects={
+                "Jet": {
+                    "jet": array_of_jet_indices
+                },
+                "Muon": {
+                    "muon": array, ...
+                }
+            }
         )
         res.to_ak()
-
-    Arbitrary, auxiliary information (additional arrays, or other objects) that should not be stored
-    in dumped akward arrays can be placed in the *aux* dictionary
-    (see :py:class:`order.AuxDataMixin`).
     """
 
     def __init__(
