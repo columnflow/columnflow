@@ -167,7 +167,7 @@ class Selector(TaskArrayFunction):
         the selector is skipped and not considered by other calibrators,
         selectors and producers in case they are evalauted on an
         :external+order:py:class:`order.dataset.Dataset` whose ``is_mc``
-        attribute is ``True`` (``False``).
+        attribute is ``False`` (``True``).
 
         All additional *kwargs* are added as class members of the new subclasses.
 
