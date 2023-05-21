@@ -88,7 +88,7 @@ def met_filters(
 @met_filters.init
 def met_filters_init(self: Selector) -> None:
     """Init function for met_filters Selector.
-    
+
     Read MET filters using the *get_met_filters* from config and add them as input columns.
 
     :param self: This :py:class:`~columnflow.selection.Selector` instance
