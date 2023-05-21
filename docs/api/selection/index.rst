@@ -15,3 +15,8 @@
 .. autoclass:: columnflow.selection.SelectionResult
    :members:
    :special-members:
+
+``Submodules``
+--------------
+.. toctree::
+   matching
