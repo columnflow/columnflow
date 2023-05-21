@@ -24,8 +24,8 @@ def met_filters(
     events: ak.Array,
     **kwargs,
 ) -> ak.Array:
-    """
-    Compute a selection mask to filter out noisy/anomalous high-MET events (MET filters).
+    """Compute a selection mask to filter out noisy/anomalous high-MET events
+    (MET filters).
 
     Individual filter decisions based on different criteria are stored as bool-valued columns
     in the input NanoAOD. The columns to apply are specified via an auxiliary config entry:
@@ -49,7 +49,27 @@ def met_filters(
     The specified columns are interpreted as booleans, with missing values treated as *True*,
     i.e. the event is considered to have passed the corresponding filter.
 
-    Returns a bool array containing the logical AND of all input columns.
+    Returns a bool array containing the logical ``AND`` of all input columns.
+
+    This :py:class:`~columnflow.selection.Selector` instance is initialized
+    with the following parameters
+
+    **uses**
+
+        ``"event"``, ``"nFlag"``
+
+    **get_met_filters**
+
+        .. code-block:: python
+
+            lambda self: self.config_inst.x.met_filters
+
+    :param self: This Selector instance
+    :type self: Selector
+    :param events: Array containing events in the NanoAOD format
+    :type events: ak.Array
+    :return: Array containing logical ``AND`` of all input filter columns
+    :rtype: ak.Array
     """
     result = ak.ones_like(events.event, dtype=bool)
 
@@ -67,8 +87,12 @@ def met_filters(
 
 @met_filters.init
 def met_filters_init(self: Selector) -> None:
-    """
-    Read MET filters from config and add them as input columns.
+    """Init function for met_filters Selector.
+    
+    Read MET filters using the *get_met_filters* from config and add them as input columns.
+
+    :param self: This :py:class:`~columnflow.selection.Selector` instance
+    :type self: Selector
     """
     met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):

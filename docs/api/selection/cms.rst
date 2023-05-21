@@ -6,3 +6,4 @@
 
 .. toctree::
     json_filter
+    met_filters
