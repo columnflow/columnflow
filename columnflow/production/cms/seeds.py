@@ -7,7 +7,7 @@ Methods related to creating event and object seeds.
 import hashlib
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, primes
+from columnflow.util import maybe_import, primes, InsertableDict
 from columnflow.columnar_util import Route, set_ak_column
 
 
@@ -71,7 +71,7 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
 
 
 @deterministic_event_seeds.setup
-def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
     Setup function that defines the vectorized seed creation function once and stores it in the
     py:attr:`create_seed` attribute.

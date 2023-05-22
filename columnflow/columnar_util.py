@@ -28,6 +28,7 @@ from collections import namedtuple, OrderedDict, defaultdict
 from typing import Sequence, Callable, Any
 
 import law
+from law.util import InsertableDict
 
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
@@ -1664,15 +1665,19 @@ class TaskArrayFunction(ArrayFunction):
         def requires(self, reqs):
             # fill the requirements dict
             reqs["weights_task"] = SomeWeightsTask.req(self.task)
+            reqs["columns_task"] = SomeColumnsTask.req(self.task)
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, inputs):
+        def setup(self, inputs, reader_targets):
             # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
 
             # save them as an instance attribute
             self.weights = weights
+
+            # fill the reader_targets to be added in an event chunk loop
+            reder_targets["my_columns"] = inputs["columns_task"]["columns"]
 
         # call my_func on a chunk of events
         inst = my_func()
@@ -1768,6 +1773,8 @@ class TaskArrayFunction(ArrayFunction):
             - *reqs*, a dictionary containing the required tasks as defined by the custom
               :py:meth:`requires_func`.
             - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
+            - *reader_targets*, an InsertableDict containing the targets to be included
+              in an event chunk loop
 
         The decorator does not return the wrapped function.
         """
@@ -1887,26 +1894,34 @@ class TaskArrayFunction(ArrayFunction):
         self,
         reqs: dict,
         inputs: dict,
+        reader_targets: InsertableDict[str, law.FileSystemFileTarget] | None = None,
         call_cache: set | None = None,
-    ) -> None:
+    ) -> dict[str, law.FileSystemTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
-        outputs.
+        outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to store targets
+        of columnar data that are to be included in an event chunk loop
         """
+        # default column targets
+        if reader_targets is None:
+            reader_targets = {}
+
         # create the call cache
         if call_cache is None:
             call_cache = set()
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(reqs, inputs)
+            self.setup_func(reqs, inputs, reader_targets)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
             if dep not in call_cache:
                 call_cache.add(dep)
-                dep.run_setup(reqs, inputs, call_cache=call_cache)
+                dep.run_setup(reqs, inputs, reader_targets, call_cache=call_cache)
+
+        return reader_targets
 
     def __call__(
         self,
@@ -2403,8 +2418,8 @@ class ChunkedIOHandler(object):
                     # priotize coffea nano events
                     source_type = "coffea_root"
                 elif source.endswith(".parquet"):
-                    # priotize coffea nano events
-                    source_type = "coffea_parquet"
+                    # priotize awkward nano events
+                    source_type = "awkward_parquet"
 
             if not source_type:
                 raise Exception(f"could not determine source_type from source '{source}'")

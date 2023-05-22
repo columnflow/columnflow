@@ -9,7 +9,7 @@ import functools
 import law
 
 from columnflow.production import Producer
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 from columnflow.columnar_util import DotDict
 
@@ -28,7 +28,7 @@ class _ScaleWeightBase(Producer):
     Common base class for the scale weight producers below that join a setup function.
     """
 
-    def setup_func(self, reqs: dict, inputs: dict) -> None:
+    def setup_func(self, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
         # named weight indices
         self.indices_9 = DotDict(
             mur_down_muf_down=0,
@@ -109,7 +109,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         # Additionally, we need to shift the last couple of weight indices
         # down by 1
         indices = self.indices_8
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
 
         # additional debug log
         logger.debug(
@@ -199,7 +199,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
                 "weight is already included in the LHEWeight.",
             )
     elif ak.all(n_weights == 8):
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
         envelope_indices = self.envelope_indices_8
 
         # additional debug log
@@ -227,9 +227,9 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
 
 @murmuf_envelope_weights.setup
-def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     # call the super func
-    super(murmuf_envelope_weights, self).setup_func(reqs, inputs)
+    super(murmuf_envelope_weights, self).setup_func(reqs, inputs, reader_targets)
 
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [

@@ -95,9 +95,9 @@ def create_category_id(
     :py:class:`order.Config` object *config* and returns it. Internally,
     :py:func:`law.util.create_hash` is used which receives *hash_len*. In case of an unintentional
     (yet unlikely) collision of two ids, there is the option to add a custom *salt* value.
-    
+
     .. note::
-    
+
         Please note that the size of the returned id depends on *hash_len*. When storing the id
         subsequently in an array, please be aware that values 8 or more require a ``np.int64``.
     """ # noqa
