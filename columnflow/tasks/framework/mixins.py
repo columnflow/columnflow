@@ -262,14 +262,12 @@ class SelectorStepsMixin(SelectorMixin):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        # expand selector step groups
-        if "config_inst" in params and len(params.get("selector_steps", [])) == 1:
-            config_inst = params["config_inst"]
-            step_group = params["selector_steps"][0]
-            params["selector_steps"] = (
-                tuple(config_inst.x.selector_step_groups[step_group])
-                if step_group in config_inst.x("selector_step_groups", {}) else
-                tuple()
+        # apply selector_steps_groups and default_selector_steps from config
+        if "config_inst" in params:
+            params["selector_steps"] = cls.resolve_config_parameter(
+                params["config_inst"],
+                params.get("selector_steps"),
+                "selector_steps",
             )
 
         # sort selector steps when the order does not matter
@@ -511,19 +509,22 @@ class MLModelTrainingMixin(MLModelMixinBase):
     ) -> tuple[tuple[str]]:
         calibrators = params.get("calibrators", ())
 
-        # use config defaults in case each config has one
-        if not calibrators:
-            defaults = tuple(
-                CalibratorsMixin.get_default_calibrators(config_inst)
-                for config_inst in ml_model_inst.config_insts
-            )
-            if all(defaults):
-                calibrators = defaults
+        calibrators = calibrators if calibrators else ((),)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
         if len(calibrators) == 1 and n_configs != 1:
             calibrators = tuple(calibrators * n_configs)
+
+        # apply calibrators_groups and default_calibrator from the config
+        calibrators = tuple(
+            ConfigTask.resolve_config_parameter(
+                config_inst,
+                calibrators[i],
+                "calibrator",
+            )
+            for i, config_inst in enumerate(ml_model_inst.config_insts)
+        )
 
         # validate number of sequences
         if len(calibrators) != n_configs:
@@ -596,19 +597,22 @@ class MLModelTrainingMixin(MLModelMixinBase):
     ) -> tuple[tuple[str]]:
         producers = params.get("producers", ())
 
-        # use config defaults in case each config has one
-        if not producers:
-            defaults = tuple(
-                ProducersMixin.get_default_producers(config_inst)
-                for config_inst in ml_model_inst.config_insts
-            )
-            if all(defaults):
-                producers = defaults
+        producers = producers if producers else ((),)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
         if len(producers) == 1 and n_configs != 1:
             producers = tuple(producers * n_configs)
+
+        # apply producers_groups and default_producer from the config
+        producers = tuple(
+            ConfigTask.resolve_config_parameter(
+                config_inst,
+                producers[i],
+                "producer",
+            )
+            for i, config_inst in enumerate(ml_model_inst.config_insts)
+        )
 
         # validate number of sequences
         if len(producers) != n_configs:
