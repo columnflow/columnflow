@@ -556,7 +556,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
         # use config defaults
         selectors = tuple(
             ConfigTask.resolve_config_default(
-                config_inst, selectors[i], "default_selector",
+                config_inst,
+                selectors[i],
+                "default_selector",
             )
             for i, config_inst in enumerate(ml_model_inst.config_insts)
         )

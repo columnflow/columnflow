@@ -452,12 +452,16 @@ class ConfigTask(AnalysisTask):
     def resolve_config_default(
         cls,
         config_inst: od.Config,
-        param: str | None = None,
+        param: str,
         default_str: str | None = None,
     ) -> str | None:
+        """
+        Applies the default value identified by *default_str* in the *config_inst*,
+        if no *param* is given.
+        """
         # expand default when param is empty
         if not param or param == law.NO_STR:
-            param = config_inst.x(default_str, None)
+            param = config_inst.x(default_str, None) if default_str else None
 
         return param
 
@@ -465,23 +469,23 @@ class ConfigTask(AnalysisTask):
     def resolve_config_default_and_groups(
         cls,
         config_inst: od.Config,
-        param: tuple[str] | None = None,
+        param: tuple[str],
         default_str: str | None = None,
         groups_str: str | None = None,
     ) -> tuple[str]:
         """
-        Resolves tuple of inputs *param* by using groups defined in the *config_inst*
-        that map a string to a tuple of strings. If *param* is empty, the default
-        defined in the config is returned.
+        Resolves tuple of inputs *param* by using groups identified by *groups_str* and
+        defined in the *config_inst* that map a string to a tuple of strings.
+        If *param* is empty, the default identified by *default_str* in the config is returned.
         """
         # expand default when param is empty
         if not param or param == law.NO_STR:
-            param = config_inst.x(default_str, None)
+            param = config_inst.x(default_str, None) if default_str else None
             if not param:
                 return ()
 
         # expand to groups
-        if param_groups := config_inst.x(groups_str, {}):
+        if default_str and (param_groups := config_inst.x(groups_str, {})):
             values = []
             for val in law.util.make_list(param):
                 values.extend(param_groups.get(val, [val]))
