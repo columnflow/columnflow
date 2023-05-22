@@ -445,6 +445,18 @@ class ProducersMixin(ConfigTask):
 
         return parts
 
+class BinOptimizerMixin(ConfigTask):
+
+    @classmethod
+    def get_bin_optimizer_inst(cls, bin_model: str, config_inst: od.Config) -> BinModel:
+        return BinModel.get_cls(bin_model)(config_inst)
+
+    bin_optimizer = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="the name of the bin optimizer to be applied; default: value of the"
+        "'default_bin_optimizer' config (TODO)",
+    )
 
 class MLModelMixinBase(AnalysisTask):
 
