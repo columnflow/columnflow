@@ -8,7 +8,7 @@ from __future__ import annotations
 
 __all__ = [
     "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
-    "create_category_id", "add_category", "create_category_combinations",
+    "create_category_id", "add_category", "create_category_combinations", "verify_config_processes",
 ]
 
 import re
@@ -235,3 +235,30 @@ def create_category_combinations(
                     parent_cat.add_category(cat)
 
     return n_created_categories
+
+
+def verify_config_processes(config: od.Config, warn: bool = False) -> None:
+    """
+    Verifies for all datasets contained in a *config* object that the linked process is covered by
+    any process object registered in *config* and raises an exception if not. If *warn* is *True*,
+    a warning is printed instead.
+    """
+    missing_pairs = []
+    for dataset in config.datasets:
+        if not config.has_process(process := dataset.processes.get_first()):
+            missing_pairs.append((dataset, process))
+
+    # nothing to do when nothing is missing
+    if not missing_pairs:
+        return
+
+    # build the message
+    msg = f"found {len(missing_pairs)} dataset(s) whose process is not registered in the '{config.name}' config:"
+    for dataset, process in missing_pairs:
+        msg += f"\n  dataset '{dataset.name}' -> process '{process.name}'"
+
+    # warn or raise
+    if warn:
+        print(f"{law.util.colored('WARNING:', 'red')} {msg}")
+    else:
+        raise Exception(msg)
