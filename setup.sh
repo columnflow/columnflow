@@ -472,12 +472,14 @@ cf_setup_software_stack() {
     export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
     ulimit -s unlimited
 
-    # local python stack in one conda / micromamba env and two virtual envs:
-    #   - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
-    #   - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
+    #
+    # setup in local envs (not remote)
+    #
+
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
+        # remote directories first if requested
         if [ "${CF_REINSTALL_SOFTWARE}" = "1" ]; then
-            echo "removing conda / micromamba at $( cf_color magenta ${CF_CONDA_BASE})"
+            echo "removing conda setup at $( cf_color magenta ${CF_CONDA_BASE})"
             rm -rf "${CF_CONDA_BASE}"
 
             echo "removing software virtual envs at $( cf_color magenta ${CF_VENV_BASE})"
@@ -494,10 +496,14 @@ cf_setup_software_stack() {
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
                 echo
-                cf_color magenta "installing micromamba at ${CF_CONDA_BASE}"
+                cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
+
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
                 curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
-                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh && mv micromamba.sh "${CF_CONDA_BASE}/etc/profile.d"
+                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
+                # make the setup file relocatable
+                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" return "$?"
+                mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
 always_yes: true
@@ -508,21 +514,19 @@ EOF
 
             # initialize micromamba
             source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
-            return 123
             micromamba activate || return "$?"
-            echo "initialized conda / micromamba with $( cf_color magenta "python ${pyv}" )"
+            echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
             # install packages
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
                 micromamba install libgcc "python=${pyv}" gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
-                # TODO: temporary issue with numba and numpy
-                micromamba install "numpy<1.24" || return "$?"
                 micromamba clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
+echo "sourcing gfal activate"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
 export GFAL_PLUGIN_DIR="\${CONDA_PREFIX}/lib/gfal2-plugins"
 export X509_CERT_DIR="${X509_CERT_DIR}"
@@ -530,12 +534,16 @@ export X509_VOMS_DIR="${X509_VOMS_DIR}"
 export X509_VOMSES="${X509_VOMSES}"
 export VOMS_USERCONF="${VOMS_USERCONF}"
 EOF
+                echo
             fi
         fi
 
         #
         # venv setup
         #
+
+        # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
+        # - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
 
         show_version_warning() {
             >&2 echo
@@ -572,14 +580,17 @@ EOF
                 cf_init_submodule "${CF_BASE}" "modules/${m}"
             done
         fi
-    else
-        # at this point we are located in a remote job
+    fi
 
-        # TODO
+    #
+    # setup in remote jobs
+    #
 
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # initialize conda
-        source "${CF_CONDA_BASE}/bin/activate" "" || return "$?"
-        echo "initialized conda / micromamba with $( cf_color magenta "python ${pyv}" )"
+        source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
+        micromamba activate || return "$?"
+        echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
         # source the prod sandbox
         source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
