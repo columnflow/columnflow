@@ -45,7 +45,7 @@ setup_columnflow() {
     #      that is usually used by an upstream analysis. For instance, if the analysis base is
     #      stored in "$MY_ANALYSIS_BASE", CF_REPO_BASE_ALIAS should be "MY_ANALYSIS_BASE" (no $).
     #   CF_CONDA_BASE
-    #       The directory where conda and conda envs are installed. Might point to
+    #       The directory where conda / micromamba and conda envs are installed. Might point to
     #       $CF_SOFTWARE_BASE/conda.
     #   CF_VENV_BASE
     #       The directory where virtual envs are installed. Might point to $CF_SOFTWARE_BASE/venvs.
@@ -400,8 +400,9 @@ cf_setup_interactive() {
 }
 
 cf_setup_software_stack() {
-    # Sets up the columnflow software stack consisting of a base environment using conda,
-    # lightweight virtual environments on top and git submodule initialization / updates.
+    # Sets up the columnflow software stack as a base environment using conda (actually using the
+    # free and faster micromamba interface), lightweight virtual environments on top and git
+    # submodule initialization / updates.
     #
     # Arguments:
     #   1. setup_name
@@ -411,7 +412,7 @@ cf_setup_software_stack() {
     #   CF_BASE
     #       The columnflow base directory.
     #   CF_CONDA_BASE
-    #       The directory where conda and conda envs will be installed.
+    #       The directory where conda / micromamba and conda envs will be installed.
     #   CF_VENV_BASE
     #       The base directory were virtual envs are installed.
     #
@@ -442,7 +443,6 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_23.1.0-1-Linux-x86_64.sh"
     local pyv="3.9"
 
     # empty the PYTHONPATH
@@ -457,10 +457,12 @@ cf_setup_software_stack() {
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
-    # also add the python path of the cenv to be installed to propagate changes to any outer venv
+    # also add the python path of the venv to be installed to propagate changes to any outer venv
     export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
 
     # update paths and flags
+    export MAMBA_ROOT_PREFIX="${CF_CONDA_BASE}"
+    export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
     export PYTHONWARNINGS="${PYTHONWARNINGS:-ignore}"
     export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
     export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
@@ -470,12 +472,14 @@ cf_setup_software_stack() {
     export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
     ulimit -s unlimited
 
-    # local python stack in one conda env and two virtual envs:
-    #   - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
-    #   - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
+    #
+    # setup in local envs (not remote)
+    #
+
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
+        # remote directories first if requested
         if [ "${CF_REINSTALL_SOFTWARE}" = "1" ]; then
-            echo "removing conda at $( cf_color magenta ${CF_CONDA_BASE})"
+            echo "removing conda setup at $( cf_color magenta ${CF_CONDA_BASE})"
             rm -rf "${CF_CONDA_BASE}"
 
             echo "removing software virtual envs at $( cf_color magenta ${CF_VENV_BASE})"
@@ -483,39 +487,42 @@ cf_setup_software_stack() {
         fi
 
         #
-        # conda setup
+        # conda / micromamba setup
         #
 
         # not needed in CI jobs
         if [ "${CF_CI_JOB}" != "1" ]; then
-            # conda base environment
+            # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
                 echo
-                cf_color magenta "installing conda at ${CF_CONDA_BASE}"
-                wget "${miniconda_source}" -O setup_miniconda.sh || return "$?"
-                bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" || return "$?"
-                rm -f setup_miniconda.sh
-                cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+                cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
+
+                mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
+                curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
+                # make the setup file relocatable
+                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" return "$?"
+                mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
+                cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
+always_yes: true
 channels:
   - conda-forge
 EOF
             fi
 
-            # initialize conda
-            source "${CF_CONDA_BASE}/etc/profile.d/conda.sh" "" || return "$?"
-            conda activate || return "$?"
-            echo "initialized conda with $( cf_color magenta "python ${pyv}" )"
+            # initialize micromamba
+            source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
+            micromamba activate || return "$?"
+            echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
             # install packages
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
-                conda install --yes libgcc gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
-                # TODO: temporary issue with numba and numpy
-                conda install --yes "numpy<1.24" || return "$?"
-                conda clean --yes --all
+                micromamba install libgcc "python=${pyv}" gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                micromamba clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -526,12 +533,16 @@ export X509_VOMS_DIR="${X509_VOMS_DIR}"
 export X509_VOMSES="${X509_VOMSES}"
 export VOMS_USERCONF="${VOMS_USERCONF}"
 EOF
+                echo
             fi
         fi
 
         #
         # venv setup
         #
+
+        # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
+        # - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
 
         show_version_warning() {
             >&2 echo
@@ -568,12 +579,17 @@ EOF
                 cf_init_submodule "${CF_BASE}" "modules/${m}"
             done
         fi
-    else
-        # at this point we are located in a remote job
+    fi
 
+    #
+    # setup in remote jobs
+    #
+
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # initialize conda
-        source "${CF_CONDA_BASE}/bin/activate" "" || return "$?"
-        echo "initialized conda with $( cf_color magenta "python ${pyv}" )"
+        source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
+        micromamba activate || return "$?"
+        echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
         # source the prod sandbox
         source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
