@@ -526,7 +526,6 @@ EOF
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
-echo "sourcing gfal activate"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
 export GFAL_PLUGIN_DIR="\${CONDA_PREFIX}/lib/gfal2-plugins"
 export X509_CERT_DIR="${X509_CERT_DIR}"
