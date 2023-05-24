@@ -2672,7 +2672,7 @@ class ChunkedIOHandler(object):
 
             # add names prefixed with an 'n' to the list of columns to read
             # (needed to construct the nested list structure of jagged columns)
-            maybe_jagged_fields = {Route(s).fields[0] for s in read_columns}
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
             filter_name.extend(
                 f"n{field}"
                 for field in maybe_jagged_fields
@@ -2746,6 +2746,16 @@ class ChunkedIOHandler(object):
             "read_dictionary" not in read_options["parquet_options"]
         ):
             read_dictionary = [Route(s).string_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+            read_dictionary.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+                if field != "GenPart"
+            )
+
             read_options.setdefault("parquet_options", {})["read_dictionary"] = read_dictionary
 
         # read the events chunk into memory
