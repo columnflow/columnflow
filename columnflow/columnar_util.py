@@ -2405,7 +2405,7 @@ class ChunkedIOHandler(object):
 
             - "uproot_root"
             - "coffea_root"
-            - "coffea_parquet" (currently unsupported)
+            - "coffea_parquet"
             - "awkward_parquet"
         """
         if source_type is None:
@@ -2438,13 +2438,13 @@ class ChunkedIOHandler(object):
                 cls.close_coffea_root,
                 cls.read_coffea_root,
             )
-        # if source_type == "coffea_parquet":
-        #     return cls.SourceHandler(
-        #         source_type,
-        #         cls.open_coffea_parquet,
-        #         cls.close_coffea_parquet,
-        #         cls.read_coffea_parquet,
-        #     )
+        if source_type == "coffea_parquet":
+            return cls.SourceHandler(
+                source_type,
+                cls.open_coffea_parquet,
+                cls.close_coffea_parquet,
+                cls.read_coffea_parquet,
+            )
         if source_type == "awkward_parquet":
             return cls.SourceHandler(
                 source_type,
@@ -2623,58 +2623,66 @@ class ChunkedIOHandler(object):
 
         return chunk
 
-    # @classmethod
-    # def open_coffea_parquet(
-    #     cls,
-    #     source: str,
-    #     open_options: dict | None = None,
-    #     read_columns: set[str | Route] | None = None,
-    # ) -> tuple[str, int]:
-    #     """
-    #     Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
-    #     *open_options* has no effect.
-    #
-    #     TODO: use read_columns?
-    #     """
-    #     return (source, pq.ParquetFile(source).metadata.num_rows)
+    @classmethod
+    def open_coffea_parquet(
+        cls,
+        source: str,
+        open_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
+    ) -> tuple[str, int]:
+        """
+        Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
+        *open_options* or *read_columns* has no effect.
+        """
+        return (source, pq.ParquetFile(source).metadata.num_rows)
 
-    # @classmethod
-    # def close_coffea_parquet(
-    #     cls,
-    #     source_object: str,
-    # ) -> None:
-    #     """
-    #     This is a placeholder method and has no effect.
-    #     """
-    #     return
+    @classmethod
+    def close_coffea_parquet(
+        cls,
+        source_object: str,
+    ) -> None:
+        """
+        This is a placeholder method and has no effect.
+        """
+        return
 
-    # @classmethod
-    # def read_coffea_parquet(
-    #     cls,
-    #     source_object: str,
-    #     chunk_pos: ChunkPosition,
-    #     read_options: dict | None = None,
-    #     read_columns: set[str | Route] | None = None,
-    # ) -> coffea.nanoevents.methods.base.NanoEventsArray:
-    #     """
-    #     Given a the location of a parquet file *source_object*, returns an awkward array chunk
-    #     referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
-    #     *coffea.nanoevents.NanoEventsFactory.from_parquet*.
-    #
-    #     TODO: use read_columns?
-    #     """
-    #     # TODO: default read options? go via dak and preloaded?
-    #
-    #     # read the events chunk into memory
-    #     chunk = coffea.nanoevents.NanoEventsFactory.from_parquet(
-    #         source_object,
-    #         entry_start=chunk_pos.entry_start,
-    #         entry_stop=chunk_pos.entry_stop,
-    #         schemaclass=coffea.nanoevents.NanoAODSchema,
-    #         **(read_options or {}),
-    #     ).events()
+    @classmethod
+    def read_coffea_parquet(
+        cls,
+        source_object: str,
+        chunk_pos: ChunkPosition,
+        read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
+    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+        """
+        Given a the location of a parquet file *source_object*, returns an awkward array chunk
+        referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
+        ``coffea.nanoevents.NanoEventsFactory.from_parquet``. *read_columns* are converted to
+        strings and, if not already present, added as nested field
+        ``parquet_options.read_dictionary`` to *read_options*.
+        """
+        # default read options
+        read_options = read_options or {}
+        read_options["runtime_cache"] = None
+        read_options["persistent_cache"] = None
 
-    #     return chunk
+        # inject read_columns
+        if read_columns and (
+            "parquet_options" not in read_options or
+            "read_dictionary" not in read_options["parquet_options"]
+        ):
+            read_dictionary = [Route(s).string_column for s in read_columns]
+            read_options.setdefault("parquet_options", {})["read_dictionary"] = read_dictionary
+
+        # read the events chunk into memory
+        chunk = coffea.nanoevents.NanoEventsFactory.from_parquet(
+            source_object,
+            entry_start=chunk_pos.entry_start,
+            entry_stop=chunk_pos.entry_stop,
+            **read_options,
+        ).events()
+
+        return chunk
 
     @classmethod
     def open_awkward_parquet(
