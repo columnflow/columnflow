@@ -239,14 +239,15 @@ def create_category_combinations(
 
 def verify_config_processes(config: od.Config, warn: bool = False) -> None:
     """
-    Verifies for all datasets contained in a *config* object that the linked process is covered by
-    any process object registered in *config* and raises an exception if not. If *warn* is *True*,
-    a warning is printed instead.
+    Verifies for all datasets contained in a *config* object that the linked processes are covered
+    by any process object registered in *config* and raises an exception if not. If *warn* is
+    *True*, a warning is printed instead.
     """
     missing_pairs = []
     for dataset in config.datasets:
-        if not config.has_process(process := dataset.processes.get_first()):
-            missing_pairs.append((dataset, process))
+        for process in dataset.processes:
+            if not config.has_process(process):
+                missing_pairs.append((dataset, process))
 
     # nothing to do when nothing is missing
     if not missing_pairs:
@@ -258,7 +259,7 @@ def verify_config_processes(config: od.Config, warn: bool = False) -> None:
         msg += f"\n  dataset '{dataset.name}' -> process '{process.name}'"
 
     # warn or raise
-    if warn:
-        print(f"{law.util.colored('WARNING:', 'red')} {msg}")
-    else:
+    if not warn:
         raise Exception(msg)
+
+    print(f"{law.util.colored('WARNING', 'red')}: {msg}")
