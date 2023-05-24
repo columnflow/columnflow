@@ -1,10 +1,11 @@
-# version 5
+# version 6
 
-awkward~=2.0
-git+https://github.com/riga/coffea.git@9ecdee5#egg=coffea
-dask-awkward~=2023.2
+awkward~=2.2
+uproot~=5.0
+git+https://github.com/CoffeaTeam/coffea.git@v2023.5.0.rc0#egg=coffea
+dask-awkward~=2023.5
 tabulate~=0.9
-zstandard~=0.20
+zstandard~=0.21
 lz4~=4.3
 xxhash~=3.2
 tensorflow~=2.11

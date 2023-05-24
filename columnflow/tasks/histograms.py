@@ -185,7 +185,7 @@ class CreateHistograms(
                 fill_kwargs = {
                     "category": events.category_ids,
                     "process": events.process_id,
-                    "shift": self.global_shift_inst.id,
+                    "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
                     "weight": weight,
                 }
                 for variable_inst in variable_insts:
@@ -199,9 +199,10 @@ class CreateHistograms(
                             return route.apply(events, null_value=variable_inst.null_value)
                     # apply it
                     fill_kwargs[variable_inst.name] = expr(events)
+
                 # broadcast and fill
-                arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
+                arrays = ak.flatten(ak.cartesian(fill_kwargs))
+                histograms[var_key].fill(**{field: arrays[field] for field in arrays.fields})
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")

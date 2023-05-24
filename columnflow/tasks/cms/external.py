@@ -58,10 +58,10 @@ class CreatePileupWeights(ConfigTask):
             if self.data_mode == "hist":
                 pu_hist_target = externals.files.pu.data_profile[shift]
                 data_profile = self.read_data_profile_from_hist(pu_hist_target)
-            else:
+            else:  # "pileupcalc"
                 pu_file_target = externals.files.pu.json
-                minbiasxs = self.config_inst.x.minbiasxs.get(shift)
-                data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
+                mb_xs = self.config_inst.x.minbias_xs.get(shift)
+                data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, mb_xs)
 
             # build the ratios and save them
             if len(mc_profile) != len(data_profile):

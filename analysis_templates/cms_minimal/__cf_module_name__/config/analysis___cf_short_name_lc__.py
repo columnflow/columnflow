@@ -11,11 +11,13 @@ import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict
+from columnflow.util import DotDict, maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
 )
+
+ak = maybe_import("awkward")
 
 
 #
@@ -290,6 +292,13 @@ cfg.add_variable(
     x_title="Number of jets",
 )
 cfg.add_variable(
+    name="jets_pt",
+    expression="Jet.pt",
+    binning=(40, 0.0, 400.0),
+    unit="GeV",
+    x_title=r"$p_{T} of all jets$",
+)
+cfg.add_variable(
     name="jet1_pt",
     expression="Jet.pt[:,0]",
     null_value=EMPTY_FLOAT,
@@ -303,6 +312,13 @@ cfg.add_variable(
     null_value=EMPTY_FLOAT,
     binning=(30, -3.0, 3.0),
     x_title=r"Jet 1 $\eta$",
+)
+cfg.add_variable(
+    name="ht",
+    expression=lambda events: ak.sum(events.Jet.pt, axis=1),
+    binning=(40, 0.0, 800.0),
+    unit="GeV",
+    x_title="HT",
 )
 # weights
 cfg.add_variable(
