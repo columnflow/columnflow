@@ -178,8 +178,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         workflow whose branch value is used instead.
 
         Iterating yields a 2-tuple (file index, input file) where the latter is either a
-        :external+law:py:class:`law.target.local.LocalFileTarget` or a
-        :external+law:py:class:`law.wlcg.WLCGFileTarget` with its fs set to
+        :external+law:py:class:`~law.target.local.LocalFileTarget` or a
+        :external+law:py:class:`~law.wlcg.WLCGFileTarget` with its fs set to
         *remote_fs*. When a sequence is passed, the fs names are evaluated in that order and the
         first existing one is generally used. However, if *eager_lookup* is *True*, in case the stat
         request to a fs was successful but took longer than two seconds, the next fs is eagerly
@@ -194,7 +194,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         :type lfn_indices: list[int] | None, optional
         :param eager_lookup: Look at the next remote fs in *remote_fs* if stat takes too long, defaults to 1
         :type eager_lookup: bool | int, optional
-        :raises TypeError: If *task* is not of type :external+law:py:class:`law.workflow.base.BaseWorkflow` or not
+        :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not
             a task analyzing a single branch in the task tree
         :raises Exception: If current task is not complete as indicated with ``self.complete()``
         :raises ValueError: If no remote fs is provided at call and none can be found in either the config instance
