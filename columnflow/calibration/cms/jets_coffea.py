@@ -10,7 +10,7 @@ import functools
 
 import law
 
-from columnflow.util import maybe_import, memoize
+from columnflow.util import maybe_import, memoize, InsertableDict
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import propagate_met, ak_random
 from columnflow.production.util import attach_coffea_behavior
@@ -406,7 +406,7 @@ def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jec_coffea.setup
-def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
 
@@ -417,6 +417,8 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
+    :param reader_targets: TODO: add docs
+    :type reader_targets: InsertableDict
 
     :raises ValueError: If module is provided with more than one JEC uncertainty
         source file
@@ -767,7 +769,11 @@ def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jer_coffea.setup
-def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jer_coffea_setup(
+    self: Calibrator,
+    reqs: dict, inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     """ Determine correct JER files for task based on config/dataset and inject them
     into the calibrator function call.
 
@@ -778,6 +784,8 @@ def jer_coffea_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
+    :param reader_targets: TODO: add docs
+    :type reader_targets: InsertableDict
 
     :raises ValueError: If module is provided with more than one JER uncertainty
         source file

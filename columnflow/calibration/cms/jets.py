@@ -9,7 +9,7 @@ import functools
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, layout_ak_array
 
 from typing import Any
@@ -421,7 +421,7 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jec.setup
-def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """Load the correct jec files using the
     :external+correctionlib:py:func:`correctionlib.highlevel.CorrectionSet.from_string`
     function and apply the corrections as needed.
@@ -433,6 +433,8 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
+    :param reader_targets: TODO: add documentation
+    :type reader_targets: InsertableDict
     """
     bundle = reqs["external_files"]
 
@@ -733,7 +735,7 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jer.setup
-def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
+def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
     Determine correct JR files for task based on config/dataset and inject them
     into the calibrator function call.
