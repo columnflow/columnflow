@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Object and event calibration tools. For more information, see :ref:base:summary .
+Object and event calibration tools. For more information, see :ref:`base:summary`.
 For convenience, :py:class:`~columnflow.calibration.base.Calibrator` and
 :py:meth:`~columnflow.calibration.base.calibrator` can be imported directly, e.g.
 
