@@ -148,7 +148,7 @@ def jec(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     *get_jec_file* can be adapted in a subclass in case it is stored differently in the
@@ -196,20 +196,20 @@ def jec(
     :uncertainty_sources: None,
 
     :propagate_met: ``True``
-    
-    :get_jec_file: 
+
+    :get_jec_file:
         .. code-block:: python
 
             lambda self, external_files: external_files.jet_jerc
 
-    :get_jec_config: 
+    :get_jec_config:
         .. code-block:: python
 
             lambda self: self.config_inst.x.jec
-    
+
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
     :type self: :py:class:`~columnflow.calibration.Calibrator`
-    
+
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
 
@@ -227,7 +227,7 @@ def jec(
         pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
         variations, see produces section
     :rtype: :external+ak:py:class:`ak.Array`
-    """
+    """ # noqa
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
     events = set_ak_column_f32(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
@@ -529,7 +529,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     *get_jer_file* can be adapted in a subclass in case it is stored differently in the
@@ -571,20 +571,20 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     :propagate_met: ``True``
     :mc_only: ``True``
 
-    
-    :get_jer_file: 
+
+    :get_jer_file:
         .. code-block:: python
 
             lambda self, external_files: external_files.jet_jerc
 
-    :get_jer_config: 
+    :get_jer_config:
         .. code-block:: python
-        
+
             lambda self: self.config_inst.x.jer
-    
+
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
     :type self: :py:class:`~columnflow.calibration.Calibrator`
-    
+
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
 
@@ -593,7 +593,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         Additionally contains columns for JER up and down variations,
         see produces section
     :rtype: :external+ak:py:class:`ak.Array`
-    """
+    """ # noqa
     # fail when running on data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
