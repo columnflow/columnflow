@@ -2,7 +2,8 @@
 
 ## Selections
 
-In columnflow, selections are defined through the {py:class}'~.Selector' class.
+In columnflow, selections are defined through the {py:class}'~columnflow.selection.Selector' class.
+
 
 ```
 Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
@@ -121,7 +122,7 @@ Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
         task. Defaults to `False`.
     :type exposed: `bool`
 
-```
+``
 
 ### Add a step to an existent selection
 
