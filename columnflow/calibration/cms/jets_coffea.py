@@ -177,7 +177,7 @@ def jec_coffea(
 ) -> ak.Array:
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
 
-    This :py:class:`~columnflow.calibration.base.Calibrator` instance is setup
+    This :py:class:`~columnflow.calibration.Calibrator` instance is setup
     with the following kwargs.
 
     :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
@@ -195,9 +195,9 @@ def jec_coffea(
 
     :*propagate_met*: ``True``
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
+    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
@@ -347,7 +347,7 @@ def jec_coffea(
 @jec_coffea.init
 def jec_coffea_init(self: Calibrator) -> None:
     """:py:meth:`init` function for :py:func:`~.jec_coffea`
-    :py:class:`~columnflow.calibration.base.Calibrator`.
+    :py:class:`~columnflow.calibration.Calibrator`.
     Adds JEC uncertainty shifts to the list of produced columns.
 
     If member variable *uncertainty_source* is ``None``, load the full list
@@ -356,8 +356,8 @@ def jec_coffea_init(self: Calibrator) -> None:
     If the member variable *propagate_met* is ``True``, add also MET and RawMET
     as well as the corresponding jec variations to the set of columns to be produced.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     sources = self.uncertainty_sources
     if sources is None:
@@ -392,10 +392,10 @@ def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs:  dict
     """
     if "external_files" in reqs:
@@ -410,10 +410,10 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets:
     """Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
 
-    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
@@ -527,7 +527,7 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     The module applies the scale factors associated to the JER and performs the
     stochastic smearing to make the energy resolution in simulation more realistic.
 
-    This :py:class:`~columnflow.calibration.base.Calibrator` instance is setup
+    This :py:class:`~columnflow.calibration.Calibrator` instance is setup
     with the following kwargs.
 
     :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
@@ -548,9 +548,9 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :*propagate_met*: ``True``
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
+    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
@@ -733,8 +733,8 @@ def jer_coffea_init(self: Calibrator) -> None:
     ``uses`` and ``produces`` sets, see documentation of :py:func:`~.jer_coffea`
     Calibrator.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     if not self.propagate_met:
         return
@@ -755,10 +755,10 @@ def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs:  dict
     """
     if "external_files" in reqs:
@@ -777,10 +777,10 @@ def jer_coffea_setup(
     """ Determine correct JER files for task based on config/dataset and inject them
     into the calibrator function call.
 
-    :param self: This :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.base.Calibrator` instance
+        :py:class:`~columnflow.calibration.Calibrator` instance
     :type reqs: dict
     :param inputs: Additional inputs, currently not used
     :type inputs: dict
@@ -828,11 +828,11 @@ def jer_coffea_setup(
     propagate_met=True,
 )
 def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    """Instance of :py:class:`~columnflow.calibration.base.Calibrator` that
+    """Instance of :py:class:`~columnflow.calibration.Calibrator` that
     does all relevant calibrations for jets, i.e. JEC and JER.
     For more information, see :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
 
-    This instance of :py:class:`~columnflow.calibration.base.Calibrator` is
+    This instance of :py:class:`~columnflow.calibration.Calibrator` is
     initialized with the following parameters by default:
 
     :*uses*: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
@@ -842,9 +842,9 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :*propagate_met*: ``True``
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` class in which
+    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.base.Calibrator`
+    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
     :type events: :external+ak:py:class:`ak.Array`
@@ -869,12 +869,12 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 @jets_coffea.init
 def jets_coffea_init(self: Calibrator) -> None:
     """:py:meth:`init` function for :py:func:`~.jets_coffea`
-    :py:class:`~columnflow.calibration.base.Calibrator`.
+    :py:class:`~columnflow.calibration.Calibrator`.
     Forwards the *propagate_met* setting to the underyling Calibrators
     :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
 
-    :param self: :py:class:`~columnflow.calibration.base.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.base.Calibrator`
+    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     # forward the propagate_met argument to the producers
     self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}

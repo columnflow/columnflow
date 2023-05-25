@@ -11,6 +11,8 @@ from typing import Callable
 
 import law
 import order as od
+from functools import wraps
+
 
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
@@ -20,10 +22,129 @@ ak = maybe_import("awkward")
 
 
 class Selector(TaskArrayFunction):
+    """Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
+    that handles selections.
+
+    :py:class:`~.Selector` s are designed to apply
+    arbitrary selection criteria. These critera can be based on already existing
+    nano AOD columns, but can also involve the output of any other module,
+    e.g. :py:class:`~columnflow.production.Producer`s. To reduce the need to
+    run potentionally computation-expensive operations multiple times, they can
+    also write new columns. Similar to :py:class:`~columnflow.production.Producer` s,
+    and :py:class:`~columnflow.calibration.Calibrator` s, this new columns must
+    be specified in the `produces` set.
+
+    Apart from the awkward array, a :py:class:`~.Selector` must also return a
+    :py:class:`~.SelectionResult`. This object contains boolean masks on event
+    and object level that represent which objects and events pass different
+    selections. These masks are saved to disc and are intended for more involved
+    studies, e.g. comparisons between frameworks.
+
+    To create a new :py:class:`~.Selector`, you can use the decorrator
+    class method :py:meth:`~.Selector.selector` like this:
+
+
+    .. code-block:: python
+
+        # import the Selector class and the selector method
+        from columnflow.selection import Selector, selector
+
+        # also import the SelectionResult
+        from columnflow.selection import SelectionResult
+
+        # maybe import awkard in case this Selector is actually run
+        ak = maybe_import("awkward")
+
+        # now wrap any function with a selector
+        @selector(
+            # define some additional information here, e.g.
+            # what columns are needed for this Selector?
+            uses={
+                "Jet.pt", "Jet.eta"
+            },
+            # does this Selector produce any columns?
+            produces={}
+
+            # pass any other variable to the selector class
+            is_this_a_fun_auxiliary_variable=True
+
+            # ...
+        )
+        def jet_selection(events: ak.Array) -> ak.Array, SelectionResult:
+            # do something ...
+
+    The decorrator will create a new :py:class:`~.Selector` instance with the
+    name of your function. The function itself is set as the `call_func` if
+    the :py:class:`~.Selector` instance. All keyword arguments specified in the
+    :py:meth:`~.Selector.selector` are available as member variables of your
+    new :py:class:`~.Selector` instance.
+
+    In additional to the member variables inherited from
+    :py:class:`~columnflow.columnar_util.TaskArrayFunction` class, the
+    :py:class:`~.Selector` class defines the *exposed* variable. This member
+    variable controls whether this :py:class:`~.Selector` instance is a
+    top level Selector that can be used directly for the
+    :py:class:`~columnflow.tasks.selection.SelectEvents` task.
+    A top level :py:class:`~.Selector` should not need anything apart from
+    the awkward array containing the events, e.g.
+
+    .. code-block:: python
+
+        @selector(
+            # some information for Selector
+
+            # This Selector will need some external input, see below
+            # Therefore, it should not be exposed
+            exposed=False
+        )
+        def some_internal_selector(
+            events: ak.Array,
+            some_additional_input: Any
+        ) -> ak.Array, SelectionResult:
+            result = SelectionResult()
+            # do stuff with additional information
+            return events, result
+
+        @selector(
+            # some information for Selector
+            # e.g., if we want to use some internal Selector, make
+            # sure that you have all the relevant information
+            uses={
+                some_internal_selector,
+            },
+            produces={
+                some_internal_selector,
+            }
+
+            # this is our top level Selector, so we need to make it reachable
+            # for the SelectEvents task
+            exposed=True
+        )
+        def top_level_selector(events: ak.Array) -> ak.Array, SelectionResult:
+            results = SelectionResult()
+            # do something here
+
+            # e.g., call the internal Selector
+            additional_info = 2
+            events, sub_result = self[some_internal_selector](events, additional_info)
+            result += sub_result
+
+            return events, result
+
+
+    :param exposed: Member variable that controls whether this
+        :py:class:`~.Selector` instance is a top level Selector that can
+        be used directly for the :py:class:`~columnflow.tasks.selection.SelectEvents`
+        task. Defaults to `False`.
+    :type exposed: `bool`
+    """
 
     exposed = False
 
     def __init__(self, *args, **kwargs):
+        """Init function for Selector. Checks whether this Selector
+        instance is exposed and sets the accessibility accordingly
+        """
         super().__init__(*args, **kwargs)
 
         # when not exposed and call_force is not specified,
@@ -40,49 +161,66 @@ class Selector(TaskArrayFunction):
         data_only: bool = False,
         **kwargs,
     ) -> DerivableMeta | Callable:
-        """
-        Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases*
-        and attaching the decorated function to it as ``call_func``. When *mc_only* (*data_only*) is
-        *True*, the selector is skipped and not considered by other calibrators, selectors and
-        producers in case they are evalauted on an :py:class:`order.Dataset` whose ``is_mc``
-        attribute is *False* (*True*).
+        """Decorator for creating a new :py:class:`~.Selector` subclass with
+        additional, optional *bases* and attaching the decorated function
+        to it as ``call_func``. When *mc_only* (*data_only*) is ``True``,
+        the selector is skipped and not considered by other calibrators,
+        selectors and producers in case they are evalauted on an
+        :external+order:py:class:`order.dataset.Dataset` whose ``is_mc``
+        attribute is ``False`` (``True``).
 
         All additional *kwargs* are added as class members of the new subclasses.
+
+        :param func: Callable that is used to perform the selections, defaults to None
+        :type func: Callable | None, optional
+        :param bases: Additional bases for new subclass, defaults to ()
+        :type bases: tuple, optional
+        :param mc_only: Flag to indicate that this Selector should only run
+            on Monte Carlo Simulation, defaults to False
+        :type mc_only: bool, optional
+        :param data_only: Flag to indicate that this Selector should only run
+            on observed data, defaults to False
+        :type data_only: bool, optional
+        :return: New Selector instance
+        :rtype: DerivableMeta | Callable
         """
         def decorator(func: Callable) -> DerivableMeta:
-            # create the class dict
-            cls_dict = {"call_func": func}
-            cls_dict.update(kwargs)
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                # create the class dict
+                cls_dict = {"call_func": func}
+                cls_dict.update(kwargs)
 
-            # get the module name
-            frame = inspect.stack()[1]
-            module = inspect.getmodule(frame[0])
+                # get the module name
+                frame = inspect.stack()[1]
+                module = inspect.getmodule(frame[0])
 
-            # get the selector name
-            cls_name = cls_dict.pop("cls_name", func.__name__)
+                # get the selector name
+                cls_name = cls_dict.pop("cls_name", func.__name__)
 
-            # optionally add skip function
-            if mc_only and data_only:
-                raise Exception(f"selector {cls_name} received both mc_only and data_only")
-            if mc_only or data_only:
-                if cls_dict.get("skip_func"):
-                    raise Exception(
-                        f"selector {cls_name} received custom skip_func, but mc_only or data_only are set",
-                    )
+                # optionally add skip function
+                if mc_only and data_only:
+                    raise Exception(f"selector {cls_name} received both mc_only and data_only")
+                if mc_only or data_only:
+                    if cls_dict.get("skip_func"):
+                        raise Exception(
+                            f"selector {cls_name} received custom skip_func, but mc_only or data_only are set",
+                        )
 
-                def skip_func(self):
-                    # never skip when there is not dataset
-                    if not getattr(self, "dataset_inst", None):
-                        return False
+                    def skip_func(self):
+                        # never skip when there is not dataset
+                        if not getattr(self, "dataset_inst", None):
+                            return False
 
-                    return self.dataset_inst.is_mc != bool(mc_only)
+                        return self.dataset_inst.is_mc != bool(mc_only)
 
-                cls_dict["skip_func"] = skip_func
+                    cls_dict["skip_func"] = skip_func
 
-            # create the subclass
-            subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
-
-            return subclass
+                # create the subclass
+                subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
+                subclass.__doc__ = func.__doc__
+                return subclass
+            return wrapper(func, **kwargs)
 
         return decorator(func) if func else decorator
 
@@ -92,47 +230,79 @@ selector = Selector.selector
 
 
 class SelectionResult(od.AuxDataMixin):
-    """
-    Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
-    provides convenience methods to merge them or to dump them into an awkward array. The resulting
-    structure looks like the following example:
+    """Lightweight class that wraps selection decisions (e.g. event and object
+    selection steps).
+
+    Additionally, this class provides convenience methods to merge them or to dump
+    them into an awkward array. Arbitrary, auxiliary information
+    (additional arrays, or other objects) that should not be stored in dumped
+    akward arrays can be placed in the *aux* dictionary
+    (see :py:class:`~order.mixins.AuxDataMixin`).
+
+    The resulting structure looks like the following example:
 
     .. code-block:: python
 
-        {
+        results = {
             # arbitrary, top-level main fields
             ...
 
             "steps": {
                 # event selection decisions from certain steps
-                "jet": array,
-                "muon": array,
-                ...
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...,
             },
 
             "objects": {
                 # object selection decisions or indices
-                "jet": array,
-                "muon": array,
-                ...
+                # define type of this field here, define that `jet` is of
+                # type `Jet`
+                "Jet": {
+                    "jet": array_of_jet_indices,
+                },
+                "Muon": {
+                    "muon": array_of_muon_indices,
+                },
+                ...,
             },
+            # additionally, you can also save auxiliary data, e.g.
+            "aux": {
+                # save the per-object jet selection masks
+                "jet": array_of_jet_object_masks,
+                # save number of jets
+                "n_passed_jets": ak.num(array_of_jet_indices, axis=1),
+                ...,
+            },
+            ...
         }
 
-    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
-    following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects*
+    keyword arguments. The following example creates the structure above.
 
     .. code-block:: python
 
+        # combined event selection after all steps
+        event_sel = reduce(and_, results.steps.values())
         res = SelectionResult(
-            main={...},
-            steps={"jet": array, "muon": array, ...}
-            objects={"jet": array, "muon": array, ...}
+            main={
+                "event": event_sel,
+            },
+            steps={
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...
+            },
+            objects={
+                "Jet": {
+                    "jet": array_of_jet_indices
+                },
+                "Muon": {
+                    "muon": array, ...
+                }
+            }
         )
         res.to_ak()
-
-    Arbitrary, auxiliary information (additional arrays, or other objects) that should not be stored
-    in dumped akward arrays can be placed in the *aux* dictionary
-    (see :py:class:`order.AuxDataMixin`).
     """
 
     def __init__(
@@ -142,6 +312,24 @@ class SelectionResult(od.AuxDataMixin):
         objects: DotDict | dict | None = None,
         aux: DotDict | dict | None = None,
     ):
+        """Init for :py:class:`~.SelectionResult` class. Initializes the
+        manditory *main*, *steps* and *objects* dictionaries as well as the
+        optional *aux* dictionary as
+        :py:class:`~columnflow.util.DotDict`
+
+        :param main: :py:class:`dictionary` containing event-level selection
+            decisions, defaults to None
+        :type main: DotDict | dict | None, optional
+        :param steps: :py:class:`dictionary` containing event-level selection
+            decisions for individual selection steps, defaults to None
+        :type steps: DotDict | dict | None, optional
+        :param objects: :py:class:`dictionary` containing object indices for
+            new collections, defaults to None
+        :type objects: DotDict | dict | None, optional
+        :param aux: Optional :py:class:`dictionary` containing auxiliary
+            information that is not safed to disk, defaults to None
+        :type aux: DotDict | dict | None, optional
+        """
         super().__init__(aux=aux)
 
         # store fields
@@ -150,9 +338,17 @@ class SelectionResult(od.AuxDataMixin):
         self.objects = DotDict.wrap(objects or {})
 
     def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
-        """
-        Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
-        unchanged.
+        """Adds the field of an *other* instance in-place.
+
+        When *None*, *this* instance is returned unchanged.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :type other: SelectionResult | None
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
+        :rtype: SelectionResult
         """
         # do nothing if the other instance is none
         if other is None:
@@ -173,9 +369,18 @@ class SelectionResult(od.AuxDataMixin):
         return self
 
     def __add__(self, other: SelectionResult | None) -> SelectionResult:
-        """
-        Returns a new instance with all fields of *this* and an *other* instance merged. When
-        *None*, a copy of *this* instance is returned.
+        """Returns a new instance with all fields of *this* and an *other*
+        instance merged.
+
+        When *None*, a copy of *this* instance is returned.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :type other: SelectionResult | None
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
+        :rtype: SelectionResult
         """
         inst = self.__class__()
 
@@ -191,8 +396,13 @@ class SelectionResult(od.AuxDataMixin):
         return inst
 
     def to_ak(self) -> ak.Array:
-        """
-        Converts the contained fields into a nested awkward array and returns it.
+        """Converts the contained fields into a nested awkward array and returns it.
+
+        The conversion is performed with multiple calls of
+        :external+ak:py:func:`ak.zip`.
+
+        :return: Transformed :py:class:`~.SelectionResult`
+        :rtype: ak.Array
         """
         to_merge = {}
         if self.steps:

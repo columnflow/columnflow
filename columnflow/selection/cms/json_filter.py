@@ -27,9 +27,8 @@ def json_filter(
     data_only=True,
     **kwargs,
 ) -> ak.Array:
-    """
-    Select only events from certified luminosity blocks included in the "golden" JSON. This filter
-    can only be applied in recorded data.
+    """Select only events from certified luminosity blocks included in the
+    "golden" JSON. This filter can only be applied in recorded data.
 
     By default, the JSON file should specified in the config as an external file under
     ``lumi.golden``:
@@ -44,6 +43,30 @@ def json_filter(
 
     *get_lumi_file* can be adapted in a subclass in case it is stored differently in the external
     files.
+
+    This :py:class:`~columnflow.selection.Selector` instance is initialized with
+    the following parameters:
+        
+    
+    **uses**
+        
+        ``"run"``, ``"luminosityBlock"``.
+
+    **get_lumi_file**
+
+        .. code-block:: python
+
+            lambda self, external_files: external_files.lumi.golden
+
+    :param self: This Selector instance
+    :type self: Selector
+    :param events: Array containing events in the NanoAOD format
+    :type events: ak.Array
+    :param data_only: boolean flag to indicate that this selector should only
+        run on observed data, defaults to True
+    :type data_only: bool, optional
+    :return: Array containing boolean masks to accept or reject given events
+    :rtype: ak.Array
     """
     lookup_result = self.run_ls_lookup[events.run, events.luminosityBlock].todense()
     return np.squeeze(np.array(lookup_result))
@@ -51,8 +74,16 @@ def json_filter(
 
 @json_filter.requires
 def json_filter_requires(self: Selector, reqs: dict) -> None:
-    """
-    Add external files bundle as a task requirement.
+    """Requirements for json_filter Selector that adds external files
+    bundle to dependencies.
+
+    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
+    as keyword ``external_files`` to the dictionary of requirements *reqs*.
+
+    :param self: This :py:class:`~columnflow.selection.Selector` instance
+    :type self: Selector
+    :param reqs: Contains requirements for this task
+    :type reqs: dict
     """
     if "external_files" in reqs:
         return
@@ -63,8 +94,20 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 @json_filter.setup
 def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    """
-    Load golden JSON and set up run/luminosity block lookup table.
+    """Setup function for json_filter Selector. Load golden JSON and set up
+    run/luminosity block lookup table.
+
+    The look-up table is provided as a
+    :external+scipy:py:class:`scipy.sparse.lil_matrix`.
+
+    :param self: This :py:class:`~columnflow.selection.Selector` instance
+    :type self: Selector
+    :param reqs: Contains requirements for this task
+    :type reqs: dict
+    :param inputs: Additional inputs, currently not used
+    :type inputs: dict
+    :param reader_targets: TODO: update docs
+    :type reader_targets: InsertableDict
     """
     bundle = reqs["external_files"]
 

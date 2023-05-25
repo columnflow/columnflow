@@ -7,3 +7,9 @@
 .. automodule:: columnflow.tasks
    :autosummary:
    :members:
+
+.. toctree::
+
+   selection
+   external
+   reduction
