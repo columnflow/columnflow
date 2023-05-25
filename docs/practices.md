@@ -2,7 +2,7 @@
 
 ## Selections
 
-In columnflow, selections are defined through the {py:class}'~columnflow.selection.Selector' class.
+In columnflow, selections are defined through the {py:class}`~columnflow.selection.Selector` class.
 
 
 ```
