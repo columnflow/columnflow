@@ -310,6 +310,40 @@ GetDatasetLFNsWrapper.__doc__ = wrapper_doc
 
 
 class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
+    """Task to collect external files.
+
+    This task is intended to download source files for other tasks, such as
+    files containing corrections for objects, the "golden" json files,
+    source files for the calculation of pileup weights, and others.
+
+    All information about the relevant external files is extracted from the
+    given ``config_inst``, which must contain the keyword ``external_files`` in the
+    auxiliary information. This can look something like this:
+
+    .. code-block:: python
+
+        # cfg is the current config instance
+        cfg.x.external_files = DotDict.wrap({
+        # The following assumes that the zip files are reachable under the
+        # url ``SOURCE_URL``
+        # jet energy correction
+        "jet_jerc": (f"{SOURCE_URL}/POG/JME/{year}{corr_postfix}_UL/jet_jerc.json.gz", "v1"),
+
+        # tau energy correction and scale factors
+        "tau_sf": (f"{SOURCE_URL}/POG/TAU/{year}{corr_postfix}_UL/tau.json.gz", "v1"),
+
+        # electron scale factors
+        "electron_sf": (f"{SOURCE_URL}/POG/EGM/{year}{corr_postfix}_UL/electron.json.gz", "v1"),
+
+    The entries in this DotDict can either be simply the path to the source files
+    or can be a tuple of the format ``(path/or/url/to/source/file, VERSION)``
+    to introduce a versioning mechanism for external files.
+
+    The :py:class:`.~BundleExternalFiles` task downloads all sources and generates
+    replicas of these files to reduce the number of access requests per file in
+    subsequent tasks. How many replicas are created is controlled with the luigi
+    command line parameter *replicas*. This task does not implement a version.
+    """
 
     replicas = luigi.IntParameter(
         default=5,
@@ -318,6 +352,12 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     version = None
 
     def __init__(self, *args, **kwargs):
+        """Initialize BundleExternalFiles task.
+
+        Calls ``super().__init__`` with the provided *args* and *kwargs* and
+        initializes hashes, file names and file directory names to save the
+        downloaded external files.
+        """
         super().__init__(*args, **kwargs)
 
         # cached hash
@@ -331,13 +371,36 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         self._files = None
 
     @classmethod
-    def create_unique_basename(cls, path):
+    def create_unique_basename(cls, path: tuple[str] | str) -> str:
+        """Create a uniqure basename.
+
+        Basename starts with a hash created from *path* using
+        :external+law:py:func:`law.util.create_hash` and ends with *path*
+        if *path* is a string or the first element of *path* if it's a tuple.
+
+        :param path: path to create a unique basename for
+        :type path: tuple[str] | str
+        :return: Unique basename
+        :rtype: str
+        """
         h = law.util.create_hash(path)
         basename = os.path.basename(path[0] if isinstance(path, tuple) else path)
         return f"{h}_{basename}"
 
     @property
-    def files_hash(self):
+    def files_hash(self) -> str:
+        """Create a hash based on all external files.
+
+        If files have not been hashed before, create a hash from a flat
+        representation of the contents of ``self.config_inst.x.external_files``.
+        The hash is generated with :external+law:py:func:`law.util.create_hash`
+        from the flattened contents. The generated hash is cached for later use
+        and is returned if the function is called again later.
+
+        :return: Hash based on the flattened list of external files in the
+            current config instance
+        :rtype: str
+        """
         if self._files_hash is None:
             # take the external files and flatten them into a deterministic order, then hash
             def deterministic_flatten(d):
@@ -351,7 +414,19 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         return self._files_hash
 
     @property
-    def file_names(self):
+    def file_names(self) -> DotDict:
+        """Create a unique basename for each external file.
+
+        The output DotDict has the same arbitrary structure as
+        ``self.config_inst.x.external_files``. This is achieved by mapping
+        the class method :py:meth:`~.BundleExternalFiles.create_unique_basename`
+        to the external_files DotDict using :external+law:py:func:`law.util.map_struct`.
+        This DotDict is cached and provided for later use.
+
+        :return: DotDict of same shape as ``external_files`` DotDict with unique
+            basenames
+        :rtype: DotDict
+        """
         if self._file_names is None:
             self._file_names = law.util.map_struct(
                 self.create_unique_basename,
@@ -361,7 +436,19 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         return self._file_names
 
     @property
-    def files(self):
+    def files(self) -> DotDict:
+        """Create DotDict containing the downloaded files.
+
+        First, check whether the outputs of :py:class:`BundleExternalFiles` exist.
+        If so, resolve the unique basenames created by
+        :py:meth:`~.BundleExternalFiles.create_unique_basename` to real existing
+        files and create a DotDict of the same format as ``self.config_inst.x.external_files``
+        using :external+law:py:func:`law.util.map_struct`.
+
+        :raises Exception: If outputs of BundleExternalFiles do not exist
+        :return: DotDict containing downloaded files
+        :rtype: DotDict
+        """
         if self._files is None:
             # get the output
             output = self.output()
@@ -383,13 +470,30 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._files
 
-    def single_output(self):
+    def single_output(self) -> law.wlcg.target.WLCGFileTarget:
+        """Create single tar ball with downloaded files.
+
+        Required by :external+law:py:class:`law.tasks.TransferLocalFile`
+
+        :return: File target for tar ball with all downloaded external files
+        :rtype: law.wlcg.target.WLCGFileTarget
+        """
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
+        """Run function for BundleExternalFiles.
+
+        First create a temporary download area. Then download each source
+        specified in ``self.config_inst.x.external_files``. If the path
+        to the source file begins with ``http://`` or ``https://``, the files
+        are obtained with ``wget``. Otherwise, the files are simply copied.
+
+        After the files were fetched successfully, create a single tar ball
+        and move this to the final target location.
+        """
         # create a tmp dir to work in
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
