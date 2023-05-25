@@ -17,13 +17,27 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
-from columnflow.util import wget
+from columnflow.util import wget, DotDict
 
 
 logger = law.logger.get_logger(__name__)
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
+    """Task to get list of logical file names (LFNs).
+    TODO: Further describe this.
+
+    :raises ValueError: _description_
+    :raises Exception: _description_
+    :raises TypeError: _description_
+    :raises Exception: _description_
+    :raises ValueError: _description_
+    :raises Exception: _description_
+    :return: _description_
+    :rtype: _type_
+    :yield: _description_
+    :rtype: _type_
+    """
 
     replicas = luigi.IntParameter(
         default=5,
@@ -39,7 +53,14 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     version = None
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: DotDict) -> DotDict:
+        """Resolve parameter values *params* from command line and propagate them to this set of parameters.
+
+        :param params: Parameters provided at command line level.
+        :type params: DotDict
+        :return: Updated list of parameter values
+        :rtype: DotDict
+        """
         params = super().resolve_param_values(params)
 
         # add the default calibrator when empty
@@ -50,17 +71,41 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         return params
 
     @property
-    def sandbox(self):
+    def sandbox(self) -> str:
+        """Defines sandbox for this task.
+
+        Uses the sandbox ``self.config_inst.x.get_dataset_lfns_sandbox`` by default.
+        If none is provided, defaults back to ``"bash::/cvmfs/cms.cern.ch/cmsset_default.sh"``
+
+        :return: Path to shell script that sets up the requested sandbox.
+        :rtype: str
+        """
         sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
         return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
 
-    def single_output(self):
+    def single_output(self) -> law.target.file.FileSystemFileTarget:
+        """Creates a remote target file for the final .json file containing the list of LFNs.
+
+        Creates a hash based on the keys in ``dataset_info_inst`` of the current run
+        using the :external+law:py:func:`law.util.create_hash` function.
+        Afterwards, initializes either a :external+law:py:class:`law.target.local.LocalFileTarget`
+        or a :external+law:py:class:`law.target.remote.base.RemoteFileTarget`
+        depending on the specified file system.
+
+        :return: Law remote target with the initialized output name
+        :rtype: law.target.file.FileSystemTarget
+        """
         # required by law.tasks.TransferLocalFile
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.target(f"lfns_{h}.json")
 
     @law.decorator.log
     def run(self):
+        """Run function for this task.
+
+        :raises ValueError: If number of loaded LFNs does not correspond to number
+            of LFNs specified in this ``dataset_info_inst``
+        """
         # prepare the lfn getter
         get_dataset_lfns = self.config_inst.x("get_dataset_lfns", None)
         msg = "via custom config function"
@@ -91,6 +136,18 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         shift_inst: od.Shift,
         dataset_key: str,
     ) -> list[str]:
+        """Get the LNF information with the ``dasgoclient`` .
+
+        :param dataset_inst: Current dataset instance, currently not used
+        :type dataset_inst: od.dataset.Dataset
+        :param shift_inst: Current shift instance, currently not used
+        :type shift_inst: od.Shift
+        :param dataset_key: DAS key identifier for the current dataset
+        :type dataset_key: str
+        :raises Exception: If query with ``dasgoclient`` fails.
+        :return: The list of LFNs corresponding to the dataset with the identifier *dataset_key*
+        :rtype: list[str]
+        """
         code, out, _ = law.util.interruptable_popen(
             f"dasgoclient --query='file dataset={dataset_key}' --limit=0",
             shell=True,
@@ -113,8 +170,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfn_indices: list[int] | None = None,
         eager_lookup: bool | int = 1,
     ) -> None:
-        """
-        Generator function that reduces the boilerplate code for looping over files referred to by
+        """Generator function that reduces the boilerplate code for looping over files referred to by
         *lfn_indices* given the lfns obtained by *this* task which needs to be complete for this
         function to succeed.
 
@@ -122,12 +178,30 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         workflow whose branch value is used instead.
 
         Iterating yields a 2-tuple (file index, input file) where the latter is either a
-        :py:class:`law.LocalFileTarget` or a :py:class:`law.wlcg.WLCGFileTarget` with its fs set to
+        :external+law:py:class:`law.target.local.LocalFileTarget` or a
+        :external+law:py:class:`law.wlcg.WLCGFileTarget` with its fs set to
         *remote_fs*. When a sequence is passed, the fs names are evaluated in that order and the
         first existing one is generally used. However, if *eager_lookup* is *True*, in case the stat
         request to a fs was successful but took longer than two seconds, the next fs is eagerly
         checked and used in case it responded with less delay. In case *eager_lookup* is an integer,
-        this check is only performed after the *eager_lookup*th fs.
+        this check is only performed after the *eager_lookup* th fs.
+
+        :param task: Current task that needs to access the nanoAOD files
+        :type task: AnalysisTask | DatasetTask
+        :param remote_fs: Name of the remote file system where the LFNs are located, defaults to None
+        :type remote_fs: str | Sequence[str] | None, optional
+        :param lfn_indices: List of indices of LFNs that are processed by this *task* instance, defaults to None
+        :type lfn_indices: list[int] | None, optional
+        :param eager_lookup: Look at the next remote fs in *remote_fs* if stat takes too long, defaults to 1
+        :type eager_lookup: bool | int, optional
+        :raises TypeError: If *task* is not of type :external+law:py:class:`law.workflow.base.BaseWorkflow` or not
+            a task analyzing a single branch in the task tree
+        :raises Exception: If current task is not complete as indicated with ``self.complete()``
+        :raises ValueError: If no remote fs is provided at call and none can be found in either the config instance
+            or the law config.
+        :raises Exception: If a given LFN cannot be found at any remote file system
+        :yield: a file target that points to a LFN
+        :rtype: law.wlcg.WLCGFileTarget
         """
         # input checks
         if not lfn_indices:
@@ -225,6 +299,14 @@ GetDatasetLFNsWrapper = wrapper_factory(
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
     attributes={"version": None},
 )
+
+wrapper_doc = """Wrapper task to get LFNs for multiple datasets.
+:enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+
+:overwrites: attribute ``version`` with None
+"""
+
+GetDatasetLFNsWrapper.__doc__ = wrapper_doc
 
 
 class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
