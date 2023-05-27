@@ -3,6 +3,7 @@
 ## Selections
 
 In columnflow, selections are defined through the {py:class}`~columnflow.selection.Selector` class.
+This class allows for arbitrary selection criteria on event level as well as object level.
 
 
 ```
