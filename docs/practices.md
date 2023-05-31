@@ -1,9 +1,89 @@
 # Best practices
 
+## Variables creation
+
+TODO
+
+## Calibrators
+
+TODO
+
+## Production of columns
+
+TODO
+
 ## Selections
 
+### Introduction
+
 In columnflow, selections are defined through the {py:class}`~columnflow.selection.Selector` class.
-This class allows for arbitrary selection criteria on event level as well as object level.
+This class allows for arbitrary selection criteria on event level as well as object level. The
+results of the selection (which events or objects are to be conserved) are saved in an instance of the
+{py:class}`~columnflow.selection.SelectorResult` class. Similar to
+{py:class}`~columnflow.production.Producer`s, it is possible to create new columns in
+{py:class}`~columnflow.selection.Selector`s. In the original columnflow setup,
+{py:class}`~columnflow.selection.Selector`s are being run in the ```SelectEvents``` task.
+
+### Create an instance of the Selector class
+
+Similar to {py:class}`~columnflow.production.Producer`s, {py:class}`~columnflow.selection.Selector`s
+need to declare which columns are to be used (produced) by the
+{py:class}`~columnflow.selection.Selector` instance in order for them to taken out of the parquet files
+(saved in the new parquet files). An example for this structure is given below (partially taken
+from the {py:class}`~columnflow.selection.Selector` documentation.):
+
+```python
+
+# import the Selector class and the selector method
+from columnflow.selection import Selector, selector
+
+# also import the SelectionResult class
+from columnflow.selection import SelectionResult
+
+# maybe import awkard in case this Selector is actually run
+ak = maybe_import("awkward")
+
+# now wrap any function with a selector
+@selector(
+    # define some additional information here, e.g.
+    # what columns are needed for this Selector?
+    uses={
+        "Jet.pt", "Jet.eta"
+    },
+    # does this Selector produce any columns?
+    produces={}
+
+    # pass any other variable to the selector class
+    some_auxiliary_variable=True
+
+    # ...
+)
+def jet_selection(events: ak.Array) -> ak.Array, SelectionResult:
+    # do something ...
+    return events, SelectionResult()
+```
+
+The structure of the arguments for the returned SelectionResult instance are discussed below. (Input the internal link here)
+
+#### Exposed and internal Selectors
+
+{py:class}`~columnflow.selection.Selector`s can be either available directly from the command line
+or only internally, through other selectors. To make a {py:class}`~columnflow.selection.Selector`
+available from the command line, it should be declared with the ```exposed=True``` argument.
+To call a fully funtional {py:class}`~columnflow.selection.Selector` (in the following refered
+as Selector_int) from an other {py:class}`~columnflow.selection.Selector` (in the following refered
+to as Selector_ext), several steps are required:
+- Selector_int should be imported in the Selector_ext script,
+- The columns needed for Selector_int should be declared in the ```uses``` argument of Selector_ext
+(it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of
+the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
+- Selector_int must be run in Selector_ext, e.g. with the
+```self[Selector_int](events, kwargs)``` call.
+
+
+
+
+
 
 
 ```
@@ -129,14 +209,7 @@ Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
 
 ### Create a new "exposed" Selector
 
-## Variables creation
 
-TODO
 
-## Production of columns
 
-TODO
 
-## Calibrators
-
-TODO
