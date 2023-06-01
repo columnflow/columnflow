@@ -1,20 +1,21 @@
-# version 2
+# version 3
 
 # documentation packages
-sphinx~=4.5
+Sphinx~=6.2
 # sphinx-rtd-theme~=1.0
-sphinx-book-theme~=0.3
+sphinx-autodoc-typehints~=1.23
+sphinx-book-theme~=1.0
+sphinx-lfs-content~=1.1
 autodocsumm~=0.2
-myst-parser~=0.18
-sphinx_lfs_content~=1.1
+myst-parser~=1.0
 
-# base packages
-luigi~=3.0
-scinum~=1.4
-six~=1.16
+# # base packages
+# luigi~=3.0
+# scinum~=1.4
+# six~=1.16
 
-# sandbox packages
-awkward~=2.2
-uproot~=5.0
-git+https://github.com/CoffeaTeam/coffea.git@v2023.5.0.rc0#egg=coffea
-dask-awkward~=2023.5
+# # sandbox packages
+# awkward~=2.2
+# uproot~=5.0
+# git+https://github.com/CoffeaTeam/coffea.git@v2023.5.0.rc0#egg=coffea
+# dask-awkward~=2023.5
