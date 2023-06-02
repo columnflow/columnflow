@@ -1564,7 +1564,6 @@ class ArrayFunction(Derivable):
         self,
         io_flag: IOFlag,
         call_cache: set | None = None,
-        debug: bool = False,
         no_dependencies: bool = False,
     ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
@@ -1616,7 +1615,7 @@ class ArrayFunction(Derivable):
     def produced_columns(self) -> set[str]:
         return self._get_produced_columns()
 
-    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag):
+    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
         """
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
@@ -1627,11 +1626,6 @@ class ArrayFunction(Derivable):
             # only check own columns
             no_dependencies=True,
         )
-        action = (
-            "receive" if io_flag == self.IOFlag.USES else
-            "produce" if io_flag == self.IOFlag.PRODUCES else
-            "find"
-        )
 
         missing = set()
         for column in columns:
@@ -1640,6 +1634,11 @@ class ArrayFunction(Derivable):
                 missing.add(column)
 
         if missing:
+            action = (
+                "receive" if io_flag == self.IOFlag.USES else
+                "produce" if io_flag == self.IOFlag.PRODUCES else
+                "find"
+            )
             missing = ", ".join(sorted(missing))
             raise Exception(
                 f"'{self.cls_name}' did not {action} any columns matching: {missing}",
