@@ -1,4 +1,4 @@
-# version 5
+# version 6
 
 awkward~=2.2
 uproot~=5.0

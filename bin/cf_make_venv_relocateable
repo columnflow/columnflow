@@ -2,7 +2,7 @@
 
 cf_make_venv_relocateable() {
     # Traverses all executables in a virtual environment directory located in $CF_VENV_BASE and
-    # replaces absolute shebangs with relative ones using /use/bin/env.
+    # replaces absolute shebangs with relative ones using /usr/bin/env.
     #
     # Arguments:
     #   1. The name of the virtual env inside $CF_VENV_BASE.
