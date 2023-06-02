@@ -15,6 +15,7 @@ from columnflow.util import DotDict, maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
+    verify_config_processes,
 )
 
 ak = maybe_import("awkward")
@@ -107,6 +108,9 @@ for dataset_name in dataset_names:
     # for testing purposes, limit the number of files to 2
     for info in dataset.info.values():
         info.n_files = min(info.n_files, 2)
+
+# verify that the root process of all datasets is part of any of the registered processes
+verify_config_processes(cfg, warn=True)
 
 # default objects, such as calibrator, selector, producer, ml model, inference model, etc
 cfg.x.default_calibrator = "example"
