@@ -1,5 +1,8 @@
 # Best practices
 
+Here general discussion of columnflow: columns (and fields, like Jet), awkward arrays, general structure of cf tree and the
+purpose of every task
+
 ## Variables creation
 
 TODO
@@ -17,9 +20,9 @@ TODO
 ### Introduction
 
 In columnflow, selections are defined through the {py:class}`~columnflow.selection.Selector` class.
-This class allows for arbitrary selection criteria on event level as well as object level. The
-results of the selection (which events or objects are to be conserved) are saved in an instance of the
-{py:class}`~columnflow.selection.SelectorResult` class. Similar to
+This class allows for arbitrary selection criteria on event level as well as object level using masks.
+The results of the selection (which events or objects are to be conserved) are saved in an instance
+of the {py:class}`~columnflow.selection.SelectionResult` class. Similar to
 {py:class}`~columnflow.production.Producer`s, it is possible to create new columns in
 {py:class}`~columnflow.selection.Selector`s. In the original columnflow setup,
 {py:class}`~columnflow.selection.Selector`s are being run in the ```SelectEvents``` task.
@@ -40,7 +43,8 @@ from columnflow.selection import Selector, selector
 # also import the SelectionResult class
 from columnflow.selection import SelectionResult
 
-# maybe import awkard in case this Selector is actually run
+# maybe import awkward in case this Selector is actually run
+from columnflow.util import maybe_import
 ak = maybe_import("awkward")
 
 # now wrap any function with a selector
@@ -63,7 +67,8 @@ def jet_selection(events: ak.Array) -> ak.Array, SelectionResult:
     return events, SelectionResult()
 ```
 
-The structure of the arguments for the returned SelectionResult instance are discussed below. (Input the internal link here)
+The structure of the arguments for the returned {py:class}`~columnflow.selection.SelectionResult`
+instance are discussed below. (Input the internal link here)
 
 #### Exposed and internal Selectors
 
@@ -78,11 +83,403 @@ to as Selector_ext), several steps are required:
 (it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of
 the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
 - Selector_int must be run in Selector_ext, e.g. with the
-```self[Selector_int](events, kwargs)``` call.
+```self[Selector_int](events, **kwargs)``` call.
+
+An example of an exposed Selector_ext with the ```jet_selection```
+{py:class}`~columnflow.selection.Selector` defined above as Selector_int, assuming the
+```jet_selection``` exists in ```analysis/selection/jet.py``` is given below.
+
+```python
+
+# import the Selector class and the selector method
+from columnflow.selection import Selector, selector
+
+# also import the SelectionResult class
+from columnflow.selection import SelectionResult
+
+# maybe import awkward in case this Selector is actually run
+from columnflow.util import maybe_import
+ak = maybe_import("awkward")
+
+# import the used internal selector
+from analysis.selection.jet import jet_selection
+
+@selector(
+    # some information for Selector
+    # e.g., if we want to use some internal Selector, make
+    # sure that you have all the relevant information
+    uses={
+        jet_selection,
+    },
+    produces={
+        jet_selection,
+    }
+
+    # this is our top level Selector, so we need to make it reachable
+    # for the SelectEvents task
+    exposed=True
+)
+def Selector_ext(events: ak.Array) -> ak.Array, SelectionResult:
+    results = SelectionResult()
+    # do something here
+
+    # e.g., call the internal Selector
+    events, sub_result = self[jet_selection](events)
+    result += sub_result
+
+    return events, result
+```
+
+#### SelectionResult
+
+The result of a {py:class}`~columnflow.selection.Selector` is propagated through an instance of the
+{py:class}`~columnflow.selection.SelectionResult` class. The
+{py:class}`~columnflow.selection.SelectionResult` object is instantiated using a dictionary for each
+argument. There are four arguments that may be set, which contain:
+- boolean masks to select the events to be kept in the analysis, which is saved under the
+```steps``` argument. Several selection steps may be defined in a single Selector, each with a unique
+name being the key of the dictionary for the corresponding mask.
+- several index masks for specific objects in a double dictionary structure, saved under the
+```objects``` argument. The double dictionary structure in the ```objects``` defines the source
+column/field from which the indices are to be taken (first dimension of the dictionary) and the name of
+the new column/field to be created with only these objects (second dimension of the dictionary). If the
+name of the column/field to be created is the same as the name of an already existing column/field, the original
+column/field will be overwritten by the new one!
+- additional informations to be used by other {py:class}`~columnflow.selection.Selector`s, saved
+under the ```aux``` argument.
+- a combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
+```"event"``` key. An example with this argument will be shown in the section
+```Example of a more complicated Selection using several selection steps```. The final
+{py:class}`~columnflow.selection.SelectionResult` object to be returned by the exposed selector must
+have this field.
+
+While the arguments in the ```aux``` dictionary are discarded after the ```ReduceEvents``` task and are
+only used for short-lived saving of internal information that might be needed by other
+{py:class}`~columnflow.selection.Selector`s, the ```steps``` and ```objects``` arguments are
+specifically used by the ```ReduceEvents``` task to apply the given masks to the nanoAOD files
+(potentially with additional columns). As described above, the ```steps``` argument is used to reduce
+the number of events to be processed further down the task tree according to the selections, while
+the ```objects``` argument is used to select which objects are to be kept for further processing and
+creates new columns/fields containing specific selected objects.
+
+Below is an example of a fully written internal Selector with its
+{py:class}`~columnflow.selection.SelectionResult` object without ```main``` argument.
+
+```python
+
+# import the Selector class and the selector method
+from columnflow.selection import Selector, selector
+
+# also import the SelectionResult class
+from columnflow.selection import SelectionResult
+
+# maybe import awkward in case this Selector is actually run
+from columnflow.util import maybe_import
+ak = maybe_import("awkward")
+
+# now wrap any function with a selector
+@selector(
+    # define some additional information here, e.g.
+    # what columns are needed for this Selector?
+    uses={
+        "Jet.pt", "Jet.eta"
+    },
+    # does this Selector produce any columns?
+    produces={}
+
+    # pass any other variable to the selector class
+    some_auxiliary_variable=True
+
+    # ...
+)
+def jet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+    # require an object of the Jet collection to have at least 20 GeV pt and at most 2.4 eta to be
+    # considered a Jet in our analysis
+    jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
+
+    # require an object of the Jet collection to have at least 50 GeV pt and at most 2.4 eta
+    jet_50pt_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
+
+    # require an event to have at least two jets to be selected
+    jet_sel = (ak.sum(jet_mask, axis=1) >= 2)
+
+    # create the list of indices to be kept from the Jet collection using the jet_mask to create the
+    # new Jet field containing only the selected Jet objects
+    jet_indices = ak.local_index(events.Jet.pt)[jet_mask]
+
+    # create the list of indices to be kept from the Jet collection using the jet_50pt_mask to create the
+    # new Jet_50pt field containing only the selected Jet_50pt objects
+    jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
+
+
+    return events, SelectionResult(
+        steps={
+            # boolean mask to create selection of the events with at least two jets, this will be
+            # applied in the ReduceEvents task
+            "jet": jet_sel,
+        },
+        objects={
+            # in ReduceEvents, the Jet field will be replaced by the new Jet field containing only
+            # selected jets, and a new field called Jet_50pt containing the jets with pt higher than
+            # 50 GeV will be created
+            "Jet": {
+                "Jet": jet_indices,
+                "Jet_50pt": jet_50pt_indices,
+            },
+        },
+        aux={
+            # jet mask that lead to the jet_indices
+            "jet_mask": jet_mask,
+        },
+    )
+```
 
 
 
+#### Selection using several selection steps
 
+In order for the ```ReduceEvents``` task to apply the final event selection to all events, it is
+necessary to input the resulting boolean array in the ```main``` argument of the returned
+{py:class}`~columnflow.selection.SelectionResult` by the exposed
+{py:class}`~columnflow.selection.Selector`.
+When several selection steps do appear in the selection, it is necessary to combine all the masks
+from all the steps in order to obtain the final boolean array to be given to the ```main``` argument
+of the {py:class}`~columnflow.selection.SelectionResult` and for it to be applied to the events.
+This can be achieved in two steps:
+
+- Combining the results from the different selections to a single
+{py:class}`~columnflow.selection.SelectionResult` object:
+```python
+results = SelectionResult()
+results += jet_results
+results += fatjet_results
+```
+
+- Reducing the different steps to a single boolean array and give it to the ```main``` argument of
+the {py:class}`~columnflow.selection.SelectionResult` object.
+```python
+from operator import and_
+from functools import reduce
+# combined event selection after all steps
+event_sel = reduce(and_, results.steps.values())
+results.main["event"] = event_sel
+```
+
+#### Selection stats
+
+
+THIS SECTION NEEDS URGENT MAINTENANCE, LOTS OF THINGS MISSING
+
+When using an exposed {py:class}`~columnflow.selection.Selector`, it is necessary to save the
+statistics of the selection in a stats object (WHY????). This can be done through an additional
+{py:class}`~columnflow.selection.Selector`
+
+In task :
+```
+self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
+self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
+```
+Therefore: Does this task only work for mc's?
+Why did we need central jets? Nothing general I presume?
+
+
+```python
+from columnflow.selection import Selector, selector
+
+# also import the SelectionResult class
+from columnflow.selection import SelectionResult
+
+# maybe import awkward in case this Selector is actually run
+from columnflow.util import maybe_import
+ak = maybe_import("awkward")
+np = maybe_import("numpy")
+
+from collections import defaultdict, OrderedDict
+
+
+@selector(uses={"process_id"})
+def increment_stats(
+    self: Selector,
+    events: ak.Array,
+    results: SelectionResult,
+    stats: dict,
+    **kwargs,
+) -> ak.Array:
+    """
+    Unexposed selector that does not actually select objects but instead increments selection
+    *stats* in-place based on all input *events* and the final selection *mask*.
+    """
+    # get event masks
+    event_mask = results.main.event
+
+    # increment plain counts
+    stats["n_events"] += len(events)
+    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
+
+    # get a list of unique jet multiplicities present in the chunk
+    unique_process_ids = np.unique(events.process_id)
+    unique_n_jets = []
+    if results.has_aux("n_central_jets"):
+        unique_n_jets = np.unique(results.x.n_central_jets)
+
+    # create a map of entry names to (weight, mask) pairs that will be written to stats
+    weight_map = OrderedDict()
+    if self.dataset_inst.is_mc:
+        # mc weight for all events
+        weight_map["mc_weight"] = (events.mc_weight, Ellipsis)
+
+        # mc weight for selected events
+        weight_map["mc_weight_selected"] = (events.mc_weight, event_mask)
+
+    # get and store the weights
+    for name, (weights, mask) in weight_map.items():
+        joinable_mask = True if mask is Ellipsis else mask
+
+        # sum for all processes
+        stats[f"sum_{name}"] += ak.sum(weights[mask])
+
+        # sums per process id and again per jet multiplicity
+        stats.setdefault(f"sum_{name}_per_process", defaultdict(float))
+        stats.setdefault(f"sum_{name}_per_process_and_njet", defaultdict(lambda: defaultdict(float)))
+        for p in unique_process_ids:
+            stats[f"sum_{name}_per_process"][int(p)] += ak.sum(
+                weights[(events.process_id == p) & joinable_mask],
+            )
+            for n in unique_n_jets:
+                stats[f"sum_{name}_per_process_and_njet"][int(p)][int(n)] += ak.sum(
+                    weights[
+                        (events.process_id == p) &
+                        (results.x.n_central_jets == n) &
+                        joinable_mask
+                    ],
+                )
+
+    return events
+```
+
+
+#### Complete example
+
+Overall, creating an exposed {py:class}`~columnflow.selection.Selector` with several selections steps
+might look like this:
+```python
+# import the Selector class and the selector method
+from columnflow.selection import Selector, selector
+
+# also import the SelectionResult class
+from columnflow.selection import SelectionResult
+
+# maybe import awkward in case this Selector is actually run
+from columnflow.util import maybe_import
+ak = maybe_import("awkward")
+
+
+# First, define an internal jet Selector to be used by the exposed Selector
+
+@selector(
+    # define some additional information here, e.g.
+    # what columns are needed for this Selector?
+    uses={
+        "Jet.pt", "Jet.eta"
+    },
+    # does this Selector produce any columns?
+    produces={}
+
+    # pass any other variable to the selector class
+    some_auxiliary_variable=True
+
+    # ...
+)
+def jet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+    # require an object of the Jet collection to have at least 20 GeV pt and at most 2.4 eta to be
+    # considered a Jet in our analysis
+    jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
+
+    # require an object of the Jet collection to have at least 50 GeV pt and at most 2.4 eta
+    jet_50pt_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
+
+    # require an event to have at least two jets to be selected
+    jet_sel = (ak.sum(jet_mask, axis=1) >= 2)
+
+    # create the list of indices to be kept from the Jet collection using the jet_mask to create the
+    # new Jet field containing only the selected Jet objects
+    jet_indices = ak.local_index(events.Jet.pt)[jet_mask]
+
+    # create the list of indices to be kept from the Jet collection using the jet_50pt_mask to create the
+    # new Jet_50pt field containing only the selected Jet_50pt objects
+    jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
+
+
+    return events, SelectionResult(
+        steps={
+            # boolean mask to create selection of the events with at least two jets, this will be
+            # applied in the ReduceEvents task
+            "jet": jet_sel,
+        },
+        objects={
+            # in ReduceEvents, the Jet field will be replaced by the new Jet field containing only
+            # selected jets, and a new field called Jet_50pt containing the jets with pt higher than
+            # 50 GeV will be created
+            "Jet": {
+                "Jet": jet_indices,
+                "Jet_50pt": jet_50pt_indices,
+            },
+        },
+        aux={
+            # jet mask that lead to the jet_indices
+            "jet_mask": jet_mask,
+        },
+    )
+
+# Next, define an internal fatjet Selector to be used by the exposed Selector
+
+@selector(
+    # define some additional information here, e.g.
+    # what columns are needed for this Selector?
+    uses={
+        "FatJet.pt",
+    },
+    # does this Selector produce any columns?
+    produces={}
+
+    # ...
+)
+def fatjet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+    # require an object of the FatJet collection to have at least 40 GeV pt to be
+    # considered a FatJet in our analysis
+    fatjet_mask = (events.FatJet.pt > 40.0)
+
+    # require an event to have at least one AK8-jet (=FatJet) to be selected
+    fatjet_sel = (ak.sum(fatjet_mask, axis=1) >= 1)
+
+    # create the list of indices to be kept from the FatJet collection using the fatjet_mask to create the
+    # new FatJet field containing only the selected FatJet objects
+    fatjet_indices = ak.local_index(events.FatJet.pt)[fatjet_mask]
+
+    return events, SelectionResult(
+        steps={
+            # boolean mask to create selection of the events with at least two jets, this will be
+            # applied in the ReduceEvents task
+            "fatjet": fatjet_sel,
+        },
+        objects={
+            # in ReduceEvents, the FatJet field will be replaced by the new FatJet field containing only
+            # selected fatjets
+            "FatJet": {
+                "FatJet": fatjet_indices,
+            },
+        },
+    )
+
+# Implement the task to update the stats object
+TODO
+
+# Now create the exposed Selector using the three above defined Selectors
+TODO
+
+```
+
+### Running the SelectEvents task
 
 
 
@@ -203,11 +600,8 @@ Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
         task. Defaults to `False`.
     :type exposed: `bool`
 
-``
+```
 
-### Add a step to an existent selection
-
-### Create a new "exposed" Selector
 
 
 
