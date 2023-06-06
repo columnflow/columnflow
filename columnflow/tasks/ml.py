@@ -471,7 +471,7 @@ class MLEvaluation(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.pickle")}
+        return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.parquet")}
 
     @law.decorator.log
     @law.decorator.localize

@@ -8,8 +8,8 @@ import functools
 
 import law
 
-from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
+from columnflow.production import Producer
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 from columnflow.columnar_util import DotDict
 
@@ -23,8 +23,51 @@ logger = law.logger.get_logger(__name__)
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-@producer(
-    uses={"LHEScaleWeight"},
+class _ScaleWeightBase(Producer):
+    """
+    Common base class for the scale weight producers below that join a setup function.
+    """
+
+    def setup_func(self, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+        # named weight indices
+        self.indices_9 = DotDict(
+            mur_down_muf_down=0,
+            mur_down_muf_nom=1,
+            mur_down_muf_up=2,
+            mur_nom_muf_down=3,
+            mur_nom_muf_nom=4,
+            mur_nom_muf_up=5,
+            mur_up_muf_down=6,
+            mur_up_muf_nom=7,
+            mur_up_muf_up=8,
+        )
+
+        # named weight indices for cases where only 8 of the exist
+        # (expecting no nominal value and all above being shifted down by one)
+        self.indices_8 = DotDict({
+            key: index if index <= self.indices_9.mur_nom_muf_nom else index - 1
+            for key, index in self.indices_9.items()
+            if key != "mur_nom_muf_nom"
+        })
+
+        # for convenience, declare some meaningful clear names for the weights
+        # here instead of the very technical names like mur_nom_muf_up
+        self.clearnames = DotDict(
+            # decorrelated weights
+            mur_weight_up="mur_up_muf_nom",
+            mur_weight_down="mur_down_muf_nom",
+            muf_weight_up="mur_nom_muf_up",
+            muf_weight_down="mur_nom_muf_down",
+            # fully-correlated names
+            murmuf_weight_up="mur_up_muf_up",
+            murmuf_weight_down="mur_down_muf_down",
+        )
+
+
+@_ScaleWeightBase.producer(
+    uses={
+        "nLHEScaleWeight", "LHEScaleWeight",
+    },
     produces={
         "mur_weight", "mur_weight_up", "mur_weight_down",
         "muf_weight", "muf_weight_up", "muf_weight_down",
@@ -66,7 +109,7 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         # Additionally, we need to shift the last couple of weight indices
         # down by 1
         indices = self.indices_8
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
 
         # additional debug log
         logger.debug(
@@ -120,47 +163,13 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@murmuf_weights.setup
-def murmuf_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
-    # define indices in case there are 9 LHEScaleWeights in total
-    self.indices_9 = DotDict(
-        mur_down_muf_down=0,
-        mur_down_muf_nom=1,
-        mur_down_muf_up=2,
-        mur_nom_muf_down=3,
-        mur_nom_muf_nom=4,
-        mur_nom_muf_up=5,
-        mur_up_muf_down=6,
-        mur_up_muf_nom=7,
-        mur_up_muf_up=8,
-    )
-
-    # if there are only 8, the nominal weight at index 4 is missing
-    # in this case, initialize an index where all indices > 4 are shifted
-    # down by one
-    self.indices_8 = DotDict({
-        key: index if index <= 4 else index - 1
-        for key, index in self.indices_9.items()
-        if key != "mur_nom_muf_nom"
-    })
-
-    # for convenience, declare some meaningful clear names for the weights
-    # here instead of the very technical names like mur_nom_muf_up
-    self.clearnames = DotDict(
-        # decorrelated weights
-        mur_weight_up="mur_up_muf_nom",
-        mur_weight_down="mur_down_muf_nom",
-        muf_weight_up="mur_nom_muf_up",
-        muf_weight_down="mur_nom_muf_down",
-        # fully-correlated names
-        murmuf_weight_up="mur_up_muf_up",
-        murmuf_weight_down="mur_down_muf_down",
-    )
-
-
-@producer(
-    uses={"LHEScaleWeight"},
-    produces={"murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down"},
+@_ScaleWeightBase.producer(
+    uses={
+        "nLHEScaleWeight", "LHEScaleWeight",
+    },
+    produces={
+        "murf_envelope_weight", "murf_envelope_weight_up", "murf_envelope_weight_down",
+    },
     # only run on mc
     mc_only=True,
 )
@@ -190,7 +199,7 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
                 "weight is already included in the LHEWeight.",
             )
     elif ak.all(n_weights == 8):
-        murf_nominal = 1
+        murf_nominal = np.array(1, dtype=np.float32)
         envelope_indices = self.envelope_indices_8
 
         # additional debug log
@@ -218,19 +227,9 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
 
 @murmuf_envelope_weights.setup
-def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
-    # define the indices of weights to consider for the envelope construction
-    self.indices_9 = DotDict(
-        mur_down_muf_down=0,
-        mur_down_muf_nom=1,
-        mur_down_muf_up=2,
-        mur_nom_muf_down=3,
-        mur_nom_muf_nom=4,
-        mur_nom_muf_up=5,
-        mur_up_muf_down=6,
-        mur_up_muf_nom=7,
-        mur_up_muf_up=8,
-    )
+def murmuf_envelope_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+    # call the super func
+    super(murmuf_envelope_weights, self).setup_func(reqs, inputs, reader_targets)
 
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [
