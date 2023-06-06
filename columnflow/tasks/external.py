@@ -6,8 +6,6 @@ Tasks dealing with external data.
 
 from __future__ import annotations
 
-__all__ = []
-
 import os
 import time
 import shutil
@@ -19,7 +17,7 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
-from columnflow.util import wget, safe_div
+from columnflow.util import wget
 
 
 logger = law.logger.get_logger(__name__)
@@ -41,8 +39,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     version = None
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # add the default calibrator when empty
         if "config_inst" in params and params.get("validate") is None:
@@ -73,7 +71,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info(f"get lfns for dataset key {key} {msg}")
-            lfns.extend(get_dataset_lfns(self.dataset_inst, self.shift_inst, key))
+            lfns.extend(get_dataset_lfns(self.dataset_inst, self.global_shift_inst, key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -81,7 +79,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
             )
 
-        self.logger.info(f"found {len(lfns)} lfns for dataset {self.dataset}")
+        self.logger.info(f"found {len(lfns)} lfn(s) for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
@@ -138,8 +136,18 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             lfn_indices = task.branch_data
         if not self.complete():
             raise Exception(f"{self} is required to be complete")
+
+        # prepare the remote fs names to resolve lfns with
         if not remote_fs:
+            # use an optional hook in the config
+            get_remote_fs = self.config_inst.x("get_dataset_lfns_remote_fs", None)
+            if callable(get_remote_fs):
+                remote_fs = get_remote_fs(task.dataset_inst)
+        if not remote_fs:
+            # use the law config
             remote_fs = law.config.get_expanded("outputs", "lfn_sources", split_csv=True)
+        if not remote_fs:
+            raise ValueError("no remote_fs given or found to resolve lfns")
         remote_fs = law.util.make_list(remote_fs)
 
         # get all lfns
@@ -336,133 +344,3 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # transfer the result
         self.transfer(tmp)
-
-
-class CreatePileupWeights(ConfigTask):
-
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
-
-    data_mode = luigi.ChoiceParameter(
-        default="hist",
-        choices=["hist", "pileupcalc"],
-        description="the mode to obtain the data pu profile; choices: 'hist', 'pileupcalc'; "
-        "default: 'hist'",
-    )
-    version = None
-
-    # default upstream dependency task classes
-    dep_BundleExternalFiles = BundleExternalFiles
-
-    def requires(self):
-        return self.dep_BundleExternalFiles.req(self)
-
-    def output(self):
-        return self.target(f"weights_from_{self.data_mode}.json")
-
-    @law.decorator.log
-    @law.decorator.safe_output
-    def run(self):
-        # prepare the external files and the output weights
-        externals = self.requires()
-        weights = {}
-
-        # read the mc profile
-        mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)
-
-        # loop over nominal and minbias_xs shifts
-        for shift in ["nominal", "minbias_xs_up", "minbias_xs_down"]:
-            # read or create the data profile
-            if self.data_mode == "hist":
-                pu_hist_target = externals.files.pu.data_profile[shift]
-                data_profile = self.read_data_profile_from_hist(pu_hist_target)
-            else:
-                pu_file_target = externals.files.pu.json
-                minbiasxs = self.config_inst.x.minbiasxs.get(shift)
-                data_profile = self.read_data_profile_from_pileupcalc(pu_file_target, minbiasxs)
-
-            # build the ratios and save them
-            if len(mc_profile) != len(data_profile):
-                raise Exception(
-                    f"the number of bins in the MC profile ({len(mc_profile)}) does not match that "
-                    f"of the data profile for the {shift} shift ({len(data_profile)})",
-                )
-
-            # store them
-            weights[shift] = [safe_div(d, m) for m, d in zip(mc_profile, data_profile)]
-            self.publish_message(f"computed pu weights for shift {shift}")
-
-        # save it
-        self.output().dump(weights, formatter="json")
-
-    @classmethod
-    def read_mc_profile_from_cfg(
-        cls,
-        pu_config_target: law.FileSystemTarget,
-    ) -> list[float]:
-        """
-        Takes a mc pileup configuration file stored in *pu_config_target*, parses its content and
-        return the pu profile as a list of float probabilities.
-        """
-        probs = []
-
-        # read non-empty lines
-        lines = map(lambda s: s.strip(), pu_config_target.load(formatter="text").split("\n"))
-
-        # loop through them and extract probabilities
-        found_prob_line = False
-        for line in lines:
-            # look for the start of the pu profile
-            if not found_prob_line:
-                if not line.startswith("mix.input.nbPileupEvents.probValue"):
-                    continue
-                found_prob_line = True
-                line = line.split("(", 1)[-1].strip()
-            # skip empty lines
-            if not line:
-                continue
-            # extract numbers
-            probs.extend(map(float, filter(bool, line.split(")", 1)[0].split(","))))
-            # look for the end of the pu profile
-            if ")" in line:
-                break
-
-        return cls.normalize_values(probs)
-
-    @classmethod
-    def read_data_profile_from_hist(
-        cls,
-        pu_hist_target: law.FileSystemTarget,
-    ) -> list[float]:
-        """
-        Takes the pileup profile in data preproducd by the lumi pog and stored in *pu_hist_target*,
-        builds the ratio to mc and returns the weights in a list.
-        """
-        hist_file = pu_hist_target.load(formatter="uproot")
-        probs = hist_file["pileup"].values().tolist()
-        return cls.normalize_values(probs)
-
-    @classmethod
-    def read_data_profile_from_pileupcalc(
-        cls,
-        pu_file_target: law.FileSystemTarget,
-        minbias_xs: float,
-    ) -> list[float]:
-        """
-        Takes the pileup profile in data read stored in *pu_file_target*, which should have been
-        produced when processing data, and a *minbias_mexs* value in mb (milli), builds the ratio to
-        mc and returns the weights in a list for 99 bins (recommended number).
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def normalize_values(cls, values: Sequence[float]) -> list[float]:
-        _sum = sum(values, 0.0)
-        return [value / _sum for value in values]
-
-
-CreatePileupWeightsWrapper = wrapper_factory(
-    base_cls=AnalysisTask,
-    require_cls=CreatePileupWeights,
-    enable=["configs", "skip_configs"],
-    attributes={"version": None},
-)

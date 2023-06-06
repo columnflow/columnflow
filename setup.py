@@ -31,7 +31,7 @@ classifiers = [
 
 
 # read the readme file
-with open(os.path.join(this_dir, "README.rst"), "r") as f:
+with open(os.path.join(this_dir, "README.md"), "r") as f:
     long_description = f.read()
 
 
@@ -57,6 +57,7 @@ setup(
     keywords=keywords,
     classifiers=classifiers,
     long_description=long_description,
+    long_description_content_type="text/markdown",
     install_requires=install_requires,
     python_requires=">=3.7, <4",
     zip_safe=False,

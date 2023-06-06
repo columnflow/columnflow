@@ -4,12 +4,10 @@
 Task to produce and merge histograms.
 """
 
-import functools
-
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
     ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
@@ -22,7 +20,6 @@ from columnflow.util import dev_sandbox
 
 
 class CreateHistograms(
-    MergeReducedEventsUser,
     VariablesMixin,
     MLModelsMixin,
     ProducersMixin,
@@ -30,40 +27,36 @@ class CreateHistograms(
     CalibratorsMixin,
     EventWeightMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
-    dep_ProduceColumns = ProduceColumns
-    dep_MLEvaluation = MLEvaluation
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        MergeReducedEvents=MergeReducedEvents,
+        ProduceColumns=ProduceColumns,
+        MLEvaluation=MLEvaluation,
+    )
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_ProduceColumns.get_allowed_shifts(config_inst, params)
-        return shifts
-
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.dep_ProduceColumns.req(self, producer=p)
+                    self.reqs.ProduceColumns.req(self, producer=p)
                     for p in self.producers
                 ]
             if self.ml_models:
                 reqs["ml"] = [
-                    self.dep_MLEvaluation.req(self, ml_model=m)
+                    self.reqs.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
                 ]
 
@@ -71,17 +64,17 @@ class CreateHistograms(
 
     def requires(self):
         reqs = {
-            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
         if self.producers:
             reqs["producers"] = [
-                self.dep_ProduceColumns.req(self, producer=p)
+                self.reqs.ProduceColumns.req(self, producer=p)
                 for p in self.producers
             ]
         if self.ml_models:
             reqs["ml"] = [
-                self.dep_MLEvaluation.req(self, ml_model=m)
+                self.reqs.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
 
@@ -89,7 +82,9 @@ class CreateHistograms(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")
+        return {
+            "hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle"),
+        }
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -111,19 +106,37 @@ class CreateHistograms(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
+
+        # define columns that need to be read
+        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        read_columns |= {
+            Route(variable_inst.expression)
+            if isinstance(variable_inst.expression, str) else
+            None  # TODO: handle variable_inst with custom expressions, can they declare columns?
+            for variable_inst in (
+                self.config_inst.get_variable(var_name)
+                for var_name in law.util.flatten(self.variable_tuples.values())
+            )
+        }
+        if self.dataset_inst.is_mc:
+            read_columns |= {Route(column) for column in self.config_inst.x.event_weights}
+            read_columns |= {Route(column) for column in self.dataset_inst.x("event_weights", [])}
+        read_columns = {Route(c) for c in read_columns}
+
+        # empty float array to use when input files have no entries
+        empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0].path]
+        files = [inputs["events"]["collection"][0]["events"].path]
         if self.producers:
-            files.extend([inp.path for inp in inputs["producers"]])
+            files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_models:
-            files.extend([inp.path for inp in inputs["ml"]])
+            files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
-            # TODO: not working yet since parquet columns are nested
-            # open_options=[{"columns": load_columns}] + (len(files) - 1) * [None],
+            read_columns=len(files) * [read_columns],
         ):
             # add additional columns
             events = update_ak_array(events, *columns)
@@ -133,7 +146,7 @@ class CreateHistograms(
 
             # build the full event weight
             weight = ak.Array(np.ones(len(events)))
-            if self.dataset_inst.is_mc:
+            if self.dataset_inst.is_mc and len(events):
                 for column in self.config_inst.x.event_weights:
                     weight = weight * Route(column).apply(events)
                 for column in self.dataset_inst.x("event_weights", []):
@@ -141,7 +154,7 @@ class CreateHistograms(
                         weight = weight * Route(column).apply(events)
                     else:
                         self.logger.warning_once(
-                            "missing_dataset_weight",
+                            f"missing_dataset_weight_{column}",
                             f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                         )
 
@@ -172,7 +185,7 @@ class CreateHistograms(
                 fill_kwargs = {
                     "category": events.category_ids,
                     "process": events.process_id,
-                    "shift": self.shift_inst.id,
+                    "shift": self.global_shift_inst.id,
                     "weight": weight,
                 }
                 for variable_inst in variable_insts:
@@ -180,7 +193,10 @@ class CreateHistograms(
                     expr = variable_inst.expression
                     if isinstance(expr, str):
                         route = Route(expr)
-                        expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                        def expr(events, *args, **kwargs):
+                            if len(events) == 0 and not has_ak_column(events, route):
+                                return empty_f32
+                            return route.apply(events, null_value=variable_inst.null_value)
                     # apply it
                     fill_kwargs[variable_inst.name] = expr(events)
                 # broadcast and fill
@@ -188,7 +204,7 @@ class CreateHistograms(
                 histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
 
         # merge output files
-        self.output().dump(histograms, formatter="pickle")
+        self.output()["hists"].dump(histograms, formatter="pickle")
 
 
 CreateHistogramsWrapper = wrapper_factory(
@@ -199,13 +215,12 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    DatasetTask,
     VariablesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    EventWeightMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -222,23 +237,18 @@ class MergeHistograms(
 
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_CreateHistograms = CreateHistograms
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CreateHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        CreateHistograms=CreateHistograms,
+    )
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
         return {0: None}
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["hists"] = self.as_branch().requires()
 
@@ -255,7 +265,7 @@ class MergeHistograms(
             if not variables:
                 return []
 
-        return self.dep_CreateHistograms.req(
+        return self.reqs.CreateHistograms.req(
             self,
             branch=-1,
             variables=tuple(variables),
@@ -264,10 +274,10 @@ class MergeHistograms(
         )
 
     def output(self):
-        return law.SiblingFileCollection({
+        return {"hists": law.SiblingFileCollection({
             variable_name: self.target(f"hist__{variable_name}.pickle")
             for variable_name in self.variables
-        })
+        })}
 
     @law.decorator.log
     def run(self):
@@ -277,7 +287,7 @@ class MergeHistograms(
 
         # load input histograms
         hists = [
-            inp.load(formatter="pickle")
+            inp["hists"].load(formatter="pickle")
             for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
         ]
 
@@ -288,7 +298,7 @@ class MergeHistograms(
 
             variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outputs[variable_name].dump(merged, formatter="pickle")
+            outputs["hists"][variable_name].dump(merged, formatter="pickle")
 
         # optionally remove inputs
         if self.remove_previous:
@@ -303,13 +313,13 @@ MergeHistogramsWrapper = wrapper_factory(
 
 
 class MergeShiftedHistograms(
-    DatasetTask,
     VariablesMixin,
     ShiftSourcesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -320,27 +330,31 @@ class MergeShiftedHistograms(
     effective_shift = None
     allow_empty_shift = True
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
+    # allow only running on nominal
+    allow_empty_shift_sources = True
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeHistograms=MergeHistograms,
+    )
 
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
         return {0: None}
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # add nominal and both directions per shift source
         for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
     def requires(self):
         return {
-            shift: self.dep_MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+            shift: self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
             for shift in ["nominal"] + self.shifts
         }
 
@@ -350,23 +364,23 @@ class MergeShiftedHistograms(
         return parts
 
     def output(self):
-        return law.SiblingFileCollection({
+        return {"hists": law.SiblingFileCollection({
             variable_name: self.target(f"shifted_hist__{variable_name}.pickle")
             for variable_name in self.variables
-        })
+        })}
 
     @law.decorator.log
     def run(self):
         # preare inputs and outputs
         inputs = self.input()
-        outputs = self.output().targets
+        outputs = self.output()["hists"].targets
 
         for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
             self.publish_message(f"merging histograms for '{variable_name}'")
 
             # load hists
             variable_hists = [
-                coll.targets[variable_name].load(formatter="pickle")
+                coll["hists"].targets[variable_name].load(formatter="pickle")
                 for coll in inputs.values()
             ]
 

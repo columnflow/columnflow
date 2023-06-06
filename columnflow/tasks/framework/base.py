@@ -18,10 +18,30 @@ import luigi
 import law
 import order as od
 
+from columnflow.util import DotDict
+
 
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
+class Requirements(DotDict):
+
+    def __init__(self, *others, **kwargs):
+        super().__init__()
+
+        # add others and kwargs
+        for reqs in others + (kwargs,):
+            self.update(reqs)
+
+
+class BaseTask(law.Task):
+
+    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
+
+    # container for upstream requirements for convenience
+    reqs = Requirements()
 
 
 class OutputLocation(enum.Enum):
@@ -32,11 +52,6 @@ class OutputLocation(enum.Enum):
     config = "config"
     local = "local"
     wlcg = "wlcg"
-
-
-class BaseTask(law.Task):
-
-    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -56,17 +71,21 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     # defaults for targets
     default_store = "$CF_STORE_LOCAL"
-    default_wlcg_fs = "wlcg_fs"
+    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs")
     default_output_location = "config"
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
-
+    def resolve_param_values(cls, params: dict) -> dict:
         # store a reference to the analysis inst
-        if "analysis" in params:
+        if "analysis_inst" not in params and "analysis" in params:
             params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
 
+        return params
+
+    @classmethod
+    def modify_param_values(cls, params: dict) -> dict:
+        params = super().modify_param_values(params)
+        params = cls.resolve_param_values(params)
         return params
 
     @classmethod
@@ -139,31 +158,46 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return ()
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        # implemented only for simplified mro control
-        return set()
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """
+        Returns two sets of shifts in a tuple: shifts implemented by _this_ task, and depdenent
+        shifts implemented by upstream tasks.
+        """
+        # get shifts from upstream dependencies, consider both their own and upstream shifts as one
+        upstream_shifts = set()
+        for req in cls.reqs.values():
+            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
+
+        return set(), upstream_shifts
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
+        if task:
+            analysis_inst = task.analysis_inst
+        elif "analysis_inst" in params:
+            analysis_inst = params["analysis_inst"]
+        else:
+            analysis_inst = cls.get_analysis_inst(params["analysis"])
+
         return {
             "task": task,
-            "analysis_inst": task.analysis_inst if task else cls.get_analysis_inst(params["analysis"]),
+            "analysis_inst": analysis_inst,
         }
 
     @classmethod
-    def get_calibrator_kwargs(cls, task=None, **params):
+    def get_calibrator_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_selector_kwargs(cls, task=None, **params):
+    def get_selector_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_producer_kwargs(cls, task=None, **params):
+    def get_producer_kwargs(cls, *args, **kwargs):
         # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(task=task, **params)
+        return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
     def find_config_objects(
@@ -385,11 +419,11 @@ class ConfigTask(AnalysisTask):
     )
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
 
         # store a reference to the config inst
-        if "analysis_inst" in params and "config" in params:
+        if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
 
         return params
@@ -404,10 +438,14 @@ class ConfigTask(AnalysisTask):
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
             kwargs["config_inst"] = task.config_inst
+        elif "config_inst" in params:
+            kwargs["config_inst"] = params["config_inst"]
         elif "config" in params and "analysis_inst" in kwargs:
             kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
@@ -432,12 +470,13 @@ class ShiftTask(ConfigTask):
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
         "default: 'nominal'",
     )
-    effective_shift = luigi.Parameter(default=law.NO_STR)
+    local_shift = luigi.Parameter(default=law.NO_STR)
 
-    # skip passing effective_shift to cli completion, req params and sandboxing
-    exclude_params_index = {"effective_shift"}
-    exclude_params_req = {"effective_shift"}
-    exclude_params_sandbox = {"effective_shift"}
+    # skip passing local_shift to cli completion, req params and sandboxing
+    exclude_params_index = {"local_shift"}
+    exclude_params_req = {"local_shift"}
+    exclude_params_sandbox = {"local_shift"}
+    exclude_params_remote_workflow = {"local_shift"}
 
     allow_empty_shift = False
 
@@ -449,79 +488,100 @@ class ShiftTask(ConfigTask):
         return params
 
     @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
+
+        return params
+
+    @classmethod
     def modify_param_values(cls, params):
         """
-        When "config" and "shift" are set, this method evaluates them to set the effecitve shift.
+        When "config" and "shift" are set, this method evaluates them to set the global shift.
         For that, it takes the shifts stored in the config instance and compares it with those
         defined by this class.
         """
-        # the modify_param_values super method must not necessarily be set
-        super_func = super().modify_param_values
-        if callable(super_func):
-            params = super_func(params)
+        params = super().modify_param_values(params)
 
         # get params
         config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
-        requested_effective_shift = params.get("effective_shift")
+        requested_local_shift = params.get("local_shift")
 
-        # initialize the effective shift when not set
-        no_values = (None, law.NO_STR)
-        if requested_effective_shift in no_values:
-            params["effective_shift"] = "nominal"
-
-        # do nothing when the effective shift is already set and no config is defined
-        if requested_effective_shift not in no_values or config_inst in no_values:
+        # require that the config is set
+        if config_inst in (None, law.NO_STR):
             return params
 
-        # shift must be set
-        if requested_shift in no_values:
+        # require that the shift is set and known
+        if requested_shift in (None, law.NO_STR):
             if cls.allow_empty_shift:
+                params["shift"] = law.NO_STR
+                params["local_shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
-
-        # complain when the requested shift is not known
         if requested_shift not in config_inst.shifts:
-            raise ValueError(f"unknown shift: {requested_shift}")
+            raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
-        # determine the allowed shifts for this class
-        allowed_shifts = cls.get_allowed_shifts(config_inst, params)
+        # determine the known shifts for this class
+        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
-        # when allowed, add it to the task parameters
-        if requested_shift in allowed_shifts:
-            params["effective_shift"] = requested_shift
+        # actual shift resolution: compare the requested shift to known ones
+        # local_shift -> the requested shift if implemented by the task itself, else nominal
+        # shift       -> the requested shift if implemented by this task
+        #                or an upsteam task (== global shift), else nominal
+        if requested_local_shift in (None, law.NO_STR):
+            if requested_shift in shifts:
+                params["shift"] = requested_shift
+                params["local_shift"] = requested_shift
+            elif requested_shift in upstream_shifts:
+                params["shift"] = requested_shift
+                params["local_shift"] = "nominal"
+            else:
+                params["shift"] = "nominal"
+                params["local_shift"] = "nominal"
 
         # store references
-        params["shift_inst"] = config_inst.get_shift(requested_shift)
-        params["effective_shift_inst"] = config_inst.get_shift(params["effective_shift"])
+        params["global_shift_inst"] = config_inst.get_shift(params["shift"])
+        params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
 
         return params
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
-            if task.shift_inst:
-                kwargs["shift_inst"] = task.shift_inst
-        elif "effective_shift" in params and "config_inst" in kwargs:
-            if params["effective_shift"] != law.NO_STR:
-                kwargs["shift_inst"] = kwargs["config_inst"].get_shift(params["effective_shift"])
+            if task.local_shift_inst:
+                kwargs["shift_inst"] = task.local_shift_inst
+            if task.global_shift_inst:
+                kwargs["global_shift_inst"] = task.global_shift_inst
+        else:
+            if "local_shift_inst" in params:
+                kwargs["local_shift_inst"] = params["local_shift_inst"]
+            if "global_shift_inst" in params:
+                kwargs["global_shift_inst"] = params["global_shift_inst"]
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # store a reference to the effective shift instance
-        self.shift_inst = None
-        if self.effective_shift and self.effective_shift != law.NO_STR:
-            self.shift_inst = self.config_inst.get_shift(self.effective_shift)
+        # store references to the shift instances
+        self.local_shift_inst = None
+        self.global_shift_inst = None
+        if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
+            self.global_shift_inst = self.config_inst.get_shift(self.shift)
+            self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
 
     def store_parts(self):
         parts = super().store_parts()
 
         # add the shift name
-        if self.shift_inst:
-            parts.insert_after("config", "shift", self.shift_inst.name)
+        if self.global_shift_inst:
+            parts.insert_after("config", "shift", self.global_shift_inst.name)
 
         return parts
 
@@ -536,14 +596,31 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # store a reference to the dataset inst
-        if "config_inst" in params and "dataset" in params:
+        if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:
             params["dataset_inst"] = params["config_inst"].get_dataset(params["dataset"])
 
         return params
+
+    @classmethod
+    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        # dataset can have shifts, that are considered as upstream shifts
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+
+        dataset_inst = params.get("dataset_inst")
+        if dataset_inst:
+            if dataset_inst.is_data:
+                # clear all shifts for data
+                shifts.clear()
+                upstream_shifts.clear()
+            else:
+                # extend with dataset variations for mc
+                upstream_shifts |= set(dataset_inst.info.keys())
+
+        return shifts, upstream_shifts
 
     @classmethod
     def get_version_params(cls):
@@ -555,30 +632,16 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        # dataset can have shifts, so extend the set of allowed shifts
-        allowed_shifts = super().get_allowed_shifts(config_inst, params)
-
-        # dataset must be set
-        if "dataset" in params:
-            requested_dataset = params.get("dataset")
-            if requested_dataset not in (None, law.NO_STR):
-                dataset_inst = config_inst.get_dataset(requested_dataset)
-                # clear shifts for data and extend with dataset variations for mc
-                if dataset_inst.is_data:
-                    allowed_shifts.clear()
-                else:
-                    allowed_shifts |= set(dataset_inst.info.keys())
-
-        return allowed_shifts
-
-    @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
+
         if task:
             kwargs["dataset_inst"] = task.dataset_inst
+        elif "dataset_inst" in params:
+            kwargs["dataset_inst"] = params["dataset_inst"]
         elif "dataset" in params and "config_inst" in kwargs:
             kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])
+
         return kwargs
 
     def __init__(self, *args, **kwargs):
@@ -587,8 +650,12 @@ class DatasetTask(ShiftTask):
         # store references to the dataset instance
         self.dataset_inst = self.config_inst.get_dataset(self.dataset)
 
-        # store dataset info for the effective shift
-        key = self.effective_shift if self.effective_shift in self.dataset_inst.info else "nominal"
+        # store dataset info for the global shift
+        key = (
+            self.global_shift_inst.name
+            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info else
+            "nominal"
+        )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
     def store_parts(self):
@@ -639,8 +706,8 @@ class DatasetTask(ShiftTask):
         """
         info.append(self.config_inst.name)
         info.append(self.dataset_inst.name)
-        if self.shift_inst and self.shift_inst.name != "nominal":
-            info.append(self.shift_inst.name)
+        if self.global_shift_inst not in (None, law.NO_STR, "nominal"):
+            info.append(self.global_shift_inst.name)
         return info
 
 
@@ -827,6 +894,10 @@ def wrapper_factory(
                 f"'{','.join(known_features)}'",
             )
 
+    # treat base_cls as a tuple
+    base_classes = law.util.make_tuple(base_cls)
+    base_cls = base_classes[0]
+
     # define wrapper feature flags
     has_configs = "configs" in enable
     has_skip_configs = has_configs and "skip_configs" in enable
@@ -862,7 +933,7 @@ def wrapper_factory(
         check_class_compatibility("datasets", DatasetTask, ShiftTask)
 
     # create the class
-    class Wrapper(base_cls, law.WrapperTask):
+    class Wrapper(*base_classes, law.WrapperTask):
 
         if has_configs:
             configs = law.CSVParameter(

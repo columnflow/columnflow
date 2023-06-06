@@ -4,7 +4,11 @@
 # the venv is already present, and whether the script is called as part of a remote (law) job
 # (CF_REMOTE_JOB=1).
 #
-# Three environment variables are expected to be set before this script is called:
+# Four environment variables are expected to be set before this script is called:
+#   CF_SANDBOX_FILE
+#       The path of the file that contained the sandbox definition and that sourced _this_ script.
+#       It is used to derive a hash for defining the installation directory and to set the value of
+#       the LAW_SANDBOX variable.
 #   CF_VENV_BASE
 #       The base directory where virtual environments will be installed. Set by the main setup.sh.
 #   CF_VENV_NAME
@@ -17,14 +21,20 @@
 #   CF_DEV
 #       Set to "1" when CF_VENV_NAME ends with "_dev", and "0" otherwise.
 #   LAW_SANDBOX
-#       Set to the name of the sandbox to be correctly interpreted later on by law.
+#       Set to the name of the sandbox to be correctly interpreted later on by law. See
+#       CF_SANDBOX_FILE above.
 #
 # Optional arguments:
-# 1. mode
+#   1. mode
 #      The setup mode. Different values are accepted:
-#        - '' (default): The virtual environment is installed when not existing yet and sourced.
-#        - reinstall:    The virtual environment is removed first, then reinstalled and sourced.
-# 2. versioncheck
+#        - ''/install: The virtual environment is installed when not existing yet and sourced.
+#        - reinstall:  The virtual environment is removed first, then reinstalled and sourced.
+#        - update:     The virtual environment is removed first in case it is outdated, then
+#                      reinstalled and sourced.
+#      Please note that if the mode is empty ('') and the environment variable CF_SANDBOX_SETUP_MODE
+#      is defined, its value is used instead.
+#
+#   2. versioncheck
 #      When "yes", perform a version check, print a warning in case of a mismatch and set a specific
 #      exit code (21). When "no", the check is skipped alltogether. When "silent", no warning is
 #      printed but an exit code might be set. When "warn" (the default), a warning might be printed,
@@ -57,12 +67,23 @@ setup_venv() {
 
     local mode="${1:-}"
     local versioncheck="${2:-warn}"
-    if [ ! -z "${mode}" ] && [ "${mode}" != "reinstall" ]; then
+
+    # default mode
+    if [ -z "${mode}" ]; then
+        if [ ! -z "${CF_SANDBOX_SETUP_MODE}" ]; then
+            mode="${CF_SANDBOX_SETUP_MODE}"
+        else
+            mode="install"
+        fi
+    fi
+
+    # value checks
+    if [ "${mode}" != "install" ] && [ "${mode}" != "reinstall" ] && [ "${mode}" != "update" ]; then
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
     fi
-    if [ "${CF_REMOTE_JOB}" = "1" ] && [ ! -z "${mode}" ]; then
-        >&2 echo "the venv setup mode must be empty in remote jobs, but got '${mode}'"
+    if [ "${CF_REMOTE_JOB}" = "1" ] && [ "${mode}" != "install" ]; then
+        >&2 echo "the venv setup mode must be 'install' or empty in remote jobs, but got '${mode}'"
         return "2"
     fi
     if [ "${versioncheck}" != "yes" ] && [ "${versioncheck}" != "no" ] && [ "${versioncheck}" != "silent" ] && [ "${versioncheck}" != "warn" ]; then
@@ -75,13 +96,19 @@ setup_venv() {
     # check required global variables
     #
 
+    local sandbox_file="${CF_SANDBOX_FILE}"
+    unset CF_SANDBOX_FILE
+    if [ -z "${sandbox_file}" ]; then
+        >&2 echo "CF_SANDBOX_FILE is not set but required by ${this_file}"
+        return "10"
+    fi
     if [ -z "${CF_VENV_NAME}" ]; then
         >&2 echo "CF_VENV_NAME is not set but required by ${this_file}"
-        return "5"
+        return "11"
     fi
     if [ -z "${CF_VENV_REQUIREMENTS}" ]; then
         >&2 echo "CF_VENV_REQUIREMENTS is not set but required by ${this_file}"
-        return "6"
+        return "12"
     fi
 
     # split $CF_VENV_REQUIREMENTS into an array
@@ -95,7 +122,7 @@ setup_venv() {
     for f in ${requirement_files[@]}; do
         if [ ! -f "${f}" ]; then
             >&2 echo "requirement file '${f}' does not exist"
-            return "7"
+            return "13"
         fi
         if [ "${f}" = "${CF_BASE}/requirements_prod.txt" ]; then
             requirement_files_contains_prod="true"
@@ -108,15 +135,18 @@ setup_venv() {
     # start the setup
     #
 
-    local install_path="${CF_VENV_BASE}/${CF_VENV_NAME}"
+    local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
+    local venv_name_hashed="${CF_VENV_NAME}_${install_hash}"
+    local install_path="${CF_VENV_BASE}/${venv_name_hashed}"
+    local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
-    local pending_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}"
+    local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
     # the venv version must be set
     if [ -z "${venv_version}" ]; then
         >&2 echo "first requirement file ${first_requirement_file} does not contain a version line"
-        return "8"
+        return "20"
     fi
 
     # ensure the CF_VENV_BASE exists
@@ -125,11 +155,11 @@ setup_venv() {
     # possible return value
     local ret="0"
 
-    # only continue outside remote jobs
+    # handle local environments
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
         # optionally remove the current installation
         if [ "${mode}" = "reinstall" ]; then
-            echo "removing current installation at $install_path (mode '${mode}')"
+            echo "removing current installation at ${install_path_repr} (mode '${mode}')"
             rm -rf "${install_path}"
         fi
 
@@ -152,74 +182,104 @@ setup_venv() {
                 sleep_counter="$(( $sleep_counter + 1 ))"
                 if [ "${sleep_counter}" -ge 120 ]; then
                     >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
-                    return "10"
+                    return "22"
                 fi
                 cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
                 sleep 10
             done
         fi
 
-        # install or fetch when not existing
+        # create the pending_flag to express that the venv state might be changing
+        touch "${pending_flag_file}"
+        clear_pending() {
+            rm -f "${pending_flag_file}"
+        }
+
+        # checks to be performed if the venv already exists
+        if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            # get the current version
+            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            if [ -z "${current_version}" ]; then
+                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
+                return "23"
+            fi
+
+            if [ "${current_version}" != "${venv_version}" ]; then
+                if [ "${mode}" = "update" ]; then
+                    # remove the venv in case an update is requested
+                    echo "removing current installation at ${install_path_repr} (mode '${mode}', installed version ${current_version}, requested version ${venv_version})"
+                    rm -rf "${install_path}"
+
+                elif [ "${versioncheck}" != "no" ]; then
+                    # complain about the version mismatch
+                    if [ "${versioncheck}" != "warn" ]; then
+                        ret="21"
+                    fi
+                    if [ "${versioncheck}" != "silent" ]; then
+                        >&2 echo
+                        >&2 echo "WARNING: outdated venv '${venv_name_hashed}'"
+                        >&2 echo "WARNING: (installed version ${current_version}, requested version ${venv_version})"
+                        >&2 echo "WARNING: located at ${install_path_repr}"
+                        >&2 echo "WARNING: please consider updating it by adding 'update' to the source command"
+                        >&2 echo "WARNING: or by setting the environment variable 'CF_SANDBOX_SETUP_MODE=update'"
+                        >&2 echo
+                    fi
+                fi
+            fi
+
+            # activate it if stilll existing
+            if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+                source "${install_path}/bin/activate" "" || return "$?"
+            fi
+        fi
+
+        # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            touch "${pending_flag_file}"
-            cf_color cyan "installing venv at ${install_path}"
+            cf_color cyan "installing venv at ${install_path} from ${sandbox_file}"
 
             rm -rf "${install_path}"
-            cf_create_venv "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "11" )
+            cf_create_venv "${venv_name_hashed}"
+            [ "$?" != "0" ] && clear_pending && return "25"
 
             # activate it
-            source "${install_path}/bin/activate" "" || ( rm -f "${pending_flag_file}" && return "12" )
+            source "${install_path}/bin/activate" ""
+            [ "$?" != "0" ] && clear_pending && return "26"
 
             # update pip
             cf_color magenta "updating pip"
-            python -m pip install -U pip || ( rm -f "${pending_flag_file}" && return "13" )
+            python -m pip install -U pip
+            [ "$?" != "0" ] && clear_pending && return "27"
 
             # install basic production requirements
             if ! ${requirement_files_contains_prod}; then
                 cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                python -m pip install -r "${CF_BASE}/requirements_prod.txt" || ( rm -f "${pending_flag_file}" && return "14" )
+                python -m pip install -r "${CF_BASE}/requirements_prod.txt"
+                [ "$?" != "0" ] && clear_pending && return "28"
             fi
 
             # install requirement files
             for f in ${requirement_files[@]}; do
                 cf_color magenta "installing requirement file ${f}"
-                python -m pip install -r "${f}" || ( rm -f "${pending_flag_file}" && return "15" )
+                python -m pip install -r "${f}"
+                [ "$?" != "0" ] && clear_pending && return "29"
                 echo
             done
 
             # ensure that the venv is relocateable
-            cf_make_venv_relocateable "${CF_VENV_NAME}" || ( rm -f "${pending_flag_file}" && return "16" )
+            cf_make_venv_relocateable "${venv_name_hashed}"
+            [ "$?" != "0" ] && clear_pending && return "30"
 
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
             echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
-            rm -f "${pending_flag_file}"
-        else
-            # get the current version
-            local curr_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
-            if [ -z "${curr_version}" ]; then
-                >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
-                return "20"
-            fi
-
-            # complain when the version is outdated
-            if [ "${curr_version}" != "${venv_version}" ] && [ "${versioncheck}" != "no" ]; then
-                if [ "${versioncheck}" != "warn" ]; then
-                    ret="21"
-                fi
-                if [ "${versioncheck}" != "silent" ]; then
-                    >&2 echo ""
-                    >&2 echo "WARNING: outdated venv '${CF_VENV_NAME}' located at"
-                    >&2 echo "WARNING: ${install_path}"
-                    >&2 echo "WARNING: please consider updating it by adding 'reinstall' to the source command"
-                    >&2 echo ""
-                fi
-            fi
-
-            # activate it
-            source "${install_path}/bin/activate" "" || return "$?"
         fi
-    else
+
+        # remove the pending_flag
+        clear_pending
+    fi
+
+    # handle remote job environments
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
@@ -244,7 +304,7 @@ setup_venv() {
             done
             if ! ${found_sandbox}; then
                 >&2 echo "bash sandbox ${CF_VENV_BASE} not found in job configuration, stopping"
-                return "30"
+                return "31"
             fi
         fi
 
@@ -255,6 +315,8 @@ setup_venv() {
 
     # export variables
     export CF_VENV_NAME="${CF_VENV_NAME}"
+    export CF_VENV_HASH="${install_hash}"
+    export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "1" || echo "0" )"
 
     # prepend persistent path fragments again for ensure priority for local packages
@@ -262,7 +324,7 @@ setup_venv() {
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
-    export LAW_SANDBOX="bash::\$CF_BASE/sandboxes/${CF_VENV_NAME}.sh"
+    export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"
 
     return "${ret}"
 }

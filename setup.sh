@@ -38,7 +38,12 @@ setup_columnflow() {
     #       Queried during the interactive setup.
     #   CF_REPO_BASE
     #       The base path of the main repository invoking tasks or scripts. Used by columnflow tasks
-    #       to identify the repository for e.g. bundling. Set to $CF_BASE when not defined already.
+    #       to identify the repository that is bundled into remote jobs. Set to $CF_BASE when not
+    #       defined already.
+    #   CF_REPO_BASE_ALIAS
+    #       Name of an environment variable whose value is identical to that of CF_REPO_BASE and
+    #      that is usually used by an upstream analysis. For instance, if the analysis base is
+    #      stored in "$MY_ANALYSIS_BASE", CF_REPO_BASE_ALIAS should be "MY_ANALYSIS_BASE" (no $).
     #   CF_CONDA_BASE
     #       The directory where conda and conda envs are installed. Might point to
     #       $CF_SOFTWARE_BASE/conda.
@@ -50,6 +55,9 @@ setup_columnflow() {
     #   CF_JOB_BASE
     #       The directory where job files from batch system submissions are kept. Used in law.cfg.
     #       Might point to $CF_DATA/jobs. Queried during the interactive setup.
+    #   CF_VENV_SETUP_MODE
+    #       The default mode for setting up virtual envs. Queried during the interactive setup. See
+    #       sandboxes/_setup_venv.sh for more info.
     #   CF_STORE_NAME
     #       The name (not path) of store directories that will be created to contain output targets,
     #       potentially both locally and remotely. Queried during the interactive setup.
@@ -150,6 +158,11 @@ setup_columnflow() {
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        setopt globdots
+    fi
+
 
     #
     # global variables
@@ -174,6 +187,9 @@ setup_columnflow() {
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
+            query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
+            [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
+            unset CF_VENV_SETUP_MODE_UPDATE
             query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
@@ -189,6 +205,7 @@ setup_columnflow() {
 
     # continue the fixed setup
     export CF_REPO_BASE="${CF_REPO_BASE:-$CF_BASE}"
+    export CF_REPO_BASE_ALIAS="${CF_REPO_BASE_ALIAS:-}"
     export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
@@ -197,6 +214,12 @@ setup_columnflow() {
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+
+    # show a warning in case no CF_REPO_BASE_ALIAS is set
+    if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
+        cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
+        cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
+    fi
 
 
     #
@@ -419,7 +442,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_4.12.0-Linux-x86_64.sh"
+    local miniconda_source="https://repo.anaconda.com/miniconda/Miniconda3-py39_23.1.0-1-Linux-x86_64.sh"
     local pyv="3.9"
 
     # empty the PYTHONPATH
@@ -428,7 +451,7 @@ cf_setup_software_stack() {
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes
     export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin"
-    export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
+    export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
 
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
@@ -470,17 +493,14 @@ cf_setup_software_stack() {
             if ${conda_missing}; then
                 echo
                 cf_color magenta "installing conda at ${CF_CONDA_BASE}"
-                (
-                    wget "${miniconda_source}" -O setup_miniconda.sh &&
-                    bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" &&
-                    rm setup_miniconda.sh &&
-                    cat << EOF >> "${CF_CONDA_BASE}/.condarc"
+                wget "${miniconda_source}" -O setup_miniconda.sh || return "$?"
+                bash setup_miniconda.sh -b -u -p "${CF_CONDA_BASE}" || return "$?"
+                rm -f setup_miniconda.sh
+                cat << EOF >> "${CF_CONDA_BASE}/.condarc"
 changeps1: false
 channels:
   - conda-forge
-  - defaults
 EOF
-                )
             fi
 
             # initialize conda
@@ -492,7 +512,10 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda environment"
-                conda install --yes libgcc gfal2 gfal2-util python-gfal2 conda-pack || return "$?"
+                conda install --yes libgcc gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                # TODO: temporary issue with numba and numpy
+                conda install --yes "numpy<1.24" || return "$?"
+                conda clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -511,21 +534,32 @@ EOF
         #
 
         show_version_warning() {
-            >&2 echo ""
+            >&2 echo
             >&2 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
-            >&2 echo "         > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
-            >&2 echo ""
+            >&2 echo "WARNING: > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
+            >&2 echo
         }
 
         # source the prod sandbox, potentially skipped in CI jobs
+        local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
             bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
-            [ "$?" = "21" ] && show_version_warning "cf_prod"
+            ret="$?"
+            if [ "${ret}" = "21" ]; then
+                show_version_warning "cf_prod"
+            elif [ "${ret}" != "0" ]; then
+                return "${ret}"
+            fi
         fi
 
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        [ "$?" = "21" ] && show_version_warning "cf_dev"
+        ret="$?"
+        if [ "${ret}" = "21" ]; then
+            show_version_warning "cf_dev"
+        elif [ "${ret}" != "0" ]; then
+            return "${ret}"
+        fi
 
         # initialze submodules
         if [ -e "${CF_BASE}/.git" ]; then
@@ -579,6 +613,7 @@ cf_init_submodule() {
         fi
     fi
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_init_submodule
 
 cf_color() {
     local color="$1"
@@ -635,6 +670,7 @@ cf_color() {
             ;;
     esac
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_color
 
 main() {
     # Invokes the main action of this script, catches possible error codes and prints a message.

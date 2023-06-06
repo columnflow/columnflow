@@ -4,12 +4,15 @@
 Column production methods related defining categories.
 """
 
+from collections import defaultdict
+
 import law
 
 from columnflow.selection import Selector
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
+
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -26,16 +29,24 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     # TODO: we maybe don't want / need to loop through all leaf categories
     for cat_inst in self.config_inst.get_leaf_categories():
-        # get the selector class
-        selector = self.category_to_selector[cat_inst]
+        # start with a true mask
+        cat_mask = np.ones(len(events)) > 0
 
-        # get the category mask
-        cat_mask = self[selector](events, **kwargs)
+        # loop through selectors
+        for selector in self.category_to_selectors[cat_inst]:
+            # run the selector for events that still match the mask, then AND concat
+            _cat_mask = self[selector](events[cat_mask], **kwargs)
+            cat_mask[cat_mask] &= np.asarray(_cat_mask == 1)
+
+            # stop if no events are left
+            if not ak.any(cat_mask):
+                break
 
         # covert to nullable array with the category ids or none, then apply ak.singletons
-        cat_ids = ak.singletons(ak.Array(np.where(np.asarray(cat_mask), cat_inst.id, None)))
-        category_ids.append(cat_ids)
+        ids = ak.where(cat_mask, np.float32(cat_inst.id), np.float32(np.nan))
+        category_ids.append(ak.singletons(ak.nan_to_none(ids)))
 
+    # combine and save
     category_ids = ak.concatenate(category_ids, axis=1)
     events = set_ak_column(events, "category_ids", category_ids, value_type=np.int32)
 
@@ -44,32 +55,33 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @category_ids.init
 def category_ids_init(self: Producer) -> None:
-    # store a mapping from leaf category to selector class for faster lookup
-    self.category_to_selector = {}
+    # store a mapping from leaf category to selector classes for faster lookup
+    self.category_to_selectors = defaultdict(list)
 
     # add all selectors obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
-        sel = cat_inst.selection
-        if Selector.derived_by(sel):
-            selector = sel
-        elif Selector.has_cls(sel):
-            selector = Selector.get_cls(sel)
-        else:
-            raise Exception(
-                f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to a existing "
-                "Selector object",
-            )
+        # treat all selections as lists
+        for sel in law.util.make_list(cat_inst.selection):
+            if Selector.derived_by(sel):
+                selector = sel
+            elif Selector.has_cls(sel):
+                selector = Selector.get_cls(sel)
+            else:
+                raise Exception(
+                    f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to an "
+                    "existing Selector object",
+                )
 
-        # variables should refer to unexposed selectors as they should usually not
-        # return SelectionResult's but a flat per-event mask
-        if selector.exposed:
-            logger.warning(
-                f"selection of category {cat_inst.name} seems to refer to an exposed selector "
-                "whose return value is most likely incompatible with category masks",
-            )
+            # variables should refer to unexposed selectors as they should usually not
+            # return SelectionResult's but a flat per-event mask
+            if selector.exposed:
+                logger.warning(
+                    f"selection of category {cat_inst.name} seems to refer to an exposed selector "
+                    "whose return value is most likely incompatible with category masks",
+                )
 
-        # update dependency sets
-        self.uses.add(selector)
-        self.produces.add(selector)
+            # update dependency sets
+            self.uses.add(selector)
+            self.produces.add(selector)
 
-        self.category_to_selector[cat_inst] = selector
+            self.category_to_selectors[cat_inst].append(selector)

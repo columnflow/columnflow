@@ -9,18 +9,18 @@ from __future__ import annotations
 __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
-    "PreloadedNanoEventsFactory",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
 ]
 
+import gc
 import re
 import math
 import time
 import copy
 import enum
-import weakref
+import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
@@ -29,18 +29,24 @@ from typing import Sequence, Callable, Any
 
 import law
 
-from columnflow.util import UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable
+from columnflow.util import (
+    UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
+    get_source_code,
+)
+
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+dak = maybe_import("dask_awkward")
 uproot = maybe_import("uproot")
 coffea = maybe_import("coffea")
 maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
+maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
-
 logger = law.logger.get_logger(__name__)
+logger_perf = law.logger.get_logger(f"{__name__}-perf")
 
 
 #: Columns that are always required when opening a nano file with coffea.
@@ -144,6 +150,20 @@ class Route(object, metaclass=RouteMeta):
        read-only
 
        The name of the corresponding column in nano-style underscore format.
+
+    .. py:attribute:: string_column
+       type: string
+       read-only
+
+       The name of the corresponding column in dot format, but only consisting of string fields,
+       i.e., without slicing or indexing fields.
+
+    .. py:attribute:: string_nano_column
+       type: string
+       read-only
+
+       The name of the corresponding column in nano-style underscore format, but only consisting of
+       string fields, i.e., without slicing or indexing fields.
     """
 
     DOT_SEP = "."
@@ -304,6 +324,14 @@ class Route(object, metaclass=RouteMeta):
     def nano_column(self) -> str:
         return self.join_nano(self._fields)
 
+    @property
+    def string_column(self) -> str:
+        return self.join(f for f in self._fields if isinstance(f, str))
+
+    @property
+    def string_nano_column(self) -> str:
+        return self.join_nano(f for f in self._fields if isinstance(f, str))
+
     def __str__(self) -> str:
         return self.join(self._fields)
 
@@ -311,7 +339,7 @@ class Route(object, metaclass=RouteMeta):
         return f"<{self.__class__.__name__} '{self}' at {hex(id(self))}>"
 
     def __hash__(self) -> int:
-        return hash(self.fields)
+        return hash(str(self.fields))
 
     def __len__(self) -> int:
         return len(self._fields)
@@ -343,7 +371,9 @@ class Route(object, metaclass=RouteMeta):
         self,
         other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> Route:
-        return self.__add__(other)
+        other = Route(other)
+        other.add(self)
+        return other
 
     def __iadd__(
         self,
@@ -515,7 +545,7 @@ def get_ak_routes(
     lookup = [(ak_array, ())]
     while lookup:
         arr, fields = lookup.pop(0)
-        if arr.fields and (max_depth <= 0 or len(fields) < max_depth):
+        if getattr(arr, "fields", None) and (max_depth <= 0 or len(fields) < max_depth):
             # extend the lookup with nested fields
             lookup.extend([
                 (getattr(arr, field), fields + (field,))
@@ -546,9 +576,13 @@ def has_ak_column(
     """
     route = Route(route)
 
+    # handle empty route
+    if not route:
+        return False
+
     try:
         route.apply(ak_array)
-    except ValueError:
+    except (ValueError, IndexError):
         return False
 
     return True
@@ -587,28 +621,32 @@ def set_ak_column(
     """
     route = Route(route)
 
+    # handle empty route
+    if not route:
+        raise ValueError("route must not be empty")
+
     # cast type
     if value_type:
         value = ak.values_astype(value, value_type)
 
     # force creating a view for consistent behavior
     orig_fields = ak_array.fields
-    ak_array = ak_array[orig_fields]
+    ak_array = ak.Array(ak_array)
 
     # when there is only one field, and route refers to that field, ak_array will be empty
     # after the removal in the next step and all shape information might get lost,
-    # so in this case add value first as a dummy column and remove it afterwards
+    # so in this case add the value first as a dummy column and remove it afterwards
     match_only_existing = len(orig_fields) == 1 and len(route) == 1 and orig_fields[0] == route[0]
     if match_only_existing:
         tmp_field = f"tmp_field_{id(object())}"
-        ak_array[tmp_field] = value
+        ak_array = ak.with_field(ak_array, value, tmp_field)
 
     # try to remove the route first so that existing columns are not overwritten but re-inserted
     ak_array = remove_ak_column(ak_array, route, silent=True)
 
     # trivial case
     if len(route) == 1:
-        ak_array[route.fields] = value
+        ak_array = ak.with_field(ak_array, value, route.fields)
 
         # remove the tmp field if existing
         if match_only_existing:
@@ -616,7 +654,7 @@ def set_ak_column(
 
         return ak_array
 
-    # identify the existing part of the subroute
+    # identify existing parts of the subroute
     # example: route is ("a", "b", "c"), "a" exists, the sub field "b" does not, "c" should be set
     sub_route = route.copy()
     missing_sub_route = Route()
@@ -635,7 +673,7 @@ def set_ak_column(
         value = ak.zip({missing_sub_route.pop(): value})
 
     # insert the value
-    ak_array[sub_route.fields] = value
+    ak_array = ak.with_field(ak_array, value, sub_route.fields)
 
     return ak_array
 
@@ -643,46 +681,43 @@ def set_ak_column(
 def remove_ak_column(
     ak_array: ak.Array,
     route: Route | Sequence[str] | str,
+    remove_empty: bool = True,
     silent: bool = False,
 ) -> ak.Array:
     """
     Removes a *route* from an awkward array *ak_array* and returns a new view with the corresponding
-    column removed.
+    column removed. When *route* points to a nested field that would be empty after removal, the
+    parent field is removed completely unless *remove_empty* is *False*.
 
-    Note that only *route* can be a :py:class:`Route` instance, a tuple of strings where each
-    string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g.
-    ``"Jet.pt"``). Unless *silent* is *True*, a *ValueError* is raised when the route does not
-    exist.
+    Note that *route* can be a :py:class:`Route` instance, a sequence of strings where each string
+    refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``).
+    Unless *silent* is *True*, a *ValueError* is raised when the route does not exist.
     """
     # force creating a view for consistent behavior
-    ak_array = ak_array[ak_array.fields]
+    ak_array = ak.Array(ak_array)
 
-    # verify that the route exists
+    # verify that the route is not empty
     route = Route(route)
     if not route:
         if silent:
             return ak_array
         raise ValueError("route must not be empty")
+
+    # verify that the route exists
     if not has_ak_column(ak_array, route):
         if silent:
             return ak_array
         raise ValueError(f"no column found in array for route '{route}'")
 
-    if len(route) == 1:
-        # trivial case: remove a top level column
-        ak_array = ak_array[[f for f in ak_array.fields if f != route[0]]]
-    else:
-        # nested case: given the route ("a", "b", "c"), set ak_array["a", "b"] to a view of "b"
-        # with all fields but "c" using __setitem__ syntax (and in particular not __setattr__!)
-        sub_route, remove_field = route[:-1], route[-1]
-        sub_array = ak_array[sub_route.fields]
-        # determine remaining fields
-        remaining_fields = [f for f in sub_array.fields if f != remove_field]
-        # if no fields are left, remove the entire sub_view
-        if not remaining_fields:
-            return remove_ak_column(ak_array, route[:-1])
-        # set the reduced view
-        ak_array[sub_route.fields] = sub_array[remaining_fields]
+    # remove it
+    ak_array = ak.without_field(ak_array, route.fields)
+
+    # remove empty parent fields
+    if remove_empty and len(route) > 1:
+        for i in range(len(route) - 1):
+            parent_route = route[:-(i + 1)]
+            if not parent_route.apply(ak_array).fields:
+                ak_array = ak.without_field(ak_array, parent_route.fields)
 
     return ak_array
 
@@ -692,6 +727,7 @@ def add_ak_alias(
     src_route: Route | Sequence[str] | str,
     dst_route: Route | Sequence[str] | str,
     remove_src: bool = False,
+    missing_strategy: str = "remove",
 ) -> ak.Array:
     """
     Adds an alias to an awkward array *ak_array* pointing the array at *src_route* to *dst_route*
@@ -699,23 +735,37 @@ def add_ak_alias(
 
     Note that existing columns referred to by *dst_route* might be overwritten. When *remove_src* is
     *True*, a view of the input array is returned with the column referred to by *src_route*
-    missing.
+    missing. Both routes can be :py:class:`Route` instances, a tuple of strings where each string
+    refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``).
 
-    Both routes can be a :py:class:`Route` instance, a tuple of strings where each string refers to
-    a subfield, e.g. ``("Jet", "pt")``, or a string with dot format (e.g. ``"Jet.pt"``). A
-    *ValueError* is raised when *src_route* does not exist.
+    In case *src_route* does not exist, *missing_strategy* is applied:
+
+        - ``"original"``: If existing, *dst_route* remains unchanged.
+        - ``"remove"``: If existing, *dst_route* is removed.
+        - ``"raise"``: A *ValueError* is raised.
     """
+    # check the strategy
+    strategies = ("original", "remove", "raise")
+    if missing_strategy not in strategies:
+        raise ValueError(
+            f"unknown missing_strategy '{missing_strategy}', valid values are {strategies}",
+        )
+
+    # convert to routes
     src_route = Route(src_route)
     dst_route = Route(dst_route)
 
     # check that the src exists
-    if not has_ak_column(ak_array, src_route):
-        raise ValueError(f"no column found in array for route '{src_route}'")
+    if has_ak_column(ak_array, src_route):
+        # add the alias, potentially overwriting existing columns
+        ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
+    else:
+        if missing_strategy == "raise":
+            raise ValueError(f"no column found in array for route '{src_route}'")
+        if missing_strategy == "remove":
+            ak_array = remove_ak_column(ak_array, dst_route)
 
-    # add the alias, potentially overwriting existing columns
-    ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
-
-    # create a view without the source if requested
+    # remove the source column
     if remove_src:
         ak_array = remove_ak_column(ak_array, src_route)
 
@@ -725,22 +775,21 @@ def add_ak_alias(
 def add_ak_aliases(
     ak_array: ak.Array,
     aliases: dict[Route | Sequence[str] | str, Route | Sequence[str], str],
-    remove_src: bool = False,
+    **kwargs: dict[str, Any],
 ) -> ak.Array:
     """
     Adds multiple *aliases*, given in a dictionary mapping destination columns to source columns, to
     an awkward array *ak_array* and returns a new view with the aliases applied.
 
-    When *remove_src* is *True*, a view of the input array is returned with all source columns
-    missing.
-
     Each column in this dictionary can be referred to by a :py:class:`Route` instance, a tuple of
     strings where each string refers to a subfield, e.g. ``("Jet", "pt")``, or a string with dot
-    format (e.g. ``"Jet.pt"``). See :py:func:`add_ak_aliases` for more info.
+    format (e.g. ``"Jet.pt"``).
+
+    All additional *kwargs* are forwarded to :py:func:`add_ak_aliases`.
     """
     # add all aliases
     for dst_route, src_route in aliases.items():
-        ak_array = add_ak_alias(ak_array, src_route, dst_route, remove_src=remove_src)
+        ak_array = add_ak_alias(ak_array, src_route, dst_route, **kwargs)
 
     return ak_array
 
@@ -761,18 +810,18 @@ def update_ak_array(
     occur:
 
         1. If *concat_routes* is either *True* or a list of routes containing the route in question,
-           the columns are concatenated along axis 1. This obviously implies that their shapes must
-           be compatible.
+           the columns are concatenated along the last axis. This obviously implies that their
+           shapes must be compatible.
         2. If case 1 does not apply and *add_routes* is either *True* or a list of routes containing
            the route in question, the columns are added using the plus operator, forwarding the
            actual implementation to awkward.
         3. If cases 1 and 2 do not apply and *overwrite_routes* is either *True* or a list of routes
            containing the route in question, new columns (right most in *others*) overwrite
            existing ones. A new view is returned in case this case occurs at least once.
-        4. If none of the cases above apply, an exception is raised.
+        4. If none of the cases above apply, columns remain unchanged.
     """
     # force creating a view for consistent behavior
-    ak_array = ak_array[ak_array.fields]
+    ak_array = ak.Array(ak_array)
 
     # trivial case
     if not others:
@@ -787,14 +836,21 @@ def update_ak_array(
         return _has_column_cache[route]
 
     # helpers to check if routes can be overwritten, added or concatenated
-    def _match_route(bool_or_list, cache, route):
+    def _match_route(matcher, cache, route):
         if route not in cache:
-            cache[route] = route in bool_or_list if isinstance(bool_or_list, list) else bool_or_list
+            cache[route] = matcher(route.column)
         return cache[route]
 
-    do_overwrite = partial(_match_route, overwrite_routes, {})
-    do_add = partial(_match_route, add_routes, {})
-    do_concat = partial(_match_route, concat_routes, {})
+    # helper to create a matching function for routes
+    def _create_matcher(routes):
+        if isinstance(routes, (list, tuple, set)):
+            return pattern_matcher([Route(route).column for route in routes])
+        return lambda route: bool(routes)
+
+    # decision helpers
+    do_overwrite = partial(_match_route, _create_matcher(overwrite_routes), {})
+    do_add = partial(_match_route, _create_matcher(add_routes), {})
+    do_concat = partial(_match_route, _create_matcher(concat_routes), {})
 
     # go through all other arrays and merge their columns
     for other in others:
@@ -805,10 +861,7 @@ def update_ak_array(
                     ak_array = set_ak_column(
                         ak_array,
                         route,
-                        ak.concatenate((
-                            route.apply(ak_array)[..., None],
-                            route.apply(other)[..., None],
-                        ), axis=-1),
+                        ak.concatenate((route.apply(ak_array), route.apply(other)), axis=-1),
                     )
                 elif do_add(route):
                     # add and reassign
@@ -821,8 +874,6 @@ def update_ak_array(
                     # delete the column first for type safety and then re-add it
                     ak_array = remove_ak_column(ak_array, route)
                     ak_array = set_ak_column(ak_array, route, route.apply(other))
-                else:
-                    raise Exception(f"cannot update already existing array column '{route}'")
             else:
                 # the route is new, so add it and manually tell the cache
                 ak_array = set_ak_column(ak_array, route, route.apply(other))
@@ -834,16 +885,18 @@ def update_ak_array(
 def flatten_ak_array(
     ak_array: ak.Array,
     routes: Sequence | set | Callable[[str], bool] | None = None,
+    nano_format: bool = False,
 ) -> OrderedDict:
     """
     Flattens a nested awkward array *ak_array* into a dictionary that maps joined column names to
     single awkward arrays. The returned dictionary might be used in conjuction with ``ak.Array`` to
     create a single array again.
 
-    :py:func:`get_ak_routes` is used internally to determine the nested structure of the array. The
-    name of flat columns in the returned dictionary follows the standard dot format. The columns to
-    save can be defined via *routes* which can be a sequence or set of column names or a function
-    receiving a column name and returning a bool.
+    :py:func:`get_ak_routes` is used internally to determine the nested structure of the array.
+    Names of flat columns in the returned dictionary follow the standard dot format by default, and
+    nano-style underscore format if *nano_format* is *True*. The columns to save can be defined via
+    *routes* which can be a sequence or set of column names or a function receiving a column name
+    and returning a bool.
     """
     # use an ordered mapping to somewhat preserve row adjacency
     flat_array = OrderedDict()
@@ -851,14 +904,14 @@ def flatten_ak_array(
     # helper to evaluate whether to keep a column
     keep_route = lambda column: True
     if isinstance(routes, (list, tuple, set)):
-        keep_route = lambda column: column in routes
+        keep_route = pattern_matcher([Route(route).column for route in routes])
     elif callable(routes):
         keep_route = routes
 
     # go through routes, create new names and store arrays
     for route in get_ak_routes(ak_array):
         if keep_route(route.column):
-            flat_array[route.column] = route.apply(ak_array)
+            flat_array[route.nano_column if nano_format else route.column] = route.apply(ak_array)
 
     return flat_array
 
@@ -915,7 +968,16 @@ def sorted_ak_to_parquet(
         make use of this function! Otherwise, operations like file merging might fail due to
         differently ordered schemas.
     """
-    ak.to_parquet(sort_ak_fields(ak_array), *args, **kwargs)
+    # sort fields
+    ak_array = sort_ak_fields(ak_array)
+
+    # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
+    # TODO: remove workaround
+    kwargs["extensionarray"] = False
+    # end workaround
+
+    # TODO: empty fields cannot be saved to parquet, but for that we would need to identify them
+    ak.to_parquet(ak_array, *args, **kwargs)
 
 
 def attach_behavior(
@@ -932,8 +994,9 @@ def attach_behavior(
     By default, all subfields of *ak_array* are kept. For further control, *skip_fields* can contain
     names or name patterns of fields that are filtered.
     """
+
     if behavior is None:
-        behavior = getattr(ak_array, "behavior", None)
+        behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
             raise ValueError(
                 f"behavior for type '{type_name}' is not set and not existing in input array",
@@ -972,25 +1035,21 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
     """
     # flatten and convert to content
     if isinstance(data_array, np.ndarray):
-        data = ak.layout.NumpyArray(np.reshape(data_array, (-1,)))
+        data = ak.contents.NumpyArray(np.reshape(data_array, (-1,)))
     elif isinstance(data_array, ak.Array):
         data = ak.flatten(data_array, axis=None)  # might create a copy
     else:
         raise TypeError(f"unhandled type of data array {data_array}")
 
     # infer the offsets
-    if not getattr(layout_array, "layout", None):
+    if getattr(layout_array, "layout", None) is None:
         raise ValueError(f"layout array {layout_array} does not have a valid layout")
     if getattr(layout_array.layout, "offsets", None):
         offsets = layout_array.layout.offsets
     else:
-        try:
-            # possibly unregularly partitioned
-            offsets = layout_array.layout.toContent().offsets_and_flatten()[0]
-        except:
-            raise ValueError(f"offsets extraction not implemented for layout array {layout_array}")
+        raise ValueError(f"offsets extraction not implemented for layout array {layout_array}")
 
-    return ak.Array(ak.layout.ListOffsetArray64(offsets, data))
+    return ak.Array(ak.contents.ListOffsetArray(offsets, data))
 
 
 def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
@@ -1010,6 +1069,15 @@ def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
         )
 
     return np.asarray(ak.flatten(ak_array, axis=axis))
+
+
+def ak_copy(ak_array: ak.Array) -> ak.Array:
+    """
+    Workaround for ``ak.copy`` which currently fails to copy arrays with coffea nano-style behavior
+    attached to them. As soon as this is functional again, this function should be deprecated and
+    removed.
+    """
+    return layout_ak_array(np.array(ak.flatten(ak_array)), ak_array)
 
 
 class RouteFilter(object):
@@ -1115,11 +1183,29 @@ class ArrayFunction(Derivable):
         practice. Instead, please consider using a decorator to wrap the main callable as done by
         the :py:class:`Calibrator`, :py:class:`Selector` and :py:class:`Producer` interfaces.
 
-    *call_func* defines the function being invoked when the instance is *called*. *uses* and
-    *produces* should be strings denoting a column in dot format or a :py:class:`Route` instance,
-    other :py:class:`ArrayFunction` instances, or a sequence or set of the two. On instance-level,
-    the full sets of :py:attr:`used_columns` and :py:attr:`produced_columns` are simply resolvable
-    through attributes.
+    *uses* and *produces* should be strings denoting a column in dot format or a :py:class:`Route`
+    instance, other :py:class:`ArrayFunction` instances, or a sequence or set of the two. On
+    instance-level, the full sets of :py:attr:`used_columns` and :py:attr:`produced_columns` are
+    simply resolvable through attributes.
+
+    *call_func* defines the function being invoked when the instance is *called*. An additional
+    initialization function can be wrapped through a decorator (similiar to ``property`` setters) as
+    shown in the example below. They constitute a mechanism to update the :py:attr:`uses` and
+    :py:attr:`produces` sets to declare dependencies in a more dynamic way.
+
+    .. code-block:: python
+
+        @my_other_func.init
+        def my_other_func_init(self: ArrayFunction):
+            self.uses.add(my_func)
+
+        # the above adds an initialization function to the already created class my_other_func,
+        # but the same could also be achived by just declaring an instance method *init_func* as
+        # part of the class definition above
+
+    Another function that can be dynamically assined (or simply implemented in the subclass) is
+    *skip_func*. If set, it is assumed to be a function that returns a bool, deciding on whether to
+    include this :py:class:`ArrayFunction` in the dependencies of other instances. The decorator
 
     In the example above, *my_other_func* declares a dependence on *my_func* by listing it in
     *uses*. This means that *my_other_func* uses the columns that *my_func* also uses. The same
@@ -1199,13 +1285,27 @@ class ArrayFunction(Derivable):
        type: callable
 
        The wrapped function to be called on arrays.
+
+    .. py:attribute: init_func
+       type: callable
+
+       The registered function defining what to update, or *None*.
+
+    .. py:attribute: skip_func
+       type: callable
+
+       The registered function defining when to skip this instance while building dependencies of
+       other instances.
     """
 
     # class-level attributes as defaults
     call_func = None
+    init_func = None
+    skip_func = None
     uses = set()
     produces = set()
-    dependency_sets = {"uses", "produces"}
+    _dependency_sets = {"uses", "produces"}
+    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1237,11 +1337,36 @@ class ArrayFunction(Derivable):
         """
         return cls.Flagged(cls, cls.IOFlag.PRODUCES)
 
+    @classmethod
+    def init(cls, func: Callable[[], None]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`init_func`
+        which is used to initialize *this* instance dependent on specific task attributes. The
+        function should not accept positional arguments.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.init_func = func
+
+    @classmethod
+    def skip(cls, func: Callable[[], bool]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`skip_func`
+        which is used to decide whether *this* instance should be skipped during the building of
+        dependency trees in other :py:class:`ArrayFunction`'s.
+
+        The function should not accept positional arguments and return a boolean.
+        """
+        cls.skip_func = func
+
     def __init__(
         self,
         call_func: Callable | None = law.no_value,
+        init_func: Callable | None = law.no_value,
+        skip_func: Callable | None = law.no_value,
         deferred_init: bool | None = True,
         instance_cache: dict | None = None,
+        log_runtime: bool | None = None,
         **kwargs,
     ):
         super().__init__()
@@ -1249,14 +1374,24 @@ class ArrayFunction(Derivable):
         # add class-level attributes as defaults for unset arguments (no_value)
         if call_func == law.no_value:
             call_func = self.__class__.call_func
+        if init_func == law.no_value:
+            init_func = self.__class__.init_func
+        if skip_func == law.no_value:
+            skip_func = self.__class__.skip_func
+        if log_runtime is not None:
+            self.log_runtime = log_runtime
 
-        # when a custom call_func is passed, bind it to this instance
+        # when a custom funcs are passed, bind them to this instance
         if call_func:
             self.call_func = call_func.__get__(self, self.__class__)
+        if init_func:
+            self.init_func = init_func.__get__(self, self.__class__)
+        if skip_func:
+            self.skip_func = skip_func.__get__(self, self.__class__)
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             if attr in kwargs:
                 try:
                     deps = set(law.util.make_list(kwargs.get(attr) or []))
@@ -1276,6 +1411,9 @@ class ArrayFunction(Derivable):
                     )
                     raise e
             setattr(self, attr, deps)
+
+            # also register a set for storing instances, filled in create_dependencies
+            setattr(self, f"{attr}_instances", set())
 
         # dictionary of dependency class to instance, set in create_dependencies
         self.deps = DotDict()
@@ -1297,8 +1435,17 @@ class ArrayFunction(Derivable):
         """
         Controls the deferred part of the initialization process.
         """
+        # create dependencies once
         instance_cache = instance_cache or {}
         self.create_dependencies(instance_cache)
+
+        # run this instance's init function which might update dependent classes
+        if callable(self.init_func):
+            self.init_func()
+
+        # instantiate dependencies again, but only perform updates
+        self.create_dependencies(instance_cache, only_update=True)
+
         return instance_cache
 
     def create_dependencies(
@@ -1306,55 +1453,67 @@ class ArrayFunction(Derivable):
         instance_cache: dict,
         only_update: bool = False,
     ) -> None:
-        # create instance-level sets to store instances of dependent ArrayFunction classes
-        # that are defined in class-level sets
-        def instantiate(cls):
-            if cls not in instance_cache:
-                # create the instance first without its deps, then cache it and
-                # finally create its deps
-                inst = self.instantiate_dependency(cls, deferred_init=False)
-                instance_cache[cls] = inst
-                inst.deferred_init(instance_cache)
-            return instance_cache[cls]
+        """
+        Walks through all dependencies configured in the :py:attr:`_dependency_sets` and fills
+        :py:attr:`deps` as well as separate sets, corresponding to the classes defined in
+        :py:attr:`_dependency_sets` (e.g. :py:attr:`uses` -> :py:attr:`uses_instances`).
 
-        def add_dep(inst):
-            self.deps[inst.__class__] = inst
-            return inst
+        *instance_cache* is a dictionary that is serves as a cache to prevent same classes being
+        instantiated multiple times.
+        """
+        def add_dep(cls_or_inst):
+            is_cls = ArrayFunction.derived_by(cls_or_inst)
+            cls = cls_or_inst if is_cls else cls_or_inst.__class__
+            if not only_update or cls not in self.deps:
+                # create or get the instance
+                if is_cls:
+                    # use the cache
+                    if cls not in instance_cache:
+                        # create the instance first without its deps, then cache it but do not
+                        # create its own deps yet within the deferred init
+                        inst = self.instantiate_dependency(cls, deferred_init=False)
+                        instance_cache[cls] = inst
+                    inst = instance_cache[cls]
+                else:
+                    inst = cls_or_inst
+
+                # optionally skip the instance
+                if callable(inst.skip_func) and inst.skip_func():
+                    self.deps.pop(cls, None)
+                    return None
+
+                # run the deferred init that creates its own deps
+                inst.deferred_init(instance_cache)
+
+                # store it
+                self.deps[cls] = inst
+
+            return self.deps[cls]
 
         # track dependent classes that are handled in the following
         added_deps = []
 
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             # get the current set of instances, potentially clearing existing ones
-            instances = getattr(self, f"{attr}_instances", set())
+            instances = getattr(self, f"{attr}_instances")
             instances.clear()
 
             # go through all dependent objects and create instances of classes, considering caching
             for obj in getattr(self, attr):
-                if ArrayFunction.derived_by(obj):
-                    if only_update and obj in self.deps:
-                        obj = self.deps[obj]
-                    else:
-                        obj = add_dep(instantiate(obj))
-                    added_deps.append(obj.__class__)
-                elif isinstance(obj, ArrayFunction):
-                    if not only_update or obj.__class__ not in self.deps:
-                        obj = add_dep(obj)
-                    added_deps.append(obj.__class__)
+                if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
+                    obj = add_dep(obj)
+                    if obj:
+                        added_deps.append(obj.__class__)
+                        instances.add(obj)
                 elif isinstance(obj, self.Flagged):
-                    if only_update and obj.wrapped in self.deps:
-                        obj = self.deps[obj.wrapped]
-                    else:
-                        if ArrayFunction.derived_by(obj.wrapped):
-                            obj = self.Flagged(instantiate(obj.wrapped), obj.io_flag)
-                        obj = add_dep(obj.wrapped)
-                    added_deps.append(obj.__class__)
+                    obj = self.Flagged(add_dep(obj.wrapped), obj.io_flag)
+                    if obj:
+                        added_deps.append(obj.wrapped.__class__)
+                        instances.add(obj)
                 else:
                     obj = copy.deepcopy(obj)
-                instances.add(obj)
-
-            # save the updated set of dependencies
-            setattr(self, f"{attr}_instances", instances)
+                    if obj:
+                        instances.add(obj)
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1384,18 +1543,18 @@ class ArrayFunction(Derivable):
         """
         deps = set()
 
-        for attr in self.dependency_sets:
+        for attr in self._dependency_sets:
             for obj in getattr(self, f"{attr}_instances"):
+                if isinstance(obj, self.Flagged):
+                    obj = obj.wrapped
                 if isinstance(obj, ArrayFunction):
                     deps.add(obj)
-                elif isinstance(obj, self.Flagged):
-                    deps.add(obj.wrapped)
                 elif include_others:
                     deps.add(obj)
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None) -> set[str]:
+    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None, debug=False) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1446,10 +1605,26 @@ class ArrayFunction(Derivable):
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
         raised if :py:attr:`call_func` is not callable.
         """
+        # check if the call_func is callable
         if not callable(self.call_func):
             raise Exception(f"call_func of {self} is not callable")
 
-        return self.call_func(*args, **kwargs)
+        # raise in case the call is actually being skipped
+        if callable(self.skip_func) and self.skip_func():
+            raise Exception(
+                f"skip_func of {self} returned True, cannot invoke call_func; skip_func code: \n\n"
+                f"{get_source_code(self.skip_func, indent=4)}",
+            )
+
+        t1 = time.perf_counter()
+        try:
+            return self.call_func(*args, **kwargs)
+        finally:
+            if self.log_runtime:
+                duration = time.perf_counter() - t1
+                logger_perf.info(
+                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                )
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -1467,11 +1642,10 @@ class TaskArrayFunction(ArrayFunction):
     `py:attr:`shifts` itself.
 
     As opposed to more basic :py:class:`ArrayFunction`'s, instances of *this* class have a direct
-    interface to tasks and can influence their behavior - and vice-versa. For this purpose, an
-    initialization function can be wrapped through a decorator (similiar to ``property`` setters) as
-    shown in the example below. Custom task requirements, and a setup of objects resulting from
-    these requirements can be defined in a similar, programmatic way. Also, they might define an
-    optional *sandbox* that is required to run this array function.
+    interface to tasks and can influence their behavior - and vice-versa. For this purpose, custom
+    task requirements, and a setup of objects resulting from these requirements can be defined in a
+    similar, programmatic way. Also, they might define an optional *sandbox* that is required to run
+    this array function.
 
     Exmple:
 
@@ -1484,11 +1658,6 @@ class TaskArrayFunction(ArrayFunction):
             def call_func(self, events):
                 # self.weights is defined below
                 events["Jet", "pt_weighted"] = events.Jet.pt * self.weights
-
-        # define config-dependent updates (e.g. extending shifts, or used and produced columns)
-        @my_func.init
-        def update(self):
-            self.shifts |= {"some_shift_up", "some_shift_down"}
 
         # define requirements that (e.g.) compute the weights
         @my_func.requires
@@ -1537,11 +1706,6 @@ class TaskArrayFunction(ArrayFunction):
 
        The resolved, flat set of dependent or produced shifts.
 
-    .. py:attribute: init_func
-       type: callable
-
-       The registered function defining what to update, or *None*.
-
     .. py:attribute: requires_func
        type: callable
 
@@ -1566,32 +1730,12 @@ class TaskArrayFunction(ArrayFunction):
     """
 
     # class-level attributes as defaults
-    init_func = None
     requires_func = None
     setup_func = None
     sandbox = None
     call_force = None
     shifts = set()
-    dependency_sets = ArrayFunction.dependency_sets | {"shifts"}
-
-    @classmethod
-    def init(cls, func: Callable[[], None]) -> None:
-        """
-        Decorator to wrap a function *func* that should be registered as :py:meth:`init_func`
-        which is used to initialize *this* instance dependent on specific task attributes. The
-        function should not accept positional arguments.
-
-        The decorator does not return the wrapped function.
-
-        .. note::
-
-            When the task invoking the requirement is workflow, be aware that both the actual
-            workflow instance as well as branch tasks might call the wrapped function. When the
-            requirements should differ between them, make sure to use the
-            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
-            distinguish the cases.
-        """
-        cls.init_func = func
+    _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
@@ -1632,7 +1776,6 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        init_func: Callable | None = law.no_value,
         requires_func: Callable | None = law.no_value,
         setup_func: Callable | None = law.no_value,
         sandbox: str | None = law.no_value,
@@ -1646,8 +1789,6 @@ class TaskArrayFunction(ArrayFunction):
         super().__init__(*args, **kwargs)
 
         # add class-level attributes as defaults for unset arguments (no_value)
-        if init_func == law.no_value:
-            init_func = self.__class__.init_func
         if requires_func == law.no_value:
             requires_func = self.__class__.requires_func
         if setup_func == law.no_value:
@@ -1658,8 +1799,6 @@ class TaskArrayFunction(ArrayFunction):
             call_force = self.__class__.call_force
 
         # when custom funcs are passed, bind them to this instance
-        if init_func:
-            self.init_func = init_func.__get__(self, self.__class__)
         if requires_func:
             self.requires_func = requires_func.__get__(self, self.__class__)
         if setup_func:
@@ -1678,26 +1817,6 @@ class TaskArrayFunction(ArrayFunction):
 
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
 
-    def deferred_init(
-        self,
-        instance_cache: dict | None = None,
-    ) -> dict:
-        """
-        Controls the deferred part of the initialization process, first calling this instances
-        :py:meth:`init_func` and then setting up dependencies.
-        """
-        # call super, which instantiates the statically defined dependencies
-        instance_cache = super().deferred_init(instance_cache)
-
-        # run this instance's init function which might update dependent classes
-        if callable(self.init_func):
-            self.init_func()
-
-        # instantiate dependencies again, potentially updating existing ones
-        instance_cache = self.create_dependencies(instance_cache, only_update=True)
-
-        return instance_cache
-
     def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> TaskArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*,
@@ -1710,23 +1829,24 @@ class TaskArrayFunction(ArrayFunction):
         return super().instantiate_dependency(cls, **kwargs)
 
     def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
-        shifts = set()
-
         # init the call cache
         if call_cache is None:
             call_cache = set()
 
-        # consider _this_ call cached
+        # add shifts and consider _this_ call cached
+        shifts = {
+            shift
+            for shift in self.shifts
+            if not isinstance(shift, (ArrayFunction, self.Flagged))
+        }
         call_cache.add(self)
 
         # add shifts of all dependent objects
-        for obj in self.get_dependencies(include_others=True):
+        for obj in self.get_dependencies(include_others=False):
             if isinstance(obj, TaskArrayFunction):
                 if obj not in call_cache:
                     call_cache.add(obj)
                     shifts |= obj._get_all_shifts(call_cache=call_cache)
-            elif isinstance(obj, str):
-                shifts.add(obj)
 
         return shifts
 
@@ -1747,7 +1867,7 @@ class TaskArrayFunction(ArrayFunction):
         if reqs is None:
             reqs = {}
 
-        # init the call cache
+        # create the call cache
         if call_cache is None:
             call_cache = set()
 
@@ -1774,7 +1894,7 @@ class TaskArrayFunction(ArrayFunction):
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
         outputs.
         """
-        # init the call cache
+        # create the call cache
         if call_cache is None:
             call_cache = set()
 
@@ -1826,39 +1946,10 @@ class TaskArrayFunction(ArrayFunction):
         return super().__call__(*args, **kwargs)
 
 
-class PreloadedNanoEventsFactory(coffea.nanoevents.NanoEventsFactory or object):
-    """
-    Custom NanoEventsFactory that re-implements the ``events()`` method that immediately loads
-    an event chunk into memory.
-    """
-
-    def events(self):
-        """
-        Builds and returns the eager (non-lazy) awkward array describing the event content of the
-        wrapped mapping.
-        """
-        events = self._events()
-        if events is None:
-            behavior = dict(self._schema.behavior)
-            behavior["__events_factory__"] = self
-            key_format = partial(coffea.nanoevents.factory._key_formatter, self._partition_key)
-            events = ak.from_buffers(
-                self._schema.form,
-                len(self),
-                self._mapping,
-                key_format=key_format,
-                lazy=False,
-                lazy_cache=None,
-                behavior=behavior,
-            )
-            self._events = weakref.ref(events)
-        return events
-
-
 class NoThreadPool(object):
     """
     Dummy implementation that mimics parts of the usual thread pool interface but instead of
-    offloading to threads, functions are instantly invoked in the calling (main) thread.
+    offloading to threads, functions are instantly invoked in the caller (main) thread.
     """
 
     class SyncResult(object):
@@ -1881,7 +1972,7 @@ class NoThreadPool(object):
 
     def __enter__(self) -> NoThreadPool:
         if not self.opened:
-            raise Exception("cannot enter closed NoThreadPool")
+            raise Exception(f"cannot enter closed {self.__class__.__name__}")
 
         return self
 
@@ -1895,6 +1986,9 @@ class NoThreadPool(object):
         return
 
     def apply_async(self, func, args=(), kwargs=None) -> SyncResult:
+        if not self.opened:
+            raise Exception(f"cannot apply_async on closed {self.__class__.__name__}")
+
         return self.SyncResult(func(*args, **(kwargs or {})))
 
 
@@ -1952,6 +2046,154 @@ class TaskQueue(object):
         return task
 
 
+class DaskArrayReader(object):
+    """
+    Class that wraps a dask_awkward array and handles chunked reading via splitting and merging of
+    materialized partitions. To allow memory efficient caching in case of overlaps between
+    partitions on disk and chunks to be read (possibly with different sizes) this process is
+    implemented as a one-time-only read operation. Hence, in situations where particular chunks need
+    to be read more than once, another instance of this class should be used.
+    """
+
+    def __init__(self, path: str, open_options: dict | None = None):
+        super().__init__()
+
+        # open the file
+        open_options = open_options or {}
+        open_options["split_row_groups"] = False
+        self.dak_array = dak.from_parquet(path, **open_options)
+        self.path = path
+
+        # fixed mapping of chunk to partition indices, created once in _materialize_via_partitions
+        self.chunk_to_partitions = {}
+
+        # temporary mapping of partition indices to cache information (chunks still to be handled
+        # and a cached array) that changes during the read process in _materialize_via_partitions
+        self.partition_cache = {
+            p: DotDict(chunks=[], array=None)
+            for p in range(self.dak_array.npartitions)
+        }
+
+        # locks to protect against RCs during read operations by different threads
+        self.chunk_to_partitions_lock = threading.Lock()
+        self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
+
+    def __del__(self):
+        self.close()
+
+    def __len__(self) -> int:
+        return len(self.dak_array)
+
+    @property
+    def closed(self) -> bool:
+        return self.dak_array is None
+
+    def close(self) -> None:
+        # free memory and perform an eager, overly cautious gc round
+        self.dak_array = None
+        self.partition_cache.clear()
+        gc.collect()
+
+    def _materialize_via_partitions(
+        self,
+        chunk_index: int,
+        entry_start: int,
+        entry_stop: int,
+        max_chunk_size: int,
+    ) -> ak.array:
+        """
+        Strategy: read from disk with granularity given by partition divisions
+            - use chunk info to determine which partitions need to be read
+            - guard each read operation of a partition by locks
+            - add materialized partitions that might overlap with another chunk in a temporary cache
+            - remove cached partitions eagerly once it becomes clear that no chunk will need it
+        """
+        # fill the chunk -> partitions mapping once
+        with self.chunk_to_partitions_lock:
+            if not self.chunk_to_partitions:
+                divs = self.dak_array.divisions
+                # note: a hare-and-tortoise algorithm could be possible to get the mapping with less
+                # than n^2 complexity, but for our case with ~30 chunks this should be ok (for now)
+                n_chunks = int(math.ceil(len(self) / max_chunk_size))
+                # in case there are no entries, ensure that at least one empty chunk is created
+                for _chunk_index in range(max(n_chunks, 1)):
+                    _entry_start = _chunk_index * max_chunk_size
+                    _entry_stop = min(_entry_start + max_chunk_size, len(self))
+                    partitions = []
+                    for p, (p_start, p_stop) in enumerate(zip(divs[:-1], divs[1:])):
+                        # note: check strict increase of chunk size to accommodate zero-length size
+                        if p_stop <= _entry_start < _entry_stop:
+                            continue
+                        if p_start >= _entry_stop > _entry_start:
+                            break
+                        partitions.append(p)
+                        self.partition_cache[p].chunks.append(_chunk_index)
+                    self.chunk_to_partitions[_chunk_index] = partitions
+
+        # read partitions one at a time and store parts that make up the chunk for concatenation
+        parts = []
+        for p in self.chunk_to_partitions[chunk_index]:
+            # obtain the array
+            with self.partition_locks[p]:
+                # remove this chunk for the list of chunks to be handled
+                self.partition_cache[p].chunks.remove(chunk_index)
+
+                if self.partition_cache[p].array is None:
+                    arr = self.dak_array.partitions[p].compute()
+                    # add to cache when there is a chunk left that will need it
+                    if self.partition_cache[p].chunks:
+                        self.partition_cache[p].array = arr
+                else:
+                    arr = self.partition_cache[p].array
+                    # remove from cache when there is no chunk left that would need it
+                    if not self.partition_cache[p].chunks:
+                        self.partition_cache[p].array = None
+
+            # add part for concatenation using entry info
+            div_start, div_stop = self.dak_array.divisions[p:p + 2]
+            part_start = max(entry_start - div_start, 0)
+            part_stop = min(entry_stop - div_start, div_stop - div_start)
+            parts.append(arr[part_start:part_stop])
+            # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
+            # make the array non-optional, assuming it is not meant to be optional
+            # TODO: remove this workaround once this other workaround is removed as well:
+            # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
+            # skip null-filling for completely empty arrays
+            if not parts[-1].layout.contents:
+                continue
+            if getattr(parts[-1], "fields", None) and ak.any(ak.ravel(ak.is_none(parts[-1]))):
+                logger.warning(
+                    f"None values detected in chunk {chunk_index} of file {self.path} during "
+                    "dask_awkward materialization that were filled with zeros while reading; "
+                    "this is a workaround in columnflow to prevent optional types in arrays; "
+                    "for now, please make sure that files are not written with optional types!",
+                )
+            parts[-1] = ak.fill_none(parts[-1], 0)
+            # end workaround
+
+        # construct the full array
+        arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
+
+        del parts
+        gc.collect()
+
+        return arr
+
+    def materialize(self, *args, **kwargs) -> ak.array:
+        # for now, it seems like the only method for materializing slices of dak arrays to ak arrays
+        # is through invoking the "compute()" operation on partitions, and in fact, slicing on dak
+        # arrays is not supported at this time (arr[start:stop] raises DaskAwkwardNotImplemented);
+        # therefore, the only way to perform parallel, chunked read operations is through partitions
+        # and while potentially being to coarse on disk, there might even be two advantages:
+        # 1. in cf, there are typically no parquet files from external sources, but they are all
+        #    created within cf and thus, they typical partition sizes exactly match the desired
+        #    chunk size (as they were created in a chunked way and eventually merged), leading to
+        #    zero overhead and no caching / overlap issues
+        # 2. it seems far more performant to read full partitions from disk rather than parts of
+        #    them (if possible at all) since meta data might have to be read in any case
+        return self._materialize_via_partitions(*args, **kwargs)
+
+
 class ChunkedIOHandler(object):
     """
     Allows reading one or multiple files and iterating through chunks of their content with
@@ -1994,24 +2236,42 @@ class ChunkedIOHandler(object):
                 handler.queue(ak.to_parquet, (selected_jet_pts, "some/path.parquet"))
 
     The maximum size of the chunks and the number of threads to load them can be configured through
-    *chunk_size* and *pool_size*. Unless *lazy* is *True*, chunks are fully loaded into memory
-    before they are yielded to be used in the main thread. In addition, *open_options* and
-    *read_options* are forwarded to internal open and read implementations to further control and
-    optimize IO.
+    *chunk_size* and *pool_size*. Chunks are fully loaded into memory before they are yielded to be
+    used in the main thread.
 
-    If *source* refers to a single object, *source_type*, *lazy*, *open_options* and *read_options*
-    should be single values as well. Otherwise, if *source* is a sequence of sources, the other
-    arguments can be sequences as well with the same length.
+    In addition, *open_options* and *read_options* are forwarded to internal open and read
+    implementations to further control and optimize IO. For instance, they can be configured to
+    select only a subset of (nested) columns to read from disk. However, since this is highly
+    dependent on the specific source type, *read_columns* can be defined as a set (!) of strings (in
+    nano-style dot format) or :py:class:`Route` objects and is added to either *open_options* or
+    *read_options* internally (source type dependent).
+
+    If *source* refers to a single object, *source_type*, *open_options*, *read_options* and
+    *read_columns* should be single values as well. Otherwise, if *source* is a sequence of sources,
+    the other arguments can be sequences as well with the same length.
 
     During iteration, before chunks are yielded, an optional message *iter_message* is printed when
-    set, receiving the chunk position as the field *pos* for formatting.
+    set, receiving the respective :py:class:`ChunkedIOHandler.ChunkPosition` as the field *pos* for
+    formatting.
     """
 
-    # chunk position container
-    ChunkPosition = namedtuple("ChunkPosition", ["index", "entry_start", "entry_stop"])
+    # source handler container
+    SourceHandler = namedtuple(
+        "SourceHandler",
+        ["type", "open", "close", "read"],
+    )
 
-    # read result containers
-    ReadResult = namedtuple("ReadResult", ["chunk", "chunk_pos"])
+    # chunk position container
+    ChunkPosition = namedtuple(
+        "ChunkPosition",
+        ["index", "entry_start", "entry_stop", "max_chunk_size"],
+    )
+
+    # read result container
+    ReadResult = namedtuple(
+        "ReadResult",
+        ["chunk", "chunk_pos"],
+    )
 
     def __init__(
         self,
@@ -2019,9 +2279,9 @@ class ChunkedIOHandler(object):
         source_type: str | Sequence[str] | None = None,
         chunk_size: int = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000),
         pool_size: int = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 4),
-        lazy: bool | Sequence[bool] = False,
-        open_options: dict | list[dict] | None = None,
-        read_options: dict | list[dict] | None = None,
+        open_options: dict | Sequence[dict] | None = None,
+        read_options: dict | Sequence[dict] | None = None,
+        read_columns: set | Sequence[set] | None = None,
         iter_message: str = "handling chunk {pos.index}",
         debug: bool = law.config.get_expanded_boolean("analysis", "chunked_io_debug", False),
     ):
@@ -2058,20 +2318,19 @@ class ChunkedIOHandler(object):
         source_type = _check_arg("source_type", source_type)
         open_options = _check_arg("open_options", open_options)
         read_options = _check_arg("read_options", read_options)
-        lazy = _check_arg("lazy", lazy)
+        read_columns = _check_arg("read_columns", read_columns)
 
         # store input attributes
         self.source_list = list(source) if self.is_multi else [source]
         self.source_type_list = list(source_type) if self.is_multi else [source_type]
         self.open_options_list = list(open_options) if self.is_multi else [open_options]
         self.read_options_list = list(read_options) if self.is_multi else [read_options]
-        self.lazy_list = list(lazy) if self.is_multi else [lazy]
+        self.read_columns_list = list(read_columns) if self.is_multi else [read_columns]
         self.chunk_size = chunk_size
         self.pool_size = max(pool_size, 1)
         self.iter_message = iter_message
 
         # attributes that are set in open(), close() or __iter__()
-        self.file_cache = []
         self.source_objects = []
         self.n_entries = None
         self.task_queue = TaskQueue()
@@ -2088,7 +2347,7 @@ class ChunkedIOHandler(object):
 
         # determine type, open and read functions per source
         self.source_handlers = [
-            self.get_source_handlers(source_type, source)
+            self.get_source_handler(source_type, source)
             for source_type, source in zip(self.source_type_list, self.source_list)
         ]
 
@@ -2104,31 +2363,35 @@ class ChunkedIOHandler(object):
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
         # determine the start of stop of this chunk
-        entry_start = chunk_index * chunk_size
-        entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
+        if n_entries == 0:
+            entry_start = 0
+            entry_stop = 0
+        else:
+            entry_start = chunk_index * chunk_size
+            entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
 
-        return cls.ChunkPosition(chunk_index, entry_start, entry_stop)
+        return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size)
 
     @classmethod
-    def get_source_handlers(
+    def get_source_handler(
         cls,
         source_type: str | None,
         source: Any | None,
-    ) -> tuple[str, Callable, Callable]:
+    ) -> SourceHandler:
         """
-        Takes a *source_type* (see list below) and gathers information about how to open and read
-        content from a specific source. A 3-tuple *(source type, open function, read function)* is
-        returned.
+        Takes a *source_type* (see list below) and gathers information about how to open, read
+        content from, and close a specific source, and returns that information in a named
+        *SourceHandler* tuple.
 
         When *source_type* is *None* but an arbitrary *source* is set, the type is derived from that
         object, and an exception is raised in case no type can be inferred.
 
         Currently supported source types are:
 
-            - "awkward_parquet"
             - "uproot_root"
             - "coffea_root"
-            - "coffea_parquet"
+            - "coffea_parquet" (currently unsupported)
+            - "awkward_parquet"
         """
         if source_type is None:
             if isinstance(source, uproot.ReadOnlyDirectory):
@@ -2146,42 +2409,36 @@ class ChunkedIOHandler(object):
             if not source_type:
                 raise Exception(f"could not determine source_type from source '{source}'")
 
-        if source_type == "awkward_parquet":
-            return (source_type, cls.open_awkward_parquet, cls.read_awkward_parquet)
         if source_type == "uproot_root":
-            return (source_type, cls.open_uproot_root, cls.read_uproot_root)
+            return cls.SourceHandler(
+                source_type,
+                cls.open_uproot_root,
+                cls.close_uproot_root,
+                cls.read_uproot_root,
+            )
         if source_type == "coffea_root":
-            return (source_type, cls.open_coffea_root, cls.read_coffea_root)
-        if source_type == "coffea_parquet":
-            return (source_type, cls.open_coffea_parquet, cls.read_coffea_parquet)
+            return cls.SourceHandler(
+                source_type,
+                cls.open_coffea_root,
+                cls.close_coffea_root,
+                cls.read_coffea_root,
+            )
+        # if source_type == "coffea_parquet":
+        #     return cls.SourceHandler(
+        #         source_type,
+        #         cls.open_coffea_parquet,
+        #         cls.close_coffea_parquet,
+        #         cls.read_coffea_parquet,
+        #     )
+        if source_type == "awkward_parquet":
+            return cls.SourceHandler(
+                source_type,
+                cls.open_awkward_parquet,
+                cls.close_awkward_parquet,
+                cls.read_awkward_parquet,
+            )
 
         raise NotImplementedError(f"unknown source_type '{source_type}'")
-
-    @classmethod
-    def open_awkward_parquet(
-        cls,
-        source: str,
-        open_options: dict | None = None,
-        file_cache: list | None = None,
-    ) -> tuple[ak.Array, int]:
-        """
-        Opens a parquet file saved at *source*, loads the content as an awkward array and returns a
-        2-tuple *(array, length)*. *open_options* are forwarded to ``awkward.from_parquet``. Passing
-        *file_cache* has no effect.
-        """
-        if not isinstance(source, str):
-            raise Exception(f"'{source}' cannot be opened as awkward_parquet")
-
-        # default open options
-        open_options = open_options or {}
-        open_options["lazy"] = True
-        open_options["lazy_cache"] = None
-        open_options["use_threads"] = False
-
-        # load the array
-        arr = ak.from_parquet(source, **open_options)
-
-        return (arr, len(arr))
 
     @classmethod
     def open_uproot_root(
@@ -2193,14 +2450,14 @@ class ChunkedIOHandler(object):
             tuple[uproot.ReadOnlyDirectory, str]
         ),
         open_options: dict | None = None,
-        file_cache: list | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> tuple[uproot.TTree, int]:
         """
         Opens an uproot tree from a root file at *source* and returns a 2-tuple *(tree, entries)*.
         *source* can be the path of the file, an already opened, readable uproot file (assuming the
         tree is called "Events"), or a 2-tuple whose second item defines the name of the tree to be
-        loaded. When a new file is opened, it receives *open_options* and is put into the
-        *file_cache* when set.
+        loaded. When a new file is opened, it receives *open_options*. Passing *read_columns* has no
+        effect.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -2210,16 +2467,59 @@ class ChunkedIOHandler(object):
             open_options = open_options or {}
             open_options["object_cache"] = None
             open_options["array_cache"] = None
-            source = uproot.open(source, **open_options)
-            if isinstance(file_cache, list):
-                file_cache.append(source)
-            tree = source[tree_name]
+            open_options.setdefault("decompression_executor", None)
+            open_options.setdefault("interpretation_executor", None)
+            f = uproot.open(source, **open_options)
+            tree = f[tree_name]
         elif isinstance(source, uproot.ReadOnlyDirectory):
             tree = source[tree_name]
         else:
             raise Exception(f"'{source}' cannot be opened as uproot_root")
 
         return (tree, tree.num_entries)
+
+    @classmethod
+    def close_uproot_root(
+        cls,
+        source_object: uproot.TTree,
+    ) -> None:
+        """
+        Closes the file that contains the TTree *source_object*.
+        """
+        f = getattr(source_object, "file", None)
+        if f is not None:
+            f.close()
+
+    @classmethod
+    def read_uproot_root(
+        cls,
+        source_object: uproot.TTree,
+        chunk_pos: ChunkPosition,
+        read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
+    ) -> ak.Array:
+        """
+        Given an uproot TTree *source_object*, returns an awkward array chunk referred to by
+        *chunk_pos*. *read_options* are passed to ``uproot.TTree.arrays``. *read_columns* are
+        converted to strings and, if not already present, added as field ``filter_name`` to
+        *read_options*.
+        """
+        # default read options
+        read_options = read_options or {}
+        read_options["array_cache"] = None
+
+        # inject read_columns
+        if read_columns and "filter_name" not in read_options:
+            filter_name = [Route(s).string_nano_column for s in read_columns]
+            read_options["filter_name"] = filter_name
+
+        chunk = source_object.arrays(
+            entry_start=chunk_pos.entry_start,
+            entry_stop=chunk_pos.entry_stop,
+            **read_options,
+        )
+
+        return chunk
 
     @classmethod
     def open_coffea_root(
@@ -2231,14 +2531,14 @@ class ChunkedIOHandler(object):
             tuple[uproot.ReadOnlyDirectory, str]
         ),
         open_options: dict | None = None,
-        file_cache: list | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> tuple[uproot.ReadOnlyDirectory, int]:
         """
         Opens an uproot file at *source* for subsequent processing with coffea and returns a 2-tuple
         *(uproot file, tree entries)*. *source* can be the path of the file, an already opened,
         readable uproot file (assuming the tree is called "Events"), or a 2-tuple whose second item
         defines the name of the tree to be loaded. *open_options* are forwarded to ``uproot.open``
-        if a new file is opened, which is then put into the *file_cache* when set.
+        if a new file is opened. Passing *read_columns* has no effect.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -2249,8 +2549,6 @@ class ChunkedIOHandler(object):
             open_options["object_cache"] = None
             open_options["array_cache"] = None
             source = uproot.open(source, **open_options)
-            if isinstance(file_cache, list):
-                file_cache.append(source)
             tree = source[tree_name]
         elif isinstance(source, uproot.ReadOnlyDirectory):
             tree = source[tree_name]
@@ -2260,123 +2558,169 @@ class ChunkedIOHandler(object):
         return (source, tree.num_entries)
 
     @classmethod
-    def open_coffea_parquet(
+    def close_coffea_root(
         cls,
-        source: str,
-        open_options: dict | None = None,
-        file_cache: list | None = None,
-    ) -> tuple[str, int]:
+        source_object: str | uproot.ReadOnlyDirectory,
+    ) -> None:
         """
-        Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
-        *open_options* and or *file_cache* has no effect.
+        Closes a ROOT file referred to by *source_object* if it is a ``ReadOnlyDirectory``. In case
+        a string is passed, this method does nothing.
         """
-        return (source, pq.ParquetFile(source).metadata.num_rows)
-
-    @classmethod
-    def read_awkward_parquet(
-        cls,
-        source_object: ak.Array,
-        chunk_pos: ChunkPosition,
-        lazy: bool = False,
-        read_options: dict | None = None,
-    ) -> ak.Array:
-        """
-        Given an awkward array *source_object*, returns the chunk referred to by *chunk_pos* either
-        as a lazy slice if *lazy* is *True*, or as a full copy loaded into memory otherwise. Passing
-        *read_options* has no effect.
-        """
-        chunk = source_object[chunk_pos.entry_start:chunk_pos.entry_stop]
-        return chunk if lazy else ak.materialized(chunk)
-
-    @classmethod
-    def read_uproot_root(
-        cls,
-        source_object: uproot.TTree,
-        chunk_pos: ChunkPosition,
-        lazy: bool = False,
-        read_options: dict | None = None,
-    ) -> ak.Array:
-        """
-        Given an uproot TTree *source_object*, returns an awkward array chunk referred to by
-        *chunk_pos* as a lazy slice if *lazy* is *True*, or as a full copy loaded into memory
-        otherwise. *read_options* are passed to either ``uproot.TTree.arrays`` or ``uproot.lazy``.
-        """
-        # default read options
-        read_options = read_options or {}
-        read_options["array_cache"] = None
-
-        if lazy:
-            view = uproot.lazy(source_object, **read_options)
-            chunk = view[chunk_pos.entry_start:chunk_pos.entry_stop]
-        else:
-            chunk = source_object.arrays(
-                entry_start=chunk_pos.entry_start,
-                entry_stop=chunk_pos.entry_stop,
-                **read_options,
-            )
-
-        return chunk
+        close = None if isinstance(source_object, str) else getattr(source_object, "close", None)
+        if callable(close):
+            close()
 
     @classmethod
     def read_coffea_root(
         cls,
         source_object: str | uproot.ReadOnlyDirectory,
         chunk_pos: ChunkPosition,
-        lazy: bool = False,
         read_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
         """
         Given a file location or opened uproot file *source_object*, returns an awkward array chunk
-        referred to by *chunk_pos*, assuming nanoAOD structure. The array is a lazy slice if *lazy*
-        is *True*, and fully loaded into memory otherwise. *read_options* are passed to
-        ``coffea.nanoevents.NanoEventsFactory.from_root``.
+        referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
+        ``coffea.nanoevents.NanoEventsFactory.from_root``. *read_columns* are converted to strings
+        and, if not already present, added as nested field ``iteritems_options.filter_name`` to
+        *read_options*.
         """
-        # define the factory to use
-        factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
-
         # default read options
         read_options = read_options or {}
         read_options["runtime_cache"] = None
         read_options["persistent_cache"] = None
 
+        # inject read_columns
+        if read_columns and (
+            "iteritems_options" not in read_options or
+            "filter_name" not in read_options["iteritems_options"]
+        ):
+            filter_name = [Route(s).string_nano_column for s in read_columns]
+            read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
+
         # read the events chunk into memory
-        chunk = factory.from_root(
+        chunk = coffea.nanoevents.NanoEventsFactory.from_root(
             source_object,
             entry_start=chunk_pos.entry_start,
             entry_stop=chunk_pos.entry_stop,
-            schemaclass=coffea.nanoevents.NanoAODSchema,
             **read_options,
         ).events()
 
         return chunk
 
+    # @classmethod
+    # def open_coffea_parquet(
+    #     cls,
+    #     source: str,
+    #     open_options: dict | None = None,
+    #     read_columns: set[str | Route] | None = None,
+    # ) -> tuple[str, int]:
+    #     """
+    #     Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
+    #     *open_options* has no effect.
+    #
+    #     TODO: use read_columns?
+    #     """
+    #     return (source, pq.ParquetFile(source).metadata.num_rows)
+
+    # @classmethod
+    # def close_coffea_parquet(
+    #     cls,
+    #     source_object: str,
+    # ) -> None:
+    #     """
+    #     This is a placeholder method and has no effect.
+    #     """
+    #     return
+
+    # @classmethod
+    # def read_coffea_parquet(
+    #     cls,
+    #     source_object: str,
+    #     chunk_pos: ChunkPosition,
+    #     read_options: dict | None = None,
+    #     read_columns: set[str | Route] | None = None,
+    # ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    #     """
+    #     Given a the location of a parquet file *source_object*, returns an awkward array chunk
+    #     referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
+    #     *coffea.nanoevents.NanoEventsFactory.from_parquet*.
+    #
+    #     TODO: use read_columns?
+    #     """
+    #     # TODO: default read options? go via dak and preloaded?
+    #
+    #     # read the events chunk into memory
+    #     chunk = coffea.nanoevents.NanoEventsFactory.from_parquet(
+    #         source_object,
+    #         entry_start=chunk_pos.entry_start,
+    #         entry_stop=chunk_pos.entry_stop,
+    #         schemaclass=coffea.nanoevents.NanoAODSchema,
+    #         **(read_options or {}),
+    #     ).events()
+
+    #     return chunk
+
     @classmethod
-    def read_coffea_parquet(
+    def open_awkward_parquet(
         cls,
-        source_object: str,
+        source: str,
+        open_options: dict | None = None,
+        read_columns: set[str | Route] | None = None,
+    ) -> tuple[ak.Array, int]:
+        """
+        Opens a parquet file saved at *source*, loads the content as an dask awkward array,
+        wrapped by a :py:class:`DaskArrayReader`, and returns a 2-tuple *(array, length)*.
+        *open_options* and *chunk_size* are forwarded to :py:class:`DaskArrayReader`. *read_columns*
+        are converted to strings and, if not already present, added as field ``columns`` to
+        *open_options*.
+        """
+        if not isinstance(source, str):
+            raise Exception(f"'{source}' cannot be opened as awkward_parquet")
+
+        # default open options
+        open_options = open_options or {}
+
+        # inject read_columns
+        if read_columns and "columns" not in open_options:
+            filter_name = [Route(s).string_column for s in read_columns]
+            open_options["columns"] = filter_name
+
+        # load the array wrapper
+        arr = DaskArrayReader(source, open_options)
+
+        return (arr, len(arr))
+
+    @classmethod
+    def close_awkward_parquet(
+        cls,
+        source_object: DaskArrayReader,
+    ) -> None:
+        """
+        Closes the dask array wrapper referred to by *source_object*.
+        """
+        source_object.close()
+
+    @classmethod
+    def read_awkward_parquet(
+        cls,
+        source_object: DaskArrayReader,
         chunk_pos: ChunkPosition,
-        lazy: bool = False,
         read_options: dict | None = None,
-    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+        read_columns: set[str | Route] | None = None,
+    ) -> ak.Array:
         """
-        Given a the location of a parquet file *source_object*, returns an awkward array chunk
-        referred to by *chunk_pos*, assuming nanoAOD structure. The array is a lazy slice if *lazy*
-        is *True*, and fully loaded into memory otherwise. *read_options* are passed to
-        *coffea.nanoevents.NanoEventsFactory.from_parquet*.
+        Given a :py:class:`DaskArrayReader` *source_object*, returns the chunk referred to by
+        *chunk_pos* as a full copy loaded into memory. Passing neither *read_options* nor
+        *read_columns* has an effect.
         """
-        # define the factory to use
-        factory = coffea.nanoevents.NanoEventsFactory if lazy else PreloadedNanoEventsFactory
-
-        # read the events chunk into memory
-        chunk = factory.from_parquet(
-            source_object,
-            entry_start=chunk_pos.entry_start,
-            entry_stop=chunk_pos.entry_stop,
-            schemaclass=coffea.nanoevents.NanoAODSchema,
-            **(read_options or {}),
-        ).events()
-
-        return chunk
+        # get the materialized ak array for that chunk
+        return source_object.materialize(
+            chunk_pos.index,
+            chunk_pos.entry_start,
+            chunk_pos.entry_stop,
+            chunk_pos.max_chunk_size,
+        )
 
     @property
     def n_chunks(self) -> int:
@@ -2406,18 +2750,19 @@ class ChunkedIOHandler(object):
             return
 
         # reset some attributes
-        del self.file_cache[:]
         del self.source_objects[:]
+        gc.collect()
         self.n_entries = None
 
         # open all sources and make sure they have the same number of entries
-        for i, (source, (_, open_source, _), open_options) in enumerate(zip(
+        for i, (source, source_handler, open_options, read_columns) in enumerate(zip(
             self.source_list,
             self.source_handlers,
             self.open_options_list,
+            self.read_columns_list,
         )):
             # open the source
-            obj, n = open_source(source, open_options=open_options, file_cache=self.file_cache)
+            obj, n = source_handler.open(source, open_options=open_options, read_columns=read_columns)
             # check entries
             if i == 0:
                 self.n_entries = n
@@ -2428,6 +2773,8 @@ class ChunkedIOHandler(object):
             # save the source object
             self.source_objects.append(obj)
 
+            logger_perf.debug(f"opening {source} of type {source_handler.type} for reading")
+
     def close(self) -> None:
         """
         Closes all cached, opened files and deletes loaded source objects. Nothing happens if the
@@ -2437,9 +2784,13 @@ class ChunkedIOHandler(object):
             # already closed
             return
 
+        # close all source objects
+        for (obj, source_handler) in zip(self.source_objects, self.source_handlers):
+            source_handler.close(obj)
+
         # just delete the file cache and reset some attributes
         del self.source_objects[:]
-        del self.file_cache[:]
+        gc.collect()
 
     def queue(self, *args, **kwargs) -> None:
         """
@@ -2458,24 +2809,37 @@ class ChunkedIOHandler(object):
 
         # create a list of read functions
         read_funcs = [
-            partial(read_source, obj, lazy=lazy, read_options=read_options)
-            for obj, (_, _, read_source), read_options, lazy in zip(
+            partial(source_handler.read, obj, read_options=read_options, read_columns=read_columns)
+            for obj, source_handler, read_options, read_columns in zip(
                 self.source_objects,
                 self.source_handlers,
                 self.read_options_list,
-                self.lazy_list,
+                self.read_columns_list,
             )
         ]
 
         # lightweight callabe that wraps all read funcs and comines their return values
         def read(chunk_pos):
-            chunks = [read_func(chunk_pos) for read_func in read_funcs]
+            chunks = []
+            durations = []
+            t1 = time.perf_counter()
+            for read_func in read_funcs:
+                chunks.append(read_func(chunk_pos))
+                durations.append(time.perf_counter() - t1)
+
+            duration = law.util.human_duration(seconds=sum(durations))
+            durations = [f"{s:.1f}" for s in durations]
+            logger_perf.debug(
+                f"reading of chunk {chunk_pos.index} from {len(durations)} file(s) took {duration} "
+                f"({'+'.join(durations)}s)",
+            )
+
             return self.ReadResult((chunks if self.is_multi else chunks[0]), chunk_pos)
 
         # create a list of all chunk positions
         chunk_positions = [
             self.create_chunk_position(self.n_entries, self.chunk_size, chunk_index)
-            for chunk_index in range(self.n_chunks)
+            for chunk_index in range(max(self.n_chunks, 1))
         ]
 
         # fill the list of tasks the pool has to work through
@@ -2503,7 +2867,7 @@ class ChunkedIOHandler(object):
 
                     # if no result was ready, sleep and try again
                     if results and result_obj == no_result:
-                        time.sleep(0.02)
+                        time.sleep(0.05)
                         continue
 
                     # immediately try to fill up the pool
@@ -2515,7 +2879,19 @@ class ChunkedIOHandler(object):
                     if isinstance(result_obj, self.ReadResult):
                         if self.iter_message:
                             print(self.iter_message.format(pos=result_obj.chunk_pos))
-                        yield (result_obj.chunk, result_obj.chunk_pos)
+
+                        # probably overly-cautious, but run garbage collection before and after
+                        gc.collect()
+                        t1 = time.perf_counter()
+                        try:
+                            yield (result_obj.chunk, result_obj.chunk_pos)
+                        finally:
+                            duration = time.perf_counter() - t1
+                            logger_perf.debug(
+                                f"processing of chunk {result_obj.chunk_pos.index} took " +
+                                law.util.human_duration(seconds=duration),
+                            )
+                        gc.collect()
 
             except:
                 self.pool.close()

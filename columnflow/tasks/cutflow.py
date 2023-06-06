@@ -11,7 +11,9 @@ from abc import abstractmethod
 import luigi
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, ShiftTask, wrapper_factory
+from columnflow.tasks.framework.base import (
+    Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
+)
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
 )
@@ -21,15 +23,15 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.selection import MergeSelectionMasks
-from columnflow.util import dev_sandbox, DotDict
+from columnflow.util import DotDict, dev_sandbox
 
 
 class CreateCutflowHistograms(
-    DatasetTask,
     VariablesMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -37,37 +39,37 @@ class CreateCutflowHistograms(
 
     selector_steps_order_sensitive = True
 
-    default_variables = ("mc_weight", "cf_*")
+    initial_step = "Initial"
 
-    # default upstream dependency task classes
-    dep_MergeSelectionMasks = MergeSelectionMasks
+    default_variables = ("event", "cf_*")
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeSelectionMasks.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeSelectionMasks=MergeSelectionMasks,
+    )
 
     def create_branch_map(self):
         # dummy branch map
         return [None]
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
-        reqs["masks"] = self.dep_MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
 
         return reqs
 
     def requires(self):
         return {
-            "masks": self.dep_MergeSelectionMasks.req(self, tree_index=0, branch=0),
+            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
         }
 
     def output(self):
-        return {var: self.target(f"cutflow_hist__var_{var}.pickle") for var in self.variables}
+        return {
+            var: self.target(f"cutflow_hist__{var}.pickle")
+            for var in self.variables
+        }
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -85,11 +87,19 @@ class CreateCutflowHistograms(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
-        # prepare expressions and histograms
+        # define columns that need to be read
+        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        if self.dataset_inst.is_mc:
+            read_columns |= {"normalization_weight"}
+        read_columns = {Route(c) for c in read_columns}
+
+        # define steps
+        steps = self.selector_steps
+
+        # prepare expressions
         expressions = {}
-        histograms = {}
         for var_key, var_names in self.variable_tuples.items():
             variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
@@ -99,32 +109,52 @@ class CreateCutflowHistograms(
                 if isinstance(expr, str):
                     route = Route(expr)
                     expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                    read_columns.add(route)
+                # TODO: handle variable_inst with custom expressions, can they declare columns?
                 expressions[variable_inst.name] = expr
 
-            # create histogram of not already existing
-            if var_key not in histograms:
-                h = (
-                    hist.Hist.new
-                    .IntCat([], name="category", growth=True)
-                    .IntCat([], name="process", growth=True)
-                    .StrCat([], name="step", growth=True)
-                    .IntCat([], name="shift", growth=True)
-                )
-                # add variable axes
-                for variable_inst in variable_insts:
-                    h = h.Var(
-                        variable_inst.bin_edges,
-                        name=variable_inst.name,
-                        label=variable_inst.get_full_x_title(),
+        # prepare columns to load
+        load_columns = {("events" + route) for route in read_columns} | {Route("steps.*")}
+
+        # prepare histograms
+        histograms = {}
+        def prepare_hists(steps):
+            for var_key, var_names in self.variable_tuples.items():
+                variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+
+                # create histogram of not already existing
+                if var_key not in histograms:
+                    h = (
+                        hist.Hist.new
+                        .IntCat([], name="category", growth=True)
+                        .IntCat([], name="process", growth=True)
+                        .StrCat(steps, name="step")
+                        .IntCat([], name="shift", growth=True)
                     )
-                # enable weights and store it
-                histograms[var_key] = h.Weight()
+                    # add variable axes
+                    for variable_inst in variable_insts:
+                        h = h.Var(
+                            variable_inst.bin_edges,
+                            name=variable_inst.name,
+                            label=variable_inst.get_full_x_title(),
+                        )
+                    # enable weights and store it
+                    histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
-            inputs["masks"].path,
+            inputs["selection"]["masks"].path,
             source_type="awkward_parquet",
+            read_columns=load_columns,
         ):
             events = arr.events
+
+            # overwrite steps if not defined yet
+            if not steps:
+                steps = arr.steps.fields
+
+            # prepare histograms and exprepssions once
+            if not histograms:
+                prepare_hists([self.initial_step] + list(steps))
 
             # add aliases
             events = add_ak_aliases(events, aliases, remove_src=True)
@@ -139,8 +169,12 @@ class CreateCutflowHistograms(
                     point = {
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
-                        "shift": self.shift_inst.id,
-                        "weight": events.normalization_weight[mask],
+                        "shift": self.global_shift_inst.id,
+                        "weight": (
+                            events.normalization_weight[mask]
+                            if self.dataset_inst.is_mc
+                            else 1.0
+                        ),
                     }
                     for var_name in var_names:
                         point[var_name] = expressions[var_name](events)[mask]
@@ -149,10 +183,9 @@ class CreateCutflowHistograms(
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(step="Initial", **dict(zip(fill_kwargs, arrays)))
+                histograms[var_key].fill(step=self.initial_step, **dict(zip(fill_kwargs, arrays)))
 
                 # fill all other steps
-                steps = self.selector_steps or arr.steps.fields
                 mask = True
                 for step in steps:
                     if step not in arr.steps.fields:
@@ -161,12 +194,8 @@ class CreateCutflowHistograms(
                         )
                     # incrementally update the mask and fill the point
                     mask = mask & arr.steps[step]
-                    if ak.sum(mask) == 0:
-                        # do not try to fill the histogram when all mask entrys are False
-                        break
-
                     fill_kwargs = get_point(mask)
-                    arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
+                    arrays = [ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values())]
                     histograms[var_key].fill(step=step, **dict(zip(fill_kwargs, arrays)))
 
         # dump the histograms
@@ -182,11 +211,11 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 
 class PlotCutflowBase(
-    ShiftTask,
     SelectorStepsMixin,
-    CalibratorsMixin,
     CategoriesMixin,
+    CalibratorsMixin,
     PlotBase,
+    ShiftTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -197,14 +226,11 @@ class PlotCutflowBase(
 
     selector_steps_order_sensitive = True
 
-    # default upstream dependency task classes
-    dep_CreateCutflowHistograms = CreateCutflowHistograms
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CreateCutflowHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        CreateCutflowHistograms=CreateCutflowHistograms,
+    )
 
     def store_parts(self):
         parts = super().store_parts()
@@ -220,8 +246,20 @@ class PlotCutflow(
     RemoteWorkflow,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_cutflow",
+        default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
+    )
+    variable = luigi.Parameter(
+        default=CreateCutflowHistograms.default_variables[0],
+        significant=False,
+        description="name of the variable to use for obtaining event counts; "
+        f"default: '{CreateCutflowHistograms.default_variables[0]}'",
+    )
+
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowBase.reqs,
+        RemoteWorkflow.reqs,
     )
 
     def create_branch_map(self):
@@ -234,17 +272,14 @@ class PlotCutflow(
 
         return list(self.categories)
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["hists"] = [
-            self.dep_CreateCutflowHistograms.req(
+            self.reqs.CreateCutflowHistograms.req(
                 self,
                 dataset=d,
-                variables=("mc_weight",),
-                _prefer_cli={"variables"},
+                variables=(self.variable,),
                 _exclude={"branches"},
             )
             for d in self.datasets
@@ -253,21 +288,20 @@ class PlotCutflow(
 
     def requires(self):
         return {
-            d: self.dep_CreateCutflowHistograms.req(
+            d: self.reqs.CreateCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
-                variables=("mc_weight",),
-                _prefer_cli={"variables"},
+                variables=(self.variable,),
             )
             for d in self.datasets
         }
 
     def output(self):
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(f"cutflow__cat_{self.branch_data}")
-        ]
+        ]}
 
     @law.decorator.log
     @view_output_plots
@@ -289,7 +323,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["mc_weight"].load(formatter="pickle")
+                h_in = inp[self.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -320,7 +354,7 @@ class PlotCutflow(
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum, "mc_weight": sum}]
+                    h = h[{"process": sum, "category": sum, self.variable: sum}]
 
                     # add the histogram
                     if process_inst in hists:
@@ -334,7 +368,7 @@ class PlotCutflow(
 
             # sort hists by process order
             hists = OrderedDict(
-                (process_inst, hists[process_inst])
+                (process_inst.copy_shallow(), hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
@@ -343,12 +377,12 @@ class PlotCutflow(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
+                category_inst=category_inst.copy_shallow(),
                 **self.get_plot_parameters(),
             )
 
             # save the plot
-            for outp in self.output():
+            for outp in self.output()["plots"]:
                 outp.dump(fig, formatter="mpl")
 
 
@@ -360,9 +394,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
-    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -376,6 +410,12 @@ class PlotCutflowVariablesBase(
     default_variables = ("cf_*",)
 
     exclude_index = True
+
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowBase.reqs,
+        RemoteWorkflow.reqs,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -406,14 +446,14 @@ class PlotCutflowVariablesBase(
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["hists"] = [
-            self.dep_CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.reqs.CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: self.dep_CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.reqs.CreateCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 
@@ -512,7 +552,7 @@ class PlotCutflowVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
     per_plot = luigi.ChoiceParameter(
@@ -523,40 +563,40 @@ class PlotCutflowVariables1D(
         "default: processes",
     )
     # TODO: combine these hard-coded plot function name with law parameter
-    plot_function_per_process = "columnflow.plotting.example.plot_variable_per_process"
-    plot_function_per_step = "columnflow.plotting.example.plot_variable_variants"
+    plot_function_per_process = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_per_step = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     def output(self):
         b = self.branch_data
         if self.per_plot == "processes":
-            return law.SiblingFileCollection({
+            return {"plots": law.SiblingFileCollection({
                 s: [
                     self.local_target(name) for name in self.get_plot_names(
                         f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}",
                     )
                 ]
                 for i, s in enumerate(self.chosen_steps)
-            })
+            })}
         else:  # per_plot == "steps"
-            return law.SiblingFileCollection({
+            return {"plots": law.SiblingFileCollection({
                 p: [
                     self.local_target(name)
                     for name in self.get_plot_names(f"plot__proc_{p}__cat_{b.category}__var_{b.variable}")
                 ]
                 for p in self.processes
-            })
+            })}
 
     def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
 
         if len(variable_insts) != 1:
-            raise Exception(f"Task {self.task_family} is only working for single variables.")
+            raise Exception(f"task {self.task_family} is only viable for single variables")
 
-        outputs = self.output()
+        outputs = self.output()["plots"]
         if self.per_plot == "processes":
             for step in self.chosen_steps:
                 step_hists = OrderedDict(
-                    (process_inst, h[{"step": hist.loc(step)}])
+                    (process_inst.copy_shallow(), h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
                 )
 
@@ -565,8 +605,8 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_process,
                     hists=step_hists,
                     config_inst=self.config_inst,
-                    category_inst=category_inst,
-                    variable_insts=variable_insts,
+                    category_inst=category_inst.copy_shallow(),
+                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
@@ -587,8 +627,8 @@ class PlotCutflowVariables1D(
                     self.plot_function_per_step,
                     hists=process_hists,
                     config_inst=self.config_inst,
-                    category_inst=category_inst,
-                    variable_insts=variable_insts,
+                    category_inst=category_inst.copy_shallow(),
+                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                     style_config={"legend_cfg": {"title": process_inst.label}},
                     **self.get_plot_parameters(),
                 )
@@ -603,29 +643,29 @@ class PlotCutflowVariables2D(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
 
     def output(self):
         b = self.branch_data
-        return law.SiblingFileCollection({
+        return {"plots": law.SiblingFileCollection({
             s: [
                 self.local_target(name) for name in self.get_plot_names(
                     f"plot__step{i}_{s}__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}",
                 )
             ]
             for i, s in enumerate(self.chosen_steps)
-        })
+        })}
 
     def run_postprocess(self, hists, category_inst, variable_insts):
         import hist
 
-        outputs = self.output()
+        outputs = self.output()["plots"]
 
         for step in self.chosen_steps:
             step_hists = OrderedDict(
-                (process_inst, h[{"step": hist.loc(step)}])
+                (process_inst.copy_shallow(), h[{"step": hist.loc(step)}])
                 for process_inst, h in hists.items()
             )
 
@@ -634,8 +674,8 @@ class PlotCutflowVariables2D(
                 self.plot_function,
                 hists=step_hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
-                variable_insts=variable_insts,
+                category_inst=category_inst.copy_shallow(),
+                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                 style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                 **self.get_plot_parameters(),
             )
@@ -652,8 +692,14 @@ class PlotCutflowVariablesPerProcess2D(
     # force this one to be a local workflow
     workflow = "local"
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotCutflowVariables2D.reqs,
+        PlotCutflowVariables2D=PlotCutflowVariables2D,
+    )
+
     def requires(self):
         return {
-            process: PlotCutflowVariables2D.req(self, processes=(process,))
+            process: self.reqs.PlotCutflowVariables2D.req(self, processes=(process,))
             for process in self.processes
         }

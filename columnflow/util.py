@@ -10,14 +10,14 @@ __all__ = [
     "UNSET", "env_is_remote", "env_is_dev", "primes",
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
     "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
-    "safe_div", "test_float", "is_pattern", "is_regex", "pattern_matcher",
-    "get_root_processes_from_campaign",
+    "safe_div", "test_float", "test_int", "is_pattern", "is_regex", "pattern_matcher",
+    "dict_add_strict", "get_source_code",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
 ]
 
-
 import os
+import abc
 import uuid
 import queue
 import threading
@@ -34,7 +34,8 @@ from typing import Callable, Any, Sequence, Union
 from types import ModuleType
 
 import law
-import order as od
+import luigi
+
 
 #: Placeholder for an unset value.
 UNSET = object()
@@ -167,8 +168,7 @@ def expand_path(*path: str) -> str:
 
 def real_path(*path: str) -> str:
     """
-    Takes *path* fragments and returns the joined,  real and absolute location with all variables
-    expanded.
+    Takes *path* fragments and returns the real, absolute location with all variables expanded.
     """
     return os.path.realpath(expand_path(*path))
 
@@ -340,8 +340,11 @@ def dev_sandbox(sandbox: str) -> str:
     if _type not in ["venv", "bash"]:
         return sandbox
 
-    # create the dev path and check if it exists
-    dev_path = "{}_dev{}".format(*os.path.splitext(path))
+    # create the dev path and check if it exists, with special treatment of the cf_{prod,dev} envs
+    if path == "$CF_BASE/sandboxes/cf_prod.sh":
+        dev_path = "$CF_BASE/sandboxes/cf_dev.sh"
+    else:
+        dev_path = "{}_dev{}".format(*os.path.splitext(path))
     if not os.path.exists(real_path(dev_path)):
         return sandbox
 
@@ -392,10 +395,21 @@ def safe_div(a: int | float, b: int | float) -> float:
 
 def test_float(f: Any) -> bool:
     """
-    Tests whether a value *i* can be converted to a float.
+    Tests whether a value *f* can be converted to a float.
     """
     try:
         float(f)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def test_int(i: Any) -> bool:
+    """
+    Tests whether a value *i* can be converted to an integer.
+    """
+    try:
+        int(i)
         return True
     except (ValueError, TypeError):
         return False
@@ -468,26 +482,6 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
     return lambda s: s == pattern
 
 
-def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
-    """
-    Extracts all root process objects from datasets contained in an order campaign and returns them
-    in a unique object index.
-    """
-    # get all dataset processes
-    processes = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
-
-    # get their root processes
-    root_processes = set.union(*map(set, (process.get_root_processes() for process in processes)))
-
-    # create an empty index and fill subprocesses via walking
-    index = od.UniqueObjectIndex(cls=od.Process)
-    for root_process in root_processes:
-        for process, _, _ in root_process.walk_processes(include_self=True):
-            index.add(process, overwrite=True)
-
-    return index
-
-
 def dict_add_strict(d: dict, key: str, value: Any) -> None:
     """
     Adds key-value pair to dictionary, but only if it does not change an existing value;
@@ -496,6 +490,27 @@ def dict_add_strict(d: dict, key: str, value: Any) -> None:
     if key in d.keys() and d[key] != value:
         raise KeyError(f"'{d.__class__.__name__}' object already has key {key}")
     d[key] = value
+
+
+def get_source_code(obj: Any, indent: str | int = None) -> str:
+    """
+    Returns the source code of any object *obj* as a string. When *indent* is not *None*, the code
+    indentation is first removed and then re-applied with *indent* if it is a string, or by that
+    many spaces in case it is an integer.
+    """
+    code = inspect.getsource(obj)
+
+    if indent is not None:
+        code = code.replace("\t", "    ")
+        lines = code.split("\n")
+        n_old_indent = len(lines[0]) - len(lines[0].lstrip(" "))
+        new_indent = (" " * indent) if isinstance(indent, int) else indent
+        code = "\n".join(
+            (new_indent + line[n_old_indent:]) if line.strip() else ""
+            for line in lines
+        )
+
+    return code
 
 
 class DotDict(OrderedDict):
@@ -653,7 +668,7 @@ def classproperty(func: Callable) -> ClassPropertyDescriptor:
     return ClassPropertyDescriptor(func)
 
 
-class DerivableMeta(type):
+class DerivableMeta(abc.ABCMeta):
     """
     Meta class for :py:class:`Derivable` objects providing class-level features such as improved
     tracing and lookup of subclasses, and single-line subclassing for partial-like overwriting of
@@ -738,6 +753,7 @@ class DerivableMeta(type):
         cls_name: str,
         bases: tuple = (),
         cls_dict: dict | None = None,
+        module: str | None = None,
     ) -> DerivableMeta:
         """
         Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
@@ -750,8 +766,9 @@ class DerivableMeta(type):
         subcls = cls.__class__(cls_name, (cls,) + bases, cls_dict or {})
 
         # overwrite __module__ to point to the module of the calling stack
-        frame = inspect.stack()[1]
-        module = inspect.getmodule(frame[0])
+        if not module:
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
         if module:
             subcls.__module__ = module.__name__
 
@@ -769,14 +786,64 @@ class Derivable(object, metaclass=DerivableMeta):
     """
     Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
 
-    .. py:attribute:: cls_name
+    .. py:classattribute:: cls_name
        type: str
        read-only
 
        A shorthand to access the name of the class.
     """
 
-    @property
-    def cls_name(self) -> str:
+    @classproperty
+    def cls_name(cls) -> str:
         # shorthand to the class name
-        return self.__class__.__name__
+        return cls.__name__
+
+
+class KeyValueMessage(luigi.worker.SchedulerMessage):
+    """
+    Subclass of :py:class:`luigi.worker.SchedulerMessage` that adds :py:attr:`key` and
+    :py:attr:`value` attributes, parsed from the incoming message assuming a format ``key = value``.
+
+    .. py:attribute: key
+       type: str
+
+       The key of the message.
+
+    .. py:attribute: value
+       type: str
+
+       The value of the message.
+    """
+
+    # compile expression for key - value parsing of scheduler messages
+    message_cre = re.compile(r"^\s*([^\=\:]+)\s*(\=|\:)\s*(.*)\s*$")
+
+    @classmethod
+    def from_message(cls, message: luigi.worker.SchedulerMessage) -> KeyValueMessage | None:
+        """
+        Factory for :py:class:`KeyValueMessage` instances that takes an existing *message* object
+        and splits its content into a key value pair. The instance is returned if the parsing is
+        successful, and *None* otherwise.
+        """
+        m = cls.message_cre.match(message.content)
+        if not m:
+            return None
+
+        return cls(
+            message._scheduler,
+            message._task_id,
+            message._message_id,
+            message.content,
+            m.group(1),
+            m.group(3),
+            **message.payload,
+        )
+
+    def __init__(self, *args, key, value, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.key = key
+        self.value = value
+
+    def __str__(self) -> str:
+        return str(self.value)

@@ -1,17 +1,20 @@
 # version 1
 
 # documentation packages
-sphinx==4.3.*
-sphinx-rtd-theme==1.0.*
-autodocsumm==0.2.*
+sphinx~=4.5
+# sphinx-rtd-theme~=1.0
+sphinx-book-theme~=0.3
+autodocsumm~=0.2
+myst-parser~=0.18
+sphinx_lfs_content~=1.1
 
 # base packages
-luigi==3.0.*
-scinum==1.4.*
-six==1.16.*
+luigi~=3.0
+scinum~=1.4
+six~=1.16
 
 # sandbox packages
-pyarrow==6.0.*
-coffea==0.7.*
-uproot==4.2.*
-awkward==1.8.*
+awkward~=2.0
+uproot~=5.0
+git+https://github.com/riga/coffea.git@9ecdee5#egg=coffea
+dask-awkward~=2023.2

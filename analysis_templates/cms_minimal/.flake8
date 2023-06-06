@@ -1,0 +1,10 @@
+[flake8]
+
+# line length of 100 is recommended, but set it to a forgiving value
+max-line-length = 120
+
+# codes of errors to ignore
+ignore = E128, E306, E402, E722, E731, W504, Q003
+
+# enforce double quotes
+inline-quotes = double

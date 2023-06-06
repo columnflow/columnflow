@@ -10,10 +10,10 @@ from abc import abstractmethod
 import law
 import luigi
 
-from columnflow.tasks.framework.base import ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
-    CategoriesMixin, ShiftSourcesMixin, EventWeightMixin,
+    CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -27,28 +27,23 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    CategoriesMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    EventWeightMixin,
-    CategoriesMixin,
-    PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-
     exclude_index = True
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeHistograms.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeHistograms=MergeHistograms,
+    )
 
     def store_parts(self):
         parts = super().store_parts()
@@ -62,10 +57,8 @@ class PlotVariablesBase(
             for var_name in sorted(self.variables)
         ]
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         reqs["merged_hists"] = self.requires_from_branch()
 
@@ -103,7 +96,7 @@ class PlotVariablesBase(
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0].targets[self.branch_data.variable].load(formatter="pickle")
+                h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -144,11 +137,15 @@ class PlotVariablesBase(
 
             # there should be hists to plot
             if not hists:
-                raise Exception("no histograms found to plot")
+                raise Exception(
+                    "no histograms found to plot; possible reasons:\n" +
+                    "  - requested variable requires columns that were missing during histogramming\n" +
+                    "  - selected --processes did not match any value on the process axis of the input histogram",
+                )
 
             # sort hists by process order
             hists = OrderedDict(
-                (process_inst, hists[process_inst])
+                (process_inst.copy_shallow(), hists[process_inst])
                 for process_inst in sorted(hists, key=process_insts.index)
             )
 
@@ -157,35 +154,38 @@ class PlotVariablesBase(
                 self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
-                category_inst=category_inst,
-                variable_insts=variable_insts,
+                category_inst=category_inst.copy_shallow(),
+                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                 **self.get_plot_parameters(),
             )
 
             # save the plot
-            for outp in self.output():
+            for outp in self.output()["plots"]:
                 outp.dump(fig, formatter="mpl")
 
 
 class PlotVariablesBaseSingleShift(
-    ShiftTask,
     PlotVariablesBase,
+    ShiftTask,
 ):
-    # default upstream dependency task classes
-    dep_MergeHistograms = MergeHistograms
-
     exclude_index = True
+
+    # upstream requirements
+    reqs = Requirements(
+        PlotVariablesBase.reqs,
+        MergeHistograms=MergeHistograms,
+    )
 
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name})
-            for var_name in self.variables
-            for cat_name in self.categories
+            for var_name in sorted(self.variables)
+            for cat_name in sorted(self.categories)
         ]
 
     def requires(self):
         return {
-            d: self.dep_MergeHistograms.req(
+            d: self.reqs.MergeHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -197,13 +197,13 @@ class PlotVariablesBaseSingleShift(
 
     def output(self):
         b = self.branch_data
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}__var_{b.variable}")
-        ]
+        ]}
 
     def get_plot_shifts(self):
-        return [self.shift_inst]
+        return [self.global_shift_inst]
 
 
 class PlotVariables1D(
@@ -211,7 +211,7 @@ class PlotVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
 
@@ -221,7 +221,7 @@ class PlotVariables2D(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot2d.plot_2d",
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
 
@@ -241,8 +241,8 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
-    ShiftSourcesMixin,
     PlotVariablesBase,
+    ShiftSourcesMixin,
 ):
     legend_title = luigi.Parameter(
         default=law.NO_STR,
@@ -251,22 +251,25 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
-    # default upstream dependency task classes
-    dep_MergeShiftedHistograms = MergeShiftedHistograms
-
     exclude_index = True
+
+    # upstream requirements
+    reqs = Requirements(
+        PlotVariablesBase.reqs,
+        MergeShiftedHistograms=MergeShiftedHistograms,
+    )
 
     def create_branch_map(self):
         return [
             DotDict({"category": cat_name, "variable": var_name, "shift_source": source})
-            for var_name in self.variables
-            for cat_name in self.categories
-            for source in self.shift_sources
+            for var_name in sorted(self.variables)
+            for cat_name in sorted(self.categories)
+            for source in sorted(self.shift_sources)
         ]
 
     def requires(self):
         return {
-            d: self.dep_MergeShiftedHistograms.req(
+            d: self.reqs.MergeShiftedHistograms.req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -278,17 +281,20 @@ class PlotVariablesBaseMultiShifts(
 
     def output(self):
         b = self.branch_data
-        return [
+        return {"plots": [
             self.target(name)
             for name in self.get_plot_names(
                 f"plot__proc_{self.processes_repr}__unc_{b.shift_source}__cat_{b.category}__var_{b.variable}",
             )
-        ]
+        ]}
 
     def get_plot_shifts(self):
         return [
-            self.config_inst.get_shift(s) for s in
-            ["nominal", f"{self.branch_data.shift_source}_up", f"{self.branch_data.shift_source}_down"]
+            self.config_inst.get_shift(s) for s in [
+                "nominal",
+                f"{self.branch_data.shift_source}_up",
+                f"{self.branch_data.shift_source}_down",
+            ]
         ]
 
     def get_plot_parameters(self):
@@ -299,11 +305,11 @@ class PlotVariablesBaseMultiShifts(
 
 
 class PlotShiftedVariables1D(
-    PlotVariablesBaseMultiShifts,
     PlotBase1D,
+    PlotVariablesBaseMultiShifts,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.example.plot_shifted_variable",
+        default="columnflow.plotting.plot_functions_1d.plot_shifted_variable",
         add_default_to_description=True,
     )
 
@@ -315,8 +321,14 @@ class PlotShiftedVariablesPerProcess1D(
     # force this one to be a local workflow
     workflow = "local"
 
+    # upstream requirements
+    reqs = Requirements(
+        PlotShiftedVariables1D.reqs,
+        PlotShiftedVariables1D=PlotShiftedVariables1D,
+    )
+
     def requires(self):
         return {
-            process: PlotShiftedVariables1D.req(self, processes=(process,))
+            process: self.reqs.PlotShiftedVariables1D.req(self, processes=(process,))
             for process in self.processes
         }

@@ -9,6 +9,7 @@ from columnflow.production.processes import process_ids
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
+
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
@@ -18,6 +19,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={process_ids, "mc_weight"},
     produces={process_ids, "normalization_weight"},
+    # only run on mc
+    mc_only=True,
 )
 def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -25,10 +28,6 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     obtained through :py:class:`category_ids` and the sum of event weights from the
     py:attr:`selection_stats` attribute to assign each event a normalization weight.
     """
-    # fail when running on data
-    if self.dataset_inst.is_data:
-        raise ValueError("attempt to compute normalization weights in data")
-
     # add process ids
     events = self[process_ids](events, **kwargs)
 
@@ -80,7 +79,7 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
           processes known to the config of the task, with keys being process ids.
     """
     # load the selection stats
-    selection_stats = inputs["selection_stats"]["collection"][0].load(formatter="json")
+    selection_stats = inputs["selection_stats"]["collection"][0]["stats"].load(formatter="json")
 
     # for the lookup tables below, determine the maximum process id
     process_insts = [

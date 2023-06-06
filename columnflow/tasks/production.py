@@ -6,7 +6,7 @@ Tasks related to producing new columns.
 
 import law
 
-from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
 )
@@ -16,33 +16,31 @@ from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
-    MergeReducedEventsUser,
     ProducerMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReducedEvents = MergeReducedEvents
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        MergeReducedEvents=MergeReducedEvents,
+    )
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReducedEvents.get_allowed_shifts(config_inst, params)
-        return shifts
+    register_producer_shifts = True
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
         # require the full merge forest
-        reqs["events"] = self.dep_MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         # add producer dependent requirements
         reqs["producer"] = self.producer_inst.run_requires()
@@ -51,20 +49,20 @@ class ProduceColumns(
 
     def requires(self):
         return {
-            "events": self.dep_MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
             "producer": self.producer_inst.run_requires(),
         }
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return self.target(f"columns_{self.branch}.parquet")
+        return {"columns": self.target(f"columns_{self.branch}.parquet")}
 
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, add_ak_aliases, sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -80,22 +78,29 @@ class ProduceColumns(
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # define nano columns that need to be loaded
-        load_columns = mandatory_coffea_columns | self.producer_inst.used_columns  # noqa
+        # get shift dependent aliases
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
-        # define columns that will be saved
-        keep_columns = self.producer_inst.produced_columns
-        route_filter = RouteFilter(keep_columns)
+        # define columns that need to be read
+        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
+        # define columns that will be written
+        write_columns = self.producer_inst.produced_columns
+        route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and diffs
         for events, pos in self.iter_chunked_io(
-            inputs["events"]["collection"][0].path,
+            inputs["events"]["collection"][0]["events"].path,
             source_type="awkward_parquet",
-            # TODO: not working yet since parquet columns are nested
-            # open_options={"columns": load_columns},
+            read_columns=read_columns,
         ):
+            # add aliases
+            events = add_ak_aliases(events, aliases, remove_src=True)
+
             # invoke the producer
-            events = self.producer_inst(events)
+            if len(events):
+                events = self.producer_inst(events)
 
             # remove columns
             events = route_filter(events)
@@ -111,7 +116,7 @@ class ProduceColumns(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
 
 
 # overwrite class defaults

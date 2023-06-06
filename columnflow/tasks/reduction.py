@@ -6,12 +6,12 @@ Tasks related to reducing events for use on further tasks.
 
 import math
 import functools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import luigi
 
-from columnflow.tasks.framework.base import AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
 )
@@ -25,60 +25,53 @@ ak = maybe_import("awkward")
 
 
 class ReduceEvents(
-    DatasetTask,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,
+    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_GetDatasetLFNs = GetDatasetLFNs
-    dep_CalibrateEvents = CalibrateEvents
-    dep_SelectEvents = SelectEvents
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        GetDatasetLFNs=GetDatasetLFNs,
+        CalibrateEvents=CalibrateEvents,
+        SelectEvents=SelectEvents,
+    )
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_GetDatasetLFNs.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_CalibrateEvents.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_SelectEvents.get_allowed_shifts(config_inst, params)
-        return shifts
-
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self):
         reqs = super().workflow_requires()
-        if only_super:
-            return reqs
 
-        reqs["lfns"] = self.dep_GetDatasetLFNs.req(self)
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ]
-            reqs["selection"] = self.dep_SelectEvents.req(self)
+            reqs["selection"] = self.reqs.SelectEvents.req(self)
         else:
             # pass-through pilot workflow requirements of upstream task
-            t = self.dep_SelectEvents.req(self)
+            t = self.reqs.SelectEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         return reqs
 
     def requires(self):
         return {
-            "lfns": self.dep_GetDatasetLFNs.req(self),
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.dep_CalibrateEvents.req(self, calibrator=c)
+                self.reqs.CalibrateEvents.req(self, calibrator=c)
                 for c in self.calibrators
             ],
-            "selection": self.dep_SelectEvents.req(self),
+            "selection": self.reqs.SelectEvents.req(self),
         }
 
     def output(self):
-        return self.target(f"events_{self.branch}.parquet")
+        return {"events": self.target(f"events_{self.branch}.parquet")}
 
     @ensure_proxy
     @law.decorator.localize
@@ -100,13 +93,48 @@ class ReduceEvents(
         tmp_dir.touch()
 
         # get shift dependent aliases
-        aliases = self.shift_inst.x("column_aliases_selection_dependent", {})
+        aliases = self.local_shift_inst.x("column_aliases", {})
 
-        # define nano columns that should be kept, and that need to be loaded
-        keep_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
-        load_columns = keep_columns | set(mandatory_coffea_columns)
-        load_columns_nano = [Route(column).nano_column for column in load_columns]
-        route_filter = RouteFilter(keep_columns)
+        # define columns that will be written
+        write_columns = {
+            Route(c)
+            for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"])
+        }
+        route_filter = RouteFilter(write_columns)
+
+        # map routes to write to their top level column
+        write_columns_groups = defaultdict(set)
+        for route in write_columns:
+            if len(route) > 1:
+                write_columns_groups[route[0]].add(route)
+
+        # define columns that need to be read
+        read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
+        read_columns = {Route(c) for c in read_columns}
+
+        # define columns to read for the differently structured selection masks
+        read_sel_columns = set()
+        # open either selector steps of the full event selection mask
+        read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
+        # add object masks, depending on the columns to write
+        # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
+        sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
+        if "objects" in sel_results.fields:
+            for src_field in sel_results.objects.fields:
+                for dst_field in sel_results.objects[src_field].fields:
+                    # nothing to do in case the top level column does not need to be loaded
+                    if not law.util.multi_match(dst_field, write_columns_groups.keys()):
+                        continue
+                    # register the object masks
+                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
+                    # in case new collections are created and configured to be written, make sure
+                    # that the corresponding columns of the source collection are loaded
+                    if src_field != dst_field:
+                        read_columns |= {
+                            src_field + route[1:]
+                            for route in write_columns_groups[dst_field]
+                        }
+        del sel_results
 
         # event counters
         n_all = 0
@@ -122,7 +150,7 @@ class ReduceEvents(
         # collect input paths
         input_paths = [nano_file]
         input_paths.append(inputs["selection"]["results"].path)
-        input_paths.extend([inp.path for inp in inputs["calibrations"]])
+        input_paths.extend([inp["columns"].path for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
             input_paths.append(inputs["selection"]["columns"].path)
 
@@ -130,7 +158,7 @@ class ReduceEvents(
         for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_options=[{"iteritems_options": {"filter_name": load_columns_nano}}] + (len(input_paths) - 1) * [None],
+            read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
         ):
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
@@ -161,17 +189,19 @@ class ReduceEvents(
 
             # loop through all object selection, go through their masks
             # and create new collections if required
-            for src_name in sel.objects.fields:
-                # get all destination collections, handling those named identically to the
-                # source collection last
-                dst_names = sel["objects", src_name].fields
-                if src_name in dst_names:
-                    dst_names.remove(src_name)
-                    dst_names.append(src_name)
-                for dst_name in dst_names:
-                    object_mask = sel.objects[src_name, dst_name][event_mask]
-                    dst_collection = events[src_name][object_mask]
-                    events = set_ak_column(events, dst_name, dst_collection)
+            if "objects" in sel.fields:
+                for src_name in sel.objects.fields:
+                    # get all destination collections, handling those named identically to the
+                    # source collection last
+                    dst_names = list(sel["objects", src_name].fields)
+                    if src_name in dst_names:
+                        # move to the end
+                        dst_names.remove(src_name)
+                        dst_names.append(src_name)
+                    for dst_name in dst_names:
+                        object_mask = sel.objects[src_name, dst_name][event_mask]
+                        dst_collection = events[src_name][object_mask]
+                        events = set_ak_column(events, dst_name, dst_collection)
 
             # remove columns
             events = route_filter(events)
@@ -188,7 +218,7 @@ class ReduceEvents(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
 
 
 ReduceEventsWrapper = wrapper_factory(
@@ -198,7 +228,11 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
+class MergeReductionStats(
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+):
 
     n_inputs = luigi.IntParameter(
         default=10,
@@ -214,15 +248,17 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         "value 'reduced_file_size' or 512MB'",
     )
 
-    # default upstream dependency task classes
-    dep_ReduceEvents = ReduceEvents
+    # upstream requirements
+    reqs = Requirements(
+        ReduceEvents=ReduceEvents,
+    )
 
     @classmethod
-    def modify_param_values(cls, params):
-        params = super().modify_param_values(params)
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
 
         # check for the default merged size
-        if "merged_size" in params and params["merged_size"] == law.NO_FLOAT:
+        if "merged_size" in params and params["merged_size"] in (None, law.NO_FLOAT):
             merged_size = 512.0
             if "config_inst" in params:
                 merged_size = params["config_inst"].x("reduced_file_size", merged_size)
@@ -230,17 +266,11 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
 
         return params
 
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_ReduceEvents.get_allowed_shifts(config_inst, params)
-        return shifts
-
     def requires(self):
-        return self.dep_ReduceEvents.req(self, branches=((0, self.n_inputs),))
+        return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
-        return self.target(f"stats_n{self.n_inputs}.json")
+        return {"stats": self.target(f"stats_n{self.n_inputs}.json")}
 
     @law.decorator.safe_output
     def run(self):
@@ -248,7 +278,7 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
         coll = self.input()["collection"]
         n = len(coll)
         sizes = [
-            inp.stat().st_size
+            inp["events"].stat().st_size
             for inp in self.iter_progress(coll.targets.values(), n, msg=f"loading {n} stats ...")
         ]
 
@@ -281,7 +311,7 @@ class MergeReductionStats(DatasetTask, SelectorStepsMixin, CalibratorsMixin):
             ("max_size_merged", max_size_merged),
             ("merge_factor", merge_factor),
         ])
-        self.output().dump(stats, indent=4, formatter="json")
+        self.output()["stats"].dump(stats, indent=4, formatter="json")
 
         # print them
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
@@ -308,8 +338,10 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 20 files into one
     merge_factor = 20
 
-    # default upstream dependency task classes
-    dep_MergeReductionStats = MergeReductionStats
+    # upstream requirements
+    reqs = Requirements(
+        MergeReductionStats=MergeReductionStats,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -328,9 +360,9 @@ class MergeReducedEventsUser(DatasetTask):
         """
         if self._cached_file_merging < 0:
             # check of the merging stats is present and of so, set the cached file merging value
-            output = self.dep_MergeReductionStats.req(self).output()
-            if output.exists():
-                self._cached_file_merging = output.load(formatter="json")["merge_factor"]
+            output = self.reqs.MergeReductionStats.req(self).output()
+            if output["stats"].exists():
+                self._cached_file_merging = output["stats"].load(formatter="json")["merge_factor"]
                 self._cache_branches = True
 
         return self._cached_file_merging
@@ -346,7 +378,7 @@ class MergeReducedEventsUser(DatasetTask):
     @classmethod
     def maybe_dummy(cls, func):
         # meant to wrap output methods of tasks depending on merging stats
-        # to inject a dummy output in case the status are not there yet
+        # to inject a dummy output in case the stats are not there yet
         @functools.wraps(func)
         def wrapper(self):
             # when the merging stats do not exist yet, return a dummy target
@@ -360,24 +392,20 @@ class MergeReducedEventsUser(DatasetTask):
 
 
 class MergeReducedEvents(
-    MergeReducedEventsUser,
     SelectorStepsMixin,
     CalibratorsMixin,
+    MergeReducedEventsUser,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    # default upstream dependency task classes
-    dep_MergeReductionStats = MergeReductionStats
-    dep_ReduceEvents = ReduceEvents
-
-    @classmethod
-    def get_allowed_shifts(cls, config_inst, params):
-        shifts = super().get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_MergeReductionStats.get_allowed_shifts(config_inst, params)
-        shifts |= cls.dep_ReduceEvents.get_allowed_shifts(config_inst, params)
-        return shifts
+    # upstream requirements
+    reqs = Requirements(
+        MergeReducedEventsUser.reqs,
+        RemoteWorkflow.reqs,
+        ReduceEvents=ReduceEvents,
+    )
 
     def is_sandboxed(self):
         # when the task is a merge forest, consider it sandboxed
@@ -392,14 +420,14 @@ class MergeReducedEvents(
 
     def merge_workflow_requires(self):
         return {
-            "stats": self.dep_MergeReductionStats.req(self),
-            "events": self.dep_ReduceEvents.req(self, _exclude={"branches"}),
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(self, _exclude={"branches"}),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "stats": self.dep_MergeReductionStats.req(self),
-            "events": self.dep_ReduceEvents.req(
+            "stats": self.reqs.MergeReductionStats.req(self),
+            "events": self.reqs.ReduceEvents.req(
                 self,
                 branches=((start_branch, end_branch),),
                 workflow="local",
@@ -411,7 +439,9 @@ class MergeReducedEvents(
         return super().trace_merge_workflow_inputs(inputs["events"])
 
     def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["events"]["collection"].targets.values())
+        return super().trace_merge_inputs([
+            inp["events"] for inp in inputs["events"]["collection"].targets.values()
+        ])
 
     def reduced_dummy_output(self):
         # mark the dummy output as a placeholder for the ForestMerge task
@@ -424,12 +454,12 @@ class MergeReducedEvents(
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))
         return law.SiblingFileCollection([
-            self.target(f"events_{i}.parquet")
+            {"events": self.target(f"events_{i}.parquet")}
             for i in range(n_merged)
         ])
 
     def merge(self, inputs, output):
-        law.pyarrow.merge_parquet_task(self, inputs, output)
+        law.pyarrow.merge_parquet_task(self, inputs, output["events"])
 
 
 MergeReducedEventsWrapper = wrapper_factory(
