@@ -64,14 +64,11 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             lambda self: self.config_inst.x.met_phi_correction_set
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :return: awkward array containing new columns with corrected ``"MET.pt"``
         and ``"MET.phi"``
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     args = (
         events.MET.pt,
@@ -96,10 +93,8 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -117,14 +112,10 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: di
     Additionally, the version of the met pt and phi corrections are checked.
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     :param reader_targets: TODO: update docs
-    :type reader_targets: dict
     """
     bundle = reqs["external_files"]
 

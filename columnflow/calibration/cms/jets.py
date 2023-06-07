@@ -36,13 +36,10 @@ def get_evaluators(
     corrections.
 
     :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
-    :type correction_set: :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     :param names: List of names of corrections to be applied
-    :type names: list
     :raises RuntimeError: If a requested correction in *names* is not available
     :return: List of compounded corrections, see
         :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    :rtype: list[Any]
     """
     # raise nice error if keys not found
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
@@ -68,10 +65,8 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
     using one or more :external+ak:py:class:`awkward arrays <ak.Array>` as inputs.
 
     :param evaluator: Evaluator instance
-    :type evaluator: :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
     :raises ValueError: If no :external+ak:py:class:`awkward arrays <ak.Array>` are provided
     :return: The correction factor derived from the input arrays
-    :rtype: float
     """
     # fail if no arguments
     if not args:
@@ -208,16 +203,13 @@ def jec(
             lambda self: self.config_inst.x.jec
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
         updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
         ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
-    :type min_pt_met_prop: float, optional
     :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
         the updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
@@ -226,7 +218,6 @@ def jec(
         ``Jet.mass``, as well as the relative difference between raw and corrected
         pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
         variations, see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
     """ # noqa
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -378,7 +369,6 @@ def jec_init(self: Calibrator) -> None:
     as well as the corresponding jec variations to the set of columns to be produced.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     jec_cfg = self.get_jec_config()
 
@@ -416,10 +406,8 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -435,14 +423,10 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     function and apply the corrections as needed.
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     :param reader_targets: TODO: add documentation
-    :type reader_targets: InsertableDict
     """
     bundle = reqs["external_files"]
 
@@ -583,16 +567,13 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             lambda self: self.config_inst.x.jer
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :return: awkward array containing new columns with smeared ``Jet.pt`` and
         ``Jet.mass``, as well as the original unsmeared values.
         Additionally contains columns for JER up and down variations,
         see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
     """ # noqa
     # fail when running on data
     if self.dataset_inst.is_data:
@@ -768,7 +749,6 @@ def jer_init(self: Calibrator) -> None:
     as well as the corresponding jec variations to the set of columns to be produced.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     if not self.propagate_met:
         return
@@ -790,10 +770,8 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -812,12 +790,9 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     function and apply the corrections as needed.
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     """
     bundle = reqs["external_files"]
 
@@ -878,14 +853,11 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :return: awkward array containing new JEC and JER related columns, see
         :py:func:`~.jec` and :py:func:`~.jer`
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     # apply jet energy corrections
     events = self[jec](events, **kwargs)
@@ -908,7 +880,6 @@ def jets_init(self: Calibrator) -> None:
     Otherwise, use their defaults.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
 
     # forward argument to the producers

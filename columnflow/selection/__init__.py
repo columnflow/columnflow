@@ -136,7 +136,6 @@ class Selector(TaskArrayFunction):
         :py:class:`~.Selector` instance is a top level Selector that can
         be used directly for the :py:class:`~columnflow.tasks.selection.SelectEvents`
         task. Defaults to `False`.
-    :type exposed: `bool`
     """
 
     exposed = False
@@ -172,17 +171,12 @@ class Selector(TaskArrayFunction):
         All additional *kwargs* are added as class members of the new subclasses.
 
         :param func: Callable that is used to perform the selections, defaults to None
-        :type func: Callable | None, optional
         :param bases: Additional bases for new subclass, defaults to ()
-        :type bases: tuple, optional
         :param mc_only: Flag to indicate that this Selector should only run
             on Monte Carlo Simulation, defaults to False
-        :type mc_only: bool, optional
         :param data_only: Flag to indicate that this Selector should only run
             on observed data, defaults to False
-        :type data_only: bool, optional
         :return: New Selector instance
-        :rtype: DerivableMeta | Callable
         """
         def decorator(func: Callable) -> DerivableMeta:
             @wraps(func)
@@ -319,16 +313,12 @@ class SelectionResult(od.AuxDataMixin):
 
         :param main: :py:class:`dictionary` containing event-level selection
             decisions, defaults to None
-        :type main: DotDict | dict | None, optional
         :param steps: :py:class:`dictionary` containing event-level selection
             decisions for individual selection steps, defaults to None
-        :type steps: DotDict | dict | None, optional
         :param objects: :py:class:`dictionary` containing object indices for
             new collections, defaults to None
-        :type objects: DotDict | dict | None, optional
         :param aux: Optional :py:class:`dictionary` containing auxiliary
             information that is not safed to disk, defaults to None
-        :type aux: DotDict | dict | None, optional
         """
         super().__init__(aux=aux)
 
@@ -344,11 +334,9 @@ class SelectionResult(od.AuxDataMixin):
 
         :param other: Instance of :py:class:`~.SelectionResult` to be added
             to current instance
-        :type other: SelectionResult | None
         :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
             instance
         :return: This instance after adding operation
-        :rtype: SelectionResult
         """
         # do nothing if the other instance is none
         if other is None:
@@ -376,11 +364,9 @@ class SelectionResult(od.AuxDataMixin):
 
         :param other: Instance of :py:class:`~.SelectionResult` to be added
             to current instance
-        :type other: SelectionResult | None
         :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
             instance
         :return: This instance after adding operation
-        :rtype: SelectionResult
         """
         inst = self.__class__()
 
@@ -402,7 +388,6 @@ class SelectionResult(od.AuxDataMixin):
         :external+ak:py:func:`ak.zip`.
 
         :return: Transformed :py:class:`~.SelectionResult`
-        :rtype: ak.Array
         """
         to_merge = {}
         if self.steps:

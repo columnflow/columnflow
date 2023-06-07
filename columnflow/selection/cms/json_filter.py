@@ -59,14 +59,10 @@ def json_filter(
             lambda self, external_files: external_files.lumi.golden
 
     :param self: This Selector instance
-    :type self: Selector
     :param events: Array containing events in the NanoAOD format
-    :type events: ak.Array
     :param data_only: boolean flag to indicate that this selector should only
         run on observed data, defaults to True
-    :type data_only: bool, optional
     :return: Array containing boolean masks to accept or reject given events
-    :rtype: ak.Array
     """
     lookup_result = self.run_ls_lookup[events.run, events.luminosityBlock].todense()
     return np.squeeze(np.array(lookup_result))
@@ -81,9 +77,7 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: This :py:class:`~columnflow.selection.Selector` instance
-    :type self: Selector
     :param reqs: Contains requirements for this task
-    :type reqs: dict
     """
     if "external_files" in reqs:
         return
@@ -101,13 +95,9 @@ def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: 
     :external+scipy:py:class:`scipy.sparse.lil_matrix`.
 
     :param self: This :py:class:`~columnflow.selection.Selector` instance
-    :type self: Selector
     :param reqs: Contains requirements for this task
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     :param reader_targets: TODO: update docs
-    :type reader_targets: InsertableDict
     """
     bundle = reqs["external_files"]
 

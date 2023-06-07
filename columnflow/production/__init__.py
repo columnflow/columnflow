@@ -7,7 +7,7 @@ Tools for producing new array columns (e.g. high-level variables).
 from __future__ import annotations
 
 import inspect
-from typing import Callable
+from typing import Callable, Union
 from functools import wraps
 
 from columnflow.util import DerivableMeta
@@ -177,12 +177,12 @@ class Producer(TaskArrayFunction):
     @classmethod
     def producer(
         cls,
-        func: Callable | None = None,
+        func: Union[Callable, None] = None,
         bases=(),
-        mc_only: bool = False,
+        mc_only: bool = True,
         data_only: bool = False,
         **kwargs,
-    ) -> DerivableMeta | Callable:
+    ) -> Union[DerivableMeta, Callable]:
         """Decorator for creating a new :py:class:`Producer` subclass with
         additional, optional *bases* and attaching the decorated function to it
         as ``call_func``. When *mc_only* (*data_only*) is *True*, the producer
@@ -192,18 +192,13 @@ class Producer(TaskArrayFunction):
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Callable function that produces new columns, defaults to None
-        :type func: Callable | None, optional
-        :param bases: Additional bases for new Producer instance, defaults to ()
-        :type bases: tuple, optional
+        :param func: Callable function that produces new columns
+        :param bases: Additional bases for new Producer instance
         :param mc_only: boolean flag indicating that this Producer instance
-            should only run on Monte Carlo simulation, defaults to False
-        :type mc_only: bool, optional
+            should only run on Monte Carlo simulation
         :param data_only: boolean flag indicating that this Producer instance
-            should only run on observed data, defaults to False
-        :type data_only: bool, optional
+            should only run on observed data
         :return: new Producer instance
-        :rtype: DerivableMeta | Callable
         """
         def decorator(func: Callable) -> DerivableMeta:
             @wraps(func)

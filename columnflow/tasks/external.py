@@ -34,9 +34,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     :raises ValueError: _description_
     :raises Exception: _description_
     :return: _description_
-    :rtype: _type_
     :yield: _description_
-    :rtype: _type_
     """
 
     replicas = luigi.IntParameter(
@@ -57,9 +55,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         """Resolve parameter values *params* from command line and propagate them to this set of parameters.
 
         :param params: Parameters provided at command line level.
-        :type params: DotDict
         :return: Updated list of parameter values
-        :rtype: DotDict
         """
         params = super().resolve_param_values(params)
 
@@ -78,7 +74,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         If none is provided, defaults back to ``"bash::/cvmfs/cms.cern.ch/cmsset_default.sh"``
 
         :return: Path to shell script that sets up the requested sandbox.
-        :rtype: str
         """
         sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
         return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
@@ -93,7 +88,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         depending on the specified file system.
 
         :return: Law remote target with the initialized output name
-        :rtype: law.target.file.FileSystemTarget
         """
         # required by law.tasks.TransferLocalFile
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
@@ -139,14 +133,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         """Get the LNF information with the ``dasgoclient`` .
 
         :param dataset_inst: Current dataset instance, currently not used
-        :type dataset_inst: od.dataset.Dataset
         :param shift_inst: Current shift instance, currently not used
-        :type shift_inst: od.Shift
         :param dataset_key: DAS key identifier for the current dataset
-        :type dataset_key: str
         :raises Exception: If query with ``dasgoclient`` fails.
         :return: The list of LFNs corresponding to the dataset with the identifier *dataset_key*
-        :rtype: list[str]
         """
         code, out, _ = law.util.interruptable_popen(
             f"dasgoclient --query='file dataset={dataset_key}' --limit=0",
@@ -187,13 +177,9 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         this check is only performed after the *eager_lookup* th fs.
 
         :param task: Current task that needs to access the nanoAOD files
-        :type task: AnalysisTask | DatasetTask
         :param remote_fs: Name of the remote file system where the LFNs are located, defaults to None
-        :type remote_fs: str | Sequence[str] | None, optional
         :param lfn_indices: List of indices of LFNs that are processed by this *task* instance, defaults to None
-        :type lfn_indices: list[int] | None, optional
         :param eager_lookup: Look at the next remote fs in *remote_fs* if stat takes too long, defaults to 1
-        :type eager_lookup: bool | int, optional
         :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not
             a task analyzing a single branch in the task tree
         :raises Exception: If current task is not complete as indicated with ``self.complete()``
@@ -201,7 +187,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             or the law config.
         :raises Exception: If a given LFN cannot be found at any remote file system
         :yield: a file target that points to a LFN
-        :rtype: law.wlcg.WLCGFileTarget
         """
         # input checks
         if not lfn_indices:
@@ -379,9 +364,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         if *path* is a string or the first element of *path* if it's a tuple.
 
         :param path: path to create a unique basename for
-        :type path: tuple[str] | str
         :return: Unique basename
-        :rtype: str
         """
         h = law.util.create_hash(path)
         basename = os.path.basename(path[0] if isinstance(path, tuple) else path)
@@ -399,7 +382,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         :return: Hash based on the flattened list of external files in the
             current config instance
-        :rtype: str
         """
         if self._files_hash is None:
             # take the external files and flatten them into a deterministic order, then hash
@@ -425,7 +407,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         :return: DotDict of same shape as ``external_files`` DotDict with unique
             basenames
-        :rtype: DotDict
         """
         if self._file_names is None:
             self._file_names = law.util.map_struct(
@@ -447,7 +428,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         :raises Exception: If outputs of BundleExternalFiles do not exist
         :return: DotDict containing downloaded files
-        :rtype: DotDict
         """
         if self._files is None:
             # get the output
@@ -476,7 +456,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         Required by :external+law:py:class:`law.tasks.TransferLocalFile`
 
         :return: File target for tar ball with all downloaded external files
-        :rtype: law.wlcg.target.WLCGFileTarget
         """
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")

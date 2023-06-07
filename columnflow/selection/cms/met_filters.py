@@ -65,11 +65,8 @@ def met_filters(
             lambda self: self.config_inst.x.met_filters
 
     :param self: This Selector instance
-    :type self: Selector
     :param events: Array containing events in the NanoAOD format
-    :type events: ak.Array
     :return: Array containing logical ``AND`` of all input filter columns
-    :rtype: ak.Array
     """
     result = ak.ones_like(events.event, dtype=bool)
 
@@ -92,7 +89,6 @@ def met_filters_init(self: Selector) -> None:
     Read MET filters using the *get_met_filters* from config and add them as input columns.
 
     :param self: This :py:class:`~columnflow.selection.Selector` instance
-    :type self: Selector
     """
     met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):

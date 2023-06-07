@@ -40,10 +40,8 @@ def get_basenames(struct: Iterable) -> Iterable:
     The loop itself is done using the :external+law:py:func:`law.util.map_struct` function.
 
     :param struct: Iterable of arbitrary nested structure containing full file paths
-    :type struct: Iterable
 
     :return: Iterable of same structure as *struct* containing only basenames of paths.
-    :rtype: Iterable
     """
     return law.util.map_struct(
         lambda p: os.path.splitext(os.path.basename(p[0] if isinstance(p, tuple) else p))[0],
@@ -80,28 +78,23 @@ def get_lookup_provider(
     the information contained in the files is meaningful in connection with the *provider_cls*.
 
     :param files: List of files containing lookup tables (e.g. JEC text files).
-    :type files: list
 
     :param conversion_func:  ``Callable`` that extracts the table of weights from the files in *files*.
         Must return an *Iterable* that provides a :py:meth:`items` method
         that returns a structure like (name, type), value
-    :type conversion_func: ``Callable``
 
     :param provider_cls: Class method that is used to construct the *provider* instance that
         finally provides the weights for the events.
         Examples: :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector`,
         :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`
-    :type provider_cls: ``Type``
 
     :param names: Optional list of weight names to include, see text above. Defaults to None.
-    :type names: list[str or tuple[str, str]], optional
 
     :raises ValueError: If *names* contains weight names that are not present in the source file
     :return: helper class that provides the weights for the events of same type as
             *provider_cls* (e.g.
             :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector`,
             :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`)
-    :rtype: ``Type``
     """
     # the extractor reads the information contained in the files
     extractor = coffea_extractor.extractor()
@@ -197,15 +190,12 @@ def jec_coffea(
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
     :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
         updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
         ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
-    :type min_pt_met_prop: float, optional
     :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
         the updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
@@ -215,7 +205,6 @@ def jec_coffea(
         ``Jet.mass``, as well as the relative difference between raw and corrected
         pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
         variations, see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
@@ -357,7 +346,6 @@ def jec_coffea_init(self: Calibrator) -> None:
     as well as the corresponding jec variations to the set of columns to be produced.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     sources = self.uncertainty_sources
     if sources is None:
@@ -393,10 +381,8 @@ def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -411,14 +397,10 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets:
     into the calibrator function call.
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     :param reader_targets: TODO: add docs
-    :type reader_targets: InsertableDict
 
     :raises ValueError: If module is provided with more than one JEC uncertainty
         source file
@@ -550,17 +532,14 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :return: awkward array containing new columns with corrected ``Jet.pt`` and
         ``Jet.mass``, as well as the original values before the smearing
         procedure using the suffix ``unsmeared`` (e.g. ``Jet.pt_unsmeared``).
         Additionally contains columns for JEC up and down variations,
         see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, "Jet.pt_unsmeared", events.Jet.pt)
@@ -734,7 +713,6 @@ def jer_coffea_init(self: Calibrator) -> None:
     Calibrator.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     if not self.propagate_met:
         return
@@ -756,10 +734,8 @@ def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
     """
     if "external_files" in reqs:
         return
@@ -778,14 +754,10 @@ def jer_coffea_setup(
     into the calibrator function call.
 
     :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
     :param reader_targets: TODO: add docs
-    :type reader_targets: InsertableDict
 
     :raises ValueError: If module is provided with more than one JER uncertainty
         source file
@@ -844,17 +816,14 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
         this function is embedded
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
     :return: awkward array containing new columns with corrected ``Jet.pt`` and
         ``Jet.mass``, as well as the original values before the smearing
         procedure using the suffix ``unsmeared`` (e.g. ``Jet.pt_unsmeared``).
         Additionally contains columns for JEC up and down variations,
         see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     # apply jet energy corrections
     events = self[jec_coffea](events, **kwargs)
@@ -874,7 +843,6 @@ def jets_coffea_init(self: Calibrator) -> None:
     :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
 
     :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
     """
     # forward the propagate_met argument to the producers
     self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}

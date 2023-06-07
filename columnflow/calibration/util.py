@@ -24,9 +24,7 @@ def ak_random(*args, rand_func: Callable) -> ak.Array:
     positional arguments to *rand_func* to obtain the random numbers.
 
     :param rand_func: Callable to generate random numbers from awkward arrays in *args*.
-    :type rand_func: Callable
     :return: awkward array filled with random numbers.
-    :rtype: ak.Array
     """
     args = ak.broadcast_arrays(*args)
 
@@ -43,7 +41,7 @@ def ak_random(*args, rand_func: Callable) -> ak.Array:
 
 
 def propagate_met(
-    jet_pt1: ak.Array,
+    jet_pt1: (ak.Array),
     jet_phi1: ak.Array,
     jet_pt2: ak.Array,
     jet_phi2: ak.Array,
@@ -58,23 +56,16 @@ def propagate_met(
     the corresponding contributions to the MET vector
 
     :param jet_pt1: transverse momentum of first jet(s)
-    :type jet_pt1: ak.Array
     :param jet_phi1: azimuthal angle of first jet(s)
-    :type jet_phi1: ak.Array
     :param jet_pt2: transverse momentum of second jet(s)
-    :type jet_pt2: ak.Array
     :param jet_phi2: azimuthal angle of second jet(s)
-    :type jet_phi2: ak.Array
     :param met_pt1: missing transverse momentum (MET)
-    :type met_pt1: ak.Array
     :param met_phi1: azimuthal angle of MET vector
-    :type met_phi1: ak.Array
 
     :raises AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and
         (*jet_pt2*, *jet_phi2*) have different dimensions.
     :return: updated values of MET vector, i.e. missing transverse momentum and
         corresponding azimuthal angle phi
-    :rtype: tuple[ak.Array, ak.Array]
     """
 
     # avoid unwanted broadcasting
