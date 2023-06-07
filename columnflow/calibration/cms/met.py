@@ -23,8 +23,9 @@ ak = maybe_import("awkward")
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Performs the MET phi (type II) correction using the correctionlib. Requires an external file in
-    the config under ``met_phi_corr``:
+    Performs the MET phi (type II) correction using the correctionlib for events there the
+    uncorrected MET pt is below the beam energy (extracted from ``config_inst.campaign.ecm * 0.5``).
+    Requires an external file in the config under ``met_phi_corr``:
 
     .. code-block:: python
 
@@ -45,15 +46,26 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     *get_met_correction_set* can be adapted in a subclass in case it is stored differently in the
     config.
     """
-    args = (
-        events.MET.pt,
-        events.MET.phi,
-        ak.values_astype(events.PV.npvs, np.float32),
-        ak.values_astype(events.run, np.float32),
-    )
-    corr_pt = self.met_pt_corrector.evaluate(*args)
-    corr_phi = self.met_phi_corrector.evaluate(*args)
+    # copy the intial pt and phi values
+    corr_pt = np.array(events.MET.pt, dtype=np.float32)
+    corr_phi = np.array(events.MET.phi, dtype=np.float32)
 
+    # select only events where MET pt is below the expected beam energy
+    mask = events.MET.pt < (0.5 * self.config_inst.campaign.ecm)
+
+    # arguments for evaluation
+    args = (
+        events.MET.pt[mask],
+        events.MET.phi[mask],
+        ak.values_astype(events.PV.npvs[mask], np.float32),
+        ak.values_astype(events.run[mask], np.float32),
+    )
+
+    # evaluate and insert
+    corr_pt[mask] = self.met_pt_corrector.evaluate(*args)
+    corr_phi[mask] = self.met_phi_corrector.evaluate(*args)
+
+    # save the corrected values
     events = set_ak_column(events, "MET.pt", corr_pt, value_type=np.float32)
     events = set_ak_column(events, "MET.phi", corr_phi, value_type=np.float32)
 
