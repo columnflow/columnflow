@@ -89,55 +89,6 @@ jobs:
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
           verbose: true
 
-        
-
-  # lint:
-  #   runs-on: ubuntu-latest
-  #   needs: Setup_software_basis_py310_latest
-  #   steps:
-  #     - name: Checkout ⬇️
-  #       uses: actions/checkout@master
-  #       with:
-  #         persist-credentials: false
-  #         submodules: recursive
-
-    #   - name: Setup python 🐍
-    #     uses: actions/setup-python@v4
-    #     with:
-    #       python-version: "3.10"
-
-    #   - name: Install dependencies ☕️
-    #     run: |
-    #       source setup.sh ""
-    # steps:
-      # - name: Lint 🔍
-      #   run: |
-      #     source setup.sh ""
-      #     ./tests/run_linting
-
-  # test:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout ⬇️
-  #       uses: actions/checkout@master
-  #       with:
-  #         persist-credentials: false
-  #         submodules: recursive
-
-  #     - name: Setup python 🐍
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.10"
-
-  #     - name: Install dependencies ☕️
-  #       run: |
-  #         source setup.sh ""
-
-  #     - name: Test 🎢
-  #       run: |
-  #         source setup.sh ""
-  #         ./tests/run_tests
-
   pypi:
     runs-on: ubuntu-latest
     environment: Pypi tests
@@ -163,36 +114,3 @@ jobs:
 
       - name: Check setup 🚦
         run: twine check "dist/$( python setup.py --fullname ).tar.gz"
-
-  # coverage:
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-  #   steps:
-  #     - name: Checkout ⬇️
-  #       uses: actions/checkout@master
-  #       with:
-  #         persist-credentials: false
-  #         submodules: recursive
-
-  #     - name: Setup python 🐍
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.10"
-
-  #     - name: Install dependencies ☕️
-  #       run: |
-  #         source setup.sh ""
-
-  #     - name: Run coverage test 🎢
-  #       run: |
-  #         source setup.sh ""
-  #         ./tests/run_coverage
-  #         ls -al
-
-  #     - name: Upload report 🔝
-  #       uses: codecov/codecov-action@v2
-  #       with:
-  #         flags: unittests
-  #         files: coverage_test_util.xml,coverage_test_columnar_util.xml
-  #         verbose: true
