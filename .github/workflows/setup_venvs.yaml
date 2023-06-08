@@ -39,11 +39,15 @@ jobs:
               **/sandboxes/venv_columnar*.sh
               **/sandboxes/columnar.txt
               **/sandboxes/_setup_venv.sh
-          - venv: "docs"
-            name: "docs"
-            hashFiles: |
-              **/sandboxes/venv_docs*.sh
-              **/sandboxes/_setup_venv.sh
+          # - venv: "docs"
+          #   name: "docs"
+          #   hashFiles: |
+          #     **/sandboxes/venv_docs*.sh
+          #     **/requirements_prod.txt
+          #     **/requirements_dev.txt
+          #     **/sandboxes/columnar.txt
+          #     **/sandboxes/ml_tf.txt
+          #     **/sandboxes/_setup_venv.sh
           - venv: ml_tf
             name: "ML (TensorFlow)"
             hashFiles: |
