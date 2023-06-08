@@ -43,7 +43,7 @@ bootstrap_htcondor_standalone() {
             source "${lcg_setup}" "" &&
             mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
             cd "${CF_SOFTWARE_BASE}/conda" &&
-            law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
+            GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
             tar -xzf "software.tgz" &&
             rm "software.tgz"
         ) || return "$?"
@@ -54,7 +54,7 @@ bootstrap_htcondor_standalone() {
         source "${lcg_setup}" "" &&
         mkdir -p "${CF_REPO_BASE}" &&
         cd "${CF_REPO_BASE}" &&
-        law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
+        GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
         tar -xzf "repo.tgz" &&
         rm "repo.tgz"
     ) || return "$?"

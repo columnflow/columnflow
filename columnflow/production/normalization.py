@@ -6,7 +6,7 @@ Column production methods related to sample normalization event weights.
 
 from columnflow.production import Producer, producer
 from columnflow.production.processes import process_ids
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 
 
@@ -67,7 +67,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @normalization_weights.setup
-def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
     Sets up objects required by the computation of normalization weights and stores them as instance
     attributes:
@@ -88,6 +88,18 @@ def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict) -> Non
         if process_inst.is_mc
     ]
     max_id = max(process_inst.id for process_inst in process_insts)
+
+    # ensure that the selection stats do not contain any process that was not previously registered
+    unregistered_process_ids = [
+        int(process_id) for process_id in selection_stats["sum_mc_weight_per_process"]
+        if int(process_id) > max_id
+    ]
+    if unregistered_process_ids:
+        id_str = ",".join(map(str, unregistered_process_ids))
+        raise Exception(
+            f"selection stats contain ids ({id_str}) of processes that were not previously " +
+            f"registered to the config '{self.config_inst.name}'",
+        )
 
     # create a event weight sum lookup table with all known processes
     sum_weights_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
