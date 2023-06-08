@@ -1,7 +1,191 @@
 # Best practices
 
-Here general discussion of columnflow: columns (and fields, like Jet), awkward arrays, general structure of cf tree and the
-purpose of every task
+Here general discussion of columnflow: columns (and fields, like Jet), awkward arrays, general
+structure of cf tree and the purpose of every task
+
+
+columnflow is a fully orchestrated columnar analysis tool for HEP analyses with pure Python. The
+workflow orchestration is managed by [law](https://github.com/riga/law) and
+[order](https://github.com/riga/order) for the metavariables. A short introduction to law is
+given below.
+
+The data processing is based on columns in [awkward arrays](https://awkward-array.org/doc/main/)
+with [coffea](https://coffeateam.github.io/coffea/)-generated behaviour. Fields like "Jet" exist
+too, they contain columns with the same first dimension (the parameters of the field, e.g. Jet.pt).
+A few additional functions for simplified handling of columns were defined in
+{doc}`~columnflow.columnar_util.py`.
+
+As most of the information is conserved in the form of columns, it would be very inefficient
+(and might not even fit in the memory) to use all columns and all events from a dataset at once for
+each task. Therefore, in order to reduce the impact on the memory:
+- a chunking of the datasets is implemented using [dask](https://www.dask.org/): not all events
+from a dataset are inputed in a task at once, but only chunked in groups of events.
+(100 000 events max per group is default as of 05.2023).
+- the user needs to define for each {py:class}`~columnflow.production.Producer`,
+{py:class}`~columnflow.calibration.Calibrator` and {py:class}`~columnflow.selection.Selector` which
+columns are to be loaded (this happens by defining the ```uses``` set in the header of the
+decorator of the class) and which new columns/fields are to be saved in parquet files after the
+respective task (this happens by defining the ```produces``` set in the header of the decorator of
+the class).
+
+## Tasks in columnflow
+
+The full task tree of columnflow can be seen in
+[this issue](https://github.com/columnflow/columnflow/issues/25).
+
+General informations about tasks and [law](https://github.com/riga/law) can be found below in
+"Law introduction" or in the [example section](https://github.com/riga/law#examples) of the law
+Github repository.
+
+While the name of each task is fairly descriptive of its purpose, a short introduction of the most
+important facts and parameters about each task group are presented below. As some tasks require
+others to run, the arguments for a task higher in the tree will also be required for tasks below
+in the tree (sometimes in a slightly different version, e.g. with an "s" if the task allows several
+instances of the parameter to be given at once (e.g. several dataset*s*)):
+
+- ```GetDatasetLFNs```: This task looks for the logical file names of the datasets to be used and
+saves them in a json file. The argument ```--dataset``` followed by the name of the dataset to be
+searched for, as defined in the analysis config is needed for this task to run. TODO: more infos?
+
+- ```CalibrateEvents```: Task to implement corrections to be applied on the datasets, e.g. jet-energy
+corrections. This task uses objects of the {py:class}`~columnflow.calibration.Calibrator` class to
+apply the calibration. The argument ```--calibrator``` followed by the name of the
+{py:class}`~columnflow.calibration.Calibrator` object to be run is needed for this task to run.
+A default value for this argument can be set in the analysis config.
+TODO: more infos, e.g. output type of task?
+
+- ```SelectEvents```: Task to implement selections to be applied on the datssets. This task uses
+objects of the {py:class}`~columnflow.selection.Selector` class to apply the selection. The output
+are masks for the events and objects to be selected saved in a parquet file and the statistics of
+the selection saved in a json file. The mask are not applied to the columns during this task.
+The argument ```--selector``` followed by the name of the
+{py:class}`~columnflow.selection.Selector` object to be run is needed for this task to run.
+A default value for this argument can be set in the analysis config.
+
+- ```ReduceEvents```: Task to apply the masks created in ```SelectEvents``` on the datasets. All
+tasks below ```ReduceEvents``` in the task graph use the parquet file resulting from
+```ReduceEvents``` to work on, not the original dataset. The columns to be conserved after
+```ReduceEvents``` are to be given in the analysis config under the ```config.x.keep_columnns```
+argument in a ```DotDict``` structure (from {doc}`~columnflow.util.py`).
+
+- ```ProduceColumns```: Task to produce additional columns for the reduced datasets, e.g. for new
+high level variables. This task uses objects of the {py:class}`~columnflow.production.Producer`
+class to create the new columns. The new columns are saved in a parquet file that can be used by
+the task below on the task graph. The argument ```--producer``` followed by the name of the
+{py:class}`~columnflow.production.Producer` object to be run is needed for this task to run.
+A default value for this argument can be set in the analysis config. TODO: Check if only columns not
+given in keep_columns (and already produced in selectors?) are produced. This is relevant if
+keep-columns has been changed after ReduceEvents has run.
+
+- ```PrepareMLEvents```, ```MLTraining```, ```MLEvaluation``` and ```PlotMLResults```: Tasks to
+train, evaluate neural networks and plot their results. TODO: more informations? output type?
+all tf based?
+
+- ```CreateHistograms```: Task to create histograms with the python package
+[Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below in the task
+graph. TODO: more informations? output type?
+
+- ```PlotVariables*```, ```PlotShiftedVariables*```: Tasks to plot the histograms created by
+```CreateHistograms``` using the python package [matplotlib](https://matplotlib.org/) with
+[mplhep](https://mplhep.readthedocs.io/en/latest/) style. Several plots are possible, including
+plots of variables for different physical processes or plots of variables for a single physical
+process but different shifts (e.g. jet-energy correction variations). The argument ```--variables```
+followed by the name of the variables defined in the analysis config, separated by a comma, as well
+as the argument ```--processes``` followed by the name of the physical processes to be plotted, as
+defined in the analysis config (this argument replaces the ```dataset``` argument for these tasks) are
+needed for these tasks to run. For the ```PlotShiftedVariables*```plots, the argument ```shifts``` is
+needed and replaces the argument ```shift```. The output format for these plots can be given with
+the TODO ????? argument. It is possible to set a default for the variables in the analysis config.
+
+- ```WriteDatacards```: TODO
+
+- ```CutflowPlots```: Task to plot the histograms created by ```CreateCutflowHistograms```, in a
+similar way to the ```PlotVariables*``` tasks. The difference is that these plots show the selection
+yields of the different selection steps defined in ```SelectEvents``` instead of only after the
+```ReduceEvents``` procedure. The selection steps to be shown can be chosen with the
+```--selector-steps``` argument.
+
+TODO: from which task on is ```--shift``` needed? Calibrate events? + Check the exact arguments of the
+various tasks.
+
+
+It should also be added that there are additional parameters specific for the tasks in columnflow,
+required by the fact that columnflow's purpose is for HEP analysis, these are the ```--analysis```
+and ```-config``` parameters, which defaults can be set in the law.cfg. These two parameters
+respectively define the config file for the different analyses to be used (where the different
+analyses and their parameters should be defined) and the name of the config file for the specific
+analysis to be used.
+
+
+
+
+## Law introduction
+
+This analysis tool uses [law](https://github.com/riga/law) for the workflow orchestration.
+Therefore, a short introduction to the most essential functions of law you should be
+aware of when using this tool are provided here. More informations are available for example in the
+"[Examples]((https://github.com/riga/law#examples))" section of this
+[Github repository](https://github.com/riga/law). This section can be ignored if you are already
+familiar with law.
+
+In [law](https://github.com/riga/law), tasks are defined and separated by purpose and may have
+dependencies to each other. As an example, columnflow defines a task for the creation of histograms
+ and a different task to make a plot of these histograms. The plotting task requires the
+histogram task to have already run, in order to have data to plot. This is checked
+by the presence or absence of the corresponding output file from the required task. If the required
+file is not present, the required task will be automatically started with the corresponding
+parameters before the called task.
+
+The full task tree of columnflow can be seen in
+[this issue](https://github.com/columnflow/columnflow/issues/25).
+
+A task is run with the command ```law run``` followed by the name of the task.
+A version, given by the argument ```--version```, followed by the name of the version, is required.
+
+In law, the intermediate results (=the outputs to the different tasks) are saved locally in the
+corresponding directory (given in the setup, the arguments to run the task are also used for the path).
+The name of the version also appears in the path and should therefore be selected to match your
+purpose, for example ```--version selection_with_gen_matching```.
+
+
+Tasks in law are organized as a graph with dependencies. Therefore a "depth" for the different
+required tasks exists, depending on which task required which other task. In order to see the
+different required tasks for a single task, you might use the argument ```--print-status -1```,
+which will show all required tasks and the existence or absence of their output for the given input
+parameters up to depth "-1", hence the deepest one. The called task with ```law run``` will have
+depth 0. You might check the output path of a task with the argument ```--print-output```,
+followed by the depth of the task. If you want a finished task to be run anew without changing
+the version (e.g. do a new histogram with different binning), you might remove the previous
+outputs with the ```--remove-output``` argument, followed by the depth up to which to remove the
+outputs. There are three removal modes:
+- ```a``` (all: remove all outputs of the different tasks up to the given depth),
+- ```i``` (interactive: prompt a selection of the tasks to remove up to the given depth)
+- ```d``` (dry: show which files might be deleted with the same selection options, but do not remove
+        the outputs).
+
+The ```--remove-output``` argument does not allow the depth "-1", check the task
+tree with ```--print-output``` before selecting the depth you want. The removal mode
+can be already selected in the command, e.g. with ```--remove-output 1,a``` (remove all outputs up
+to depth 1).
+
+Once the output has been removed, it is possible to run the task again. It is also possible to
+rerun the task in the same command as the removal by adding the ```y``` argument at the end.
+Therefore, removing all outputs of a selected task (but not its dependencies) and running it again
+at once would correspond to the following command:
+
+```shell
+law run name_of_the_task --version name_of_the_version --remove-output 0,a,y
+```
+
+An example command to see the location of the output file after running a 1D plot of a variable
+with columnflow using only law functions and the default arguments for the tasks would be:
+
+```shell
+law run PlotVariables1D --version test_plot --print-output 0
+```
+
+
+
 
 ## Variables creation
 
@@ -481,125 +665,30 @@ TODO
 
 ### Running the SelectEvents task
 
+The ```SelectEvents``` task runs a specific selection script and saves the created masks for event and
+objects selections in a parquet file, as well as the statistics of the selection in a json file.
 
+While it is possible to see all the arguments and their explanation for this task using
+```law run SelectEvents --help```, the only argument created specifically for this task is the
+```--selector``` argument, through which the exposed {py:class}`~columnflow.selection.Selector` to
+be used can be chosen.
 
-```
-Derivative of :py:class:`~columnflow.columnar_util.TaskArrayFunction`
-    that handles selections.
+The masks created by this task are then used by the ```ReduceEvents``` task to reduce the number of
+events (see the ```steps``` argument for the {py:class}`~columnflow.selection.SelectionResult`) and
+create/update new columns/fields with only the selected objects (see the ```objects``` argument for
+the {py:class}`~columnflow.selection.SelectionResult`). The saved statistics are used for plotting. (?????)
 
-    :py:class:`~.Selector` s are designed to apply
-    arbitrary selection criteria. These critera can be based on already existing
-    nano AOD columns, but can also involve the output of any other module,
-    e.g. :py:class:`~columnflow.production.Producer`s. To reduce the need to
-    run potentionally computation-expensive operations multiple times, they can
-    also write new columns. Similar to :py:class:`~columnflow.production.Producer` s,
-    and :py:class:`~columnflow.calibration.Calibrator` s, this new columns must
-    be specified in the `produces` set.
+It should not be forgotten that any column created in this task should be included in the
+```keep_columns``` argument of the config file, as only columns explicitely required to be kept in
+this dictionary will be loaded and then saved in the reduced parquet file.
 
-    Apart from the awkward array, a :py:class:`~.Selector` must also return a
-    :py:class:`~.SelectionResult`. This object contains boolean masks on event
-    and object level that represent which objects and events pass different
-    selections. These masks are saved to disc and are intended for more involved
-    studies, e.g. comparisons between frameworks.
+An example of how to run this task for an analysis with several datasets and configs is given below:
 
-    To create a new :py:class:`~.Selector`, you can use the decorrator
-    class method :py:meth:`~.Selector.selector` like this:
-
-
-    .. code-block:: python
-
-        # import the Selector class and the selector method
-        from columnflow.selection import Selector, selector
-
-        # also import the SelectionResult
-        from columnflow.selection import SelectionResult
-
-        # maybe import awkard in case this Selector is actually run
-        ak = maybe_import("awkward")
-
-        # now wrap any function with a selector
-        @selector(
-            # define some additional information here, e.g.
-            # what columns are needed for this Selector?
-            uses={
-                "Jet.pt", "Jet.eta"
-            },
-            # does this Selector produce any columns?
-            produces={}
-
-            # pass any other variable to the selector class
-            is_this_a_fun_auxiliary_variable=True
-
-            # ...
-        )
-        def jet_selection(events: ak.Array) -> ak.Array, SelectionResult:
-            # do something ...
-
-    The decorrator will create a new :py:class:`~.Selector` instance with the
-    name of your function. The function itself is set as the `call_func` if
-    the :py:class:`~.Selector` instance. All keyword arguments specified in the
-    :py:meth:`~.Selector.selector` are available as member variables of your
-    new :py:class:`~.Selector` instance.
-
-    In additional to the member variables inherited from
-    :py:class:`~columnflow.columnar_util.TaskArrayFunction` class, the
-    :py:class:`~.Selector` class defines the *exposed* variable. This member
-    variable controls whether this :py:class:`~.Selector` instance is a
-    top level Selector that can be used directly for the
-    :py:class:`~columnflow.tasks.selection.SelectEvents` task.
-    A top level :py:class:`~.Selector` should not need anything apart from
-    the awkward array containing the events, e.g.
-
-    .. code-block:: python
-
-        @selector(
-            # some information for Selector
-
-            # This Selector will need some external input, see below
-            # Therefore, it should not be exposed
-            exposed=False
-        )
-        def some_internal_selector(
-            events: ak.Array,
-            some_additional_input: Any
-        ) -> ak.Array, SelectionResult:
-            result = SelectionResult()
-            # do stuff with additional information
-            return events, result
-
-        @selector(
-            # some information for Selector
-            # e.g., if we want to use some internal Selector, make
-            # sure that you have all the relevant information
-            uses={
-                some_internal_selector,
-            },
-            produces={
-                some_internal_selector,
-            }
-
-            # this is our top level Selector, so we need to make it reachable
-            # for the SelectEvents task
-            exposed=True
-        )
-        def top_level_selector(events: ak.Array) -> ak.Array, SelectionResult:
-            results = SelectionResult()
-            # do something here
-
-            # e.g., call the internal Selector
-            additional_info = 2
-            events, sub_result = self[some_internal_selector](events, additional_info)
-            result += sub_result
-
-            return events, result
-
-
-    :param exposed: Member variable that controls whether this
-        :py:class:`~.Selector` instance is a top level Selector that can
-        be used directly for the :py:class:`~columnflow.tasks.selection.SelectEvents`
-        task. Defaults to `False`.
-    :type exposed: `bool`
-
+```shell
+law run SelectEvents --version name_of_your_version \
+                     --config name_of_your_config \
+                     --selector name_of_the_selector \
+                     --dataset name_of_the_dataset_to_be_run
 ```
 
 
