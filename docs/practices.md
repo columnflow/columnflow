@@ -13,7 +13,7 @@ The data processing is based on columns in [awkward arrays](https://awkward-arra
 with [coffea](https://coffeateam.github.io/coffea/)-generated behaviour. Fields like "Jet" exist
 too, they contain columns with the same first dimension (the parameters of the field, e.g. Jet.pt).
 A few additional functions for simplified handling of columns were defined in
-{doc}`~columnflow.columnar_util`.
+{py:mod}`~columnflow.columnar_util`.
 
 As most of the information is conserved in the form of columns, it would be very inefficient
 (and might not even fit in the memory) to use all columns and all events from a dataset at once for
@@ -41,7 +41,7 @@ While the name of each task is fairly descriptive of its purpose, a short introd
 important facts and parameters about each task group are presented below. As some tasks require
 others to run, the arguments for a task higher in the tree will also be required for tasks below
 in the tree (sometimes in a slightly different version, e.g. with an "s" if the task allows several
-instances of the parameter to be given at once (e.g. several dataset*s*)):
+instances of the parameter to be given at once (e.g. several dataset**s**)):
 
 - ```GetDatasetLFNs```: This task looks for the logical file names of the datasets to be used and
 saves them in a json file. The argument ```--dataset``` followed by the name of the dataset to be
@@ -66,7 +66,7 @@ A default value for this argument can be set in the analysis config.
 tasks below ```ReduceEvents``` in the task graph use the parquet file resulting from
 ```ReduceEvents``` to work on, not the original dataset. The columns to be conserved after
 ```ReduceEvents``` are to be given in the analysis config under the ```config.x.keep_columnns```
-argument in a ```DotDict``` structure (from {doc}`~columnflow.util.py`).
+argument in a ```DotDict``` structure (from {py:mod}`~columnflow.util`).
 
 - ```ProduceColumns```: Task to produce additional columns for the reduced datasets, e.g. for new
 high level variables. This task uses objects of the {py:class}`~columnflow.production.Producer`
