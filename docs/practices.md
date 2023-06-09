@@ -68,7 +68,7 @@ A default value for this argument can be set in the analysis config. From this t
 - ```ReduceEvents```: Task to apply the masks created in ```SelectEvents``` on the datasets. All
 tasks below ```ReduceEvents``` in the task graph use the parquet file resulting from
 ```ReduceEvents``` to work on, not the original dataset. The columns to be conserved after
-```ReduceEvents``` are to be given in the analysis config under the ```config.x.keep_columnns```
+```ReduceEvents``` are to be given in the analysis config under the ```config.x.keep_columns```
 argument in a ```DotDict``` structure (from {py:mod}`~columnflow.util`).
 
 - ```ProduceColumns```: Task to produce additional columns for the reduced datasets, e.g. for new
@@ -94,13 +94,13 @@ TODO: more informations? output type?
 [mplhep](https://mplhep.readthedocs.io/en/latest/) style. Several plots are possible, including
 plots of variables for different physical processes or plots of variables for a single physical
 process but different shifts (e.g. jet-energy correction variations). The argument ```--variables```
-followed by the name of the variables defined in the analysis config, separated by a comma, as well
-as the argument ```--processes``` followed by the name of the physical processes to be plotted, as
-defined in the analysis config (this argument can be used instead of the ```--datasets``` argument
-for these tasks) are needed for these tasks to run. For the ```PlotShiftedVariables*```plots, the
+followed by the name of the variables defined in the analysis config, separated by a comma, is
+needed for these tasks to run. It is also possible to replace the ```--datasets``` argument
+for these tasks by the ```--processes``` argument followed by the name of the physical processes to
+be plotted, as defined in the analysis config. For the ```PlotShiftedVariables*```plots, the
 argument ```shift-sources``` is needed and replaces the argument ```shift```. The output format for
 these plots can be given with the ```--file-types``` argument. It is possible to set a default for the
-variables in the analysis config. TODO: is processes needed or is datasets enough?
+variables in the analysis config.
 
 - ```WriteDatacards```: TODO
 
