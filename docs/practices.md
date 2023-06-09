@@ -13,7 +13,7 @@ The data processing is based on columns in [awkward arrays](https://awkward-arra
 with [coffea](https://coffeateam.github.io/coffea/)-generated behaviour. Fields like "Jet" exist
 too, they contain columns with the same first dimension (the parameters of the field, e.g. Jet.pt).
 A few additional functions for simplified handling of columns were defined in
-{doc}`~columnflow.columnar_util.py`.
+{doc}`~columnflow.columnar_util`.
 
 As most of the information is conserved in the form of columns, it would be very inefficient
 (and might not even fit in the memory) to use all columns and all events from a dataset at once for
@@ -259,10 +259,10 @@ instance are discussed below. (Input the internal link here)
 {py:class}`~columnflow.selection.Selector`s can be either available directly from the command line
 or only internally, through other selectors. To make a {py:class}`~columnflow.selection.Selector`
 available from the command line, it should be declared with the ```exposed=True``` argument.
-To call a fully funtional {py:class}`~columnflow.selection.Selector` (in the following refered
+To call a fully functional {py:class}`~columnflow.selection.Selector` (in the following refered
 as Selector_int) from an other {py:class}`~columnflow.selection.Selector` (in the following refered
 to as Selector_ext), several steps are required:
-- Selector_int should be imported in the Selector_ext script,
+- If defined in an other file, Selector_int should be imported in the Selector_ext script,
 - The columns needed for Selector_int should be declared in the ```uses``` argument of Selector_ext
 (it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of
 the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
@@ -320,20 +320,20 @@ The result of a {py:class}`~columnflow.selection.Selector` is propagated through
 {py:class}`~columnflow.selection.SelectionResult` class. The
 {py:class}`~columnflow.selection.SelectionResult` object is instantiated using a dictionary for each
 argument. There are four arguments that may be set, which contain:
-- boolean masks to select the events to be kept in the analysis, which is saved under the
+- Boolean masks to select the events to be kept in the analysis, which is saved under the
 ```steps``` argument. Several selection steps may be defined in a single Selector, each with a unique
 name being the key of the dictionary for the corresponding mask.
-- several index masks for specific objects in a double dictionary structure, saved under the
+- Several index masks for specific objects in a double dictionary structure, saved under the
 ```objects``` argument. The double dictionary structure in the ```objects``` defines the source
 column/field from which the indices are to be taken (first dimension of the dictionary) and the name of
 the new column/field to be created with only these objects (second dimension of the dictionary). If the
 name of the column/field to be created is the same as the name of an already existing column/field, the original
 column/field will be overwritten by the new one!
-- additional informations to be used by other {py:class}`~columnflow.selection.Selector`s, saved
+- Additional informations to be used by other {py:class}`~columnflow.selection.Selector`s, saved
 under the ```aux``` argument.
-- a combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
+- A combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
 ```"event"``` key. An example with this argument will be shown in the section
-```Example of a more complicated Selection using several selection steps```. The final
+```Complete example```. The final
 {py:class}`~columnflow.selection.SelectionResult` object to be returned by the exposed selector must
 have this field.
 
