@@ -51,7 +51,9 @@ searched for, as defined in the analysis config is needed for this task to run. 
 corrections. This task uses objects of the {py:class}`~columnflow.calibration.Calibrator` class to
 apply the calibration. The argument ```--calibrator``` followed by the name of the
 {py:class}`~columnflow.calibration.Calibrator` object to be run is needed for this task to run.
-A default value for this argument can be set in the analysis config.
+A default value for this argument can be set in the analysis config. Similarly the ```--shift```
+argument can be given, in order to choose which corrections are to be
+used, e.g. which variation (up, down, nominal) of the jet-energy corrections are to be used.
 TODO: more infos, e.g. output type of task?
 
 - ```SelectEvents```: Task to implement selections to be applied on the datssets. This task uses
@@ -60,7 +62,8 @@ are masks for the events and objects to be selected saved in a parquet file and 
 the selection saved in a json file. The mask are not applied to the columns during this task.
 The argument ```--selector``` followed by the name of the
 {py:class}`~columnflow.selection.Selector` object to be run is needed for this task to run.
-A default value for this argument can be set in the analysis config.
+A default value for this argument can be set in the analysis config. From this task on, the
+```--calibrator``` argument is replaced by ```--calibrators```.
 
 - ```ReduceEvents```: Task to apply the masks created in ```SelectEvents``` on the datasets. All
 tasks below ```ReduceEvents``` in the task graph use the parquet file resulting from
@@ -83,7 +86,8 @@ all tf based?
 
 - ```CreateHistograms```: Task to create histograms with the python package
 [Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below in the task
-graph. TODO: more informations? output type?
+graph. From this task on, the ```--producer``` argument is replaced by ```--producers```.
+TODO: more informations? output type?
 
 - ```PlotVariables*```, ```PlotShiftedVariables*```: Tasks to plot the histograms created by
 ```CreateHistograms``` using the python package [matplotlib](https://matplotlib.org/) with
@@ -92,10 +96,11 @@ plots of variables for different physical processes or plots of variables for a 
 process but different shifts (e.g. jet-energy correction variations). The argument ```--variables```
 followed by the name of the variables defined in the analysis config, separated by a comma, as well
 as the argument ```--processes``` followed by the name of the physical processes to be plotted, as
-defined in the analysis config (this argument replaces the ```dataset``` argument for these tasks) are
-needed for these tasks to run. For the ```PlotShiftedVariables*```plots, the argument ```shifts``` is
-needed and replaces the argument ```shift```. The output format for these plots can be given with
-the TODO ????? argument. It is possible to set a default for the variables in the analysis config.
+defined in the analysis config (this argument can be used instead of the ```--datasets``` argument
+for these tasks) are needed for these tasks to run. For the ```PlotShiftedVariables*```plots, the
+argument ```shift-sources``` is needed and replaces the argument ```shift```. The output format for
+these plots can be given with the ```--file-types``` argument. It is possible to set a default for the
+variables in the analysis config. TODO: is processes needed or is datasets enough?
 
 - ```WriteDatacards```: TODO
 
@@ -105,8 +110,7 @@ yields of the different selection steps defined in ```SelectEvents``` instead of
 ```ReduceEvents``` procedure. The selection steps to be shown can be chosen with the
 ```--selector-steps``` argument.
 
-TODO: from which task on is ```--shift``` needed? Calibrate events? + Check the exact arguments of the
-various tasks.
+
 
 
 It should also be added that there are additional parameters specific for the tasks in columnflow,
