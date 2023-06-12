@@ -3,4 +3,4 @@
 luigi~=3.3
 scinum>=1.4.6
 six~=1.16
-pyyaml~=6
+pyyaml==6.*
