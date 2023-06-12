@@ -1,4 +1,4 @@
-# version 2
+# version 3
 
 # documentation packages
 sphinx~=4.5
@@ -9,12 +9,12 @@ myst-parser~=0.18
 sphinx_lfs_content~=1.1
 
 # base packages
-luigi~=3.0
+luigi~=3.3
 scinum~=1.4
 six~=1.16
 
 # sandbox packages
 awkward~=2.2
 uproot~=5.0
-git+https://github.com/CoffeaTeam/coffea.git@v2023.5.0.rc0#egg=coffea
-dask-awkward~=2023.5
+git+https://github.com/CoffeaTeam/coffea.git@v2023.6.0.rc0#egg=coffea
+dask-awkward~=2023.6
