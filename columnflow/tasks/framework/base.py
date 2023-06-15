@@ -890,12 +890,12 @@ def wrapper_factory(
 ) -> law.task.base.Register:
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and
-    ``law.WrapperTask``, that do nothing but require multiple instances of *require_cls*. Unless
+    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*. Unless
     *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus
     "Wrapper". Additional *attributes* are added as class-level members when given.
 
-    The instances of *require_cls* to be required in the ``requires()`` method can be controlled by
-    task parameters. These parameters can be enabled through the string sequence *enable*, which
+    The instances of *require_cls* to be required in the :py:meth:`~.wrapper_factory.Wrapper.requires()` method
+    can be controlled by task parameters. These parameters can be enabled through the string sequence *enable*, which
     currently accepts:
 
         - ``configs``, ``skip_configs``
@@ -1156,6 +1156,7 @@ def wrapper_factory(
             return params
 
         def requires(self):
+
             # build all requirements based on the parameter space
             reqs = {}
 
