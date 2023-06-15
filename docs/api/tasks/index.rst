@@ -9,7 +9,10 @@
    :members:
 
 .. toctree::
+   :maxdepth: 1
 
    selection
    external
    reduction
+   framework/index
+   cms
