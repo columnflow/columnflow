@@ -81,7 +81,6 @@ class Calibrator(TaskArrayFunction):
 
                 # create the subclass
                 subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
-                subclass.__doc__ = func.__doc__
                 return subclass
             return wrapper(func, **kwargs)
 
