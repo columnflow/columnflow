@@ -95,7 +95,7 @@ def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: 
 
     First, location of the golden json file is extracted with the
     :py:meth:`~json_filter.get_lumi_file` function. Afterwards, a lookup
-    table is constructed from the lumi sections and run numbers in the 
+    table is constructed from the lumi sections and run numbers in the
     golden json file.
     The look-up table is provided as a
     :external+scipy:py:class:`scipy.sparse.lil_matrix`.

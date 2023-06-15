@@ -1317,7 +1317,7 @@ class ArrayFunction(Derivable):
     call_func = None
     init_func = None
     skip_func = None
-    
+
     uses = set()
     produces = set()
     _dependency_sets = {"uses", "produces"}

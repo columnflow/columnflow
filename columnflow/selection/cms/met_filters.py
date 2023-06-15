@@ -14,7 +14,8 @@ from columnflow.columnar_util import Route
 
 ak = maybe_import("awkward")
 
-def get_met_filters(self) -> Iterable[str]: 
+
+def get_met_filters(self) -> Iterable[str]:
     """function to obtain met filters from the config.
 
     By default, this is done using
