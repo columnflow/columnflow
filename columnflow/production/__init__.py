@@ -185,7 +185,7 @@ class Producer(TaskArrayFunction):
     ) -> Union[DerivableMeta, Callable]:
         """Decorator for creating a new :py:class:`Producer` subclass with
         additional, optional *bases* and attaching the decorated function to it
-        as ``call_func``. When *mc_only* (*data_only*) is *True*, the producer
+        as :py:meth:`~Producer.call_func`. When *mc_only* (*data_only*) is *True*, the producer
         is skipped and not considered by other calibrators, selectors and
         producers in case they are evalauted on an
         :py:class:`order.dataset.Dataset` whose ``is_mc`` attribute is *False* (*True*).
@@ -234,7 +234,6 @@ class Producer(TaskArrayFunction):
 
                 # create the subclass
                 subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
-                subclass.__doc__ = func.__doc__
                 return subclass
             return wrapper(func, **kwargs)
 

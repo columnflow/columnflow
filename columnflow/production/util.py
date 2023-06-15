@@ -6,7 +6,7 @@ General producers that might be utilized in various places.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Sequence, Union
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
@@ -65,18 +65,28 @@ default_collections = {
 def attach_coffea_behavior(
     self: Producer,
     events: ak.Array,
-    collections: dict | Sequence | None = None,
+    collections: Union[dict, Sequence, None] = None,
     **kwargs,
 ) -> ak.Array:
-    """
-    Rebuild certain collections with original coffea behavior in case some of them might have been
-    invalidated in a potential previous step. All information on source collection names, type
-    names, attributes to check whether the correct behavior is already attached, and fields to
-    potentially skip is taken from :py:obj:`default_collections`.
+    """Rebuild certain collections with original coffea behavior.
 
-    However, this information is updated by *collections* when it is a dict. In case it is a list,
-    its items are interpreted as names of collections defined as keys in
-    :py:obj:`default_collections` for which the behavior should be attached.
+    This might become relevant in case some of the collections have been
+    invalidated in a potential previous step. All information on source
+    collection names, :external+coffea:doc:`index` type names,
+    attributes to check whether the correct behavior is already attached,
+    and fields to potentially skip is taken from :py:obj:`default_collections`.
+
+    However, this information is updated by *collections* when it is a dict.
+    In case it is a list, its items are interpreted as names of collections
+    defined as keys in :py:obj:`default_collections` for which the behavior
+    should be attached.
+
+    :param events: Array containing the events
+    :param collections: Attach behavior for these collections. If :py:class:`dict`,
+        the :py:obj:`default_collections` are updated with the information in
+        *collections*. If :py:class:`list`, only update this set of *collections*
+        as specified in the :py:obj:`default_collections`.
+    :return: Array with correct behavior attached for collections
     """
     # update or reduce collection info
     _collections = default_collections
