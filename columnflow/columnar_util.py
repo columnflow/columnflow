@@ -236,9 +236,14 @@ class Route(object, metaclass=RouteMeta):
         sep: str,
         column: str,
     ) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
-        """
-        Splits a string at a separator *sep* and returns the fragments, potentially with selection,
+        """Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
+
+        :param sep: Separator to be used to split *column* into subcomponents
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets
+            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         # first extract and replace possibly nested slices
         # note: a regexp would be far cleaner, but there are edge cases which possibly require
@@ -292,14 +297,23 @@ class Route(object, metaclass=RouteMeta):
         """
         Splits a string assumed to be in dot format and returns the fragments, potentially with
         selection, slice and advanced indexing expressions.
+
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets
+            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         return cls._split(cls.DOT_SEP, column)
 
     @classmethod
     def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
-        """
-        Splits a string assumed to be in nano-style underscore format and returns the fragments,
+        """Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
+
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets
+            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         return cls._split(cls.NANO_SEP, column)
 
@@ -1303,6 +1317,7 @@ class ArrayFunction(Derivable):
     call_func = None
     init_func = None
     skip_func = None
+    
     uses = set()
     produces = set()
     _dependency_sets = {"uses", "produces"}
@@ -1350,6 +1365,7 @@ class ArrayFunction(Derivable):
         @wraps(func)
         def wrapper(*args, **kwargs) -> None:
             cls.init_func = func
+            cls.init_func.__name__ = func.__name__
             return func
         return wrapper(func)
 
@@ -2237,7 +2253,7 @@ class ChunkedIOHandler(object):
     The content to load is configurable through *source*, which can be a file path or an opened file
     object, and a *source_type*, which defines how the *source* should be opened and traversed for
     chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation details
-    and :py:meth:`get_source_handlers` for a list of currently supported sources.
+    and :py:meth:`~ChunkedIOHandler.get_source_handler` for a list of currently supported sources.
 
     Example:
 
@@ -2283,7 +2299,7 @@ class ChunkedIOHandler(object):
     the other arguments can be sequences as well with the same length.
 
     During iteration, before chunks are yielded, an optional message *iter_message* is printed when
-    set, receiving the respective :py:class:`ChunkedIOHandler.ChunkPosition` as the field *pos* for
+    set, receiving the respective :py:class:`~ChunkedIOHandler.ChunkPosition` as the field *pos* for
     formatting.
     """
 
@@ -2389,9 +2405,9 @@ class ChunkedIOHandler(object):
         n_entries: int,
         chunk_size: int,
         chunk_index: int,
-    ) -> ChunkPosition:
+    ) -> ChunkedIOHandler.ChunkPosition:
         """
-        Creates and returns a *ChunkPosition* object based on the total number of entries
+        Creates and returns a :py:attr:`~.ChunkedIOHandler.ChunkPosition` object based on the total number of entries
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
         # determine the start of stop of this chunk
@@ -2526,7 +2542,7 @@ class ChunkedIOHandler(object):
     def read_uproot_root(
         cls,
         source_object: uproot.TTree,
-        chunk_pos: ChunkPosition,
+        chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> ak.Array:
@@ -2606,7 +2622,7 @@ class ChunkedIOHandler(object):
     def read_coffea_root(
         cls,
         source_object: str | uproot.ReadOnlyDirectory,
-        chunk_pos: ChunkPosition,
+        chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
@@ -2667,7 +2683,7 @@ class ChunkedIOHandler(object):
     def read_coffea_parquet(
         cls,
         source_object: str,
-        chunk_pos: ChunkPosition,
+        chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
@@ -2745,7 +2761,7 @@ class ChunkedIOHandler(object):
     def read_awkward_parquet(
         cls,
         source_object: DaskArrayReader,
-        chunk_pos: ChunkPosition,
+        chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> ak.Array:
