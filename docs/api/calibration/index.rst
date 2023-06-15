@@ -11,6 +11,7 @@ Summary
 -------
 .. :autoclass:: Calibrator
    :members:
+   :inherited-members:
 
 .. toctree::
    :maxdepth: 2
