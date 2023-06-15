@@ -6,7 +6,7 @@ Distance-based methods.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Union
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import
@@ -20,7 +20,7 @@ def cleaning_factory(
     selector_name: str,
     to_clean: str,
     clean_against: list[str],
-    metric: Callable | None = None,
+    metric: Union[Callable, None] = None,
 ) -> Selector:
     """Factory to generate a function with name *selector_name* that cleans the
     field *to_clean* in an array following the
@@ -37,9 +37,8 @@ def cleaning_factory(
     :param to_clean: Name of the field to be cleaned (e.g. ``"Jet"``)
     :param clean_against: Names of the fields of object to clean field *to_clean*
         against (e.g. ``["Muon"]``)
-    :param metric: Function to use for the cleaning. If None, the
+    :param metric: Function to use for the cleaning. If None, use
         :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`
-        , defaults to None
     :return: Instance of :py:class:`~columnflow.selection.Selector`
     """
     # default of the metric function is the delta_r function
@@ -73,7 +72,7 @@ def cleaning_factory(
         events: ak.Array,
         to_clean: str,
         clean_against: list[str],
-        metric: Callable | None = metric,
+        metric: Union[Callable, None] = metric,
         threshold: float = 0.4,
     ) -> ak.Array:
         """abstract function to perform a cleaning of field *to_clean* against
@@ -156,23 +155,23 @@ delta_r_jet_lepton = cleaning_factory(
 def jet_lepton_delta_r_cleaning(
     self: Selector,
     events: ak.Array,
-    stats: dict[str, int | float],
+    stats: dict[str, Union[int, float]],
     threshold: float = 0.4,
     **kwargs,
 ) -> SelectionResult:
-    """function to apply the selection requirements necessary for a
+    """Function to apply the selection requirements necessary for a
     cleaning of jets against leptons.
+
     The function calls the requirements to clean the field *Jet* against
     the concatination of the fields *[Muon, Electron]*, i.e. all leptons
     and passes the desired threshold for the selection
 
-    :param self: This Selector instance
     :param events: Array containing events in the NanoAOD format
-    :param stats: :py:class:`dictionary` containing selection stats
+    :param stats: :py:class:`dictionary <dict>` containing selection stats
         (not used here).
     :param threshold: Threshold value for decision which objects to keep and
-        which to reject, defaults to ``0.4``
-    :return: SelectionResult with indices of cleaned jets
+        which to reject
+    :return: :py:class:`~columnflow.selection.SelectionResult` with indices of cleaned jets
     """
     clean_jet_indices = self[delta_r_jet_lepton](events, "Jet", ["Muon", "Electron"], threshold=threshold)
 

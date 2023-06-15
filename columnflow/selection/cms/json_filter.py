@@ -7,7 +7,7 @@ Selectors for applying golden JSON in data.
 from __future__ import annotations
 
 from columnflow.selection import Selector, selector
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, DotDict
 
 
 ak = maybe_import("awkward")
@@ -16,10 +16,28 @@ sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 
 
+def get_lumi_file(self, external_files: DotDict) -> str:
+    """Function to load path or url to golden json files.
+
+    By default, the path is extracted from the current *config_inst*, which
+    should have a *external_files* in the auxiliary information block.
+    The path or url is extracted with
+
+    .. code-block:: python
+
+        external_files.lumi.golden
+
+    :param external_files: Config containing the information about the path
+        or url to the golden json file containing good lumi sections.
+    :return: path or url to golden json file.
+    """
+    return external_files.lumi.golden
+
+
 @selector(
     uses={"run", "luminosityBlock"},
     # function to determine the golden lumi file
-    get_lumi_file=(lambda self, external_files: external_files.lumi.golden),
+    get_lumi_file=get_lumi_file,
 )
 def json_filter(
     self: Selector,
@@ -44,21 +62,6 @@ def json_filter(
     *get_lumi_file* can be adapted in a subclass in case it is stored differently in the external
     files.
 
-    This :py:class:`~columnflow.selection.Selector` instance is initialized with
-    the following parameters:
-        
-    
-    **uses**
-        
-        ``"run"``, ``"luminosityBlock"``.
-
-    **get_lumi_file**
-
-        .. code-block:: python
-
-            lambda self, external_files: external_files.lumi.golden
-
-    :param self: This Selector instance
     :param events: Array containing events in the NanoAOD format
     :param data_only: boolean flag to indicate that this selector should only
         run on observed data, defaults to True
@@ -76,7 +79,6 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: This :py:class:`~columnflow.selection.Selector` instance
     :param reqs: Contains requirements for this task
     """
     if "external_files" in reqs:
@@ -88,16 +90,19 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 @json_filter.setup
 def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    """Setup function for json_filter Selector. Load golden JSON and set up
+    """Setup function for :py:class:`json_filter`. Load golden JSON and set up
     run/luminosity block lookup table.
 
+    First, location of the golden json file is extracted with the
+    :py:meth:`~json_filter.get_lumi_file` function. Afterwards, a lookup
+    table is constructed from the lumi sections and run numbers in the 
+    golden json file.
     The look-up table is provided as a
     :external+scipy:py:class:`scipy.sparse.lil_matrix`.
 
-    :param self: This :py:class:`~columnflow.selection.Selector` instance
     :param reqs: Contains requirements for this task
     :param inputs: Additional inputs, currently not used
-    :param reader_targets: TODO: update docs
+    :param reader_targets: Additional targets, currently not used
     """
     bundle = reqs["external_files"]
 

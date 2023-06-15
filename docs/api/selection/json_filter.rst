@@ -8,7 +8,7 @@
 ``Selectors``
 -------------
 
-.. autofunction:: json_filter
-.. autofunction:: json_filter_requires
-.. autofunction:: json_filter_setup
+.. autoclass:: json_filter
+    :members:
+    :undoc-members:
 

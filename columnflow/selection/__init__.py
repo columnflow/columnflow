@@ -28,10 +28,10 @@ class Selector(TaskArrayFunction):
     :py:class:`~.Selector` s are designed to apply
     arbitrary selection criteria. These critera can be based on already existing
     nano AOD columns, but can also involve the output of any other module,
-    e.g. :py:class:`~columnflow.production.Producer`s. To reduce the need to
+    e.g. :py:class:`~columnflow.production.Producer`. To reduce the need to
     run potentionally computation-expensive operations multiple times, they can
-    also write new columns. Similar to :py:class:`~columnflow.production.Producer` s,
-    and :py:class:`~columnflow.calibration.Calibrator` s, this new columns must
+    also write new columns. Similar to :py:class:`~columnflow.production.Producer`,
+    and :py:class:`~columnflow.calibration.Calibrator`, these new columns must
     be specified in the `produces` set.
 
     Apart from the awkward array, a :py:class:`~.Selector` must also return a
@@ -135,7 +135,8 @@ class Selector(TaskArrayFunction):
     :param exposed: Member variable that controls whether this
         :py:class:`~.Selector` instance is a top level Selector that can
         be used directly for the :py:class:`~columnflow.tasks.selection.SelectEvents`
-        task. Defaults to `False`.
+        task
+    :type exposed: bool
     """
 
     exposed = False
@@ -170,12 +171,12 @@ class Selector(TaskArrayFunction):
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Callable that is used to perform the selections, defaults to None
-        :param bases: Additional bases for new subclass, defaults to ()
+        :param func: Callable that is used to perform the selections
+        :param bases: Additional bases for new subclass
         :param mc_only: Flag to indicate that this Selector should only run
-            on Monte Carlo Simulation, defaults to False
+            on Monte Carlo Simulation
         :param data_only: Flag to indicate that this Selector should only run
-            on observed data, defaults to False
+            on observed data
         :return: New Selector instance
         """
         def decorator(func: Callable) -> DerivableMeta:
@@ -212,7 +213,6 @@ class Selector(TaskArrayFunction):
 
                 # create the subclass
                 subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
-                subclass.__doc__ = func.__doc__
                 return subclass
             return wrapper(func, **kwargs)
 
@@ -312,13 +312,13 @@ class SelectionResult(od.AuxDataMixin):
         :py:class:`~columnflow.util.DotDict`
 
         :param main: :py:class:`dictionary` containing event-level selection
-            decisions, defaults to None
+            decisions
         :param steps: :py:class:`dictionary` containing event-level selection
-            decisions for individual selection steps, defaults to None
+            decisions for individual selection steps
         :param objects: :py:class:`dictionary` containing object indices for
-            new collections, defaults to None
+            new collections
         :param aux: Optional :py:class:`dictionary` containing auxiliary
-            information that is not safed to disk, defaults to None
+            information that is not safed to disk
         """
         super().__init__(aux=aux)
 
