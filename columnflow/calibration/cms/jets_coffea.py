@@ -88,7 +88,7 @@ def get_lookup_provider(
         Examples: :external+coffea:py:class:`~coffea.jetmet_tools.FactorizedJetCorrector`,
         :external+coffea:py:class:`~coffea.jetmet_tools.JetCorrectionUncertainty`
 
-    :param names: Optional list of weight names to include, see text above. Defaults to None.
+    :param names: Optional list of weight names to include, see text above.
 
     :raises ValueError: If *names* contains weight names that are not present in the source file
     :return: helper class that provides the weights for the events of same type as
@@ -170,36 +170,15 @@ def jec_coffea(
 ) -> ak.Array:
     """Apply jet energy corrections and calculate shifts for jet energy uncertainty sources.
 
-    This :py:class:`~columnflow.calibration.Calibrator` instance is setup
-    with the following kwargs.
-
-    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
-        ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``,
-        ``"Rho.fixedGridRhoFastjetAll"``, ``"fixedGridRhoFastjetAll"``,
-        :py:func:`~columnflow.production.util.attach_coffea_behavior`
-
-    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
-        If *propagate_met* is ``True``, also produces columns for the original
-        MET values (RawMET) and corrected MET (MET). Additionally produces columns
-        corresponding to JEC up and down variations for all previously
-        mentioned columns except for Jet.rawFactor.
-
-    :*uncertainy_source*: ``None``
-
-    :*propagate_met*: ``True``
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
-        this function is embedded
-
     :param events: awkward array containing events to process
     :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
         updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
+        ``met.pt > *min_pt_met_prop*``.
     :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
         the updated jet values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.eta > *min_eta_met_prop*``. Defaults to ``5.2``.
+        ``met.eta > *min_eta_met_prop*``.
 
     :return: awkward array containing new columns with corrected ``Jet.pt`` and
         ``Jet.mass``, as well as the relative difference between raw and corrected
@@ -335,7 +314,7 @@ def jec_coffea(
 
 @jec_coffea.init
 def jec_coffea_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for :py:func:`~.jec_coffea`
+    """:py:meth:`init` function for :py:class:`~.jec_coffea`
     :py:class:`~columnflow.calibration.Calibrator`.
     Adds JEC uncertainty shifts to the list of produced columns.
 
@@ -344,8 +323,6 @@ def jec_coffea_init(self: Calibrator) -> None:
 
     If the member variable *propagate_met* is ``True``, add also MET and RawMET
     as well as the corresponding jec variations to the set of columns to be produced.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     """
     sources = self.uncertainty_sources
     if sources is None:
@@ -380,7 +357,6 @@ def jec_coffea_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     """
@@ -396,7 +372,6 @@ def jec_coffea_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets:
     """Determine correct JEC files for task based on config/dataset and inject them
     into the calibrator function call.
 
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     :param inputs: Additional inputs, currently not used
@@ -508,30 +483,6 @@ def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     The module applies the scale factors associated to the JER and performs the
     stochastic smearing to make the energy resolution in simulation more realistic.
-
-    This :py:class:`~columnflow.calibration.Calibrator` instance is setup
-    with the following kwargs.
-
-    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
-        ``""Jet.genJetIdx""``, ``"Rho.fixedGridRhoFastjetAll"``,
-        ``"fixedGridRhoFastjetAll"``, ``"nGenJet"``, ``"GenJet.pt"``,
-        ``"GenJet.eta"``, ``"GenJet.phi"``, ``"MET.pt"``, ``"MET.phi"``,
-        :py:func:`~columnflow.production.util.attach_coffea_behavior`
-
-    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.pt_unsmeared"``,
-        ``"Jet.mass_unsmeared"``.
-        If *propagate_met* is ``True``, also produces columns for the original
-        MET values (``MET.pt_unsmeared``) and corrected MET (MET).
-        Additionally produces columns
-        corresponding to JEC up and down variations for all previously
-        mentioned columns.
-
-    :*mc_only*: ``True``
-
-    :*propagate_met*: ``True``
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
-        this function is embedded
 
     :param events: awkward array containing events to process
 
@@ -709,10 +660,8 @@ def jer_coffea_init(self: Calibrator) -> None:
     """Initialization of dynamic components of the jer calibrator.
 
     If *propagate_met* is ``True``, add the relevant MET columns to the
-    ``uses`` and ``produces`` sets, see documentation of :py:func:`~.jer_coffea`
+    ``uses`` and ``produces`` sets, see documentation of :py:class:`~.jer_coffea`
     Calibrator.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     """
     if not self.propagate_met:
         return
@@ -733,7 +682,6 @@ def jer_coffea_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     """
@@ -753,7 +701,6 @@ def jer_coffea_setup(
     """ Determine correct JER files for task based on config/dataset and inject them
     into the calibrator function call.
 
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     :param inputs: Additional inputs, currently not used
@@ -802,20 +749,7 @@ def jer_coffea_setup(
 def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """Instance of :py:class:`~columnflow.calibration.Calibrator` that
     does all relevant calibrations for jets, i.e. JEC and JER.
-    For more information, see :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
-
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
-
-    :*uses*: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
-        and :py:func:`~.jer_coffea`.
-    :*produces*: Same as the two base Calibrators, see :py:func:`~.jec_coffea`
-        and :py:func:`~.jer_coffea`.
-
-    :*propagate_met*: ``True``
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
-        this function is embedded
+    For more information, see :py:class:`~.jec_coffea` and :py:class:`~.jer_coffea`.
 
     :param events: awkward array containing events to process
 
@@ -837,12 +771,10 @@ def jets_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets_coffea.init
 def jets_coffea_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for :py:func:`~.jets_coffea`
+    """:py:meth:`init` function for :py:class:`~.jets_coffea`
     :py:class:`~columnflow.calibration.Calibrator`.
     Forwards the *propagate_met* setting to the underyling Calibrators
-    :py:func:`~.jec_coffea` and :py:func:`~.jer_coffea`.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
+    :py:class:`~.jec_coffea` and :py:class:`~.jer_coffea`.
     """
     # forward the propagate_met argument to the producers
     self.deps_kwargs[jec_coffea] = {"propagate_met": self.propagate_met}

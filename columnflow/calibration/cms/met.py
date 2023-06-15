@@ -42,29 +42,10 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
     where "variable" and "data_source" are placeholders that are inserted in the
-    calibrator setup :py:func:`~.met_phi_setup`.
+    calibrator setup :py:meth:`~.met_phi.setup_func`.
     *get_met_correction_set* can be adapted in a subclass in case it is stored
     differently in the config.
 
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
-
-    :*uses*: ``"run"``, ``"PV.npvs"``, ``"MET.pt"``, ``"MET.phi"``
-
-    :*produces*: ``"MET.pt"``, ``"MET.phi"``
-
-    :get_met_file: 
-        .. code-block:: python
-
-            lambda self, external_files: external_files.met_phi_corr
-
-    :get_met_config: 
-        .. code-block:: python
-
-            lambda self: self.config_inst.x.met_phi_correction_set
-
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    
     :param events: awkward array containing events to process
 
     :return: awkward array containing new columns with corrected ``"MET.pt"``
@@ -92,7 +73,6 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
     Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
     as keyword ``external_files`` to the dictionary of requirements *reqs*.
 
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     """
@@ -109,13 +89,19 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: di
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     function and apply the corrections as needed.
 
+    The files used to initialize the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    instance are extracted using the :py:meth:`~met_phi.get_met_file` function.
+    The name of a correction is constructed based on a `variable` (e.g. `pt`)
+    and the `data_source`, which is extracted from the current `dataset_inst`.
+    The name template used for the construction is extracted using the
+    :py:meth:`~.met_phi.get_met_file` function.
+
     Additionally, the version of the met pt and phi corrections are checked.
 
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
     :param inputs: Additional inputs, currently not used
-    :param reader_targets: TODO: update docs
+    :param reader_targets: Additional targets, currently not used
     """
     bundle = reqs["external_files"]
 
