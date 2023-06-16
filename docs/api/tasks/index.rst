@@ -12,6 +12,7 @@
    :maxdepth: 1
 
    selection
+   calibration
    external
    reduction
    framework/index
