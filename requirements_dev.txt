@@ -1,9 +1,9 @@
 # version 6
 # packages might be installed in addition to other requirements
 
-ipython==8.8.*
-pytest==7.1.*
-pytest-cov==3.0.*
-flake8==5.0.*
-flake8-commas==2.1.*
-flake8-quotes==3.3.*
+ipython~=8.8
+pytest~=7.1
+pytest-cov~=3.0
+flake8~=5.0
+flake8-commas~=2.1
+flake8-quotes~=3.3
