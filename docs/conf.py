@@ -100,6 +100,7 @@ intersphinx_mapping = {
     "correctionlib": ("https://cms-nanoaod.github.io/correctionlib", None),
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
     "uproot": ("https://uproot.readthedocs.io/en/latest/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None), 
 }
 
 
