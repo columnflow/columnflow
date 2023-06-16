@@ -1,6 +1,7 @@
-``columnflow.tasks.framework``
+``framework``
 ==============================
 
+.. currentmodule:: columnflow.tasks.framework
 .. automodule:: columnflow.tasks.framework
    :autosummary:
    :members:
@@ -9,3 +10,4 @@
    :maxdepth: 1
    
    base
+   mixins
