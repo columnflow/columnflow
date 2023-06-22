@@ -76,9 +76,7 @@ high level variables. This task uses objects of the {py:class}`~columnflow.produ
 class to create the new columns. The new columns are saved in a parquet file that can be used by
 the task below on the task graph. The argument ```--producer``` followed by the name of the
 {py:class}`~columnflow.production.Producer` object to be run is needed for this task to run.
-A default value for this argument can be set in the analysis config. TODO: Check if only columns not
-given in keep_columns (and already produced in selectors?) are produced. This is relevant if
-keep-columns has been changed after ReduceEvents has run.
+A default value for this argument can be set in the analysis config.
 
 - ```PrepareMLEvents```, ```MLTraining```, ```MLEvaluation``` and ```PlotMLResults```: Tasks to
 train, evaluate neural networks and plot their results. TODO: more informations? output type?
@@ -86,8 +84,9 @@ all tf based?
 
 - ```CreateHistograms```: Task to create histograms with the python package
 [Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below in the task
-graph. From this task on, the ```--producer``` argument is replaced by ```--producers```.
-TODO: more informations? output type?
+graph. From this task on, the ```--producer``` argument is replaced by ```--producers```. The
+histograms are saved in a pickle file.
+TODO: more informations?
 
 - ```PlotVariables*```, ```PlotShiftedVariables*```: Tasks to plot the histograms created by
 ```CreateHistograms``` using the python package [matplotlib](https://matplotlib.org/) with
@@ -193,7 +192,22 @@ law run PlotVariables1D --version test_plot --print-output 0
 
 ## Variables creation
 
-TODO
+Good version:
+
+In order to plot something out of the processed datasets, columnflow uses
+{external+order:py:class}`order.variable.Variable`s. These
+{external+order:py:class}`order.variable.Variable`s need to be added to the config using the
+function {external+order:py:func}`order.config.Config.add_variable`
+
+Bad version:
+
+Once the calibration of the events, the selection of events and objects and the production of new
+columns/fields is done for some datasets, one might want to plot different variables from the
+obtained reduced datasets. Several tasks in columnflow are dedicated to plotting and histograming,
+and if they are dependent on some variable, they .
+
+### Define a new variable
+
 
 ## Calibrators
 
@@ -275,7 +289,9 @@ the ```uses``` set from Selector_int will be added to the ```uses``` set of Sele
 
 An example of an exposed Selector_ext with the ```jet_selection```
 {py:class}`~columnflow.selection.Selector` defined above as Selector_int, assuming the
-```jet_selection``` exists in ```analysis/selection/jet.py``` is given below.
+```jet_selection``` exists in ```analysis/selection/jet.py``` is given below. It should be mentioned
+that a few details must be changed for this selector to work within the worklow, the full version
+can be found in the ```Complete example``` section.
 
 ```python
 
@@ -313,9 +329,9 @@ def Selector_ext(events: ak.Array) -> ak.Array, SelectionResult:
 
     # e.g., call the internal Selector
     events, sub_result = self[jet_selection](events)
-    result += sub_result
+    results += sub_result
 
-    return events, result
+    return events, results
 ```
 
 #### SelectionResult
@@ -446,8 +462,10 @@ results += fatjet_results
 - Reducing the different steps to a single boolean array and give it to the ```main``` argument of
 the {py:class}`~columnflow.selection.SelectionResult` object.
 ```python
+# import the functions to combine the selection masks
 from operator import and_
 from functools import reduce
+
 # combined event selection after all steps
 event_sel = reduce(and_, results.steps.values())
 results.main["event"] = event_sel
@@ -456,19 +474,26 @@ results.main["event"] = event_sel
 #### Selection stats
 
 
-THIS SECTION NEEDS URGENT MAINTENANCE, LOTS OF THINGS MISSING
+In order to use the correct values for the weights to be applied to the Monte Carlo samples while
+plotting, it is necessary to save some information which would be lost after the ```ReduceEvents```
+task. An example for that would be the sum of all the Monte Carlo weights in a simulation, which is
+needed for the normalization weights. In order to propagate this information to tasks further down
+the tree, the ```stats.json``` file is created. As it is a json file, it contains a
+dictionary with the key corresponding to the name of the information to be saved, while the value
+for the key is the information itself. The dictionary is created in the ```SelectEvents``` task and
+updated in place in a {py:class}`~columnflow.selection.Selector`. Depending on the weights to be
+used, various additional information might need to be saved in the ```stats``` object.
 
-When using an exposed {py:class}`~columnflow.selection.Selector`, it is necessary to save the
-statistics of the selection in a stats object (WHY????). This can be done through an additional
-{py:class}`~columnflow.selection.Selector`
+The keys ```"n_events"```, ```"n_events_selected"```, ```"sum_mc_weight"```,
+```"sum_mc_weight_selected"``` get printed by the ```SelectEvents``` task along with the
+corresponding efficiency. If they are not set, the default value for floats will be printed instead.
 
-In task :
-```
-self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
-self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
-```
-Therefore: Does this task only work for mc's?
-Why did we need central jets? Nothing general I presume?
+Below is an example of such a {py:class}`~columnflow.selection.Selector` updating the ```stats```
+dictionary in place. This dictionary will be saved in the ```stats.json``` file. For convenience,
+the weights were saved in a weight_map dictionary along with the mask before the sum of the weights
+was saved in the ```stats``` dictionary. In this example, the keys to be printed by the
+```SelectEvents``` task and the sum of the Monte Carlo weights per process (needed for correct
+normalization of the number of Monte Carlo events in the plots) are saved.
 
 
 ```python
@@ -485,7 +510,7 @@ np = maybe_import("numpy")
 from collections import defaultdict, OrderedDict
 
 
-@selector(uses={"process_id"})
+@selector(uses={"process_id", "mc_weight"})
 def increment_stats(
     self: Selector,
     events: ak.Array,
@@ -504,11 +529,8 @@ def increment_stats(
     stats["n_events"] += len(events)
     stats["n_events_selected"] += ak.sum(event_mask, axis=0)
 
-    # get a list of unique jet multiplicities present in the chunk
+    # get a list of unique process ids present in the chunk
     unique_process_ids = np.unique(events.process_id)
-    unique_n_jets = []
-    if results.has_aux("n_central_jets"):
-        unique_n_jets = np.unique(results.x.n_central_jets)
 
     # create a map of entry names to (weight, mask) pairs that will be written to stats
     weight_map = OrderedDict()
@@ -519,28 +541,19 @@ def increment_stats(
         # mc weight for selected events
         weight_map["mc_weight_selected"] = (events.mc_weight, event_mask)
 
-    # get and store the weights
+    # get and store the sum of weights in the stats dictionary
     for name, (weights, mask) in weight_map.items():
         joinable_mask = True if mask is Ellipsis else mask
 
-        # sum for all processes
+        # sum of different weights in weight_map for all processes
         stats[f"sum_{name}"] += ak.sum(weights[mask])
 
-        # sums per process id and again per jet multiplicity
+        # sums per process id
         stats.setdefault(f"sum_{name}_per_process", defaultdict(float))
-        stats.setdefault(f"sum_{name}_per_process_and_njet", defaultdict(lambda: defaultdict(float)))
         for p in unique_process_ids:
             stats[f"sum_{name}_per_process"][int(p)] += ak.sum(
                 weights[(events.process_id == p) & joinable_mask],
             )
-            for n in unique_n_jets:
-                stats[f"sum_{name}_per_process_and_njet"][int(p)][int(n)] += ak.sum(
-                    weights[
-                        (events.process_id == p) &
-                        (results.x.n_central_jets == n) &
-                        joinable_mask
-                    ],
-                )
 
     return events
 ```
@@ -556,11 +569,18 @@ from columnflow.selection import Selector, selector
 
 # also import the SelectionResult class
 from columnflow.selection import SelectionResult
+from columnflow.production.cms.mc_weight import mc_weight
+
+# import the functions to combine the selection masks
+from operator import and_
+from functools import reduce
 
 # maybe import awkward in case this Selector is actually run
 from columnflow.util import maybe_import
 ak = maybe_import("awkward")
+np = maybe_import("numpy")
 
+from collections import defaultdict, OrderedDict
 
 # First, define an internal jet Selector to be used by the exposed Selector
 
@@ -660,12 +680,121 @@ def fatjet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, Select
     )
 
 # Implement the task to update the stats object
-TODO
+
+@selector(uses={"process_id", "mc_weight"})
+def increment_stats(
+    self: Selector,
+    events: ak.Array,
+    results: SelectionResult,
+    stats: dict,
+    **kwargs,
+) -> ak.Array:
+    """
+    Unexposed selector that does not actually select objects but instead increments selection
+    *stats* in-place based on all input *events* and the final selection *mask*.
+    """
+    # get event masks
+    event_mask = results.main.event
+
+    # increment plain counts
+    stats["n_events"] += len(events)
+    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
+
+    # get a list of unique process ids present in the chunk
+    unique_process_ids = np.unique(events.process_id)
+
+    # create a map of entry names to (weight, mask) pairs that will be written to stats
+    weight_map = OrderedDict()
+    if self.dataset_inst.is_mc:
+        # mc weight for all events
+        weight_map["mc_weight"] = (events.mc_weight, Ellipsis)
+
+        # mc weight for selected events
+        weight_map["mc_weight_selected"] = (events.mc_weight, event_mask)
+
+    # get and store the sum of weights in the stats dictionary
+    for name, (weights, mask) in weight_map.items():
+        joinable_mask = True if mask is Ellipsis else mask
+
+        # sum of different weights in weight_map for all processes
+        stats[f"sum_{name}"] += ak.sum(weights[mask])
+
+        # sums per process id
+        stats.setdefault(f"sum_{name}_per_process", defaultdict(float))
+        for p in unique_process_ids:
+            stats[f"sum_{name}_per_process"][int(p)] += ak.sum(
+                weights[(events.process_id == p) & joinable_mask],
+            )
+
+    return events
+
 
 # Now create the exposed Selector using the three above defined Selectors
-TODO
 
+@selector(
+    # some information for Selector
+    # e.g., if we want to use some internal Selector, make
+    # sure that you have all the relevant information
+    uses={
+        mc_weight, jet_selection, fatjet_selection_with_result, increment_stats, process_ids,
+    },
+    produces={
+        mc_weight, process_ids,
+    }
+
+    # this is our top level Selector, so we need to make it reachable
+    # for the SelectEvents task
+    exposed=True
+)
+def Selector_ext(
+    self: Selector,
+    events: ak.Array,
+    stats: defaultdict,
+    **kwargs,
+) -> tuple[ak.Array, SelectionResult]:
+
+    results = SelectionResult()
+
+    # add corrected mc weights to be used later for plotting and to calculate the sum saved in stats
+    if self.dataset_inst.is_mc:
+        events = self[mc_weight](events, **kwargs)
+
+    # call the first internal selector, the jet selector, and save its result
+    events, jet_results = self[jet_selection_with_result](events, **kwargs)
+    results += jet_results
+
+    # call the second internal selector, the fatjet selector, and save its result
+    events, fatjet_results = self[fatjet_selection_with_result](events, **kwargs)
+    results += fatjet_results
+
+    # combined event selection after all steps
+    event_sel = reduce(and_, results.steps.values())
+    results.main["event"] = event_sel
+
+    # create process ids, used by increment_stats
+    events = self[process_ids](events, **kwargs)
+
+    # use increment stats selector to update dictionary to be saved in json format
+    events = self[increment_stats](events, results, stats, **kwargs)
+
+    return events, results
 ```
+
+Notes:
+- If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
+on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
+function can be applied on the ```events``` array using
+```python
+events = self[attach_coffea_behavior](events, **kwargs)
+```
+If the name of the field does not correspond to a standard field name, e.g. "BtaggedJets", which
+should provide the same behaviour as a normal jet, the behaviour can still be set, using
+```python
+collections = {x: {"type_name" : "Jet"} for x in ["BtaggedJets"]}
+events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
+```
+
+-
 
 ### Running the SelectEvents task
 
@@ -694,6 +823,14 @@ law run SelectEvents --version name_of_your_version \
                      --selector name_of_the_selector \
                      --dataset name_of_the_dataset_to_be_run
 ```
+
+
+
+General questions:
+- Where to put "attach_coffea_behavior"?
+- Where to put ??? and ```cf_sandbox venv_columnar_dev bash ``` -> use a script in a sandbox
+- How to require the output of a task in a general python script which is not a task again? ->
+ask marcel where the example was with ".law_run()"
 
 
 
