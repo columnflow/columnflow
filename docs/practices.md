@@ -192,21 +192,45 @@ law run PlotVariables1D --version test_plot --print-output 0
 
 ## Variables creation
 
-Good version:
 
 In order to plot something out of the processed datasets, columnflow uses
-{external+order:py:class}`order.variable.Variable`s. These
+{external+order:py:class}`order.variable.Variable`s. It is therefore not enough to create a new
+column in a {py:class}`~columnflow.production.Producer` for the plotting tasks, it must also be
+translated in a {external+order:py:class}`order.variable.Variable`, which name can be given
+to the argument ```--variables``` for the plotting/histograming task. These
 {external+order:py:class}`order.variable.Variable`s need to be added to the config using the
-function {external+order:py:func}`order.config.Config.add_variable`
+function {external+order:py:meth}`order.config.Config.add_variable`. The standard syntax is as
+follows:
+```python
+config.add_variable(
+    name=variable_name,  # this is to be given to the "--variables" argument for the plotting task
+    expression=content_of_the_variable,
+    null_value=value_to_be_given_if_content_not_available_for_event,
+    binning=(bins, lower_edge, upper_edge),
+    unit=unit_of_the_variable_if_any,
+    x_title=x_title_of_histogram_when_plotted,
+)
+```
 
-Bad version:
+An example with the transverse momentum of the first jet would be:
+```python
+config.add_variable(
+    name="jet1_pt",
+    expression="Jet.pt[:,0]",
+    null_value=EMPTY_FLOAT,
+    binning=(40, 0.0, 400.0),
+    unit="GeV",
+    x_title=r"Jet 1 $p_{T}$",
+)
+```
 
-Once the calibration of the events, the selection of events and objects and the production of new
-columns/fields is done for some datasets, one might want to plot different variables from the
-obtained reduced datasets. Several tasks in columnflow are dedicated to plotting and histograming,
-and if they are dependent on some variable, they .
+The list of possible keyword arguments can be found in
+{external+order:py:class}`order.variable.Variable`. The values in ```expression``` can be either
+one-dimensional or more dimensional arrays. In this second case the information is flattened before
+plotting. It is to be mentioned that {py:attribute}`~columnflow.columnar_util.EMPTY_FLOAT` is a
+columnflow internal null value and corresponds to the value ```-9999```.
 
-### Define a new variable
+Test: Histogram mit None füllen: underflow bin? fehlermeldung?
 
 
 ## Calibrators
@@ -257,14 +281,14 @@ ak = maybe_import("awkward")
         "Jet.pt", "Jet.eta"
     },
     # does this Selector produce any columns?
-    produces={}
+    produces=set(),
 
     # pass any other variable to the selector class
-    some_auxiliary_variable=True
+    some_auxiliary_variable=True,
 
     # ...
 )
-def jet_selection(events: ak.Array) -> ak.Array, SelectionResult:
+def jet_selection(events: ak.Array) -> tuple[ak.Array, SelectionResult]:
     # do something ...
     return events, SelectionResult()
 ```
@@ -317,13 +341,13 @@ from analysis.selection.jet import jet_selection
     },
     produces={
         jet_selection,
-    }
+    },
 
     # this is our top level Selector, so we need to make it reachable
     # for the SelectEvents task
-    exposed=True
+    exposed=True,
 )
-def Selector_ext(events: ak.Array) -> ak.Array, SelectionResult:
+def Selector_ext(events: ak.Array) -> tuple[ak.Array, SelectionResult]:
     results = SelectionResult()
     # do something here
 
@@ -389,14 +413,14 @@ ak = maybe_import("awkward")
         "Jet.pt", "Jet.eta"
     },
     # does this Selector produce any columns?
-    produces={}
+    produces=set(),
 
     # pass any other variable to the selector class
-    some_auxiliary_variable=True
+    some_auxiliary_variable=True,
 
     # ...
 )
-def jet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+def jet_selection_with_result(events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     # require an object of the Jet collection to have at least 20 GeV pt and at most 2.4 eta to be
     # considered a Jet in our analysis
     jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
@@ -564,12 +588,15 @@ def increment_stats(
 Overall, creating an exposed {py:class}`~columnflow.selection.Selector` with several selections steps
 might look like this:
 ```python
+# coding: utf-8
+
 # import the Selector class and the selector method
 from columnflow.selection import Selector, selector
 
 # also import the SelectionResult class
 from columnflow.selection import SelectionResult
 from columnflow.production.cms.mc_weight import mc_weight
+from columnflow.production.processes import process_ids
 
 # import the functions to combine the selection masks
 from operator import and_
@@ -591,14 +618,12 @@ from collections import defaultdict, OrderedDict
         "Jet.pt", "Jet.eta"
     },
     # does this Selector produce any columns?
-    produces={}
+    produces=set(),
 
     # pass any other variable to the selector class
-    some_auxiliary_variable=True
-
-    # ...
+    some_auxiliary_variable=True,
 )
-def jet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     # require an object of the Jet collection to have at least 20 GeV pt and at most 2.4 eta to be
     # considered a Jet in our analysis
     jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
@@ -648,11 +673,11 @@ def jet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, Selection
         "FatJet.pt",
     },
     # does this Selector produce any columns?
-    produces={}
+    produces=set(),
 
     # ...
 )
-def fatjet_selection_with_result(events: ak.Array, **kwargs) -> ak.Array, SelectionResult:
+def fatjet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     # require an object of the FatJet collection to have at least 40 GeV pt to be
     # considered a FatJet in our analysis
     fatjet_mask = (events.FatJet.pt > 40.0)
@@ -736,15 +761,16 @@ def increment_stats(
     # e.g., if we want to use some internal Selector, make
     # sure that you have all the relevant information
     uses={
-        mc_weight, jet_selection, fatjet_selection_with_result, increment_stats, process_ids,
+        mc_weight, jet_selection_with_result, fatjet_selection_with_result, increment_stats,
+        process_ids,
     },
     produces={
         mc_weight, process_ids,
-    }
+    },
 
     # this is our top level Selector, so we need to make it reachable
     # for the SelectEvents task
-    exposed=True
+    exposed=True,
 )
 def Selector_ext(
     self: Selector,
@@ -778,9 +804,15 @@ def Selector_ext(
     events = self[increment_stats](events, results, stats, **kwargs)
 
     return events, results
+
 ```
 
 Notes:
+- If you want to build this exposed {py:class}`~columnflow.selection.Selector` along with the inner
+{py:class}`~columnflow.selection.Selector`s in a new file, you will still need to put the name of
+the new file along with its path in the ```law.cfg``` file under the ```selection_modules```
+argument for law to be able to find the file.
+
 - If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
 on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
 function can be applied on the ```events``` array using
@@ -794,7 +826,10 @@ collections = {x: {"type_name" : "Jet"} for x in ["BtaggedJets"]}
 events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
--
+- The actual creation of the weights to be applied in the histogramms after the selection should be
+done in the ```ProduceColumns``` task, using the stats object created in this task if needed.
+
+
 
 ### Running the SelectEvents task
 
@@ -824,13 +859,22 @@ law run SelectEvents --version name_of_your_version \
                      --dataset name_of_the_dataset_to_be_run
 ```
 
-
+Notes:
+- Running the exposed {py:class}`~columnflow.selection.Selector` from the ```Complete example```
+section would simply require you to give the name ```Selector_ext``` in the ```--selector```
+argument.
 
 General questions:
 - Where to put "attach_coffea_behavior"?
 - Where to put ??? and ```cf_sandbox venv_columnar_dev bash ``` -> use a script in a sandbox
 - How to require the output of a task in a general python script which is not a task again? ->
 ask marcel where the example was with ".law_run()"
+- Where to write about errors in columnflow? first thing to mention: If you get an error and look at
+the error stack, you will probably see two errors: 1) the actual error and where it happened in
+the code (standard python error) and 2) a sandbox error that you can ignore in most of the cases, as
+it does not correspond to your problem, it only says in which sandbox it happened. Should be
+somewhere for new users, as the first error to be seen when going up is the sandbox error, which is
+not useful.
 
 
 
