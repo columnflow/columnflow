@@ -287,7 +287,7 @@ setup_cmssw() {
     eval "$( scramv1 runtime -sh )"
     cd "${orig_dir}"
 
-    # prepend persistent path fragments again for ensure priority for local packages
+    # prepend persistent path fragments again to ensure priority for local packages
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 

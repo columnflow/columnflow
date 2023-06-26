@@ -502,7 +502,7 @@ cf_setup_software_stack() {
                 curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 # make the setup file relocatable
-                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" return "$?"
+                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -520,8 +520,19 @@ EOF
             # install packages
             if ${conda_missing}; then
                 echo
-                cf_color cyan "setting up conda environment"
-                micromamba install libgcc "python=${pyv}" gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                cf_color cyan "setting up conda / micromamba environment"
+                # pin numpy until https://github.com/columnflow/columnflow/issues/250 is fixed
+                micromamba install \
+                    libgcc \
+                    "python=${pyv}" \
+                    gfal2 \
+                    gfal2-util \
+                    python-gfal2 \
+                    git \
+                    git-lfs \
+                    conda-pack \
+                    "numpy=1.24" \
+                    || return "$?"
                 micromamba clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
