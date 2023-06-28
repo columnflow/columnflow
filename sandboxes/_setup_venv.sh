@@ -132,7 +132,7 @@ setup_venv() {
 
 
     #
-    # start the setup
+    # define variables
     #
 
     local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
@@ -141,7 +141,19 @@ setup_venv() {
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
+
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
+
+    # prepend persistent path fragments to priotize packages in the outer env
+    export CF_VENV_PYTHONPATH="${install_path}/lib/python${pyv}/site-packages"
+    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
+    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+
+
+    #
+    # start the setup
+    #
 
     # the venv version must be set
     if [ -z "${venv_version}" ]; then
@@ -227,7 +239,7 @@ setup_venv() {
                 fi
             fi
 
-            # activate it if stilll existing
+            # activate it
             if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
                 source "${install_path}/bin/activate" "" || return "$?"
             fi
@@ -318,10 +330,6 @@ setup_venv() {
     export CF_VENV_HASH="${install_hash}"
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "1" || echo "0" )"
-
-    # prepend persistent path fragments again for ensure priority for local packages
-    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"

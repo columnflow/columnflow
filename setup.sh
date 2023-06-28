@@ -71,11 +71,11 @@ setup_columnflow() {
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
-    #       PATH fragments that should be considered by sandboxes (bash, venv, cmssw) as having
-    #       priority, e.g. to ensure that executable of local packages in used first.
+    #       PATH fragments that should be considered by sandboxes (bash, venv, cmssw) to have
+    #       precedence, e.g. to ensure that executables of local packages are priotized.
     #   CF_PERSISTENT_PYTHONPATH
-    #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) as
-    #       having priority, e.g. to ensure that local packages in submodules are imported first.
+    #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) to have
+    #       precedence, e.g. to ensure that python modules of local packages are priotized.
     #   CF_ORIG_PATH
     #       Copy of the $PATH variable before ammended by the seutp.
     #   CF_ORIG_PYTHONPATH
@@ -450,7 +450,7 @@ cf_setup_software_stack() {
 
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes
-    export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin"
+    export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin"
     export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
 
     # prepend them
@@ -458,7 +458,8 @@ cf_setup_software_stack() {
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
-    export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+    export CF_CONDA_PYTHONPATH="${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+    export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_PYTHONPATH}"
 
     # update paths and flags
     export MAMBA_ROOT_PREFIX="${CF_CONDA_BASE}"
@@ -521,7 +522,6 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                # pin numpy until https://github.com/columnflow/columnflow/issues/250 is fixed
                 micromamba install \
                     libgcc \
                     "python=${pyv}" \
@@ -531,7 +531,6 @@ EOF
                     git \
                     git-lfs \
                     conda-pack \
-                    "numpy=1.24" \
                     || return "$?"
                 micromamba clean --yes --all
 
