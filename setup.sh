@@ -76,14 +76,16 @@ setup_columnflow() {
     #   CF_PERSISTENT_PYTHONPATH
     #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) to have
     #       precedence, e.g. to ensure that python modules of local packages are priotized.
+    #   CF_CONDA_PYTHONPATH
+    #       PYTHONPATH fragments pointing to packages intalled by conda.
     #   CF_ORIG_PATH
-    #       Copy of the $PATH variable before ammended by the seutp.
+    #       Copy of the $PATH variable before ammended by the setup.
     #   CF_ORIG_PYTHONPATH
-    #       Copy of the $PYTHONPATH variable before ammended by the seutp.
+    #       Copy of the $PYTHONPATH variable before ammended by the setup.
     #   CF_ORIG_PYTHON3PATH
-    #       Copy of the $PYTHON3PATH variable before ammended by the seutp.
+    #       Copy of the $PYTHON3PATH variable before ammended by the setup.
     #   CF_ORIG_LD_LIBRARY_PATH
-    #       Copy of the $LD_LIBRARY_PATH variable before ammended by the seutp.
+    #       Copy of the $LD_LIBRARY_PATH variable before ammended by the setup.
     #   CF_WLCG_CACHE_ROOT
     #       The directory in which remote files from WLCG locations might be cached. No caching is
     #       used when empty. Queried during the interactive setup. Used in law.cfg.

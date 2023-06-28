@@ -261,6 +261,7 @@ setup_venv() {
             cf_color magenta "updating pip"
             python -m pip install -U pip
             [ "$?" != "0" ] && clear_pending && return "27"
+            echo
 
             # install basic production requirements
             if ! ${requirement_files_contains_prod}; then
