@@ -42,12 +42,24 @@ class CreatePileupWeights(ConfigTask):
     def output(self):
         return self.target(f"weights_from_{self.data_mode}.json")
 
+    def sandbox_stagein(self):
+        # stagein all inputs
+        return True
+
+    def sandbox_stageout(self):
+        # stageout all outputs
+        return True
+
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # prepare the external files and the output weights
         externals = self.requires()
         weights = {}
+
+        # since this tasks uses stage-in into and stage-out from the sandbox,
+        # prepare external files with the staged-in inputs
+        externals.get_files(self.input())
 
         # read the mc profile
         mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)
