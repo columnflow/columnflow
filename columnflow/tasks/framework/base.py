@@ -249,7 +249,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return _cache["has_obj_func"](name)
 
         object_names = []
-        patterns = []
         lookup = law.util.make_list(names)
         while lookup:
             name = lookup.pop(0)
@@ -260,20 +259,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 # a key in the object group dict
                 lookup.extend(list(object_groups[name]))
             elif accept_patterns:
-                # must eventually be a pattern, store it for object traversal
-                # special case
-                if name == "*":
-                    object_names = list(get_all_object_names())
-                    del patterns[:]
-                    break
-                patterns.append(name)
-
-        # if patterns are found, loop through them to preserve the order of patterns
-        # and compare to all existing names
-        for pattern in patterns:
-            for name in get_all_object_names():
-                if law.util.multi_match(name, pattern):
-                    object_names.append(name)
+                # must eventually be a pattern, perform an object traversal
+                for _name in get_all_object_names():
+                    if law.util.multi_match(_name, name):
+                        object_names.append(_name)
 
         return law.util.make_unique(object_names)
 
