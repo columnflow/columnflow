@@ -294,6 +294,7 @@ cfg.add_variable(
     expression="n_jet",
     binning=(11, -0.5, 10.5),
     x_title="Number of jets",
+    discrete_x=True,
 )
 cfg.add_variable(
     name="jets_pt",
