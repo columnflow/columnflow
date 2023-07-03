@@ -7,6 +7,7 @@ Exemplary selection methods.
 from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
+from columnflow.selection.stats import increment_stats
 from columnflow.production.processes import process_ids
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.util import maybe_import
