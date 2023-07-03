@@ -266,17 +266,20 @@ setup_venv() {
             # install basic production requirements
             if ! ${requirement_files_contains_prod}; then
                 cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                python -m pip install -r "${CF_BASE}/requirements_prod.txt"
+                pip install -r "${CF_BASE}/requirements_prod.txt"
                 [ "$?" != "0" ] && clear_pending && return "28"
             fi
 
             # install requirement files
             for f in ${requirement_files[@]}; do
                 cf_color magenta "installing requirement file ${f}"
-                python -m pip install -r "${f}"
+                pip install -r "${f}"
                 [ "$?" != "0" ] && clear_pending && return "29"
                 echo
             done
+
+            # clear the pip cache
+            pip cache -q purge 2> /dev/null
 
             # ensure that the venv is relocateable
             cf_make_venv_relocateable "${venv_name_hashed}"

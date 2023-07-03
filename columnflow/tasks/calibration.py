@@ -32,6 +32,7 @@ class CalibrateEvents(
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
+    # register shifts found in the chosen calibrator to this task
     register_calibrator_shifts = True
 
     def workflow_requires(self):

@@ -162,7 +162,7 @@ class CalibratorsMixin(ConfigTask):
         part = "__".join(self.calibrators[:5])
         if len(self.calibrators) > 5:
             part += f"__{law.util.create_hash(self.calibrators[5:])}"
-        parts.insert_before("version", "calibrators", f"calib__{part}")
+        parts.insert_before("version", "calibrators", f"calib__{part or 'none'}")
 
         return parts
 
@@ -421,7 +421,7 @@ class ProducersMixin(ConfigTask):
             part = "__".join(self.producers[:5])
             if len(self.producers) > 5:
                 part += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"prod__{part}")
+        parts.insert_before("version", "producers", f"prod__{part or 'none'}")
 
         return parts
 
@@ -843,9 +843,11 @@ class MLModelsMixin(ConfigTask):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
+
         if self.ml_model_insts:
             part = "__".join(self.ml_models)
             parts.insert_before("version", "ml_models", f"ml__{part}")
+
         return parts
 
 

@@ -185,7 +185,10 @@ class CreateCutflowHistograms(
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                histograms[var_key].fill(step=self.initial_step, **{field: arrays[field] for field in arrays.fields})
+                histograms[var_key].fill(
+                    step=self.initial_step,
+                    **{field: arrays[field] for field in arrays.fields},
+                )
 
                 # fill all other steps
                 mask = True
@@ -198,7 +201,10 @@ class CreateCutflowHistograms(
                     mask = mask & arr.steps[step]
                     fill_kwargs = get_point(mask)
                     arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                    histograms[var_key].fill(step=step, **{field: arrays[field] for field in arrays.fields})
+                    histograms[var_key].fill(
+                        step=step,
+                        **{field: arrays[field] for field in arrays.fields},
+                    )
 
         # dump the histograms
         for var_key in histograms.keys():

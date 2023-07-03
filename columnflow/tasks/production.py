@@ -34,6 +34,7 @@ class ProduceColumns(
         MergeReducedEvents=MergeReducedEvents,
     )
 
+    # register shifts found in the chosen producer to this task
     register_producer_shifts = True
 
     def workflow_requires(self):

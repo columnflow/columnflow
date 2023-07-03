@@ -39,6 +39,7 @@ class SelectEvents(
         CalibrateEvents=CalibrateEvents,
     )
 
+    # register shifts found in the chosen selector to this task
     register_selector_shifts = True
 
     def workflow_requires(self):

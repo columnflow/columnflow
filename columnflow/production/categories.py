@@ -27,7 +27,6 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     category_ids = []
 
-    # TODO: we maybe don't want / need to loop through all leaf categories
     for cat_inst in self.config_inst.get_leaf_categories():
         # start with a true mask
         cat_mask = np.ones(len(events)) > 0

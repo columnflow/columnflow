@@ -52,7 +52,9 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     @property
     def sandbox(self):
         sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
-        return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        if sandbox is None:
+            sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        return sandbox if sandbox and sandbox != law.NO_STR else None
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile

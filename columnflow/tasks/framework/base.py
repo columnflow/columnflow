@@ -75,17 +75,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     @classmethod
+    def modify_param_values(cls, params: dict) -> dict:
+        params = super().modify_param_values(params)
+        params = cls.resolve_param_values(params)
+        return params
+
+    @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
             params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
 
-        return params
-
-    @classmethod
-    def modify_param_values(cls, params: dict) -> dict:
-        params = super().modify_param_values(params)
-        params = cls.resolve_param_values(params)
         return params
 
     @classmethod
@@ -534,16 +534,6 @@ class ShiftTask(ConfigTask):
         return params
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
-        params = super().resolve_param_values(params)
-
-        # set default shift
-        if params.get("shift") in (None, law.NO_STR):
-            params["shift"] = "nominal"
-
-        return params
-
-    @classmethod
     def modify_param_values(cls, params):
         """
         When "config" and "shift" are set, this method evaluates them to set the global shift.
@@ -592,6 +582,16 @@ class ShiftTask(ConfigTask):
         # store references
         params["global_shift_inst"] = config_inst.get_shift(params["shift"])
         params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+
+        return params
+
+    @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
 
         return params
 

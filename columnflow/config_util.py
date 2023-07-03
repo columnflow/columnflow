@@ -77,7 +77,7 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
     """
     return sum(
         (
-            [config.get_shift(f"{s}_up"), config.get_shift(f"{s}_down")]
+            [config.get_shift(f"{s}_{od.Shift.UP}"), config.get_shift(f"{s}_{od.Shift.DOWN}")]
             for s in shift_sources
         ),
         [],
