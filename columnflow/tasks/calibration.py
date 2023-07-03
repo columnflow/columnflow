@@ -54,7 +54,13 @@ class CalibrateEvents(
         return reqs
 
     def output(self):
-        return {"columns": self.target(f"calib_{self.branch}.parquet")}
+        outputs = {}
+
+        # only declare the output in case the producer actually creates columns
+        if self.calibrator_inst.produced_columns:
+            outputs["columns"] = self.target(f"calib_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @ensure_proxy

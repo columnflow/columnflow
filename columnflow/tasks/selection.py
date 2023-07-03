@@ -53,7 +53,8 @@ class SelectEvents(
         if not self.pilot:
             reqs["calib"] = [
                 self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                for c, calibrator_inst in zip(self.calibrators, self.calibrator_insts)
+                if calibrator_inst.produced_columns
             ]
         else:
             # pass-through pilot workflow requirements of upstream task
@@ -70,7 +71,8 @@ class SelectEvents(
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
                 self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                for c, calibrator_inst in zip(self.calibrators, self.calibrator_insts)
+                if calibrator_inst.produced_columns
             ],
         }
 
