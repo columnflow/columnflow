@@ -13,7 +13,7 @@ __all__ = [
 
 import re
 import itertools
-from typing import Callable, Any
+from typing import Callable, Any, Sequence
 
 import law
 import order as od
@@ -82,6 +82,32 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
         ),
         [],
     )
+
+
+def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
+    """
+    Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift
+    sources, the latter ones are expanded with both possible directions and returned in a common
+    list.
+
+    Example:
+
+    .. code-block:: python
+
+        expand_shift_sources(["jes", "jer_up"])
+        # -> ["jes_up", "jes_down", "jer_up"]
+    """
+    _shifts = []
+    for shift in shifts:
+        try:
+            od.Shift.split_name(shift)
+            _shifts.append(shift)
+        except ValueError as e:
+            if not isinstance(shift, str):
+                raise e
+            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.UP}"])
+
+    return law.util.make_unique(_shifts)
 
 
 def create_category_id(
