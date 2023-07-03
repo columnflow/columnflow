@@ -7,8 +7,15 @@ Collection of general helpers and utilities.
 from __future__ import annotations
 
 __all__ = [
-    "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
-    "create_category_id", "add_category", "create_category_combinations", "verify_config_processes",
+    "get_root_processes_from_campaign",
+    "get_datasets_from_process",
+    "add_shift_aliases",
+    "get_shifts_from_sources",
+    "expand_shift_sources",
+    "create_category_id",
+    "add_category",
+    "create_category_combinations",
+    "verify_config_processes",
 ]
 
 import re
@@ -21,14 +28,17 @@ import order as od
 
 def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
     """
-    Extracts all root process objects from datasets contained in an order campaign and returns them
-    in a unique object index.
+    Extracts all root process objects from datasets contained in an order *campaign* and returns
+    them in a unique object index.
     """
     # get all dataset processes
     processes = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
 
     # get their root processes
-    root_processes = set.union(*map(set, (process.get_root_processes() for process in processes)))
+    root_processes = set.union(*map(set, (
+        (process.get_root_processes() or [process])
+        for process in processes
+    )))
 
     # create an empty index and fill subprocesses via walking
     index = od.UniqueObjectIndex(cls=od.Process)
@@ -37,6 +47,33 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
             index.add(process, overwrite=True)
 
     return index
+
+
+def get_datasets_from_process(config: od.Config, process: str | od.Process) -> list[od.Dataset]:
+    """
+    Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
+    containg matching processes. This is done by walking through *process* and its child processes
+    in a breadth-first manner and as soon as at least one matching dataset is found for a process,
+    its child processes are excluded from the traversal.
+    """
+    root_process_inst = config.get_process(process)
+
+    dataset_insts = []
+    for process_inst, _, child_process_insts in root_process_inst.walk_processes(include_self=True):
+        found_dataset = False
+
+        # check datasets
+        for dataset_inst in config.datasets:
+            # TODO: should the has_process call be shallow? the default is a deep lookup
+            if dataset_inst.has_process(process_inst):
+                dataset_insts.append(dataset_inst)
+                found_dataset = True
+
+        # empty the children since they do not need to be traversed
+        if found_dataset:
+            del child_process_insts[:]
+
+    return dataset_insts
 
 
 def add_shift_aliases(
