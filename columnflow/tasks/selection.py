@@ -30,7 +30,7 @@ class SelectEvents(
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by selector function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -301,7 +301,7 @@ class MergeSelectionMasks(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # recursively merge 8 files into one
     merge_factor = 8
