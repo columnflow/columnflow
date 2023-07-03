@@ -108,9 +108,9 @@ def btag_weights(
         # save the new column
         return set_ak_column(events, column_name, weight, value_type=np.float32)
 
-    # when the globally requested uncertainty is a known jec shift, obtain the propagated effect and
+    # when the requested uncertainty is a known jec shift, obtain the propagated effect and
     # do not produce additional systematics
-    shift_inst = self.global_shift_inst
+    shift_inst = self.local_shift_inst
     if shift_inst.is_nominal:
         # nominal weight and those of all method intrinsic uncertainties
         events = add_weight("central", None, "btag_weight")
@@ -144,7 +144,7 @@ def btag_weights_init(self: Producer) -> None:
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
-    shift_inst = getattr(self, "global_shift_inst", None)
+    shift_inst = getattr(self, "local_shift_inst", None)
     if not shift_inst:
         return
 
