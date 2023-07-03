@@ -105,7 +105,7 @@ def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
         except ValueError as e:
             if not isinstance(shift, str):
                 raise e
-            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.UP}"])
+            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
 
     return law.util.make_unique(_shifts)
 
