@@ -52,8 +52,8 @@ class SelectEvents(
 
         if not self.pilot:
             reqs["calib"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c, calibrator_inst in zip(self.calibrators, self.calibrator_insts)
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
         else:
@@ -70,8 +70,8 @@ class SelectEvents(
         reqs = {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c, calibrator_inst in zip(self.calibrators, self.calibrator_insts)
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ],
         }

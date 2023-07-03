@@ -56,7 +56,7 @@ class CalibrateEvents(
     def output(self):
         outputs = {}
 
-        # only declare the output in case the producer actually creates columns
+        # only declare the output in case the calibrator actually creates columns
         if self.calibrator_inst.produced_columns:
             outputs["columns"] = self.target(f"calib_{self.branch}.parquet")
 
