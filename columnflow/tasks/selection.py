@@ -42,6 +42,9 @@ class SelectEvents(
     # register shifts found in the chosen selector to this task
     register_selector_shifts = True
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -143,7 +146,12 @@ class SelectEvents(
             events = update_ak_array(events, *diffs)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)

@@ -49,6 +49,9 @@ class CreateCutflowHistograms(
         MergeSelectionMasks=MergeSelectionMasks,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def create_branch_map(self):
         # dummy branch map
         return [None]
@@ -158,7 +161,12 @@ class CreateCutflowHistograms(
                 prepare_hists([self.initial_step] + list(steps))
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)

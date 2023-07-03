@@ -45,6 +45,9 @@ class PrepareMLEvents(
         ProduceColumns=ProduceColumns,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -139,7 +142,12 @@ class PrepareMLEvents(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # generate fold indices
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds
@@ -402,6 +410,9 @@ class MLEvaluation(
 
     allow_empty_ml_model = False
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     # upstream requirements
     reqs = Requirements(
         MergeReducedEventsUser.reqs,
@@ -522,7 +533,12 @@ class MLEvaluation(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # asdasd
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds

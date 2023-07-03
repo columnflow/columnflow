@@ -42,6 +42,9 @@ class CreateHistograms(
         MLEvaluation=MLEvaluation,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -142,7 +145,12 @@ class CreateHistograms(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # build the full event weight
             weight = ak.Array(np.ones(len(events)))

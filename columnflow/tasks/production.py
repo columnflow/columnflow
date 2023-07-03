@@ -37,6 +37,9 @@ class ProduceColumns(
     # register shifts found in the chosen producer to this task
     register_producer_shifts = True
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -106,7 +109,12 @@ class ProduceColumns(
                 events = update_ak_array(events, *cols)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
+                )
 
                 # invoke the producer
                 if len(events):
