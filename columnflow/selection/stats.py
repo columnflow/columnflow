@@ -86,8 +86,8 @@ def increment_stats(
     Based on the *weight_map* in the example above, this will result in four additional fields in
     *stats*, i.e., ``"sum_mc_weight_per_process"``, ``"sum_mc_weight_selected_per_process"``,
     ``"sum_mc_weight_per_njet"``, ``"sum_mc_weight_selected_per_njet"``. Each of these new fields
-    will refer to a dictionary with keys corresponding to ``"values"`` defined in the *group_map*
-    above.
+    will refer to a dictionary with keys corresponding to the unique values defined in the
+    *group_map* above.
 
     In addition, combinations of groups can be configured using *group_combinations*. It accepts a
     sequence of tuples whose elements should be names of groups in *group_names*. As the name
