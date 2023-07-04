@@ -7,7 +7,11 @@ aggregation over datasets.
 
 from __future__ import annotations
 
+import itertools
+from functools import reduce
 from collections import defaultdict
+from operator import and_, getitem as getitem_
+from typing import Sequence, Callable
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import
@@ -17,17 +21,15 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-@selector(
-    # configuration flags, the set of "used" columns is defined in the init based on these flags
-    per_process=False,
-    per_njet=False,
-)
+@selector()
 def increment_stats(
     self: Selector,
     events: ak.Array,
     results: SelectionResult,
     stats: dict,
     weight_map: dict[str, ak.Array | tuple[ak.Array, ak.Array]] | None = None,
+    group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
+    group_combinations: Sequence[tuple[str]] | None = None,
     **kwargs,
 ) -> ak.Array:
     """
@@ -56,15 +58,51 @@ def increment_stats(
         # (where results are generated, and events and stats were passed by SelectEvents)
         self[increment_stats_per_process](events, results, stats, weight_map)
 
-    When *per_process* is *True*, all entries in the weight map are also evaluated per process id.
-    In this case, a column ``"process_id"`` must exist in the *events* chunk.
+    Each sum of weights can also be extracted for each unique element in a so-called group, such as
+    per process id, or per jet multiplicity bin. For this purpose, a *group_map* can be defined,
+    mapping the name of a group (e.g. ``"process"`` or ``"njet"``) to a dictionary with the fields
 
-    When *per_njet* is *True*, all entries in the weight map are also evaluated per jet
-    multiplicity. In this case, the auxiliary data of the *results* object must contain a field
-    *n_jets* from which the unique number of jets in the *events* chunk is extracted.
+        - ``"values"``, unique values to loop over,
+        - ``"mask_fn"``, a function that is supposed to return a mask given a single value, and
+        - ``"combinations_only"`` (optional), a boolean flag (*False* by default) that decides
+            whether this group is not to be evaluated on its own, but only as part of a combination
+            with other groups (see below).
 
-    When both *per_process* and *per_njet* are *True*, the evaluation is also done for each
-    process - jet multiplicity combination.
+    Example:
+
+    .. code-block:: python
+
+        group_map = {
+            "process"]: {
+                "values": events.process_id,
+                "mask_fn": (lambda v: events.process_id == v),
+            },
+            "njet": {
+                "values": results.x.n_jets,
+                "mask_fn": (lambda v: results.x.n_jets == v),
+            },
+        }
+
+    Based on the *weight_map* in the example above, this will result in four additional fields in
+    *stats*, i.e., ``"sum_mc_weight_per_process"``, ``"sum_mc_weight_selected_per_process"``,
+    ``"sum_mc_weight_per_njet"``, ``"sum_mc_weight_selected_per_njet"``. Each of these new fields
+    will refer to a dictionary with keys corresponding to ``"values"`` defined in the *group_map*
+    above.
+
+    In addition, combinations of groups can be configured using *group_combinations*. It accepts a
+    sequence of tuples whose elements should be names of groups in *group_names*. As the name
+    suggests, combinations of all possible values between groups are evaluated and stored in a
+    nested dictionary.
+
+    Example:
+
+    .. code-block:: python
+
+        group_combinations = [("process", "njet")]
+
+    In this case, *stats* will obtain additional fields ``"sum_mc_weight_per_process_and_njet"``
+    and ``"sum_mc_weight_selected_per_process_and_njet"``, referring to nested dictionaries whose
+    structure depends on the exact order of group names per tuple.
     """
     # get the plain event mask
     event_mask = results.main.event
@@ -73,12 +111,25 @@ def increment_stats(
     stats["n_events"] += len(events)
     stats["n_events_selected"] += ak.sum(event_mask, axis=0)
 
-    # if required, get a list of unique jet multiplicities present in the chunk
-    unique_process_ids = np.unique(events.process_id) if self.per_process else None
+    # make values in group map unique
+    unique_group_values = {
+        np.unique(group_data["values"])
+        for group_name, group_data in group_map.items()
+    }
 
-    # if required, get a list of unique jet multiplicity values present in the chunk
-    # (this is required to be stored in the selection result as auxiliary data)
-    unique_n_jets = np.unique(results.x.n_jets) if self.per_njet else None
+    # treat groups as combinations of a single group
+    for group_name, group_data in list(group_map.items())[::-1]:
+        if group_data["combinations_only"] or (group_name,) in group_combinations:
+            continue
+        group_combinations.insert(0, (group_name,))
+
+    # prepare default types (nested defaultdict's) down to a certain depth
+    group_defaults = {
+        1: (lambda: defaultdict(float)),
+    }
+    for i in range(2, max([len(group_names) for group_names in group_combinations] + [0]) + 1):
+        # use a self-executing closure to avoid reliance inside the lambda on i in the loop body
+        group_defaults[i] = (lambda i: (lambda: group_defaults[i - 1]))(i)
 
     # get and store the weights per entry in the map
     for name, weights in weight_map.items():
@@ -86,48 +137,33 @@ def increment_stats(
         if isinstance(weights, (tuple, list)) and len(weights) == 2:
             weights, mask = weights
 
-        # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
-        joinable_mask = True if mask is Ellipsis else mask
-
         # sum for all processes
         stats[f"sum_{name}"] += ak.sum(weights[mask])
 
-        # per process
-        if self.per_process:
-            stats.setdefault(f"sum_{name}_per_process", defaultdict(float))
-            for p in unique_process_ids:
-                stats[f"sum_{name}_per_process"][int(p)] += ak.sum(
-                    weights[(events.process_id == p) & joinable_mask],
-                )
+        # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
+        joinable_mask = True if mask is Ellipsis else mask
 
-        # per jet multiplicity
-        if self.per_njet:
-            stats.setdefault(f"sum_{name}_per_njet", defaultdict(float))
-            for n in unique_n_jets:
-                stats[f"sum_{name}_per_njet"][int(n)] += ak.sum(
-                    weights[(results.x.n_jets == n) & joinable_mask],
-                )
+        # per group combination
+        for group_names in group_combinations:
+            group_key = f"sum_{name}_per_" + "_and_".join(group_names)
 
-        # per process and jet multuplicity
-        if self.per_process and self.per_njet:
-            stats.setdefault(f"sum_{name}_per_process_and_njet", defaultdict(lambda: defaultdict(float)))
-            for p in unique_process_ids:
-                for n in unique_n_jets:
-                    stats[f"sum_{name}_per_process_and_njet"][int(p)][int(n)] += ak.sum(
-                        weights[
-                            (events.process_id == p) &
-                            (results.x.n_jets == n) &
-                            joinable_mask
-                        ],
-                    )
+            # set the default structure
+            if group_key not in stats:
+                stats[group_key] = group_defaults[len(group_names)]()
+
+            # set values
+            for values in itertools.product(*(unique_group_values[g] for g in group_names)):
+                # evaluate and join the masks
+                group_mask = reduce(
+                    and_,
+                    (group_map[g]["mask_fn"](v) for g, v in zip(group_names, values)),
+                )
+                # find the innermost dictionary to perform the in-place item assignment
+                innermost_dict = reduce(
+                    getitem_,
+                    [stats[group_key]] + list(map(str, values[:-1])),
+                )
+                # increment
+                innermost_dict[str(values[-1])] += ak.sum(weights[group_mask & joinable_mask])
 
     return events
-
-
-@increment_stats.init
-def increment_stats_init(self: Selector) -> None:
-    """
-    Custom initialization function.
-    """
-    if self.per_process:
-        self.uses |= {"process_id"}
