@@ -24,7 +24,7 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict, defaultdict
+from collections import namedtuple, OrderedDict
 from typing import Sequence, Callable, Any
 
 import law
@@ -1553,7 +1553,7 @@ class ArrayFunction(Derivable):
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None, debug=False) -> set[str]:
+    def _get_columns(self, io_flag: IOFlag, _cache: set | None = None) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1561,11 +1561,11 @@ class ArrayFunction(Derivable):
         columns = set()
 
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # declare _this_ call cached
-        call_cache.add(self.Flagged(self, io_flag))
+        _cache.add(self.Flagged(self, io_flag))
 
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
@@ -1576,24 +1576,24 @@ class ArrayFunction(Derivable):
                 elif obj.io_flag == self.IOFlag.AUTO:
                     flagged = self.Flagged(obj.wrapped, io_flag)
                 # skip when already cached
-                if flagged in call_cache:
+                if flagged in _cache:
                     continue
                 # add the columns
-                columns |= flagged.wrapped._get_columns(flagged.io_flag, call_cache=call_cache)
+                columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
             else:
                 columns.add(obj)
 
         return columns
 
-    def _get_used_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.USES, call_cache=call_cache)
+    def _get_used_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
     def used_columns(self) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.PRODUCES, call_cache=call_cache)
+    def _get_produced_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
     def produced_columns(self) -> set[str]:
@@ -1813,6 +1813,10 @@ class TaskArrayFunction(ArrayFunction):
         self.sandbox = sandbox
         self.call_force = call_force
 
+        # cached results of the main call function per thread id
+        self._result_cache = {}
+        self._result_cache_lock = threading.RLock()
+
     def __getattr__(self, attr: str) -> Any:
         """
         Attribute access to objects named *attr* in the :py:attr:`inst_dict`.
@@ -1833,10 +1837,38 @@ class TaskArrayFunction(ArrayFunction):
 
         return super().instantiate_dependency(cls, **kwargs)
 
-    def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
+    def _get_cached_result(self) -> Any | law.NoValue:
+        """
+        Returns the last cached result or :py:attr:`law.no_value` if no cached result was found.
+        """
+        with self._result_cache_lock:
+            return self._result_cache.get(threading.get_ident(), law.no_value)
+
+    def _cache_result(self, obj: Any) -> None:
+        """
+        Adds a new result *obj* to the cache.
+        """
+        with self._result_cache_lock:
+            self._result_cache[threading.get_ident()] = obj
+
+    def _clear_cache(self, deps: bool = False) -> None:
+        """
+        Removes any previously cached result. When *deps* is *True*, caches of all dependencies
+        are cleared recursively.
+        """
+        with self._result_cache_lock:
+            self._result_cache.pop(threading.get_ident(), None)
+
+        # also clear dependencies
+        if deps:
+            for obj in self.get_dependencies():
+                if isinstance(obj, TaskArrayFunction):
+                    obj._clear_cache(deps=deps)
+
+    def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # add shifts and consider _this_ call cached
         shifts = {
@@ -1844,14 +1876,14 @@ class TaskArrayFunction(ArrayFunction):
             for shift in self.shifts
             if not isinstance(shift, (ArrayFunction, self.Flagged))
         }
-        call_cache.add(self)
+        _cache.add(self)
 
         # add shifts of all dependent objects
         for obj in self.get_dependencies(include_others=False):
             if isinstance(obj, TaskArrayFunction):
-                if obj not in call_cache:
-                    call_cache.add(obj)
-                    shifts |= obj._get_all_shifts(call_cache=call_cache)
+                if obj not in _cache:
+                    _cache.add(obj)
+                    shifts |= obj._get_all_shifts(_cache=_cache)
 
         return shifts
 
@@ -1862,7 +1894,7 @@ class TaskArrayFunction(ArrayFunction):
     def run_requires(
         self,
         reqs: dict | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict:
         """
         Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
@@ -1873,8 +1905,8 @@ class TaskArrayFunction(ArrayFunction):
             reqs = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's requires function
         if callable(self.requires_func):
@@ -1882,9 +1914,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_requires(reqs=reqs, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_requires(reqs=reqs, _cache=_cache)
 
         return reqs
 
@@ -1893,7 +1925,7 @@ class TaskArrayFunction(ArrayFunction):
         reqs: dict,
         inputs: dict,
         reader_targets: InsertableDict[str, law.FileSystemFileTarget] | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict[str, law.FileSystemTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
@@ -1906,8 +1938,8 @@ class TaskArrayFunction(ArrayFunction):
             reader_targets = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's setup function
         if callable(self.setup_func):
@@ -1915,48 +1947,49 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_setup(reqs, inputs, reader_targets, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
 
         return reader_targets
 
     def __call__(
         self,
         *args,
-        call_cache: bool | defaultdict | None = None,
         call_force: bool | None = None,
-        n_return: int = 1,
         **kwargs,
     ) -> Any:
         """
         Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
-        Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before, it is not called again but the first *n_return* elements of
-        *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
-        when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
+        By default, all return values are cached per thread identifier while dependent
+        :py:class:`TaskArrayFunction`s are evaluted. This can be bypassed if either *call_force* is
+        *True*, or when it is *None* and the :py:attr:`call_force` attribute of this instance is
+        *True*.
         """
-        # call caching
-        if call_cache is not False:
-            # setup a new call cache when not present yet
-            if not isinstance(call_cache, dict):
-                call_cache = defaultdict(int)
+        clear_cache = kwargs.get("clear_cache", True)
+        kwargs["clear_cache"] = False
 
-            # check if the instance was called before or wether the call is forced
-            if call_force is None:
-                call_force = self.call_force
-            if call_cache[self] > 0 and not call_force:
-                return args[0] if n_return == 1 else args[:n_return]
+        # call_force default
+        if call_force is None:
+            call_force = self.call_force
 
-            # increase the count and set kwargs for the call downstream
-            call_cache[self] += 1
+        # get the cached result
+        result = self._get_cached_result()
 
-        # stack all kwargs
-        kwargs = {"call_cache": call_cache, **kwargs}
+        # do the actual call
+        update = call_force or result is law.no_value
+        if update:
+            result = super().__call__(*args, **kwargs)
 
-        return super().__call__(*args, **kwargs)
+        # clear or update the cache
+        if clear_cache:
+            self._clear_cache(deps=True)
+        elif update:
+            self._cache_result(result)
+
+        return result
 
 
 class NoThreadPool(object):
