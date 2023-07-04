@@ -136,7 +136,7 @@ def get_datasets_from_process(
                         break
 
             # in the inclusive strategy, children do not need to be traversed if a dataset was found
-            if found_dataset and strategy == "inclusive":
+            if strategy == "inclusive" and found_dataset:
                 del child_insts[:]
 
         return law.util.make_unique(dataset_insts)
