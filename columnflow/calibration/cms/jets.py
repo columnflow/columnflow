@@ -11,7 +11,7 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import maybe_import, InsertableDict, DotDict
-from columnflow.columnar_util import set_ak_column, layout_ak_array
+from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
 
 
 np = maybe_import("numpy")
@@ -150,13 +150,14 @@ def get_jec_config_default(self) -> DotDict:
 @calibrator(
     uses={
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
-        "Jet.jetId", "fixedGridRhoFastjetAll", "Rho.fixedGridRhoFastjetAll",
+        "Jet.jetId",
+        optional("fixedGridRhoFastjetAll"),
+        optional("Rho.fixedGridRhoFastjetAll"),
         attach_coffea_behavior,
     },
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
-    check_columns_present={"produces"},  # some used columns optional
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -542,7 +543,8 @@ def get_jer_config(self) -> DotDict:
 @calibrator(
     uses={
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
-        "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
+        optional("Rho.fixedGridRhoFastjetAll"),
+        optional("fixedGridRhoFastjetAll"),
         "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
@@ -554,7 +556,6 @@ def get_jer_config(self) -> DotDict:
         "MET.pt", "MET.phi",
         "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
-    check_columns_present={"produces"},  # some used columns optional
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc

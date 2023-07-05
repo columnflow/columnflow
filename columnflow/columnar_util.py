@@ -12,6 +12,7 @@ __all__ = [
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
+    "optional_column",
 ]
 
 import gc
@@ -1173,6 +1174,21 @@ class RouteFilter(object):
         return ak_array
 
 
+# flags for marking ArrayFunction input/output columns as optional
+class OptFlag(enum.Flag):
+    REQUIRED = enum.auto()
+    OPTIONAL = enum.auto()
+
+
+# shallow wrapper around an object (a class or instance) and an OptFlag
+OptFlagged = namedtuple("OptFlagged", ["wrapped", "opt_flag"])
+
+
+# convenience function for marking optional input/output columns
+def optional_column(wrapped) -> OptFlagged:
+    return OptFlagged(wrapped, OptFlag.OPTIONAL)
+
+
 class ArrayFunction(Derivable):
     """
     Base class for function wrappers that act on arrays and keep track of used as well as produced
@@ -1353,29 +1369,29 @@ class ArrayFunction(Derivable):
         USES = enum.auto()
         PRODUCES = enum.auto()
 
-    # shallow wrapper around an objects (a class or instance) and an IOFlag
-    Flagged = namedtuple("Flagged", ["wrapped", "io_flag"])
+    # shallow wrapper around an object (a class or instance) and an IOFlag
+    IOFlagged = namedtuple("IOFlagged", ["wrapped", "io_flag"])
 
     @classproperty
-    def AUTO(cls) -> Flagged:
+    def AUTO(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the AUTO flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the AUTO flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.AUTO)
+        return cls.IOFlagged(cls, cls.IOFlag.AUTO)
 
     @classproperty
-    def USES(cls) -> Flagged:
+    def USES(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the USES flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the USES flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.USES)
+        return cls.IOFlagged(cls, cls.IOFlag.USES)
 
     @classproperty
-    def PRODUCES(cls) -> Flagged:
+    def PRODUCES(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the PRODUCES flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the PRODUCES flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.PRODUCES)
+        return cls.IOFlagged(cls, cls.IOFlag.PRODUCES)
 
     @classmethod
     def init(cls, func: Callable[[], None]) -> None:
@@ -1545,20 +1561,26 @@ class ArrayFunction(Derivable):
 
             # go through all dependent objects and create instances of classes, considering caching
             for obj in getattr(self, attr):
+                # get optional flag
+                opt_flag = OptFlag.REQUIRED
+                if isinstance(obj, OptFlagged):
+                    opt_flag = obj.opt_flag
+                    obj = obj.wrapped
+
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
-                        instances.add(obj)
-                elif isinstance(obj, self.Flagged):
-                    obj = self.Flagged(add_dep(obj.wrapped), obj.io_flag)
+                        instances.add(OptFlagged(obj, opt_flag))
+                elif isinstance(obj, self.IOFlagged):
+                    obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
-                        instances.add(obj)
+                        instances.add(OptFlagged(obj, opt_flag))
                 else:
                     obj = copy.deepcopy(obj)
                     if obj:
-                        instances.add(obj)
+                        instances.add(OptFlagged(obj, opt_flag))
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1590,7 +1612,11 @@ class ArrayFunction(Derivable):
 
         for attr in self._dependency_sets:
             for obj in getattr(self, f"{attr}_instances"):
-                if isinstance(obj, self.Flagged):
+                # strip optional flag
+                if isinstance(obj, OptFlagged):
+                    obj = obj.wrapped
+                # strip i/o flag
+                if isinstance(obj, self.IOFlagged):
                     obj = obj.wrapped
                 if isinstance(obj, ArrayFunction):
                     deps.add(obj)
@@ -1602,6 +1628,9 @@ class ArrayFunction(Derivable):
     def _get_columns(
         self,
         io_flag: IOFlag,
+        # if REQUIRED, return only columns not marked optioal
+        # if OPTIONAL, return all columns
+        opt_flag: OptFlag = OptFlag.OPTIONAL,
         call_cache: set | None = None,
         dependencies: bool = True,
     ) -> set[str]:
@@ -1616,39 +1645,52 @@ class ArrayFunction(Derivable):
             call_cache = set()
 
         # declare _this_ call cached
-        call_cache.add(self.Flagged(self, io_flag))
+        call_cache.add(OptFlagged(self.IOFlagged(self, io_flag), opt_flag))
 
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
-            if isinstance(obj, (ArrayFunction, self.Flagged)):
+            cache_key = obj
+            if isinstance(obj, OptFlagged):
+                # don't include optional columns when only required are requested
+                if opt_flag == OptFlag.REQUIRED and obj.opt_flag == OptFlag.OPTIONAL:
+                    continue
+
+                # strip optional flag
+                obj = obj.wrapped
+            else:
+                cache_key = OptFlagged(obj, OptFlag.REQUIRED)
+
+            if isinstance(obj, (ArrayFunction, self.IOFlagged)):
                 # don't propagate to dependencies
                 if not dependencies:
                     continue
 
-                flagged = obj
                 if isinstance(obj, ArrayFunction):
-                    flagged = self.Flagged(obj, io_flag)
+                    cache_key = OptFlagged(self.IOFlagged(obj, io_flag), cache_key.opt_flag)
                 elif obj.io_flag == self.IOFlag.AUTO:
-                    flagged = self.Flagged(obj.wrapped, io_flag)
+                    cache_key = OptFlagged(self.IOFlagged(obj.wrapped, io_flag), cache_key.opt_flag)
+
                 # skip when already cached
-                if flagged in call_cache:
+                if cache_key in call_cache:
                     continue
+
                 # add the columns
-                columns |= flagged.wrapped._get_columns(flagged.io_flag, call_cache=call_cache)
+                io_flagged = cache_key.wrapped
+                columns |= io_flagged.wrapped._get_columns(io_flagged.io_flag, opt_flag, call_cache=call_cache)
             else:
                 columns.add(obj)
 
         return columns
 
-    def _get_used_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.USES, call_cache=call_cache)
+    def _get_used_columns(self, opt_flag: OptFlag = OptFlag.OPTIONAL, call_cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, opt_flag=opt_flag, call_cache=call_cache)
 
     @property
     def used_columns(self) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.PRODUCES, call_cache=call_cache)
+    def _get_produced_columns(self, opt_flag: OptFlag = OptFlag.OPTIONAL, call_cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, opt_flag=opt_flag, call_cache=call_cache)
 
     @property
     def produced_columns(self) -> set[str]:
@@ -1662,6 +1704,8 @@ class ArrayFunction(Derivable):
 
         columns = self._get_columns(
             io_flag=io_flag,
+            # only check required columns
+            opt_flag=OptFlag.REQUIRED,
             # only check own columns
             dependencies=False,
         )
@@ -1945,7 +1989,7 @@ class TaskArrayFunction(ArrayFunction):
         shifts = {
             shift
             for shift in self.shifts
-            if not isinstance(shift, (ArrayFunction, self.Flagged))
+            if not isinstance(shift, (ArrayFunction, self.IOFlagged))
         }
         call_cache.add(self)
 
