@@ -33,7 +33,7 @@ class PrepareMLEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     allow_empty_ml_model = False
 
@@ -211,7 +211,7 @@ class MergeMLEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     fold = luigi.IntParameter(
         default=0,
