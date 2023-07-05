@@ -318,7 +318,7 @@ def ensure_proxy(
 
 def dev_sandbox(sandbox: str, add: bool = True, remove: bool = True) -> str:
     """
-    Takes a sandbox key *sandbox* and adds or removes the subtring "_dev" right before the file
+    Takes a sandbox key *sandbox* and adds or removes the substring "_dev" right before the file
     extension (if any), depending on whether the current environment is used for development (see
     :py:attr:`env_is_dev`) and the *add* and *remove* flags.
 
