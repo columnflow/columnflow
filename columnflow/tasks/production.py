@@ -59,15 +59,21 @@ class ProduceColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"columns": self.target(f"columns_{self.branch}.parquet")}
+        outputs = {}
+
+        # only declare the output in case the producer actually creates columns
+        if self.producer_inst.produced_columns:
+            outputs["columns"] = self.target(f"columns_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
-            add_ak_aliases, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
