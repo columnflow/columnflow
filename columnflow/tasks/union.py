@@ -47,8 +47,9 @@ class UniteColumns(
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=p)
-                    for p in self.producers
+                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    for producer_inst in self.producer_insts
+                    if producer_inst.produced_columns
                 ]
             if self.ml_models:
                 reqs["ml"] = [
@@ -65,8 +66,9 @@ class UniteColumns(
 
         if self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
         if self.ml_models:
             reqs["ml"] = [
