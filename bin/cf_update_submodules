@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-__cf_short_name_lc___update_submodules() {
+cf_update_submodules() {
     # Updates all git submodules in case no local changes are found.
     #
     # Required environment variables:
-    #   __cf_short_name_uc___BASE:
-    #       The repository base path.
     #   CF_BASE:
     #       The columnflow base path.
+    #   CF_REPO_BASE:
+    #       The base path of the main analysis repository invoking tasks or scripts.
 
     # load cf setup helpers
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
@@ -15,18 +15,19 @@ __cf_short_name_lc___update_submodules() {
     # update columnflow submodules
     if [ -d "${CF_BASE}/.git" ] || [ -f "${CF_BASE}/.git" ]; then
         for m in $( ls -1q "${CF_BASE}/modules" ); do
-            echo "checking columnflow submodule ${m}"
+            echo "checking submodule ${m} in \$CF_BASE/modules"
             cf_init_submodule "${CF_BASE}" "modules/${m}"
         done
     fi
 
-    # update __cf_short_name_lc__ submodules
-    if [ -d "${__cf_short_name_uc___BASE}/.git" ]; then
-        for m in $( ls -1q "${__cf_short_name_uc___BASE}/modules" ); do
-            echo "checking __cf_analysis_name__ submodule ${m}"
-            cf_init_submodule "${__cf_short_name_uc___BASE}" "modules/${m}"
+    # for updating analysis supmodules, CF_REPO_BASE must be set
+    if [ -d "${CF_REPO_BASE}/.git" ]; then
+        for m in $( ls -1q "${CF_REPO_BASE}/modules" ); do
+            echo "checking submodule ${m} in \$CF_REPO_BASE/modules"
+            cf_init_submodule "${CF_REPO_BASE}" "modules/${m}"
         done
     fi
 }
 
-__cf_short_name_lc___update_submodules "$@"
+cf_update_submodules "$@"
+

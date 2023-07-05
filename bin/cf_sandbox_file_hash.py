@@ -14,6 +14,9 @@ relative to certain environment variables.
 
 Example 1:
 
+> cf_sandbox_file_hash /path/to/cf/sandboxes/venv_columnar.sh --path
+> $CF_BASE/sandboxes/venv_columnar.sh
+
 > cf_sandbox_file_hash /path/to/cf/sandboxes/venv_columnar.sh
 > 4ef45674
 
@@ -43,17 +46,20 @@ import os
 import hashlib
 
 
-def create_sandbox_file_hash(sandbox_file: str, return_path: bool = False) -> str:
+def create_sandbox_file_hash(
+    sandbox_file: str,
+    return_path: bool = False,
+) -> str:
     """
     Creates a hash of a *sandbox_file*, relative to either CF_REPO_BASE if set, or CF_BASE
     otherwise. When it is found to be relative to CF_REPO_BASE and a CF_REPO_BASE_ALIAS is defined,
     CF_REPO_BASE_ALIAS is used instead.
 
-    The hash itself is based on the first eight characters of the sha1sum of the relative sandbox
-    file.
-
     If *return_path* is *True*, this function does not return the hash but rather the path
     determined by the mechanism above.
+
+    The hash itself is based on the first eight characters of the sha1sum of the relative sandbox
+    file.
     """
     # prepare paths
     abs_sandbox_file = real_path(sandbox_file)

@@ -30,7 +30,7 @@ class SelectEvents(
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by selector function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -39,7 +39,11 @@ class SelectEvents(
         CalibrateEvents=CalibrateEvents,
     )
 
+    # register shifts found in the chosen selector to this task
     register_selector_shifts = True
+
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -48,8 +52,9 @@ class SelectEvents(
 
         if not self.pilot:
             reqs["calib"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ]
         else:
             # pass-through pilot workflow requirements of upstream task
@@ -65,8 +70,9 @@ class SelectEvents(
         reqs = {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ],
         }
 
@@ -142,7 +148,12 @@ class SelectEvents(
             events = update_ak_array(events, *diffs)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
@@ -292,7 +303,7 @@ class MergeSelectionMasks(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # recursively merge 8 files into one
     merge_factor = 8

@@ -32,7 +32,7 @@ class ReduceEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -42,6 +42,9 @@ class ReduceEvents(
         SelectEvents=SelectEvents,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -49,8 +52,9 @@ class ReduceEvents(
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ]
             reqs["selection"] = self.reqs.SelectEvents.req(self)
         else:
@@ -64,8 +68,9 @@ class ReduceEvents(
         return {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ],
             "selection": self.reqs.SelectEvents.req(self),
         }
@@ -164,7 +169,12 @@ class ReduceEvents(
             events = update_ak_array(events, *diffs)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_steps=self.missing_column_alias_strategy,
+            )
 
             # build the event mask
             if self.selector_steps:
@@ -398,7 +408,7 @@ class MergeReducedEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(

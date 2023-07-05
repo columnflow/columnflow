@@ -25,7 +25,7 @@ class ProduceColumns(
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by producer function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -34,7 +34,11 @@ class ProduceColumns(
         MergeReducedEvents=MergeReducedEvents,
     )
 
+    # register shifts found in the chosen producer to this task
     register_producer_shifts = True
+
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -55,15 +59,21 @@ class ProduceColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"columns": self.target(f"columns_{self.branch}.parquet")}
+        outputs = {}
+
+        # only declare the output in case the producer actually creates columns
+        if self.producer_inst.produced_columns:
+            outputs["columns"] = self.target(f"columns_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
-            add_ak_aliases, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet,
         )
 
         # prepare inputs and outputs
@@ -105,7 +115,12 @@ class ProduceColumns(
                 events = update_ak_array(events, *cols)
 
                 # add aliases
-                events = add_ak_aliases(events, aliases, remove_src=True)
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
+                )
 
                 # invoke the producer
                 if len(events):

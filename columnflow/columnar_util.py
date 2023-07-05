@@ -972,10 +972,8 @@ def sorted_ak_to_parquet(
     # sort fields
     ak_array = sort_ak_fields(ak_array)
 
-    # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
-    # TODO: remove workaround
+    # disable extensionarrays
     kwargs["extensionarray"] = False
-    # end workaround
 
     # TODO: empty fields cannot be saved to parquet, but for that we would need to identify them
     ak.to_parquet(ak_array, *args, **kwargs)
@@ -2228,22 +2226,6 @@ class DaskArrayReader(object):
             part_start = max(entry_start - div_start, 0)
             part_stop = min(entry_stop - div_start, div_stop - div_start)
             parts.append(arr[part_start:part_stop])
-            # workaround for https://github.com/dask-contrib/dask-awkward/issues/140
-            # make the array non-optional, assuming it is not meant to be optional
-            # TODO: remove this workaround once this other workaround is removed as well:
-            # https://github.com/uhh-cms/columnflow/blob/89f3429bbc4349ee2269fae497f3bf69a0b06ed3/columnflow/columnar_util.py#L957  # noqa
-            # skip null-filling for completely empty arrays
-            if not parts[-1].layout.contents:
-                continue
-            if getattr(parts[-1], "fields", None) and ak.any(ak.ravel(ak.is_none(parts[-1]))):
-                logger.warning(
-                    f"None values detected in chunk {chunk_index} of file {self.path} during "
-                    "dask_awkward materialization that were filled with zeros while reading; "
-                    "this is a workaround in columnflow to prevent optional types in arrays; "
-                    "for now, please make sure that files are not written with optional types!",
-                )
-            parts[-1] = ak.fill_none(parts[-1], 0)
-            # end workaround
 
         # construct the full array
         arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
