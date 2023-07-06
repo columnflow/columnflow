@@ -109,7 +109,7 @@ def get_datasets_from_process(
 
     In addition, two arguments configure how the check is performed whether a process is contained
     in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
-    Otherwise, all datasets matching a specific process are returned. Forthe check itself,
+    Otherwise, all datasets matching a specific process are returned. For the check itself,
     *check_deep* is forwarded to :py:meth:`order.Dataset.has_process`.
     """
     # check the strategy
