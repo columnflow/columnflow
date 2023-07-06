@@ -154,9 +154,8 @@ def create_category_combinations(
 
     If the name of a new category is already known to *config* it is skipped unless *skip_existing*
     is *False*. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
-    names to categories that represents the combination of categories to be added, as well as the
-    tentative named returned by *name_fn*. In case *skip_fn* returns *True*, the combination is
-    skipped.
+    names to categories that represents the combination of categories to be added. In case *skip_fn*
+    returns *True*, the combination is skipped.
 
     Example:
 
@@ -212,7 +211,7 @@ def create_category_combinations(
                     continue
 
                 # skip when manually triggered
-                if callable(skip_fn) and skip_fn(root_cats, cat_name):
+                if callable(skip_fn) and skip_fn(root_cats):
                     continue
 
                 # create arguments for the new category
