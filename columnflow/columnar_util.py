@@ -1851,19 +1851,19 @@ class TaskArrayFunction(ArrayFunction):
         with self._result_cache_lock:
             self._result_cache[threading.get_ident()] = obj
 
-    def _clear_cache(self, deps: bool = False) -> None:
+    def _clear_cache(self, dependencies: bool = False) -> None:
         """
-        Removes any previously cached result. When *deps* is *True*, caches of all dependencies
-        are cleared recursively.
+        Removes any previously cached result. When *dependencies* is *True*, caches of all
+        dependencies are cleared recursively.
         """
         with self._result_cache_lock:
             self._result_cache.pop(threading.get_ident(), None)
 
         # also clear dependencies
-        if deps:
+        if dependencies:
             for obj in self.get_dependencies():
                 if isinstance(obj, TaskArrayFunction):
-                    obj._clear_cache(deps=deps)
+                    obj._clear_cache(dependencies=dependencies)
 
     def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
@@ -1985,7 +1985,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # clear or update the cache
         if clear_cache:
-            self._clear_cache(deps=True)
+            self._clear_cache(dependencies=True)
         elif update:
             self._cache_result(result)
 
