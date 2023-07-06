@@ -27,6 +27,7 @@ def increment_stats(
     events: ak.Array,
     results: SelectionResult,
     stats: dict,
+    event_mask: ak.Array | None = None,
     weight_map: dict[str, ak.Array | tuple[ak.Array, ak.Array]] | None = None,
     group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
     group_combinations: Sequence[tuple[str]] | None = None,
@@ -38,11 +39,12 @@ def increment_stats(
     *results*.
 
     By default, only two fields are incremented in *stats*: ``"n_events"`` and
-    ``"n_events_selected"``. The latter is based on the full selection mask taken from
-    ``results.main.event``. However, a *weight_map* can be defined to configure additional fields to
-    be added. The key of each entry will result in a new field ``sum_<weight_key>``. Values should
-    consist of 2-tuples with the actual weights to be considered and a mask to be applied to it. If
-    all events should be considered, the mask can refer to an ``Ellipsis``.
+    ``"n_events_selected"``. The latter is based on the full selection mask taken from *event_mask*
+    that defaults to ``results.main.event``. However, a *weight_map* can be defined to configure
+    additional fields to be added. The key of each entry will result in a new field
+    ``sum_<weight_key>``. Values should consist of 2-tuples with the actual weights to be considered
+    and a mask to be applied to it. If all events should be considered, the mask can refer to an
+    ``Ellipsis``.
 
     Example:
 
@@ -104,8 +106,9 @@ def increment_stats(
     and ``"sum_mc_weight_selected_per_process_and_njet"``, referring to nested dictionaries whose
     structure depends on the exact order of group names per tuple.
     """
-    # get the plain event mask
-    event_mask = results.main.event
+    # when no event mask is given, fallback to the main results object
+    if event_mask is None:
+        event_mask = results.main.event
 
     # increment plain counts
     stats.setdefault("n_events", 0)
