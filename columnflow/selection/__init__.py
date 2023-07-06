@@ -84,11 +84,13 @@ class Selector(TaskArrayFunction):
             # optionally add skip function
             if mc_only and data_only:
                 raise Exception(f"selector {cls_name} received both mc_only and data_only")
-            if mc_only or data_only or nominal_only:
+            if nominal_only and shifts_only:
+                raise Exception(f"selector {cls_name} received both nominal_only and shifts_only")
+            if mc_only or data_only or nominal_only or shifts_only:
                 if cls_dict.get("skip_func"):
                     raise Exception(
                         f"selector {cls_name} received custom skip_func, but either mc_only, "
-                        "data_only or nominal_only are set",
+                        "data_only, nominal_only or shifts_only are set",
                     )
 
                 def skip_func(self):
