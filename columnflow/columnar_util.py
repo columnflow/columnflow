@@ -1059,9 +1059,9 @@ def attach_behavior(
 
 def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
     """
-    Structures an input *data_array* by making at an awkward array with a layout inferred from
-    *layout_array* and returns it. In particular, this function can be used to create new awkward
-    arrays from existing numpy arrays and forcing a known, arbitrarily ragged shape to it. Example:
+    Takes a *data_array* and structures its contents into the same structure as *layout_array*, with
+    up to one level of nesting. In particular, this function can be used to create new awkward
+    arrays from existing numpy arrays and forcing a known, potentially ragged shape to it. Example:
 
     .. code-block:: python
 
@@ -1071,23 +1071,7 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
         c = layout_ak_array(a, b)
         # <Array [[], [1.0, 2.0], [], [3.0, 4.0, 5.0]] type='4 * var * float32'>
     """
-    # flatten and convert to content
-    if isinstance(data_array, np.ndarray):
-        data = ak.contents.NumpyArray(np.reshape(data_array, (-1,)))
-    elif isinstance(data_array, ak.Array):
-        data = ak.flatten(data_array, axis=None)  # might create a copy
-    else:
-        raise TypeError(f"unhandled type of data array {data_array}")
-
-    # infer the offsets
-    if getattr(layout_array, "layout", None) is None:
-        raise ValueError(f"layout array {layout_array} does not have a valid layout")
-    if getattr(layout_array.layout, "offsets", None):
-        offsets = layout_array.layout.offsets
-    else:
-        raise ValueError(f"offsets extraction not implemented for layout array {layout_array}")
-
-    return ak.Array(ak.contents.ListOffsetArray(offsets, data))
+    return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
 def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
