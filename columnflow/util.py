@@ -316,11 +316,21 @@ def ensure_proxy(
     return before_call, call, after_call
 
 
-def dev_sandbox(sandbox: str) -> str:
+def dev_sandbox(sandbox: str, add: bool = True, remove: bool = True) -> str:
     """
-    Takes a sandbox key *sandbox* and injects the subtring "_dev" right before the file extension
-    (if any) in case the current environment is used for development (see :py:attr:`env_is_dev`) and
-    the corresponding sandbox exists. Otherwise *sandbox* is returned unchanged.
+    Takes a sandbox key *sandbox* and adds or removes the substring "_dev" right before the file
+    extension (if any), depending on whether the current environment is used for development (see
+    :py:attr:`env_is_dev`) and the *add* and *remove* flags.
+
+    If *sandbox* does not contain the "_dev" postfix and both :py:attr:`env_is_dev` and *add* are
+    *True*, the postfix is appended.
+
+    If *sandbox* does (!) contain the "_dev" postfix, :py:attr:`env_is_dev` is *False* and *remove*
+    is *True*, the postfix is removed.
+
+    In any other case, *sandbox* is returned unchanged.
+
+    Examples:
 
     .. code-block:: python
 
@@ -332,25 +342,30 @@ def dev_sandbox(sandbox: str) -> str:
         dev_sandbox("bash::/path/to/script.sh")
         # -> "bash::/path/to/script.sh"
     """
-    # do nothing when not in dev env
-    if not env_is_dev:
-        return sandbox
-
     # only take into account venv and bash sandboxes
     _type, path = law.Sandbox.split_key(sandbox)
     if _type not in ["venv", "bash"]:
         return sandbox
 
-    # create the dev path and check if it exists, with special treatment of the cf_{prod,dev} envs
-    if path == "$CF_BASE/sandboxes/cf_prod.sh":
-        dev_path = "$CF_BASE/sandboxes/cf_dev.sh"
+    # check if the sandbox is dev
+    path_no_ext, ext = os.path.splitext(path)
+    sandbox_is_dev = path_no_ext.endswith("_dev")
+
+    # update the path if needed
+    if not sandbox_is_dev and env_is_dev and add:
+        path = f"{path_no_ext}_dev{ext}"
+    elif sandbox_is_dev and not env_is_dev and remove:
+        path = f"{path_no_ext[:-4]}{ext}"
     else:
-        dev_path = "{}_dev{}".format(*os.path.splitext(path))
-    if not os.path.exists(real_path(dev_path)):
+        # nothing to do in any other case
+        return sandbox
+
+    # if the path does not exist, return the sandbox unchanged as well
+    if not os.path.exists(real_path(path)):
         return sandbox
 
     # all checks passed
-    return law.Sandbox.join_key(_type, dev_path)
+    return law.Sandbox.join_key(_type, path)
 
 
 def freeze(cont: Any) -> Any:

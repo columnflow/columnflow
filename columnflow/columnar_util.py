@@ -728,7 +728,7 @@ def add_ak_alias(
     src_route: Route | Sequence[str] | str,
     dst_route: Route | Sequence[str] | str,
     remove_src: bool = False,
-    missing_strategy: str = "remove",
+    missing_strategy: str = "original",
 ) -> ak.Array:
     """
     Adds an alias to an awkward array *ak_array* pointing the array at *src_route* to *dst_route*
@@ -744,6 +744,32 @@ def add_ak_alias(
         - ``"original"``: If existing, *dst_route* remains unchanged.
         - ``"remove"``: If existing, *dst_route* is removed.
         - ``"raise"``: A *ValueError* is raised.
+
+    Examples:
+
+    .. code-block:: python
+
+        # example 1
+        events = ak.Array(...)  # contains Jet.pt and Jet.pt_jec_up
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt")
+        # -> events.Jet.pt will now be the same as Jet.pt_jec_up
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", remove_src=True)
+        # -> again, events.Jet.pt will now be the same as Jet.pt_jec_up but the latter is removed
+
+
+        # example 2
+        events = ak.Array(...)  # contains only Jet.pt
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt")
+        # -> the source column "Jet.pt_jec_up" does not exist, so nothing happens
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", missing_strategy="raise")
+        # -> an exception will be raised since the source column is missing
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", missing_strategy="remove")
+        # -> the destination column "Jet.pt" will be removed as there is no source column to alias
     """
     # check the strategy
     strategies = ("original", "remove", "raise")
@@ -760,15 +786,19 @@ def add_ak_alias(
     if has_ak_column(ak_array, src_route):
         # add the alias, potentially overwriting existing columns
         ak_array = set_ak_column(ak_array, dst_route, src_route.apply(ak_array))
+
+        # remove the source column
+        if remove_src:
+            ak_array = remove_ak_column(ak_array, src_route)
+
     else:
+        # the source column does not exist, so apply the missing_strategy
         if missing_strategy == "raise":
+            # complain
             raise ValueError(f"no column found in array for route '{src_route}'")
         if missing_strategy == "remove":
+            # remove the actual destination column
             ak_array = remove_ak_column(ak_array, dst_route)
-
-    # remove the source column
-    if remove_src:
-        ak_array = remove_ak_column(ak_array, src_route)
 
     return ak_array
 
@@ -983,6 +1013,7 @@ def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
     behavior: dict | None = None,
+    keep_fields: Sequence[str] | None = None,
     skip_fields: Sequence[str] | None = None,
 ) -> ak.Array:
     """
@@ -990,10 +1021,10 @@ def attach_behavior(
     must be a key of a *behavior* dictionary which defaults to the "behavior" attribute of
     *ak_array* when present. Otherwise, a *ValueError* is raised.
 
-    By default, all subfields of *ak_array* are kept. For further control, *skip_fields* can contain
-    names or name patterns of fields that are filtered.
+    By default, all subfields of *ak_array* are kept. For further control, *keep_fields*
+    (*skip_fields*) can contain names or name patterns of fields that are kept (filtered).
+    *keep_fields* has priority, i.e., when it is set, *skip_fields* is not considered.
     """
-
     if behavior is None:
         behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
@@ -1002,14 +1033,22 @@ def attach_behavior(
             )
 
     # prepare field skipping
+    if keep_fields and skip_fields:
+        raise Exception("can only pass one of 'keep_fields' and 'skip_fields'")
+
     keep_field = lambda field: True
-    if skip_fields:
-        skip_fields = law.util.make_list(skip_fields)
-        skip_fields = {
-            field for field in ak_array.fields
-            if law.util.multi_match(field, skip_fields)
+    if keep_fields or skip_fields:
+        requested_fields = law.util.make_list(keep_fields or skip_fields)
+        requested_fields = {
+            field
+            for field in ak_array.fields
+            if law.util.multi_match(field, requested_fields)
         }
-        keep_field = lambda field: field not in skip_fields
+        keep_field = (
+            (lambda field: field in requested_fields)
+            if keep_fields else
+            (lambda field: field not in requested_fields)
+        )
 
     return ak.zip(
         {field: ak_array[field] for field in ak_array.fields if keep_field(field)},
@@ -1020,9 +1059,9 @@ def attach_behavior(
 
 def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
     """
-    Structures an input *data_array* by making at an awkward array with a layout inferred from
-    *layout_array* and returns it. In particular, this function can be used to create new awkward
-    arrays from existing numpy arrays and forcing a known, arbitrarily ragged shape to it. Example:
+    Takes a *data_array* and structures its contents into the same structure as *layout_array*, with
+    up to one level of nesting. In particular, this function can be used to create new awkward
+    arrays from existing numpy arrays and forcing a known, potentially ragged shape to it. Example:
 
     .. code-block:: python
 
@@ -1032,23 +1071,7 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
         c = layout_ak_array(a, b)
         # <Array [[], [1.0, 2.0], [], [3.0, 4.0, 5.0]] type='4 * var * float32'>
     """
-    # flatten and convert to content
-    if isinstance(data_array, np.ndarray):
-        data = ak.contents.NumpyArray(np.reshape(data_array, (-1,)))
-    elif isinstance(data_array, ak.Array):
-        data = ak.flatten(data_array, axis=None)  # might create a copy
-    else:
-        raise TypeError(f"unhandled type of data array {data_array}")
-
-    # infer the offsets
-    if getattr(layout_array, "layout", None) is None:
-        raise ValueError(f"layout array {layout_array} does not have a valid layout")
-    if getattr(layout_array.layout, "offsets", None):
-        offsets = layout_array.layout.offsets
-    else:
-        raise ValueError(f"offsets extraction not implemented for layout array {layout_array}")
-
-    return ak.Array(ak.contents.ListOffsetArray(offsets, data))
+    return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
 def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
@@ -1303,6 +1326,7 @@ class ArrayFunction(Derivable):
     skip_func = None
     uses = set()
     produces = set()
+    check_columns_present = None
     _dependency_sets = {"uses", "produces"}
     log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
@@ -1387,6 +1411,11 @@ class ArrayFunction(Derivable):
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
+
+        if self.check_columns_present is None:
+            self.check_columns_present = self._dependency_sets
+        elif not self.check_columns_present:
+            self.check_columns_present = set()
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -1553,7 +1582,12 @@ class ArrayFunction(Derivable):
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, _cache: set | None = None) -> set[str]:
+    def _get_columns(
+        self,
+        io_flag: IOFlag,
+        _cache: set | None = None,
+        dependencies: bool = True,
+    ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1570,6 +1604,10 @@ class ArrayFunction(Derivable):
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
             if isinstance(obj, (ArrayFunction, self.Flagged)):
+                # don't propagate to dependencies
+                if not dependencies:
+                    continue
+
                 flagged = obj
                 if isinstance(obj, ArrayFunction):
                     flagged = self.Flagged(obj, io_flag)
@@ -1599,6 +1637,35 @@ class ArrayFunction(Derivable):
     def produced_columns(self) -> set[str]:
         return self._get_produced_columns()
 
+    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
+        """
+        Check if awkward array contains at least one column matching each
+        entry in 'uses' or 'produces' and raise Exception if none were found.
+        """
+
+        columns = self._get_columns(
+            io_flag=io_flag,
+            # only check own columns
+            dependencies=False,
+        )
+
+        missing = set()
+        for column in columns:
+            found = ak_array.layout.form.select_columns(column).columns()
+            if not found:
+                missing.add(column)
+
+        if missing:
+            action = (
+                "receive" if io_flag == self.IOFlag.USES else
+                "produce" if io_flag == self.IOFlag.PRODUCES else
+                "find"
+            )
+            missing = ", ".join(sorted(missing))
+            raise Exception(
+                f"'{self.cls_name}' did not {action} any columns matching: {missing}",
+            )
+
     def __call__(self, *args, **kwargs):
         """
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
@@ -1615,15 +1682,30 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
+        # assume first argument is event array and
+        # check that the 'used' columns are present
+        if "uses" in self.check_columns_present:
+            self._check_columns(args[0], self.IOFlag.USES)
+
+        # call and time the wrapped function
         t1 = time.perf_counter()
         try:
-            return self.call_func(*args, **kwargs)
+            results = self.call_func(*args, **kwargs)
         finally:
             if self.log_runtime:
                 duration = time.perf_counter() - t1
                 logger_perf.info(
                     f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
                 )
+
+        # assume result is an event array or tuple with
+        # an event array as the first element and
+        # check that the 'produced' columns are present
+        if "produces" in self.check_columns_present:
+            result = results[0] if isinstance(results, (tuple, list)) else results
+            self._check_columns(result, self.IOFlag.PRODUCES)
+
+        return results
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -2626,6 +2708,16 @@ class ChunkedIOHandler(object):
             "filter_name" not in read_options["iteritems_options"]
         ):
             filter_name = [Route(s).string_nano_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+            filter_name.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+            )
+
+            # filter on these column names when reading
             read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
 
         # read the events chunk into memory
@@ -2687,6 +2779,15 @@ class ChunkedIOHandler(object):
             "read_dictionary" not in read_options["parquet_options"]
         ):
             read_dictionary = [Route(s).string_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+            read_dictionary.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+            )
+
             read_options.setdefault("parquet_options", {})["read_dictionary"] = read_dictionary
 
         # read the events chunk into memory
