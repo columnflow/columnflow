@@ -1563,7 +1563,7 @@ class ArrayFunction(Derivable):
         self,
         io_flag: IOFlag,
         call_cache: set | None = None,
-        no_dependencies: bool = False,
+        dependencies: bool = True,
     ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
@@ -1582,7 +1582,7 @@ class ArrayFunction(Derivable):
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
             if isinstance(obj, (ArrayFunction, self.Flagged)):
                 # don't propagate to dependencies
-                if no_dependencies:
+                if not dependencies:
                     continue
 
                 flagged = obj
@@ -1623,7 +1623,7 @@ class ArrayFunction(Derivable):
         columns = self._get_columns(
             io_flag=io_flag,
             # only check own columns
-            no_dependencies=True,
+            dependencies=False,
         )
 
         missing = set()
