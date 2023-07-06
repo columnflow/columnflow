@@ -120,6 +120,7 @@ def increment_stats(
     }
 
     # treat groups as combinations of a single group
+    group_combinations = list(group_combinations or [])
     for group_name, group_data in list(group_map.items())[::-1]:
         if group_data.get("combinations_only", False) or (group_name,) in group_combinations:
             continue
