@@ -2730,7 +2730,6 @@ class ChunkedIOHandler(object):
             read_dictionary.extend(
                 f"n{field}"
                 for field in maybe_jagged_fields
-                if field != "GenPart"
             )
 
             read_options.setdefault("parquet_options", {})["read_dictionary"] = read_dictionary
