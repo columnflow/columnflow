@@ -73,7 +73,7 @@ def increment_stats(
     .. code-block:: python
 
         group_map = {
-            "process"]: {
+            "process": {
                 "values": events.process_id,
                 "mask_fn": (lambda v: events.process_id == v),
             },
@@ -108,18 +108,20 @@ def increment_stats(
     event_mask = results.main.event
 
     # increment plain counts
+    stats.setdefault("n_events", 0)
+    stats.setdefault("n_events_selected", 0)
     stats["n_events"] += len(events)
     stats["n_events_selected"] += ak.sum(event_mask, axis=0)
 
     # make values in group map unique
     unique_group_values = {
-        np.unique(group_data["values"])
+        group_name: np.unique(ak.flatten(group_data["values"], axis=None))
         for group_name, group_data in group_map.items()
     }
 
     # treat groups as combinations of a single group
     for group_name, group_data in list(group_map.items())[::-1]:
-        if group_data["combinations_only"] or (group_name,) in group_combinations:
+        if group_data.get("combinations_only", False) or (group_name,) in group_combinations:
             continue
         group_combinations.insert(0, (group_name,))
 
@@ -134,10 +136,15 @@ def increment_stats(
     # get and store the weights per entry in the map
     for name, weights in weight_map.items():
         mask = Ellipsis
-        if isinstance(weights, (tuple, list)) and len(weights) == 2:
-            weights, mask = weights
+        if isinstance(weights, (tuple, list)):
+            if len(weights) == 1:
+                weights = weights[0]
+            elif len(weights) == 2:
+                weights, mask = weights
+            else:
+                raise Exception(f"cannot interpret as weights and optional mask: '{weights}'")
 
-        # sum for all processes
+        # sum for all groups
         stats[f"sum_{name}"] += ak.sum(weights[mask])
 
         # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
