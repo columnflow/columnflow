@@ -15,6 +15,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox
+from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
@@ -50,6 +51,18 @@ class CreateDatacards(
         return reqs
 
     def requires(self):
+        # helper to find automatic datasets
+        def get_mc_datasets(proc_obj: dict) -> list[str]:
+            # when datasets are defined on the process object itself, return them
+            if proc_obj.config_mc_datasets:
+                return proc_obj.config_mc_datasets
+
+            # if not, check the config
+            return [
+                dataset_inst.name
+                for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
+            ]
+
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
@@ -65,7 +78,7 @@ class CreateDatacards(
                     branch=-1,
                     _exclude={"branches"},
                 )
-                for dataset in proc_obj.config_mc_datasets
+                for dataset in get_mc_datasets(proc_obj)
             }
             for proc_obj in cat_obj.processes
         }
