@@ -18,7 +18,6 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
-from columnflow.selection.util import create_collections_from_masks
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 
 
@@ -83,8 +82,9 @@ class ReduceEvents(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            sorted_ak_to_parquet, set_ak_column,
         )
+        from columnflow.selection.util import create_collections_from_masks
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -199,7 +199,13 @@ class ReduceEvents(
             # loop through all object selection, go through their masks
             # and create new collections if required
             if "objects" in sel.fields:
-                events = create_collections_from_masks(events, sel.objects, event_mask=event_mask)
+                # apply the event mask
+                obj_masks = sel.objects
+                for src_name in obj_masks.fields:
+                    for dst_name in obj_masks[src_name].fields:
+                        obj_mask = obj_masks[src_name, dst_name][event_mask]
+                        obj_masks = set_ak_column(obj_masks, f"{src_name}.{dst_name}", obj_mask)
+                events = create_collections_from_masks(events, obj_masks)
 
             # remove columns
             events = route_filter(events)
