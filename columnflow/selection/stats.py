@@ -145,8 +145,9 @@ def increment_stats(
             else:
                 raise Exception(f"cannot interpret as weights and optional mask: '{weights}'")
 
-        # sum for all groups
+        # sum for all groups, with and without the seleciton
         stats[f"sum_{name}"] += ak.sum(weights[mask])
+        stats[f"sum_{name}_selected"] += ak.sum(weights[event_mask & mask])
 
         # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
         joinable_mask = True if mask is Ellipsis else mask
@@ -154,10 +155,13 @@ def increment_stats(
         # per group combination
         for group_names in group_combinations:
             group_key = f"sum_{name}_per_" + "_and_".join(group_names)
+            group_key_sel = f"sum_{name}_selected_per_" + "_and_".join(group_names)
 
-            # set the default structure
+            # set the default structures
             if group_key not in stats:
                 stats[group_key] = group_defaults[len(group_names)]()
+            if group_key_sel not in stats:
+                stats[group_key_sel] = group_defaults[len(group_names)]()
 
             # set values
             for values in itertools.product(*(unique_group_values[g] for g in group_names)):
@@ -166,12 +170,15 @@ def increment_stats(
                     and_,
                     (group_map[g]["mask_fn"](v) for g, v in zip(group_names, values)),
                 )
-                # find the innermost dictionary to perform the in-place item assignment
-                innermost_dict = reduce(
-                    getitem_,
-                    [stats[group_key]] + list(map(str, values[:-1])),
+                # find the innermost dict to perform the in-place item assignment, then increment
+                str_values = list(map(str, values))
+                innermost_dict = reduce(getitem_, [stats[group_key]] + str_values[:-1])
+                innermost_dict[str_values[-1]] += ak.sum(
+                    weights[group_mask & joinable_mask],
                 )
-                # increment
-                innermost_dict[str(values[-1])] += ak.sum(weights[group_mask & joinable_mask])
+                innermost_dict_sel = reduce(getitem_, [stats[group_key_sel]] + str_values[:-1])
+                innermost_dict_sel[str_values[-1]] += ak.sum(
+                    weights[event_mask & group_mask & joinable_mask],
+                )
 
     return events
