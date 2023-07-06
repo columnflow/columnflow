@@ -13,7 +13,7 @@ __all__ = [
 
 import re
 import itertools
-from typing import Callable, Any
+from typing import Callable, Any, Sequence
 
 import law
 import order as od
@@ -84,6 +84,32 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
     )
 
 
+def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
+    """
+    Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift
+    sources, the latter ones are expanded with both possible directions and returned in a common
+    list.
+
+    Example:
+
+    .. code-block:: python
+
+        expand_shift_sources(["jes", "jer_up"])
+        # -> ["jes_up", "jes_down", "jer_up"]
+    """
+    _shifts = []
+    for shift in shifts:
+        try:
+            od.Shift.split_name(shift)
+            _shifts.append(shift)
+        except ValueError as e:
+            if not isinstance(shift, str):
+                raise e
+            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
+
+    return law.util.make_unique(_shifts)
+
+
 def create_category_id(
     config: od.Config,
     category_name: str,
@@ -130,10 +156,11 @@ def add_category(config: od.Config, **kwargs) -> od.Category:
 
 def create_category_combinations(
     config: od.Config,
-    categories: dict[str, list[od.Categories]],
+    categories: dict[str, list[od.Category]],
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
+    skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
 ) -> int:
     """
     Given a *config* object and sequences of *categories* in a dict, creates all combinations of
@@ -152,7 +179,9 @@ def create_category_combinations(
     and a list of all parent selection statements.
 
     If the name of a new category is already known to *config* it is skipped unless *skip_existing*
-    is *False*.
+    is *False*. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
+    names to categories that represents the combination of categories to be added. In case *skip_fn*
+    returns *True*, the combination is skipped.
 
     Example:
 
@@ -164,10 +193,9 @@ def create_category_combinations(
             "n_tags": [cfg.get_category("0t"), cfg.get_category("1t")],
         }
 
-        def name_fn(lepton=None, n_jets=None, n_tags=None):
+        def name_fn(categories):
             # simple implementation: join names in defined order if existing
-            parts = [lepton, n_jets, n_tags]
-            return "__".join(part for part in parts if part is not None)
+            return "__".join(cat.name for cat in categories.values() if cat)
 
         def kwargs_fn(categories):
             # return arguments that are forwarded to the category init
@@ -202,13 +230,14 @@ def create_category_combinations(
             for root_cats in itertools.product(*_categories):
                 # build the name
                 root_cats = dict(zip(_group_names, root_cats))
-                cat_name = name_fn(**{
-                    group_name: cat.name
-                    for group_name, cat in root_cats.items()
-                })
+                cat_name = name_fn(root_cats)
 
                 # skip when already existing
                 if skip_existing and config.has_category(cat_name, deep=True):
+                    continue
+
+                # skip when manually triggered
+                if callable(skip_fn) and skip_fn(root_cats):
                     continue
 
                 # create arguments for the new category
