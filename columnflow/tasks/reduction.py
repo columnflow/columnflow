@@ -202,12 +202,7 @@ class ReduceEvents(
             # and create new collections if required
             if "objects" in sel.fields:
                 # apply the event mask
-                obj_masks = sel.objects
-                for src_name in obj_masks.fields:
-                    for dst_name in obj_masks[src_name].fields:
-                        obj_mask = obj_masks[src_name, dst_name][event_mask]
-                        obj_masks = set_ak_column(obj_masks, f"{src_name}.{dst_name}", obj_mask)
-                events = create_collections_from_masks(events, obj_masks)
+                events = create_collections_from_masks(events, sel.objects[event_mask])
 
             # remove columns
             events = route_filter(events)
