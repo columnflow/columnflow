@@ -98,13 +98,14 @@ def ak_evaluate(evaluator, *args):
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId", "fixedGridRhoFastjetAll", "Rho.fixedGridRhoFastjetAll",
         attach_coffea_behavior,
     },
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
+    check_columns_present={"produces"},  # some used columns optional
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -395,9 +396,9 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
         "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
-        "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
+        "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
     },
@@ -408,6 +409,7 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
         "MET.pt", "MET.phi",
         "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
+    check_columns_present={"produces"},  # some used columns optional
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc
