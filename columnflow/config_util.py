@@ -59,9 +59,9 @@ def get_datasets_from_process(
 ) -> list[od.Dataset]:
     r"""
     Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
-    containg matching processes. This is done by walking through *process* and its child processes
-    and checking whether their are contained in known datasets. *strategy* controls how possible
-    amgiguities are resolved:
+    contain matching processes. This is done by walking through *process* and its child processes
+    and checking whether they are contained in known datasets. *strategy* controls how possible
+    ambiguities are resolved:
 
         - ``"all"``: The full process tree is traversed and all matching datasets are considered.
             Note that this might lead to a potential overrepresentation of the phase space.
@@ -108,7 +108,7 @@ def get_datasets_from_process(
     In addition, two arguments configure how the check is performed whether a process is contained
     in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
     Otherwise, all datasets matching a specific process are returned. Forthe check itself,
-    *check_deep* is forwarded to :py:meth:`order.Datasaet.has_process`.
+    *check_deep* is forwarded to :py:meth:`order.Dataset.has_process`.
     """
     # check the strategy
     known_strategies = ["all", "inclusive", "exclusive", "exclusive_strict"]
@@ -119,7 +119,7 @@ def get_datasets_from_process(
     # make sure we are dealing a process instance
     root_inst = config.get_process(process)
 
-    # the tree traversal differens depending on the strategy, so distinsuish cases
+    # the tree traversal differs depending on the strategy, so distinguish cases
     if strategy in ["all", "inclusive"]:
         dataset_insts = []
         for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="bfs"):
@@ -142,6 +142,7 @@ def get_datasets_from_process(
         return law.util.make_unique(dataset_insts)
 
     # at this point, strategy is exclusive or exclusive_strict
+    assert strategy in ("exclusive", "exclusive_strict")
     dataset_insts = OrderedDict()
     for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
         # check if child processes have matched datasets already

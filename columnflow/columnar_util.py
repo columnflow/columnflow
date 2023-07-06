@@ -744,6 +744,32 @@ def add_ak_alias(
         - ``"original"``: If existing, *dst_route* remains unchanged.
         - ``"remove"``: If existing, *dst_route* is removed.
         - ``"raise"``: A *ValueError* is raised.
+
+    Examples:
+
+    .. code-block:: python
+
+        # example 1
+        events = ak.Array(...)  # contains Jet.pt and Jet.pt_jec_up
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt")
+        # -> events.Jet.pt will now be the same as Jet.pt_jec_up
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", remove_src=True)
+        # -> again, events.Jet.pt will now be the same as Jet.pt_jec_up but the latter is removed
+
+
+        # example 2
+        events = ak.Array(...)  # contains only Jet.pt
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt")
+        # -> the source column "Jet.pt_jec_up" does not exist, so nothing happens
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", missing_strategy="raise")
+        # -> an exception will be raised since the source column is missing
+
+        events = add_ak_alias(events, "Jet.pt_jec_up", "Jet.pt", missing_strategy="remove")
+        # -> the destination column "Jet.pt" will be removed as there is no source column to alias
     """
     # check the strategy
     strategies = ("original", "remove", "raise")
@@ -766,9 +792,12 @@ def add_ak_alias(
             ak_array = remove_ak_column(ak_array, src_route)
 
     else:
+        # the source column does not exist, so apply the missing_strategy
         if missing_strategy == "raise":
+            # complain
             raise ValueError(f"no column found in array for route '{src_route}'")
         if missing_strategy == "remove":
+            # remove the actual destination column
             ak_array = remove_ak_column(ak_array, dst_route)
 
     return ak_array
@@ -1004,6 +1033,9 @@ def attach_behavior(
             )
 
     # prepare field skipping
+    if keep_fields and skip_fields:
+        raise Exception("can only pass one of 'keep_fields' and 'skip_fields'")
+
     keep_field = lambda field: True
     if keep_fields or skip_fields:
         requested_fields = law.util.make_list(keep_fields or skip_fields)
