@@ -1685,7 +1685,10 @@ class ArrayFunction(Derivable):
         # assume first argument is event array and
         # check that the 'used' columns are present
         if "uses" in self.check_columns_present:
-            self._check_columns(args[0], self.IOFlag.USES)
+            # when args is empty (when this method was called with keyword arguments only),
+            # use the first keyword argument
+            first_arg = args[0] if args else list(kwargs.values())[0]
+            self._check_columns(first_arg, self.IOFlag.USES)
 
         # call and time the wrapped function
         t1 = time.perf_counter()
@@ -2036,7 +2039,7 @@ class TaskArrayFunction(ArrayFunction):
             call_cache[self] += 1
 
         # stack all kwargs
-        kwargs = {"call_cache": call_cache, **kwargs}
+        kwargs = {**kwargs, "call_cache": call_cache}
 
         return super().__call__(*args, **kwargs)
 

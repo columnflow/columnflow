@@ -114,7 +114,7 @@ def increment_stats(
     stats.setdefault("n_events", 0)
     stats.setdefault("n_events_selected", 0)
     stats["n_events"] += len(events)
-    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
+    stats["n_events_selected"] += int(ak.sum(event_mask, axis=0))
 
     # make values in group map unique
     unique_group_values = {
@@ -148,12 +148,12 @@ def increment_stats(
             else:
                 raise Exception(f"cannot interpret as weights and optional mask: '{weights}'")
 
-        # sum for all groups, with and without the seleciton
-        stats[f"sum_{name}"] += ak.sum(weights[mask])
-        stats[f"sum_{name}_selected"] += ak.sum(weights[event_mask & mask])
-
         # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
         joinable_mask = True if mask is Ellipsis else mask
+
+        # sum for all groups, with and without the seleciton
+        stats[f"sum_{name}"] += float(ak.sum(weights[mask]))
+        stats[f"sum_{name}_selected"] += float(ak.sum(weights[event_mask & joinable_mask]))
 
         # per group combination
         for group_names in group_combinations:
@@ -176,12 +176,12 @@ def increment_stats(
                 # find the innermost dict to perform the in-place item assignment, then increment
                 str_values = list(map(str, values))
                 innermost_dict = reduce(getitem_, [stats[group_key]] + str_values[:-1])
-                innermost_dict[str_values[-1]] += ak.sum(
+                innermost_dict[str_values[-1]] += float(ak.sum(
                     weights[group_mask & joinable_mask],
-                )
+                ))
                 innermost_dict_sel = reduce(getitem_, [stats[group_key_sel]] + str_values[:-1])
-                innermost_dict_sel[str_values[-1]] += ak.sum(
+                innermost_dict_sel[str_values[-1]] += float(ak.sum(
                     weights[event_mask & group_mask & joinable_mask],
-                )
+                ))
 
     return events

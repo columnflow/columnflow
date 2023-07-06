@@ -169,6 +169,14 @@ def example(
         }
         # store all weights per process id and jet multiplicity
         group_combinations.append(("process", "njet"))
-    self[increment_stats](events, results, stats, weight_map, group_map, group_combinations, **kwargs)
+    self[increment_stats](
+        events=events,
+        results=results,
+        stats=stats,
+        weight_map=weight_map,
+        group_map=group_map,
+        group_combinations=group_combinations,
+        **kwargs,
+    )
 
     return events, results
