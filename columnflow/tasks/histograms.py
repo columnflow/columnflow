@@ -31,7 +31,7 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -54,8 +54,9 @@ class CreateHistograms(
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=p)
-                    for p in self.producers
+                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    for producer_inst in self.producer_insts
+                    if producer_inst.produced_columns
                 ]
             if self.ml_models:
                 reqs["ml"] = [
@@ -72,8 +73,9 @@ class CreateHistograms(
 
         if self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
         if self.ml_models:
             reqs["ml"] = [
@@ -244,7 +246,7 @@ class MergeHistograms(
         description="when True, remove particlar input histograms after merging; default: False",
     )
 
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -332,7 +334,7 @@ class MergeShiftedHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # disable the shift parameter
     shift = None

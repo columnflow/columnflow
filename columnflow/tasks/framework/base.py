@@ -590,7 +590,7 @@ class ShiftTask(ConfigTask):
 
         if task:
             if task.local_shift_inst:
-                kwargs["shift_inst"] = task.local_shift_inst
+                kwargs["local_shift_inst"] = task.local_shift_inst
             if task.global_shift_inst:
                 kwargs["global_shift_inst"] = task.global_shift_inst
         else:
