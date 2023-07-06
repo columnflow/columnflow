@@ -75,33 +75,33 @@ def get_datasets_from_process(
     As an example, consider the process tree
 
     .. code-block:: none
-
                --- single_top ---
               /        |         \
              /         |          \
         s_channel  t_channel  tw_channel
-           / \        / \
-          /   \      /   \
-         t   tbar   t   tbar
+           / \        / \         / \
+          /   \      /   \       /   \
+         t   tbar   t   tbar    t   tbar
 
     and datasets existing for
 
     .. code-block:: none
-
         1. single_top__s_channel_t
         2. single_top__s_channel_tbar
         3. single_top__t_channel
         4. single_top__t_channel_t
         5. single_top__tw_channel
+        6. single_top__tw_channel_t
+        7. single_top__tw_channel_tbar
 
     in the *config*. Depending on *strategy*, the returned datasets for process ``single_top``are:
 
-        - ``"all"``: ``[1, 2, 3, 4, 5]``. Simply all datasets matching any subprocess.
-        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t`` since a more
-            inclusive dataset (``single_top__t_channel``) exists.
-        - ``"exclusive"``: ``[1, 2, 4, 5]``. Skipping ``single_top__t_channel`` since a more
-            exclusive dataset (``single_top__t_channel_t``) exists.
-        - ``"exclusive_strict"``: ``[1, 2, 3, 5]``. Not skipping ``single_top__t_channel`` since not
+        - ``"all"``: ``[1, 2, 3, 4, 5, 6, 7]``. Simply all datasets matching any subprocess.
+        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``, ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more
+            inclusive datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
+        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and ``single_top__tw_channel`` since more
+            exclusive datasets (``single_top__t_channel_t``, ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
+        - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping ``single_top__t_channel`` since not
             all subprocesses of ``t_channel`` match a dataset (there is no
             ``single_top__t_channel_tbar`` dataset).
 
