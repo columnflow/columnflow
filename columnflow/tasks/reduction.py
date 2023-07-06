@@ -84,7 +84,7 @@ class ReduceEvents(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet, set_ak_column,
+            sorted_ak_to_parquet,
         )
         from columnflow.selection.util import create_collections_from_masks
 
