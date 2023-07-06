@@ -135,7 +135,7 @@ def increment_stats(
     }
     for i in range(2, max([len(group_names) for group_names in group_combinations] + [0]) + 1):
         # use a self-executing closure to avoid reliance inside the lambda on i in the loop body
-        group_defaults[i] = (lambda i: (lambda: group_defaults[i - 1]))(i)
+        group_defaults[i] = (lambda i: (lambda: defaultdict(group_defaults[i - 1])))(i)
 
     # get and store the weights per entry in the map
     for name, weights in weight_map.items():
