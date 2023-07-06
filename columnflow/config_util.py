@@ -97,13 +97,15 @@ def get_datasets_from_process(
     in the *config*. Depending on *strategy*, the returned datasets for process ``single_top``are:
 
         - ``"all"``: ``[1, 2, 3, 4, 5, 6, 7]``. Simply all datasets matching any subprocess.
-        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``, ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more
-            inclusive datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
-        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and ``single_top__tw_channel`` since more
-            exclusive datasets (``single_top__t_channel_t``, ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
-        - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping ``single_top__t_channel`` since not
-            all subprocesses of ``t_channel`` match a dataset (there is no
-            ``single_top__t_channel_tbar`` dataset).
+        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``,
+            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more inclusive
+            datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
+        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and
+            ``single_top__tw_channel`` since more exclusive datasets (``single_top__t_channel_t``,
+            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
+        - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping
+            ``single_top__t_channel`` since not all subprocesses of ``t_channel`` match a dataset
+            (there is no ``single_top__t_channel_tbar`` dataset).
 
     In addition, two arguments configure how the check is performed whether a process is contained
     in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
