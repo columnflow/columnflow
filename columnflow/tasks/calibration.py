@@ -24,7 +24,7 @@ class CalibrateEvents(
     RemoteWorkflow,
 ):
     # default sandbox, might be overwritten by calibrator function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -54,7 +54,13 @@ class CalibrateEvents(
         return reqs
 
     def output(self):
-        return {"columns": self.target(f"calib_{self.branch}.parquet")}
+        outputs = {}
+
+        # only declare the output in case the calibrator actually creates columns
+        if self.calibrator_inst.produced_columns:
+            outputs["columns"] = self.target(f"calib_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @ensure_proxy
