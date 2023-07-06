@@ -1303,6 +1303,7 @@ class ArrayFunction(Derivable):
     skip_func = None
     uses = set()
     produces = set()
+    check_columns_present = None
     _dependency_sets = {"uses", "produces"}
     log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
@@ -1387,6 +1388,11 @@ class ArrayFunction(Derivable):
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
+
+        if self.check_columns_present is None:
+            self.check_columns_present = self._dependency_sets
+        elif not self.check_columns_present:
+            self.check_columns_present = set()
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -1553,7 +1559,12 @@ class ArrayFunction(Derivable):
 
         return deps
 
-    def _get_columns(self, io_flag: IOFlag, call_cache: set | None = None, debug=False) -> set[str]:
+    def _get_columns(
+        self,
+        io_flag: IOFlag,
+        call_cache: set | None = None,
+        dependencies: bool = True,
+    ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1570,6 +1581,10 @@ class ArrayFunction(Derivable):
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
             if isinstance(obj, (ArrayFunction, self.Flagged)):
+                # don't propagate to dependencies
+                if not dependencies:
+                    continue
+
                 flagged = obj
                 if isinstance(obj, ArrayFunction):
                     flagged = self.Flagged(obj, io_flag)
@@ -1599,6 +1614,35 @@ class ArrayFunction(Derivable):
     def produced_columns(self) -> set[str]:
         return self._get_produced_columns()
 
+    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
+        """
+        Check if awkward array contains at least one column matching each
+        entry in 'uses' or 'produces' and raise Exception if none were found.
+        """
+
+        columns = self._get_columns(
+            io_flag=io_flag,
+            # only check own columns
+            dependencies=False,
+        )
+
+        missing = set()
+        for column in columns:
+            found = ak_array.layout.form.select_columns(column).columns()
+            if not found:
+                missing.add(column)
+
+        if missing:
+            action = (
+                "receive" if io_flag == self.IOFlag.USES else
+                "produce" if io_flag == self.IOFlag.PRODUCES else
+                "find"
+            )
+            missing = ", ".join(sorted(missing))
+            raise Exception(
+                f"'{self.cls_name}' did not {action} any columns matching: {missing}",
+            )
+
     def __call__(self, *args, **kwargs):
         """
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
@@ -1615,15 +1659,30 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
+        # assume first argument is event array and
+        # check that the 'used' columns are present
+        if "uses" in self.check_columns_present:
+            self._check_columns(args[0], self.IOFlag.USES)
+
+        # call and time the wrapped function
         t1 = time.perf_counter()
         try:
-            return self.call_func(*args, **kwargs)
+            results = self.call_func(*args, **kwargs)
         finally:
             if self.log_runtime:
                 duration = time.perf_counter() - t1
                 logger_perf.info(
                     f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
                 )
+
+        # assume result is an event array or tuple with
+        # an event array as the first element and
+        # check that the 'produced' columns are present
+        if "produces" in self.check_columns_present:
+            result = results[0] if isinstance(results, (tuple, list)) else results
+            self._check_columns(result, self.IOFlag.PRODUCES)
+
+        return results
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -2593,6 +2652,16 @@ class ChunkedIOHandler(object):
             "filter_name" not in read_options["iteritems_options"]
         ):
             filter_name = [Route(s).string_nano_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+            filter_name.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+            )
+
+            # filter on these column names when reading
             read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
 
         # read the events chunk into memory
@@ -2654,6 +2723,15 @@ class ChunkedIOHandler(object):
             "read_dictionary" not in read_options["parquet_options"]
         ):
             read_dictionary = [Route(s).string_column for s in read_columns]
+
+            # add names prefixed with an 'n' to the list of columns to read
+            # (needed to construct the nested list structure of jagged columns)
+            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+            read_dictionary.extend(
+                f"n{field}"
+                for field in maybe_jagged_fields
+            )
+
             read_options.setdefault("parquet_options", {})["read_dictionary"] = read_dictionary
 
         # read the events chunk into memory
