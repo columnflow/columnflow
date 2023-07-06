@@ -18,8 +18,8 @@ ak = maybe_import("awkward")
 @producer(
     uses={
         # global columns for event seed
-        "run", "luminosityBlock", "event", "nGenJet", "nGenPart", "nJet", "nPhoton", "nMuon",
-        "nElectron", "nTau", "nSV",
+        "run", "luminosityBlock", "event",
+        "Photon.pt", "SV.pt",
         # first-object columns for event seed
         "Tau.jetIdx", "Tau.decayMode",
         "Muon.jetIdx", "Muon.nStations",
@@ -42,9 +42,19 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     seed = self.create_seed(events.event)
     prime_offset = 3
 
-    # get global integers, with a slight difference between data and mc
-    global_fields = ["nGenJet", "nGenPart"] if self.dataset_inst.is_mc else ["run", "luminosityBlock"]
-    global_fields.extend(["nJet", "nPhoton", "nMuon", "nElectron", "nTau", "nSV"])
+    # get counts of jagged fields
+    global_fields = []
+    for field in ["Jet", "Photon", "Muon", "Electron", "Tau", "SV"] + (
+        ["GenJet", "GenPart"] if self.dataset_inst.is_mc else []
+    ):
+        events[f"n{field}"] = ak.num(events[field])
+        global_fields.append(f"n{field}")
+
+    # get run and lumi for data
+    if not self.dataset_inst.is_mc:
+        global_fields.extend(["run", "luminosityBlock"])
+
+    # calculate seed
     for i, f in enumerate(global_fields, prime_offset):
         seed = seed + primes[i] * (events[f] if f in events.fields else ak.num(events[f[1:]]))
 
@@ -70,6 +80,21 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     return events
 
 
+@deterministic_event_seeds.init
+def deterministic_event_seeds_init(self: Producer) -> None:
+    """
+    Init function that adds MC-specific columns needed for seed
+    determinations.
+    """
+    if not hasattr(self, "dataset_inst") or not self.dataset_inst.is_mc:
+        return
+
+    self.uses |= {
+        "GenJet.pt",
+        "GenPart.pt",
+    }
+
+
 @deterministic_event_seeds.setup
 def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
@@ -85,7 +110,7 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, re
 
 
 @producer(
-    uses={deterministic_event_seeds, "nJet"},
+    uses={deterministic_event_seeds},
     produces={"Jet.deterministic_seed"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
