@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.stats import increment_stats
+from columnflow.selection.util import sorted_indices_from_mask
 from columnflow.production.processes import process_ids
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.util import maybe_import
@@ -81,10 +82,6 @@ def jet_selection(
     jet_mask = (events.Jet.pt >= 25.0) & (abs(events.Jet.eta) < 2.4)
     jet_sel = ak.sum(jet_mask, axis=1) >= 1
 
-    # creat pt sorted jet indices
-    jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)
-    jet_indices = jet_indices[jet_mask[jet_indices]]
-
     # build and return selection results
     # "objects" maps source columns to new columns and selections to be applied on the old columns
     # to create them, e.g. {"Jet": {"MyCustomJetCollection": indices_applied_to_Jet}}
@@ -94,7 +91,7 @@ def jet_selection(
         },
         objects={
             "Jet": {
-                "Jet": jet_indices,
+                "Jet": sorted_indices_from_mask(jet_mask, events.Jet.pt, ascending=False),
             },
         },
         aux={
