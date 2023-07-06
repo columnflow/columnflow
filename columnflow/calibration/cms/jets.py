@@ -105,6 +105,7 @@ def ak_evaluate(evaluator, *args):
     produces={
         "Jet.pt", "Jet.mass", "Jet.rawFactor",
     },
+    check_columns_present={"produces"},  # some used columns optional
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -408,6 +409,7 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
         "MET.pt", "MET.phi",
         "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
+    check_columns_present={"produces"},  # some used columns optional
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc
