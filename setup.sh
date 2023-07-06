@@ -422,7 +422,7 @@ cf_setup_software_stack() {
     #   CF_REMOTE_JOB
     #       When "1", the software stack is sourced but not built.
     #   CF_CI_JOB
-    #       When "1", the "cf_prod" venv is skipped and only the "cf_dev" env is built.
+    #       When "1", the "cf" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
 
@@ -553,8 +553,8 @@ EOF
         # venv setup
         #
 
-        # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
-        # - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
+        # - "cf"     : contains the minimal stack to run tasks and is sent alongside jobs
+        # - "cf_dev" : "cf" + additional python tools for local development (e.g. ipython)
 
         show_version_warning() {
             >&2 echo
@@ -563,13 +563,13 @@ EOF
             >&2 echo
         }
 
-        # source the prod sandbox, potentially skipped in CI jobs
+        # source the production sandbox, potentially skipped in CI jobs
         local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
-            bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
+            bash -c "source \"${CF_BASE}/sandboxes/cf.sh\" \"\" \"silent\""
             ret="$?"
             if [ "${ret}" = "21" ]; then
-                show_version_warning "cf_prod"
+                show_version_warning "cf"
             elif [ "${ret}" != "0" ]; then
                 return "${ret}"
             fi
@@ -603,8 +603,8 @@ EOF
         micromamba activate || return "$?"
         echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
-        # source the prod sandbox
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
+        # source the production sandbox
+        source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
 }
 
