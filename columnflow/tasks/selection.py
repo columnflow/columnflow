@@ -194,15 +194,15 @@ class SelectEvents(
         outputs["stats"].dump(stats, indent=4, formatter="json")
 
         # print some stats
-        eff = safe_div(stats["n_events_selected"], stats["n_events"])
+        eff = safe_div(stats["num_events_selected"], stats["num_events"])
         eff_weighted = safe_div(stats["sum_mc_weight_selected"], stats["sum_mc_weight"])
-        self.publish_message(f"all events         : {int(stats['n_events'])}")
-        self.publish_message(f"sel. events        : {int(stats['n_events_selected'])}")
+        self.publish_message(f"all events         : {int(stats['num_events'])}")
+        self.publish_message(f"sel. events        : {int(stats['num_events_selected'])}")
         self.publish_message(f"efficiency         : {eff:.4f}")
         self.publish_message(f"sum mc weights     : {stats['sum_mc_weight']}")
         self.publish_message(f"sum sel. mc weights: {stats['sum_mc_weight_selected']}")
         self.publish_message(f"efficiency         : {eff_weighted:.4f}")
-        if not stats["n_events_selected"]:
+        if not eff:
             self.publish_message(law.util.colored("no events selected", "red"))
 
 

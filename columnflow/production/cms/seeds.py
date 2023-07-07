@@ -8,7 +8,7 @@ import hashlib
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, primes, InsertableDict
-from columnflow.columnar_util import Route, set_ak_column
+from columnflow.columnar_util import Route, set_ak_column, has_ak_column
 
 
 np = maybe_import("numpy")
@@ -47,7 +47,9 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     for field in ["Jet", "Photon", "Muon", "Electron", "Tau", "SV"] + (
         ["GenJet", "GenPart"] if self.dataset_inst.is_mc else []
     ):
-        events[f"n{field}"] = ak.num(events[field])
+        if not has_ak_column(events, field):
+            continue
+        events = set_ak_column(events, f"n{field}", ak.num(events[field], axis=1))
         global_fields.append(f"n{field}")
 
     # get run and lumi for data
@@ -64,7 +66,9 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
         "Jet.nElectrons", "Jet.nMuons",
     ]
     for i, f in enumerate(object_fields, prime_offset + len(global_fields)):
-        values = events[Route(f).fields]
+        if not has_ak_column(events, f):
+            continue
+        values = Route(f).apply(events)
         seed = seed + primes[i] * (ak.fill_none(ak.firsts(values, axis=1), -1) + 1)
 
     # create and store them
