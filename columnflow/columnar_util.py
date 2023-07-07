@@ -1752,7 +1752,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, inputs, reader_targets):
+        def setup(self, reqs, inputs, reader_targets):
             # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
 

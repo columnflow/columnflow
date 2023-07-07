@@ -148,31 +148,31 @@ def example(
     events = self[cutflow_features](events, results.objects, **kwargs)
 
     # increment stats
-    weight_map = {}
+    weight_map = {
+        "num_events": Ellipsis,
+        "num_events_selected": results.main.event,
+    }
     group_map = {}
     group_combinations = []
     if self.dataset_inst.is_mc:
-        # mc weight for all events
-        weight_map["mc_weight"] = (events.mc_weight, Ellipsis)
-        # mc weight for selected events
-        weight_map["mc_weight_selected"] = (events.mc_weight, results.main.event)
-        # store all weights per process id
-        group_map["process"] = {
-            "values": events.process_id,
-            "mask_fn": (lambda v: events.process_id == v),
+        weight_map = {
+            **weight_map,
+            # mc weight for all events
+            "sum_mc_weight": (events.mc_weight, Ellipsis),
+            "sum_mc_weight_selected": (events.mc_weight, results.main.event),
         }
-        # store all weights per jet multiplicity
-        group_map["njet"] = {
-            "values": results.x.n_jets,
-            "mask_fn": (lambda v: results.x.n_jets == v),
-            "combinations_only": True,
+        group_map = {
+            **group_map,
+            "njet": {
+                "values": results.x.n_jets,
+                "mask_fn": (lambda v: results.x.n_jets == v),
+            },
         }
-        # store all weights per process id and jet multiplicity
         group_combinations.append(("process", "njet"))
-    self[increment_stats](
-        events=events,
-        results=results,
-        stats=stats,
+    events = self[increment_stats](
+        events,
+        results,
+        stats,
         weight_map=weight_map,
         group_map=group_map,
         group_combinations=group_combinations,
