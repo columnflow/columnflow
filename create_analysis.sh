@@ -268,6 +268,7 @@ create_analysis() {
     echo
 
     echo_color bright "1. Setup the repository and install the environment."
+    echo "  > cd ${cf_analysis_name}"
     echo "  > source setup.sh [optional_setup_name]"
 
     echo

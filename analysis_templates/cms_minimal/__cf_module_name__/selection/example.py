@@ -4,9 +4,11 @@
 Exemplary selection methods.
 """
 
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
+from columnflow.selection.stats import increment_stats
+from columnflow.selection.util import sorted_indices_from_mask
 from columnflow.production.processes import process_ids
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.util import maybe_import
@@ -19,36 +21,36 @@ ak = maybe_import("awkward")
 
 
 #
-# selector used by categories definitions
+# selectors used by categories definitions
 # (not "exposed" to be used from the command line)
 #
 
 @selector(uses={"event"})
 def sel_incl(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
-    # return a mask with
+    # fully inclusive selection
     return ak.ones_like(events.event) == 1
 
 
-@selector(uses={"nJet", "Jet.pt"})
+@selector(uses={"Jet.pt"})
 def sel_2j(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
     # two or more jets
-    return ak.sum(events.Jet.pt, axis=1) >= 2
+    return ak.num(events.Jet.pt, axis=1) >= 2
 
 
 #
-# actual selectors
+# other unexposed selectors
+# (not selectable from the command line but used by other, exposed selectors)
 #
 
 
 @selector(
-    uses={"nMuon", "Muon.pt", "Muon.eta"},
-    exposed=True,
+    uses={"Muon.pt", "Muon.eta"},
 )
 def muon_selection(
     self: Selector,
     events: ak.Array,
     **kwargs,
-) -> SelectionResult:
+) -> tuple[ak.Array, SelectionResult]:
     # example muon selection: exactly one muon
     muon_mask = (events.Muon.pt >= 20.0) & (abs(events.Muon.eta) < 2.1)
     muon_sel = ak.sum(muon_mask, axis=1) == 1
@@ -69,21 +71,16 @@ def muon_selection(
 
 
 @selector(
-    uses={"nJet", "Jet.pt", "Jet.eta"},
-    exposed=True,
+    uses={"Jet.pt", "Jet.eta"},
 )
 def jet_selection(
     self: Selector,
     events: ak.Array,
     **kwargs,
-) -> SelectionResult:
+) -> tuple[ak.Array, SelectionResult]:
     # example jet selection: at least one jet
     jet_mask = (events.Jet.pt >= 25.0) & (abs(events.Jet.eta) < 2.4)
     jet_sel = ak.sum(jet_mask, axis=1) >= 1
-
-    # creat pt sorted jet indices
-    jet_indices = ak.argsort(events.Jet.pt, axis=-1, ascending=False)
-    jet_indices = jet_indices[jet_mask[jet_indices]]
 
     # build and return selection results
     # "objects" maps source columns to new columns and selections to be applied on the old columns
@@ -94,85 +91,25 @@ def jet_selection(
         },
         objects={
             "Jet": {
-                "Jet": jet_indices,
+                "Jet": sorted_indices_from_mask(jet_mask, events.Jet.pt, ascending=False),
             },
+        },
+        aux={
+            "n_jets": ak.sum(jet_mask, axis=1),
         },
     )
 
 
 #
-# combined selectors
+# exposed selectors
+# (those that can be invoked from the command line)
 #
-
-@selector(
-    uses={"mc_weight", "process_id"},
-)
-def increment_stats(
-    self: Selector,
-    events: ak.Array,
-    results: SelectionResult,
-    stats: dict,
-    **kwargs,
-) -> ak.Array:
-    """
-    Unexposed selector that does not actually select objects but instead increments selection
-    *stats* in-place based on all input *events* and the final selection *mask*.
-    """
-    # get the event mask
-    event_mask = results.main.event
-
-    # increment plain counts
-    stats["n_events"] += len(events)
-    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
-
-    # get a list of unique process ids and jet multiplicities present in the chunk
-    unique_process_ids = np.unique(events.process_id)
-    unique_n_jets = []
-    if results.has_aux("n_central_jets"):
-        unique_n_jets = np.unique(results.x.n_central_jets)
-
-    # create a map of entry names to (weight, mask) pairs that will be written to stats
-    weight_map = OrderedDict()
-    if self.dataset_inst.is_mc:
-        # mc weight for all events
-        weight_map["mc_weight"] = (events.mc_weight, Ellipsis)
-
-        # mc weight for selected events
-        weight_map["mc_weight_selected"] = (events.mc_weight, event_mask)
-
-        # add more entries here
-        # ...
-
-    # get and store the weights
-    for name, (weights, mask) in weight_map.items():
-        joinable_mask = True if mask is Ellipsis else mask
-
-        # sum for all processes
-        stats[f"sum_{name}"] += ak.sum(weights[mask])
-
-        # sums per process id and again per jet multiplicity
-        stats.setdefault(f"sum_{name}_per_process", defaultdict(float))
-        stats.setdefault(f"sum_{name}_per_process_and_njet", defaultdict(lambda: defaultdict(float)))
-        for p in unique_process_ids:
-            stats[f"sum_{name}_per_process"][int(p)] += ak.sum(
-                weights[(events.process_id == p) & joinable_mask],
-            )
-            for n in unique_n_jets:
-                stats[f"sum_{name}_per_process_and_njet"][int(p)][int(n)] += ak.sum(
-                    weights[
-                        (events.process_id == p) &
-                        (results.x.n_central_jets == n) &
-                        joinable_mask
-                    ],
-                )
-
-    return events
-
 
 @selector(
     uses={
         # selectors / producers called within _this_ selector
-        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection, increment_stats,
+        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection,
+        increment_stats,
     },
     produces={
         # selectors / producers whose newly created columns should be kept
@@ -185,7 +122,7 @@ def example(
     events: ak.Array,
     stats: defaultdict,
     **kwargs,
-) -> SelectionResult:
+) -> tuple[ak.Array, SelectionResult]:
     # prepare the selection results that are updated at every step
     results = SelectionResult()
 
@@ -211,6 +148,35 @@ def example(
     events = self[cutflow_features](events, results.objects, **kwargs)
 
     # increment stats
-    self[increment_stats](events, results, stats, **kwargs)
+    weight_map = {}
+    group_map = {}
+    group_combinations = []
+    if self.dataset_inst.is_mc:
+        # mc weight for all events
+        weight_map["mc_weight"] = (events.mc_weight, Ellipsis)
+        # mc weight for selected events
+        weight_map["mc_weight_selected"] = (events.mc_weight, results.main.event)
+        # store all weights per process id
+        group_map["process"] = {
+            "values": events.process_id,
+            "mask_fn": (lambda v: events.process_id == v),
+        }
+        # store all weights per jet multiplicity
+        group_map["njet"] = {
+            "values": results.x.n_jets,
+            "mask_fn": (lambda v: results.x.n_jets == v),
+            "combinations_only": True,
+        }
+        # store all weights per process id and jet multiplicity
+        group_combinations.append(("process", "njet"))
+    self[increment_stats](
+        events=events,
+        results=results,
+        stats=stats,
+        weight_map=weight_map,
+        group_map=group_map,
+        group_combinations=group_combinations,
+        **kwargs,
+    )
 
     return events, results

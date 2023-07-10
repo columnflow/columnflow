@@ -4,6 +4,8 @@
 Column production methods related defining categories.
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 
 import law
@@ -21,13 +23,17 @@ logger = law.logger.get_logger(__name__)
 
 
 @producer(produces={"category_ids"})
-def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def category_ids(
+    self: Producer,
+    events: ak.Array,
+    target_events: ak.Array | None = None,
+    **kwargs,
+) -> ak.Array:
     """
     Assigns each event an array of category ids.
     """
     category_ids = []
 
-    # TODO: we maybe don't want / need to loop through all leaf categories
     for cat_inst in self.config_inst.get_leaf_categories():
         # start with a true mask
         cat_mask = np.ones(len(events)) > 0
@@ -43,14 +49,18 @@ def category_ids(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
                 break
 
         # covert to nullable array with the category ids or none, then apply ak.singletons
-        ids = ak.where(cat_mask, np.float32(cat_inst.id), np.float32(np.nan))
+        ids = ak.where(cat_mask, np.float64(cat_inst.id), np.float64(np.nan))
         category_ids.append(ak.singletons(ak.nan_to_none(ids)))
 
-    # combine and save
+    # combine
     category_ids = ak.concatenate(category_ids, axis=1)
-    events = set_ak_column(events, "category_ids", category_ids, value_type=np.int32)
 
-    return events
+    # save, optionally on a target events array
+    if target_events is None:
+        target_events = events
+    target_events = set_ak_column(target_events, "category_ids", category_ids, value_type=np.int64)
+
+    return target_events
 
 
 @category_ids.init

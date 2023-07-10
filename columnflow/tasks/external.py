@@ -52,7 +52,9 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     @property
     def sandbox(self):
         sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
-        return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        if sandbox is None:
+            sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        return sandbox if sandbox and sandbox != law.NO_STR else None
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
@@ -278,11 +280,11 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._file_names
 
-    @property
-    def files(self):
+    def get_files(self, output=None):
         if self._files is None:
             # get the output
-            output = self.output()
+            if not output:
+                output = self.output()
             if not output.exists():
                 raise Exception(
                     f"accessing external files from the bundle requires the output of {self} to "
@@ -300,6 +302,10 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
             self._files = law.util.map_struct(resolve_basename, self.file_names)
 
         return self._files
+
+    @property
+    def files(self):
+        return self.get_files()
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile

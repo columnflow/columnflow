@@ -204,6 +204,30 @@ class InferenceModel(Derivable):
             return True
 
     @classmethod
+    def inference_model(
+        cls,
+        func: Callable | None = None,
+        bases=(),
+        **kwargs,
+    ) -> DerivableMeta | Callable:
+        """
+        Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
+        *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
+        added as class members of the new subclasses.
+        """
+        def decorator(func: Callable) -> DerivableMeta:
+            # create the class dict
+            cls_dict = {"init_func": func}
+            cls_dict.update(kwargs)
+
+            # create the subclass
+            subclass = cls.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+
+            return subclass
+
+        return decorator(func) if func else decorator
+
+    @classmethod
     def model_spec(cls) -> DotDict:
         """
         Returns a dictionary representing the top-level structure of the model.
@@ -354,9 +378,10 @@ class InferenceModel(Derivable):
         # model info
         self.model = self.model_spec()
 
-        # custom init function when set
+        # custom init function when set, always followed by the cleanup
         if callable(self.init_func):
             self.init_func()
+            self.cleanup()
 
     def to_yaml(self, stream: TextIO | None = None) -> str | None:
         """
@@ -1285,24 +1310,5 @@ class InferenceModel(Derivable):
                     yield (category_name, process_name, parameter)
 
 
-def inference_model(
-    func: Callable | None = None,
-    bases=(),
-    **kwargs,
-) -> DerivableMeta | Callable:
-    """
-    Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
-    *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
-    added as class members of the new subclasses.
-    """
-    def decorator(func: Callable) -> DerivableMeta:
-        # create the class dict
-        cls_dict = {"init_func": func}
-        cls_dict.update(kwargs)
-
-        # create the subclass
-        subclass = InferenceModel.derive(func.__name__, bases=bases, cls_dict=cls_dict)
-
-        return subclass
-
-    return decorator(func) if func else decorator
+# shorthand
+inference_model = InferenceModel.inference_model

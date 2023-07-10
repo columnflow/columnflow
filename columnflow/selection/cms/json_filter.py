@@ -45,8 +45,24 @@ def json_filter(
     *get_lumi_file* can be adapted in a subclass in case it is stored differently in the external
     files.
     """
-    lookup_result = self.run_ls_lookup[events.run, events.luminosityBlock].todense()
-    return np.squeeze(np.array(lookup_result))
+    # handle out-of-bounds values
+    run_out_of_bounds = (events.run >= self.run_ls_lookup.shape[0])
+    ls_out_of_bounds = (events.luminosityBlock >= self.run_ls_lookup.shape[1])
+    out_of_bounds = (run_out_of_bounds | ls_out_of_bounds)
+
+    run = ak.where(out_of_bounds, 0, events.run)
+    ls = ak.where(out_of_bounds, 0, events.luminosityBlock)
+
+    # look up json filter decision
+    lookup_result = self.run_ls_lookup[run, ls].todense()
+
+    # remove extra dimensions
+    lookup_result = np.squeeze(np.array(lookup_result))
+
+    # reject out-ouf-bounds entries
+    lookup_result = ak.where(out_of_bounds, False, lookup_result)
+
+    return lookup_result
 
 
 @json_filter.requires

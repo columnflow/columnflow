@@ -13,7 +13,7 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={"nGenPart", "GenPart.genPartIdxMother", "GenPart.pdgId", "GenPart.statusFlags"},
+    uses={"GenPart.genPartIdxMother", "GenPart.pdgId", "GenPart.statusFlags"},
     produces={"gen_top_decay"},
 )
 def gen_top_decay_products(self: Producer, events: ak.Array, **kwargs) -> ak.Array:

@@ -35,7 +35,7 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     selector_steps_order_sensitive = True
 
@@ -48,6 +48,9 @@ class CreateCutflowHistograms(
         RemoteWorkflow.reqs,
         MergeSelectionMasks=MergeSelectionMasks,
     )
+
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
 
     def create_branch_map(self):
         # dummy branch map
@@ -158,7 +161,12 @@ class CreateCutflowHistograms(
                 prepare_hists([self.initial_step] + list(steps))
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
@@ -185,7 +193,10 @@ class CreateCutflowHistograms(
                 # fill the raw point
                 fill_kwargs = get_point()
                 arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                histograms[var_key].fill(step=self.initial_step, **{field: arrays[field] for field in arrays.fields})
+                histograms[var_key].fill(
+                    step=self.initial_step,
+                    **{field: arrays[field] for field in arrays.fields},
+                )
 
                 # fill all other steps
                 mask = True
@@ -198,7 +209,10 @@ class CreateCutflowHistograms(
                     mask = mask & arr.steps[step]
                     fill_kwargs = get_point(mask)
                     arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                    histograms[var_key].fill(step=step, **{field: arrays[field] for field in arrays.fields})
+                    histograms[var_key].fill(
+                        step=step,
+                        **{field: arrays[field] for field in arrays.fields},
+                    )
 
         # dump the histograms
         for var_key in histograms.keys():
@@ -221,10 +235,9 @@ class PlotCutflowBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     exclude_index = True
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     selector_steps_order_sensitive = True
 

@@ -39,7 +39,7 @@ class PrepareMLEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     allow_empty_ml_model = False
 
@@ -50,6 +50,9 @@ class PrepareMLEvents(
         MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
     )
+
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -75,19 +78,25 @@ class PrepareMLEvents(
 
         if not self.pilot and self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
 
         return reqs
 
     def requires(self):
-        reqs = {"events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"})}
+        reqs = {
+            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+        }
+
         if self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
+
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -145,7 +154,12 @@ class PrepareMLEvents(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # generate fold indices
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds
@@ -203,7 +217,7 @@ class MergeMLEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     fold = luigi.IntParameter(
         default=0,
@@ -408,6 +422,9 @@ class MLEvaluation(
 
     allow_empty_ml_model = False
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     # upstream requirements
     reqs = Requirements(
         MergeReducedEventsUser.reqs,
@@ -438,8 +455,9 @@ class MLEvaluation(
 
         if not self.pilot and self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
 
         return reqs
@@ -463,8 +481,9 @@ class MLEvaluation(
 
         if self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
 
         return reqs
@@ -528,7 +547,12 @@ class MLEvaluation(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # asdasd
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds

@@ -30,7 +30,7 @@ class CreateYieldTable(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     table_format = luigi.Parameter(
         default="fancy_grid",
