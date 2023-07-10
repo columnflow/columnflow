@@ -59,7 +59,7 @@ def increment_stats(
             "num_events_selected": results.main.event,  # selected events only
             # "sum" operations
             "sum_mc_weight": events.mc_weight,  # weights of all events
-            "sum_mc_weight_selected": (events.mc_weight, results,main.event),  # weights of selected events
+            "sum_mc_weight_selected": (events.mc_weight, results.main.event),  # weights of selected events
         }
 
         # usage within an exposed selector
