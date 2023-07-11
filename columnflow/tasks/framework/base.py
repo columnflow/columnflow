@@ -463,7 +463,7 @@ class ConfigTask(AnalysisTask):
 
             # allow default to be a function, taking task parameters as input
             if isinstance(param, Callable):
-                param = param(**task_params)
+                param = param(container, **task_params)
 
         # if multiple params are returned, use the first
         if param and isinstance(param, (list, tuple)):
@@ -498,7 +498,7 @@ class ConfigTask(AnalysisTask):
 
             # allow default to be a function, taking task parameters as input
             if isinstance(param, Callable):
-                param = param(**task_params)
+                param = param(container, **task_params)
 
             if not param:
                 return ()
