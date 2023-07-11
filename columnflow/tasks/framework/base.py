@@ -266,6 +266,197 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         return law.util.make_unique(object_names)
 
+    @classmethod
+    def resolve_config_default(
+        cls,
+        task_params: dict[str, Any],
+        param: str,
+        container: str | od.AuxDataMixin = "config_inst",
+        default_str: str | None = None,
+        multiple: bool = False,
+    ) -> str | tuple[str] | None:
+        """
+        Function that resolves the default of *param* when it is not set.
+        The default is identified via the *default_str* from an :py:class:`order.AuxDataMixin` *container*
+        and points to an auxiliary that can be either a string or a function.
+        When *multiple* is True, a tuple is returned. If *multiple* is false and the resolved parameter
+        is an iterable, the first entry is returned.
+
+        Example:
+
+        .. code-block:: python
+            def resolve_param_values(params):
+                params["producer"] = ConfigTask.resolve_config_default(
+                    params,
+                    params.get("producer"),
+                    container=params["config_inst"]
+                    default_str="default_producer",
+                    multiple=True,
+                )
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={"default_producer": ["my_producer_1", "my_producer_2"]},
+            )
+
+            params = {
+                "config_inst": config_inst,
+                "producer": None,
+            }
+            resolve_param_values(params)  # sets params["producer"] to ("my_producer_1", "my_producer_2")
+
+            params = {
+                "config_inst": config_inst,
+                "producer": "some_other_producer",
+            }
+            resolve_param_values(params)  # sets params["producer"] to ("some_other_producer",)
+
+        When *default_str* points to a function, it should take *container* and *task_params* as an input.
+
+        Example:
+
+        .. code-block:: python
+            def resolve_param_values(params):
+                params["ml_model"] = ConfigTask.resolve_config_default(
+                    params,
+                    params.get("ml_model"),
+                    container=params["config_inst"]
+                    default_str="default_ml_model",
+                    multiple=True,
+                )
+
+            # A function that chooses the ml_model based on an attibute that is set in an inference_model
+            def default_ml_model(container, **task_params):
+                default_ml_model = None
+
+                # check if task is using an inference model
+                if "inference_model" in task_params.keys():
+                    inference_model = task_params.get("inference_model", None)
+
+                    # if inference model is not set, assume it's the container default
+                    if inference_model in (None, "NO_STR"):
+                        inference_model = container.x.default_inference_model
+
+                    # get the default_ml_model from the inference_model_inst
+                    inference_model_inst = columnflow.inference.InferenceModel._subclasses[inference_model]
+                    default_ml_model = getattr(inference_model_inst, "ml_model_name", default_ml_model)
+
+                    return default_ml_model
+
+                return default_ml_model
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={"default_ml_model": default_ml_model},
+            )
+
+            @inference_model(ml_model_name="default_ml_model")
+            def my_inference_model(self):
+                # some inference model implementation
+                ...
+
+            params = {"config_inst": config_inst, "ml_model": None, "inference_model": "my_inference_model"}
+            resolve_param_values(params)  # sets params["ml_model"] to "my_ml_model"
+
+            params = {"config_inst": config_inst, "ml_model": "some_ml_model", "inference_model": "my_inference_model"}
+            resolve_param_values(params)  # sets params["ml_model"] to "some_ml_model"
+        """
+
+        # get the container inst
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+
+        if not container:
+            return param
+
+        # expand default when param is empty
+        if param in (None, law.NO_STR):
+            param = container.x(default_str, None) if default_str else None
+
+            # allow default to be a function, taking task parameters as input
+            if isinstance(param, Callable):
+                param = param(container, **task_params)
+
+        # return either a tuple or only the first param, based on the *multiple* parameter
+        if multiple:
+            return law.util.make_tuple(param, cast=True)
+        elif param and isinstance(param, (list, tuple)):
+            return param[0]
+
+        return param
+
+    @classmethod
+    def resolve_config_default_and_groups(
+        cls,
+        task_params: dict[str, Any],
+        param: tuple[str],
+        container: str | od.AuxDataMixin = "config_inst",
+        default_str: str | None = None,
+        groups_str: str | None = None,
+    ) -> tuple[str]:
+        """
+        Resolves tuple of inputs *param* by using groups identified via the *groups_str* from
+        an :py:class:`order.AuxDataMixin` *container* that maps a string to a tuple of strings.
+        If *param* is empty, the default identified by *default_str* from the *container* is returned.
+        If *default_str* points to a function, it should take *container* and *task_params* as an input.
+
+        Example:
+
+        .. code-block:: python
+            def resolve_param_values(params):
+                params["producers"] = ConfigTask.resolve_config_default_and_groups(
+                    params,
+                    params.get("producers"),
+                    container=params["config_inst"]
+                    default_str="default_producer",
+                    groups_str="producer_groups",
+                )
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={
+                    "default_producer": ["features_1", "my_producer_group"],
+                    "producer_groups": {"my_producer_group": ["features_2", "features_3"]},
+                },
+            )
+
+            params = {
+                "config_inst": config_inst,
+                "producer": None,
+            }
+            resolve_param_values(params)  # sets params["producers"] to ("features_1", "features_2", "features_3")
+        """
+        # get the container inst
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+
+        if not container:
+            return param
+
+        # expand default when param is empty
+        if param in (None, law.NO_STR):
+            param = container.x(default_str, None) if default_str else None
+
+            # allow default to be a function, taking task parameters as input
+            if isinstance(param, Callable):
+                param = param(container, **task_params)
+
+            if not param:
+                return ()
+
+        # expand to groups
+        if default_str and (param_groups := container.x(groups_str, {})):
+            values = []
+            for val in law.util.make_list(param):
+                values.extend(param_groups.get(val, [val]))
+            return tuple(values)
+
+        # return the param as is
+        return law.util.make_tuple(param)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -436,82 +627,6 @@ class ConfigTask(AnalysisTask):
             kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
 
         return kwargs
-
-    @classmethod
-    def resolve_config_default(
-        cls,
-        task_params: dict[str, Any],
-        param: str,
-        container: str | od.AuxDataMixin = "config_inst",
-        default_str: str | None = None,
-    ) -> str | None:
-        """
-        Applies the default value identified by *default_str* in the *config_inst*,
-        if no *param* is given.
-        """
-
-        # get the container inst
-        if isinstance(container, str):
-            container = task_params.get(container, None)
-
-        if not container:
-            return param
-
-        # expand default when param is empty
-        if not param or param == law.NO_STR:
-            param = container.x(default_str, None) if default_str else None
-
-            # allow default to be a function, taking task parameters as input
-            if isinstance(param, Callable):
-                param = param(container, **task_params)
-
-        # if multiple params are returned, use the first
-        if param and isinstance(param, (list, tuple)):
-            param = param[0]
-
-        return param
-
-    @classmethod
-    def resolve_config_default_and_groups(
-        cls,
-        task_params: dict[str, Any],
-        param: tuple[str],
-        container: str | od.AuxDataMixin = "config_inst",
-        default_str: str | None = None,
-        groups_str: str | None = None,
-    ) -> tuple[str]:
-        """
-        Resolves tuple of inputs *param* by using groups identified by *groups_str* and
-        defined in the *config_inst* that map a string to a tuple of strings.
-        If *param* is empty, the default identified by *default_str* in the config is returned.
-        """
-        # get the container inst
-        if isinstance(container, str):
-            container = task_params.get(container, None)
-
-        if not container:
-            return param
-
-        # expand default when param is empty
-        if not param or param == law.NO_STR:
-            param = container.x(default_str, None) if default_str else None
-
-            # allow default to be a function, taking task parameters as input
-            if isinstance(param, Callable):
-                param = param(container, **task_params)
-
-            if not param:
-                return ()
-
-        # expand to groups
-        if default_str and (param_groups := container.x(groups_str, {})):
-            values = []
-            for val in law.util.make_list(param):
-                values.extend(param_groups.get(val, [val]))
-            return tuple(values)
-
-        # return the param as is
-        return law.util.make_tuple(param)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
