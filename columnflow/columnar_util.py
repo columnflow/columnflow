@@ -2053,8 +2053,8 @@ class TaskArrayFunction(ArrayFunction):
         *True*, or when it is *None* and the :py:attr:`call_force` attribute of this instance is
         *True*.
         """
-        clear_cache = kwargs.get("clear_cache", True)
-        kwargs["clear_cache"] = False
+        clear_cache = kwargs.get("_clear_cache", True)
+        kwargs["_clear_cache"] = False
 
         # call_force default
         if call_force is None:
