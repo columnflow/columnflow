@@ -270,7 +270,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def resolve_config_default(
         cls,
         task_params: dict[str, Any],
-        param: str,
+        param: str | tuple[str] | None,
         container: str | od.AuxDataMixin = "config_inst",
         default_str: str | None = None,
         multiple: bool = False,
@@ -372,7 +372,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand default when param is empty
-        if param in (None, law.NO_STR):
+        print("d", default_str, param)
+        if param in (None, law.NO_STR, tuple()):
             param = container.x(default_str, None) if default_str else None
 
             # allow default to be a function, taking task parameters as input
@@ -391,7 +392,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def resolve_config_default_and_groups(
         cls,
         task_params: dict[str, Any],
-        param: tuple[str],
+        param: str | tuple[str] | None,
         container: str | od.AuxDataMixin = "config_inst",
         default_str: str | None = None,
         groups_str: str | None = None,
@@ -437,7 +438,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand default when param is empty
-        if param in (None, law.NO_STR):
+        print("d+g", default_str, param)
+        if param in (None, law.NO_STR, tuple()):
             param = container.x(default_str, None) if default_str else None
 
             # allow default to be a function, taking task parameters as input
