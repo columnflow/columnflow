@@ -394,8 +394,8 @@ def create_category_combinations(
                     if len(_parent_group_names) == 1:
                         parent_cat_name = root_cats[_parent_group_names[0]].name
                     else:
-                        parent_cat_name = name_fn(**{
-                            group_name: root_cats[group_name].name
+                        parent_cat_name = name_fn({
+                            group_name: root_cats[group_name]
                             for group_name in _parent_group_names
                         })
                     parent_cat = config.get_category(parent_cat_name, deep=True)

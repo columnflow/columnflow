@@ -1685,7 +1685,10 @@ class ArrayFunction(Derivable):
         # assume first argument is event array and
         # check that the 'used' columns are present
         if "uses" in self.check_columns_present:
-            self._check_columns(args[0], self.IOFlag.USES)
+            # when args is empty (when this method was called with keyword arguments only),
+            # use the first keyword argument
+            first_arg = args[0] if args else list(kwargs.values())[0]
+            self._check_columns(first_arg, self.IOFlag.USES)
 
         # call and time the wrapped function
         t1 = time.perf_counter()
@@ -1749,7 +1752,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, inputs, reader_targets):
+        def setup(self, reqs, inputs, reader_targets):
             # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
 
