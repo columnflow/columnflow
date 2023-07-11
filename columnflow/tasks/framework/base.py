@@ -12,7 +12,7 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence
+from typing import Sequence, Callable, Any
 
 import luigi
 import law
@@ -440,25 +440,43 @@ class ConfigTask(AnalysisTask):
     @classmethod
     def resolve_config_default(
         cls,
-        config_inst: od.Config,
+        task_params: dict[str, Any],
         param: str,
+        container: str | od.AuxDataMixin = "config_inst",
         default_str: str | None = None,
     ) -> str | None:
         """
         Applies the default value identified by *default_str* in the *config_inst*,
         if no *param* is given.
         """
+
+        # get the container inst
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+
+        if not container:
+            return param
+
         # expand default when param is empty
         if not param or param == law.NO_STR:
-            param = config_inst.x(default_str, None) if default_str else None
+            param = container.x(default_str, None) if default_str else None
+
+            # allow default to be a function, taking task parameters as input
+            if isinstance(param, Callable):
+                param = param(**task_params)
+
+        # if multiple params are returned, use the first
+        if param and isinstance(param, (list, tuple)):
+            param = param[0]
 
         return param
 
     @classmethod
     def resolve_config_default_and_groups(
         cls,
-        config_inst: od.Config,
+        task_params: dict[str, Any],
         param: tuple[str],
+        container: str | od.AuxDataMixin = "config_inst",
         default_str: str | None = None,
         groups_str: str | None = None,
     ) -> tuple[str]:
@@ -467,14 +485,26 @@ class ConfigTask(AnalysisTask):
         defined in the *config_inst* that map a string to a tuple of strings.
         If *param* is empty, the default identified by *default_str* in the config is returned.
         """
+        # get the container inst
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+
+        if not container:
+            return param
+
         # expand default when param is empty
         if not param or param == law.NO_STR:
-            param = config_inst.x(default_str, None) if default_str else None
+            param = container.x(default_str, None) if default_str else None
+
+            # allow default to be a function, taking task parameters as input
+            if isinstance(param, Callable):
+                param = param(**task_params)
+
             if not param:
                 return ()
 
         # expand to groups
-        if default_str and (param_groups := config_inst.x(groups_str, {})):
+        if default_str and (param_groups := container.x(groups_str, {})):
             values = []
             for val in law.util.make_list(param):
                 values.extend(param_groups.get(val, [val]))
