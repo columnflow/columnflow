@@ -372,7 +372,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand default when param is empty
-        print("d", default_str, param)
         if param in (None, law.NO_STR, tuple()):
             param = container.x(default_str, None) if default_str else None
 
@@ -438,7 +437,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand default when param is empty
-        print("d+g", default_str, param)
         if param in (None, law.NO_STR, tuple()):
             param = container.x(default_str, None) if default_str else None
 
