@@ -384,7 +384,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # when still empty, return an empty value
         if not param:
             return () if multiple else None
-        
+
         # return either a tuple or the first param, based on the *multiple*
         param = law.util.make_tuple(param)
         return param if multiple else param[0]
@@ -447,7 +447,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return ()
 
         # expand groups recursively
-        if default_str and (param_groups := container.x(groups_str, {})):
+        if groups_str and (param_groups := container.x(groups_str, {})):
             values = []
             lookup = law.util.make_list(param)
             handled_groups = set()
