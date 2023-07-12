@@ -15,21 +15,25 @@ from columnflow.config_util import expand_shift_sources
 
 
 class Producer(TaskArrayFunction):
+    """
+    Base class for all producers.
+    """
 
     @classmethod
     def producer(
         cls,
         func: Callable | None = None,
-        bases=(),
-        mc_only: bool = False,
+        bases: tuple = (),
+        mc_only: bool = True,
         data_only: bool = False,
         nominal_only: bool = False,
         shifts_only: Sequence[str] | set[str] | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`Producer` subclass with additional, optional *bases*
-        and attaching the decorated function to it as ``call_func``.
+        Decorator for creating a new :py:class:`Producer` subclass with
+        additional, optional *bases* and attaching the decorated function to it
+        as :py:meth:`~Producer.call_func`.
 
         When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
         other calibrators, selectors and producers in case they are evalauted on a
@@ -42,6 +46,14 @@ class Producer(TaskArrayFunction):
         not match.
 
         All additional *kwargs* are added as class members of the new subclasses.
+
+        :param func: Callable function that produces new columns
+        :param bases: Additional bases for new Producer instance
+        :param mc_only: boolean flag indicating that this Producer instance
+            should only run on Monte Carlo simulation
+        :param data_only: boolean flag indicating that this Producer instance
+            should only run on observed data
+        :return: new Producer instance
         """
         # prepare shifts_only
         if shifts_only:

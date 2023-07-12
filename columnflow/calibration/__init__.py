@@ -15,12 +15,15 @@ from columnflow.config_util import expand_shift_sources
 
 
 class Calibrator(TaskArrayFunction):
+    """
+    Base class for all calibrators.
+    """
 
     @classmethod
     def calibrator(
         cls,
         func: Callable | None = None,
-        bases=(),
+        bases: tuple = (),
         mc_only: bool = False,
         data_only: bool = False,
         nominal_only: bool = False,
@@ -28,7 +31,7 @@ class Calibrator(TaskArrayFunction):
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`Calibrator` subclass with additional, optional
+        Decorator for creating a new :py:class:`~.Calibrator` subclass with additional, optional
         *bases* and attaching the decorated function to it as ``call_func``.
 
         When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
@@ -42,6 +45,16 @@ class Calibrator(TaskArrayFunction):
         not match.
 
         All additional *kwargs* are added as class members of the new subclasses.
+
+        :param func: Function to be wrapped and integrated into new :py:class:`Calibrator`
+            instance , defaults to None
+        :param bases: additional bases for new :py:class:`Calibrator`, defaults to ()
+        :param mc_only: only run this :py:class:`Calibrator` on Monte Carlo simulation
+            , defaults to False
+        :param data_only: only run this :py:class:`Calibrator` on observed data,
+            defaults to False
+        :return: new :py:class:`Calibrator` instance with *func* as the `call_func`
+            or the decorator itself
         """
         # prepare shifts_only
         if shifts_only:

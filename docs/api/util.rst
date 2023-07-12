@@ -3,6 +3,8 @@
 
 .. automodule:: columnflow.util
 
+.. currentmodule:: columnflow.util
+
 Summary
 -------
 
@@ -47,22 +49,22 @@ Attributes
 ``UNSET``
 +++++++++
 
-.. autoattribute:: UNSET
+.. autoattribute:: columnflow.util.UNSET
 
 ``env_is_remote``
 +++++++++++++++++
 
-.. autoattribute:: env_is_remote
+.. autoattribute:: columnflow.util.env_is_remote
 
 ``env_is_dev``
 ++++++++++++++
 
-.. autoattribute:: env_is_dev
+.. autoattribute:: columnflow.util.env_is_dev
 
 ``primes``
 ++++++++++
 
-.. autoattribute:: primes
+.. autoattribute:: columnflow.util.primes
 
 Functions
 ---------
@@ -180,6 +182,7 @@ Classes
 
 .. autoclass:: DotDict
    :members:
+   :special-members:
 
 ``MockModule``
 ++++++++++++++
@@ -198,15 +201,18 @@ Classes
 
 .. autoclass:: ClassPropertyDescriptor
    :members:
+   :special-members:
 
 ``DerivableMeta``
 +++++++++++++++++
 
 .. autoclass:: DerivableMeta
    :members:
+   :special-members:
 
 ``Derivable``
 +++++++++++++
 
 .. autoclass:: Derivable
    :members:
+   :special-members:
