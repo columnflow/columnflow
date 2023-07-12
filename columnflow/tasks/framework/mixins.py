@@ -47,12 +47,14 @@ class CalibratorMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        # add the default calibrator when empty
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
+            # add the default calibrator when empty
             params["calibrator"] = cls.resolve_config_default(
-                params["config_inst"],
+                params,
                 params.get("calibrator"),
+                container=config_inst,
                 default_str="default_calibrator",
+                multiple=False,
             )
             params["calibrator_inst"] = cls.get_calibrator_inst(params["calibrator"], params)
 
@@ -118,11 +120,11 @@ class CalibratorsMixin(ConfigTask):
     @classmethod
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
-
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
             params["calibrators"] = cls.resolve_config_default_and_groups(
-                params["config_inst"],
+                params,
                 params.get("calibrators"),
+                container=config_inst,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
             )
@@ -193,11 +195,13 @@ class SelectorMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default selector when empty
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
             params["selector"] = cls.resolve_config_default(
-                params["config_inst"],
+                params,
                 params.get("selector"),
+                container=config_inst,
                 default_str="default_selector",
+                multiple=False,
             )
             params["selector_inst"] = cls.get_selector_inst(params["selector"], params)
 
@@ -258,10 +262,11 @@ class SelectorStepsMixin(SelectorMixin):
         params = super().resolve_param_values(params)
 
         # apply selector_steps_groups and default_selector_steps from config
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
             params["selector_steps"] = cls.resolve_config_default_and_groups(
-                params["config_inst"],
+                params,
                 params.get("selector_steps"),
+                container=config_inst,
                 default_str="default_selector_steps",
                 groups_str="selector_step_groups",
             )
@@ -305,11 +310,13 @@ class ProducerMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default producer when empty
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
             params["producer"] = cls.resolve_config_default(
-                params["config_inst"],
+                params,
                 params.get("producer"),
+                container=config_inst,
                 default_str="default_producer",
+                multiple=False,
             )
             params["producer_inst"] = cls.get_producer_inst(params["producer"], params)
 
@@ -376,10 +383,11 @@ class ProducersMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" in params:
+        if config_inst := params.get("config_inst"):
             params["producers"] = cls.resolve_config_default_and_groups(
-                params["config_inst"],
+                params,
                 params.get("producers"),
+                container=config_inst,
                 default_str="default_producer",
                 groups_str="producer_groups",
             )
@@ -511,8 +519,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
         # apply calibrators_groups and default_calibrator from the config
         calibrators = tuple(
             ConfigTask.resolve_config_default_and_groups(
-                config_inst,
+                params,
                 calibrators[i],
+                container=config_inst,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
             )
@@ -556,9 +565,11 @@ class MLModelTrainingMixin(MLModelMixinBase):
         # use config defaults
         selectors = tuple(
             ConfigTask.resolve_config_default(
-                config_inst,
+                params,
                 selectors[i],
-                "default_selector",
+                container=config_inst,
+                default_str="default_selector",
+                multiple=False,
             )
             for i, config_inst in enumerate(ml_model_inst.config_insts)
         )
@@ -599,8 +610,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
         # apply producers_groups and default_producer from the config
         producers = tuple(
             ConfigTask.resolve_config_default_and_groups(
-                config_inst,
+                params,
                 producers[i],
+                container=config_inst,
                 default_str="default_producer",
                 groups_str="producer_groups",
             )
@@ -634,6 +646,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
 
         if "analysis_inst" in params and "ml_model" in params:
             analysis_inst = params["analysis_inst"]
+
+            # NOTE: we could try to implement resolving the default ml_model here
             ml_model_inst = cls.get_ml_model_inst(params["ml_model"], analysis_inst)
             params["ml_model_inst"] = ml_model_inst
 
@@ -732,11 +746,14 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
         if "analysis_inst" in params and "config_inst" in params:
             analysis_inst = params["analysis_inst"]
             config_inst = params["config_inst"]
-            if (
-                params.get("ml_model") in (None, law.NO_STR) and
-                config_inst.x("default_ml_model", None)
-            ):
-                params["ml_model"] = config_inst.x.default_ml_model
+
+            params["ml_model"] = cls.resolve_config_default(
+                params,
+                params.get("ml_model"),
+                container=config_inst,
+                default_str="default_ml_model",
+                multiple=False,
+            )
 
             # initialize it once to trigger its set_config hook which might, in turn,
             # add objects to the config itself
@@ -807,8 +824,9 @@ class MLModelsMixin(ConfigTask):
 
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
-                params["config_inst"],
+                params,
                 params.get("ml_models"),
+                container=config_inst,
                 default_str="default_ml_model",
                 groups_str="ml_model_groups",
             )
@@ -864,10 +882,14 @@ class InferenceModelMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
-        if "config_inst" in params:
-            config_inst = params["config_inst"]
-            if params.get("inference_model") in (None, law.NO_STR) and config_inst.x("default_inference_model", None):
-                params["inference_model"] = config_inst.x.default_inference_model
+        if config_inst := params.get("config_inst"):
+            params["inference_model"] = cls.resolve_config_default(
+                params,
+                params.get("inference_model"),
+                container=config_inst,
+                default_str="default_inference_model",
+                multiple=False,
+            )
 
         return params
 
