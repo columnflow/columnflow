@@ -281,12 +281,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         and points to an auxiliary that can be either a string or a function.
         When *multiple* is True, a tuple is returned. If *multiple* is false and the resolved parameter
         is an iterable, the first entry is returned.
+        Does nothing when no container is given or *param* is already set.
 
         Example:
 
         .. code-block:: python
+
             def resolve_param_values(params):
-                params["producer"] = ConfigTask.resolve_config_default(
+                params["producer"] = AnalysisTask.resolve_config_default(
                     params,
                     params.get("producer"),
                     container=params["config_inst"]
@@ -310,7 +312,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 "config_inst": config_inst,
                 "producer": "some_other_producer",
             }
-            resolve_param_values(params)  # sets params["producer"] to ("some_other_producer",)
+            resolve_param_values(params)  # sets params["producer"] to "some_other_producer"
 
         When *default_str* points to a function, it should take *container* and *task_params* as an input.
 
@@ -318,7 +320,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         .. code-block:: python
             def resolve_param_values(params):
-                params["ml_model"] = ConfigTask.resolve_config_default(
+                params["ml_model"] = AnalysisTask.resolve_config_default(
                     params,
                     params.get("ml_model"),
                     container=params["config_inst"]
@@ -380,10 +382,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 param = param(container, **task_params)
 
         # return either a tuple or only the first param, based on the *multiple* parameter
-        if multiple:
-            return law.util.make_tuple(param, cast=True)
-        elif param and isinstance(param, (list, tuple)):
-            return param[0]
+        if not param:
+            return () if multiple else None
+
+        param = law.util.make_tuple(param)
+        return param if multiple else param[0]
 
         return param
 
@@ -405,14 +408,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         Example:
 
         .. code-block:: python
-            def resolve_param_values(params):
-                params["producers"] = ConfigTask.resolve_config_default_and_groups(
-                    params,
-                    params.get("producers"),
-                    container=params["config_inst"]
-                    default_str="default_producer",
-                    groups_str="producer_groups",
-                )
 
             config_inst = od.Config(
                 id=0,
@@ -423,18 +418,23 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 },
             )
 
-            params = {
-                "config_inst": config_inst,
-                "producer": None,
-            }
-            resolve_param_values(params)  # sets params["producers"] to ("features_1", "features_2", "features_3")
+            params = {"producer": None}
+
+            AnalysisTask.resolve_config_default_and_groups(
+                params,
+                params.get("producer"),
+                container=config_inst,
+                default_str="default_producer",
+                groups_str="producer_groups",
+            )
+            # -> ("features_1", "features_2", "features_3")
         """
         # get the container inst
         if isinstance(container, str):
             container = task_params.get(container, None)
 
         if not container:
-            return param
+            return law.util.make_tuple(param)
 
         # expand default when param is empty
         if param in (None, law.NO_STR, tuple()):
@@ -444,17 +444,28 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             if isinstance(param, Callable):
                 param = param(container, **task_params)
 
-            if not param:
-                return ()
+        if not param:
+            return ()
 
-        # expand to groups
+        # expand groups recursively
         if default_str and (param_groups := container.x(groups_str, {})):
             values = []
-            for val in law.util.make_list(param):
-                values.extend(param_groups.get(val, [val]))
-            return tuple(values)
+            lookup = law.util.make_list(param)
+            handled_groups = set()
+            while lookup:
+                value = lookup.pop(0)
+                if value in param_groups:
+                    if value in handled_groups:
+                        raise Exception(
+                            f"definition of '{groups_str}' contains circular references involving "
+                            "group '{value}'",
+                        )
+                    lookup = law.util.make_list(param_groups[value]) + lookup
+                    handled_groups.add(value)
+                else:
+                    values.append(value)
+            param = values
 
-        # return the param as is
         return law.util.make_tuple(param)
 
     def __init__(self, *args, **kwargs):
