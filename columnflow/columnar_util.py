@@ -23,7 +23,7 @@ import enum
 import threading
 import multiprocessing
 import multiprocessing.pool
-from functools import partial, wraps
+from functools import partial
 from collections import namedtuple, OrderedDict, defaultdict
 from typing import Sequence, Callable, Any
 
@@ -236,13 +236,14 @@ class Route(object, metaclass=RouteMeta):
         sep: str,
         column: str,
     ) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
-        """Splits a string at a separator *sep* and returns the fragments, potentially with selection,
+        """
+        Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
 
         :param sep: Separator to be used to split *column* into subcomponents
         :param column: Name of the column to be split
-        :raises ValueError: If *column* is malformed, specifically if brackets
-            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :raises ValueError: If *column* is malformed, specifically if brackets are not encountered
+            in pairs (i.e. opening backet w/o closing and vice versa).
         :return: tuple of subcomponents extracted from *column*
         """
         # first extract and replace possibly nested slices
@@ -307,12 +308,13 @@ class Route(object, metaclass=RouteMeta):
 
     @classmethod
     def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
-        """Splits a string assumed to be in nano-style underscore format and returns the fragments,
+        """
+        Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
 
         :param column: Name of the column to be split
-        :raises ValueError: If *column* is malformed, specifically if brackets
-            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :raises ValueError: If *column* is malformed, specifically if brackets are not encountered
+            in pairs (i.e. opening backet w/o closing and vice versa).
         :return: tuple of subcomponents extracted from *column*
         """
         return cls._split(cls.NANO_SEP, column)
@@ -1384,12 +1386,7 @@ class ArrayFunction(Derivable):
 
         The decorator does not return the wrapped function.
         """
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> None:
-            cls.init_func = func
-            cls.init_func.__name__ = func.__name__
-            return func
-        return wrapper(func)
+        cls.init_func = func
 
     @classmethod
     def skip(cls, func: Callable[[], bool]) -> None:
@@ -1400,11 +1397,7 @@ class ArrayFunction(Derivable):
 
         The function should not accept positional arguments and return a boolean.
         """
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> None:
-            cls.skip_func = func
-            return func
-        return wrapper(func)
+        cls.skip_func = func
 
     def __init__(
         self,
@@ -1798,8 +1791,8 @@ class TaskArrayFunction(ArrayFunction):
         This is most certainly never used in practice. Instead, please either consider defining the
         class the normal way, or use a decorator to wrap the main callable first and by that
         creating the class as done by the :py:class:`~columnflow.calibration.Calibrator`,
-        :py:class:`~columnflow.selection.Selector` and
-        :py:class:`~columnflow.production.Producer` interfaces.
+        :py:class:`~columnflow.selection.Selector` and :py:class:`~columnflow.production.Producer`
+        interfaces.
 
     .. py:classattribute:: shifts
        type: set
@@ -1869,11 +1862,7 @@ class TaskArrayFunction(ArrayFunction):
             :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
             distinguish the cases.
         """
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> None:
-            cls.requires_func = func
-            return func
-        return wrapper(func)
+        cls.requires_func = func
 
     @classmethod
     def setup(cls, func: Callable[[dict], None]) -> None:
@@ -1890,11 +1879,7 @@ class TaskArrayFunction(ArrayFunction):
 
         The decorator does not return the wrapped function.
         """
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> None:
-            cls.setup_func = func
-            return func
-        return wrapper(func)
+        cls.setup_func = func
 
     def __init__(
         self,
@@ -2320,7 +2305,7 @@ class ChunkedIOHandler(object):
     The content to load is configurable through *source*, which can be a file path or an opened file
     object, and a *source_type*, which defines how the *source* should be opened and traversed for
     chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation details
-    and :py:meth:`~ChunkedIOHandler.get_source_handler` for a list of currently supported sources.
+    and :py:meth:`get_source_handler` for a list of currently supported sources.
 
     Example:
 
@@ -2472,9 +2457,9 @@ class ChunkedIOHandler(object):
         n_entries: int,
         chunk_size: int,
         chunk_index: int,
-    ) -> ChunkedIOHandler.ChunkPosition:
+    ) -> ChunkPosition:
         """
-        Creates and returns a :py:attr:`~.ChunkedIOHandler.ChunkPosition` object based on the total number of entries
+        Creates and returns a :py:attr:`ChunkPosition` object based on the total number of entries
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
         # determine the start of stop of this chunk
@@ -2609,7 +2594,7 @@ class ChunkedIOHandler(object):
     def read_uproot_root(
         cls,
         source_object: uproot.TTree,
-        chunk_pos: ChunkedIOHandler.ChunkPosition,
+        chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> ak.Array:
@@ -2689,7 +2674,7 @@ class ChunkedIOHandler(object):
     def read_coffea_root(
         cls,
         source_object: str | uproot.ReadOnlyDirectory,
-        chunk_pos: ChunkedIOHandler.ChunkPosition,
+        chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
@@ -2760,7 +2745,7 @@ class ChunkedIOHandler(object):
     def read_coffea_parquet(
         cls,
         source_object: str,
-        chunk_pos: ChunkedIOHandler.ChunkPosition,
+        chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:

@@ -50,7 +50,6 @@ elif html_theme == "alabaster":
 elif html_theme == "sphinx_book_theme":
     copyright = copyright.split(",", 1)[0]
     html_theme_options.update({
-        "logo_only": False,
         "home_page_in_toc": True,
         "show_navbar_depth": 2,
         "show_toc_level": 2,
@@ -63,13 +62,12 @@ elif html_theme == "sphinx_book_theme":
 extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
-    # "sphinx_autodoc_defaultargs",
     "sphinx_autodoc_typehints",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosectionlabel",
+    "sphinx_lfs_content",
     "autodocsumm",
     "myst_parser",
-    "sphinx_lfs_content",
     "pydomain_patch",
 ]
 
@@ -80,12 +78,10 @@ autodoc_default_options = {
     "show-inheritance": True,
 }
 
-# typehints_fully_qualified = True
-
 autosectionlabel_prefix_document = True
 
 intersphinx_aliases = {
-    # Alias for a class that was imported at its package level
+    # alias for a class that was imported at its package level
     ("py:class", "awkward.highlevel.Array"):
         ("py:class", "ak.Array"),
 }
@@ -106,6 +102,7 @@ intersphinx_mapping = {
 
 def add_intersphinx_aliases_to_inv(app):
     from sphinx.ext.intersphinx import InventoryAdapter
+
     inventories = InventoryAdapter(app.builder.env)
 
     for alias, target in app.config.intersphinx_aliases.items():
@@ -113,10 +110,7 @@ def add_intersphinx_aliases_to_inv(app):
         target_domain, target_name = target
         try:
             found = inventories.main_inventory[target_domain][target_name]
-            try:
-                inventories.main_inventory[alias_domain][alias_name] = found
-            except KeyError:
-                continue
+            inventories.main_inventory[alias_domain][alias_name] = found
         except KeyError:
             continue
 
@@ -126,6 +120,7 @@ def setup(app):
     # implement intersphinx aliases with workaround
     app.add_config_value("intersphinx_aliases", {}, "env")
     app.connect("builder-inited", add_intersphinx_aliases_to_inv)
+
     # set style sheets
     app.add_css_file("styles_common.css")
     if html_theme in ("sphinx_rtd_theme", "alabaster", "sphinx_book_theme"):

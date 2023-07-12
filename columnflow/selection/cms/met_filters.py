@@ -5,6 +5,7 @@ Selector related to MET filters.
 """
 
 from __future__ import annotations
+
 from typing import Iterable
 
 from columnflow.selection import Selector, selector
@@ -87,11 +88,6 @@ def met_filters(
 
 @met_filters.init
 def met_filters_init(self: Selector) -> None:
-    """Init function for met_filters Selector.
-
-    Read MET filters using the :py:meth:`~met_filters.get_met_filters` method
-    from config and add them as input columns.
-    """
     met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):
         # do nothing when no dataset_inst is known

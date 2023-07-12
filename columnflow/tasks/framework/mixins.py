@@ -1294,11 +1294,12 @@ class ChunkedIOMixin(AnalysisTask):
 
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
-        """Perform explicit check whether all values in array *ak_array* are finite.
+        """
+        Perform explicit check whether all values in array *ak_array* are finite.
 
         The check is performed using the :external+numpy:py:func:`numpy.isfinite` function
 
-        :param ak_array: Array with events to check
+        :param ak_array: Array with events to check.
         :raises ValueError: If any value in *ak_array* is not finite.
         """
         import numpy as np

@@ -16,8 +16,9 @@ sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 
 
-def get_lumi_file(self, external_files: DotDict) -> str:
-    """Function to load path or url to golden json files.
+def get_lumi_file_default(self, external_files: DotDict) -> str:
+    """
+    Function to load path or url to golden json files.
 
     By default, the path is extracted from the current *config_inst*, which
     should have a *external_files* in the auxiliary information block.
@@ -37,7 +38,7 @@ def get_lumi_file(self, external_files: DotDict) -> str:
 @selector(
     uses={"run", "luminosityBlock"},
     # function to determine the golden lumi file
-    get_lumi_file=get_lumi_file,
+    get_lumi_file=get_lumi_file_default,
 )
 def json_filter(
     self: Selector,
@@ -45,8 +46,9 @@ def json_filter(
     data_only=True,
     **kwargs,
 ) -> ak.Array:
-    """Select only events from certified luminosity blocks included in the
-    "golden" JSON. This filter can only be applied in recorded data.
+    """
+    Select only events from certified luminosity blocks included in the "golden" JSON. This filter
+    can only be applied in recorded data.
 
     By default, the JSON file should specified in the config as an external file under
     ``lumi.golden``:
@@ -63,8 +65,8 @@ def json_filter(
     files.
 
     :param events: Array containing events in the NanoAOD format
-    :param data_only: boolean flag to indicate that this selector should only
-        run on observed data, defaults to True
+    :param data_only: boolean flag to indicate that this selector should only run on observed data,
+        defaults to True
     :return: Array containing boolean masks to accept or reject given events
     """
     # handle out-of-bounds values
@@ -89,14 +91,6 @@ def json_filter(
 
 @json_filter.requires
 def json_filter_requires(self: Selector, reqs: dict) -> None:
-    """Requirements for json_filter Selector that adds external files
-    bundle to dependencies.
-
-    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
-    as keyword ``external_files`` to the dictionary of requirements *reqs*.
-
-    :param reqs: Contains requirements for this task
-    """
     if "external_files" in reqs:
         return
 
@@ -105,16 +99,15 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 
 @json_filter.setup
-def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    """Setup function for :py:class:`json_filter`. Load golden JSON and set up
-    run/luminosity block lookup table.
-
-    First, location of the golden json file is extracted with the
-    :py:meth:`~json_filter.get_lumi_file` function. Afterwards, a lookup
-    table is constructed from the lumi sections and run numbers in the
-    golden json file.
-    The look-up table is provided as a
-    :external+scipy:py:class:`scipy.sparse.lil_matrix`.
+def json_filter_setup(
+    self: Selector,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
+    """
+    Setup function for :py:class:`json_filter`. Load golden JSON and set up run/luminosity block
+    lookup table.
 
     :param reqs: Contains requirements for this task
     :param inputs: Additional inputs, currently not used

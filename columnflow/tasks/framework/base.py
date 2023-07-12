@@ -876,16 +876,18 @@ def wrapper_factory(
     enable: Sequence[str],
     cls_name: str | None = None,
     attributes: dict | None = None,
+    docs: str | None = None,
 ) -> law.task.base.Register:
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and
-    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*. Unless
-    *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus
-    "Wrapper". Additional *attributes* are added as class-level members when given.
+    :py:class:`~law.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
+        Unless *cls_name* is defined, the name of the created class defaults to the name of
+        *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
+        given.
 
-    The instances of *require_cls* to be required in the :py:meth:`~.wrapper_factory.Wrapper.requires()` method
-    can be controlled by task parameters. These parameters can be enabled through the string sequence *enable*, which
-    currently accepts:
+    The instances of *require_cls* to be required in the
+    :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
+    These parameters can be enabled through the string sequence *enable*, which currently accepts:
 
         - ``configs``, ``skip_configs``
         - ``shifts``, ``skip_shifts``
@@ -914,7 +916,7 @@ def wrapper_factory(
     "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
     list of config instances known to an analysis), *require_cls* must be at least a
     :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-    explicitly not.
+        explicitly not.
     """
     # check known features
     known_features = [
@@ -1145,7 +1147,6 @@ def wrapper_factory(
             return params
 
         def requires(self):
-
             # build all requirements based on the parameter space
             reqs = {}
 
@@ -1178,5 +1179,9 @@ def wrapper_factory(
 
     # overwrite __name__
     Wrapper.__name__ = cls_name or require_cls.__name__ + "Wrapper"
+
+    # set docs
+    if docs:
+        Wrapper.__docs__ = docs
 
     return Wrapper

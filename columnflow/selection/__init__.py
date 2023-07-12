@@ -11,8 +11,6 @@ from typing import Callable, Sequence
 
 import law
 import order as od
-from functools import wraps
-
 
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
@@ -49,9 +47,8 @@ class Selector(TaskArrayFunction):
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`~.Selector` subclass with
-        additional, optional *bases* and attaching the decorated function
-        to it as ``call_func``.
+        Decorator for creating a new :py:class:`~.Selector` subclass with additional, optional
+        *bases* and attaching the decorated function to it as ``call_func``.
 
         When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
         other calibrators, selectors and producers in case they are evalauted on a

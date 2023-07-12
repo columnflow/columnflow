@@ -26,10 +26,9 @@ class CalibrateEvents(
     """
     Task to apply calibrations to objects, e.g. leptons and jets.
 
-    The calibrations that are to be applied can be specified on the command
-    line, and are implemented as instances of the
-    :py:class:`~columnflow.calibration.Calibrator` class. For further information,
-    please consider the documentation there.
+    The calibrations that are to be applied can be specified on the command line, and are
+    implemented as instances of the :py:class:`~columnflow.calibration.Calibrator` class. For
+    further information, please consider the documentation there.
     """
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -45,14 +44,8 @@ class CalibrateEvents(
 
     def workflow_requires(self) -> dict:
         """
-        Configure the requirements for the workflow in general.
-        For more general informations, see
+        Configure the requirements for the workflow in general. For more general informations, see
         :external+law:py:meth:`BaseWorkflow.workflow_requires() <law.workflow.base.BaseWorkflow.workflow_requires>`.
-
-        In addition to the general requirements by the ``super`` class to
-        :py:class:`CalibrateEvents`, this task requires the outputs from the
-        :py:class:`~columnflow.tasks.external.GetDatasetLFNs` as well as
-        everything that the current *calibrator_inst* requires.
 
         :return: Dictionary containing the requirements for this task.
         """
@@ -68,22 +61,6 @@ class CalibrateEvents(
     def requires(self) -> dict:
         """
         Configure the requirements for the individual branches of the workflow.
-        For more general informations, see
-        :external+law:py:meth:`BaseWorkflowProxy.requires() <law.workflow.base.BaseWorkflowProxy.requires>`.
-
-        This task requires the outputs from the
-        :py:class:`~columnflow.tasks.external.GetDatasetLFNs` as well as
-        everything that the current *calibrator_inst* requires.
-
-        :return: Dictionary containing the requirements for this task. This has
-            the structure
-
-            .. code-block:: python
-
-                {
-                    "lfns": Requirements from GetDatasetLFNs Task,
-                    "calibrator": Requirements for the current *calibrator_ins*
-                }
         """
         reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
@@ -184,10 +161,9 @@ CalibrateEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CalibrateEvents,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
-)
-
-CalibrateEventsWrapper.__doc__ = """
+    docs="""
 Wrapper task to calibrate events for multiple datasets.
 
 :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
-"""
+""",
+)

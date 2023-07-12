@@ -44,10 +44,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
     @classmethod
     def resolve_param_values(cls, params: DotDict) -> DotDict:
         """
-        Resolve parameter values *params* from command line and propagate them to this set of parameters.
+        Resolve parameter values *params* from command line and propagate them to this set of
+        parameters.
 
         :param params: Parameters provided at command line level.
-        :return: Updated list of parameter values
+        :return: Updated list of parameter values.
         """
         params = super().resolve_param_values(params)
 
@@ -85,8 +86,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         """
         Run function for this task.
 
-        :raises ValueError: If number of loaded LFNs does not correspond to number
-            of LFNs specified in this ``dataset_info_inst``
+        :raises ValueError: If number of loaded LFNs does not correspond to number of LFNs specified
+            in this ``dataset_info_inst``.
         """
         # prepare the lfn getter
         get_dataset_lfns = self.config_inst.x("get_dataset_lfns", None)
@@ -119,13 +120,13 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         dataset_key: str,
     ) -> list[str]:
         """
-        Get the LNF information with the ``dasgoclient`` .
+        Get the LNF information with the ``dasgoclient``.
 
-        :param dataset_inst: Current dataset instance, currently not used
-        :param shift_inst: Current shift instance, currently not used
-        :param dataset_key: DAS key identifier for the current dataset
+        :param dataset_inst: Current dataset instance, currently not used.
+        :param shift_inst: Current shift instance, currently not used.
+        :param dataset_key: DAS key identifier for the current dataset.
         :raises Exception: If query with ``dasgoclient`` fails.
-        :return: The list of LFNs corresponding to the dataset with the identifier *dataset_key*
+        :return: The list of LFNs corresponding to the dataset with the identifier *dataset_key*.
         """
         code, out, _ = law.util.interruptable_popen(
             f"dasgoclient --query='file dataset={dataset_key}' --limit=0",
@@ -264,27 +265,26 @@ GetDatasetLFNsWrapper = wrapper_factory(
     require_cls=GetDatasetLFNs,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
     attributes={"version": None},
-)
-
-GetDatasetLFNsWrapper.__doc__ = """
+    docs="""
 Wrapper task to get LFNs for multiple datasets.
 
 :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
 :overwrites: attribute ``version`` with None
-"""
+""",
+)
 
 
 class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     """
     Task to collect external files.
 
-    This task is intended to download source files for other tasks, such as
-    files containing corrections for objects, the "golden" json files,
-    source files for the calculation of pileup weights, and others.
+    This task is intended to download source files for other tasks, such as files containing
+    corrections for objects, the "golden" json files, source files for the calculation of pileup
+    weights, and others.
 
-    All information about the relevant external files is extracted from the
-    given ``config_inst``, which must contain the keyword ``external_files`` in the
-    auxiliary information. This can look like this:
+    All information about the relevant external files is extracted from the given ``config_inst``,
+    which must contain the keyword ``external_files`` in the auxiliary information. This can look
+    like this:
 
     .. code-block:: python
 
@@ -301,9 +301,9 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         # electron scale factors
         "electron_sf": (f"{SOURCE_URL}/POG/EGM/{year}{corr_postfix}_UL/electron.json.gz", "v1"),
 
-    The entries in this DotDict can either be simply the path to the source files
-    or can be a tuple of the format ``(path/or/url/to/source/file, VERSION)``
-    to introduce a versioning mechanism for external files.
+    The entries in this DotDict can either be simply the path to the source files or can be a tuple
+    of the format ``(path/or/url/to/source/file, VERSION)`` to introduce a versioning mechanism for
+    external files.
     """
 
     replicas = luigi.IntParameter(
@@ -342,8 +342,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         """
         Create a hash based on all external files.
 
-        :return: Hash based on the flattened list of external files in the
-            current config instance
+        :return: Hash based on the flattened list of external files in the current config instance.
         """
         if self._files_hash is None:
             # take the external files and flatten them into a deterministic order, then hash
@@ -362,8 +361,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         """
         Create a unique basename for each external file.
 
-        :return: DotDict of same shape as ``external_files`` DotDict with unique
-            basenames
+        :return: DotDict of same shape as ``external_files`` DotDict with unique basenames.
         """
         if self._file_names is None:
             self._file_names = law.util.map_struct(
@@ -396,7 +394,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._files
 
-      @property
+    @property
     def files(self):
         return self.get_files()
 
