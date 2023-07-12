@@ -366,29 +366,28 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             resolve_param_values(params)  # sets params["ml_model"] to "some_ml_model"
         """
 
-        # get the container inst
-        if isinstance(container, str):
-            container = task_params.get(container, None)
-
-        if not container:
-            return param
-
-        # expand default when param is empty
         if param in (None, law.NO_STR, tuple()):
-            param = container.x(default_str, None) if default_str else None
+            param = None
 
-            # allow default to be a function, taking task parameters as input
-            if isinstance(param, Callable):
-                param = param(container, **task_params)
+            # get the container inst
+            if isinstance(container, str):
+                container = task_params.get(container)
 
-        # return either a tuple or only the first param, based on the *multiple* parameter
+            # expand default when container is set
+            if container and default_str:
+                param = container.x(default_str, None)
+
+                # allow default to be a function, taking task parameters as input
+                if isinstance(param, Callable):
+                    param = param(container, **task_params)
+
+        # when still empty, return an empty value
         if not param:
             return () if multiple else None
-
+        
+        # return either a tuple or the first param, based on the *multiple*
         param = law.util.make_tuple(param)
         return param if multiple else param[0]
-
-        return param
 
     @classmethod
     def resolve_config_default_and_groups(
