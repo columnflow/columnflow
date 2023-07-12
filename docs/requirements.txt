@@ -2,7 +2,7 @@
 
 # documentation packages
 sphinx~=6.2.1
-sphinx-autodoc-typehints~=1.23.3
+sphinx-autodoc-typehints~=1.22,<1.23
 sphinx-book-theme~=1.0.1
 sphinx-lfs-content~=1.1.3
 autodocsumm~=0.2.11
