@@ -24,17 +24,8 @@ logger = law.logger.get_logger(__name__)
 
 
 class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
-    """Task to get list of logical file names (LFNs).
-    TODO: Further describe this.
-
-    :raises ValueError: _description_
-    :raises Exception: _description_
-    :raises TypeError: _description_
-    :raises Exception: _description_
-    :raises ValueError: _description_
-    :raises Exception: _description_
-    :return: _description_
-    :yield: _description_
+    """
+    Task to get list of logical file names (LFNs).
     """
 
     replicas = luigi.IntParameter(
@@ -42,7 +33,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         description="number of replicas to generate; default: 5",
     )
     validate = law.OptionalBoolParameter(
-        default=None,  # set to True as long as we are doing tests with reduced n_files in datasets
+        default=None,
         significant=False,
         description="when True, complains if the number of obtained LFNs does not match the value "
         "expected from the dataset info; default: obtained from 'validate_dataset_lfns' auxiliary "
@@ -52,7 +43,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     @classmethod
     def resolve_param_values(cls, params: DotDict) -> DotDict:
-        """Resolve parameter values *params* from command line and propagate them to this set of parameters.
+        """
+        Resolve parameter values *params* from command line and propagate them to this set of parameters.
 
         :param params: Parameters provided at command line level.
         :return: Updated list of parameter values
@@ -68,24 +60,19 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     @property
     def sandbox(self) -> str:
-        """Defines sandbox for this task.
-
-        Uses the sandbox ``self.config_inst.x.get_dataset_lfns_sandbox`` by default.
-        If none is provided, defaults back to ``"bash::/cvmfs/cms.cern.ch/cmsset_default.sh"``
+        """
+        Defines sandbox for this task.
 
         :return: Path to shell script that sets up the requested sandbox.
         """
         sandbox = self.config_inst.x("get_dataset_lfns_sandbox", None)
-        return sandbox or "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        if sandbox is None:
+            sandbox = "bash::/cvmfs/cms.cern.ch/cmsset_default.sh"
+        return sandbox if sandbox and sandbox != law.NO_STR else None
 
     def single_output(self) -> law.target.file.FileSystemFileTarget:
-        """Creates a remote target file for the final .json file containing the list of LFNs.
-
-        Creates a hash based on the keys in ``dataset_info_inst`` of the current run
-        using the :external+law:py:func:`law.util.create_hash` function.
-        Afterwards, initializes either a :external+law:py:class:`law.target.local.LocalFileTarget`
-        or a :external+law:py:class:`law.target.remote.base.RemoteFileTarget`
-        depending on the specified file system.
+        """
+        Creates a remote target file for the final .json file containing the list of LFNs.
 
         :return: Law remote target with the initialized output name
         """
@@ -95,7 +82,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     @law.decorator.log
     def run(self):
-        """Run function for this task.
+        """
+        Run function for this task.
 
         :raises ValueError: If number of loaded LFNs does not correspond to number
             of LFNs specified in this ``dataset_info_inst``
@@ -130,7 +118,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         shift_inst: od.Shift,
         dataset_key: str,
     ) -> list[str]:
-        """Get the LNF information with the ``dasgoclient`` .
+        """
+        Get the LNF information with the ``dasgoclient`` .
 
         :param dataset_inst: Current dataset instance, currently not used
         :param shift_inst: Current shift instance, currently not used
@@ -160,21 +149,13 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfn_indices: list[int] | None = None,
         eager_lookup: bool | int = 1,
     ) -> None:
-        """Generator function that reduces the boilerplate code for looping over files referred to by
+        """
+        Generator function that reduces the boilerplate code for looping over files referred to by
         *lfn_indices* given the lfns obtained by *this* task which needs to be complete for this
         function to succeed.
 
         When *lfn_indices* are not given, *task* must be a branch of a :py:class:`DatasetTask`
         workflow whose branch value is used instead.
-
-        Iterating yields a 2-tuple (file index, input file) where the latter is either a
-        :external+law:py:class:`~law.target.local.LocalFileTarget` or a
-        :external+law:py:class:`~law.wlcg.WLCGFileTarget` with its fs set to
-        *remote_fs*. When a sequence is passed, the fs names are evaluated in that order and the
-        first existing one is generally used. However, if *eager_lookup* is *True*, in case the stat
-        request to a fs was successful but took longer than two seconds, the next fs is eagerly
-        checked and used in case it responded with less delay. In case *eager_lookup* is an integer,
-        this check is only performed after the *eager_lookup* th fs.
 
         :param task: Current task that needs to access the nanoAOD files
         :param remote_fs: Name of the remote file system where the LFNs are located, defaults to None
@@ -285,17 +266,17 @@ GetDatasetLFNsWrapper = wrapper_factory(
     attributes={"version": None},
 )
 
-wrapper_doc = """Wrapper task to get LFNs for multiple datasets.
-:enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+GetDatasetLFNsWrapper.__doc__ = """
+Wrapper task to get LFNs for multiple datasets.
 
+:enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
 :overwrites: attribute ``version`` with None
 """
 
-GetDatasetLFNsWrapper.__doc__ = wrapper_doc
-
 
 class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
-    """Task to collect external files.
+    """
+    Task to collect external files.
 
     This task is intended to download source files for other tasks, such as
     files containing corrections for objects, the "golden" json files,
@@ -303,7 +284,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     All information about the relevant external files is extracted from the
     given ``config_inst``, which must contain the keyword ``external_files`` in the
-    auxiliary information. This can look something like this:
+    auxiliary information. This can look like this:
 
     .. code-block:: python
 
@@ -323,11 +304,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     The entries in this DotDict can either be simply the path to the source files
     or can be a tuple of the format ``(path/or/url/to/source/file, VERSION)``
     to introduce a versioning mechanism for external files.
-
-    The :py:class:`.~BundleExternalFiles` task downloads all sources and generates
-    replicas of these files to reduce the number of access requests per file in
-    subsequent tasks. How many replicas are created is controlled with the luigi
-    command line parameter *replicas*. This task does not implement a version.
     """
 
     replicas = luigi.IntParameter(
@@ -337,12 +313,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     version = None
 
     def __init__(self, *args, **kwargs):
-        """Initialize BundleExternalFiles task.
-
-        Calls ``super().__init__`` with the provided *args* and *kwargs* and
-        initializes hashes, file names and file directory names to save the
-        downloaded external files.
-        """
         super().__init__(*args, **kwargs)
 
         # cached hash
@@ -357,11 +327,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @classmethod
     def create_unique_basename(cls, path: tuple[str] | str) -> str:
-        """Create a uniqure basename.
-
-        Basename starts with a hash created from *path* using
-        :external+law:py:func:`law.util.create_hash` and ends with *path*
-        if *path* is a string or the first element of *path* if it's a tuple.
+        """
+        Create a unique basename.
 
         :param path: path to create a unique basename for
         :return: Unique basename
@@ -372,13 +339,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @property
     def files_hash(self) -> str:
-        """Create a hash based on all external files.
-
-        If files have not been hashed before, create a hash from a flat
-        representation of the contents of ``self.config_inst.x.external_files``.
-        The hash is generated with :external+law:py:func:`law.util.create_hash`
-        from the flattened contents. The generated hash is cached for later use
-        and is returned if the function is called again later.
+        """
+        Create a hash based on all external files.
 
         :return: Hash based on the flattened list of external files in the
             current config instance
@@ -397,13 +359,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @property
     def file_names(self) -> DotDict:
-        """Create a unique basename for each external file.
-
-        The output DotDict has the same arbitrary structure as
-        ``self.config_inst.x.external_files``. This is achieved by mapping
-        the class method :py:meth:`~.BundleExternalFiles.create_unique_basename`
-        to the external_files DotDict using :external+law:py:func:`law.util.map_struct`.
-        This DotDict is cached and provided for later use.
+        """
+        Create a unique basename for each external file.
 
         :return: DotDict of same shape as ``external_files`` DotDict with unique
             basenames
@@ -416,22 +373,11 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._file_names
 
-    @property
-    def files(self) -> DotDict:
-        """Create DotDict containing the downloaded files.
-
-        First, check whether the outputs of :py:class:`BundleExternalFiles` exist.
-        If so, resolve the unique basenames created by
-        :py:meth:`~.BundleExternalFiles.create_unique_basename` to real existing
-        files and create a DotDict of the same format as ``self.config_inst.x.external_files``
-        using :external+law:py:func:`law.util.map_struct`.
-
-        :raises Exception: If outputs of BundleExternalFiles do not exist
-        :return: DotDict containing downloaded files
-        """
+    def get_files(self, output=None):
         if self._files is None:
             # get the output
-            output = self.output()
+            if not output:
+                output = self.output()
             if not output.exists():
                 raise Exception(
                     f"accessing external files from the bundle requires the output of {self} to "
@@ -450,29 +396,17 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._files
 
-    def single_output(self) -> law.wlcg.target.WLCGFileTarget:
-        """Create single tar ball with downloaded files.
+      @property
+    def files(self):
+        return self.get_files()
 
-        Required by :external+law:py:class:`law.tasks.TransferLocalFile`
-
-        :return: File target for tar ball with all downloaded external files
-        """
+    def single_output(self):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
-        """Run function for BundleExternalFiles.
-
-        First create a temporary download area. Then download each source
-        specified in ``self.config_inst.x.external_files``. If the path
-        to the source file begins with ``http://`` or ``https://``, the files
-        are obtained with ``wget``. Otherwise, the files are simply copied.
-
-        After the files were fetched successfully, create a single tar ball
-        and move this to the final target location.
-        """
         # create a tmp dir to work in
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()

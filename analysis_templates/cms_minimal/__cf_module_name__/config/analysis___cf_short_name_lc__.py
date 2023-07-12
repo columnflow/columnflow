@@ -36,8 +36,8 @@ ana.x.versions = {}
 # files of bash sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
 ana.x.bash_sandboxes = [
-    "$CF_BASE/sandboxes/cf_prod.sh",
-    "$CF_BASE/sandboxes/venv_columnar.sh",
+    "$CF_BASE/sandboxes/cf.sh",
+    law.config.get("analysis", "default_columnar_sandbox"),
 ]
 
 # files of cmssw sandboxes that might be required by remote tasks
@@ -294,6 +294,7 @@ cfg.add_variable(
     expression="n_jet",
     binning=(11, -0.5, 10.5),
     x_title="Number of jets",
+    discrete_x=True,
 )
 cfg.add_variable(
     name="jets_pt",

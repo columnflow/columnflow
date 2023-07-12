@@ -97,16 +97,10 @@ def example(self):
         effect=(0.5, 1.1),
     )
 
-    #
-    # post-processing
-    #
-
-    self.cleanup()
-
 
 @inference_model
 def example_no_shapes(self):
-    # same initialization as "test" above
+    # same initialization as "example" above
     example.init_func.__get__(self, self.__class__)()
 
     #
@@ -114,11 +108,5 @@ def example_no_shapes(self):
     #
 
     for category_name, process_name, parameter in self.iter_parameters():
-        if parameter.type.is_shape:
+        if parameter.type.is_shape or any(trafo.from_shape for trafo in parameter.transformations):
             self.remove_parameter(parameter.name, process=process_name, category=category_name)
-
-    #
-    # post-processing
-    #
-
-    self.cleanup()

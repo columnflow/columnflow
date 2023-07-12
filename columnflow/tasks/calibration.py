@@ -23,7 +23,8 @@ class CalibrateEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    """Task to apply calibrations to objects, e.g. leptons and jets.
+    """
+    Task to apply calibrations to objects, e.g. leptons and jets.
 
     The calibrations that are to be applied can be specified on the command
     line, and are implemented as instances of the
@@ -31,7 +32,7 @@ class CalibrateEvents(
     please consider the documentation there.
     """
     # default sandbox, might be overwritten by calibrator function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -39,10 +40,12 @@ class CalibrateEvents(
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
+    # register shifts found in the chosen calibrator to this task
     register_calibrator_shifts = True
 
     def workflow_requires(self) -> dict:
-        """Configure the requirements for the workflow in general.
+        """
+        Configure the requirements for the workflow in general.
         For more general informations, see
         :external+law:py:meth:`BaseWorkflow.workflow_requires() <law.workflow.base.BaseWorkflow.workflow_requires>`.
 
@@ -63,7 +66,8 @@ class CalibrateEvents(
         return reqs
 
     def requires(self) -> dict:
-        """Configure the requirements for the individual branches of the workflow.
+        """
+        Configure the requirements for the individual branches of the workflow.
         For more general informations, see
         :external+law:py:meth:`BaseWorkflowProxy.requires() <law.workflow.base.BaseWorkflowProxy.requires>`.
 
@@ -88,42 +92,25 @@ class CalibrateEvents(
 
         return reqs
 
-    def output(self) -> dict:
-        """Defines the outputs of the current branch within the workflow.
-
-        :return: Dictionary with outputs. The current format is
-
-            .. code-block:: python
-
-                {
-                    "columns": self.target(f"calib_{self.branch}.parquet"),
-                }
-
-            where `self.branch` is the current index of the branch.
+    def output(self):
         """
-        return {"columns": self.target(f"calib_{self.branch}.parquet")}
+        Defines the outputs of the current branch within the workflow.
+        """
+        outputs = {}
+
+        # only declare the output in case the calibrator actually creates columns
+        if self.calibrator_inst.produced_columns:
+            outputs["columns"] = self.target(f"calib_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
     def run(self):
-        """run method of this Task family.
-
-        First, the requirements for this tasks are resolved and their outputs
-        are collected as inputs to this Task.
-        Afterwards, the events are loaded from the Logical File Names (LFNs)
-        using the :py:meth:`~columnflow.columnar_utils.ChunkedIOHandler.iter_chunked_io`
-        method. The format of the LFN data structure is expected to be compatible
-        with the ``coffea_root`` source handler. For more information, please
-        consider the documentation of the :py:class:`~columnflow.columnar_utils.ChunkedIOHandler`
-
-        The current calibrator instance *calibrator_ins* is applied to each chunk
-        non-relevant intermediary columns are removed from the array.
-        If member variable *check_finite* is set, the values after the calibration
-        are checked using the :py:meth:`~columnflow.tasks.framework.mixins.ChunkedIOMixin.raise_if_not_finite`.
-
-        Finally, the arrays are saved to disk in the parquet format.
+        """
+        Run method of this task.
         """
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
@@ -199,8 +186,8 @@ CalibrateEventsWrapper = wrapper_factory(
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 
-wrapper_doc = """Wrapper task to calibrate events for multiple datasets.
+CalibrateEventsWrapper.__doc__ = """
+Wrapper task to calibrate events for multiple datasets.
 
 :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
 """
-CalibrateEventsWrapper.__doc__ = wrapper_doc

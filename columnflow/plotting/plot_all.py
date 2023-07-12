@@ -263,11 +263,14 @@ def plot_all(
             "simwip": "Simulation work in progress",
             "simpre": "Simulation preliminary",
             "simpw": "Simulation private work",
+            "od": "OpenData",
+            "odwip": "OpenData work in progress",
+            "odpw": "OpenData private work",
             "public": "",
         }
         cms_label_kwargs = {
             "ax": ax,
-            "llabel": label_options[cms_label],
+            "llabel": label_options.get(cms_label, cms_label),
             "fontsize": 22,
             "data": False,
         }

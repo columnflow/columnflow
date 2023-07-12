@@ -148,7 +148,7 @@ def get_lookup_provider(
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
         "Jet.jetId",
         "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
         attach_coffea_behavior,
@@ -457,9 +457,9 @@ jec_coffea_nominal = jec_coffea.derive("jec_coffea_nominal", cls_dict={"uncertai
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
         "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
-        "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
+        "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
     },

@@ -15,14 +15,15 @@ from columnflow.columnar_util import Route
 ak = maybe_import("awkward")
 
 
-def get_met_filters(self) -> Iterable[str]:
-    """function to obtain met filters from the config.
+def get_met_filters_default(self) -> Iterable[str]:
+    """
+    Function to obtain met filters from the config.
 
     By default, this is done using
 
     .. code-block:: python
 
-        config_inst.x.met_filters
+        return config_inst.x.met_filters
 
     :return: list or set of met filters to be applied
     """
@@ -30,15 +31,17 @@ def get_met_filters(self) -> Iterable[str]:
 
 
 @selector(
-    uses={"event", "nFlag"},
-    get_met_filters=get_met_filters,
+    uses={"event"},
+    # function to obtain met filters from the config
+    get_met_filters=get_met_filters_default,
 )
 def met_filters(
     self: Selector,
     events: ak.Array,
     **kwargs,
 ) -> ak.Array:
-    """Compute a selection mask to filter out noisy/anomalous high-MET events
+    """
+    Compute a selection mask to filter out noisy/anomalous high-MET events
     (MET filters).
 
     Individual filter decisions based on different criteria are stored as bool-valued columns
