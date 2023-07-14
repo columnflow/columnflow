@@ -116,12 +116,16 @@ class CreateHistograms(
         # define columns that need to be read
         read_columns = {"category_ids", "process_id"} | set(aliases.values())
         read_columns |= {
-            Route(variable_inst.expression)
-            if isinstance(variable_inst.expression, str) else
-            None  # TODO: handle variable_inst with custom expressions, can they declare columns?
+            Route(inp)
             for variable_inst in (
                 self.config_inst.get_variable(var_name)
                 for var_name in law.util.flatten(self.variable_tuples.values())
+            )
+            for inp in (
+                [variable_inst.expression]
+                if isinstance(variable_inst.expression, str)
+                # for variable_inst with custom expressions, read columns declared via aux key
+                else variable_inst.x("inputs", [])
             )
         }
         if self.dataset_inst.is_mc:
