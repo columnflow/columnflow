@@ -14,20 +14,21 @@ from operator import and_, getitem as getitem_
 from typing import Sequence, Callable
 
 from columnflow.selection import Selector, SelectionResult, selector
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-@selector()
+@selector(
+    call_force=True,
+)
 def increment_stats(
     self: Selector,
     events: ak.Array,
     results: SelectionResult,
     stats: dict,
-    event_mask: ak.Array | None = None,
     weight_map: dict[str, ak.Array | tuple[ak.Array, ak.Array]] | None = None,
     group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
     group_combinations: Sequence[tuple[str]] | None = None,
@@ -38,13 +39,14 @@ def increment_stats(
     metrics in a given dictionary *stats* given a chunk of *events* and the corresponding selection
     *results*.
 
-    By default, only two fields are incremented in *stats*: ``"n_events"`` and
-    ``"n_events_selected"``. The latter is based on the full selection mask taken from *event_mask*
-    that defaults to ``results.main.event``. However, a *weight_map* can be defined to configure
-    additional fields to be added. The key of each entry will result in a new field
-    ``sum_<weight_key>``. Values should consist of 2-tuples with the actual weights to be considered
-    and a mask to be applied to it. If all events should be considered, the mask can refer to an
-    ``Ellipsis``.
+    A weight_map* can be defined to configure the actual fields to be added. The key of each entry
+    should either start with ``"num``, to state that it will refer to a plain number of events, or
+    ``"sum"``, to state that the field describes the sum of a specific column (usualky weights).
+    Different types of values are accepted, depending on the type of "operation":
+
+        - ``"num"``: An event mask, or an *Ellipsis* to select all events.
+        - ``"sum"``: Either a column to sum over, or a 2-tuple containing the column to sum, and
+                     an event mask to only sum over certain events.
 
     Example:
 
@@ -52,13 +54,17 @@ def increment_stats(
 
         # weight map definition
         weight_map = {
-            "mc_weight": (events.mc_weight, Ellipsis),
-            "mc_weight_selected": (events.mc_weight, results.main.event),
+            # "num" operations
+            "num_events": Ellipsis,  # all events
+            "num_events_selected": results.main.event,  # selected events only
+            # "sum" operations
+            "sum_mc_weight": events.mc_weight,  # weights of all events
+            "sum_mc_weight_selected": (events.mc_weight, results.main.event),  # weights of selected events
         }
 
         # usage within an exposed selector
         # (where results are generated, and events and stats were passed by SelectEvents)
-        self[increment_stats_per_process](events, results, stats, weight_map)
+        self[increment_stats_per_process](events, results, stats, weight_map=weight_map, **kwargs)
 
     Each sum of weights can also be extracted for each unique element in a so-called group, such as
     per process id, or per jet multiplicity bin. For this purpose, a *group_map* can be defined,
@@ -85,11 +91,11 @@ def increment_stats(
             },
         }
 
-    Based on the *weight_map* in the example above, this will result in four additional fields in
-    *stats*, i.e., ``"sum_mc_weight_per_process"``, ``"sum_mc_weight_selected_per_process"``,
-    ``"sum_mc_weight_per_njet"``, ``"sum_mc_weight_selected_per_njet"``. Each of these new fields
-    will refer to a dictionary with keys corresponding to the unique values defined in the
-    *group_map* above.
+    Based on the *weight_map* in the example above, this will result in eight additional fields in
+    *stats*, e.g, ``"sum_mc_weight_per_process"``, ``"sum_mc_weight_selected_per_process"``,
+    ``"sum_mc_weight_per_njet"``, ``"sum_mc_weight_selected_per_njet"``, etc. (same of "num"). Each
+    of these new fields will refer to a dictionary with keys corresponding to the unique values
+    defined in the *group_map* above.
 
     In addition, combinations of groups can be configured using *group_combinations*. It accepts a
     sequence of tuples whose elements should be names of groups in *group_names*. As the name
@@ -102,20 +108,11 @@ def increment_stats(
 
         group_combinations = [("process", "njet")]
 
-    In this case, *stats* will obtain additional fields ``"sum_mc_weight_per_process_and_njet"``
-    and ``"sum_mc_weight_selected_per_process_and_njet"``, referring to nested dictionaries whose
-    structure depends on the exact order of group names per tuple.
+    In this case, *stats* will obtain additional fields, such as
+    ``"sum_mc_weight_per_process_and_njet"`` and ``"sum_mc_weight_selected_per_process_and_njet"``,
+    referring to nested dictionaries whose structure depends on the exact order of group names per
+    tuple.
     """
-    # when no event mask is given, fallback to the main results object
-    if event_mask is None:
-        event_mask = results.main.event
-
-    # increment plain counts
-    stats.setdefault("n_events", 0)
-    stats.setdefault("n_events_selected", 0)
-    stats["n_events"] += len(events)
-    stats["n_events_selected"] += int(ak.sum(event_mask, axis=0))
-
     # make values in group map unique
     unique_group_values = {
         group_name: np.unique(ak.flatten(group_data["values"], axis=None))
@@ -129,42 +126,57 @@ def increment_stats(
             continue
         group_combinations.insert(0, (group_name,))
 
-    # prepare default types (nested defaultdict's) down to a certain depth
-    group_defaults = {
-        1: (lambda: defaultdict(float)),
-    }
-    for i in range(2, max([len(group_names) for group_names in group_combinations] + [0]) + 1):
-        # use a self-executing closure to avoid reliance inside the lambda on i in the loop body
-        group_defaults[i] = (lambda i: (lambda: defaultdict(group_defaults[i - 1])))(i)
-
     # get and store the weights per entry in the map
-    for name, weights in weight_map.items():
-        mask = Ellipsis
-        if isinstance(weights, (tuple, list)):
-            if len(weights) == 1:
-                weights = weights[0]
-            elif len(weights) == 2:
-                weights, mask = weights
+    for weight_name, obj in weight_map.items():
+        # check whether the weight is either a "num" or "sum" field
+        if weight_name.startswith("num"):
+            op = self.NUM
+        elif weight_name.startswith("sum"):
+            op = self.SUM
+        else:
+            raise Exception(
+                f"weight '{weight_name}' starting with unknown operation; should either start with "
+                "'num' or 'sum'",
+            )
+
+        # interpret obj based on the aoperation to be applied
+        weights = None
+        weight_mask = Ellipsis
+        if isinstance(obj, (tuple, list)):
+            if op == self.NUM:
+                raise Exception(
+                    f"weight map entry '{weight_name}' should refer to a mask, "
+                    f"but found a sequence: {obj}",
+                )
+            if len(obj) == 1:
+                weights = obj[0]
+            elif len(obj) == 2:
+                weights, weight_mask = obj
             else:
-                raise Exception(f"cannot interpret as weights and optional mask: '{weights}'")
+                raise Exception(f"cannot interpret as weights and optional mask: '{obj}'")
+        elif op == self.NUM:
+            weight_mask = obj
+        else:  # SUM
+            weights = obj
 
-        # when mask is an Ellipsis, it cannot be & joined to other masks, so use True instead
-        joinable_mask = True if mask is Ellipsis else mask
+        # when mask is an Ellipsis, it cannot be AND joined to other masks, so convert to true mask
+        if weight_mask is Ellipsis:
+            weight_mask = np.ones(len(events), dtype=bool)
 
-        # sum for all groups, with and without the seleciton
-        stats[f"sum_{name}"] += float(ak.sum(weights[mask]))
-        stats[f"sum_{name}_selected"] += float(ak.sum(weights[event_mask & joinable_mask]))
+        # apply the operation
+        if op == self.NUM:
+            stats[f"{weight_name}"] += int(ak.sum(weight_mask))
+        else:  # SUM
+            stats[f"{weight_name}"] += float(ak.sum(weights[weight_mask]))
 
         # per group combination
         for group_names in group_combinations:
-            group_key = f"sum_{name}_per_" + "_and_".join(group_names)
-            group_key_sel = f"sum_{name}_selected_per_" + "_and_".join(group_names)
+            group_key = f"{weight_name}_per_" + "_and_".join(group_names)
 
             # set the default structures
             if group_key not in stats:
-                stats[group_key] = group_defaults[len(group_names)]()
-            if group_key_sel not in stats:
-                stats[group_key_sel] = group_defaults[len(group_names)]()
+                dtype = int if op == self.NUM else float
+                stats[group_key] = self.defaultdicts[dtype][len(group_names)]()
 
             # set values
             for values in itertools.product(*(unique_group_values[g] for g in group_names)):
@@ -176,12 +188,53 @@ def increment_stats(
                 # find the innermost dict to perform the in-place item assignment, then increment
                 str_values = list(map(str, values))
                 innermost_dict = reduce(getitem_, [stats[group_key]] + str_values[:-1])
-                innermost_dict[str_values[-1]] += float(ak.sum(
-                    weights[group_mask & joinable_mask],
-                ))
-                innermost_dict_sel = reduce(getitem_, [stats[group_key_sel]] + str_values[:-1])
-                innermost_dict_sel[str_values[-1]] += float(ak.sum(
-                    weights[event_mask & group_mask & joinable_mask],
-                ))
+                if op == self.NUM:
+                    innermost_dict[str_values[-1]] += int(ak.sum(weight_mask & group_mask))
+                else:  # SUM
+                    innermost_dict[str_values[-1]] += float(ak.sum(weights[weight_mask & group_mask]))
 
     return events
+
+
+@increment_stats.setup
+def increment_stats_setup(
+    self: Selector,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
+    # flags to descibe "number" and "sum" fields
+    self.NUM, self.SUM = range(2)
+
+    # store nested defaultdict's with a certain maximum nesting depth
+    self.defaultdicts = {
+        float: {1: (lambda: defaultdict(float))},
+        int: {1: (lambda: defaultdict(int))},
+    }
+    for i in range(2, 10 + 1):
+        # use a self-executing closure to avoid reliance inside the lambda on i in the loop body
+        self.defaultdicts[float][i] = (lambda i: (lambda: defaultdict(self.defaultdicts[float][i - 1])))(i)
+        self.defaultdicts[int][i] = (lambda i: (lambda: defaultdict(self.defaultdicts[int][i - 1])))(i)
+
+
+@selector(
+    uses={increment_stats},
+    produces={increment_stats},
+    call_force=True,
+)
+def increment_event_stats(
+    self: Selector,
+    events: ak.Array,
+    results: SelectionResult,
+    stats: dict,
+    **kwargs,
+) -> ak.Array:
+    """
+    Simplified version of :py:class:`increment_stats` that only increments the number of events and
+    the number of selected events.
+    """
+    weight_map = {
+        "num_events": Ellipsis,
+        "num_events_selected": results.main.event,
+    }
+    return self[increment_stats](events, results, stats, weight_map=weight_map, **kwargs)

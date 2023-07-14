@@ -239,6 +239,12 @@ class Route(object, metaclass=RouteMeta):
         """
         Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
+
+        :param sep: Separator to be used to split *column* into subcomponents
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets are not encountered
+            in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         # first extract and replace possibly nested slices
         # note: a regexp would be far cleaner, but there are edge cases which possibly require
@@ -292,6 +298,11 @@ class Route(object, metaclass=RouteMeta):
         """
         Splits a string assumed to be in dot format and returns the fragments, potentially with
         selection, slice and advanced indexing expressions.
+
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets
+            are not encountered in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         return cls._split(cls.DOT_SEP, column)
 
@@ -300,6 +311,11 @@ class Route(object, metaclass=RouteMeta):
         """
         Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
+
+        :param column: Name of the column to be split
+        :raises ValueError: If *column* is malformed, specifically if brackets are not encountered
+            in pairs (i.e. opening backet w/o closing and vice versa).
+        :return: tuple of subcomponents extracted from *column*
         """
         return cls._split(cls.NANO_SEP, column)
 
@@ -1324,6 +1340,7 @@ class ArrayFunction(Derivable):
     call_func = None
     init_func = None
     skip_func = None
+
     uses = set()
     produces = set()
     check_columns_present = None
@@ -1752,7 +1769,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, inputs, reader_targets):
+        def setup(self, reqs, inputs, reader_targets):
             # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
 
@@ -1773,8 +1790,9 @@ class TaskArrayFunction(ArrayFunction):
         The above example uses explicit subclassing, mixed with decorator usage to extend the class.
         This is most certainly never used in practice. Instead, please either consider defining the
         class the normal way, or use a decorator to wrap the main callable first and by that
-        creating the class as done by the :py:class:`Calibrator`, :py:class:`Selector` and
-        :py:class:`Producer` interfaces.
+        creating the class as done by the :py:class:`~columnflow.calibration.Calibrator`,
+        :py:class:`~columnflow.selection.Selector` and :py:class:`~columnflow.production.Producer`
+        interfaces.
 
     .. py:classattribute:: shifts
        type: set
@@ -2287,7 +2305,7 @@ class ChunkedIOHandler(object):
     The content to load is configurable through *source*, which can be a file path or an opened file
     object, and a *source_type*, which defines how the *source* should be opened and traversed for
     chunking. See the classmethods ``open_...`` and ``read_...`` below for implementation details
-    and :py:meth:`get_source_handlers` for a list of currently supported sources.
+    and :py:meth:`get_source_handler` for a list of currently supported sources.
 
     Example:
 
@@ -2333,7 +2351,7 @@ class ChunkedIOHandler(object):
     the other arguments can be sequences as well with the same length.
 
     During iteration, before chunks are yielded, an optional message *iter_message* is printed when
-    set, receiving the respective :py:class:`ChunkedIOHandler.ChunkPosition` as the field *pos* for
+    set, receiving the respective :py:class:`~ChunkedIOHandler.ChunkPosition` as the field *pos* for
     formatting.
     """
 
@@ -2441,7 +2459,7 @@ class ChunkedIOHandler(object):
         chunk_index: int,
     ) -> ChunkPosition:
         """
-        Creates and returns a *ChunkPosition* object based on the total number of entries
+        Creates and returns a :py:attr:`ChunkPosition` object based on the total number of entries
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
         # determine the start of stop of this chunk
@@ -2814,7 +2832,7 @@ class ChunkedIOHandler(object):
     def read_awkward_parquet(
         cls,
         source_object: DaskArrayReader,
-        chunk_pos: ChunkPosition,
+        chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> ak.Array:

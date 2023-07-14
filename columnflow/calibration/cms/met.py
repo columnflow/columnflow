@@ -23,7 +23,8 @@ ak = maybe_import("awkward")
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Performs the MET phi (type II) correction using the correctionlib for events there the
+    Performs the MET phi (type II) correction using the
+    :external+correctionlib:doc:`index` for events there the
     uncorrected MET pt is below the beam energy (extracted from ``config_inst.campaign.ecm * 0.5``).
     Requires an external file in the config under ``met_phi_corr``:
 
@@ -42,9 +43,12 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
         cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
-    where "variable" and "data_source" are placeholders that are inserted in the calibrator setup.
-    *get_met_correction_set* can be adapted in a subclass in case it is stored differently in the
-    config.
+    where "variable" and "data_source" are placeholders that are inserted in the
+    calibrator setup :py:meth:`~.met_phi.setup_func`.
+    *get_met_correction_set* can be adapted in a subclass in case it is stored
+    differently in the config.
+
+    :param events: awkward array containing events to process
     """
     # copy the intial pt and phi values
     corr_pt = np.array(events.MET.pt, dtype=np.float32)
@@ -83,6 +87,16 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
 
 @met_phi.setup
 def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: dict) -> None:
+    """
+    Load the correct met files using the :py:func:`from_string` method of the
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    function and apply the corrections as needed.
+
+    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`
+        instance
+    :param inputs: Additional inputs, currently not used.
+    :param reader_targets: Additional targets, currently not used.
+    """
     bundle = reqs["external_files"]
 
     # create the pt and phi correctors
