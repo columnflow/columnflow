@@ -19,8 +19,8 @@ import gc
 import re
 import math
 import time
-import copy
 import enum
+import fnmatch
 import threading
 import multiprocessing
 import multiprocessing.pool
@@ -29,11 +29,12 @@ from collections import namedtuple, OrderedDict, defaultdict
 from typing import Sequence, Callable, Any
 
 import law
+import order as od
 from law.util import InsertableDict
 
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
-    get_source_code,
+    get_source_code, is_pattern,
 )
 
 
@@ -85,20 +86,7 @@ class ItemEval(object):
 eval_item = ItemEval()
 
 
-class RouteMeta(type):
-    """
-    Meta class for :py:class:`Route` that prevents instances from being copied when passed to the
-    constructor.
-    """
-
-    def __call__(cls, route: Route | Any | None = None):
-        if isinstance(route, cls):
-            return route
-
-        return super().__call__(route=route)
-
-
-class Route(object, metaclass=RouteMeta):
+class Route(od.TagMixin):
     """
     Route objects describe the location of columns in nested arrays and are basically wrappers
     around a sequence of nested fields. Additionally, they provide convenience methods for
@@ -183,7 +171,7 @@ class Route(object, metaclass=RouteMeta):
     def _join(
         cls,
         sep: str,
-        fields: Sequence[str | int | slice | type(Ellipsis) | tuple | list],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list],
         _outer: bool = True,
     ) -> str:
         """
@@ -214,7 +202,7 @@ class Route(object, metaclass=RouteMeta):
     @classmethod
     def join(
         cls,
-        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
@@ -224,7 +212,7 @@ class Route(object, metaclass=RouteMeta):
     @classmethod
     def join_nano(
         cls,
-        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
@@ -236,7 +224,7 @@ class Route(object, metaclass=RouteMeta):
         cls,
         sep: str,
         column: str,
-    ) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
+    ) -> Sequence[str | int | slice | type(Ellipsis) | list]:
         """
         Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
@@ -295,7 +283,7 @@ class Route(object, metaclass=RouteMeta):
         return tuple(parts)
 
     @classmethod
-    def split(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
+    def split(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list]:
         """
         Splits a string assumed to be in dot format and returns the fragments, potentially with
         selection, slice and advanced indexing expressions.
@@ -308,7 +296,7 @@ class Route(object, metaclass=RouteMeta):
         return cls._split(cls.DOT_SEP, column)
 
     @classmethod
-    def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
+    def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list]:
         """
         Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
@@ -320,8 +308,8 @@ class Route(object, metaclass=RouteMeta):
         """
         return cls._split(cls.NANO_SEP, column)
 
-    def __init__(self, route=None):
-        super().__init__()
+    def __init__(self, route: Any | None = None, tags: dict | None = None):
+        super().__init__(tags=tags)
 
         # initial storage of fields
         self._fields = []
@@ -329,6 +317,10 @@ class Route(object, metaclass=RouteMeta):
         # use the add method to set the initial value
         if route:
             self.add(route)
+
+            # when route was a Route instance itself, add its tags
+            if isinstance(route, Route):
+                self.add_tag(route.tags)
 
     @property
     def fields(self) -> tuple:
@@ -362,12 +354,12 @@ class Route(object, metaclass=RouteMeta):
     def __len__(self) -> int:
         return len(self._fields)
 
-    def __eq__(self, other: Route | Sequence[str] | str) -> bool:
+    def __eq__(self, other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list]) -> bool:
         if isinstance(other, Route):
             return self.fields == other.fields
-        elif isinstance(other, (list, tuple)):
+        if isinstance(other, tuple):
             return self.fields == tuple(other)
-        elif isinstance(other, str):
+        if isinstance(other, str):
             return self.column == other
         return False
 
@@ -379,7 +371,7 @@ class Route(object, metaclass=RouteMeta):
 
     def __add__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> Route:
         route = self.copy()
         route.add(other)
@@ -387,7 +379,7 @@ class Route(object, metaclass=RouteMeta):
 
     def __radd__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> Route:
         other = Route(other)
         other.add(self)
@@ -395,7 +387,7 @@ class Route(object, metaclass=RouteMeta):
 
     def __iadd__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> Route:
         self.add(other)
         return self
@@ -403,7 +395,7 @@ class Route(object, metaclass=RouteMeta):
     def __getitem__(
         self,
         index: Any,
-    ) -> Route | str | int | slice | type(Ellipsis) | list | tuple:
+    ) -> Route | str | int | slice | type(Ellipsis) | list:
         # detect slicing and return a new instance with the selected fields
         field = self._fields.__getitem__(index)
         return field if isinstance(index, int) else self.__class__(field)
@@ -411,13 +403,13 @@ class Route(object, metaclass=RouteMeta):
     def __setitem__(
         self,
         index: Any,
-        value: str | int | slice | type(Ellipsis) | list | tuple,
+        value: str | int | slice | type(Ellipsis) | list,
     ) -> None:
         self._fields.__setitem__(index, value)
 
     def add(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
     ) -> None:
         """
         Adds an *other* route instance, or the fields extracted from either a sequence of strings or
@@ -528,6 +520,26 @@ class Route(object, metaclass=RouteMeta):
                         res = ak.fill_none(res, null_value)
 
         return res
+
+
+def optional_column(
+    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
+) -> Route | Sequence[Route] | set[Route]:
+    """
+    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
+    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
+    a sequence, a sequence of the same type containing route objects is returned.
+    """
+    def create(r):
+        route = Route(r)
+        route.add_tag("optional")
+        return route
+
+    # check if multiple routes were passed
+    multiple = isinstance(route, (list, set))
+
+    # create multiple or a single tagged route
+    return route.__class__(map(create, route)) if multiple else create(route)
 
 
 def get_ak_routes(
@@ -1174,21 +1186,6 @@ class RouteFilter(object):
         return ak_array
 
 
-# flags for marking ArrayFunction input/output columns as optional
-class OptFlag(enum.Flag):
-    REQUIRED = enum.auto()
-    OPTIONAL = enum.auto()
-
-
-# shallow wrapper around an object (a class or instance) and an OptFlag
-OptFlagged = namedtuple("OptFlagged", ["wrapped", "opt_flag"])
-
-
-# convenience function for marking optional input/output columns
-def optional_column(wrapped) -> OptFlagged:
-    return OptFlagged(wrapped, OptFlag.OPTIONAL)
-
-
 class ArrayFunction(Derivable):
     """
     Base class for function wrappers that act on arrays and keep track of used as well as produced
@@ -1298,6 +1295,20 @@ class ArrayFunction(Derivable):
        Flag that can be used in nested dependencies between array functions to denote columns names
        in the :py:attr:`produces` set.
 
+    .. py:classattribute:: check_used_columns
+       type: bool
+
+       A flag that decides whether, during the actual call, the input array should be checked for
+       the existence of all columns defined in :py:attr:`uses`. If a column is missing, an exception
+       is raised.
+
+    .. py:classattribute:: check_produced_columns
+       type: bool
+
+       A flag that decides whether, after the actual call, the output array should be checked for
+       the existence of all columns defined in :py:attr:`produces`. If a column is missing, an
+       exception is raised.
+
     .. py:attribute:: uses_instances
        type: set
 
@@ -1359,7 +1370,8 @@ class ArrayFunction(Derivable):
 
     uses = set()
     produces = set()
-    check_columns_present = None
+    check_used_columns = True
+    check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
     log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
@@ -1420,9 +1432,11 @@ class ArrayFunction(Derivable):
         call_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
-        deferred_init: bool | None = True,
+        check_used_columns: bool | None = None,
+        check_produced_columns: bool | None = None,
         instance_cache: dict | None = None,
         log_runtime: bool | None = None,
+        deferred_init: bool | None = True,
         **kwargs,
     ):
         super().__init__()
@@ -1434,6 +1448,10 @@ class ArrayFunction(Derivable):
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if check_used_columns is not None:
+            self.check_used_columns = check_used_columns
+        if check_produced_columns is not None:
+            self.check_produced_columns = check_produced_columns
         if log_runtime is not None:
             self.log_runtime = log_runtime
 
@@ -1444,11 +1462,6 @@ class ArrayFunction(Derivable):
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
-
-        if self.check_columns_present is None:
-            self.check_columns_present = self._dependency_sets
-        elif not self.check_columns_present:
-            self.check_columns_present = set()
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -1561,26 +1574,19 @@ class ArrayFunction(Derivable):
 
             # go through all dependent objects and create instances of classes, considering caching
             for obj in getattr(self, attr):
-                # get optional flag
-                opt_flag = OptFlag.REQUIRED
-                if isinstance(obj, OptFlagged):
-                    opt_flag = obj.opt_flag
-                    obj = obj.wrapped
-
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
-                        instances.add(OptFlagged(obj, opt_flag))
+                        instances.add(self.IOFlagged(obj, self.IOFlag.AUTO))
                 elif isinstance(obj, self.IOFlagged):
                     obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
-                        instances.add(OptFlagged(obj, opt_flag))
+                        instances.add(obj)
                 else:
-                    obj = copy.deepcopy(obj)
-                    if obj:
-                        instances.add(OptFlagged(obj, opt_flag))
+                    # here, obj must be anything that is accepted by route
+                    instances.add(obj if isinstance(obj, Route) else Route(obj))
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1612,9 +1618,6 @@ class ArrayFunction(Derivable):
 
         for attr in self._dependency_sets:
             for obj in getattr(self, f"{attr}_instances"):
-                # strip optional flag
-                if isinstance(obj, OptFlagged):
-                    obj = obj.wrapped
                 # strip i/o flag
                 if isinstance(obj, self.IOFlagged):
                     obj = obj.wrapped
@@ -1628,11 +1631,8 @@ class ArrayFunction(Derivable):
     def _get_columns(
         self,
         io_flag: IOFlag,
-        # if REQUIRED, return only columns not marked optioal
-        # if OPTIONAL, return all columns
-        opt_flag: OptFlag = OptFlag.OPTIONAL,
-        call_cache: set | None = None,
         dependencies: bool = True,
+        _cache: set | None = None,
     ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
@@ -1641,56 +1641,45 @@ class ArrayFunction(Derivable):
         columns = set()
 
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # declare _this_ call cached
-        call_cache.add(OptFlagged(self.IOFlagged(self, io_flag), opt_flag))
+        _cache.add(self.IOFlagged(self, io_flag))
 
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
-            cache_key = obj
-            if isinstance(obj, OptFlagged):
-                # don't include optional columns when only required are requested
-                if opt_flag == OptFlag.REQUIRED and obj.opt_flag == OptFlag.OPTIONAL:
-                    continue
-
-                # strip optional flag
-                obj = obj.wrapped
-            else:
-                cache_key = OptFlagged(obj, OptFlag.REQUIRED)
-
             if isinstance(obj, (ArrayFunction, self.IOFlagged)):
                 # don't propagate to dependencies
                 if not dependencies:
                     continue
 
+                flagged = obj
                 if isinstance(obj, ArrayFunction):
-                    cache_key = OptFlagged(self.IOFlagged(obj, io_flag), cache_key.opt_flag)
+                    flagged = self.IOFlagged(obj, io_flag)
                 elif obj.io_flag == self.IOFlag.AUTO:
-                    cache_key = OptFlagged(self.IOFlagged(obj.wrapped, io_flag), cache_key.opt_flag)
+                    flagged = self.IOFlagged(obj.wrapped, io_flag)
 
                 # skip when already cached
-                if cache_key in call_cache:
+                if flagged in _cache:
                     continue
 
                 # add the columns
-                io_flagged = cache_key.wrapped
-                columns |= io_flagged.wrapped._get_columns(io_flagged.io_flag, opt_flag, call_cache=call_cache)
+                columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
             else:
                 columns.add(obj)
 
         return columns
 
-    def _get_used_columns(self, opt_flag: OptFlag = OptFlag.OPTIONAL, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.USES, opt_flag=opt_flag, call_cache=call_cache)
+    def _get_used_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
     def used_columns(self) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, opt_flag: OptFlag = OptFlag.OPTIONAL, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.PRODUCES, opt_flag=opt_flag, call_cache=call_cache)
+    def _get_produced_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
     def produced_columns(self) -> set[str]:
@@ -1701,20 +1690,31 @@ class ArrayFunction(Derivable):
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
         """
+        # get own columns, i.e, routes that are non-optional
+        routes = [
+            route
+            for route in self._get_columns(io_flag=io_flag, dependencies=False)
+            if not route.has_tag("optional")
+        ]
 
-        columns = self._get_columns(
-            io_flag=io_flag,
-            # only check required columns
-            opt_flag=OptFlag.REQUIRED,
-            # only check own columns
-            dependencies=False,
-        )
+        # helper to identify if ak_array has a specific column under consideration of patterns
+        def exists(route):
+            route_str = str(route)
+            # trivial check for non-patterns
+            if is_pattern(route_str):
+                for _route in get_ak_routes(ak_array):
+                    if fnmatch.fnmatch(str(_route), route_str):
+                        return True
+                return False
 
-        missing = set()
-        for column in columns:
-            found = ak_array.layout.form.select_columns(column).columns()
-            if not found:
-                missing.add(column)
+            return has_ak_column(ak_array, route)
+
+        # get missing columns
+        missing = {
+            route
+            for route in routes
+            if not exists(route)
+        }
 
         if missing:
             action = (
@@ -1722,7 +1722,7 @@ class ArrayFunction(Derivable):
                 "produce" if io_flag == self.IOFlag.PRODUCES else
                 "find"
             )
-            missing = ", ".join(sorted(missing))
+            missing = ", ".join(sorted(map(str, missing)))
             raise Exception(
                 f"'{self.cls_name}' did not {action} any columns matching: {missing}",
             )
@@ -1743,9 +1743,9 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
-        # assume first argument is event array and
-        # check that the 'used' columns are present
-        if "uses" in self.check_columns_present:
+        # assume result is an event array or tuple with an event array as the first element and
+        # check that the 'produced' columns are present
+        if self.check_produced_columns:
             # when args is empty (when this method was called with keyword arguments only),
             # use the first keyword argument
             first_arg = args[0] if args else list(kwargs.values())[0]
@@ -1762,10 +1762,9 @@ class ArrayFunction(Derivable):
                     f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
                 )
 
-        # assume result is an event array or tuple with
-        # an event array as the first element and
+        # assume result is an event array or tuple with an event array as the first element and
         # check that the 'produced' columns are present
-        if "produces" in self.check_columns_present:
+        if self.check_produced_columns:
             result = results[0] if isinstance(results, (tuple, list)) else results
             self._check_columns(result, self.IOFlag.PRODUCES)
 
@@ -1980,10 +1979,10 @@ class TaskArrayFunction(ArrayFunction):
 
         return super().instantiate_dependency(cls, **kwargs)
 
-    def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
+    def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # add shifts and consider _this_ call cached
         shifts = {
@@ -1991,14 +1990,14 @@ class TaskArrayFunction(ArrayFunction):
             for shift in self.shifts
             if not isinstance(shift, (ArrayFunction, self.IOFlagged))
         }
-        call_cache.add(self)
+        _cache.add(self)
 
         # add shifts of all dependent objects
         for obj in self.get_dependencies(include_others=False):
             if isinstance(obj, TaskArrayFunction):
-                if obj not in call_cache:
-                    call_cache.add(obj)
-                    shifts |= obj._get_all_shifts(call_cache=call_cache)
+                if obj not in _cache:
+                    _cache.add(obj)
+                    shifts |= obj._get_all_shifts(_cache=_cache)
 
         return shifts
 
@@ -2009,7 +2008,7 @@ class TaskArrayFunction(ArrayFunction):
     def run_requires(
         self,
         reqs: dict | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict:
         """
         Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
@@ -2020,8 +2019,8 @@ class TaskArrayFunction(ArrayFunction):
             reqs = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's requires function
         if callable(self.requires_func):
@@ -2029,9 +2028,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_requires(reqs=reqs, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_requires(reqs=reqs, _cache=_cache)
 
         return reqs
 
@@ -2040,7 +2039,7 @@ class TaskArrayFunction(ArrayFunction):
         reqs: dict,
         inputs: dict,
         reader_targets: InsertableDict[str, law.FileSystemFileTarget] | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict[str, law.FileSystemTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
@@ -2053,8 +2052,8 @@ class TaskArrayFunction(ArrayFunction):
             reader_targets = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's setup function
         if callable(self.setup_func):
@@ -2062,9 +2061,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_setup(reqs, inputs, reader_targets, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
 
         return reader_targets
 
