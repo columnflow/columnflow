@@ -20,7 +20,6 @@ import re
 import math
 import time
 import enum
-import fnmatch
 import threading
 import multiprocessing
 import multiprocessing.pool
@@ -34,7 +33,7 @@ from law.util import InsertableDict
 
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
-    get_source_code, is_pattern,
+    get_source_code,
 )
 
 
