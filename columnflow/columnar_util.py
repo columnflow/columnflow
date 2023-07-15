@@ -171,7 +171,7 @@ class Route(od.TagMixin):
     def _join(
         cls,
         sep: str,
-        fields: Sequence[str | int | slice | type(Ellipsis) | list],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
         _outer: bool = True,
     ) -> str:
         """
@@ -202,7 +202,7 @@ class Route(od.TagMixin):
     @classmethod
     def join(
         cls,
-        fields: Sequence[str | int | slice | type(Ellipsis) | list],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> str:
         """
         Joins a sequence of strings into a string in dot format and returns it.
@@ -212,7 +212,7 @@ class Route(od.TagMixin):
     @classmethod
     def join_nano(
         cls,
-        fields: Sequence[str | int | slice | type(Ellipsis) | list],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> str:
         """
         Joins a sequence of strings into a string in nano-style underscore format and returns it.
@@ -224,7 +224,7 @@ class Route(od.TagMixin):
         cls,
         sep: str,
         column: str,
-    ) -> Sequence[str | int | slice | type(Ellipsis) | list]:
+    ) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string at a separator *sep* and returns the fragments, potentially with selection,
         slice and advanced indexing expressions.
@@ -283,7 +283,7 @@ class Route(od.TagMixin):
         return tuple(parts)
 
     @classmethod
-    def split(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list]:
+    def split(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string assumed to be in dot format and returns the fragments, potentially with
         selection, slice and advanced indexing expressions.
@@ -296,7 +296,7 @@ class Route(od.TagMixin):
         return cls._split(cls.DOT_SEP, column)
 
     @classmethod
-    def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list]:
+    def split_nano(cls, column: str) -> tuple[str | int | slice | type(Ellipsis) | list | tuple]:
         """
         Splits a string assumed to be in nano-style underscore format and returns the fragments,
         potentially with selection, slice and advanced indexing expressions.
@@ -357,7 +357,7 @@ class Route(od.TagMixin):
     def __eq__(self, other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list]) -> bool:
         if isinstance(other, Route):
             return self.fields == other.fields
-        if isinstance(other, tuple):
+        if isinstance(other, (list, tuple)):
             return self.fields == tuple(other)
         if isinstance(other, str):
             return self.column == other
@@ -371,7 +371,7 @@ class Route(od.TagMixin):
 
     def __add__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> Route:
         route = self.copy()
         route.add(other)
@@ -379,7 +379,7 @@ class Route(od.TagMixin):
 
     def __radd__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> Route:
         other = Route(other)
         other.add(self)
@@ -387,7 +387,7 @@ class Route(od.TagMixin):
 
     def __iadd__(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> Route:
         self.add(other)
         return self
@@ -395,7 +395,7 @@ class Route(od.TagMixin):
     def __getitem__(
         self,
         index: Any,
-    ) -> Route | str | int | slice | type(Ellipsis) | list:
+    ) -> Route | str | int | slice | type(Ellipsis) | list | tuple:
         # detect slicing and return a new instance with the selected fields
         field = self._fields.__getitem__(index)
         return field if isinstance(index, int) else self.__class__(field)
@@ -403,13 +403,13 @@ class Route(od.TagMixin):
     def __setitem__(
         self,
         index: Any,
-        value: str | int | slice | type(Ellipsis) | list,
+        value: str | int | slice | type(Ellipsis) | list | tuple,
     ) -> None:
         self._fields.__setitem__(index, value)
 
     def add(
         self,
-        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list],
+        other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> None:
         """
         Adds an *other* route instance, or the fields extracted from either a sequence of strings or
@@ -1299,15 +1299,19 @@ class ArrayFunction(Derivable):
        type: bool
 
        A flag that decides whether, during the actual call, the input array should be checked for
-       the existence of all columns defined in :py:attr:`uses`. If a column is missing, an exception
-       is raised.
+       the existence of all non-optional columns defined in :py:attr:`uses`. If a column is missing,
+       an exception is raised. A column, represented by a :py:class:`~.Route` object internally, is
+       considered optional if it has a tag ``"optional"`` as, for instance, added by
+       :py:func:`~.optional_column`.
 
     .. py:classattribute:: check_produced_columns
        type: bool
 
        A flag that decides whether, after the actual call, the output array should be checked for
-       the existence of all columns defined in :py:attr:`produces`. If a column is missing, an
-       exception is raised.
+       the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
+       missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+       internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+       :py:func:`~.optional_column`.
 
     .. py:attribute:: uses_instances
        type: set
@@ -1697,35 +1701,27 @@ class ArrayFunction(Derivable):
             if not route.has_tag("optional")
         ]
 
-        # helper to identify if ak_array has a specific column under consideration of patterns
-        def exists(route):
-            route_str = str(route)
-            # trivial check for non-patterns
-            if is_pattern(route_str):
-                for _route in get_ak_routes(ak_array):
-                    if fnmatch.fnmatch(str(_route), route_str):
-                        return True
-                return False
-
-            return has_ak_column(ak_array, route)
-
         # get missing columns
         missing = {
             route
             for route in routes
-            if not exists(route)
+            if not ak_array.layout.form.select_columns(str(route)).columns()
         }
 
-        if missing:
-            action = (
-                "receive" if io_flag == self.IOFlag.USES else
-                "produce" if io_flag == self.IOFlag.PRODUCES else
-                "find"
-            )
-            missing = ", ".join(sorted(map(str, missing)))
-            raise Exception(
-                f"'{self.cls_name}' did not {action} any columns matching: {missing}",
-            )
+        # nothing to do when no column is missing
+        if not missing:
+            return
+
+        # raise
+        action = (
+            "receive" if io_flag == self.IOFlag.USES else
+            "produce" if io_flag == self.IOFlag.PRODUCES else
+            "find"
+        )
+        missing = ", ".join(sorted(map(str, missing)))
+        raise Exception(
+            f"'{self.cls_name}' did not {action} any columns matching: {missing}",
+        )
 
     def __call__(self, *args, **kwargs):
         """
@@ -1743,9 +1739,9 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
-        # assume result is an event array or tuple with an event array as the first element and
-        # check that the 'produced' columns are present
-        if self.check_produced_columns:
+        # assume first argument is an event array and
+        # check that the 'used' columns are present
+        if self.check_used_columns:
             # when args is empty (when this method was called with keyword arguments only),
             # use the first keyword argument
             first_arg = args[0] if args else list(kwargs.values())[0]
