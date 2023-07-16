@@ -21,9 +21,13 @@ import order as od
 from columnflow.util import DotDict
 
 
+# default analysis and config related objects
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+# placeholder to denote a default value that is resolved dynamically
+RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
@@ -115,15 +119,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         other class. The parameters are used when calling ``Task.req(self)``.
         """
         # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
-        _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
-        _prefer_cli |= {
+        _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
             "htcondor_gpus", "htcondor_pool",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
-        # when cls accepts a version, but non was actively requested, use the version map to assign it
+        # when cls accepts a version but none was requested use the version map to assign it
         version_map = None
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
             version_map = cls.get_version_map(inst)
@@ -131,7 +134,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # when the version map is set, lookup the key with which to find a version in the map and overwrite it
+        # when the version map is set, lookup the key with which to find a version in the map and
+        # overwrite it
         if version_map and cls.task_family in version_map:
             version_params = list(cls.get_version_params())
             version = version_map[cls.task_family]
@@ -274,14 +278,20 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         container: str | od.AuxDataMixin = "config_inst",
         default_str: str | None = None,
         multiple: bool = False,
-    ) -> str | tuple[str] | None:
+    ) -> str | tuple | Any | None:
         """
-        Function that resolves the default of *param* when it is not set.
-        The default is identified via the *default_str* from an :py:class:`order.AuxDataMixin` *container*
-        and points to an auxiliary that can be either a string or a function.
-        When *multiple* is True, a tuple is returned. If *multiple* is false and the resolved parameter
-        is an iterable, the first entry is returned.
-        Does nothing when no container is given or *param* is already set.
+        Resolves a given parameter value *param*, checks if it should be placed with a default value
+        when empty, and in this case, does the actual default value resolution.
+
+        This resolution is triggered only in case *param* refers to :py:attr:`RESOLVE_DEFAULT`, a
+        1-tuple containing this attribute, or *None*, If so, the default is identified via the
+        *default_str* from an :py:class:`order.AuxDataMixin` *container* and points to an auxiliary
+        that can be either a string or a function. In the latter case, it is called with the task
+        class, the container instance, and all task parameters. Note that when no *container* is
+        given, *param* is returned unchanged.
+
+        When *multiple* is *True*, a tuple is returned. If *multiple* is *False* and the resolved
+        parameter is an iterable, the first entry is returned.
 
         Example:
 
@@ -304,7 +314,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
             params = {
                 "config_inst": config_inst,
-                "producer": None,
+                "producer": RESOLVE_DEFAULT,
             }
             resolve_param_values(params)  # sets params["producer"] to ("my_producer_1", "my_producer_2")
 
@@ -314,9 +324,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             }
             resolve_param_values(params)  # sets params["producer"] to "some_other_producer"
 
-        When *default_str* points to a function, it should take *container* and *task_params* as an input.
-
-        Example:
+        Example where the default points to a function:
 
         .. code-block:: python
             def resolve_param_values(params):
@@ -328,8 +336,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     multiple=True,
                 )
 
-            # A function that chooses the ml_model based on an attibute that is set in an inference_model
-            def default_ml_model(container, **task_params):
+            # a function that chooses the ml_model based on an attibute that is set in an inference_model
+            def default_ml_model(task_cls, container, task_params):
                 default_ml_model = None
 
                 # check if task is using an inference model
@@ -365,29 +373,35 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             params = {"config_inst": config_inst, "ml_model": "some_ml_model", "inference_model": "my_inference_model"}
             resolve_param_values(params)  # sets params["ml_model"] to "some_ml_model"
         """
+        # check if the parameter value is to be resolved
+        resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
 
-        if param in (None, law.NO_STR, tuple()):
+        # interpret missing parameters (e.g. NO_STR) as None
+        # (special case: an empty string is usually an active decision, but counts as missing too)
+        if law.is_no_param(param) or resolve_default or param == "":
             param = None
 
-            # get the container inst
+        # actual resolution
+        if resolve_default:
+            # get the container inst (mostly a config_inst or analysis_inst)
             if isinstance(container, str):
                 container = task_params.get(container)
 
             # expand default when container is set
             if container and default_str:
-                param = container.x(default_str, None)
+                param = container.x(default_str, None) if default_str else None
 
                 # allow default to be a function, taking task parameters as input
                 if isinstance(param, Callable):
-                    param = param(container, **task_params)
+                    param = param(cls, container, task_params)
 
         # when still empty, return an empty value
-        if not param:
+        if param is None:
             return () if multiple else None
 
         # return either a tuple or the first param, based on the *multiple*
         param = law.util.make_tuple(param)
-        return param if multiple else param[0]
+        return param if multiple else (param[0] if param else None)
 
     @classmethod
     def resolve_config_default_and_groups(
@@ -399,10 +413,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         groups_str: str | None = None,
     ) -> tuple[str]:
         """
-        Resolves tuple of inputs *param* by using groups identified via the *groups_str* from
-        an :py:class:`order.AuxDataMixin` *container* that maps a string to a tuple of strings.
-        If *param* is empty, the default identified by *default_str* from the *container* is returned.
-        If *default_str* points to a function, it should take *container* and *task_params* as an input.
+        This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a
+        parameter value *param* is empty and should be replaced with a default value. See the
+        referenced method for documentation on *task_params*, *param*, *container* and
+        *default_str*.
+
+        What this method does in addition is that it checks if the values contained in *param*
+        (after default value resolution) refers to a group of values identified via the *groups_str*
+        from the :py:class:`order.AuxDataMixin` *container* that maps a string to a tuple of
+        strings. If it does, each value in *param* that refers to a group is expanded by the actual
+        group values.
 
         Example:
 
@@ -417,7 +437,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 },
             )
 
-            params = {"producer": None}
+            params = {"producer": RESOLVE_DEFAULT}
 
             AnalysisTask.resolve_config_default_and_groups(
                 params,
@@ -428,23 +448,23 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             )
             # -> ("features_1", "features_2", "features_3")
         """
-        # get the container inst
+        # resolve the parameter
+        param = cls.resolve_config_default(
+            task_params=task_params,
+            param=param,
+            container=container,
+            default_str=default_str,
+            multiple=True,
+        )
+        if not param:
+            return param
+
+        # get the container inst and return if it's not set
         if isinstance(container, str):
             container = task_params.get(container, None)
 
         if not container:
-            return law.util.make_tuple(param)
-
-        # expand default when param is empty
-        if param in (None, law.NO_STR, tuple()):
-            param = container.x(default_str, None) if default_str else None
-
-            # allow default to be a function, taking task parameters as input
-            if isinstance(param, Callable):
-                param = param(container, **task_params)
-
-        if not param:
-            return ()
+            return param
 
         # expand groups recursively
         if groups_str and (param_groups := container.x(groups_str, {})):
@@ -457,7 +477,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     if value in handled_groups:
                         raise Exception(
                             f"definition of '{groups_str}' contains circular references involving "
-                            "group '{value}'",
+                            f"group '{value}'",
                         )
                     lookup = law.util.make_list(param_groups[value]) + lookup
                     handled_groups.add(value)
