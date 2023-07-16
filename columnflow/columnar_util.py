@@ -345,7 +345,10 @@ class Route(od.TagMixin):
         return self.join(self._fields)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} '{self}' at {hex(id(self))}>"
+        tags = ""
+        if self.tags:
+            tags = f" (tags={','.join(sorted(self.tags))})"
+        return f"<{self.__class__.__name__} '{self}'{tags} at {hex(id(self))}>"
 
     def __hash__(self) -> int:
         return hash(str(self.fields))
