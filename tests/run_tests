@@ -6,6 +6,7 @@ action() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
+    local cf_dir="$( dirname "${this_dir}" )"
 
     # dev flag for sandboxes
     local dev="$( [ "${CF_DEV}" = "1" ] && echo "_dev" || echo "" )"
@@ -21,7 +22,7 @@ action() {
 
     # test_columnar_util
     echo
-    bash "${this_dir}/run_test" test_columnar_util "venv_columnar${dev}.sh"
+    bash "${this_dir}/run_test" test_columnar_util "${cf_dir}/sandboxes/venv_columnar${dev}.sh"
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 

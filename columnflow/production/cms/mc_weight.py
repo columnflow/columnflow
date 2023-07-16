@@ -6,7 +6,7 @@ Methods for dealing with MC weights.
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, has_ak_column
+from columnflow.columnar_util import set_ak_column, has_ak_column, optional_column as optional
 
 
 np = maybe_import("numpy")
@@ -14,11 +14,10 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={"genWeight", "LHEWeight.originalXWGTUP"},
+    uses={"genWeight", optional("LHEWeight.originalXWGTUP")},
     produces={"mc_weight"},
     # only run on mc
     mc_only=True,
-    check_columns_present={"produces"},  # some used columns optional
 )
 def mc_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
