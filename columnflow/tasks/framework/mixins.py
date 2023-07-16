@@ -74,6 +74,13 @@ class CalibratorMixin(ConfigTask):
 
         return shifts, upstream_shifts
 
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --calibrator set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"calibrator"}
+
+        return super().req_params(inst, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -145,6 +152,13 @@ class CalibratorsMixin(ConfigTask):
                 upstream_shifts |= calibrator_inst.all_shifts
 
         return shifts, upstream_shifts
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --calibrators set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"calibrators"}
+
+        return super().req_params(inst, **kwargs)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -221,6 +235,13 @@ class SelectorMixin(ConfigTask):
 
         return shifts, upstream_shifts
 
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --selector set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"selector"}
+
+        return super().req_params(inst, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -276,6 +297,13 @@ class SelectorStepsMixin(SelectorMixin):
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))
 
         return params
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --selector-steps set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"selector_steps"}
+
+        return super().req_params(inst, **kwargs)
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -335,6 +363,13 @@ class ProducerMixin(ConfigTask):
                 upstream_shifts |= producer_inst.all_shifts
 
         return shifts, upstream_shifts
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --producer set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"producer"}
+
+        return super().req_params(inst, **kwargs)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -409,6 +444,13 @@ class ProducersMixin(ConfigTask):
 
         return shifts, upstream_shifts
 
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --producers set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"producers"}
+
+        return super().req_params(inst, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -441,6 +483,13 @@ class MLModelMixinBase(AnalysisTask):
     )
 
     exclude_params_repr_empty = {"ml_model"}
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --ml-model set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_model"}
+
+        return super().req_params(inst, **kwargs)
 
     @classmethod
     def get_ml_model_inst(
@@ -846,6 +895,13 @@ class MLModelsMixin(ConfigTask):
 
         return params
 
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --ml-models set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_models"}
+
+        return super().req_params(inst, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -896,6 +952,13 @@ class InferenceModelMixin(ConfigTask):
     @classmethod
     def get_inference_model_inst(cls, inference_model: str, config_inst: od.Config) -> InferenceModel:
         return InferenceModel.get_cls(inference_model)(config_inst)
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+        # prefer --inference-model set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"inference_model"}
+
+        return super().req_params(inst, **kwargs)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
