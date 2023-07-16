@@ -12,13 +12,13 @@ __all__ = [
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
+    "optional_column",
 ]
 
 import gc
 import re
 import math
 import time
-import copy
 import enum
 import threading
 import multiprocessing
@@ -28,6 +28,7 @@ from collections import namedtuple, OrderedDict, defaultdict
 from typing import Sequence, Callable, Any
 
 import law
+import order as od
 from law.util import InsertableDict
 
 from columnflow.util import (
@@ -84,20 +85,7 @@ class ItemEval(object):
 eval_item = ItemEval()
 
 
-class RouteMeta(type):
-    """
-    Meta class for :py:class:`Route` that prevents instances from being copied when passed to the
-    constructor.
-    """
-
-    def __call__(cls, route: Route | Any | None = None):
-        if isinstance(route, cls):
-            return route
-
-        return super().__call__(route=route)
-
-
-class Route(object, metaclass=RouteMeta):
+class Route(od.TagMixin):
     """
     Route objects describe the location of columns in nested arrays and are basically wrappers
     around a sequence of nested fields. Additionally, they provide convenience methods for
@@ -182,7 +170,7 @@ class Route(object, metaclass=RouteMeta):
     def _join(
         cls,
         sep: str,
-        fields: Sequence[str | int | slice | type(Ellipsis) | tuple | list],
+        fields: Sequence[str | int | slice | type(Ellipsis) | list | tuple],
         _outer: bool = True,
     ) -> str:
         """
@@ -319,8 +307,8 @@ class Route(object, metaclass=RouteMeta):
         """
         return cls._split(cls.NANO_SEP, column)
 
-    def __init__(self, route=None):
-        super().__init__()
+    def __init__(self, route: Any | None = None, tags: dict | None = None):
+        super().__init__(tags=tags)
 
         # initial storage of fields
         self._fields = []
@@ -328,6 +316,10 @@ class Route(object, metaclass=RouteMeta):
         # use the add method to set the initial value
         if route:
             self.add(route)
+
+            # when route was a Route instance itself, add its tags
+            if isinstance(route, Route):
+                self.add_tag(route.tags)
 
     @property
     def fields(self) -> tuple:
@@ -353,7 +345,10 @@ class Route(object, metaclass=RouteMeta):
         return self.join(self._fields)
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} '{self}' at {hex(id(self))}>"
+        tags = ""
+        if self.tags:
+            tags = f" (tags={','.join(sorted(self.tags))})"
+        return f"<{self.__class__.__name__} '{self}'{tags} at {hex(id(self))}>"
 
     def __hash__(self) -> int:
         return hash(str(self.fields))
@@ -361,12 +356,12 @@ class Route(object, metaclass=RouteMeta):
     def __len__(self) -> int:
         return len(self._fields)
 
-    def __eq__(self, other: Route | Sequence[str] | str) -> bool:
+    def __eq__(self, other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list]) -> bool:
         if isinstance(other, Route):
             return self.fields == other.fields
-        elif isinstance(other, (list, tuple)):
+        if isinstance(other, (list, tuple)):
             return self.fields == tuple(other)
-        elif isinstance(other, str):
+        if isinstance(other, str):
             return self.column == other
         return False
 
@@ -527,6 +522,26 @@ class Route(object, metaclass=RouteMeta):
                         res = ak.fill_none(res, null_value)
 
         return res
+
+
+def optional_column(
+    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
+) -> Route | Sequence[Route] | set[Route]:
+    """
+    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
+    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
+    a sequence, a sequence of the same type containing route objects is returned.
+    """
+    def create(r):
+        route = Route(r)
+        route.add_tag("optional")
+        return route
+
+    # check if multiple routes were passed
+    multiple = isinstance(route, (list, set))
+
+    # create multiple or a single tagged route
+    return route.__class__(map(create, route)) if multiple else create(route)
 
 
 def get_ak_routes(
@@ -1282,6 +1297,24 @@ class ArrayFunction(Derivable):
        Flag that can be used in nested dependencies between array functions to denote columns names
        in the :py:attr:`produces` set.
 
+    .. py:classattribute:: check_used_columns
+       type: bool
+
+       A flag that decides whether, during the actual call, the input array should be checked for
+       the existence of all non-optional columns defined in :py:attr:`uses`. If a column is missing,
+       an exception is raised. A column, represented by a :py:class:`~.Route` object internally, is
+       considered optional if it has a tag ``"optional"`` as, for instance, added by
+       :py:func:`~.optional_column`.
+
+    .. py:classattribute:: check_produced_columns
+       type: bool
+
+       A flag that decides whether, after the actual call, the output array should be checked for
+       the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
+       missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+       internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+       :py:func:`~.optional_column`.
+
     .. py:attribute:: uses_instances
        type: set
 
@@ -1343,7 +1376,8 @@ class ArrayFunction(Derivable):
 
     uses = set()
     produces = set()
-    check_columns_present = None
+    check_used_columns = True
+    check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
     log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
 
@@ -1353,29 +1387,29 @@ class ArrayFunction(Derivable):
         USES = enum.auto()
         PRODUCES = enum.auto()
 
-    # shallow wrapper around an objects (a class or instance) and an IOFlag
-    Flagged = namedtuple("Flagged", ["wrapped", "io_flag"])
+    # shallow wrapper around an object (a class or instance) and an IOFlag
+    IOFlagged = namedtuple("IOFlagged", ["wrapped", "io_flag"])
 
     @classproperty
-    def AUTO(cls) -> Flagged:
+    def AUTO(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the AUTO flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the AUTO flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.AUTO)
+        return cls.IOFlagged(cls, cls.IOFlag.AUTO)
 
     @classproperty
-    def USES(cls) -> Flagged:
+    def USES(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the USES flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the USES flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.USES)
+        return cls.IOFlagged(cls, cls.IOFlag.USES)
 
     @classproperty
-    def PRODUCES(cls) -> Flagged:
+    def PRODUCES(cls) -> IOFlagged:
         """
-        Returns a :py:attr:`Flagged` object, wrapping this class and the PRODUCES flag.
+        Returns a :py:attr:`IOFlagged` object, wrapping this class and the PRODUCES flag.
         """
-        return cls.Flagged(cls, cls.IOFlag.PRODUCES)
+        return cls.IOFlagged(cls, cls.IOFlag.PRODUCES)
 
     @classmethod
     def init(cls, func: Callable[[], None]) -> None:
@@ -1404,9 +1438,11 @@ class ArrayFunction(Derivable):
         call_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
-        deferred_init: bool | None = True,
+        check_used_columns: bool | None = None,
+        check_produced_columns: bool | None = None,
         instance_cache: dict | None = None,
         log_runtime: bool | None = None,
+        deferred_init: bool | None = True,
         **kwargs,
     ):
         super().__init__()
@@ -1418,6 +1454,10 @@ class ArrayFunction(Derivable):
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if check_used_columns is not None:
+            self.check_used_columns = check_used_columns
+        if check_produced_columns is not None:
+            self.check_produced_columns = check_produced_columns
         if log_runtime is not None:
             self.log_runtime = log_runtime
 
@@ -1428,11 +1468,6 @@ class ArrayFunction(Derivable):
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
-
-        if self.check_columns_present is None:
-            self.check_columns_present = self._dependency_sets
-        elif not self.check_columns_present:
-            self.check_columns_present = set()
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -1549,16 +1584,15 @@ class ArrayFunction(Derivable):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
-                        instances.add(obj)
-                elif isinstance(obj, self.Flagged):
-                    obj = self.Flagged(add_dep(obj.wrapped), obj.io_flag)
+                        instances.add(self.IOFlagged(obj, self.IOFlag.AUTO))
+                elif isinstance(obj, self.IOFlagged):
+                    obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
                         instances.add(obj)
                 else:
-                    obj = copy.deepcopy(obj)
-                    if obj:
-                        instances.add(obj)
+                    # here, obj must be anything that is accepted by route
+                    instances.add(obj if isinstance(obj, Route) else Route(obj))
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1590,7 +1624,8 @@ class ArrayFunction(Derivable):
 
         for attr in self._dependency_sets:
             for obj in getattr(self, f"{attr}_instances"):
-                if isinstance(obj, self.Flagged):
+                # strip i/o flag
+                if isinstance(obj, self.IOFlagged):
                     obj = obj.wrapped
                 if isinstance(obj, ArrayFunction):
                     deps.add(obj)
@@ -1602,8 +1637,8 @@ class ArrayFunction(Derivable):
     def _get_columns(
         self,
         io_flag: IOFlag,
-        call_cache: set | None = None,
         dependencies: bool = True,
+        _cache: set | None = None,
     ) -> set[str]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
@@ -1612,43 +1647,45 @@ class ArrayFunction(Derivable):
         columns = set()
 
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # declare _this_ call cached
-        call_cache.add(self.Flagged(self, io_flag))
+        _cache.add(self.IOFlagged(self, io_flag))
 
         # add columns of all dependent objects
         for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
-            if isinstance(obj, (ArrayFunction, self.Flagged)):
+            if isinstance(obj, (ArrayFunction, self.IOFlagged)):
                 # don't propagate to dependencies
                 if not dependencies:
                     continue
 
                 flagged = obj
                 if isinstance(obj, ArrayFunction):
-                    flagged = self.Flagged(obj, io_flag)
+                    flagged = self.IOFlagged(obj, io_flag)
                 elif obj.io_flag == self.IOFlag.AUTO:
-                    flagged = self.Flagged(obj.wrapped, io_flag)
+                    flagged = self.IOFlagged(obj.wrapped, io_flag)
+
                 # skip when already cached
-                if flagged in call_cache:
+                if flagged in _cache:
                     continue
+
                 # add the columns
-                columns |= flagged.wrapped._get_columns(flagged.io_flag, call_cache=call_cache)
+                columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
             else:
                 columns.add(obj)
 
         return columns
 
-    def _get_used_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.USES, call_cache=call_cache)
+    def _get_used_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
     def used_columns(self) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, call_cache: set | None = None) -> set[str]:
-        return self._get_columns(io_flag=self.IOFlag.PRODUCES, call_cache=call_cache)
+    def _get_produced_columns(self, _cache: set | None = None) -> set[str]:
+        return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
     def produced_columns(self) -> set[str]:
@@ -1659,29 +1696,34 @@ class ArrayFunction(Derivable):
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
         """
+        # get own columns, i.e, routes that are non-optional
+        routes = [
+            route
+            for route in self._get_columns(io_flag=io_flag, dependencies=False)
+            if not route.has_tag("optional")
+        ]
 
-        columns = self._get_columns(
-            io_flag=io_flag,
-            # only check own columns
-            dependencies=False,
+        # get missing columns
+        missing = {
+            route
+            for route in routes
+            if not ak_array.layout.form.select_columns(str(route)).columns()
+        }
+
+        # nothing to do when no column is missing
+        if not missing:
+            return
+
+        # raise
+        action = (
+            "receive" if io_flag == self.IOFlag.USES else
+            "produce" if io_flag == self.IOFlag.PRODUCES else
+            "find"
         )
-
-        missing = set()
-        for column in columns:
-            found = ak_array.layout.form.select_columns(column).columns()
-            if not found:
-                missing.add(column)
-
-        if missing:
-            action = (
-                "receive" if io_flag == self.IOFlag.USES else
-                "produce" if io_flag == self.IOFlag.PRODUCES else
-                "find"
-            )
-            missing = ", ".join(sorted(missing))
-            raise Exception(
-                f"'{self.cls_name}' did not {action} any columns matching: {missing}",
-            )
+        missing = ", ".join(sorted(map(str, missing)))
+        raise Exception(
+            f"'{self.cls_name}' did not {action} any columns matching: {missing}",
+        )
 
     def __call__(self, *args, **kwargs):
         """
@@ -1699,9 +1741,9 @@ class ArrayFunction(Derivable):
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
-        # assume first argument is event array and
+        # assume first argument is an event array and
         # check that the 'used' columns are present
-        if "uses" in self.check_columns_present:
+        if self.check_used_columns:
             # when args is empty (when this method was called with keyword arguments only),
             # use the first keyword argument
             first_arg = args[0] if args else list(kwargs.values())[0]
@@ -1718,10 +1760,9 @@ class ArrayFunction(Derivable):
                     f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
                 )
 
-        # assume result is an event array or tuple with
-        # an event array as the first element and
+        # assume result is an event array or tuple with an event array as the first element and
         # check that the 'produced' columns are present
-        if "produces" in self.check_columns_present:
+        if self.check_produced_columns:
             result = results[0] if isinstance(results, (tuple, list)) else results
             self._check_columns(result, self.IOFlag.PRODUCES)
 
@@ -1936,25 +1977,25 @@ class TaskArrayFunction(ArrayFunction):
 
         return super().instantiate_dependency(cls, **kwargs)
 
-    def _get_all_shifts(self, call_cache: set | None = None) -> set[str]:
+    def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # add shifts and consider _this_ call cached
         shifts = {
             shift
             for shift in self.shifts
-            if not isinstance(shift, (ArrayFunction, self.Flagged))
+            if not isinstance(shift, (ArrayFunction, self.IOFlagged))
         }
-        call_cache.add(self)
+        _cache.add(self)
 
         # add shifts of all dependent objects
         for obj in self.get_dependencies(include_others=False):
             if isinstance(obj, TaskArrayFunction):
-                if obj not in call_cache:
-                    call_cache.add(obj)
-                    shifts |= obj._get_all_shifts(call_cache=call_cache)
+                if obj not in _cache:
+                    _cache.add(obj)
+                    shifts |= obj._get_all_shifts(_cache=_cache)
 
         return shifts
 
@@ -1965,7 +2006,7 @@ class TaskArrayFunction(ArrayFunction):
     def run_requires(
         self,
         reqs: dict | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict:
         """
         Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
@@ -1976,8 +2017,8 @@ class TaskArrayFunction(ArrayFunction):
             reqs = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's requires function
         if callable(self.requires_func):
@@ -1985,9 +2026,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_requires(reqs=reqs, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_requires(reqs=reqs, _cache=_cache)
 
         return reqs
 
@@ -1996,7 +2037,7 @@ class TaskArrayFunction(ArrayFunction):
         reqs: dict,
         inputs: dict,
         reader_targets: InsertableDict[str, law.FileSystemFileTarget] | None = None,
-        call_cache: set | None = None,
+        _cache: set | None = None,
     ) -> dict[str, law.FileSystemTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
@@ -2009,8 +2050,8 @@ class TaskArrayFunction(ArrayFunction):
             reader_targets = {}
 
         # create the call cache
-        if call_cache is None:
-            call_cache = set()
+        if _cache is None:
+            _cache = set()
 
         # run this instance's setup function
         if callable(self.setup_func):
@@ -2018,9 +2059,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in call_cache:
-                call_cache.add(dep)
-                dep.run_setup(reqs, inputs, reader_targets, call_cache=call_cache)
+            if dep not in _cache:
+                _cache.add(dep)
+                dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
 
         return reader_targets
 
