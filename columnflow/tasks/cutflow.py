@@ -114,7 +114,9 @@ class CreateCutflowHistograms(
                     route = Route(expr)
                     expr = functools.partial(route.apply, null_value=variable_inst.null_value)
                     read_columns.add(route)
-                # TODO: handle variable_inst with custom expressions, can they declare columns?
+                else:
+                    # for variable_inst with custom expressions, read columns declared via aux key
+                    read_columns |= {inp for inp in variable_inst.x("inputs", [])}
                 expressions[variable_inst.name] = expr
 
         # prepare columns to load

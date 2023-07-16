@@ -75,20 +75,18 @@ class RouteTest(unittest.TestCase):
         # all values in the split are instance of str
         self.assertTrue(all(isinstance(value, str) for value in split_result))
 
-    def test_cached_init(self):
-        # SHOULD: Returns input, if it is a Route instance,
-        # otherwise uses Route constructor with input
+    def test_tags(self):
+        r = Route(("i", "like", "trains"), tags={"optional", "foo.bar"})
+        self.assertTrue(r.has_tag("optional"))
+        self.assertTrue(r.has_tag("opt*"))
+        self.assertTrue(r.has_tag("foo.bar"))
+        self.assertTrue(r.has_tag("foo.*"))
+        self.assertFalse(r.has_tag("bar"))
 
-        # RouteInstance --> returns same object
-        self.assertIs(Route(self.route), self.route)
-
-        # if result of *check* with same fields as self.route, is equal to self.route
-        # Sequence[str] --> RouteInstance
-        route_from_sequence = Route(("i", "like", "trains"))
-        self.assertEqual(route_from_sequence, self.route)
-        # str --> RouteInstance
-        route_from_str = Route(("i", "like", "trains"))
-        self.assertEqual(route_from_str, self.route)
+        # check that tags are copied when the init gets another route object
+        r2 = Route(r)
+        self.assertTrue(r2.has_tag("optional"))
+        self.assertFalse(r2.has_tag("bar"))
 
     def test_apply(self):
         # SHOULD: Select value from awkward array using it slice mechanic
@@ -147,8 +145,13 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(str(self.route), "i.like.trains")
 
     def test__repr__(self):
-        # TODO: No idea how to test
-        pass
+        # repr without tags
+        r = Route(("i", "like", "trains"))
+        self.assertTrue(repr(r).startswith("<Route 'i.like.trains' at 0x"))
+
+        # repr with tags
+        r = Route(("i", "like", "trains"), tags={"foo"})
+        self.assertTrue(repr(r).startswith("<Route 'i.like.trains' (tags=foo) at 0x"))
 
     def test__hash__(self):
         # SHOULD: Return the same hash if two Routes
@@ -409,12 +412,21 @@ class ArrayFunctionTest(unittest.TestCase):
         self.assertIsInstance(produced_columns, set)
 
         # everythin within Set is a string
-        self.assertTrue(all(isinstance(column, str) for column in used_columns.union(produced_columns)))
+        self.assertTrue(all(
+            isinstance(column, Route)
+            for column in used_columns.union(produced_columns)
+        ))
 
         # result should have USES: arr1, arr2, any_input_A, any_input_B
         # PRODUCES : "empty_arr", "pT.e"
-        self.assertEqual(used_columns, set(["met", "pT.all", "any_input_A", "any_input_B"]))
-        self.assertEqual(produced_columns, set(["pT.e", "all_empty"]))
+        self.assertEqual(
+            set(map(str, used_columns)),
+            set(["met", "pT.all", "any_input_A", "any_input_B"]),
+        )
+        self.assertEqual(
+            set(map(str, produced_columns)),
+            set(["pT.e", "all_empty"]),
+        )
 
 
 class ColumnarUtilFunctionsTest(unittest.TestCase):

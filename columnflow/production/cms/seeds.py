@@ -8,7 +8,12 @@ import hashlib
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, primes, InsertableDict
-from columnflow.columnar_util import Route, set_ak_column, has_ak_column
+from columnflow.columnar_util import (
+    Route,
+    set_ak_column,
+    has_ak_column,
+    optional_column as optional,
+)
 
 
 np = maybe_import("numpy")
@@ -19,11 +24,11 @@ ak = maybe_import("awkward")
     uses={
         # global columns for event seed
         "run", "luminosityBlock", "event",
-        "Photon.pt", "SV.pt",
+        optional("Photon.pt"), optional("SV.pt"),
         # first-object columns for event seed
-        "Tau.jetIdx", "Tau.decayMode",
-        "Muon.jetIdx", "Muon.nStations",
-        "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
+        optional("Tau.jetIdx"), optional("Tau.decayMode"),
+        optional("Muon.jetIdx"), optional("Muon.nStations"),
+        optional("Jet.nConstituents"), optional("Jet.nElectrons"), optional("Jet.nMuons"),
     },
     produces={"deterministic_seed"},
 )

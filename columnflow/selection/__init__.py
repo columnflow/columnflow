@@ -21,6 +21,9 @@ ak = maybe_import("awkward")
 
 
 class Selector(TaskArrayFunction):
+    """
+    Base class for all selectors.
+    """
 
     exposed = False
 
@@ -44,8 +47,8 @@ class Selector(TaskArrayFunction):
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`Selector` subclass with additional, optional *bases*
-        and attaching the decorated function to it as ``call_func``.
+        Decorator for creating a new :py:class:`~.Selector` subclass with additional, optional
+        *bases* and attaching the decorated function to it as ``call_func``.
 
         When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
         other calibrators, selectors and producers in case they are evalauted on a
@@ -58,6 +61,14 @@ class Selector(TaskArrayFunction):
         not match.
 
         All additional *kwargs* are added as class members of the new subclasses.
+
+        :param func: Callable that is used to perform the selections
+        :param bases: Additional bases for new subclass
+        :param mc_only: Flag to indicate that this Selector should only run
+            on Monte Carlo Simulation
+        :param data_only: Flag to indicate that this Selector should only run
+            on observed data
+        :return: New Selector instance
         """
         # prepare shifts_only
         if shifts_only:
@@ -127,46 +138,79 @@ selector = Selector.selector
 
 class SelectionResult(od.AuxDataMixin):
     """
-    Lightweight class that wraps selection decisions (e.g. event and object selection steps) and
-    provides convenience methods to merge them or to dump them into an awkward array. The resulting
-    structure looks like the following example:
+    Lightweight class that wraps selection decisions (e.g. event and object
+    selection steps).
+
+    Additionally, this class provides convenience methods to merge them or to dump
+    them into an awkward array. Arbitrary, auxiliary information
+    (additional arrays, or other objects) that should not be stored in dumped
+    akward arrays can be placed in the *aux* dictionary
+    (see :py:class:`~order.mixins.AuxDataMixin`).
+
+    The resulting structure looks like the following example:
 
     .. code-block:: python
 
-        {
+        results = {
             # arbitrary, top-level main fields
             ...
 
             "steps": {
                 # event selection decisions from certain steps
-                "jet": array,
-                "muon": array,
-                ...
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...,
             },
 
             "objects": {
                 # object selection decisions or indices
-                "jet": array,
-                "muon": array,
-                ...
+                # define type of this field here, define that `jet` is of
+                # type `Jet`
+                "Jet": {
+                    "jet": array_of_jet_indices,
+                },
+                "Muon": {
+                    "muon": array_of_muon_indices,
+                },
+                ...,
             },
+            # additionally, you can also save auxiliary data, e.g.
+            "aux": {
+                # save the per-object jet selection masks
+                "jet": array_of_jet_object_masks,
+                # save number of jets
+                "n_passed_jets": ak.num(array_of_jet_indices, axis=1),
+                ...,
+            },
+            ...
         }
 
-    The fields can be configured through the *main*, *steps* and *objects* keyword arguments. The
-    following example creates the structure above.
+    The fields can be configured through the *main*, *steps* and *objects*
+    keyword arguments. The following example creates the structure above.
 
     .. code-block:: python
 
+        # combined event selection after all steps
+        event_sel = reduce(and_, results.steps.values())
         res = SelectionResult(
-            main={...},
-            steps={"jet": array, "muon": array, ...}
-            objects={"jet": array, "muon": array, ...}
+            main={
+                "event": event_sel,
+            },
+            steps={
+                "jet": array_of_event_masks,
+                "muon": array_of_event_masks,
+                ...
+            },
+            objects={
+                "Jet": {
+                    "jet": array_of_jet_indices
+                },
+                "Muon": {
+                    "muon": array, ...
+                }
+            }
         )
         res.to_ak()
-
-    Arbitrary, auxiliary information (additional arrays, or other objects) that should not be stored
-    in dumped akward arrays can be placed in the *aux* dictionary
-    (see :py:class:`order.AuxDataMixin`).
     """
 
     def __init__(
@@ -185,8 +229,15 @@ class SelectionResult(od.AuxDataMixin):
 
     def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
         """
-        Adds the field of an *other* instance in-place. When *None*, *this* instance is returned
-        unchanged.
+        Adds the field of an *other* instance in-place.
+
+        When *None*, *this* instance is returned unchanged.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
         """
         # do nothing if the other instance is none
         if other is None:
@@ -208,8 +259,16 @@ class SelectionResult(od.AuxDataMixin):
 
     def __add__(self, other: SelectionResult | None) -> SelectionResult:
         """
-        Returns a new instance with all fields of *this* and an *other* instance merged. When
-        *None*, a copy of *this* instance is returned.
+        Returns a new instance with all fields of *this* and an *other*
+        instance merged.
+
+        When *None*, a copy of *this* instance is returned.
+
+        :param other: Instance of :py:class:`~.SelectionResult` to be added
+            to current instance
+        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
+            instance
+        :return: This instance after adding operation
         """
         inst = self.__class__()
 
@@ -227,6 +286,11 @@ class SelectionResult(od.AuxDataMixin):
     def to_ak(self) -> ak.Array:
         """
         Converts the contained fields into a nested awkward array and returns it.
+
+        The conversion is performed with multiple calls of
+        :external+ak:py:func:`ak.zip`.
+
+        :return: Transformed :py:class:`~.SelectionResult`
         """
         to_merge = {}
         if self.steps:
