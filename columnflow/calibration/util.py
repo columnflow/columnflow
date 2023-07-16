@@ -19,9 +19,13 @@ ak = maybe_import("awkward")
 # https://github.com/scikit-hep/awkward/issues/489\#issuecomment-711090923
 def ak_random(*args, rand_func: Callable) -> ak.Array:
     """
-    Return an awkward array filled with random numbers. The *args* must be broadcastable
-    awkward arrays and will be passed as positional arguments to *rand_func* to obtain the
-    random numbers.
+    Return an awkward array filled with random numbers.
+
+    The *args* must be broadcastable awkward arrays and will be passed as positional arguments to
+    *rand_func* to obtain the random numbers.
+
+    :param rand_func: Callable to generate random numbers from awkward arrays in *args*.
+    :return: awkward array filled with random numbers.
     """
     args = ak.broadcast_arrays(*args)
 
@@ -38,7 +42,7 @@ def ak_random(*args, rand_func: Callable) -> ak.Array:
 
 
 def propagate_met(
-    jet_pt1: ak.Array,
+    jet_pt1: (ak.Array),
     jet_phi1: ak.Array,
     jet_pt2: ak.Array,
     jet_phi2: ak.Array,
@@ -46,10 +50,24 @@ def propagate_met(
     met_phi1: ak.Array,
 ) -> tuple[ak.Array, ak.Array]:
     """
-    Helper function to compute new MET based on per-jet pts and phis
-    before and after a correction.
-    """
+    Helper function to compute new MET based on per-jet pts and phis before and after a correction.
+    Since the pts and phis parameterize the individual jets, the dimensions of the arrays
+    (*jet_pt1*, *jet_phi1*) as well as (*jet_pt2*, *jet_phi2*) must be the same. The pt values are
+    decomposed into their x and y components, which are then propagated to the corresponding
+    contributions to the MET vector
 
+    :param jet_pt1: transverse momentum of first jet(s)
+    :param jet_phi1: azimuthal angle of first jet(s)
+    :param jet_pt2: transverse momentum of second jet(s)
+    :param jet_phi2: azimuthal angle of second jet(s)
+    :param met_pt1: missing transverse momentum (MET)
+    :param met_phi1: azimuthal angle of MET vector
+
+    :raises AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and (*jet_pt2*, *jet_phi2*) have
+        different dimensions.
+    :return: updated values of MET vector, i.e. missing transverse momentum and corresponding
+        azimuthal angle phi.
+    """
     # avoid unwanted broadcasting
     assert jet_pt1.ndim == jet_phi1.ndim
     assert jet_pt2.ndim == jet_phi2.ndim

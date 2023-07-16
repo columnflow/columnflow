@@ -7,7 +7,7 @@ Selectors for applying golden JSON in data.
 from __future__ import annotations
 
 from columnflow.selection import Selector, selector
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, DotDict
 
 
 ak = maybe_import("awkward")
@@ -16,10 +16,29 @@ sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 
 
+def get_lumi_file_default(self, external_files: DotDict) -> str:
+    """
+    Function to load path or url to golden json files.
+
+    By default, the path is extracted from the current *config_inst*, which
+    should have a *external_files* in the auxiliary information block.
+    The path or url is extracted with
+
+    .. code-block:: python
+
+        external_files.lumi.golden
+
+    :param external_files: Config containing the information about the path
+        or url to the golden json file containing good lumi sections.
+    :return: path or url to golden json file.
+    """
+    return external_files.lumi.golden
+
+
 @selector(
     uses={"run", "luminosityBlock"},
     # function to determine the golden lumi file
-    get_lumi_file=(lambda self, external_files: external_files.lumi.golden),
+    get_lumi_file=get_lumi_file_default,
 )
 def json_filter(
     self: Selector,
@@ -44,16 +63,34 @@ def json_filter(
 
     *get_lumi_file* can be adapted in a subclass in case it is stored differently in the external
     files.
+
+    :param events: Array containing events in the NanoAOD format
+    :param data_only: boolean flag to indicate that this selector should only run on observed data,
+        defaults to True
+    :return: Array containing boolean masks to accept or reject given events
     """
-    lookup_result = self.run_ls_lookup[events.run, events.luminosityBlock].todense()
-    return np.squeeze(np.array(lookup_result))
+    # handle out-of-bounds values
+    run_out_of_bounds = (events.run >= self.run_ls_lookup.shape[0])
+    ls_out_of_bounds = (events.luminosityBlock >= self.run_ls_lookup.shape[1])
+    out_of_bounds = (run_out_of_bounds | ls_out_of_bounds)
+
+    run = ak.where(out_of_bounds, 0, events.run)
+    ls = ak.where(out_of_bounds, 0, events.luminosityBlock)
+
+    # look up json filter decision
+    lookup_result = self.run_ls_lookup[run, ls].todense()
+
+    # remove extra dimensions
+    lookup_result = np.squeeze(np.array(lookup_result))
+
+    # reject out-ouf-bounds entries
+    lookup_result = ak.where(out_of_bounds, False, lookup_result)
+
+    return lookup_result
 
 
 @json_filter.requires
 def json_filter_requires(self: Selector, reqs: dict) -> None:
-    """
-    Add external files bundle as a task requirement.
-    """
     if "external_files" in reqs:
         return
 
@@ -62,9 +99,19 @@ def json_filter_requires(self: Selector, reqs: dict) -> None:
 
 
 @json_filter.setup
-def json_filter_setup(self: Selector, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def json_filter_setup(
+    self: Selector,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     """
-    Load golden JSON and set up run/luminosity block lookup table.
+    Setup function for :py:class:`json_filter`. Load golden JSON and set up run/luminosity block
+    lookup table.
+
+    :param reqs: Contains requirements for this task
+    :param inputs: Additional inputs, currently not used
+    :param reader_targets: Additional targets, currently not used
     """
     bundle = reqs["external_files"]
 

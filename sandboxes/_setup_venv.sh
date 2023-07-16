@@ -132,7 +132,7 @@ setup_venv() {
 
 
     #
-    # start the setup
+    # define variables
     #
 
     local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
@@ -141,7 +141,19 @@ setup_venv() {
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
+
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
+
+    # prepend persistent path fragments to priotize packages in the outer env
+    export CF_VENV_PYTHONPATH="${install_path}/lib/python${pyv}/site-packages"
+    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
+    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+
+
+    #
+    # start the setup
+    #
 
     # the venv version must be set
     if [ -z "${venv_version}" ]; then
@@ -227,7 +239,7 @@ setup_venv() {
                 fi
             fi
 
-            # activate it if stilll existing
+            # activate it
             if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
                 source "${install_path}/bin/activate" "" || return "$?"
             fi
@@ -249,21 +261,25 @@ setup_venv() {
             cf_color magenta "updating pip"
             python -m pip install -U pip
             [ "$?" != "0" ] && clear_pending && return "27"
+            echo
 
             # install basic production requirements
             if ! ${requirement_files_contains_prod}; then
                 cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                python -m pip install -r "${CF_BASE}/requirements_prod.txt"
+                pip install -r "${CF_BASE}/requirements_prod.txt"
                 [ "$?" != "0" ] && clear_pending && return "28"
             fi
 
             # install requirement files
             for f in ${requirement_files[@]}; do
                 cf_color magenta "installing requirement file ${f}"
-                python -m pip install -r "${f}"
+                pip install -r "${f}"
                 [ "$?" != "0" ] && clear_pending && return "29"
                 echo
             done
+
+            # clear the pip cache
+            pip cache -q purge 2> /dev/null
 
             # ensure that the venv is relocateable
             cf_make_venv_relocateable "${venv_name_hashed}"
@@ -318,10 +334,6 @@ setup_venv() {
     export CF_VENV_HASH="${install_hash}"
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "1" || echo "0" )"
-
-    # prepend persistent path fragments again for ensure priority for local packages
-    export PATH="${CF_PERSISTENT_PATH}:${PATH}"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"

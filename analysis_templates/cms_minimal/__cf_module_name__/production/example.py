@@ -8,8 +8,10 @@ Column production methods related to higher-level features.
 from columnflow.production import Producer, producer
 from columnflow.production.categories import category_ids
 from columnflow.production.normalization import normalization_weights
+from columnflow.production.cms.seeds import deterministic_seeds
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.production.cms.muon import muon_weights
+from columnflow.selection.util import create_collections_from_masks
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
 
@@ -39,7 +41,7 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     uses={
         mc_weight, category_ids,
         # nano columns
-        "Jet.pt", "Jet.eta", "Jet.phi",
+        "Jet.pt",
     },
     produces={
         mc_weight, category_ids,
@@ -56,20 +58,29 @@ def cutflow_features(
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
 
-    events = self[category_ids](events, **kwargs)
+    # apply object masks and create new collections
+    reduced_events = create_collections_from_masks(events, object_masks)
 
-    # apply some per-object selections
-    # (here shown for default jets as done in selection.example.jet_selection)
-    selected_jet = events.Jet[object_masks["Jet"]["Jet"]]
+    # create category ids per event and add categories back to the
+    events = self[category_ids](reduced_events, target_events=events, **kwargs)
 
-    events = set_ak_column(events, "cutflow.jet1_pt", Route("pt[:,0]").apply(selected_jet, EMPTY_FLOAT))
+    # add cutflow columns
+    events = set_ak_column(
+        events,
+        "cutflow.jet1_pt",
+        Route("Jet.pt[:,0]").apply(events, EMPTY_FLOAT),
+    )
 
     return events
 
 
 @producer(
-    uses={features, category_ids, normalization_weights, muon_weights},
-    produces={features, category_ids, normalization_weights, muon_weights},
+    uses={
+        features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+    },
+    produces={
+        features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+    },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # features
@@ -78,8 +89,8 @@ def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # category ids
     events = self[category_ids](events, **kwargs)
 
-    # deterministoc seeds
-    events = self[category_ids](events, **kwargs)
+    # deterministic seeds
+    events = self[deterministic_seeds](events, **kwargs)
 
     # mc-only weights
     if self.dataset_inst.is_mc:

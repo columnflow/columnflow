@@ -7,13 +7,21 @@ Collection of general helpers and utilities.
 from __future__ import annotations
 
 __all__ = [
-    "get_root_processes_from_campaign", "add_shift_aliases", "get_shifts_from_sources",
-    "create_category_id", "add_category", "create_category_combinations", "verify_config_processes",
+    "get_root_processes_from_campaign",
+    "get_datasets_from_process",
+    "add_shift_aliases",
+    "get_shifts_from_sources",
+    "expand_shift_sources",
+    "create_category_id",
+    "add_category",
+    "create_category_combinations",
+    "verify_config_processes",
 ]
 
 import re
 import itertools
-from typing import Callable, Any
+from collections import OrderedDict
+from typing import Callable, Any, Sequence
 
 import law
 import order as od
@@ -21,14 +29,17 @@ import order as od
 
 def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
     """
-    Extracts all root process objects from datasets contained in an order campaign and returns them
-    in a unique object index.
+    Extracts all root process objects from datasets contained in an order *campaign* and returns
+    them in a unique object index.
     """
     # get all dataset processes
     processes = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
 
     # get their root processes
-    root_processes = set.union(*map(set, (process.get_root_processes() for process in processes)))
+    root_processes = set.union(*map(set, (
+        (process.get_root_processes() or [process])
+        for process in processes
+    )))
 
     # create an empty index and fill subprocesses via walking
     index = od.UniqueObjectIndex(cls=od.Process)
@@ -37,6 +48,133 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
             index.add(process, overwrite=True)
 
     return index
+
+
+def get_datasets_from_process(
+    config: od.Config,
+    process: str | od.Process,
+    strategy: str = "inclusive",
+    only_first: bool = True,
+    check_deep: bool = False,
+) -> list[od.Dataset]:
+    r"""
+    Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
+    contain matching processes. This is done by walking through *process* and its child processes
+    and checking whether they are contained in known datasets. *strategy* controls how possible
+    ambiguities are resolved:
+
+        - ``"all"``: The full process tree is traversed and all matching datasets are considered.
+            Note that this might lead to a potential overrepresentation of the phase space.
+        - ``"inclusive"``: If a dataset is found to match a process, its child processes are not
+            checked further.
+        - ``"exclusive"``: If **any** (deep) subprocess of *process* is found to be contained in a
+            dataset, return datasets of subprocesses but not that of *process* itself (if any).
+        - ``"exclusive_strict"``: If **all** (deep) subprocesses of *process* are found to be
+            contained in a dataset, return these datasets but not that of *process* itself (if any).
+
+    As an example, consider the process tree
+
+    .. code-block:: none
+               --- single_top ---
+              /        |         \
+             /         |          \
+        s_channel  t_channel  tw_channel
+           / \        / \         / \
+          /   \      /   \       /   \
+         t   tbar   t   tbar    t   tbar
+
+    and datasets existing for
+
+    .. code-block:: none
+        1. single_top__s_channel_t
+        2. single_top__s_channel_tbar
+        3. single_top__t_channel
+        4. single_top__t_channel_t
+        5. single_top__tw_channel
+        6. single_top__tw_channel_t
+        7. single_top__tw_channel_tbar
+
+    in the *config*. Depending on *strategy*, the returned datasets for process ``single_top``are:
+
+        - ``"all"``: ``[1, 2, 3, 4, 5, 6, 7]``. Simply all datasets matching any subprocess.
+        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``,
+            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more inclusive
+            datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
+        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and
+            ``single_top__tw_channel`` since more exclusive datasets (``single_top__t_channel_t``,
+            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
+        - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping
+            ``single_top__t_channel`` since not all subprocesses of ``t_channel`` match a dataset
+            (there is no ``single_top__t_channel_tbar`` dataset).
+
+    In addition, two arguments configure how the check is performed whether a process is contained
+    in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
+    Otherwise, all datasets matching a specific process are returned. For the check itself,
+    *check_deep* is forwarded to :py:meth:`order.Dataset.has_process`.
+    """
+    # check the strategy
+    known_strategies = ["all", "inclusive", "exclusive", "exclusive_strict"]
+    if strategy not in known_strategies:
+        _known_strategies = ", ".join(map("'{}'".format, known_strategies))
+        raise ValueError(f"unknown strategy {strategy}, known values are {_known_strategies}")
+
+    # make sure we are dealing a process instance
+    root_inst = config.get_process(process)
+
+    # the tree traversal differs depending on the strategy, so distinguish cases
+    if strategy in ["all", "inclusive"]:
+        dataset_insts = []
+        for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="bfs"):
+            found_dataset = False
+
+            # check datasets
+            for dataset_inst in config.datasets:
+                if dataset_inst.has_process(process_inst, deep=check_deep):
+                    dataset_insts.append(dataset_inst)
+                    found_dataset = True
+
+                    # stop checking more datasets when only the first matters
+                    if only_first:
+                        break
+
+            # in the inclusive strategy, children do not need to be traversed if a dataset was found
+            if strategy == "inclusive" and found_dataset:
+                del child_insts[:]
+
+        return law.util.make_unique(dataset_insts)
+
+    # at this point, strategy is exclusive or exclusive_strict
+    assert strategy in ("exclusive", "exclusive_strict")
+    dataset_insts = OrderedDict()
+    for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
+        # check if child processes have matched datasets already
+        if child_insts:
+            n_found = sum(int(child_inst in dataset_insts) for child_inst in child_insts)
+            # potentially skip the current process
+            if strategy == "exclusive" and n_found:
+                continue
+            if strategy == "exclusive_strict" and n_found == len(child_insts):
+                # add a empty list to mark this is done
+                dataset_insts[process_inst] = []
+                continue
+            # at this point, the process itself must be checked,
+            # so remove potentially found datasets of children
+            dataset_insts = {
+                child_inst: _dataset_insts
+                for child_inst, _dataset_insts in dataset_insts.items()
+                if child_inst not in child_insts
+            }
+
+        # check datasets
+        for dataset_inst in config.datasets:
+            if dataset_inst.has_process(process_inst, deep=check_deep):
+                dataset_insts.setdefault(process_inst, []).append(dataset_inst)
+
+                # stop checking more datasets when only the first matters
+                if only_first:
+                    break
+
+    return sum(dataset_insts.values(), [])
 
 
 def add_shift_aliases(
@@ -77,11 +215,37 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.S
     """
     return sum(
         (
-            [config.get_shift(f"{s}_up"), config.get_shift(f"{s}_down")]
+            [config.get_shift(f"{s}_{od.Shift.UP}"), config.get_shift(f"{s}_{od.Shift.DOWN}")]
             for s in shift_sources
         ),
         [],
     )
+
+
+def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
+    """
+    Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift
+    sources, the latter ones are expanded with both possible directions and returned in a common
+    list.
+
+    Example:
+
+    .. code-block:: python
+
+        expand_shift_sources(["jes", "jer_up"])
+        # -> ["jes_up", "jes_down", "jer_up"]
+    """
+    _shifts = []
+    for shift in shifts:
+        try:
+            od.Shift.split_name(shift)
+            _shifts.append(shift)
+        except ValueError as e:
+            if not isinstance(shift, str):
+                raise e
+            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
+
+    return law.util.make_unique(_shifts)
 
 
 def create_category_id(
@@ -130,10 +294,11 @@ def add_category(config: od.Config, **kwargs) -> od.Category:
 
 def create_category_combinations(
     config: od.Config,
-    categories: dict[str, list[od.Categories]],
+    categories: dict[str, list[od.Category]],
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
+    skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
 ) -> int:
     """
     Given a *config* object and sequences of *categories* in a dict, creates all combinations of
@@ -152,7 +317,9 @@ def create_category_combinations(
     and a list of all parent selection statements.
 
     If the name of a new category is already known to *config* it is skipped unless *skip_existing*
-    is *False*.
+    is *False*. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
+    names to categories that represents the combination of categories to be added. In case *skip_fn*
+    returns *True*, the combination is skipped.
 
     Example:
 
@@ -164,10 +331,9 @@ def create_category_combinations(
             "n_tags": [cfg.get_category("0t"), cfg.get_category("1t")],
         }
 
-        def name_fn(lepton=None, n_jets=None, n_tags=None):
+        def name_fn(categories):
             # simple implementation: join names in defined order if existing
-            parts = [lepton, n_jets, n_tags]
-            return "__".join(part for part in parts if part is not None)
+            return "__".join(cat.name for cat in categories.values() if cat)
 
         def kwargs_fn(categories):
             # return arguments that are forwarded to the category init
@@ -202,13 +368,14 @@ def create_category_combinations(
             for root_cats in itertools.product(*_categories):
                 # build the name
                 root_cats = dict(zip(_group_names, root_cats))
-                cat_name = name_fn(**{
-                    group_name: cat.name
-                    for group_name, cat in root_cats.items()
-                })
+                cat_name = name_fn(root_cats)
 
                 # skip when already existing
                 if skip_existing and config.has_category(cat_name, deep=True):
+                    continue
+
+                # skip when manually triggered
+                if callable(skip_fn) and skip_fn(root_cats):
                     continue
 
                 # create arguments for the new category
@@ -227,8 +394,8 @@ def create_category_combinations(
                     if len(_parent_group_names) == 1:
                         parent_cat_name = root_cats[_parent_group_names[0]].name
                     else:
-                        parent_cat_name = name_fn(**{
-                            group_name: root_cats[group_name].name
+                        parent_cat_name = name_fn({
+                            group_name: root_cats[group_name]
                             for group_name in _parent_group_names
                         })
                     parent_cat = config.get_category(parent_cat_name, deep=True)

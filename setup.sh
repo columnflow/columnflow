@@ -71,19 +71,21 @@ setup_columnflow() {
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
-    #       PATH fragments that should be considered by sandboxes (bash, venv, cmssw) as having
-    #       priority, e.g. to ensure that executable of local packages in used first.
+    #       PATH fragments that should be considered by sandboxes (bash, venv, cmssw) to have
+    #       precedence, e.g. to ensure that executables of local packages are priotized.
     #   CF_PERSISTENT_PYTHONPATH
-    #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) as
-    #       having priority, e.g. to ensure that local packages in submodules are imported first.
+    #       PYTHONPATH fragments that should be considered by sandboxes (bash, venv, cmssw) to have
+    #       precedence, e.g. to ensure that python modules of local packages are priotized.
+    #   CF_CONDA_PYTHONPATH
+    #       PYTHONPATH fragments pointing to packages intalled by conda.
     #   CF_ORIG_PATH
-    #       Copy of the $PATH variable before ammended by the seutp.
+    #       Copy of the $PATH variable before ammended by the setup.
     #   CF_ORIG_PYTHONPATH
-    #       Copy of the $PYTHONPATH variable before ammended by the seutp.
+    #       Copy of the $PYTHONPATH variable before ammended by the setup.
     #   CF_ORIG_PYTHON3PATH
-    #       Copy of the $PYTHON3PATH variable before ammended by the seutp.
+    #       Copy of the $PYTHON3PATH variable before ammended by the setup.
     #   CF_ORIG_LD_LIBRARY_PATH
-    #       Copy of the $LD_LIBRARY_PATH variable before ammended by the seutp.
+    #       Copy of the $LD_LIBRARY_PATH variable before ammended by the setup.
     #   CF_WLCG_CACHE_ROOT
     #       The directory in which remote files from WLCG locations might be cached. No caching is
     #       used when empty. Queried during the interactive setup. Used in law.cfg.
@@ -234,6 +236,13 @@ setup_columnflow() {
     #
 
     cf_setup_common_variables || return "$?"
+
+
+    #
+    # git hooks
+    #
+
+    cf_setup_git_hooks || return "$?"
 
 
     #
@@ -420,7 +429,7 @@ cf_setup_software_stack() {
     #   CF_REMOTE_JOB
     #       When "1", the software stack is sourced but not built.
     #   CF_CI_JOB
-    #       When "1", the "cf_prod" venv is skipped and only the "cf_dev" env is built.
+    #       When "1", the "cf" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
 
@@ -450,7 +459,7 @@ cf_setup_software_stack() {
 
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes
-    export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin:${CF_SOFTWARE_BASE}/bin"
+    export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin"
     export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
 
     # prepend them
@@ -458,7 +467,8 @@ cf_setup_software_stack() {
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
-    export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+    export CF_CONDA_PYTHONPATH="${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+    export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_PYTHONPATH}"
 
     # update paths and flags
     export MAMBA_ROOT_PREFIX="${CF_CONDA_BASE}"
@@ -502,7 +512,7 @@ cf_setup_software_stack() {
                 curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 # make the setup file relocatable
-                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" return "$?"
+                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -520,8 +530,17 @@ EOF
             # install packages
             if ${conda_missing}; then
                 echo
-                cf_color cyan "setting up conda environment"
-                micromamba install libgcc "python=${pyv}" gfal2 gfal2-util python-gfal2 git git-lfs conda-pack || return "$?"
+                cf_color cyan "setting up conda / micromamba environment"
+                micromamba install \
+                    libgcc \
+                    "python=${pyv}" \
+                    gfal2 \
+                    gfal2-util \
+                    python-gfal2 \
+                    git \
+                    git-lfs \
+                    conda-pack \
+                    || return "$?"
                 micromamba clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
@@ -541,8 +560,8 @@ EOF
         # venv setup
         #
 
-        # - "cf_prod": contains the minimal stack to run tasks and is sent alongside jobs
-        # - "cf_dev" : "cf_prod" + additional python tools for local development (e.g. ipython)
+        # - "cf"     : contains the minimal stack to run tasks and is sent alongside jobs
+        # - "cf_dev" : "cf" + additional python tools for local development (e.g. ipython)
 
         show_version_warning() {
             >&2 echo
@@ -551,13 +570,13 @@ EOF
             >&2 echo
         }
 
-        # source the prod sandbox, potentially skipped in CI jobs
+        # source the production sandbox, potentially skipped in CI jobs
         local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
-            bash -c "source \"${CF_BASE}/sandboxes/cf_prod.sh\" \"\" \"silent\""
+            bash -c "source \"${CF_BASE}/sandboxes/cf.sh\" \"\" \"silent\""
             ret="$?"
             if [ "${ret}" = "21" ]; then
-                show_version_warning "cf_prod"
+                show_version_warning "cf"
             elif [ "${ret}" != "0" ]; then
                 return "${ret}"
             fi
@@ -591,10 +610,94 @@ EOF
         micromamba activate || return "$?"
         echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
-        # source the prod sandbox
-        source "${CF_BASE}/sandboxes/cf_prod.sh" "" "no"
+        # source the production sandbox
+        source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
 }
+
+cf_setup_git_hooks() {
+    # Initializes lfs and custom githooks in the local checkout for both the columnflow
+    # (sub)repository, as well as the analysis repository in case a directory bin/githooks is found.
+
+    # helper to setup hooks
+    setup_hooks() {
+        local repo_dir="$1"
+        local src_dir="$2"
+
+        # determine the target hooks directory
+        local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
+        if [ "$?" != "0" ] || [ ! -d "${dst_dir}" ]; then
+            2>&1 echo "no git hooks directory found, cannot setup hooks"
+            return "30"
+        fi
+
+        # do nothing if hooks are already setup up
+        local flag_file="${dst_dir}/.cf_hooks_setup"
+        [ -f "${flag_file}" ] && return "0"
+
+        # detect if lfs hooks are already installed, as identified by the pre-push
+        local lfs_installed="false"
+        local f
+        for f in $( ls -1 "${dst_dir}"/{pre-push,pre-push-*} 2> /dev/null || true ); do
+            if [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
+                lfs_installed="true"
+                break
+            fi
+        done
+
+        # setup lfs if not done yet
+        if ! ${lfs_installed}; then
+            ( cd "${repo_dir}" && git lfs install > /dev/null ) || return "$?"
+        fi
+
+        # move all existing hooks and replace them with combined scripts
+        for f in $( ls -1 "${dst_dir}" ); do
+            # skip samples
+            [[ "${f}" == *.sample ]] && continue
+            # move the file and create the new one
+            mv "${dst_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
+            cp "${CF_BASE}/bin/githooks/_combined_hook.sh" "${dst_dir}/${f}"
+        done
+
+        # setup all hooks in bin/githooks
+        for f in $( ls -1 "${src_dir}" ); do
+            [[ "${f}" == *.sh ]] && continue
+            ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
+        done
+
+        # create the flag file
+        touch "${flag_file}"
+
+        return "0"
+    }
+
+    # helper to find a hook postfix number
+    hook_postfix() {
+        local dst_dir="$1"
+        local hook_name="$2"
+
+        for i in {1..100}; do
+            if [ ! -f "${dst_dir}/${hook_name}-${i}" ]; then
+                echo "-${i}"
+                return "0"
+            fi
+        done
+
+        2>&1 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
+        return "31"
+    }
+
+    # setup columnflow hooks
+    setup_hooks "${CF_BASE}" "${CF_BASE}/bin/githooks"
+
+    # setup repository hooks
+    if [ ! -z "${CF_REPO_BASE}" ] && [ -d "${CF_REPO_BASE}/bin/githooks" ]; then
+        setup_hooks "${CF_REPO_BASE}" "${CF_REPO_BASE}/bin/githooks"
+    fi
+
+    return "0"
+}
+[ ! -z "${BASH_VERSION}" ] && export -f cf_setup_git_hooks
 
 cf_init_submodule() {
     # Initializes and updates a git submodule.

@@ -57,6 +57,7 @@ setup___cf_short_name_lc__() {
     export __cf_short_name_uc___BASE="${this_dir}"
     export CF_BASE="${this_dir}/modules/columnflow"
     export CF_REPO_BASE="${__cf_short_name_uc___BASE}"
+    export CF_REPO_BASE_ALIAS="__cf_short_name_uc___BASE"
     export CF_SETUP_NAME="${setup_name}"
 
     # load cf setup helpers
@@ -121,6 +122,13 @@ setup___cf_short_name_lc__() {
             cf_init_submodule "${__cf_short_name_uc___BASE}" "modules/${m}"
         done
     fi
+
+
+    #
+    # git hooks
+    #
+
+    cf_setup_git_hooks || return "$?"
 
 
     #

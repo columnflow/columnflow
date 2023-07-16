@@ -23,8 +23,15 @@ class CalibrateEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Task to apply calibrations to objects, e.g. leptons and jets.
+
+    The calibrations that are to be applied can be specified on the command line, and are
+    implemented as instances of the :py:class:`~columnflow.calibration.Calibrator` class. For
+    further information, please consider the documentation there.
+    """
     # default sandbox, might be overwritten by calibrator function
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -32,9 +39,16 @@ class CalibrateEvents(
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
+    # register shifts found in the chosen calibrator to this task
     register_calibrator_shifts = True
 
-    def workflow_requires(self):
+    def workflow_requires(self) -> dict:
+        """
+        Configure the requirements for the workflow in general. For more general informations, see
+        :external+law:py:meth:`BaseWorkflow.workflow_requires() <law.workflow.base.BaseWorkflow.workflow_requires>`.
+
+        :return: Dictionary containing the requirements for this task.
+        """
         reqs = super().workflow_requires()
 
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
@@ -44,7 +58,10 @@ class CalibrateEvents(
 
         return reqs
 
-    def requires(self):
+    def requires(self) -> dict:
+        """
+        Configure the requirements for the individual branches of the workflow.
+        """
         reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
@@ -53,13 +70,25 @@ class CalibrateEvents(
         return reqs
 
     def output(self):
-        return {"columns": self.target(f"calib_{self.branch}.parquet")}
+        """
+        Defines the outputs of the current branch within the workflow.
+        """
+        outputs = {}
+
+        # only declare the output in case the calibrator actually creates columns
+        if self.calibrator_inst.produced_columns:
+            outputs["columns"] = self.target(f"calib_{self.branch}.parquet")
+
+        return outputs
 
     @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False, output=True)
     @law.decorator.safe_output
     def run(self):
+        """
+        Run method of this task.
+        """
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
         )
@@ -132,4 +161,9 @@ CalibrateEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CalibrateEvents,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    docs="""
+Wrapper task to calibrate events for multiple datasets.
+
+:enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+""",
 )

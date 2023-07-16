@@ -286,7 +286,7 @@ def prepare_plot_config(
             },
         }
         if h_mc is not None:
-            plot_config["ratio_kwargs"] = {
+            plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
                 "yerr": False if any(data_hide_errors) else None,
             }
