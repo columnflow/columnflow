@@ -239,6 +239,13 @@ setup_columnflow() {
 
 
     #
+    # git hooks
+    #
+
+    cf_setup_git_hooks || return "$?"
+
+
+    #
     # law setup
     #
 
@@ -607,6 +614,90 @@ EOF
         source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
 }
+
+cf_setup_git_hooks() {
+    # Initializes lfs and custom githooks in the local checkout for both the columnflow
+    # (sub)repository, as well as the analysis repository in case a directory bin/githooks is found.
+
+    # helper to setup hooks
+    setup_hooks() {
+        local repo_dir="$1"
+        local src_dir="$2"
+
+        # determine the target hooks directory
+        local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
+        if [ "$?" != "0" ] || [ ! -d "${dst_dir}" ]; then
+            2>&1 echo "no git hooks directory found, cannot setup hooks"
+            return "30"
+        fi
+
+        # do nothing if hooks are already setup up
+        local flag_file="${dst_dir}/.cf_hooks_setup"
+        [ -f "${flag_file}" ] && return "0"
+
+        # detect if lfs hooks are already installed, as identified by the pre-push
+        local lfs_installed="false"
+        local f
+        for f in $( ls -1 "${dst_dir}"/{pre-push,pre-push-*} 2> /dev/null || true ); do
+            if [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
+                lfs_installed="true"
+                break
+            fi
+        done
+
+        # setup lfs if not done yet
+        if ! ${lfs_installed}; then
+            ( cd "${repo_dir}" && git lfs install > /dev/null ) || return "$?"
+        fi
+
+        # move all existing hooks and replace them with combined scripts
+        for f in $( ls -1 "${dst_dir}" ); do
+            # skip samples
+            [[ "${f}" == *.sample ]] && continue
+            # move the file and create the new one
+            mv "${dst_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
+            cp "${CF_BASE}/bin/githooks/_combined_hook.sh" "${dst_dir}/${f}"
+        done
+
+        # setup all hooks in bin/githooks
+        for f in $( ls -1 "${src_dir}" ); do
+            [[ "${f}" == *.sh ]] && continue
+            ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
+        done
+
+        # create the flag file
+        touch "${flag_file}"
+
+        return "0"
+    }
+
+    # helper to find a hook postfix number
+    hook_postfix() {
+        local dst_dir="$1"
+        local hook_name="$2"
+
+        for i in {1..100}; do
+            if [ ! -f "${dst_dir}/${hook_name}-${i}" ]; then
+                echo "-${i}"
+                return "0"
+            fi
+        done
+
+        2>&1 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
+        return "31"
+    }
+
+    # setup columnflow hooks
+    setup_hooks "${CF_BASE}" "${CF_BASE}/bin/githooks"
+
+    # setup repository hooks
+    if [ ! -z "${CF_REPO_BASE}" ] && [ -d "${CF_REPO_BASE}/bin/githooks" ]; then
+        setup_hooks "${CF_REPO_BASE}" "${CF_REPO_BASE}/bin/githooks"
+    fi
+
+    return "0"
+}
+[ ! -z "${BASH_VERSION}" ] && export -f cf_setup_git_hooks
 
 cf_init_submodule() {
     # Initializes and updates a git submodule.
