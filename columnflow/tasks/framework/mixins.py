@@ -15,7 +15,7 @@ import luigi
 import law
 import order as od
 
-from columnflow.tasks.framework.base import AnalysisTask, ConfigTask
+from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.production import Producer
@@ -30,7 +30,7 @@ ak = maybe_import("awkward")
 class CalibratorMixin(ConfigTask):
 
     calibrator = luigi.Parameter(
-        default=law.NO_STR,
+        default=RESOLVE_DEFAULT,
         description="the name of the calibrator to be applied; default: value of the "
         "'default_calibrator' config",
     )
@@ -65,8 +65,7 @@ class CalibratorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        calibrator_inst = params.get("calibrator_inst")
-        if calibrator_inst:
+        if calibrator_inst := params.get("calibrator_inst"):
             if cls.register_calibrator_shifts:
                 shifts |= calibrator_inst.all_shifts
             else:
@@ -107,7 +106,7 @@ class CalibratorMixin(ConfigTask):
 class CalibratorsMixin(ConfigTask):
 
     calibrators = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
         brace_expand=True,
@@ -127,6 +126,7 @@ class CalibratorsMixin(ConfigTask):
     @classmethod
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
+
         if config_inst := params.get("config_inst"):
             params["calibrators"] = cls.resolve_config_default_and_groups(
                 params,
@@ -144,8 +144,7 @@ class CalibratorsMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
-        calibrator_insts = params.get("calibrator_insts")
-        for calibrator_inst in calibrator_insts or []:
+        for calibrator_inst in params.get("calibrator_insts") or []:
             if cls.register_calibrators_shifts:
                 shifts |= calibrator_inst.all_shifts
             else:
@@ -186,7 +185,7 @@ class CalibratorsMixin(ConfigTask):
 class SelectorMixin(ConfigTask):
 
     selector = luigi.Parameter(
-        default=law.NO_STR,
+        default=RESOLVE_DEFAULT,
         description="the name of the selector to be applied; default: value of the "
         "'default_selector' config",
     )
@@ -226,8 +225,7 @@ class SelectorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        selector_inst = params.get("selector_inst")
-        if selector_inst:
+        if selector_inst := params.get("selector_inst"):
             if cls.register_selector_shifts:
                 shifts |= selector_inst.all_shifts
             else:
@@ -320,7 +318,7 @@ class SelectorStepsMixin(SelectorMixin):
 class ProducerMixin(ConfigTask):
 
     producer = luigi.Parameter(
-        default=law.NO_STR,
+        default=RESOLVE_DEFAULT,
         description="the name of the producer to be applied; default: value of the "
         "'default_producer' config",
     )
@@ -355,8 +353,7 @@ class ProducerMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        producer_inst = params.get("producer_inst")
-        if producer_inst:
+        if producer_inst := params.get("producer_inst"):
             if cls.register_producer_shifts:
                 shifts |= producer_inst.all_shifts
             else:
@@ -398,7 +395,7 @@ class ProducerMixin(ConfigTask):
 class ProducersMixin(ConfigTask):
 
     producers = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="comma-separated names of producers to be applied; empty default",
         brace_expand=True,
     )
@@ -435,8 +432,7 @@ class ProducersMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
-        producer_insts = params.get("producer_insts")
-        for producer_inst in producer_insts or []:
+        for producer_inst in params.get("producer_insts") or []:
             if cls.register_producers_shifts:
                 shifts |= producer_inst.all_shifts
             else:
@@ -778,7 +774,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
 class MLModelMixin(ConfigTask, MLModelMixinBase):
 
     ml_model = luigi.Parameter(
-        default=law.NO_STR,
+        default=RESOLVE_DEFAULT,
         description="the name of the ML model to be applied; default: value of the "
         "'default_ml_model' config",
     )
@@ -867,10 +863,7 @@ class MLModelsMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if "analysis_inst" in params and "config_inst" in params:
-            analysis_inst = params["analysis_inst"]
-            config_inst = params["config_inst"]
-
+        if (analysis_inst := params.get("analysis_inst")) and (config_inst := params.get("config_inst")):
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 params,
@@ -928,7 +921,7 @@ class MLModelsMixin(ConfigTask):
 class InferenceModelMixin(ConfigTask):
 
     inference_model = luigi.Parameter(
-        default=law.NO_STR,
+        default=RESOLVE_DEFAULT,
         description="the name of the inference model to be used; default: value of the "
         "'default_inference_model' config",
     )
