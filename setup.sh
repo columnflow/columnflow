@@ -13,6 +13,8 @@ setup_columnflow() {
     # Optionally preconfigured environment variables:
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
+    #   CF_REINSTALL_HOOKS
+    #       When "1", existing git hooks are removed and linked again.
     #   CF_REMOTE_JOB
     #       When "1", applies configurations for remote job. Remote jobs will set this value if needed
     #       and there is no need to set this by hand.
@@ -623,6 +625,7 @@ cf_setup_git_hooks() {
     setup_hooks() {
         local repo_dir="$1"
         local src_dir="$2"
+        local f
 
         # determine the target hooks directory
         local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
@@ -631,13 +634,22 @@ cf_setup_git_hooks() {
             return "30"
         fi
 
-        # do nothing if hooks are already setup up
+        # remove existing hooks if requested
         local flag_file="${dst_dir}/.cf_hooks_setup"
+        if [ "${CF_REINSTALL_HOOKS}" = "1" ]; then
+            # remove hooks
+            for f in $( ls -1 "${dst_dir}" ); do
+                [[ "${f}" != *.sample ]] && rm -f "${dst_dir}/${f}"
+            done
+            # remove the flag file
+            rm -f "${flat_file}"
+        fi
+
+        # do nothing if hooks are already setup up
         [ -f "${flag_file}" ] && return "0"
 
         # detect if lfs hooks are already installed, as identified by the pre-push
         local lfs_installed="false"
-        local f
         for f in $( ls -1 "${dst_dir}"/{pre-push,pre-push-*} 2> /dev/null || true ); do
             if [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
                 lfs_installed="true"
