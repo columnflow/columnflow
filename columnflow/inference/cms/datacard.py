@@ -370,8 +370,13 @@ class DatacardWriter(object):
                 if proc_name == "data":
                     continue
 
+                # get the process scale (usually 1)
+                proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
+                scale = proc_obj.scale
+
                 # nominal shape
                 h_nom = _hists["nominal"].copy()
+                from IPython import embed; embed()
                 if fill_empty_bins:
                     fill_empty(h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
