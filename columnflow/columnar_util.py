@@ -1390,6 +1390,24 @@ class ArrayFunction(Derivable):
     # shallow wrapper around an object (a class or instance) and an IOFlag
     IOFlagged = namedtuple("IOFlagged", ["wrapped", "io_flag"])
 
+    # shallow wrapper around any object that returns the object itself in its default call method
+    # given an array function instance (can be easily subclassed to return something else)
+    class DeferredColumn(object):
+
+        def __init__(self, *columns: Any):
+            super().__init__()
+
+            # save columns as tuple, specially handling the case where a single set is given
+            self.columns = (
+                tuple(columns[0])
+                if len(columns) == 1 and isinstance(columns[0], set)
+                else columns
+            )
+
+        def __call__(self, func: ArrayFunction) -> Any:
+            # default implementation, just return the column(s)
+            return self.columns[0] if len(self.columns) == 1 else set(self.columns)
+
     @classproperty
     def AUTO(cls) -> IOFlagged:
         """
@@ -1579,17 +1597,35 @@ class ArrayFunction(Derivable):
             instances.clear()
 
             # go through all dependent objects and create instances of classes, considering caching
-            for obj in getattr(self, attr):
+            objs = list(getattr(self, attr))
+            while objs:
+                obj = objs.pop(0)
+
+                # obj might be a deferred column
+                if isinstance(obj, self.DeferredColumn):
+                    obj = obj(self)
+                    # when obj is falsy, skip it
+                    if not obj:
+                        continue
+                    # when obj is a set of objects, i.e., it cannot be understood as a Route,
+                    # extend the loop and start over, otherwise handle obj as is
+                    if isinstance(obj, set):
+                        objs = list(obj) + objs
+                        continue
+
+                # handle other types
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
                         instances.add(self.IOFlagged(obj, self.IOFlag.AUTO))
+
                 elif isinstance(obj, self.IOFlagged):
                     obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
                         instances.add(obj)
+
                 else:
                     # here, obj must be anything that is accepted by route
                     instances.add(obj if isinstance(obj, Route) else Route(obj))
@@ -1721,9 +1757,7 @@ class ArrayFunction(Derivable):
             "find"
         )
         missing = ", ".join(sorted(map(str, missing)))
-        raise Exception(
-            f"'{self.cls_name}' did not {action} any columns matching: {missing}",
-        )
+        raise Exception(f"'{self.cls_name}' did not {action} any columns matching: {missing}")
 
     def __call__(self, *args, **kwargs):
         """
@@ -2121,10 +2155,10 @@ class NoThreadPool(object):
         def get(self) -> Any:
             return self.return_value
 
-    def __init__(self, processes):
+    def __init__(self, processes: int):
         super().__init__()
 
-        self.processes = processes
+        self._processes = processes
         self.opened = True
 
     def __enter__(self) -> NoThreadPool:
@@ -2142,7 +2176,7 @@ class NoThreadPool(object):
     def terminate(self) -> None:
         return
 
-    def apply_async(self, func, args=(), kwargs=None) -> SyncResult:
+    def apply_async(self, func: Callable, args=(), kwargs=None) -> SyncResult:
         if not self.opened:
             raise Exception(f"cannot apply_async on closed {self.__class__.__name__}")
 
