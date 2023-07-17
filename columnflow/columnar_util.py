@@ -2115,7 +2115,10 @@ class TaskArrayFunction(ArrayFunction):
         clear_cache = kwargs.get("_clear_cache", True)
         kwargs["_clear_cache"] = False
 
-        # call_force default
+        # pass the call_force setting
+        kwargs["call_force"] = call_force
+
+        # call_force default for this call
         if call_force is None:
             call_force = self.call_force
 
