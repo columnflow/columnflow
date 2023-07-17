@@ -12,7 +12,7 @@ __all__ = [
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
-    "optional_column",
+    "deferred_column", "optional_column",
 ]
 
 import gc
@@ -20,6 +20,7 @@ import re
 import math
 import time
 import enum
+import inspect
 import threading
 import multiprocessing
 import multiprocessing.pool
@@ -522,26 +523,6 @@ class Route(od.TagMixin):
                         res = ak.fill_none(res, null_value)
 
         return res
-
-
-def optional_column(
-    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
-) -> Route | Sequence[Route] | set[Route]:
-    """
-    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
-    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
-    a sequence, a sequence of the same type containing route objects is returned.
-    """
-    def create(r):
-        route = Route(r)
-        route.add_tag("optional")
-        return route
-
-    # check if multiple routes were passed
-    multiple = isinstance(route, (list, set))
-
-    # create multiple or a single tagged route
-    return route.__class__(map(create, route)) if multiple else create(route)
 
 
 def get_ak_routes(
@@ -1394,6 +1375,29 @@ class ArrayFunction(Derivable):
     # given an array function instance (can be easily subclassed to return something else)
     class DeferredColumn(object):
 
+        @classmethod
+        def deferred_column(
+            cls,
+            call_func: Callable[[ArrayFunction], Any | set[Any]],
+        ) -> ArrayFunction.DeferredColumn:
+            """
+            Subclass factory to be used as a decorator wrapping a *call_func* that will be used as
+            the new ``__call__`` method. Note that the use of ``super()`` inside the decorated
+            method should always be done with arguments (i.e., class and instance).
+            """
+            cls_dict = {"__call__": call_func}
+
+            # overwrite __module__ to point to the module of the calling stack
+            frame = inspect.stack()[1]
+            module = inspect.getmodule(frame[0])
+            if module:
+                cls_dict["__module__"] = module.__name__
+
+            # create a subclass
+            subcls = cls.__class__(call_func.__name__, (cls,), cls_dict)
+
+            return subcls
+
         def __init__(self, *columns: Any):
             super().__init__()
 
@@ -1404,8 +1408,12 @@ class ArrayFunction(Derivable):
                 else set(columns)
             )
 
-        def __call__(self, func: ArrayFunction) -> Any:
-            # default implementation, just return the column(s)
+        def __call__(self, func: ArrayFunction) -> Any | set[Any]:
+            # default implementation
+            return self.get()
+
+        def get(self) -> Any | set[Any]:
+            # return the first column if there is just one, otherwise all
             return list(self.columns)[0] if len(self.columns) == 1 else self.columns
 
     @classproperty
@@ -1801,6 +1809,30 @@ class ArrayFunction(Derivable):
             self._check_columns(result, self.IOFlag.PRODUCES)
 
         return results
+
+
+# shorthand
+deferred_column = ArrayFunction.DeferredColumn.deferred_column
+
+
+def optional_column(
+    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
+) -> Route | Sequence[Route] | set[Route]:
+    """
+    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
+    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
+    a sequence, a sequence of the same type containing route objects is returned.
+    """
+    def create(r):
+        route = Route(r)
+        route.add_tag("optional")
+        return route
+
+    # check if multiple routes were passed
+    multiple = isinstance(route, (list, set))
+
+    # create multiple or a single tagged route
+    return route.__class__(map(create, route)) if multiple else create(route)
 
 
 class TaskArrayFunction(ArrayFunction):
