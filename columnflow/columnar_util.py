@@ -1397,16 +1397,16 @@ class ArrayFunction(Derivable):
         def __init__(self, *columns: Any):
             super().__init__()
 
-            # save columns as tuple, specially handling the case where a single set is given
+            # save columns as set, specially handling the case where a single set is given
             self.columns = (
-                tuple(columns[0])
+                columns[0]
                 if len(columns) == 1 and isinstance(columns[0], set)
-                else columns
+                else set(columns)
             )
 
         def __call__(self, func: ArrayFunction) -> Any:
             # default implementation, just return the column(s)
-            return self.columns[0] if len(self.columns) == 1 else set(self.columns)
+            return list(self.columns)[0] if len(self.columns) == 1 else self.columns
 
     @classproperty
     def AUTO(cls) -> IOFlagged:
