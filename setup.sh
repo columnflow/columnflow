@@ -639,10 +639,10 @@ cf_setup_git_hooks() {
         if [ "${CF_REINSTALL_HOOKS}" = "1" ]; then
             # remove hooks
             for f in $( ls -1 "${dst_dir}" ); do
-                [[ "${f}" != *.sample ]] && rm -f "${dst_dir}/${f}"
+                [ -f "${dst_dir}/${f}" ] && [[ "${f}" != *.sample ]] && rm -f "${dst_dir}/${f}"
             done
             # remove the flag file
-            rm -f "${flat_file}"
+            rm -f "${flag_file}"
         fi
 
         # do nothing if hooks are already setup up
@@ -651,7 +651,7 @@ cf_setup_git_hooks() {
         # detect if lfs hooks are already installed, as identified by the pre-push
         local lfs_installed="false"
         for f in $( ls -1 "${dst_dir}"/{pre-push,pre-push-*} 2> /dev/null || true ); do
-            if [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
+            if [ -f "${f}" ] && [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
                 lfs_installed="true"
                 break
             fi
@@ -664,16 +664,18 @@ cf_setup_git_hooks() {
 
         # move all existing hooks and replace them with combined scripts
         for f in $( ls -1 "${dst_dir}" ); do
-            # skip samples
-            [[ "${f}" == *.sample ]] && continue
+            # skip samples and directories
+            ( [ ! -f "${dst_dir}/${f}" ] || [[ "${f}" == *.sample ]] ) && continue
             # move the file and create the new one
             mv "${dst_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
-            cp "${CF_BASE}/bin/githooks/_combined_hook.sh" "${dst_dir}/${f}"
+            cp "${CF_BASE}/bin/githooks/combined_hook.sh" "${dst_dir}/${f}"
         done
 
         # setup all hooks in bin/githooks
         for f in $( ls -1 "${src_dir}" ); do
-            [[ "${f}" == *.sh ]] && continue
+            # skip scripts and directories
+            ( [ -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
+            # link files
             ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
         done
 
