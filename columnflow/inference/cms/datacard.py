@@ -370,8 +370,12 @@ class DatacardWriter(object):
                 if proc_name == "data":
                     continue
 
+                # get the process scale (usually 1)
+                proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
+                scale = proc_obj.scale
+
                 # nominal shape
-                h_nom = _hists["nominal"].copy()
+                h_nom = _hists["nominal"].copy() * scale
                 if fill_empty_bins:
                     fill_empty(h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
@@ -386,7 +390,7 @@ class DatacardWriter(object):
                             f"shapes of parameter '{param_name}' for process '{proc_name}' "
                             f"in category '{cat_name}' misconfigured: {__hists}",
                         )
-                    return __hists["down"], __hists["up"]
+                    return __hists["down"] * scale, __hists["up"] * scale
 
                 # go through all parameters and check if varied shapes need to be processed
                 for _, _, param_obj in self.inference_model_inst.iter_parameters(category=cat_name, process=proc_name):

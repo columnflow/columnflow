@@ -125,6 +125,13 @@ setup___cf_short_name_lc__() {
 
 
     #
+    # git hooks
+    #
+
+    cf_setup_git_hooks || return "$?"
+
+
+    #
     # law setup
     #
 
