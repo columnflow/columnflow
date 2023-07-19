@@ -1378,25 +1378,33 @@ class ArrayFunction(Derivable):
         @classmethod
         def deferred_column(
             cls,
-            call_func: Callable[[ArrayFunction], Any | set[Any]],
-        ) -> ArrayFunction.DeferredColumn:
+            call_func: Callable[[ArrayFunction], Any | set[Any]] | None = None,
+        ) -> ArrayFunction.DeferredColumn | Callable:
             """
             Subclass factory to be used as a decorator wrapping a *call_func* that will be used as
             the new ``__call__`` method. Note that the use of ``super()`` inside the decorated
             method should always be done with arguments (i.e., class and instance).
             """
-            cls_dict = {"__call__": call_func}
+            def decorator(
+                call_func: Callable[[ArrayFunction], Any | set[Any]],
+            ) -> ArrayFunction.DeferredColumn:
+                cls_dict = {
+                    "__call__": call_func,
+                    "__doc__": call_func.__doc__,
+                }
 
-            # overwrite __module__ to point to the module of the calling stack
-            frame = inspect.stack()[1]
-            module = inspect.getmodule(frame[0])
-            if module:
-                cls_dict["__module__"] = module.__name__
+                # overwrite __module__ to point to the module of the calling stack
+                frame = inspect.stack()[1]
+                module = inspect.getmodule(frame[0])
+                if module:
+                    cls_dict["__module__"] = module.__name__
 
-            # create a subclass
-            subcls = cls.__class__(call_func.__name__, (cls,), cls_dict)
+                # create a subclass
+                subcls = cls.__class__(call_func.__name__, (cls,), cls_dict)
 
-            return subcls
+                return subcls
+
+            return decorator(call_func) if call_func else decorator
 
         def __init__(self, *columns: Any):
             super().__init__()
