@@ -1620,14 +1620,16 @@ class ArrayFunction(Derivable):
                 # obj might be a deferred column
                 if isinstance(obj, self.DeferredColumn):
                     obj = obj(self)
-                    # when obj is falsy, skip it
-                    if not obj:
-                        continue
-                    # when obj is a set of objects, i.e., it cannot be understood as a Route,
-                    # extend the loop and start over, otherwise handle obj as is
-                    if isinstance(obj, set):
-                        objs = list(obj) + objs
-                        continue
+
+                # when obj is falsy, skip it
+                if not obj:
+                    continue
+
+                # when obj is a set of objects, i.e., it cannot be understood as a Route,
+                # extend the loop and start over, otherwise handle obj as is
+                if isinstance(obj, set):
+                    objs = list(obj) + objs
+                    continue
 
                 # handle other types
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
@@ -1824,23 +1826,30 @@ deferred_column = ArrayFunction.DeferredColumn.deferred_column
 
 
 def optional_column(
-    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
-) -> Route | Sequence[Route] | set[Route]:
+    *routes: Route | Any | set[Route | Any],
+) -> Route | set[Route]:
     """
-    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
-    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
-    a sequence, a sequence of the same type containing route objects is returned.
+    Takes an objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
+    constructor, and returns a single or a set of route objects being tagged ``"optional"``.
     """
-    def create(r):
+    if not routes:
+        raise Exception("at least one route argument must be given")
+
+    def opt_route(r):
         route = Route(r)
         route.add_tag("optional")
         return route
 
-    # check if multiple routes were passed
-    multiple = isinstance(route, (list, set))
+    # determine if multple objects are given and handle the case where a single set is given
+    multiple = False
+    if len(routes) == 1 and isinstance(routes[0], set):
+        multiple = True
+        routes = routes[0]
+    elif len(routes) > 1:
+        multiple = True
 
     # create multiple or a single tagged route
-    return route.__class__(map(create, route)) if multiple else create(route)
+    return set(map(opt_route, routes)) if multiple else opt_route(list(routes)[0])
 
 
 class TaskArrayFunction(ArrayFunction):
