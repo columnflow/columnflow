@@ -29,6 +29,7 @@ ak = maybe_import("awkward")
         optional("Tau.jetIdx"), optional("Tau.decayMode"),
         optional("Muon.jetIdx"), optional("Muon.nStations"),
         optional("Jet.nConstituents"), optional("Jet.nElectrons"), optional("Jet.nMuons"),
+        optional("GenJet.pt"), optional("GenPart.pt"),
     },
     produces={"deterministic_seed"},
 )
@@ -87,21 +88,6 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     # print(f"events: {n_events}, unique seeds: {n_seeds}, match: {match_text}")
 
     return events
-
-
-@deterministic_event_seeds.init
-def deterministic_event_seeds_init(self: Producer) -> None:
-    """
-    Init function that adds MC-specific columns needed for seed
-    determinations.
-    """
-    if not hasattr(self, "dataset_inst") or not self.dataset_inst.is_mc:
-        return
-
-    self.uses |= {
-        "GenJet.pt",
-        "GenPart.pt",
-    }
 
 
 @deterministic_event_seeds.setup

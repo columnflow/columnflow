@@ -68,8 +68,6 @@ setup_columnflow() {
     #       interactive setup.
     #   CF_CI_JOB
     #       Set to "1" if a CI environment is detected (e.g. GitHub actions), and "0" otherwise.
-    #   CF_VOMS
-    #       The name of the user's virtual organization. Queried during the interactive setup.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
@@ -194,7 +192,6 @@ setup_columnflow() {
             query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
             [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
             unset CF_VENV_SETUP_MODE_UPDATE
-            query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
@@ -674,7 +671,7 @@ cf_setup_git_hooks() {
         # setup all hooks in bin/githooks
         for f in $( ls -1 "${src_dir}" ); do
             # skip scripts and directories
-            ( [ -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
+            ( [ ! -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
             # link files
             ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
         done
