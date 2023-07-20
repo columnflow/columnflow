@@ -64,7 +64,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         default=default_analysis,
         description=f"name of the analysis; default: '{default_analysis}'",
     )
-    version = luigi.Parameter(description="mandatory version that is encoded into output paths")
+    version = luigi.Parameter(
+        description="mandatory version that is encoded into output paths",
+    )
 
     allow_empty_sandbox = True
     sandbox = None
@@ -93,7 +95,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
-    def get_analysis_inst(cls, analysis):
+    def get_analysis_inst(cls, analysis: str) -> od.Analysis:
         # prepare names
         if "." not in analysis:
             raise ValueError(f"invalid analysis format: {analysis}")
@@ -113,7 +115,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return analysis_inst
 
     @classmethod
-    def req_params(cls, inst, **kwargs):
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
         """
         Returns parameters that are jointly defined in this class and another task instance of some
         other class. The parameters are used when calling ``Task.req(self)``.
@@ -180,7 +182,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return set(), upstream_shifts
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
+    def get_array_function_kwargs(
+        cls,
+        task: AnalysisTask | None = None,
+        **params,
+    ) -> dict[str, Any]:
         if task:
             analysis_inst = task.analysis_inst
         elif "analysis_inst" in params:
@@ -194,17 +200,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
     @classmethod
-    def get_calibrator_kwargs(cls, *args, **kwargs):
+    def get_calibrator_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_selector_kwargs(cls, *args, **kwargs):
+    def get_selector_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_producer_kwargs(cls, *args, **kwargs):
+    def get_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
