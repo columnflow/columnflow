@@ -158,7 +158,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # when version is a callable, invoke it
         if callable(version):
-            version = version(cls, inst, params)
+            version = version(inst, params)
 
         # at this point, version must be a string
         if not isinstance(version, str):
