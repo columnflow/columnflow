@@ -332,7 +332,6 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
-        "CF_VOMS": "cf_voms",
     }
 
     # upstream requirements

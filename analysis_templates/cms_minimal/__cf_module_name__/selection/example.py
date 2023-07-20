@@ -153,7 +153,6 @@ def example(
         "num_events_selected": results.main.event,
     }
     group_map = {}
-    group_combinations = []
     if self.dataset_inst.is_mc:
         weight_map = {
             **weight_map,
@@ -162,20 +161,17 @@ def example(
             "sum_mc_weight_selected": (events.mc_weight, results.main.event),
         }
         group_map = {
-            **group_map,
             "njet": {
                 "values": results.x.n_jets,
                 "mask_fn": (lambda v: results.x.n_jets == v),
             },
         }
-        group_combinations.append(("process", "njet"))
     events = self[increment_stats](
         events,
         results,
         stats,
         weight_map=weight_map,
         group_map=group_map,
-        group_combinations=group_combinations,
         **kwargs,
     )
 
