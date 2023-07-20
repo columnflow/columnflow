@@ -244,7 +244,7 @@ cfg.x.event_weights = DotDict({
 # task instance and parameters to be passed to the task family
 cfg.x.versions = {
     # "cf.CalibrateEvents": "prod1",
-    # "cf.SelectEvents": (lambda task_inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
+    # "cf.SelectEvents": (lambda cls, inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
     # ...
 }
 
