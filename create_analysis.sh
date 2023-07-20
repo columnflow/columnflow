@@ -305,8 +305,8 @@ create_analysis() {
 
     echo
 
-    echo "   b) Create the jet1_pt distribution for the single top dataset"
-    echo "      (if you have a image/pdf viewer installed, add it via '--view-cmd <binary>')"
+    echo "   b) Create the jet1_pt distribution for the single top datasets"
+    echo "      (if you have an image/pdf viewer installed, add it via '--view-cmd <binary>')"
     echo_color bright "      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt"
     echo
     echo "      Again, verify what you just ran, now with recursion depth 4"

@@ -68,8 +68,8 @@ Setup successfull! The next steps are:
       Verify what you just run by adding '--print-status -1' (-1 = fully recursive)
       > law run cf.ReduceEvents --version dev1 --branch 0 --print-status -1
 
-   b) Create the jet1_pt distribution for the single top dataset
-      (if you have a image/pdf viewer installed, add it via '--view-cmd <binary>')
+   b) Create the jet1_pt distribution for the single top datasets
+      (if you have an image/pdf viewer installed, add it via '--view-cmd <binary>')
       > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
 
       Again, verify what you just ran, now with recursion depth 4
