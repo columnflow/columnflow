@@ -35,7 +35,13 @@ The full task tree of columnflow can be seen in
 
 General informations about tasks and [law](https://github.com/riga/law) can be found below in
 "Law introduction" or in the [example section](https://github.com/riga/law#examples) of the law
-Github repository.
+Github repository. In general (at least for cms), using columnflow requires a grid proxy, as the
+dataset files are accessed through it. The grid proxy should be activated after the setup of the
+default environment. It is however possible to create a custom law config file to be used by people
+without a grid certificate, although someone must run the tasks ```GetDatasetLFNs``` and
+```CreatePileUpWeights``` (```CreatePileUpWeights``` is an internal task, not to be accessed directly from
+the command line, this will be run automatically e.g. for plots) for them, which output can then be
+used be used without grid certificate.
 
 While the name of each task is fairly descriptive of its purpose, a short introduction of the most
 important facts and parameters about each task group are presented below. As some tasks require
@@ -225,12 +231,10 @@ config.add_variable(
 ```
 
 The list of possible keyword arguments can be found in
-{external+order:py:class}`order.variable.Variable`. The values in ```expression``` can be either
-one-dimensional or more dimensional arrays. In this second case the information is flattened before
+{external+order:py:class}`order.variable.Variable`. The values in ```expression``` can be either a
+one-dimensional or a more dimensional array. In this second case the information is flattened before
 plotting. It is to be mentioned that {py:attribute}`~columnflow.columnar_util.EMPTY_FLOAT` is a
 columnflow internal null value and corresponds to the value ```-9999```.
-
-Test: Histogram mit None füllen: underflow bin? fehlermeldung?
 
 
 ## Calibrators
@@ -239,7 +243,156 @@ TODO
 
 ## Production of columns
 
-TODO
+### Introduction
+
+In columnflow, event/object based information (weights, properties, ...) is stored in columns.
+The creation of new columns is managed by instances of the
+{py:class}`~columnflow.production.Producer` class. {py:class}`~columnflow.production.Producer`s can
+be called in other classes ({py:class}`~columnflow.calibration.Calibrator` and
+{py:class}`~columnflow.selection.Selector`), or directly through the ```ProduceColumns``` task. It
+is also possible to create new columns directly within
+{py:class}`~columnflow.calibration.Calibrator`s and {py:class}`~columnflow.selection.Selector`s,
+without using instances of the {py:class}`~columnflow.production.Producer` class, but the process is
+the same as for the {py:class}`~columnflow.production.Producer` class. Therefore, the
+{py:class}`~columnflow.production.Producer` class, which sole purpose is the creation of new
+columns, will be used to describe the process. The new columns are saved in a parquet file. If the
+column were created before the ```ReduceEvents``` task and are still needed afterwards, it should
+not be forgotten to include them in the ```keep_columns``` auxiliary of the config, as they would
+otherwise not be saved in the output file of the task. If the columns are created further down
+the task tree, e.g. in ```ProduceColumns```, they will be stored in an other parquet file, namely as
+the output of the corresponding task, but these parquet files will be loaded similarly to the
+outputs from ```ReduceEvents```.
+
+### Usage
+
+To create new columns, the {py:class}`~columnflow.production.Producer` instance will need to load
+the columns needed for the production of the new columns from the dataset/parquet files. This is
+given by the ```uses``` set of the instance of the {py:class}`~columnflow.production.Producer`
+class. Similarly, the newly created columns within the producer need to be declared in the
+```produces``` set of the instance of the {py:class}`~columnflow.production.Producer` class to be
+stored in the output parquet file. The {py:class}`~columnflow.production.Producer` instance only
+needs to return the ```events``` array with the additional columns. New columns can be set using
+the function {py:func}`~columnflow.columnar_util.set_ak_column`.
+
+An example of a {py:class}`~columnflow.production.Producer` for the ```HT```variable is given below:
+
+```python
+from columnflow.production import Producer, producer
+from columnflow.util import maybe_import
+from columnflow.columnar_util import set_ak_column
+
+np = maybe_import("numpy")
+ak = maybe_import("awkward")
+
+
+@producer(
+    uses={"Jet.pt"},
+    produces={"HT"},
+)
+def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # reconstruct HT and write in the events
+    events = set_ak_column(events, "HT", ak.sum(events.Jet.pt, axis=1))
+
+    return events
+```
+
+To call a {py:class}`~columnflow.production.Producer` in an other
+{py:class}`~columnflow.production.Producer`/{py:class}`~columnflow.calibration.Calibrator`/
+{py:class}`~columnflow.selection.Selector`, the following expression might be used:
+```python
+events = self[producer_name](arguments_of_the_producer, **kwargs)
+```
+
+Hence, a complete example would be:
+```python
+from columnflow.production import Producer, producer
+from columnflow.util import maybe_import
+from columnflow.columnar_util import set_ak_column
+
+np = maybe_import("numpy")
+ak = maybe_import("awkward")
+
+
+@producer(
+    uses={"Jet.pt"},
+    produces={"HT"},
+)
+def HT_feature(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # reconstruct HT and write in the events
+    events = set_ak_column(events, "HT", ak.sum(events.Jet.pt, axis=1))
+
+    return events
+
+
+@producer(
+    uses={HT_feature},
+    produces={HT_feature, "Jet.pt_squared"},
+)
+def all_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # use other producer to create HT column
+    events = self[HT_feature](events, **kwargs)
+
+    # create for all jets a column containing the square of the transverse momentum
+    events = set_ak_column(events, "Jet.pt_squared", events.Jet.pt * events.Jet.pt)
+
+    return events
+```
+
+The ```all_features``` producer creates therefore two new columns, the ```HT``` column on event
+level, and the ```pt_squared``` column for each object of the ```Jet``` collection.
+
+Notes:
+- If one wants to index the ```events``` array in a way that the index does not exist for every
+event (e.g. ```events.Jet.pt[10]``` does only work for events with 11 or more jets), it is possible
+to use the {py:class}`~columnflow.columnar_util.Route` class and its
+{py:meth}`~columnflow.columnar_util.Route.apply` function, which allows to give a default value to
+the returned array in the case of a missing element without throwing an error.
+
+- If the {py:class}`~columnflow.production.Producer` is built in a new file and to be used directly
+by ```ProduceColumns```, you will still need to put the name of the new file along with its path in
+the ```law.cfg``` file under the ```production_modules``` argument for law to be able to find the
+file.
+
+- If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
+on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
+function can be applied on the ```events``` array using
+```python
+events = self[attach_coffea_behavior](events, **kwargs)
+```
+If the name of the field does not correspond to a standard field name, e.g. "BtaggedJets", which
+should provide the same behaviour as a normal jet, the behaviour can still be set, using
+```python
+collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
+events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
+```
+
+- The weights for plotting should ideally be created in the ```ProduceColumns``` task, after the
+selection and reduction of the data.
+
+
+### ProduceColumns task
+
+The ```ProduceColumns``` task runs a specific instance of the
+{py:class}`~columnflow.production.Producer` class and stores the additional columns created in a
+parquet file.
+
+While it is possible to see all the arguments and their explanation for this task using
+```law run ProduceColumns --help```, the only argument created specifically for this task is the
+```--producer``` argument, through which the {py:class}`~columnflow.production.Producer` to be used
+can be chosen.
+
+An example of how to run this task for an analysis with several datasets and configs is given below:
+
+```shell
+law run SelectEvents --version name_of_your_version \
+                     --config name_of_your_config \
+                     --producer name_of_the_producer \
+                     --dataset name_of_the_dataset_to_be_run
+```
+
+It is to be mentioned that this task is run after the ```SelectEvents``` and ```CalibrateEvents```
+tasks and therefore uses the default arguments for the ```--calibrators``` and the ```--selector```
+if not specified otherwise.
 
 ## Selections
 
@@ -273,6 +426,7 @@ from columnflow.selection import SelectionResult
 from columnflow.util import maybe_import
 ak = maybe_import("awkward")
 
+
 # now wrap any function with a selector
 @selector(
     # define some additional information here, e.g.
@@ -288,7 +442,7 @@ ak = maybe_import("awkward")
 
     # ...
 )
-def jet_selection(events: ak.Array) -> tuple[ak.Array, SelectionResult]:
+def jet_selection(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     # do something ...
     return events, SelectionResult()
 ```
@@ -332,6 +486,7 @@ ak = maybe_import("awkward")
 # import the used internal selector
 from analysis.selection.jet import jet_selection
 
+
 @selector(
     # some information for Selector
     # e.g., if we want to use some internal Selector, make
@@ -347,7 +502,7 @@ from analysis.selection.jet import jet_selection
     # for the SelectEvents task
     exposed=True,
 )
-def Selector_ext(events: ak.Array) -> tuple[ak.Array, SelectionResult]:
+def Selector_ext(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     results = SelectionResult()
     # do something here
 
@@ -405,6 +560,7 @@ from columnflow.selection import SelectionResult
 from columnflow.util import maybe_import
 ak = maybe_import("awkward")
 
+
 # now wrap any function with a selector
 @selector(
     # define some additional information here, e.g.
@@ -420,7 +576,7 @@ ak = maybe_import("awkward")
 
     # ...
 )
-def jet_selection_with_result(events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
+def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, SelectionResult]:
     # require an object of the Jet collection to have at least 20 GeV pt and at most 2.4 eta to be
     # considered a Jet in our analysis
     jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
@@ -438,7 +594,6 @@ def jet_selection_with_result(events: ak.Array, **kwargs) -> tuple[ak.Array, Sel
     # create the list of indices to be kept from the Jet collection using the jet_50pt_mask to create the
     # new Jet_50pt field containing only the selected Jet_50pt objects
     jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
-
 
     return events, SelectionResult(
         steps={
@@ -609,6 +764,7 @@ np = maybe_import("numpy")
 
 from collections import defaultdict, OrderedDict
 
+
 # First, define an internal jet Selector to be used by the exposed Selector
 
 @selector(
@@ -642,7 +798,6 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     # new Jet_50pt field containing only the selected Jet_50pt objects
     jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
 
-
     return events, SelectionResult(
         steps={
             # boolean mask to create selection of the events with at least two jets, this will be
@@ -663,6 +818,7 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
             "jet_mask": jet_mask,
         },
     )
+
 
 # Next, define an internal fatjet Selector to be used by the exposed Selector
 
@@ -703,6 +859,7 @@ def fatjet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> 
             },
         },
     )
+
 
 # Implement the task to update the stats object
 
@@ -804,7 +961,6 @@ def Selector_ext(
     events = self[increment_stats](events, results, stats, **kwargs)
 
     return events, results
-
 ```
 
 Notes:
@@ -822,7 +978,7 @@ events = self[attach_coffea_behavior](events, **kwargs)
 If the name of the field does not correspond to a standard field name, e.g. "BtaggedJets", which
 should provide the same behaviour as a normal jet, the behaviour can still be set, using
 ```python
-collections = {x: {"type_name" : "Jet"} for x in ["BtaggedJets"]}
+collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
 events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
@@ -858,6 +1014,9 @@ law run SelectEvents --version name_of_your_version \
                      --selector name_of_the_selector \
                      --dataset name_of_the_dataset_to_be_run
 ```
+
+It is to be mentioned that this task is run after the ```CalibrateEvents``` task and therefore uses
+the default argument for the ```--calibrators``` if not specified otherwise.
 
 Notes:
 - Running the exposed {py:class}`~columnflow.selection.Selector` from the ```Complete example```
