@@ -12,7 +12,7 @@ __all__ = [
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
     "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
-    "optional_column",
+    "deferred_column", "optional_column",
 ]
 
 import gc
@@ -20,6 +20,7 @@ import re
 import math
 import time
 import enum
+import inspect
 import threading
 import multiprocessing
 import multiprocessing.pool
@@ -522,26 +523,6 @@ class Route(od.TagMixin):
                         res = ak.fill_none(res, null_value)
 
         return res
-
-
-def optional_column(
-    route: Route | Any | Sequence[Route | Any] | set[Route | Any],
-) -> Route | Sequence[Route] | set[Route]:
-    """
-    Takes an object *object*, whose type can be anything that is accepted by the :py:class:`~.Route`
-    constructor, and returns a route object that contains a tag ``"optional"``. In case *route* is
-    a sequence, a sequence of the same type containing route objects is returned.
-    """
-    def create(r):
-        route = Route(r)
-        route.add_tag("optional")
-        return route
-
-    # check if multiple routes were passed
-    multiple = isinstance(route, (list, set))
-
-    # create multiple or a single tagged route
-    return route.__class__(map(create, route)) if multiple else create(route)
 
 
 def get_ak_routes(
@@ -1390,6 +1371,59 @@ class ArrayFunction(Derivable):
     # shallow wrapper around an object (a class or instance) and an IOFlag
     IOFlagged = namedtuple("IOFlagged", ["wrapped", "io_flag"])
 
+    # shallow wrapper around any object that returns the object itself in its default call method
+    # given an array function instance (can be easily subclassed to return something else)
+    class DeferredColumn(object):
+
+        @classmethod
+        def deferred_column(
+            cls,
+            call_func: Callable[[ArrayFunction], Any | set[Any]] | None = None,
+        ) -> ArrayFunction.DeferredColumn | Callable:
+            """
+            Subclass factory to be used as a decorator wrapping a *call_func* that will be used as
+            the new ``__call__`` method. Note that the use of ``super()`` inside the decorated
+            method should always be done with arguments (i.e., class and instance).
+            """
+            def decorator(
+                call_func: Callable[[ArrayFunction], Any | set[Any]],
+            ) -> ArrayFunction.DeferredColumn:
+                cls_dict = {
+                    "__call__": call_func,
+                    "__doc__": call_func.__doc__,
+                }
+
+                # overwrite __module__ to point to the module of the calling stack
+                frame = inspect.stack()[1]
+                module = inspect.getmodule(frame[0])
+                if module:
+                    cls_dict["__module__"] = module.__name__
+
+                # create a subclass
+                subcls = cls.__class__(call_func.__name__, (cls,), cls_dict)
+
+                return subcls
+
+            return decorator(call_func) if call_func else decorator
+
+        def __init__(self, *columns: Any):
+            super().__init__()
+
+            # save columns as set, specially handling the case where a single set is given
+            self.columns = (
+                columns[0]
+                if len(columns) == 1 and isinstance(columns[0], set)
+                else set(columns)
+            )
+
+        def __call__(self, func: ArrayFunction) -> Any | set[Any]:
+            # default implementation
+            return self.get()
+
+        def get(self) -> Any | set[Any]:
+            # return the first column if there is just one, otherwise all
+            return list(self.columns)[0] if len(self.columns) == 1 else self.columns
+
     @classproperty
     def AUTO(cls) -> IOFlagged:
         """
@@ -1579,17 +1613,37 @@ class ArrayFunction(Derivable):
             instances.clear()
 
             # go through all dependent objects and create instances of classes, considering caching
-            for obj in getattr(self, attr):
+            objs = list(getattr(self, attr))
+            while objs:
+                obj = objs.pop(0)
+
+                # obj might be a deferred column
+                if isinstance(obj, self.DeferredColumn):
+                    obj = obj(self)
+
+                # when obj is falsy, skip it
+                if not obj:
+                    continue
+
+                # when obj is a set of objects, i.e., it cannot be understood as a Route,
+                # extend the loop and start over, otherwise handle obj as is
+                if isinstance(obj, set):
+                    objs = list(obj) + objs
+                    continue
+
+                # handle other types
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
                         instances.add(self.IOFlagged(obj, self.IOFlag.AUTO))
+
                 elif isinstance(obj, self.IOFlagged):
                     obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
                         instances.add(obj)
+
                 else:
                     # here, obj must be anything that is accepted by route
                     instances.add(obj if isinstance(obj, Route) else Route(obj))
@@ -1721,9 +1775,7 @@ class ArrayFunction(Derivable):
             "find"
         )
         missing = ", ".join(sorted(map(str, missing)))
-        raise Exception(
-            f"'{self.cls_name}' did not {action} any columns matching: {missing}",
-        )
+        raise Exception(f"'{self.cls_name}' did not {action} any columns matching: {missing}")
 
     def __call__(self, *args, **kwargs):
         """
@@ -1767,6 +1819,37 @@ class ArrayFunction(Derivable):
             self._check_columns(result, self.IOFlag.PRODUCES)
 
         return results
+
+
+# shorthand
+deferred_column = ArrayFunction.DeferredColumn.deferred_column
+
+
+def optional_column(
+    *routes: Route | Any | set[Route | Any],
+) -> Route | set[Route]:
+    """
+    Takes one or several objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
+    constructor, and returns a single or a set of route objects being tagged ``"optional"``.
+    """
+    if not routes:
+        raise Exception("at least one route argument must be given")
+
+    def opt_route(r):
+        route = Route(r)
+        route.add_tag("optional")
+        return route
+
+    # determine if multple objects are given and handle the case where a single set is given
+    multiple = False
+    if len(routes) == 1 and isinstance(routes[0], set):
+        multiple = True
+        routes = routes[0]
+    elif len(routes) > 1:
+        multiple = True
+
+    # create multiple or a single tagged route
+    return set(map(opt_route, routes)) if multiple else opt_route(list(routes)[0])
 
 
 class TaskArrayFunction(ArrayFunction):
@@ -2121,10 +2204,10 @@ class NoThreadPool(object):
         def get(self) -> Any:
             return self.return_value
 
-    def __init__(self, processes):
+    def __init__(self, processes: int):
         super().__init__()
 
-        self.processes = processes
+        self._processes = processes
         self.opened = True
 
     def __enter__(self) -> NoThreadPool:
@@ -2142,7 +2225,7 @@ class NoThreadPool(object):
     def terminate(self) -> None:
         return
 
-    def apply_async(self, func, args=(), kwargs=None) -> SyncResult:
+    def apply_async(self, func: Callable, args=(), kwargs=None) -> SyncResult:
         if not self.opened:
             raise Exception(f"cannot apply_async on closed {self.__class__.__name__}")
 
