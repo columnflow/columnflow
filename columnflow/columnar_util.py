@@ -1829,7 +1829,7 @@ def optional_column(
     *routes: Route | Any | set[Route | Any],
 ) -> Route | set[Route]:
     """
-    Takes an objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
+    Takes one or several objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
     constructor, and returns a single or a set of route objects being tagged ``"optional"``.
     """
     if not routes:
