@@ -850,7 +850,7 @@ class MLModelDataMixin(MLModelMixin):
 class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
     )

@@ -147,7 +147,7 @@ create_analysis() {
     echo
     query_input "cf_module_name" "Name of the python module in the analysis directory" "${cf_analysis_name,,}"
     echo
-    query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "-"
+    query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "${cf_module_name}"
     echo
     query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "cms_minimal" "cms_minimal"
     echo
@@ -207,20 +207,20 @@ create_analysis() {
 
     # rename files
     echo_color cyan "renaming files"
-    find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv "$1" "${1//__cf_analysis_name__/'${cf_analysis_name}'}"' bash {} \;
-    find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv "$1" "${1//__cf_module_name__/'${cf_module_name}'}"' bash {} \;
-    find . -depth -name '*__cf_short_name_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_lc__/'${cf_short_name_lc}'}"' bash {} \;
-    find . -depth -name '*__cf_short_name_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_uc__/'${cf_short_name_uc}'}"' bash {} \;
+    PATH="/usr/bin" find . -depth -name '*__cf_analysis_name__*' -execdir bash -c 'mv "$1" "${1//__cf_analysis_name__/'${cf_analysis_name}'}"' bash {} \;
+    PATH="/usr/bin" find . -depth -name '*__cf_module_name__*' -execdir bash -c 'mv "$1" "${1//__cf_module_name__/'${cf_module_name}'}"' bash {} \;
+    PATH="/usr/bin" find . -depth -name '*__cf_short_name_lc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_lc__/'${cf_short_name_lc}'}"' bash {} \;
+    PATH="/usr/bin" find . -depth -name '*__cf_short_name_uc__*' -execdir bash -c 'mv -i "$1" "${1//__cf_short_name_uc__/'${cf_short_name_uc}'}"' bash {} \;
     echo_color green "done"
 
     echo
 
     # update files
     echo_color cyan "inserting placeholders"
-    find . -type f -execdir sed -i 's/__cf_analysis_name__/'${cf_analysis_name}'/g' {} \;
-    find . -type f -execdir sed -i 's/__cf_module_name__/'${cf_module_name}'/g' {} \;
-    find . -type f -execdir sed -i 's/__cf_short_name_lc__/'${cf_short_name_lc}'/g' {} \;
-    find . -type f -execdir sed -i 's/__cf_short_name_uc__/'${cf_short_name_uc}'/g' {} \;
+    PATH="/usr/bin" find . -type f -execdir sed -i 's/__cf_analysis_name__/'${cf_analysis_name}'/g' {} \;
+    PATH="/usr/bin" find . -type f -execdir sed -i 's/__cf_module_name__/'${cf_module_name}'/g' {} \;
+    PATH="/usr/bin" find . -type f -execdir sed -i 's/__cf_short_name_lc__/'${cf_short_name_lc}'/g' {} \;
+    PATH="/usr/bin" find . -type f -execdir sed -i 's/__cf_short_name_uc__/'${cf_short_name_uc}'/g' {} \;
     echo_color green "done"
 
 
@@ -267,54 +267,61 @@ create_analysis() {
 
     echo
 
-    echo_color bright "1. Setup the repository and install the environment."
-    echo "  > cd ${cf_analysis_name}"
-    echo "  > source setup.sh [optional_setup_name]"
+    echo_color cyan "1. Setup the repository and install the environment."
+    echo_color bright "   > cd ${cf_analysis_name}"
+    echo_color bright "   > source setup.sh [optional_setup_name]"
 
     echo
 
-    echo_color bright "2. Run local tests & linting checks to verify that the analysis is setup correctly."
-    echo "  > ./tests/run_all"
+    echo_color cyan "2. Run local tests & linting checks to verify that the analysis is setup correctly."
+    echo_color bright "   > ./tests/run_all"
 
     echo
 
-    echo_color bright "3. Create a GRID proxy if you intend to run tasks that need one"
+    echo_color cyan "3. Create a GRID proxy if you intend to run tasks that need one"
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-        echo "  > voms-proxy-init -voms cms -rfc -valid 196:00"
+        echo_color bright "   > voms-proxy-init -voms cms -rfc -valid 196:00"
     else
-        echo "  > voms-proxy-init -rfc -valid 196:00"
+        echo_color bright "   > voms-proxy-init -rfc -valid 196:00"
     fi
 
     echo
 
-    echo_color bright "4. Checkout the 'Getting started' guide to run your first tasks."
-    echo "  https://columnflow.readthedocs.io/en/stable/start.html"
+    echo_color cyan "4. Checkout the 'Getting started' guide to run your first tasks."
+    echo "   https://columnflow.readthedocs.io/en/stable/start.html"
 
     echo
 
-    echo "  Suggestions for tasks to run:"
+    echo "   Suggestions for tasks to run:"
     echo
 
-    echo "  a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the"
-    echo "     default dataset using the default calibrator and default selector"
-    echo "     (enter the command below and 'tab-tab' to see all arguments or add --help for help)"
-    echo "    > law run cf.ReduceEvents --version dev1 --branch 0"
+    echo "   a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the"
+    echo "      default dataset using the default calibrator and default selector"
+    echo "      (enter the command below and 'tab-tab' to see all arguments or add --help for help)"
+    echo_color bright "      > law run cf.ReduceEvents --version dev1 --branch 0"
+    echo
+    echo "      Verify what you just run by adding '--print-status -1' (-1 = fully recursive)"
+    echo_color bright "      > law run cf.ReduceEvents --version dev1 --branch 0 --print-status -1"
 
     echo
 
-    echo "  b) Create the jet1_pt distribution for the single top dataset:"
-    echo "    > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt"
+    echo "   b) Create the jet1_pt distribution for the single top datasets"
+    echo "      (if you have an image/pdf viewer installed, add it via '--view-cmd <binary>')"
+    echo_color bright "      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt"
+    echo
+    echo "      Again, verify what you just ran, now with recursion depth 4"
+    echo_color bright "      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt --print-status 4"
 
     echo
 
-    echo "  c) Include the ttbar dataset and also plot jet1_eta:"
-    echo "    > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta"
+    echo "   c) Include the ttbar dataset and also plot jet1_eta"
+    echo_color bright "      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta"
 
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
         echo
 
-        echo "  d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py:"
-        echo "    > law run cf.CreateDatacards --version dev1 --inference-model example"
+        echo "   d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py"
+        echo_color bright "      > law run cf.CreateDatacards --version dev1 --inference-model example"
     fi
 
     echo

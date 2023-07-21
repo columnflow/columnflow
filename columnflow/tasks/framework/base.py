@@ -64,7 +64,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         default=default_analysis,
         description=f"name of the analysis; default: '{default_analysis}'",
     )
-    version = luigi.Parameter(description="mandatory version that is encoded into output paths")
+    version = luigi.Parameter(
+        description="mandatory version that is encoded into output paths",
+    )
 
     allow_empty_sandbox = True
     sandbox = None
@@ -93,7 +95,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
-    def get_analysis_inst(cls, analysis):
+    def get_analysis_inst(cls, analysis: str) -> od.Analysis:
         # prepare names
         if "." not in analysis:
             raise ValueError(f"invalid analysis format: {analysis}")
@@ -113,7 +115,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return analysis_inst
 
     @classmethod
-    def req_params(cls, inst, **kwargs):
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
         """
         Returns parameters that are jointly defined in this class and another task instance of some
         other class. The parameters are used when calling ``Task.req(self)``.
@@ -126,40 +128,45 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
-        # when cls accepts a version but none was requested use the version map to assign it
-        version_map = None
-        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
-            version_map = cls.get_version_map(inst)
-
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # when the version map is set, lookup the key with which to find a version in the map and
-        # overwrite it
-        if version_map and cls.task_family in version_map:
-            version_params = list(cls.get_version_params())
-            version = version_map[cls.task_family]
-            while isinstance(version, dict) and version_params:
-                param = version_params.pop(0)
-                if param not in params:
-                    break
-                value = params[param]
-                if value not in version:
-                    if None not in version:
-                        break
-                    value = None
-                version = version[value]
-            params["version"] = version
+        # overwrite the version when set in the config
+        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+            if config_version := cls.get_version_map_value(inst, params):
+                params["version"] = config_version
 
         return params
 
     @classmethod
-    def get_version_map(cls, task):
+    def get_version_map(cls, task: AnalysisTask) -> dict[str, str | Callable]:
         return task.analysis_inst.get_aux("versions", {})
 
     @classmethod
-    def get_version_params(cls):
-        return ()
+    def get_version_map_value(
+        cls,
+        inst: AnalysisTask,
+        params: dict,
+        version_map: dict[str, str | Callable] | None = None,
+    ) -> str | None:
+        if version_map is None:
+            version_map = cls.get_version_map(inst)
+
+        # the task family must be in the version map
+        if not (version := version_map.get(cls.task_family)):
+            return None
+
+        # when version is a callable, invoke it
+        if callable(version):
+            version = version(cls, inst, params)
+
+        # at this point, version must be a string
+        if not isinstance(version, str):
+            raise TypeError(
+                f"version map entry for '{cls.task_family}' must be a string, but got {version}",
+            )
+
+        return version
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
@@ -175,7 +182,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return set(), upstream_shifts
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
+    def get_array_function_kwargs(
+        cls,
+        task: AnalysisTask | None = None,
+        **params,
+    ) -> dict[str, Any]:
         if task:
             analysis_inst = task.analysis_inst
         elif "analysis_inst" in params:
@@ -189,17 +200,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
     @classmethod
-    def get_calibrator_kwargs(cls, *args, **kwargs):
+    def get_calibrator_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_selector_kwargs(cls, *args, **kwargs):
+    def get_selector_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_producer_kwargs(cls, *args, **kwargs):
+    def get_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
@@ -691,13 +702,6 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def get_version_params(cls):
-        params = super().get_version_params()
-        if cls.shift:
-            params += ("shift",)
-        return params
-
-    @classmethod
     def modify_param_values(cls, params):
         """
         When "config" and "shift" are set, this method evaluates them to set the global shift.
@@ -831,15 +835,6 @@ class DatasetTask(ShiftTask):
                 upstream_shifts |= set(dataset_inst.info.keys())
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_version_params(cls):
-        params = super().get_version_params()
-        if cls.shift:
-            params = params[:-1] + ("dataset", "shift")
-        else:
-            params += ("dataset",)
-        return params
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):

@@ -13,6 +13,8 @@ setup_columnflow() {
     # Optionally preconfigured environment variables:
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
+    #   CF_REINSTALL_HOOKS
+    #       When "1", existing git hooks are removed and linked again.
     #   CF_REMOTE_JOB
     #       When "1", applies configurations for remote job. Remote jobs will set this value if needed
     #       and there is no need to set this by hand.
@@ -66,8 +68,6 @@ setup_columnflow() {
     #       interactive setup.
     #   CF_CI_JOB
     #       Set to "1" if a CI environment is detected (e.g. GitHub actions), and "0" otherwise.
-    #   CF_VOMS
-    #       The name of the user's virtual organization. Queried during the interactive setup.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
@@ -192,7 +192,6 @@ setup_columnflow() {
             query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
             [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
             unset CF_VENV_SETUP_MODE_UPDATE
-            query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
@@ -623,6 +622,7 @@ cf_setup_git_hooks() {
     setup_hooks() {
         local repo_dir="$1"
         local src_dir="$2"
+        local f
 
         # determine the target hooks directory
         local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
@@ -631,15 +631,24 @@ cf_setup_git_hooks() {
             return "30"
         fi
 
-        # do nothing if hooks are already setup up
+        # remove existing hooks if requested
         local flag_file="${dst_dir}/.cf_hooks_setup"
+        if [ "${CF_REINSTALL_HOOKS}" = "1" ]; then
+            # remove hooks
+            for f in $( ls -1 "${dst_dir}" ); do
+                [ -f "${dst_dir}/${f}" ] && [[ "${f}" != *.sample ]] && rm -f "${dst_dir}/${f}"
+            done
+            # remove the flag file
+            rm -f "${flag_file}"
+        fi
+
+        # do nothing if hooks are already setup up
         [ -f "${flag_file}" ] && return "0"
 
         # detect if lfs hooks are already installed, as identified by the pre-push
         local lfs_installed="false"
-        local f
         for f in $( ls -1 "${dst_dir}"/{pre-push,pre-push-*} 2> /dev/null || true ); do
-            if [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
+            if [ -f "${f}" ] && [ ! -z "$( cat "${f}" | grep "git lfs pre-push" )" ]; then
                 lfs_installed="true"
                 break
             fi
@@ -652,16 +661,18 @@ cf_setup_git_hooks() {
 
         # move all existing hooks and replace them with combined scripts
         for f in $( ls -1 "${dst_dir}" ); do
-            # skip samples
-            [[ "${f}" == *.sample ]] && continue
+            # skip samples and directories
+            ( [ ! -f "${dst_dir}/${f}" ] || [[ "${f}" == *.sample ]] ) && continue
             # move the file and create the new one
             mv "${dst_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
-            cp "${CF_BASE}/bin/githooks/_combined_hook.sh" "${dst_dir}/${f}"
+            cp "${CF_BASE}/bin/githooks/combined_hook.sh" "${dst_dir}/${f}"
         done
 
         # setup all hooks in bin/githooks
         for f in $( ls -1 "${src_dir}" ); do
-            [[ "${f}" == *.sh ]] && continue
+            # skip scripts and directories
+            ( [ ! -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
+            # link files
             ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
         done
 

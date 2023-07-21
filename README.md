@@ -16,6 +16,8 @@
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
+Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
+
 
 <!-- marker-after-header -->
 
@@ -45,36 +47,41 @@ At the end of the setup, you will see further instructions and suggestions to ru
 ```
 Setup successfull! The next steps are:
 
-  1. Setup the repository and install the environment.
-    > source setup.sh [optional_setup_name]
+1. Setup the repository and install the environment.
+   > cd
+   > source setup.sh [optional_setup_name]
 
-  2. Run local tests & linting checks to verify that the analysis is setup correctly.
-    > ./tests/run_all
+2. Run local tests & linting checks to verify that the analysis is setup correctly.
+   > ./tests/run_all
 
-  3. Create a GRID proxy if you intend to run tasks that need one
-    > voms-proxy-init -voms cms -rfc -valid 196:00
+3. Create a GRID proxy if you intend to run tasks that need one
+   > voms-proxy-init -rfc -valid 196:00
 
-  4. Checkout the 'Getting started' guide to run your first tasks.
-    https://columnflow.readthedocs.io/en/stable/start.html
+4. Checkout the 'Getting started' guide to run your first tasks.
+   https://columnflow.readthedocs.io/en/stable/start.html
 
-    Suggestions for tasks to run:
+   Suggestions for tasks to run:
 
-    a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
-       default dataset using the default calibrator and default selector
-       (enter the command below and 'tab-tab' to see all arguments or add --help for help)
+   a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
+      default dataset using the default calibrator and default selector
+      (enter the command below and 'tab-tab' to see all arguments or add --help for help)
       > law run cf.ReduceEvents --version dev1 --branch 0
 
-    b) Create the jet1_pt distribution for the single top dataset:
+      Verify what you just run by adding '--print-status -1' (-1 = fully recursive)
+      > law run cf.ReduceEvents --version dev1 --branch 0 --print-status -1
+
+   b) Create the jet1_pt distribution for the single top datasets
+      (if you have an image/pdf viewer installed, add it via '--view-cmd <binary>')
       > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
 
-    c) Include the ttbar dataset and also plot jet1_eta:
-      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
+      Again, verify what you just ran, now with recursion depth 4
+      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt --print-status 4
 
-    d) Create cms-style datacards for the example model in hgg/inference/example.py:
-      > law run cf.CreateDatacards --version dev1 --inference-model example
+   c) Include the ttbar dataset and also plot jet1_eta
+      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
 ```
 
-For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/issues/25#issue-1258137827).
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph).
 
 
 ## Projects using columnflow
