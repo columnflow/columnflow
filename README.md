@@ -16,6 +16,8 @@
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
+Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
+
 
 <!-- marker-after-header -->
 
