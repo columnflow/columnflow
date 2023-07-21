@@ -265,7 +265,8 @@ class MergeHistograms(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["hists"] = self.as_branch().requires()
+        if not self.pilot:
+            reqs["hists"] = self.as_branch().requires()
 
         return reqs
 
@@ -361,9 +362,10 @@ class MergeShiftedHistograms(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # add nominal and both directions per shift source
-        for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+        if not self.pilot:
+            # add nominal and both directions per shift source
+            for shift in ["nominal"] + self.shifts:
+                reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
