@@ -85,7 +85,7 @@ def draw_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
 
 def draw_errorbars(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     values = h.values() / norm
-    variances = np.sqrt(h.variances()) / norm
+    variances = h.variances() / norm**2
     # compute asymmetric poisson errors for data
     # TODO: passing the output of poisson_interval as yerr to mpl.plothist leads to
     #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
