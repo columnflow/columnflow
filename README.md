@@ -26,8 +26,8 @@ Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
 
 This project is currently in a beta phase.
 The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
-At this point (December 2022), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
-The first released version is expected in early 2023.
+At this point (July 2023), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
+The first released version is expected in the fall of 2023.
 However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
 
 ![Columnflow analytics](https://repobeats.axiom.co/api/embed/b6ebc5ba41019de55eb48e195eecb438890442c8.svg "Columnflow analytics")
