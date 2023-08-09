@@ -31,7 +31,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     functions below.
     """
     # compute the indices for looking up weights
-    indices = events.Pileup.nTrueInt.to_numpy() - 1
+    indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
     max_bin = len(self.pu_weights) - 1
     indices[indices > max_bin] = max_bin
 
