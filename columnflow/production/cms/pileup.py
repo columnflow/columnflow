@@ -19,7 +19,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
-    uses={"PV.npvs"},
+    uses={"Pileup.nTrueInt"},
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
     # only run on mc
     mc_only=True,
@@ -31,7 +31,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     functions below.
     """
     # compute the indices for looking up weights
-    indices = events.PV.npvs.to_numpy() - 1
+    indices = events.Pileup.nTrueInt.to_numpy() - 1
     max_bin = len(self.pu_weights) - 1
     indices[indices > max_bin] = max_bin
 
