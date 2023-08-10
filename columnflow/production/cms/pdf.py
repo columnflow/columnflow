@@ -74,4 +74,16 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, "pdf_weight_up", 1 + stddev)
     events = set_ak_column_f32(events, "pdf_weight_down", 1 - stddev)
 
+    if ak.any(pdf_weight_nominal == 0):
+        # set all pdf weights to 0 when the nominal pdf weight is 0
+        invalid_pdf_weight = (pdf_weight_nominal == 0)
+        logger.warning(
+            f"In dataset {self.dataset_inst.name}, {ak.sum(invalid_pdf_weight)} nominal " +
+            "LHEPdfWeights with values 0 have been found. The nominal/up/down pdf_weight "
+            "columns have been set to 0 for these events.",
+        )
+        set_ak_column(events, "pdf_weight", ak.where(invalid_pdf_weight, 0, events.pdf_weight))
+        set_ak_column(events, "pdf_weight_up", ak.where(invalid_pdf_weight, 0, events.pdf_weight_up))
+        set_ak_column(events, "pdf_weight_down", ak.where(invalid_pdf_weight, 0, events.pdf_weight_down))
+
     return events
