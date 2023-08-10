@@ -9,7 +9,7 @@ from __future__ import annotations
 import gc
 import time
 import itertools
-from typing import Sequence, Any
+from typing import Sequence, Any, Iterable
 
 import luigi
 import law
@@ -28,23 +28,62 @@ ak = maybe_import("awkward")
 
 
 class CalibratorMixin(ConfigTask):
+    """Mixin to include a single :py:class:`~columnflow.calibration.Calibrator` into tasks.
 
+    Inheriting from this mixin will give access to instantiate and access a
+    :py:class:`~columnflow.calibration.Calibrator` instance with name *calibrator*,
+    which is an input parameter for this task.
+    """
     calibrator = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the calibrator to be applied; default: value of the "
         "'default_calibrator' config",
     )
+    calibrator.__annotations__ = " ".join("""
+        the name of the calibrator to be applied; default: value of the
+        'default_calibrator' config""".split())
 
     # decibes whether the task itself runs the calibrator and implements its shifts
     register_calibrator_shifts = False
 
     @classmethod
-    def get_calibrator_inst(cls, calibrator, kwargs=None):
+    def get_calibrator_inst(cls, calibrator: str, kwargs=None) -> Calibrator:
+        """Initialize :py:class:`~columnflow.calibration.Calibrator` instance.
+
+        Extracts relevant *kwargs* for this calibrator instance using the
+        :py:meth:`~columnflow.tasks.framework.base.AnalaysisTask.get_calibrator_kwargs`
+        method.
+        After this process, the previously initialized instance of a 
+        :py:class:`~columnflow.calibration.Calibrator` with the name
+        *calibrator* is initialized using the
+        :py:meth:`~columnflow.util.DerivableMeta.get_cls` method with the
+        relevant keyword arguments.
+
+        :param calibrator: Name of the calibrator instance
+        :param kwargs: Any set keyword argument that is potentially relevant for
+            this :py:class:`~columnflow.calibration.Calibrator` instance
+        :return: The initialized :py:class:`~columnflow.calibration.Calibrator`
+            instance.
+        """
         inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
         return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict) -> dict:
+        """Resolve parameter values *params* relevant for the
+        :py:class:`CalibratorMixin` and all classes it inherits from.
+
+        Loads the ``config_inst`` and loads the parameter ``"calibrator"``.
+        In case the parameter is not found, defaults to ``"default_calibrator"``.
+        Finally, this function adds the keyword ``"calibrator_inst"``, which
+        contains the :py:class:`~columnflow.calibration.Calibrator` instance
+        obtained using :py:meth:`~.CalibratorMixin.get_calibrator_inst` method.
+
+        :param params: Dictionary with parameters provided by the user at
+            commandline level.
+        :return: Dictionary of parameters that now includes new value for
+            ``"calibrator_inst"``.
+        """
         params = super().resolve_param_values(params)
 
         if config_inst := params.get("config_inst"):
@@ -62,6 +101,21 @@ class CalibratorMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of shifts that the current ``calibrator_inst`` registers to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`CalibratorMixin`
+        inherits from.
+        Afterwards, check if the current ``calibrator_inst`` registers shifts
+        and add them to the current set of ``shifts`` and ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
@@ -87,7 +141,16 @@ class CalibratorMixin(ConfigTask):
         self._calibrator_inst = None
 
     @property
-    def calibrator_inst(self):
+    def calibrator_inst(self) -> Calibrator:
+        """Access current :py:class:`~columnflow.calibration.Calibrator` instance.
+
+        Loads the current :py:class:`~columnflow.calibration.Calibrator` *calibrator_inst* from
+        the cache or initializes it.
+        If the calibrator requests a specific ``sandbox``, set this sandbox as
+        the environment for the current Task.
+
+        :return: Current :py:class:`~columnflow.calibration.Calibrator` instance
+        """
         if self._calibrator_inst is None:
             self._calibrator_inst = self.get_calibrator_inst(self.calibrator, {"task": self})
 
@@ -97,13 +160,28 @@ class CalibratorMixin(ConfigTask):
 
         return self._calibrator_inst
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
+        """Create parts to create the output path to store intermediary results
+        for the current Task.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"calibrator": "calib__{self.calibrator}"}` before keyword ``version``.
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator}")
         return parts
 
 
 class CalibratorsMixin(ConfigTask):
+    """Mixin to include multiple :py:class:`~columnflow.calibration.Calibrator` instances into tasks.
+
+    Inheriting from this mixin will allow a task to instantiate and access a set of
+    :py:class:`~columnflow.calibration.Calibrator` instances with names *calibrators*,
+    which is a comma-separated list of calibrator names and is an input parameter for this task.
+    """
 
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -116,7 +194,17 @@ class CalibratorsMixin(ConfigTask):
     register_calibrators_shifts = False
 
     @classmethod
-    def get_calibrator_insts(cls, calibrators, kwargs=None):
+    def get_calibrator_insts(cls, calibrators: Iterable[str], kwargs=None) -> list[Calibrator]:
+        """Get all requested *calibrators*.
+
+        :py:class:`~columnflow.calibration.Calibrator` instances are either
+        initalized or loaded from cache.
+
+        :param calibrators: Names of Calibrators to load
+        :param kwargs: Additional keyword arguments to forward to individual
+            :py:class:`~columnflow.calibration.Calibrator` instances
+        :return: List of :py:class:`~columnflow.calibration.Calibrator` instances.
+        """
         inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
         return [
             Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
@@ -124,7 +212,21 @@ class CalibratorsMixin(ConfigTask):
         ]
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: law.util.InsertableDict) -> law.util.InsertableDict:
+        """Resolve values *params* and check against possible default values and
+        calibrator groups.
+
+        Check the values in *params* against the default value ``"default_calibrator"``
+        and possible group definitions ``"calibrator_groups"`` in the current config inst.
+        For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.ConfigTask.resolve_config_default_and_groups`.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the list requested
+            :py:class:`~columnflow.calibration.Calibrator` instances under the
+            keyword ``"calibrator_insts"``. See :py:meth:`~.CalibratorsMixin.get_calibrator_insts`
+            for more information.
+        """
         params = super().resolve_param_values(params)
 
         if config_inst := params.get("config_inst"):
@@ -141,6 +243,22 @@ class CalibratorsMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of all shifts that the list of ``calibrator_insts`` register to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`CalibratorsMixin`
+        inherits from.
+        Afterwards, loop through the list of :py:class:`~columnflow.calibration.Calibrator`
+        and check if they register shifts. If yes, add them to the current set of
+        ``shifts`` and ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
@@ -166,12 +284,33 @@ class CalibratorsMixin(ConfigTask):
         self._calibrator_insts = None
 
     @property
-    def calibrator_insts(self):
+    def calibrator_insts(self) -> list[Calibrator]:
+        """Access current list of :py:class:`~columnflow.calibration.Calibrator` instances.
+
+        Loads the current :py:class:`~columnflow.calibration.Calibrator` *calibrator_inst* from
+        the cache or initializes it.
+        If the calibrator requests a specific ``sandbox``, set this sandbox as
+        the environment for the current Task.
+
+        :return: Current list :py:class:`~columnflow.calibration.Calibrator` instances
+        """
         if self._calibrator_insts is None:
             self._calibrator_insts = self.get_calibrator_insts(self.calibrators, {"task": self})
         return self._calibrator_insts
 
     def store_parts(self):
+        """Create parts to create the output path to store intermediary results
+        for the current Task.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"calibrator": "calib__{HASH}"}` before keyword ``version``.
+        Here, ``HASH`` is the joint string of the first five calibrator names
+        + a hash created with :py:meth:`law.util.create_hash` based on
+        the list of calibrators, starting at its 5th element (i.e. ``self.calibrators[5:]``)
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
 
         part = "__".join(self.calibrators[:5])

@@ -12,7 +12,7 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence, Callable, Any
+from typing import Sequence, Callable, Any, Union
 
 import luigi
 import law
@@ -504,11 +504,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # store the analysis instance
         self.analysis_inst = self.get_analysis_inst(self.analysis)
 
-    def store_parts(self):
-        """
-        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
+    def store_parts(self) -> law.util.InsertableDict:
+        """Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
+
+        :return: Dictionary with parts to create a path to store intermediary results.
         """
         parts = law.util.InsertableDict()
 
