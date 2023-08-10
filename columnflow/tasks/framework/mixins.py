@@ -53,7 +53,7 @@ class CalibratorMixin(ConfigTask):
         Extracts relevant *kwargs* for this calibrator instance using the
         :py:meth:`~columnflow.tasks.framework.base.AnalaysisTask.get_calibrator_kwargs`
         method.
-        After this process, the previously initialized instance of a 
+        After this process, the previously initialized instance of a
         :py:class:`~columnflow.calibration.Calibrator` with the name
         *calibrator* is initialized using the
         :py:meth:`~columnflow.util.DerivableMeta.get_cls` method with the

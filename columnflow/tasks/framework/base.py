@@ -12,7 +12,7 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence, Callable, Any, Union
+from typing import Sequence, Callable, Any
 
 import luigi
 import law
@@ -1097,7 +1097,7 @@ def wrapper_factory(
 
     :param base_cls: Base class for this wrapper
     :param require_cls: :py:class:`~law.task.base.Task` class to be wrapped
-    :param enable: Enable these parameters to control the wrapped 
+    :param enable: Enable these parameters to control the wrapped
         :py:class:`~law.task.base.Task` class instance.
         Currently allowed parameters are: "configs", "skip_configs",
         "shifts", "skip_shifts", "datasets", "skip_datasets"
