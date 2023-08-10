@@ -31,8 +31,14 @@ RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
+    """General class for requirements of different tasks.
 
+        Can be initialized with other :py:class:`~columnflow.util.DotDict`
+        instances and additional keyword arguments ``kwargs``, which are
+        added.
+        """
     def __init__(self, *others, **kwargs):
+
         super().__init__()
 
         # add others and kwargs
@@ -338,6 +344,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         Example where the default points to a function:
 
         .. code-block:: python
+
             def resolve_param_values(params):
                 params["ml_model"] = AnalysisTask.resolve_config_default(
                     params,
@@ -1042,19 +1049,18 @@ class CommandTask(AnalysisTask):
 
 
 def wrapper_factory(
-    base_cls: law.Task,
+    base_cls: law.task.base.Task,
     require_cls: AnalysisTask,
     enable: Sequence[str],
     cls_name: str | None = None,
     attributes: dict | None = None,
     docs: str | None = None,
 ) -> law.task.base.Register:
-    """
-    Factory function creating wrapper task classes, inheriting from *base_cls* and
-    :py:class:`~law.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
-        Unless *cls_name* is defined, the name of the created class defaults to the name of
-        *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
-        given.
+    """Factory function creating wrapper task classes, inheriting from *base_cls* and
+    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
+    Unless *cls_name* is defined, the name of the created class defaults to the name of
+    *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
+    given.
 
     The instances of *require_cls* to be required in the
     :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
@@ -1087,7 +1093,33 @@ def wrapper_factory(
     "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
     list of config instances known to an analysis), *require_cls* must be at least a
     :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-        explicitly not.
+    explicitly not.
+
+    :param base_cls: Base class for this wrapper
+    :param require_cls: :py:class:`~law.task.base.Task` class to be wrapped
+    :param enable: Enable these parameters to control the wrapped 
+        :py:class:`~law.task.base.Task` class instance.
+        Currently allowed parameters are: "configs", "skip_configs",
+        "shifts", "skip_shifts", "datasets", "skip_datasets"
+    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the
+        name of the :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
+    :param attributes: Add these attributes as class-level members of the
+        new :py:class:`~law.task.base.WrapperTask` class
+    :param docs: Manually set the documentation string `__doc__` of the new
+        :py:class:`~law.task.base.WrapperTask` class instance
+    :raises ValueError: If a parameter provided with `enable` is not in the list
+        of known parameters
+    :raises TypeError: If any parameter in `enable` is incompatible with the
+        :py:class:`~law.task.base.WrapperTask` class instance or the inheritance
+        structure of corresponding classes
+    :raises ValueError: when `configs` are enabled but not found in the analysis
+        config instance
+    :raises ValueError: when `shifts` are enabled but not found in the analysis
+        config instance
+    :raises ValueError: when `datasets` are enabled but not found in the analysis
+        config instance
+    :return: The new :py:class:`~law.task.base.WrapperTask` for the
+        :py:class:`~law.task.base.Task` class `required_cls`
     """
     # check known features
     known_features = [
@@ -1317,7 +1349,14 @@ def wrapper_factory(
 
             return params
 
-        def requires(self):
+        def requires(self) -> Requirements:
+            """Collect requirements defined by the underlying ``require_cls``
+            of the :py:class:`~law.task.base.WrapperTask` depending on optional
+            additional parameters.
+
+            :return: Requirements for the :py:class:`~law.task.base.WrapperTask`
+                instance.
+            """
             # build all requirements based on the parameter space
             reqs = {}
 
