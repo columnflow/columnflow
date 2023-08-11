@@ -77,8 +77,10 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if ak.any(stddev > 0.5):
         # catch events with large pdf variations
         # TODO: how should we handle large PDF weight uncertainties (especially above 100%)?
+        occurances = ak.sum(stddev > 0.5)
+        frac = occurances / ak.count(stddev, axis=0) * 100
         logger.warning(
-            f"In dataset {self.dataset_inst.name}, there are {ak.sum(stddev > 0.5)} " +
+            f"In dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) " +
             "entries with pdf uncertainty above 50%",
         )
 
@@ -90,8 +92,8 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             "LHEPdfWeights with values 0 have been found. The nominal/up/down pdf_weight "
             "columns have been set to 0 for these events.",
         )
-        events = set_ak_column(events, "pdf_weight", ak.where(invalid_pdf_weight, 0, events.pdf_weight))
-        events = set_ak_column(events, "pdf_weight_up", ak.where(invalid_pdf_weight, 0, events.pdf_weight_up))
-        events = set_ak_column(events, "pdf_weight_down", ak.where(invalid_pdf_weight, 0, events.pdf_weight_down))
+        events = set_ak_column_f32(events, "pdf_weight", ak.where(invalid_pdf_weight, 0, events.pdf_weight))
+        events = set_ak_column_f32(events, "pdf_weight_up", ak.where(invalid_pdf_weight, 0, events.pdf_weight_up))
+        events = set_ak_column_f32(events, "pdf_weight_down", ak.where(invalid_pdf_weight, 0, events.pdf_weight_down))
 
     return events
