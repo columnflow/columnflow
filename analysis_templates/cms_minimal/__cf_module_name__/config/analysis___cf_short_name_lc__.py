@@ -11,11 +11,14 @@ import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict
+from columnflow.util import DotDict, maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
+    verify_config_processes,
 )
+
+ak = maybe_import("awkward")
 
 
 #
@@ -28,13 +31,14 @@ analysis___cf_short_name_lc__ = ana = od.Analysis(
 )
 
 # analysis-global versions
+# (see cfg.x.versions below for more info)
 ana.x.versions = {}
 
 # files of bash sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
 ana.x.bash_sandboxes = [
-    "$CF_BASE/sandboxes/cf_prod.sh",
-    "$CF_BASE/sandboxes/venv_columnar.sh",
+    "$CF_BASE/sandboxes/cf.sh",
+    law.config.get("analysis", "default_columnar_sandbox"),
 ]
 
 # files of cmssw sandboxes that might be required by remote tasks
@@ -105,6 +109,9 @@ for dataset_name in dataset_names:
     # for testing purposes, limit the number of files to 2
     for info in dataset.info.values():
         info.n_files = min(info.n_files, 2)
+
+# verify that the root process of all datasets is part of any of the registered processes
+verify_config_processes(cfg, warn=True)
 
 # default objects, such as calibrator, selector, producer, ml model, inference model, etc
 cfg.x.default_calibrator = "example"
@@ -233,10 +240,11 @@ cfg.x.event_weights = DotDict({
     "muon_weight": get_shifts("mu"),
 })
 
-# versions per task family and optionally also dataset and shift
-# None can be used as a key to define a default value
+# versions per task family, either referring to strings or to callables receving the invoking
+# task instance and parameters to be passed to the task family
 cfg.x.versions = {
     # "cf.CalibrateEvents": "prod1",
+    # "cf.SelectEvents": (lambda cls, inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
     # ...
 }
 
@@ -288,6 +296,14 @@ cfg.add_variable(
     expression="n_jet",
     binning=(11, -0.5, 10.5),
     x_title="Number of jets",
+    discrete_x=True,
+)
+cfg.add_variable(
+    name="jets_pt",
+    expression="Jet.pt",
+    binning=(40, 0.0, 400.0),
+    unit="GeV",
+    x_title=r"$p_{T} of all jets$",
 )
 cfg.add_variable(
     name="jet1_pt",
@@ -303,6 +319,13 @@ cfg.add_variable(
     null_value=EMPTY_FLOAT,
     binning=(30, -3.0, 3.0),
     x_title=r"Jet 1 $\eta$",
+)
+cfg.add_variable(
+    name="ht",
+    expression=lambda events: ak.sum(events.Jet.pt, axis=1),
+    binning=(40, 0.0, 800.0),
+    unit="GeV",
+    x_title="HT",
 )
 # weights
 cfg.add_variable(

@@ -1,10 +1,5 @@
-# version 5
+# version 7
 
-awkward~=2.0
-git+https://github.com/riga/coffea.git@9ecdee5#egg=coffea
-dask-awkward~=2023.2
-tabulate~=0.9
-zstandard~=0.20
-lz4~=4.3
-xxhash~=3.2
-tensorflow~=2.11
+-r columnar.txt
+
+tensorflow~=2.11.0

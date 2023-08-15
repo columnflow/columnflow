@@ -7,7 +7,7 @@ Column production methods related to pileup weights.
 import functools
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 
 
@@ -19,7 +19,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
-    uses={"PV.npvs"},
+    uses={"Pileup.nTrueInt"},
     produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
     # only run on mc
     mc_only=True,
@@ -31,7 +31,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     functions below.
     """
     # compute the indices for looking up weights
-    indices = events.PV.npvs.to_numpy() - 1
+    indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
     max_bin = len(self.pu_weights) - 1
     indices[indices > max_bin] = max_bin
 
@@ -56,7 +56,7 @@ def pu_weight_requires(self: Producer, reqs: dict) -> None:
 
 
 @pu_weight.setup
-def pu_weight_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def pu_weight_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     """
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.

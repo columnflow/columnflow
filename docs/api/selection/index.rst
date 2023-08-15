@@ -1,23 +1,27 @@
 ``columnflow.selection``
 ========================
 
+.. currentmodule:: columnflow.selection
+
 .. automodule:: columnflow.selection
    :autosummary:
 
 ``Selector``
 ------------
-.. autoclass:: columnflow.selection.Selector
+.. autoclass:: Selector
    :members:
    :special-members:
 
 ``SelectionResult``
 -------------------
-.. autoclass:: columnflow.selection.SelectionResult
+.. autoclass:: SelectionResult
    :members:
    :special-members:
 
 ``Submodules``
 --------------
 .. toctree::
+   :maxdepth: 2
+
    matching
    cms

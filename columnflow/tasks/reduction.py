@@ -32,7 +32,7 @@ class ReduceEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -42,6 +42,9 @@ class ReduceEvents(
         SelectEvents=SelectEvents,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -49,8 +52,9 @@ class ReduceEvents(
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ]
             reqs["selection"] = self.reqs.SelectEvents.req(self)
         else:
@@ -64,8 +68,9 @@ class ReduceEvents(
         return {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=c)
-                for c in self.calibrators
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
             ],
             "selection": self.reqs.SelectEvents.req(self),
         }
@@ -79,8 +84,9 @@ class ReduceEvents(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet, set_ak_column,
+            sorted_ak_to_parquet,
         )
+        from columnflow.selection.util import create_collections_from_masks
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -164,7 +170,12 @@ class ReduceEvents(
             events = update_ak_array(events, *diffs)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_steps=self.missing_column_alias_strategy,
+            )
 
             # build the event mask
             if self.selector_steps:
@@ -190,18 +201,8 @@ class ReduceEvents(
             # loop through all object selection, go through their masks
             # and create new collections if required
             if "objects" in sel.fields:
-                for src_name in sel.objects.fields:
-                    # get all destination collections, handling those named identically to the
-                    # source collection last
-                    dst_names = list(sel["objects", src_name].fields)
-                    if src_name in dst_names:
-                        # move to the end
-                        dst_names.remove(src_name)
-                        dst_names.append(src_name)
-                    for dst_name in dst_names:
-                        object_mask = sel.objects[src_name, dst_name][event_mask]
-                        dst_collection = events[src_name][object_mask]
-                        events = set_ak_column(events, dst_name, dst_collection)
+                # apply the event mask
+                events = create_collections_from_masks(events, sel.objects[event_mask])
 
             # remove columns
             events = route_filter(events)
@@ -398,7 +399,7 @@ class MergeReducedEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(

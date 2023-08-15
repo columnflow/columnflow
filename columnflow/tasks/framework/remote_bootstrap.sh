@@ -17,7 +17,6 @@ bootstrap_htcondor_standalone() {
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
-    export CF_VOMS="{{cf_voms}}"
     [ ! -z "{{voms_proxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
@@ -43,7 +42,7 @@ bootstrap_htcondor_standalone() {
             source "${lcg_setup}" "" &&
             mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
             cd "${CF_SOFTWARE_BASE}/conda" &&
-            law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
+            GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
             tar -xzf "software.tgz" &&
             rm "software.tgz"
         ) || return "$?"
@@ -54,7 +53,7 @@ bootstrap_htcondor_standalone() {
         source "${lcg_setup}" "" &&
         mkdir -p "${CF_REPO_BASE}" &&
         cd "${CF_REPO_BASE}" &&
-        law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
+        GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
         tar -xzf "repo.tgz" &&
         rm "repo.tgz"
     ) || return "$?"

@@ -6,6 +6,8 @@ Selector related to MET filters.
 
 from __future__ import annotations
 
+from typing import Iterable
+
 from columnflow.selection import Selector, selector
 from columnflow.util import maybe_import
 from columnflow.columnar_util import Route
@@ -14,17 +16,33 @@ from columnflow.columnar_util import Route
 ak = maybe_import("awkward")
 
 
+def get_met_filters_default(self) -> Iterable[str]:
+    """
+    Function to obtain met filters from the config.
+
+    By default, this is done using
+
+    .. code-block:: python
+
+        return config_inst.x.met_filters
+
+    :return: list or set of met filters to be applied
+    """
+    return self.config_inst.x.met_filters
+
+
 @selector(
-    uses={"event", "nFlag"},
+    uses={"event"},
     # function to obtain met filters from the config
-    get_met_filters=(lambda self: self.config_inst.x.met_filters),
+    get_met_filters=get_met_filters_default,
 )
 def met_filters(
     self: Selector,
     events: ak.Array,
     **kwargs,
 ) -> ak.Array:
-    """Compute a selection mask to filter out noisy/anomalous high-MET events
+    """
+    Compute a selection mask to filter out noisy/anomalous high-MET events
     (MET filters).
 
     Individual filter decisions based on different criteria are stored as bool-valued columns
@@ -51,25 +69,8 @@ def met_filters(
 
     Returns a bool array containing the logical ``AND`` of all input columns.
 
-    This :py:class:`~columnflow.selection.Selector` instance is initialized
-    with the following parameters
-
-    **uses**
-
-        ``"event"``, ``"nFlag"``
-
-    **get_met_filters**
-
-        .. code-block:: python
-
-            lambda self: self.config_inst.x.met_filters
-
-    :param self: This Selector instance
-    :type self: Selector
     :param events: Array containing events in the NanoAOD format
-    :type events: ak.Array
     :return: Array containing logical ``AND`` of all input filter columns
-    :rtype: ak.Array
     """
     result = ak.ones_like(events.event, dtype=bool)
 
@@ -87,13 +88,6 @@ def met_filters(
 
 @met_filters.init
 def met_filters_init(self: Selector) -> None:
-    """Init function for met_filters Selector.
-
-    Read MET filters using the *get_met_filters* from config and add them as input columns.
-
-    :param self: This :py:class:`~columnflow.selection.Selector` instance
-    :type self: Selector
-    """
     met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):
         # do nothing when no dataset_inst is known

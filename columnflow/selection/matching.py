@@ -6,7 +6,7 @@ Distance-based methods.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Union
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import
@@ -20,32 +20,23 @@ def cleaning_factory(
     selector_name: str,
     to_clean: str,
     clean_against: list[str],
-    metric: Callable | None = None,
+    metric: Union[Callable, None] = None,
 ) -> Selector:
-    """Factory to generate a function with name *selector_name* that cleans the
-    field *to_clean* in an array following the
-    :external+coffea:py:class:`~coffea.nanoevents.NanoAODSchema` against the
-    field(s) *clean_against*.
-    First, the necessary column names to construct four-momenta for the
-    different object fields are constructed, i.e. ``pt``, ``eta``, ``phi`` and
-    ``e`` for the different objects.
-    Finally, the actual selector function is generated, which uses these
-    columns.
+    """
+    Factory to generate a function with name *selector_name* that cleans the field *to_clean* in an
+    array following the :external+coffea:py:class:`~coffea.nanoevents.NanoAODSchema` against the
+    field(s) *clean_against*. First, the necessary column names to construct four-momenta for the
+    different object fields are constructed, i.e. ``pt``, ``eta``, ``phi`` and ``e`` for the
+    different objects. Finally, the actual selector function is generated, which uses these columns.
 
-    :param selector_name: Name of the :py:class:`~columnflow.selection.Selector`
-        class to be initialized
-    :type selector_name: str
-    :param to_clean: Name of the field to be cleaned (e.g. ``"Jet"``)
-    :type to_clean: str
-    :param clean_against: Names of the fields of object to clean field *to_clean*
-        against (e.g. ``["Muon"]``)
-    :type clean_against: list[str]
-    :param metric: Function to use for the cleaning. If None, the
-        :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`
-        , defaults to None
-    :type metric: Callable | None, optional
-    :return: Instance of :py:class:`~columnflow.selection.Selector`
-    :rtype: Selector
+    :param selector_name: Name of the :py:class:`~columnflow.selection.Selector` class to be
+        initialized.
+    :param to_clean: Name of the field to be cleaned (e.g. ``"Jet"``).
+    :param clean_against: Names of the fields of object to clean field *to_clean* against
+        (e.g. ``["Muon"]``).
+    :param metric: Function to use for the cleaning. If None, use
+        :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`.
+    :return: Instance of :py:class:`~columnflow.selection.Selector`.
     """
     # default of the metric function is the delta_r function
     # of the coffea LorentzVectors
@@ -78,44 +69,34 @@ def cleaning_factory(
         events: ak.Array,
         to_clean: str,
         clean_against: list[str],
-        metric: Callable | None = metric,
+        metric: Union[Callable, None] = metric,
         threshold: float = 0.4,
     ) -> ak.Array:
-        """abstract function to perform a cleaning of field *to_clean* against
-        a (list of) field(s) *clean_against* based on an abitrary metric
-        *metric* (e.g.
-        :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`).
-        First concatenate all fields in *clean_against*, which thus includes
-        all fields that are to be used for the comparison of the metric.
-        Then construct the metric for all permutations of the different objects
-        using the :external+coffea:doc:`index`
+        """
+        Abstract function to perform a cleaning of field *to_clean* against a (list of) field(s)
+        *clean_against* based on an abitrary metric *metric* (e.g.
+        :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`). First
+        concatenate all fields in *clean_against*, which thus includes all fields that are to be
+        used for the comparison of the metric. Then construct the metric for all permutations of the
+        different objects using the :external+coffea:doc:`index`
         :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.nearest`
-        implementation.
-        All objects in field *to_clean* are removed if the metric is below the
+        implementation. All objects in field *to_clean* are removed if the metric is below the
         *threshold*.
 
-        :param self: :py:class:`columnflow.selection.Selector` instance into
-            which this function is embedded.
-        :type self: Selector
+        :param self: :py:class:`columnflow.selection.Selector` instance into which this function is
+            embedded.
         :param events: array containing events in the NanoAOD format
-        :type events: ak.Array
         param to_clean: Name of the field to be cleaned (e.g. ``"Jet"``)
-        :type to_clean: str
-        :param clean_against: Names of the fields of object to clean field *to_clean*
-            against (e.g. ``["Muon"]``)
-        :type clean_against: list[str]
+        :param clean_against: Names of the fields of object to clean field *to_clean* against (e.g.
+            ``["Muon"]``)
         :param metric: Function to use for the cleaning. If None, the
-            :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`
-            , defaults to None
-        :type metric: Callable | None, optional
-        :param threshold: Threshold value for decision which objects to keep and
-            which to reject, defaults to ``0.4``
-        :type threshold: float, optional
-        :return: array of indices of cleaned objects, ordered according to the
-            ``pt`` of the objects
-        :rtype: ak.Array
+            :external+coffea:py:meth:`~coffea.nanoevents.methods.vector.LorentzVector.delta_r`,
+            defaults to None.
+        :param threshold: Threshold value for decision which objects to keep and which to reject,
+            defaults to ``0.4``.
+        :return: array of indices of cleaned objects, ordered according to the ``pt`` of the
+            objects.
         """
-
         # concatenate the fields that are to be used in the construction
         # of the metric table
         summed_clean_against = ak.concatenate(
@@ -126,15 +107,13 @@ def cleaning_factory(
         # load actual NanoEventArray that is to be cleaned
         to_clean_field = events[to_clean]
 
-        # construct metric table for these objects. The metric table contains
-        # the minimal value of the metric *metric* for each object in field
-        # *to_clean* w.r.t. all objects in *summed_clean_against*. Thus,
-        # it has the dimensions nevents x nto_clean, where *nevents* is
-        # the number of events in the current chunk of data and *nto_clean*
-        # is the length of the field *to_clean*. Note that the argument
-        # *threshold* in the *nearest* function must be set to None since
-        # the function will perform a selection itself to extract the nearest
-        # objects (i.e. applies the selection we want here in reverse)
+        # construct metric table for these objects. The metric table contains the minimal value of
+        # the metric *metric* for each object in field *to_clean* w.r.t. all objects in
+        # *summed_clean_against*. Thus, it has the dimensions nevents x nto_clean, where *nevents*
+        # is the number of events in the current chunk of data and *nto_clean* is the length of the
+        # field *to_clean*. Note that the argument *threshold* in the *nearest* function must be set
+        # to None since the function will perform a selection itself to extract the nearest objects
+        # (i.e. applies the selection we want here in reverse)
         _, metric = to_clean_field.nearest(
             summed_clean_against,
             metric=metric,
@@ -148,7 +127,7 @@ def cleaning_factory(
         # construct final result. Currently, this is the list of indices for
         # clean jets, sorted for pt
         # WARNING: this still contains the bug with the application of the mask
-        #           which will be adressed in a PR in the very near future
+        #          which will be adressed in a PR in the very near future
         # TODO: return the mask itself instead of the list of indices
         sorted_list = ak.argsort(to_clean_field.pt, axis=-1, ascending=False)[mask]
         return sorted_list
@@ -168,28 +147,20 @@ delta_r_jet_lepton = cleaning_factory(
 def jet_lepton_delta_r_cleaning(
     self: Selector,
     events: ak.Array,
-    stats: dict[str, int | float],
+    stats: dict[str, Union[int, float]],
     threshold: float = 0.4,
     **kwargs,
 ) -> SelectionResult:
-    """function to apply the selection requirements necessary for a
-    cleaning of jets against leptons.
-    The function calls the requirements to clean the field *Jet* against
-    the concatination of the fields *[Muon, Electron]*, i.e. all leptons
-    and passes the desired threshold for the selection
+    """
+    Function to apply the selection requirements necessary for a cleaning of jets against leptons.
 
-    :param self: This Selector instance
-    :type self: Selector
+    The function calls the requirements to clean the field *Jet* against the concatination of the
+    fields *[Muon, Electron]*, i.e. all leptons and passes the desired threshold for the selection
+
     :param events: Array containing events in the NanoAOD format
-    :type events: ak.Array
-    :param stats: :py:class:`dictionary` containing selection stats
-        (not used here).
-    :type stats: dict[str, int  |  float]
-    :param threshold: Threshold value for decision which objects to keep and
-        which to reject, defaults to ``0.4``
-    :type threshold: float, optional
-    :return: SelectionResult with indices of cleaned jets
-    :rtype: SelectionResult
+    :param stats: :py:class:`dictionary <dict>` containing selection stats (not used here).
+    :param threshold: Threshold value for decision which objects to keep and which to reject.
+    :return: :py:class:`~columnflow.selection.SelectionResult` with indices of cleaned jets.
     """
     clean_jet_indices = self[delta_r_jet_lepton](events, "Jet", ["Muon", "Electron"], threshold=threshold)
 

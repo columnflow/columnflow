@@ -254,42 +254,52 @@ def prepare_plot_config(
                 "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
                 "ratio_kwargs": {"norm": h_mc.values()},
             }
+
     # draw lines
     for i, h in enumerate(line_hists):
         line_norm = sum(h.values()) if shape_norm else 1
-        plot_config[f"line_{i}"] = {
+        plot_config[f"line_{i}"] = plot_cfg = {
             "method": "draw_hist",
             "hist": h,
             "kwargs": {
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
-                "yerr": False if line_hide_errors[i] else None,
             },
             # "ratio_kwargs": {
             #     "norm": h.values(),
             #     "color": line_colors[i],
-            #     "yerr": False if line_hide_errors[i] else None,
             # },
         }
+
+        # suppress error bars by overriding `yerr`
+        if line_hide_errors[i]:
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = False
 
     # draw data
     if data_hists:
         data_norm = sum(h_data.values()) if shape_norm else 1
-        plot_config["data"] = {
+        plot_config["data"] = plot_cfg = {
             "method": "draw_errorbars",
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
                 "label": "Data",
-                "yerr": False if any(data_hide_errors) else None,
             },
         }
+
         if h_mc is not None:
-            plot_config["ratio_kwargs"] = {
+            plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
-                "yerr": False if any(data_hide_errors) else None,
             }
+
+        # suppress error bars by overriding `yerr`
+        if any(data_hide_errors):
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = False
 
     return plot_config
 
@@ -302,3 +312,57 @@ def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: 
         value = (maximum - minimum) * factor + minimum
 
     return value
+
+
+def reduce_with(spec: str | float | callable, values: list[float]) -> float:
+    """
+    Reduce an array of *values* to a single value using the function indicated
+    by *spec*. Intended as a helper for resolving range specifications supplied
+    as strings.
+
+    Supported specifiers are:
+
+      * 'min': minimum value
+      * 'max': maximum value
+      * 'maxabs': the absolute value of the maximum or minimum, whichever is larger
+      * 'minabs': the absolute value of the maximum or minimum, whichever is smaller
+
+    A hyphen (``-``) can be prefixed to any specifier to return its negative.
+
+    Callables can be passed as *spec* and should take a single array-valued argument
+    and return a single value. Floats passes as specifiers will be returned directly.
+    """
+
+    # if callable, apply to array
+    if callable(spec):
+        return spec(values)
+
+    # if not a string, assume fixed literal and return
+    if not isinstance(spec, str):
+        return spec
+
+    # determine sign
+    factor = 1.
+    if spec.startswith("-"):
+        spec = spec[1:]
+        factor = -1.
+
+    if spec not in reduce_with.funcs:
+        available = ", ".join(reduce_with.funcs)
+        raise ValueError(
+            f"unknown reduction function '{spec}'. "
+            f"Available: {available}",
+        )
+
+    func = reduce_with.funcs[spec]
+    values = np.asarray(values)
+
+    return factor * func(values)
+
+
+reduce_with.funcs = {
+    "min": lambda v: np.nanmin(v),
+    "max": lambda v: np.nanmax(v),
+    "maxabs": lambda v: max(abs(np.nanmax(v)), abs(np.nanmin(v))),
+    "minabs": lambda v: min(abs(np.nanmax(v)), abs(np.nanmin(v))),
+}

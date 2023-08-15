@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# Custom post-commit hook that runs the linter.
+
+action() {
+    # just lint
+    if [ ! -d "${CF_BASE}" ]; then
+        2>&1 echo "CF_BASE not setup, skip linting"
+    elif [ "${CF_SKIP_POST_COMMIT}" != "1" ]; then
+        echo "post-commit linting ..."
+        bash "${CF_BASE}/tests/run_linting"
+        echo
+    fi
+
+    # always end successfully
+    return "0"
+}
+action "$@"

@@ -57,6 +57,7 @@ setup___cf_short_name_lc__() {
     export __cf_short_name_uc___BASE="${this_dir}"
     export CF_BASE="${this_dir}/modules/columnflow"
     export CF_REPO_BASE="${__cf_short_name_uc___BASE}"
+    export CF_REPO_BASE_ALIAS="__cf_short_name_uc___BASE"
     export CF_SETUP_NAME="${setup_name}"
 
     # load cf setup helpers
@@ -76,7 +77,6 @@ setup___cf_short_name_lc__() {
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
-            query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"
@@ -121,6 +121,13 @@ setup___cf_short_name_lc__() {
             cf_init_submodule "${__cf_short_name_uc___BASE}" "modules/${m}"
         done
     fi
+
+
+    #
+    # git hooks
+    #
+
+    cf_setup_git_hooks || return "$?"
 
 
     #

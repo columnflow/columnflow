@@ -9,45 +9,29 @@ Summary
 ..   autosummary::
     get_evaluators
     ak_evaluate
+    jec
 
 
 Functions
 ---------
 
-``get_evaluators``
-++++++++++++++++++
 .. autofunction:: get_evaluators
 
-``ak_evaluate``
-+++++++++++++++
 .. autofunction:: ak_evaluate
 
 Calibrators
 -----------
 
-``jets``
-++++++++++++++
-.. autofunction:: jets
+.. autoclass:: jets
+    :members:
+    :undoc-members:
 
-.. autofunction:: jets_init
+.. autoclass:: jec
+    :members:
+    :undoc-members:
+    :exclude-members: skip_func
 
-
-``jec``
-++++++++++++++
-.. autofunction:: jec
-
-.. autofunction:: jec_init
-
-.. autofunction:: jec_requires
-
-.. autofunction:: jec_setup
-
-``jer``
-++++++++++++++
-.. autofunction:: jer
-
-.. autofunction:: jer_init
-
-.. autofunction:: jer_requires
-
-.. autofunction:: jer_setup
+.. autoclass:: jer
+    :members:
+    :undoc-members:
+    :exclude-members: skip_func

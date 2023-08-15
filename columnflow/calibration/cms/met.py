@@ -22,9 +22,11 @@ ak = maybe_import("awkward")
     get_met_config=(lambda self: self.config_inst.x.met_phi_correction_set),
 )
 def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    """Performs the MET phi (type II) correction using the
-    :external+correctionlib:doc:`index`. Requires an external file in
-    the config under ``met_phi_corr``:
+    """
+    Performs the MET phi (type II) correction using the
+    :external+correctionlib:doc:`index` for events there the
+    uncorrected MET pt is below the beam energy (extracted from ``config_inst.campaign.ecm * 0.5``).
+    Requires an external file in the config under ``met_phi_corr``:
 
     .. code-block:: python
 
@@ -42,46 +44,32 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         cfg.x.met_phi_correction_set = "{variable}_metphicorr_pfmet_{data_source}"
 
     where "variable" and "data_source" are placeholders that are inserted in the
-    calibrator setup :py:func:`~.met_phi_setup`.
+    calibrator setup :py:meth:`~.met_phi.setup_func`.
     *get_met_correction_set* can be adapted in a subclass in case it is stored
     differently in the config.
 
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
-
-    :*uses*: ``"run"``, ``"PV.npvs"``, ``"MET.pt"``, ``"MET.phi"``
-
-    :*produces*: ``"MET.pt"``, ``"MET.phi"``
-
-    :get_met_file: 
-        .. code-block:: python
-
-            lambda self, external_files: external_files.met_phi_corr
-
-    :get_met_config: 
-        .. code-block:: python
-
-            lambda self: self.config_inst.x.met_phi_correction_set
-
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
-
-    :return: awkward array containing new columns with corrected ``"MET.pt"``
-        and ``"MET.phi"``
-    :rtype: :external+ak:py:class:`ak.Array`
     """
-    args = (
-        events.MET.pt,
-        events.MET.phi,
-        ak.values_astype(events.PV.npvs, np.float32),
-        ak.values_astype(events.run, np.float32),
-    )
-    corr_pt = self.met_pt_corrector.evaluate(*args)
-    corr_phi = self.met_phi_corrector.evaluate(*args)
+    # copy the intial pt and phi values
+    corr_pt = np.array(events.MET.pt, dtype=np.float32)
+    corr_phi = np.array(events.MET.phi, dtype=np.float32)
 
+    # select only events where MET pt is below the expected beam energy
+    mask = events.MET.pt < (0.5 * self.config_inst.campaign.ecm)
+
+    # arguments for evaluation
+    args = (
+        events.MET.pt[mask],
+        events.MET.phi[mask],
+        ak.values_astype(events.PV.npvs[mask], np.float32),
+        ak.values_astype(events.run[mask], np.float32),
+    )
+
+    # evaluate and insert
+    corr_pt[mask] = self.met_pt_corrector.evaluate(*args)
+    corr_phi[mask] = self.met_phi_corrector.evaluate(*args)
+
+    # save the corrected values
     events = set_ak_column(events, "MET.pt", corr_pt, value_type=np.float32)
     events = set_ak_column(events, "MET.phi", corr_phi, value_type=np.float32)
 
@@ -90,17 +78,6 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @met_phi.requires
 def met_phi_requires(self: Calibrator, reqs: dict) -> None:
-    """Add external files bundle (for MET text files) to dependencies.
-
-    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
-    as keyword ``external_files`` to the dictionary of requirements *reqs*.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
-    """
     if "external_files" in reqs:
         return
 
@@ -109,20 +86,16 @@ def met_phi_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @met_phi.setup
-def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """Load the correct met files using the :py:func:`from_string` method of the
+def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: dict) -> None:
+    """
+    Load the correct met files using the :py:func:`from_string` method of the
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     function and apply the corrections as needed.
 
-    Additionally, the version of the met pt and phi corrections are checked.
-
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
-    :param inputs: Additional inputs, currently not used
-    :type inputs: dict
+    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`
+        instance
+    :param inputs: Additional inputs, currently not used.
+    :param reader_targets: Additional targets, currently not used.
     """
     bundle = reqs["external_files"]
 

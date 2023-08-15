@@ -11,6 +11,7 @@ action() {
     # get and check arguments
     local mod="$1"
     local sandbox="$2"
+
     if [ -z "${mod}" ]; then
         2>&1 echo "missing module to test (argument 1)"
         return "1"
@@ -24,10 +25,10 @@ action() {
             python -m unittest "tests.${mod}"
         )
     else
-        echo "testing ${mod} in sandbox ${sandbox} ..."
+        echo "testing ${mod} ..."
         (
             cd "${cf_dir}" && \
-            bash -c "source \"sandboxes/${sandbox}\" \"\" yes && python -m unittest \"tests.${mod}\""
+            cf_sandbox "${sandbox}" "python -m unittest tests.${mod}"
         )
     fi
 }

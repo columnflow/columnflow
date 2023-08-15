@@ -35,7 +35,7 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     selector_steps_order_sensitive = True
 
@@ -48,6 +48,9 @@ class CreateCutflowHistograms(
         RemoteWorkflow.reqs,
         MergeSelectionMasks=MergeSelectionMasks,
     )
+
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
 
     def create_branch_map(self):
         # dummy branch map
@@ -76,6 +79,7 @@ class CreateCutflowHistograms(
     @law.decorator.safe_output
     def run(self):
         import hist
+        import numpy as np
         import awkward as ak
         from columnflow.columnar_util import Route, add_ak_aliases
 
@@ -110,7 +114,9 @@ class CreateCutflowHistograms(
                     route = Route(expr)
                     expr = functools.partial(route.apply, null_value=variable_inst.null_value)
                     read_columns.add(route)
-                # TODO: handle variable_inst with custom expressions, can they declare columns?
+                else:
+                    # for variable_inst with custom expressions, read columns declared via aux key
+                    read_columns |= {inp for inp in variable_inst.x("inputs", [])}
                 expressions[variable_inst.name] = expr
 
         # prepare columns to load
@@ -157,7 +163,12 @@ class CreateCutflowHistograms(
                 prepare_hists([self.initial_step] + list(steps))
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
@@ -166,14 +177,15 @@ class CreateCutflowHistograms(
                 # helper to build the point for filling, except for the step which does
                 # not support broadcasting
                 def get_point(mask=Ellipsis):
+                    n_events = len(events) if mask is Ellipsis else ak.sum(mask)
                     point = {
                         "process": events.process_id[mask],
                         "category": category_ids[mask],
-                        "shift": self.global_shift_inst.id,
+                        "shift": np.ones(n_events, dtype=np.int32) * self.global_shift_inst.id,
                         "weight": (
                             events.normalization_weight[mask]
                             if self.dataset_inst.is_mc
-                            else 1.0
+                            else np.ones(n_events, dtype=np.float32)
                         ),
                     }
                     for var_name in var_names:
@@ -182,8 +194,11 @@ class CreateCutflowHistograms(
 
                 # fill the raw point
                 fill_kwargs = get_point()
-                arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(step=self.initial_step, **dict(zip(fill_kwargs, arrays)))
+                arrays = ak.flatten(ak.cartesian(fill_kwargs))
+                histograms[var_key].fill(
+                    step=self.initial_step,
+                    **{field: arrays[field] for field in arrays.fields},
+                )
 
                 # fill all other steps
                 mask = True
@@ -195,8 +210,11 @@ class CreateCutflowHistograms(
                     # incrementally update the mask and fill the point
                     mask = mask & arr.steps[step]
                     fill_kwargs = get_point(mask)
-                    arrays = [ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values())]
-                    histograms[var_key].fill(step=step, **dict(zip(fill_kwargs, arrays)))
+                    arrays = ak.flatten(ak.cartesian(fill_kwargs))
+                    histograms[var_key].fill(
+                        step=step,
+                        **{field: arrays[field] for field in arrays.fields},
+                    )
 
         # dump the histograms
         for var_key in histograms.keys():
@@ -219,10 +237,9 @@ class PlotCutflowBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     exclude_index = True
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     selector_steps_order_sensitive = True
 

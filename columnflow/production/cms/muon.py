@@ -7,7 +7,7 @@ Muon related event weights.
 from __future__ import annotations
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 
@@ -17,7 +17,7 @@ ak = maybe_import("awkward")
 
 @producer(
     uses={
-        "nMuon", "Muon.pt", "Muon.eta",
+        "Muon.pt", "Muon.eta",
     },
     produces={
         "muon_weight", "muon_weight_up", "muon_weight_down",
@@ -94,7 +94,7 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @muon_weights.setup
-def muon_weights_setup(self: Producer, reqs: dict, inputs: dict) -> None:
+def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector

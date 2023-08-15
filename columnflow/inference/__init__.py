@@ -126,6 +126,7 @@ class InferenceModel(Derivable):
                 config_process: hh
                 is_signal: True
                 config_mc_datasets: [hh_ggf]
+                scale: 1.0
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -143,6 +144,7 @@ class InferenceModel(Derivable):
                 is_signal: False
                 config_process: ttbar
                 config_mc_datasets: [tt_sl, tt_dl, tt_fh]
+                scale: 1.0
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -204,6 +206,30 @@ class InferenceModel(Derivable):
             return True
 
     @classmethod
+    def inference_model(
+        cls,
+        func: Callable | None = None,
+        bases=(),
+        **kwargs,
+    ) -> DerivableMeta | Callable:
+        """
+        Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
+        *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
+        added as class members of the new subclasses.
+        """
+        def decorator(func: Callable) -> DerivableMeta:
+            # create the class dict
+            cls_dict = {"init_func": func}
+            cls_dict.update(kwargs)
+
+            # create the subclass
+            subclass = cls.derive(func.__name__, bases=bases, cls_dict=cls_dict)
+
+            return subclass
+
+        return decorator(func) if func else decorator
+
+    @classmethod
     def model_spec(cls) -> DotDict:
         """
         Returns a dictionary representing the top-level structure of the model.
@@ -256,6 +282,7 @@ class InferenceModel(Derivable):
         config_process: str | None = None,
         is_signal: bool = False,
         config_mc_datasets: Sequence[str] | None = None,
+        scale: float | int = 1.0,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
@@ -264,12 +291,14 @@ class InferenceModel(Derivable):
             - *is_signal*: A boolean flag deciding whether this process describes signal.
             - *config_process*: The name of the source process in the config to use.
             - *config_mc_datasets*: List of names of MC datasets in the config to use.
+            - *scale*: A float value to scale the process, defaulting to 1.0.
         """
         return DotDict([
             ("name", str(name)),
             ("is_signal", bool(is_signal)),
             ("config_process", str(config_process) if config_process else None),
             ("config_mc_datasets", list(map(str, config_mc_datasets or []))),
+            ("scale", float(scale)),
             ("parameters", []),
         ])
 
@@ -354,9 +383,10 @@ class InferenceModel(Derivable):
         # model info
         self.model = self.model_spec()
 
-        # custom init function when set
+        # custom init function when set, always followed by the cleanup
         if callable(self.init_func):
             self.init_func()
+            self.cleanup()
 
     def to_yaml(self, stream: TextIO | None = None) -> str | None:
         """
@@ -1284,25 +1314,27 @@ class InferenceModel(Derivable):
                 for parameter in parameters:
                     yield (category_name, process_name, parameter)
 
+    #
+    # other helpers
+    #
 
-def inference_model(
-    func: Callable | None = None,
-    bases=(),
-    **kwargs,
-) -> DerivableMeta | Callable:
-    """
-    Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
-    *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
-    added as class members of the new subclasses.
-    """
-    def decorator(func: Callable) -> DerivableMeta:
-        # create the class dict
-        cls_dict = {"init_func": func}
-        cls_dict.update(kwargs)
+    def scale_process(
+        self,
+        scale: int | float,
+        process: str | Sequence[str] | None = None,
+        category: str | Sequence[str] | None = None,
+    ) -> bool:
+        """
+        Sets the scale attribute of all processes whose names match *process*, optionally in all
+        categories whose names match *category*, to *scale*. Returns *True* if at least one process
+        was found and scale, and *False* otherwise.
+        """
+        found = False
+        for _, process in self.iter_processes(process=process, category=category):
+            process.scale = float(scale)
+            found = True
+        return found
 
-        # create the subclass
-        subclass = InferenceModel.derive(func.__name__, bases=bases, cls_dict=cls_dict)
 
-        return subclass
-
-    return decorator(func) if func else decorator
+# shorthand
+inference_model = InferenceModel.inference_model

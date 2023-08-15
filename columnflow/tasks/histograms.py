@@ -31,7 +31,7 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -42,6 +42,9 @@ class CreateHistograms(
         MLEvaluation=MLEvaluation,
     )
 
+    # strategy for handling missing source columns when adding aliases on event chunks
+    missing_column_alias_strategy = "original"
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -51,8 +54,9 @@ class CreateHistograms(
         if not self.pilot:
             if self.producers:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=p)
-                    for p in self.producers
+                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    for producer_inst in self.producer_insts
+                    if producer_inst.produced_columns
                 ]
             if self.ml_models:
                 reqs["ml"] = [
@@ -69,8 +73,9 @@ class CreateHistograms(
 
         if self.producers:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=p)
-                for p in self.producers
+                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                for producer_inst in self.producer_insts
+                if producer_inst.produced_columns
             ]
         if self.ml_models:
             reqs["ml"] = [
@@ -111,12 +116,16 @@ class CreateHistograms(
         # define columns that need to be read
         read_columns = {"category_ids", "process_id"} | set(aliases.values())
         read_columns |= {
-            Route(variable_inst.expression)
-            if isinstance(variable_inst.expression, str) else
-            None  # TODO: handle variable_inst with custom expressions, can they declare columns?
+            Route(inp)
             for variable_inst in (
                 self.config_inst.get_variable(var_name)
                 for var_name in law.util.flatten(self.variable_tuples.values())
+            )
+            for inp in (
+                [variable_inst.expression]
+                if isinstance(variable_inst.expression, str)
+                # for variable_inst with custom expressions, read columns declared via aux key
+                else variable_inst.x("inputs", [])
             )
         }
         if self.dataset_inst.is_mc:
@@ -142,7 +151,12 @@ class CreateHistograms(
             events = update_ak_array(events, *columns)
 
             # add aliases
-            events = add_ak_aliases(events, aliases, remove_src=True)
+            events = add_ak_aliases(
+                events,
+                aliases,
+                remove_src=True,
+                missing_strategy=self.missing_column_alias_strategy,
+            )
 
             # build the full event weight
             weight = ak.Array(np.ones(len(events)))
@@ -185,7 +199,7 @@ class CreateHistograms(
                 fill_kwargs = {
                     "category": events.category_ids,
                     "process": events.process_id,
-                    "shift": self.global_shift_inst.id,
+                    "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
                     "weight": weight,
                 }
                 for variable_inst in variable_insts:
@@ -199,9 +213,10 @@ class CreateHistograms(
                             return route.apply(events, null_value=variable_inst.null_value)
                     # apply it
                     fill_kwargs[variable_inst.name] = expr(events)
+
                 # broadcast and fill
-                arrays = (ak.flatten(a) for a in ak.broadcast_arrays(*fill_kwargs.values()))
-                histograms[var_key].fill(**dict(zip(fill_kwargs, arrays)))
+                arrays = ak.flatten(ak.cartesian(fill_kwargs))
+                histograms[var_key].fill(**{field: arrays[field] for field in arrays.fields})
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
@@ -235,7 +250,7 @@ class MergeHistograms(
         description="when True, remove particlar input histograms after merging; default: False",
     )
 
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -323,7 +338,7 @@ class MergeShiftedHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # disable the shift parameter
     shift = None

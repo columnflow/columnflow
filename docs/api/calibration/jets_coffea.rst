@@ -24,40 +24,21 @@ Summary
 Functions
 ---------
 
-``get_basenames``
-+++++++++++++++++
 .. autofunction:: get_basenames
 
-``get_lookup_provider``
-+++++++++++++++++++++++
 .. autofunction:: get_lookup_provider
 
 Calibrators
 -----------
 
-``jets_coffea``
-+++++++++++++++
-.. autofunction:: jets_coffea
+.. autoclass:: jets_coffea
+    :members:
+    :undoc-members:
 
-.. autofunction:: jets_coffea_init
+.. autoclass:: jec_coffea
+    :members:
+    :undoc-members:
 
-
-``jec_coffea``
-++++++++++++++
-.. autofunction:: jec_coffea
-
-.. autofunction:: jec_coffea_init
-
-.. autofunction:: jec_coffea_requires
-
-.. autofunction:: jec_coffea_setup
-
-``jer_coffea``
-++++++++++++++
-.. autofunction:: jer_coffea
-
-.. autofunction:: jer_coffea_init
-
-.. autofunction:: jer_coffea_requires
-
-.. autofunction:: jer_coffea_setup
+.. autoclass:: jer_coffea
+    :members:
+    :undoc-members:

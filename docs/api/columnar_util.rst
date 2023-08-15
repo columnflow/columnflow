@@ -1,9 +1,9 @@
 ``columnflow.columnar_util``
 ============================
 
-.. automodule:: columnflow.columnar_util
-
 .. currentmodule:: columnflow.columnar_util
+
+.. automodule:: columnflow.columnar_util
 
 Summary
 -------
@@ -32,6 +32,7 @@ Summary
    ArrayFunction
    TaskArrayFunction
    ChunkedIOHandler
+   InsertableDict
 
 Attributes
 ----------
@@ -39,17 +40,17 @@ Attributes
 ``EMPTY_INT``
 +++++++++++++
 
-.. autoattribute:: EMPTY_INT
+.. autoattribute:: columnflow.columnar_util.EMPTY_INT
 
 ``EMPTY_FLOAT``
 +++++++++++++++
 
-.. autoattribute:: EMPTY_FLOAT
+.. autoattribute:: columnflow.columnar_util.EMPTY_FLOAT
 
 ``mandatory_coffea_columns``
 ++++++++++++++++++++++++++++
 
-.. autoattribute:: mandatory_coffea_columns
+.. autoattribute:: columnflow.columnar_util.mandatory_coffea_columns
 
 Functions
 ---------
@@ -155,4 +156,7 @@ Classes
 ++++++++++++++++++++
 
 .. autoclass:: ChunkedIOHandler
+   :members:
+
+.. autoclass:: InsertableDict
    :members:

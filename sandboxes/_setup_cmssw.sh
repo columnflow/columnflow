@@ -106,15 +106,7 @@ setup_cmssw() {
 
 
     #
-    # store variables of the encapsulating venv
-    #
-
-    local pyv="$( python3 -c "import sys; print('{0.major}.{0.minor}'.format(sys.version_info))" )"
-    local venv_site_packages="${CF_VENV_BASE}/${CF_VENV_NAME}/lib/python${pyv}/site-packages"
-
-
-    #
-    # start the setup
+    # define variables
     #
 
     local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
@@ -123,7 +115,13 @@ setup_cmssw() {
     local install_path="${install_base}/${CF_CMSSW_VERSION}"
     local install_path_repr="\$CF_CMSSW_BASE/${cmssw_env_name_hashed}/${CF_CMSSW_VERSION}"
     local pending_flag_file="${CF_CMSSW_BASE}/pending_${cmssw_env_name_hashed}_${CF_CMSSW_VERSION}"
+
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
+
+
+    #
+    # start the setup
+    #
 
     # ensure CF_CMSSW_BASE exists
     mkdir -p "${CF_CMSSW_BASE}"
@@ -287,14 +285,10 @@ setup_cmssw() {
     eval "$( scramv1 runtime -sh )"
     cd "${orig_dir}"
 
-    # prepend persistent path fragments again for ensure priority for local packages
+    # prepend persistent path fragments again to ensure priority for local packages and
+    # remove the conda based python fragments since there are too many overlaps between packages
+    export PYTHONPATH="${CF_PERSISTENT_PATH}:$( echo ${PYTHONPATH} | sed "s|${CF_CONDA_PYTHONPATH}||g" )"
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
-
-    # prepend the site-packages of the encapsulating venv for priotity over cmssw-shipped packages
-    # note: this could potentially lead to version mismatches so in case this becomes in issue,
-    # this injection needs refactoring
-    export PYTHONPATH="${venv_site_packages}:${PYTHONPATH}"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"

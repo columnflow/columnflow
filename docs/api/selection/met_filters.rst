@@ -8,6 +8,6 @@
 ``Selectors`` 
 -------------
 
-.. autofunction:: met_filters
-.. autofunction:: met_filters_init
-
+.. autoclass:: met_filters
+    :members:
+    :undoc-members:

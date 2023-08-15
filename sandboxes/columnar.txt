@@ -1,11 +1,11 @@
-# version 7
+# version 10
 
-awkward~=2.0
-uproot~=5.0
-git+https://github.com/riga/coffea.git@9ecdee5#egg=coffea
-dask-awkward~=2023.2
-correctionlib~=2.2
-tabulate~=0.9
-zstandard~=0.20
-lz4~=4.3
-xxhash~=3.2
+awkward~=2.3.1
+uproot~=5.0.9
+git+https://github.com/CoffeaTeam/coffea.git@v2023.6.0.rc0#egg=coffea
+dask-awkward~=2023.7.1
+tabulate~=0.9.0
+zstandard~=0.21.0
+lz4~=4.3.2
+xxhash~=3.2.0
+correctionlib~=2.2.2

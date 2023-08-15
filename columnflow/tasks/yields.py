@@ -30,7 +30,7 @@ class CreateYieldTable(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     table_format = luigi.Parameter(
         default="fancy_grid",
@@ -230,7 +230,7 @@ class CreateYieldTable(
 
                     # format yields into strings
                     yields_str[category].append((value / norm_factor).str(
-                        # combine_uncs="all",  # TODO
+                        combine_uncs="all",
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
                     ))

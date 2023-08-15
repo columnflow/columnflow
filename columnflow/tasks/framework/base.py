@@ -12,7 +12,7 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence
+from typing import Sequence, Callable, Any
 
 import luigi
 import law
@@ -21,9 +21,13 @@ import order as od
 from columnflow.util import DotDict
 
 
+# default analysis and config related objects
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+# placeholder to denote a default value that is resolved dynamically
+RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
@@ -60,7 +64,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         default=default_analysis,
         description=f"name of the analysis; default: '{default_analysis}'",
     )
-    version = luigi.Parameter(description="mandatory version that is encoded into output paths")
+    version = luigi.Parameter(
+        description="mandatory version that is encoded into output paths",
+    )
 
     allow_empty_sandbox = True
     sandbox = None
@@ -75,6 +81,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     @classmethod
+    def modify_param_values(cls, params: dict) -> dict:
+        params = super().modify_param_values(params)
+        params = cls.resolve_param_values(params)
+        return params
+
+    @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
@@ -83,13 +95,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
-    def modify_param_values(cls, params: dict) -> dict:
-        params = super().modify_param_values(params)
-        params = cls.resolve_param_values(params)
-        return params
-
-    @classmethod
-    def get_analysis_inst(cls, analysis):
+    def get_analysis_inst(cls, analysis: str) -> od.Analysis:
         # prepare names
         if "." not in analysis:
             raise ValueError(f"invalid analysis format: {analysis}")
@@ -109,53 +115,58 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return analysis_inst
 
     @classmethod
-    def req_params(cls, inst, **kwargs):
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
         """
         Returns parameters that are jointly defined in this class and another task instance of some
         other class. The parameters are used when calling ``Task.req(self)``.
         """
         # always prefer certain parameters given as task family parameters (--TaskFamily-parameter)
-        _prefer_cli = set(law.util.make_list(kwargs.get("_prefer_cli", [])))
-        _prefer_cli |= {
+        _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
             "htcondor_gpus", "htcondor_pool",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
-        # when cls accepts a version, but non was actively requested, use the version map to assign it
-        version_map = None
-        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
-            version_map = cls.get_version_map(inst)
-
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # when the version map is set, lookup the key with which to find a version in the map and overwrite it
-        if version_map and cls.task_family in version_map:
-            version_params = list(cls.get_version_params())
-            version = version_map[cls.task_family]
-            while isinstance(version, dict) and version_params:
-                param = version_params.pop(0)
-                if param not in params:
-                    break
-                value = params[param]
-                if value not in version:
-                    if None not in version:
-                        break
-                    value = None
-                version = version[value]
-            params["version"] = version
+        # overwrite the version when set in the config
+        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+            if config_version := cls.get_version_map_value(inst, params):
+                params["version"] = config_version
 
         return params
 
     @classmethod
-    def get_version_map(cls, task):
+    def get_version_map(cls, task: AnalysisTask) -> dict[str, str | Callable]:
         return task.analysis_inst.get_aux("versions", {})
 
     @classmethod
-    def get_version_params(cls):
-        return ()
+    def get_version_map_value(
+        cls,
+        inst: AnalysisTask,
+        params: dict,
+        version_map: dict[str, str | Callable] | None = None,
+    ) -> str | None:
+        if version_map is None:
+            version_map = cls.get_version_map(inst)
+
+        # the task family must be in the version map
+        if not (version := version_map.get(cls.task_family)):
+            return None
+
+        # when version is a callable, invoke it
+        if callable(version):
+            version = version(cls, inst, params)
+
+        # at this point, version must be a string
+        if not isinstance(version, str):
+            raise TypeError(
+                f"version map entry for '{cls.task_family}' must be a string, but got {version}",
+            )
+
+        return version
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
@@ -171,7 +182,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return set(), upstream_shifts
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
+    def get_array_function_kwargs(
+        cls,
+        task: AnalysisTask | None = None,
+        **params,
+    ) -> dict[str, Any]:
         if task:
             analysis_inst = task.analysis_inst
         elif "analysis_inst" in params:
@@ -185,17 +200,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
     @classmethod
-    def get_calibrator_kwargs(cls, *args, **kwargs):
+    def get_calibrator_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_selector_kwargs(cls, *args, **kwargs):
+    def get_selector_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
-    def get_producer_kwargs(cls, *args, **kwargs):
+    def get_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
         # implemented here only for simplified mro control
         return cls.get_array_function_kwargs(*args, **kwargs)
 
@@ -249,7 +264,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return _cache["has_obj_func"](name)
 
         object_names = []
-        patterns = []
         lookup = law.util.make_list(names)
         while lookup:
             name = lookup.pop(0)
@@ -260,22 +274,229 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 # a key in the object group dict
                 lookup.extend(list(object_groups[name]))
             elif accept_patterns:
-                # must eventually be a pattern, store it for object traversal
-                # special case
-                if name == "*":
-                    object_names = list(get_all_object_names())
-                    del patterns[:]
-                    break
-                patterns.append(name)
-
-        # if patterns are found, loop through them to preserve the order of patterns
-        # and compare to all existing names
-        for pattern in patterns:
-            for name in get_all_object_names():
-                if law.util.multi_match(name, pattern):
-                    object_names.append(name)
+                # must eventually be a pattern, perform an object traversal
+                for _name in get_all_object_names():
+                    if law.util.multi_match(_name, name):
+                        object_names.append(_name)
 
         return law.util.make_unique(object_names)
+
+    @classmethod
+    def resolve_config_default(
+        cls,
+        task_params: dict[str, Any],
+        param: str | tuple[str] | None,
+        container: str | od.AuxDataMixin = "config_inst",
+        default_str: str | None = None,
+        multiple: bool = False,
+    ) -> str | tuple | Any | None:
+        """
+        Resolves a given parameter value *param*, checks if it should be placed with a default value
+        when empty, and in this case, does the actual default value resolution.
+
+        This resolution is triggered only in case *param* refers to :py:attr:`RESOLVE_DEFAULT`, a
+        1-tuple containing this attribute, or *None*, If so, the default is identified via the
+        *default_str* from an :py:class:`order.AuxDataMixin` *container* and points to an auxiliary
+        that can be either a string or a function. In the latter case, it is called with the task
+        class, the container instance, and all task parameters. Note that when no *container* is
+        given, *param* is returned unchanged.
+
+        When *multiple* is *True*, a tuple is returned. If *multiple* is *False* and the resolved
+        parameter is an iterable, the first entry is returned.
+
+        Example:
+
+        .. code-block:: python
+
+            def resolve_param_values(params):
+                params["producer"] = AnalysisTask.resolve_config_default(
+                    params,
+                    params.get("producer"),
+                    container=params["config_inst"]
+                    default_str="default_producer",
+                    multiple=True,
+                )
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={"default_producer": ["my_producer_1", "my_producer_2"]},
+            )
+
+            params = {
+                "config_inst": config_inst,
+                "producer": RESOLVE_DEFAULT,
+            }
+            resolve_param_values(params)  # sets params["producer"] to ("my_producer_1", "my_producer_2")
+
+            params = {
+                "config_inst": config_inst,
+                "producer": "some_other_producer",
+            }
+            resolve_param_values(params)  # sets params["producer"] to "some_other_producer"
+
+        Example where the default points to a function:
+
+        .. code-block:: python
+            def resolve_param_values(params):
+                params["ml_model"] = AnalysisTask.resolve_config_default(
+                    params,
+                    params.get("ml_model"),
+                    container=params["config_inst"]
+                    default_str="default_ml_model",
+                    multiple=True,
+                )
+
+            # a function that chooses the ml_model based on an attibute that is set in an inference_model
+            def default_ml_model(task_cls, container, task_params):
+                default_ml_model = None
+
+                # check if task is using an inference model
+                if "inference_model" in task_params.keys():
+                    inference_model = task_params.get("inference_model", None)
+
+                    # if inference model is not set, assume it's the container default
+                    if inference_model in (None, "NO_STR"):
+                        inference_model = container.x.default_inference_model
+
+                    # get the default_ml_model from the inference_model_inst
+                    inference_model_inst = columnflow.inference.InferenceModel._subclasses[inference_model]
+                    default_ml_model = getattr(inference_model_inst, "ml_model_name", default_ml_model)
+
+                    return default_ml_model
+
+                return default_ml_model
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={"default_ml_model": default_ml_model},
+            )
+
+            @inference_model(ml_model_name="default_ml_model")
+            def my_inference_model(self):
+                # some inference model implementation
+                ...
+
+            params = {"config_inst": config_inst, "ml_model": None, "inference_model": "my_inference_model"}
+            resolve_param_values(params)  # sets params["ml_model"] to "my_ml_model"
+
+            params = {"config_inst": config_inst, "ml_model": "some_ml_model", "inference_model": "my_inference_model"}
+            resolve_param_values(params)  # sets params["ml_model"] to "some_ml_model"
+        """
+        # check if the parameter value is to be resolved
+        resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
+
+        # interpret missing parameters (e.g. NO_STR) as None
+        # (special case: an empty string is usually an active decision, but counts as missing too)
+        if law.is_no_param(param) or resolve_default or param == "":
+            param = None
+
+        # actual resolution
+        if resolve_default:
+            # get the container inst (mostly a config_inst or analysis_inst)
+            if isinstance(container, str):
+                container = task_params.get(container)
+
+            # expand default when container is set
+            if container and default_str:
+                param = container.x(default_str, None) if default_str else None
+
+                # allow default to be a function, taking task parameters as input
+                if isinstance(param, Callable):
+                    param = param(cls, container, task_params)
+
+        # when still empty, return an empty value
+        if param is None:
+            return () if multiple else None
+
+        # return either a tuple or the first param, based on the *multiple*
+        param = law.util.make_tuple(param)
+        return param if multiple else (param[0] if param else None)
+
+    @classmethod
+    def resolve_config_default_and_groups(
+        cls,
+        task_params: dict[str, Any],
+        param: str | tuple[str] | None,
+        container: str | od.AuxDataMixin = "config_inst",
+        default_str: str | None = None,
+        groups_str: str | None = None,
+    ) -> tuple[str]:
+        """
+        This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a
+        parameter value *param* is empty and should be replaced with a default value. See the
+        referenced method for documentation on *task_params*, *param*, *container* and
+        *default_str*.
+
+        What this method does in addition is that it checks if the values contained in *param*
+        (after default value resolution) refers to a group of values identified via the *groups_str*
+        from the :py:class:`order.AuxDataMixin` *container* that maps a string to a tuple of
+        strings. If it does, each value in *param* that refers to a group is expanded by the actual
+        group values.
+
+        Example:
+
+        .. code-block:: python
+
+            config_inst = od.Config(
+                id=0,
+                name="my_config",
+                aux={
+                    "default_producer": ["features_1", "my_producer_group"],
+                    "producer_groups": {"my_producer_group": ["features_2", "features_3"]},
+                },
+            )
+
+            params = {"producer": RESOLVE_DEFAULT}
+
+            AnalysisTask.resolve_config_default_and_groups(
+                params,
+                params.get("producer"),
+                container=config_inst,
+                default_str="default_producer",
+                groups_str="producer_groups",
+            )
+            # -> ("features_1", "features_2", "features_3")
+        """
+        # resolve the parameter
+        param = cls.resolve_config_default(
+            task_params=task_params,
+            param=param,
+            container=container,
+            default_str=default_str,
+            multiple=True,
+        )
+        if not param:
+            return param
+
+        # get the container inst and return if it's not set
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+
+        if not container:
+            return param
+
+        # expand groups recursively
+        if groups_str and (param_groups := container.x(groups_str, {})):
+            values = []
+            lookup = law.util.make_list(param)
+            handled_groups = set()
+            while lookup:
+                value = lookup.pop(0)
+                if value in param_groups:
+                    if value in handled_groups:
+                        raise Exception(
+                            f"definition of '{groups_str}' contains circular references involving "
+                            f"group '{value}'",
+                        )
+                    lookup = law.util.make_list(param_groups[value]) + lookup
+                    handled_groups.add(value)
+                else:
+                    values.append(value)
+            param = values
+
+        return law.util.make_tuple(param)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -481,23 +702,6 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def get_version_params(cls):
-        params = super().get_version_params()
-        if cls.shift:
-            params += ("shift",)
-        return params
-
-    @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
-        params = super().resolve_param_values(params)
-
-        # set default shift
-        if params.get("shift") in (None, law.NO_STR):
-            params["shift"] = "nominal"
-
-        return params
-
-    @classmethod
     def modify_param_values(cls, params):
         """
         When "config" and "shift" are set, this method evaluates them to set the global shift.
@@ -550,12 +754,22 @@ class ShiftTask(ConfigTask):
         return params
 
     @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
+
+        return params
+
+    @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
         kwargs = super().get_array_function_kwargs(task=task, **params)
 
         if task:
             if task.local_shift_inst:
-                kwargs["shift_inst"] = task.local_shift_inst
+                kwargs["local_shift_inst"] = task.local_shift_inst
             if task.global_shift_inst:
                 kwargs["global_shift_inst"] = task.global_shift_inst
         else:
@@ -621,15 +835,6 @@ class DatasetTask(ShiftTask):
                 upstream_shifts |= set(dataset_inst.info.keys())
 
         return shifts, upstream_shifts
-
-    @classmethod
-    def get_version_params(cls):
-        params = super().get_version_params()
-        if cls.shift:
-            params = params[:-1] + ("dataset", "shift")
-        else:
-            params += ("dataset",)
-        return params
 
     @classmethod
     def get_array_function_kwargs(cls, task=None, **params):
@@ -841,16 +1046,18 @@ def wrapper_factory(
     enable: Sequence[str],
     cls_name: str | None = None,
     attributes: dict | None = None,
+    docs: str | None = None,
 ) -> law.task.base.Register:
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and
-    ``law.WrapperTask``, that do nothing but require multiple instances of *require_cls*. Unless
-    *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus
-    "Wrapper". Additional *attributes* are added as class-level members when given.
+    :py:class:`~law.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
+        Unless *cls_name* is defined, the name of the created class defaults to the name of
+        *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
+        given.
 
-    The instances of *require_cls* to be required in the ``requires()`` method can be controlled by
-    task parameters. These parameters can be enabled through the string sequence *enable*, which
-    currently accepts:
+    The instances of *require_cls* to be required in the
+    :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
+    These parameters can be enabled through the string sequence *enable*, which currently accepts:
 
         - ``configs``, ``skip_configs``
         - ``shifts``, ``skip_shifts``
@@ -879,7 +1086,7 @@ def wrapper_factory(
     "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
     list of config instances known to an analysis), *require_cls* must be at least a
     :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-    explicitly not.
+        explicitly not.
     """
     # check known features
     known_features = [
@@ -1142,5 +1349,9 @@ def wrapper_factory(
 
     # overwrite __name__
     Wrapper.__name__ = cls_name or require_cls.__name__ + "Wrapper"
+
+    # set docs
+    if docs:
+        Wrapper.__docs__ = docs
 
     return Wrapper

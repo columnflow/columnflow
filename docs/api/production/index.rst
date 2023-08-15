@@ -5,9 +5,13 @@
 
 .. automodule:: columnflow.production
    :autosummary:
-   :members:
-   :special-members:
+   
+Classes
++++++++
 
+.. autoclass:: Producer
+   :members:
+   :undoc-members:
 
 .. toctree:: 
    :maxdepth: 1

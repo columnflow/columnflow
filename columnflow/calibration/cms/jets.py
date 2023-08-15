@@ -5,14 +5,14 @@ Jet energy corrections and jet resolution smearing.
 """
 
 import functools
+from typing import Any
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior
-from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, layout_ak_array
+from columnflow.util import maybe_import, InsertableDict, DotDict
+from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
 
-from typing import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -30,19 +30,17 @@ def get_evaluators(
     correction_set: correctionlib.highlevel.CorrectionSet,
     names: list[str],
 ) -> list[Any]:
-    """Helper function to get a list of correction evaluators from a
+    """
+    Helper function to get a list of correction evaluators from a
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` object given
     a list of *names*. The *names* can refer to either simple or compound
     corrections.
 
     :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
-    :type correction_set: :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     :param names: List of names of corrections to be applied
-    :type names: list
     :raises RuntimeError: If a requested correction in *names* is not available
     :return: List of compounded corrections, see
         :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    :rtype: list[Any]
     """
     # raise nice error if keys not found
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
@@ -64,14 +62,13 @@ def get_evaluators(
 
 
 def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
-    """Evaluate a :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
+    """
+    Evaluate a :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
     using one or more :external+ak:py:class:`awkward arrays <ak.Array>` as inputs.
 
     :param evaluator: Evaluator instance
-    :type evaluator: :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
     :raises ValueError: If no :external+ak:py:class:`awkward arrays <ak.Array>` are provided
     :return: The correction factor derived from the input arrays
-    :rtype: float
     """
     # fail if no arguments
     if not args:
@@ -114,10 +111,48 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
 # jet energy corrections
 #
 
+# define default functions for jec calibrator
+def get_jec_file_default(self, external_files: DotDict) -> str:
+    """
+    Function to obtain external jec files.
+
+    By default, this function extracts the location of the jec correction
+    files from the current config instance *config_inst*:
+
+    .. code-block:: python
+
+        cfg.x.external_files = DotDict.wrap({
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+        })
+
+    :param external_files: Dictionary containing the information about the file location
+    :return: path or url to correction file(s)
+    """ # noqa
+    return external_files.jet_jerc
+
+
+def get_jec_config_default(self) -> DotDict:
+    """Load config relevant to the JEC corrections.
+
+    By default, this is extracted from the current *config_inst*:
+
+    .. code-block:: python
+
+        self.config_inst.x.jec
+
+    Used in :py:meth:`~.jec.setup_func`.
+
+    :return: Dictionary containing configurations for JEC callibrations
+    """
+    return self.config_inst.x.jec
+
+
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
-        "Jet.jetId", "fixedGridRhoFastjetAll", "Rho.fixedGridRhoFastjetAll",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
+        "Jet.jetId",
+        optional("fixedGridRhoFastjetAll"),
+        optional("Rho.fixedGridRhoFastjetAll"),
         attach_coffea_behavior,
     },
     produces={
@@ -128,9 +163,9 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
     # toggle for propagation to MET
     propagate_met=True,
     # function to determine the correction file
-    get_jec_file=(lambda self, external_files: external_files.jet_jerc),
+    get_jec_file=get_jec_file_default,
     # function to determine the jec configuration dict
-    get_jec_config=(lambda self: self.config_inst.x.jec),
+    get_jec_config=get_jec_config_default,
 )
 def jec(
     self: Calibrator,
@@ -139,7 +174,7 @@ def jec(
     max_eta_met_prop: float = 5.2,
     **kwargs,
 ) -> ak.Array:
-    """Performs the jet energy corrections and uncertainty shifts using the 
+    """Performs the jet energy corrections and uncertainty shifts using the
     :external+correctionlib:doc:`index`, optionally
     propagating the changes to the MET.
 
@@ -148,7 +183,7 @@ def jec(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     *get_jec_file* can be adapted in a subclass in case it is stored differently in the
@@ -183,51 +218,17 @@ def jec(
     This instance of :py:class:`~columnflow.calibration.Calibrator` is
     initialized with the following parameters by default:
 
-    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``, ``"Jet.mass"``,
-        ``"Jet.area"``, ``"Jet.rawFactor"``, ``"Jet.jetId"``, ``"fixedGridRhoFastjetAll"``,
-        ``"Rho.fixedGridRhoFastjetAll"``,
-        :py:func:`~columnflow.production.util.attach_coffea_behavior`
-    :*produces*: ``"Jet.pt"``, ``"Jet.mass"``, ``"Jet.rawFactor"``.
-        If *propagate_met* is ``True``, also produces columns for the original
-        MET values (RawMET) and corrected MET (MET). Additionally produces columns
-        corresponding to JEC up and down variations for all previously
-        mentioned columns except for Jet.rawFactor.
-
-    :uncertainty_sources: None,
-
-    :propagate_met: ``True``
-    
-    :get_jec_file: 
-        .. code-block:: python
-
-            lambda self, external_files: external_files.jet_jerc
-
-    :get_jec_config: 
-        .. code-block:: python
-
-            lambda self: self.config_inst.x.jec
-    
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
 
-    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the
-        updated jet values to the missing transverse energy (MET) using
+    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values
+        to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.pt > *min_pt_met_prop*``. Defaults to ``15.0``.
-    :type min_pt_met_prop: float, optional
-    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate
-        the updated jet values to the missing transverse energy (MET) using
+        ``met.pt > *min_pt_met_prop*``.
+    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet
+        values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.eta > *min_eta_met_prop*``. Defaults to ``5.2``.
-    :return: awkward array containing new columns with corrected ``Jet.pt`` and
-        ``Jet.mass``, as well as the relative difference between raw and corrected
-        pt ``Jet.rawFactor``. Additionally contains columns for JEC up and down
-        variations, see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
-    """
+        ``met.eta > *min_eta_met_prop*``.
+    """ # noqa
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
     events = set_ak_column_f32(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
@@ -367,19 +368,6 @@ def jec(
 
 @jec.init
 def jec_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for :py:func:`~.jec`
-    :py:class:`~columnflow.calibration.Calibrator`.
-    Adds JEC uncertainty shifts to the list of produced columns.
-
-    If member variable *uncertainty_source* is ``None``, load the full list
-    of jec uncertainties from the associated ``config`` instance.
-
-    If the member variable *propagate_met* is ``True``, add also MET and RawMET
-    as well as the corresponding jec variations to the set of columns to be produced.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
-    """
     jec_cfg = self.get_jec_config()
 
     sources = self.uncertainty_sources
@@ -410,17 +398,6 @@ def jec_init(self: Calibrator) -> None:
 
 @jec.requires
 def jec_requires(self: Calibrator, reqs: dict) -> None:
-    """Add external files bundle (for JEC text files) to dependencies.
-
-    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
-    as keyword ``external_files`` to the dictionary of requirements *reqs*.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
-    """
     if "external_files" in reqs:
         return
 
@@ -429,18 +406,54 @@ def jec_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jec.setup
-def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """Load the correct jec files using the :py:func:`from_string` method of the
+def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+    """
+    Load the correct jec files using the :py:func:`from_string` method of the
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     function and apply the corrections as needed.
 
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
+    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    instance are extracted with the :py:meth:`~.jec.get_jec_file`.
+
+    Uses the member function :py:meth:`~.jec.get_jec_config` to construct the
+    required keys, which are based on the following information about the JEC:
+
+        - levels
+        - campaign
+        - version
+        - jet_type
+
+    A corresponding example snippet wihtin the *config_inst* could like something
+    like this:
+
+    .. code-block:: python
+
+        cfg.x.jec = DotDict.wrap({
+            # campaign name for this JEC correctiono
+            "campaign": f"Summer19UL{year2}{jerc_postfix}",
+            # version of the corrections
+            "version": "V7",
+            # Type of jets that the corrections should be applied on
+            "jet_type": "AK4PFchs",
+            # relevant levels in the derivation process of the JEC
+            "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+            # relevant levels in the derivation process of the Type 1 MET JEC
+            "levels_for_type1_met": ["L1FastJet"],
+            # names of the uncertainties to be applied
+            "uncertainty_sources": [
+                "Total",
+                "CorrelationGroupMPFInSitu",
+                "CorrelationGroupIntercalibration",
+                "CorrelationGroupbJES",
+                "CorrelationGroupFlavor",
+                "CorrelationGroupUncorrelated",
+            ],
+        })
+
     :param reqs: Requirement dictionary for this
         :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
     :param inputs: Additional inputs, currently not used
-    :type inputs: dict
+    :param reader_targets: TODO: add documentation
     """
     bundle = reqs["external_files"]
 
@@ -488,15 +501,51 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
 jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
 
 
+# define default functions for jec calibrator
+def get_jer_file(self, external_files: DotDict) -> str:
+    """
+    Function to obtain external jer files.
+
+    By default, this function extracts the location of the jec correction files from the current
+    config instance *config_inst*:
+
+    .. code-block:: python
+
+        cfg.x.external_files = DotDict.wrap({
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+        })
+
+    :param external_files: Dictionary containing the information about the file location
+    :return: path or url to correction file(s)
+    """ # noqa
+    return external_files.jet_jerc
+
+
+def get_jer_config(self) -> DotDict:
+    """
+    Load config relevant to the JER corrections.
+
+    By default, this is extracted from the current *config_inst*:
+
+    .. code-block:: python
+
+        self.config_inst.x.jer
+
+    :return: Dictionary containing configurations for JEC callibrations
+    """
+    return self.config_inst.x.jer
+
+
 #
 # jet energy resolution smearing
 #
 
 @calibrator(
     uses={
-        "nJet", "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
-        "Rho.fixedGridRhoFastjetAll", "fixedGridRhoFastjetAll",
-        "nGenJet", "GenJet.pt", "GenJet.eta", "GenJet.phi",
+        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
+        optional("Rho.fixedGridRhoFastjetAll"),
+        optional("fixedGridRhoFastjetAll"),
+        "GenJet.pt", "GenJet.eta", "GenJet.phi",
         "MET.pt", "MET.phi",
         attach_coffea_behavior,
     },
@@ -512,14 +561,14 @@ jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_jer_file=(lambda self, external_files: external_files.jet_jerc),
+    get_jer_file=get_jer_file,
     # function to determine the jer configuration dict
-    get_jer_config=(lambda self: self.config_inst.x.jer),
+    get_jer_config=get_jer_config,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    """Applies the jet energy resolution smearing in MC and calculates the
-    associated uncertainty shifts using the :external+correctionlib:doc:`index`,
-    following the recommendations given in
+    """
+    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty
+    shifts using the :external+correctionlib:doc:`index`, following the recommendations given in
     https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
 
     Requires an external file in the config under ``jet_jerc``:
@@ -527,11 +576,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",  # noqa
+            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
-    *get_jer_file* can be adapted in a subclass in case it is stored differently in the
-    external files
+    *get_jer_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
 
     The jer configuration should be an auxiliary entry in the config, specifying the correction
     details under ``jer``:
@@ -548,50 +597,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     Throws an error if running on data.
 
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
-
-    :*uses*: ``"nJet"``, ``"Jet.pt"``, ``"Jet.eta"``, ``"Jet.phi"``,
-        ``"Jet.mass"``, ``"Jet.genJetIdx"``, ``"Rho.fixedGridRhoFastjetAll"``,
-        ``"fixedGridRhoFastjetAll"``, ``"nGenJet"``, ``"GenJet.pt"``,
-        ``"GenJet.eta"``, ``"GenJet.phi"``, ``"MET.pt"``, ``"MET.phi"``,
-        :py:func:`~columnflow.production.util.attach_coffea_behavior`
-    :*produces*: Smeared Jet values (``"Jet.pt"``, ``"Jet.mass"``),
-        as well as the original values (``"Jet.pt_unsmeared"``,
-        ``"Jet.mass_unsmeared"``).
-
-        If *propagate_met* is ``True``, also produces columns for the original
-        MET values (``"MET.pt_unmeared"``, ``"MET.phi_unmeared"``) and
-        corrected MET (MET). Additionally produces columns
-        corresponding to JEC up and down variations for all previously
-        mentioned columns except for unsmeared values.
-
-    :propagate_met: ``True``
-    :mc_only: ``True``
-
-    
-    :get_jer_file: 
-        .. code-block:: python
-
-            lambda self, external_files: external_files.jet_jerc
-
-    :get_jer_config: 
-        .. code-block:: python
-        
-            lambda self: self.config_inst.x.jer
-    
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
-
-    :return: awkward array containing new columns with smeared ``Jet.pt`` and
-        ``Jet.mass``, as well as the original unsmeared values.
-        Additionally contains columns for JER up and down variations,
-        see produces section
-    :rtype: :external+ak:py:class:`ak.Array`
-    """
+    """ # noqa
     # fail when running on data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
@@ -757,17 +764,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jer.init
 def jer_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for :py:func:`~.jer`
-    :py:class:`~columnflow.calibration.Calibrator`.
-    Adds all MET related columns to ``produces`` set if *propagate_met* is ``True``,
-    see produces section in :py:func:`~.jer`.
-
-    If the member variable *propagate_met* is ``True``, add also MET and RawMET
-    as well as the corresponding jec variations to the set of columns to be produced.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
-    """
     if not self.propagate_met:
         return
 
@@ -782,17 +778,6 @@ def jer_init(self: Calibrator) -> None:
 
 @jer.requires
 def jer_requires(self: Calibrator, reqs: dict) -> None:
-    """Add external files bundle (for JER text files) to dependencies.
-
-    Adds the requirements for task :py:class:`~columnflow.tasks.external.BundleExternalFiles`
-    as keyword ``external_files`` to the dictionary of requirements *reqs*.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs:  dict
-    """
     if "external_files" in reqs:
         return
 
@@ -801,21 +786,36 @@ def jer_requires(self: Calibrator, reqs: dict) -> None:
 
 
 @jer.setup
-def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
-    """Determine correct JER files for task based on config/dataset and inject them
-    into the calibrator function call.
+def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+    """
+    Load the correct jer files using the :py:func:`from_string` method of the
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` function and apply the
+    corrections as needed.
 
-    Load the correct JER files using the :py:func:`from_string` method of the
-    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    function and apply the corrections as needed.
+    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
+    instance are extracted with the :py:meth:`~.jer.get_jer_file`.
 
-    :param self: This :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
-    :type reqs: dict
-    :param inputs: Additional inputs, currently not used
-    :type inputs: dict
+    Uses the member function :py:meth:`~.jer.get_jer_config` to construct the required keys, which
+    are based on the following information about the JER:
+
+    - campaign
+    - version
+    - jet_type
+
+    A corresponding example snippet within the *config_inst* could like something like this:
+
+    .. code-block:: python
+
+        cfg.x.jer = DotDict.wrap({
+            "campaign": f"Summer19UL{year2}{jerc_postfix}",
+            "version": "JRV3",
+            "jet_type": "AK4PFchs",
+        })
+
+    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`
+        instance.
+    :param inputs: Additional inputs, currently not used.
+    :param reader_targets: TODO: add documentation.
     """
     bundle = reqs["external_files"]
 
@@ -855,35 +855,11 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict) -> None:
     get_jer_config=None,
 )
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-    """Instance of :py:class:`~columnflow.calibration.Calibrator` that
-    does all relevant calibrations for jets, i.e. JEC and JER.
-    For more information, see :py:func:`~.jec` and :py:func:`~.jer`.
-
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
-
-    :*uses*: Same as the two base Calibrators, see :py:func:`~.jec`
-        and :py:func:`~.jer`.
-    :*produces*: Same as the two base Calibrators, see :py:func:`~.jec`
-        and :py:func:`~.jer`.
-
-    :*propagate_met*: ``None``
-
-    :get_jec_file: ``None``
-    :get_jec_config: ``None``
-    :get_jer_file: ``None``
-    :get_jer_config: ``None``
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` class in which
-        this function is embedded
-    :type self: :py:class:`~columnflow.calibration.Calibrator`
+    """
+    Instance of :py:class:`~columnflow.calibration.Calibrator` that does all relevant calibrations
+    for jets, i.e. JEC and JER. For more information, see :py:func:`~.jec` and :py:func:`~.jer`.
 
     :param events: awkward array containing events to process
-    :type events: :external+ak:py:class:`ak.Array`
-
-    :return: awkward array containing new JEC and JER related columns, see
-        :py:func:`~.jec` and :py:func:`~.jer`
-    :rtype: :external+ak:py:class:`ak.Array`
     """
     # apply jet energy corrections
     events = self[jec](events, **kwargs)
@@ -897,18 +873,6 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator) -> None:
-    """:py:meth:`init` function for :py:func:`~.jets`
-    :py:class:`~columnflow.calibration.Calibrator`.
-
-    If *propagate_met*, *get_jec_file*, *get_jec_config*, *get_jec_file*,
-    *get_jec_config* are set (i.e. not ``None``), propagate these settings
-    to the underlying :py:func:`~.jec` and :py:func:`~.jer` Calibrators.
-    Otherwise, use their defaults.
-
-    :param self: :py:class:`~columnflow.calibration.Calibrator` instance
-    :type self:  :py:class:`~columnflow.calibration.Calibrator`
-    """
-
     # forward argument to the producers
     if self.propagate_met is not None:
         self.deps_kwargs[jec]["propagate_met"] = self.propagate_met

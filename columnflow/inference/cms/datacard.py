@@ -12,6 +12,7 @@ from typing import Sequence, Any
 
 import law
 
+from columnflow import __version__ as cf_version
 from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div
 
@@ -83,6 +84,10 @@ class DatacardWriter(object):
         separators = set()
         empty_lines = set()
 
+        # extra info
+        blocks.extra = [f"# created with columnflow v{cf_version}"]
+        empty_lines.add("extra")
+
         # counts block
         blocks.counts = [("imax", "*"), ("jmax", "*"), ("kmax", "*")]
         separators.add("counts")
@@ -92,6 +97,7 @@ class DatacardWriter(object):
         separators.add("shapes")
 
         # observations
+        blocks.observations = []
         if all("data" in _rates for _rates in rates.values()):
             blocks.observations = [
                 ("bin", list(rates)),
@@ -274,7 +280,8 @@ class DatacardWriter(object):
                 blocks.mc_stats.append([cat_obj.name, "autoMCStats"] + mc_stats_list)
 
         # prettify blocks
-        blocks.observations = self.align_lines(list(blocks.observations))
+        if blocks.observations:
+            blocks.observations = self.align_lines(list(blocks.observations))
         if blocks.tabular_parameters:
             blocks.rates, blocks.tabular_parameters = self.align_rates_and_parameters(
                 list(blocks.rates),
@@ -363,8 +370,12 @@ class DatacardWriter(object):
                 if proc_name == "data":
                     continue
 
+                # get the process scale (usually 1)
+                proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
+                scale = proc_obj.scale
+
                 # nominal shape
-                h_nom = _hists["nominal"].copy()
+                h_nom = _hists["nominal"].copy() * scale
                 if fill_empty_bins:
                     fill_empty(h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
@@ -379,7 +390,7 @@ class DatacardWriter(object):
                             f"shapes of parameter '{param_name}' for process '{proc_name}' "
                             f"in category '{cat_name}' misconfigured: {__hists}",
                         )
-                    return __hists["down"], __hists["up"]
+                    return __hists["down"] * scale, __hists["up"] * scale
 
                 # go through all parameters and check if varied shapes need to be processed
                 for _, _, param_obj in self.inference_model_inst.iter_parameters(category=cat_name, process=proc_name):
