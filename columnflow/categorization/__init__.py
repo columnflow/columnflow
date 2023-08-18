@@ -7,11 +7,10 @@ Event categorization tools.
 from __future__ import annotations
 
 import inspect
-from typing import Callable, Sequence
+from typing import Callable
 
 from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
-from columnflow.config_util import expand_shift_sources
 
 
 class Categorizer(TaskArrayFunction):
