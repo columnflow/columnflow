@@ -45,6 +45,10 @@ class CreateHistograms(
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
 
+    # names of columns that contain category ids
+    # (might become a parameter at some point)
+    category_id_columns = {"category_ids"}
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -114,7 +118,7 @@ class CreateHistograms(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = {"category_ids", "process_id"} | set(aliases.values())
+        read_columns = {"process_id"} | set(self.category_id_columns) | set(aliases.values())
         read_columns |= {
             Route(inp)
             for variable_inst in (
@@ -195,9 +199,15 @@ class CreateHistograms(
                     # enable weights and store it
                     histograms[var_key] = h.Weight()
 
+                # merge category ids
+                category_ids = ak.concatenate(
+                    [Route(c).apply(events) for c in self.category_id_columns],
+                    axis=-1,
+                )
+
                 # broadcast arrays so that each event can be filled for all its categories
                 fill_kwargs = {
-                    "category": events.category_ids,
+                    "category": category_ids,
                     "process": events.process_id,
                     "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
                     "weight": weight,
