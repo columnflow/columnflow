@@ -47,7 +47,7 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if ak.any(bad_mask):
         bad_values = set(n_weights[bad_mask])
         raise Exception(
-            "the number of LHEPdfWeights is expected to be 101 or 103, but also found values " +
+            "the number of LHEPdfWeights is expected to be 101 or 103, but also found values "
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
@@ -56,9 +56,9 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if ak.any(pdf_weight_nominal != 1):
         bad_values = set(pdf_weight_nominal[pdf_weight_nominal != 1])
         logger.debug(
-            "The nominal LHEPdfWeight is expected to be 1 but also found values " +
-            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-            "normalized to the nominal LHEPdfWeight and it is assumed that the nominal " +
+            "The nominal LHEPdfWeight is expected to be 1 but also found values "
+            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be "
+            "normalized to the nominal LHEPdfWeight and it is assumed that the nominal "
             "weight is already included in the LHEWeight.",
         )
 
@@ -74,21 +74,19 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, "pdf_weight_up", 1 + stddev)
     events = set_ak_column_f32(events, "pdf_weight_down", 1 - stddev)
 
-    if ak.any(stddev > 0.5):
+    if ak.any(outlier_mask := (stddev > 0.5)):
         # catch events with large pdf variations
-        # TODO: how should we handle large PDF weight uncertainties (especially above 100%)?
-        occurances = ak.sum(stddev > 0.5)
+        occurances = ak.sum(outlier_mask)
         frac = occurances / ak.count(stddev, axis=0) * 100
         logger.warning(
-            f"In dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) " +
+            f"In dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) "
             "entries with pdf uncertainty above 50%",
         )
 
-    if ak.any(pdf_weight_nominal == 0):
+    if ak.any(invalid_pdf_weight := (pdf_weight_nominal == 0)):
         # set all pdf weights to 0 when the nominal pdf weight is 0
-        invalid_pdf_weight = (pdf_weight_nominal == 0)
         logger.warning(
-            f"In dataset {self.dataset_inst.name}, {ak.sum(invalid_pdf_weight)} nominal " +
+            f"In dataset {self.dataset_inst.name}, {ak.sum(invalid_pdf_weight)} nominal "
             "LHEPdfWeights with values 0 have been found. The nominal/up/down pdf_weight "
             "columns have been set to 0 for these events.",
         )
