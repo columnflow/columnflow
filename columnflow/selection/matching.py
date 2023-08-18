@@ -165,4 +165,4 @@ def jet_lepton_delta_r_cleaning(
     clean_jet_indices = self[delta_r_jet_lepton](events, "Jet", ["Muon", "Electron"], threshold=threshold)
 
     # TODO: should not return a new object collection but an array with masks
-    return SelectionResult(objects={"Jet": clean_jet_indices})
+    return events, SelectionResult(objects={"Jet": clean_jet_indices})

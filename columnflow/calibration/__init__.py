@@ -19,6 +19,8 @@ class Calibrator(TaskArrayFunction):
     Base class for all calibrators.
     """
 
+    exposed = True
+
     @classmethod
     def calibrator(
         cls,

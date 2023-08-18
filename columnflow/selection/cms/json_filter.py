@@ -6,7 +6,7 @@ Selectors for applying golden JSON in data.
 
 from __future__ import annotations
 
-from columnflow.selection import Selector, selector
+from columnflow.selection import Selector, selector, SelectionResult
 from columnflow.util import maybe_import, InsertableDict, DotDict
 
 
@@ -43,9 +43,9 @@ def get_lumi_file_default(self, external_files: DotDict) -> str:
 def json_filter(
     self: Selector,
     events: ak.Array,
-    data_only=True,
+    data_only: bool = True,
     **kwargs,
-) -> ak.Array:
+) -> tuple[ak.Array, SelectionResult]:
     """
     Select only events from certified luminosity blocks included in the "golden" JSON. This filter
     can only be applied in recorded data.
@@ -86,7 +86,7 @@ def json_filter(
     # reject out-ouf-bounds entries
     lookup_result = ak.where(out_of_bounds, False, lookup_result)
 
-    return lookup_result
+    return lookup_result, SelectionResult()
 
 
 @json_filter.requires

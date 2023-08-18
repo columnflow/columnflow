@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from columnflow.selection import Selector, selector
+from columnflow.selection import Selector, selector, SelectionResult
 from columnflow.util import maybe_import
 from columnflow.columnar_util import Route
 
@@ -40,7 +40,7 @@ def met_filters(
     self: Selector,
     events: ak.Array,
     **kwargs,
-) -> ak.Array:
+) -> tuple[ak.Array, SelectionResult]:
     """
     Compute a selection mask to filter out noisy/anomalous high-MET events
     (MET filters).
@@ -83,7 +83,7 @@ def met_filters(
         # append to the result
         result = (result & vals)
 
-    return result
+    return result, SelectionResult()
 
 
 @met_filters.init
