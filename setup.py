@@ -9,8 +9,8 @@ this_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 keywords = [
-    "physics", "analysis", "experiment", "columnar", "vectoized",
-    "law", "order", "luigi", "lhc", "cms",
+    "physics", "analysis", "experiment", "columnar", "vectorized",
+    "law", "order", "luigi", "workflow", "automation", "lhc", "cern",
 ]
 
 
