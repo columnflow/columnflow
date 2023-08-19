@@ -15,7 +15,7 @@
 #       The name of the virtual environment. It will be installed into $CF_VENV_BASE/$CF_VENV_NAME.
 #   CF_VENV_REQUIREMENTS
 #       The requirements file containing packages that are installed on top of
-#       $CF_BASE/requirements_prod.txt.
+#       $CF_BASE/sandboxes/cf.txt.
 #
 # Upon venv activation, two environment variables are set in addition to those exported by the venv:
 #   CF_DEV
@@ -113,7 +113,7 @@ setup_venv() {
 
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
-    local requirement_files_contains_prod="false"
+    local requirement_files_contains_cf="false"
     if ${shell_is_zsh}; then
         requirement_files=(${(@s:,:)CF_VENV_REQUIREMENTS})
     else
@@ -124,8 +124,8 @@ setup_venv() {
             >&2 echo "requirement file '${f}' does not exist"
             return "13"
         fi
-        if [ "${f}" = "${CF_BASE}/requirements_prod.txt" ]; then
-            requirement_files_contains_prod="true"
+        if [ "${f}" = "${CF_BASE}/sandboxes/cf.txt" ]; then
+            requirement_files_contains_cf="true"
         fi
     done
     local first_requirement_file="${requirement_files[0]}"
@@ -247,7 +247,7 @@ setup_venv() {
 
         # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            cf_color cyan "installing venv at ${install_path} from ${sandbox_file}"
+            cf_color cyan "installing venv ${CF_VENV_NAME} at ${install_path} from ${sandbox_file}"
 
             rm -rf "${install_path}"
             cf_create_venv "${venv_name_hashed}"
@@ -257,33 +257,32 @@ setup_venv() {
             source "${install_path}/bin/activate" ""
             [ "$?" != "0" ] && clear_pending && return "26"
 
-            # update pip
-            cf_color magenta "updating pip"
-            python -m pip install -U pip
-            [ "$?" != "0" ] && clear_pending && return "27"
-            echo
+            # compose a list of arguments containing dependencies to install
+            local install_reqs=""
+            add_requirements() {
+                local args="${@}"
+                echo "$( cf_color magenta "install" ) $( cf_color default_bright "${args}" )"
+                [ ! -z "${install_reqs}" ] && install_reqs="${install_reqs} "
+                install_reqs="${install_reqs}${args}"
+            }
 
-            # install basic production requirements
-            if ! ${requirement_files_contains_prod}; then
-                cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                pip install -r "${CF_BASE}/requirements_prod.txt"
-                [ "$?" != "0" ] && clear_pending && return "28"
+            # update packaging tools
+            add_requirements pip setuptools
+
+            # basic cf requirements
+            if ! ${requirement_files_contains_cf}; then
+                add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
             fi
 
-            # install requirement files
+            # requirement files
             for f in ${requirement_files[@]}; do
-                cf_color magenta "installing requirement file ${f}"
-                pip install -r "${f}"
-                [ "$?" != "0" ] && clear_pending && return "29"
-                echo
+                add_requirements -r "${f}"
             done
 
-            # clear the pip cache
-            pip cache -q purge 2> /dev/null
-
-            # ensure that the venv is relocateable
-            cf_make_venv_relocateable "${venv_name_hashed}"
-            [ "$?" != "0" ] && clear_pending && return "30"
+            # actual installation
+            eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
+            [ "$?" != "0" ] && clear_pending && return "27"
+            echo
 
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
