@@ -36,7 +36,7 @@ with open(os.path.join(this_dir, "README.md"), "r") as f:
 
 
 # load installation requirements
-with open(os.path.join(this_dir, "requirements_prod.txt"), "r") as f:
+with open(os.path.join(this_dir, "sandboxes", "cf.txt"), "r") as f:
     install_requires = [line.strip() for line in f.readlines() if line.strip()]
 
 
