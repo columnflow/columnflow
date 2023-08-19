@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cf_make_venv_relocateable() {
+cf_make_venv_relocatable() {
     # Traverses all executables in a virtual environment directory located in $CF_VENV_BASE and
     # replaces absolute shebangs with relative ones using /usr/bin/env.
     #
@@ -68,4 +68,4 @@ cf_make_venv_relocateable() {
     done
 }
 
-cf_make_venv_relocateable "$@"
+cf_make_venv_relocatable "$@"
