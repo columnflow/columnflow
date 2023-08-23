@@ -343,7 +343,7 @@ class SelectorMixin(ConfigTask):
     def get_selector_inst(
         cls,
         selector: str,
-        kwargs=None
+        kwargs=None,
     ) -> Selector:
         """Get requested *selector*.
 
