@@ -322,7 +322,14 @@ class CalibratorsMixin(ConfigTask):
 
 
 class SelectorMixin(ConfigTask):
+    """Mixin to include multiple :py:class:`~columnflow.selection.Selector`
+    instances into tasks.
 
+    Inheriting from this mixin will allow a task to instantiate and access a
+    :py:class:`~columnflow.selection.Selector` instance with names *selector*,
+    which is a comma-separated list of calibrator names and is an input
+    parameter for this task.
+    """
     selector = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the selector to be applied; default: value of the "
@@ -333,7 +340,21 @@ class SelectorMixin(ConfigTask):
     register_selector_shifts = False
 
     @classmethod
-    def get_selector_inst(cls, selector, kwargs=None):
+    def get_selector_inst(
+        cls,
+        selector: str,
+        kwargs=None
+    ) -> Selector:
+        """Get requested *selector*.
+
+        :py:class:`~columnflow.selection.Selector` instance is either
+        initalized or loaded from cache.
+
+        :param selector: Names of Selector to load
+        :param kwargs: Additional keyword arguments to forward to the
+            :py:class:`~columnflow.selection.Selector` instance
+        :return: :py:class:`~columnflow.selection.Selector` instance.
+        """
         selector_cls = Selector.get_cls(selector)
 
         if not selector_cls.exposed:
@@ -343,7 +364,19 @@ class SelectorMixin(ConfigTask):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict) -> dict:
+        """Resolve values *params* and check against possible default values and
+        selector groups.
+
+        Check the values in *params* against the default value ``"default_selector"``
+        in the current config inst. For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.AnalysisTask.resolve_config_default`.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the requested
+            :py:class:`~columnflow.selection.Selector` instance under the
+            keyword ``"selector_inst"``.
+        """
         params = super().resolve_param_values(params)
 
         # add the default selector when empty
@@ -360,7 +393,26 @@ class SelectorMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict,
+    ) -> tuple[set[str], set[str]]:
+        """Adds set of shifts that the current ``selector_inst`` registers to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`SelectorMixin`
+        inherits from.
+        Afterwards, check if the current ``selector_inst`` registers shifts
+        and add them to the current set of ``shifts`` and ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
@@ -387,6 +439,15 @@ class SelectorMixin(ConfigTask):
 
     @property
     def selector_inst(self):
+        """Access current :py:class:`~columnflow.selection.Selector` instance.
+
+        Loads the current :py:class:`~columnflow.selection.Selector` *selector_inst* from
+        the cache or initializes it.
+        If the selector requests a specific ``sandbox``, set this sandbox as
+        the environment for the current Task.
+
+        :return: Current :py:class:`~columnflow.selection.Selector` instance
+        """
         if self._selector_inst is None:
             self._selector_inst = self.get_selector_inst(self.selector, {"task": self})
 
@@ -397,6 +458,15 @@ class SelectorMixin(ConfigTask):
         return self._selector_inst
 
     def store_parts(self):
+        """Create parts to create the output path to store intermediary results
+        for the current Task.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"selector": "sel__{SELECTOR_NAME}"}` before keyword ``version``.
+        Here, ``SELECTOR_NAME`` is the name of the current ``selector_inst``.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
         parts.insert_before("version", "selector", f"sel__{self.selector}")
         return parts
@@ -443,6 +513,19 @@ class SelectorStepsMixin(SelectorMixin):
         return super().req_params(inst, **kwargs)
 
     def store_parts(self) -> law.util.InsertableDict:
+        """Create parts to create the output path to store intermediary results
+        for the current Task.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"selector": "__steps__LIST_OF_STEPS"}`, where ``LIST_OF_STEPS`` is the
+        sorted list of selector steps.
+        Here, ``HASH`` is the joint string of the first five calibrator names
+        + a hash created with :py:meth:`law.util.create_hash` based on
+        the list of calibrators, starting at its 5th element (i.e. ``self.calibrators[5:]``)
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
 
         steps = self.selector_steps
