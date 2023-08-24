@@ -150,7 +150,7 @@ def jet_lepton_delta_r_cleaning(
     stats: dict[str, Union[int, float]],
     threshold: float = 0.4,
     **kwargs,
-) -> SelectionResult:
+) -> tuple[ak.Array, SelectionResult]:
     """
     Function to apply the selection requirements necessary for a cleaning of jets against leptons.
 
@@ -160,7 +160,10 @@ def jet_lepton_delta_r_cleaning(
     :param events: Array containing events in the NanoAOD format
     :param stats: :py:class:`dictionary <dict>` containing selection stats (not used here).
     :param threshold: Threshold value for decision which objects to keep and which to reject.
-    :return: :py:class:`~columnflow.selection.SelectionResult` with indices of cleaned jets.
+
+    :return: Tuple containing the events array and a
+        :py:class:`~columnflow.selection.SelectionResult` with indices of cleaned jets in the
+        "Jet" object field.
     """
     clean_jet_indices = self[delta_r_jet_lepton](events, "Jet", ["Muon", "Electron"], threshold=threshold)
 

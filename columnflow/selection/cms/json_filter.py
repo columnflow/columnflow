@@ -67,7 +67,9 @@ def json_filter(
     :param events: Array containing events in the NanoAOD format
     :param data_only: boolean flag to indicate that this selector should only run on observed data,
         defaults to True
-    :return: Array containing boolean masks to accept or reject given events
+    :return: Tuple containing the events array and a
+        :py:class:`~columnflow.selection.SelectionResult` with a "json" field in its "steps" data
+        representing a boolean mask to accept or reject given events
     """
     # handle out-of-bounds values
     run_out_of_bounds = (events.run >= self.run_ls_lookup.shape[0])
@@ -86,7 +88,7 @@ def json_filter(
     # reject out-ouf-bounds entries
     lookup_result = ak.where(out_of_bounds, False, lookup_result)
 
-    return lookup_result, SelectionResult()
+    return events, SelectionResult(steps={"json": lookup_result})
 
 
 @json_filter.requires

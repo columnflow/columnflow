@@ -70,7 +70,9 @@ def met_filters(
     Returns a bool array containing the logical ``AND`` of all input columns.
 
     :param events: Array containing events in the NanoAOD format
-    :return: Array containing logical ``AND`` of all input filter columns
+    :return: Tuple containing the events array and a
+        :py:class:`~columnflow.selection.SelectionResult` with a "met_filter" field in its "steps"
+        data representing the logical ``AND`` of all input filter columns
     """
     result = ak.ones_like(events.event, dtype=bool)
 
@@ -83,7 +85,7 @@ def met_filters(
         # append to the result
         result = (result & vals)
 
-    return result, SelectionResult()
+    return events, SelectionResult(steps={"met_filter": result})
 
 
 @met_filters.init
