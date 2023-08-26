@@ -33,7 +33,7 @@ cf_create_venv() {
 
     # replace absolute paths in the activation file to make it relocatable for bash and zsh
     sed -i -r \
-        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "$ZSH_VERSION" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "${ZSH_VERSION}" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
         "${CF_VENV_BASE}/${name}/bin/activate"
 
     # make it relocatable, loosing all relations to the outer env
