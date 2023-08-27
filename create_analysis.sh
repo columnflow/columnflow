@@ -19,7 +19,7 @@ create_analysis() {
     local exec_dir="$( pwd )"
     local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
-    local debug="false"
+    local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -242,18 +242,20 @@ create_analysis() {
     echo
 
     echo_color cyan "setup submodules"
+
+    local gh_prefix="https://github.com/"
+    ${cf_use_ssh,,} && gh_prefix="git@github.com:"
+
     mkdir -p modules
-    if [ "${cf_use_ssh}" ]; then
-        git submodule add -b "${fetch_cf_branch}" git@github.com:columnflow/columnflow.git modules/columnflow
-        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-            git submodule add -b "${fetch_cmsdb_branch}" git@github.com:uhh-cms/cmsdb.git modules/cmsdb
-        fi
+    if ${debug}; then
+        ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" https://github.com/columnflow/columnflow.git modules/columnflow
-        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-            git submodule add "${fetch_cmsdb_branch}" https://github.com/uhh-cms/cmsdb.git modules/cmsdb
-        fi
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}columnflow/columnflow.git" modules/columnflow
     fi
+    if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}uhh-cms/cmsdb.git" modules/cmsdb
+    fi
+
     git submodule update --init --recursive
     echo_color green "done"
 

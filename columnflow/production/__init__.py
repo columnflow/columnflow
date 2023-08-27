@@ -19,6 +19,8 @@ class Producer(TaskArrayFunction):
     Base class for all producers.
     """
 
+    exposed = True
+
     @classmethod
     def producer(
         cls,

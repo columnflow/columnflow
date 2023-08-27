@@ -345,6 +345,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         .. code-block:: python
 
+
             def resolve_param_values(params):
                 params["ml_model"] = AnalysisTask.resolve_config_default(
                     params,

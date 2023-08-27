@@ -1,8 +1,8 @@
 # coding: utf-8
 
-""" _Jet calibration with coffea
+"""
 Calibration methods for jets using :external+coffea:doc:`coffea <installation>`
-functions
+functions.
 """
 
 import os
@@ -172,12 +172,12 @@ def jec_coffea(
     :param events: awkward array containing events to process
     :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values
         to the missing transverse energy (MET) using
-        :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.pt >
-            *min_pt_met_prop*``.
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.pt > min_pt_met_prop``.
     :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet
         values to the missing transverse energy (MET) using
-        :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.eta >
-            *min_eta_met_prop*``.
+        :py:func:`~columnflow.calibration.util.propagate_met` for events where
+        ``met.eta > min_eta_met_prop``.
     """
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))

@@ -257,13 +257,13 @@ cfg.add_channel(name="mutau", id=1)
 add_category(
     cfg,
     name="incl",
-    selection="sel_incl",
+    selection="cat_incl",
     label="inclusive",
 )
 add_category(
     cfg,
     name="2j",
-    selection="sel_2j",
+    selection="cat_2j",
     label="2 jets",
 )
 

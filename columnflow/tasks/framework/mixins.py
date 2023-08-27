@@ -65,8 +65,12 @@ class CalibratorMixin(ConfigTask):
         :return: The initialized :py:class:`~columnflow.calibration.Calibrator`
             instance.
         """
+        calibrator_cls = Calibrator.get_cls(calibrator)
+        if not calibrator_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
+
         inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
-        return Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
+        return calibrator_cls(inst_dict=inst_dict)
 
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
@@ -206,10 +210,17 @@ class CalibratorsMixin(ConfigTask):
         :return: List of :py:class:`~columnflow.calibration.Calibrator` instances.
         """
         inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
-        return [
-            Calibrator.get_cls(calibrator)(inst_dict=inst_dict)
-            for calibrator in calibrators
-        ]
+
+        insts = []
+        for calibrator in calibrators:
+            calibrator_cls = Calibrator.get_cls(calibrator)
+            if not calibrator_cls.exposed:
+                raise RuntimeError(
+                    f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}",
+                )
+            insts.append(calibrator_cls(inst_dict=inst_dict))
+
+        return insts
 
     @classmethod
     def resolve_param_values(cls, params: law.util.InsertableDict) -> law.util.InsertableDict:
@@ -356,7 +367,6 @@ class SelectorMixin(ConfigTask):
         :return: :py:class:`~columnflow.selection.Selector` instance.
         """
         selector_cls = Selector.get_cls(selector)
-
         if not selector_cls.exposed:
             raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
 
@@ -550,8 +560,12 @@ class ProducerMixin(ConfigTask):
 
     @classmethod
     def get_producer_inst(cls, producer, kwargs=None):
+        producer_cls = Producer.get_cls(producer)
+        if not producer_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
+
         inst_dict = cls.get_producer_kwargs(**kwargs) if kwargs else None
-        return Producer.get_cls(producer)(inst_dict=inst_dict)
+        return producer_cls(inst_dict=inst_dict)
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -628,10 +642,15 @@ class ProducersMixin(ConfigTask):
     @classmethod
     def get_producer_insts(cls, producers, kwargs=None):
         inst_dict = cls.get_producer_kwargs(**kwargs) if kwargs else None
-        return [
-            Producer.get_cls(producer)(inst_dict=inst_dict)
-            for producer in producers
-        ]
+
+        insts = []
+        for producer in producers:
+            producer_cls = Producer.get_cls(producer)
+            if not producer_cls.exposed:
+                raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
+            insts.append(producer_cls(inst_dict=inst_dict))
+
+        return insts
 
     @classmethod
     def resolve_param_values(cls, params):
