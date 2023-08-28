@@ -55,6 +55,9 @@ create_analysis() {
             cyan)
                 echo -e "\x1b[0;49;36m${msg}\x1b[0m"
                 ;;
+            magenta)
+                echo -e "\x1b[0;49;35m${msg}\x1b[0m"
+                ;;
             bright)
                 echo -e "\x1b[1;49;39m${msg}\x1b[0m"
                 ;;
@@ -324,6 +327,9 @@ create_analysis() {
 
         echo "   d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py"
         echo_color bright "      > law run cf.CreateDatacards --version dev1 --inference-model example"
+
+        echo
+        echo "$( echo_color magenta "Please note that the '${cf_analysis_flavor}' example needs access to a few files on" ) $( echo_color bright "/afs/cern.ch" )!"
     fi
 
     echo
