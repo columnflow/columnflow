@@ -1437,5 +1437,5 @@ class ChunkedIOMixin(AnalysisTask):
         if overlapping_routes:
             raise ValueError(
                 f"found {len(overlapping_routes)} overlapping columns across {len(ak_arrays)} "
-                f"arrays: {','.join(overlapping_routes)}",
+                f"columns: {','.join(overlapping_routes)}",
             )
