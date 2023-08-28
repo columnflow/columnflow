@@ -33,7 +33,7 @@ def increment_stats(
     group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
     group_combinations: Sequence[tuple[str]] | None = None,
     **kwargs,
-) -> ak.Array:
+) -> tuple[ak.Array, SelectionResult]:
     """
     Unexposed selector that does not actually select objects but that instead increments selection
     metrics in a given dictionary *stats* given a chunk of *events* and the corresponding selection
@@ -193,7 +193,7 @@ def increment_stats(
                 else:  # SUM
                     innermost_dict[str_values[-1]] += float(ak.sum(weights[weight_mask & group_mask]))
 
-    return events
+    return events, results
 
 
 @increment_stats.setup
@@ -228,7 +228,7 @@ def increment_event_stats(
     results: SelectionResult,
     stats: dict,
     **kwargs,
-) -> ak.Array:
+) -> tuple[ak.Array, SelectionResult]:
     """
     Simplified version of :py:class:`increment_stats` that only increments the number of events and
     the number of selected events.

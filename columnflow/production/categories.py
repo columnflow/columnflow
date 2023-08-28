@@ -10,7 +10,7 @@ from collections import defaultdict
 
 import law
 
-from columnflow.selection import Selector
+from columnflow.categorization import Categorizer
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
@@ -36,17 +36,12 @@ def category_ids(
 
     for cat_inst in self.config_inst.get_leaf_categories():
         # start with a true mask
-        cat_mask = np.ones(len(events)) > 0
+        cat_mask = np.ones(len(events), dtype=bool)
 
         # loop through selectors
-        for selector in self.category_to_selectors[cat_inst]:
-            # run the selector for events that still match the mask, then AND concat
-            _cat_mask = self[selector](events[cat_mask], **kwargs)
-            cat_mask[cat_mask] &= np.asarray(_cat_mask == 1)
-
-            # stop if no events are left
-            if not ak.any(cat_mask):
-                break
+        for categorizer in self.categorizer_map[cat_inst]:
+            events, mask = self[categorizer](events, **kwargs)
+            cat_mask = cat_mask & mask
 
         # covert to nullable array with the category ids or none, then apply ak.singletons
         ids = ak.where(cat_mask, np.float64(cat_inst.id), np.float64(np.nan))
@@ -65,33 +60,32 @@ def category_ids(
 
 @category_ids.init
 def category_ids_init(self: Producer) -> None:
-    # store a mapping from leaf category to selector classes for faster lookup
-    self.category_to_selectors = defaultdict(list)
+    # store a mapping from leaf category to categorizer classes for faster lookup
+    self.categorizer_map = defaultdict(list)
 
-    # add all selectors obtained from leaf category selection expressions to the used columns
+    # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
-        # treat all selections as lists
+        # treat all selections as lists of categorizers
         for sel in law.util.make_list(cat_inst.selection):
-            if Selector.derived_by(sel):
-                selector = sel
-            elif Selector.has_cls(sel):
-                selector = Selector.get_cls(sel)
+            if Categorizer.derived_by(sel):
+                categorizer = sel
+            elif Categorizer.has_cls(sel):
+                categorizer = Categorizer.get_cls(sel)
             else:
                 raise Exception(
                     f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to an "
-                    "existing Selector object",
+                    "existing Categorizer object",
                 )
 
-            # variables should refer to unexposed selectors as they should usually not
-            # return SelectionResult's but a flat per-event mask
-            if selector.exposed:
-                logger.warning(
-                    f"selection of category {cat_inst.name} seems to refer to an exposed selector "
-                    "whose return value is most likely incompatible with category masks",
+            # the categorizer must be exposed
+            if not categorizer.exposed:
+                raise RuntimeError(
+                    f"cannot use unexposed categorizer '{categorizer}' to evaluate category "
+                    f"{cat_inst}",
                 )
 
             # update dependency sets
-            self.uses.add(selector)
-            self.produces.add(selector)
+            self.uses.add(categorizer)
+            self.produces.add(categorizer)
 
-            self.category_to_selectors[cat_inst].append(selector)
+            self.categorizer_map[cat_inst].append(categorizer)

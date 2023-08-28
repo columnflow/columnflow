@@ -3,7 +3,7 @@
 
 .. include:: ../README.md
    :parser: myst_parser.sphinx_
-   :start-after: <!-- marker-after-logo -->
+   :start-after: <!-- marker-before-badges -->
    :end-before: <!-- marker-after-header -->
 
 .. toctree::
@@ -15,5 +15,5 @@
 
 .. include:: ../README.md
    :parser: myst_parser.sphinx_
-   :start-after: <!-- marker-after-header -->
+   :start-after: <!-- marker-before-note -->
    :end-before: <!-- marker-after-body -->
