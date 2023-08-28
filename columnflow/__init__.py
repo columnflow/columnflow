@@ -38,7 +38,7 @@ if law.config.has_option("outputs", "wlcg_file_systems"):
     ]
 
 
-# initialize producers, calibrators, selectors, ml and stat models
+# initialize producers, calibrators, selectors, categorizers, ml models and stat models
 from columnflow.util import maybe_import
 
 import columnflow.production  # noqa
@@ -57,6 +57,12 @@ import columnflow.selection  # noqa
 if law.config.has_option("analysis", "selection_modules"):
     for m in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
         logger.debug(f"loading selection module '{m}'")
+        maybe_import(m.strip())
+
+import columnflow.categorization  # noqa
+if law.config.has_option("analysis", "categorization_modules"):
+    for m in law.config.get_expanded("analysis", "categorization_modules", split_csv=True):
+        logger.debug(f"loading categorization module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.ml  # noqa
