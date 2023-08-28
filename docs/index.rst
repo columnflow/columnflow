@@ -10,7 +10,7 @@
    :maxdepth: 1
 
    start.md
-   practices.md
+   user_guide/index
    api/index
 
 .. include:: ../README.md
