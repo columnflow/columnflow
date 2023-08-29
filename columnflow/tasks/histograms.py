@@ -151,6 +151,10 @@ class CreateHistograms(
             source_type=len(files) * ["awkward_parquet"],
             read_columns=len(files) * [read_columns],
         ):
+            # optional check for overlapping inputs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping([events] + list(columns))
+
             # add additional columns
             events = update_ak_array(events, *columns)
 
@@ -230,6 +234,14 @@ class CreateHistograms(
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
+
+
+# overwrite class defaults
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+CreateHistograms.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=CreateHistograms.task_family in check_overlap_tasks,
+    add_default_to_description=True,
+)
 
 
 CreateHistogramsWrapper = wrapper_factory(

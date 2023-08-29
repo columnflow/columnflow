@@ -135,7 +135,7 @@ class CalibrateEvents(
             events = route_filter(events)
 
             # optional check for finite values
-            if self.check_finite:
+            if self.check_finite_output:
                 self.raise_if_not_finite(events)
 
             # save as parquet via a thread in the same pool
@@ -151,7 +151,7 @@ class CalibrateEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-CalibrateEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+CalibrateEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=CalibrateEvents.task_family in check_finite_tasks,
     add_default_to_description=True,
 )

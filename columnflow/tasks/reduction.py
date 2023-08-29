@@ -166,6 +166,10 @@ class ReduceEvents(
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
         ):
+            # optional check for overlapping inputs within diffs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping(list(diffs))
+
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
 
@@ -221,6 +225,13 @@ class ReduceEvents(
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
 
+
+# overwrite class defaults
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+ReduceEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=ReduceEvents.task_family in check_overlap_tasks,
+    add_default_to_description=True,
+)
 
 ReduceEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,

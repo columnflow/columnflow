@@ -67,7 +67,12 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @normalization_weights.setup
-def normalization_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def normalization_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     """
     Sets up objects required by the computation of normalization weights and stores them as instance
     attributes:

@@ -72,7 +72,7 @@ setup___cf_short_name_lc__() {
             query CF_DATA "Local data directory" "\$__cf_short_name_uc___BASE/data" "./data"
             query CF_STORE_NAME "Relative path used in store paths (see next queries)" "__cf_short_name_lc___store"
             query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
-            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
+            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "\$CF_DATA/__cf_short_name_lc___cache"
             export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"

@@ -338,6 +338,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         Example where the default points to a function:
 
         .. code-block:: python
+
             def resolve_param_values(params):
                 params["ml_model"] = AnalysisTask.resolve_config_default(
                     params,
@@ -1051,9 +1052,9 @@ def wrapper_factory(
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and
     :py:class:`~law.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
-        Unless *cls_name* is defined, the name of the created class defaults to the name of
-        *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
-        given.
+    Unless *cls_name* is defined, the name of the created class defaults to the name of
+    *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
+    given.
 
     The instances of *require_cls* to be required in the
     :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
@@ -1086,7 +1087,7 @@ def wrapper_factory(
     "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
     list of config instances known to an analysis), *require_cls* must be at least a
     :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-        explicitly not.
+    explicitly not.
     """
     # check known features
     known_features = [
@@ -1144,10 +1145,10 @@ def wrapper_factory(
 
         if has_configs:
             configs = law.CSVParameter(
-                default=("*",),
+                default=(default_config,),
                 description="names or name patterns of configs to use; can also be the key of a "
-                "mapping defined in the 'config_groups' auxiliary data of the analysis; default: "
-                "('*',)",
+                "mapping defined in the 'config_groups' auxiliary data of the analysis; "
+                f"default: {default_config}",
                 brace_expand=True,
             )
         if has_skip_configs:
