@@ -19,7 +19,7 @@ create_analysis() {
     local exec_dir="$( pwd )"
     local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
-    local debug="false"
+    local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -54,6 +54,9 @@ create_analysis() {
                 ;;
             cyan)
                 echo -e "\x1b[0;49;36m${msg}\x1b[0m"
+                ;;
+            magenta)
+                echo -e "\x1b[0;49;35m${msg}\x1b[0m"
                 ;;
             bright)
                 echo -e "\x1b[1;49;39m${msg}\x1b[0m"
@@ -242,18 +245,20 @@ create_analysis() {
     echo
 
     echo_color cyan "setup submodules"
+
+    local gh_prefix="https://github.com/"
+    ${cf_use_ssh,,} && gh_prefix="git@github.com:"
+
     mkdir -p modules
-    if [ "${cf_use_ssh}" ]; then
-        git submodule add -b "${fetch_cf_branch}" git@github.com:columnflow/columnflow.git modules/columnflow
-        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-            git submodule add -b "${fetch_cmsdb_branch}" git@github.com:uhh-cms/cmsdb.git modules/cmsdb
-        fi
+    if ${debug}; then
+        ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" https://github.com/columnflow/columnflow.git modules/columnflow
-        if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-            git submodule add "${fetch_cmsdb_branch}" https://github.com/uhh-cms/cmsdb.git modules/cmsdb
-        fi
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}columnflow/columnflow.git" modules/columnflow
     fi
+    if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}uhh-cms/cmsdb.git" modules/cmsdb
+    fi
+
     git submodule update --init --recursive
     echo_color green "done"
 
@@ -322,6 +327,9 @@ create_analysis() {
 
         echo "   d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py"
         echo_color bright "      > law run cf.CreateDatacards --version dev1 --inference-model example"
+
+        echo
+        echo "$( echo_color magenta "Please note that the '${cf_analysis_flavor}' example needs access to a few files on" ) $( echo_color bright "/afs/cern.ch" )!"
     fi
 
     echo
