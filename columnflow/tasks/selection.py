@@ -144,6 +144,10 @@ class SelectEvents(
             source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
             read_columns=(1 + n_calib) * [read_columns],
         ):
+            # optional check for overlapping inputs within diffs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping(list(diffs))
+
             # apply the calibrated diffs
             events = update_ak_array(events, *diffs)
 
@@ -160,7 +164,7 @@ class SelectEvents(
             results_array = results.to_ak()
 
             # optional check for finite values
-            if self.check_finite:
+            if self.check_finite_output:
                 self.raise_if_not_finite(results_array)
 
             # save results as parquet via a thread in the same pool
@@ -173,7 +177,7 @@ class SelectEvents(
                 events = route_filter(events)
 
                 # optional check for finite values
-                if self.check_finite:
+                if self.check_finite_output:
                     self.raise_if_not_finite(events)
 
                 # save additional columns as parquet via a thread in the same pool
@@ -208,8 +212,14 @@ class SelectEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-SelectEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+SelectEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=SelectEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+SelectEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=SelectEvents.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 

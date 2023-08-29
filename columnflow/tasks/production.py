@@ -111,6 +111,10 @@ class ProduceColumns(
                 source_type=["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=[read_columns] * (len(reader_targets) + 1),
             ):
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(cols))
+
                 # apply the optional columns from custom requirements
                 events = update_ak_array(events, *cols)
 
@@ -130,7 +134,7 @@ class ProduceColumns(
                 events = route_filter(events)
 
                 # optional check for finite values
-                if self.check_finite:
+                if self.check_finite_output:
                     self.raise_if_not_finite(events)
 
                 # save as parquet via a thread in the same pool
@@ -145,8 +149,14 @@ class ProduceColumns(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-ProduceColumns.check_finite = ChunkedIOMixin.check_finite.copy(
+ProduceColumns.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=ProduceColumns.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+ProduceColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=ProduceColumns.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 

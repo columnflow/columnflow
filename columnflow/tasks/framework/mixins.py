@@ -9,6 +9,7 @@ from __future__ import annotations
 import gc
 import time
 import itertools
+from collections import Counter
 from typing import Sequence, Any
 
 import luigi
@@ -1342,14 +1343,19 @@ class EventWeightMixin(ConfigTask):
 
 class ChunkedIOMixin(AnalysisTask):
 
-    check_finite = luigi.BoolParameter(
+    check_finite_output = luigi.BoolParameter(
         default=False,
         significant=False,
         description="when True, checks whether output arrays only contain finite values before "
         "writing to them to file",
     )
+    check_overlapping_inputs = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, checks whether columns if input arrays overlap in at least one field",
+    )
 
-    exclude_params_req = {"check_finite"}
+    exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
 
     def iter_chunked_io(self, *args, **kwargs):
         from columnflow.columnar_util import ChunkedIOHandler
@@ -1392,15 +1398,14 @@ class ChunkedIOMixin(AnalysisTask):
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
         """
-        Perform explicit check whether all values in array *ak_array* are finite.
+        Checks whether all values in array *ak_array* are finite.
 
-        The check is performed using the :external+numpy:py:func:`numpy.isfinite` function
+        The check is performed using the :external+numpy:py:func:`numpy.isfinite` function.
 
         :param ak_array: Array with events to check.
         :raises ValueError: If any value in *ak_array* is not finite.
         """
         import numpy as np
-        import awkward as ak
         from columnflow.columnar_util import get_ak_routes
 
         for route in get_ak_routes(ak_array):
@@ -1409,3 +1414,28 @@ class ChunkedIOMixin(AnalysisTask):
                     f"found one or more non-finite values in column '{route.column}' "
                     f"of array {ak_array}",
                 )
+
+    @classmethod
+    def raise_if_overlapping(cls, ak_arrays: Sequence[ak.Array]) -> None:
+        """
+        Checks whether fields of *ak_arrays* overlap.
+
+        :param ak_arrays: Arrays with fields to check.
+        :raises ValueError: If at least one overlap is found.
+        """
+        from columnflow.columnar_util import get_ak_routes
+
+        # when less than two arrays are given, there cannot be any overlap
+        if len(ak_arrays) < 2:
+            return
+
+        # determine overlapping routes
+        counts = Counter(sum(map(get_ak_routes, ak_arrays), []))
+        overlapping_routes = [r for r, c in counts.items() if c > 1]
+
+        # raise
+        if overlapping_routes:
+            raise ValueError(
+                f"found {len(overlapping_routes)} overlapping columns across {len(ak_arrays)} "
+                f"columns: {','.join(overlapping_routes)}",
+            )
