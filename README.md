@@ -10,7 +10,7 @@
 <!-- marker-before-badges -->
 
 <p align="center">
-  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yam">
+  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml">
     <img alt="Build status" src="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg" />
   </a>
   <a href="https://pypi.python.org/pypi/columnflow">
