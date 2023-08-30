@@ -44,6 +44,12 @@ setup_cmssw() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="$( pwd )"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # source the main setup script to access helpers
     CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 

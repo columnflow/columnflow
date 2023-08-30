@@ -1145,10 +1145,10 @@ def wrapper_factory(
 
         if has_configs:
             configs = law.CSVParameter(
-                default=("*",),
+                default=(default_config,),
                 description="names or name patterns of configs to use; can also be the key of a "
-                "mapping defined in the 'config_groups' auxiliary data of the analysis; default: "
-                "('*',)",
+                "mapping defined in the 'config_groups' auxiliary data of the analysis; "
+                f"default: {default_config}",
                 brace_expand=True,
             )
         if has_skip_configs:

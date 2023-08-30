@@ -23,6 +23,7 @@ create_analysis() {
 
     # zsh options
     if ${shell_is_zsh}; then
+        emulate -L bash
         setopt globdots
     fi
 
@@ -30,6 +31,14 @@ create_analysis() {
     #
     # helpers
     #
+
+    str_lc() {
+        ${shell_is_zsh} && echo "${(L)1}" || echo "${1,,}"
+    }
+
+    str_uc() {
+        ${shell_is_zsh} && echo "${(U)1}" || echo "${1^^}"
+    }
 
     export_var() {
         local varname="$1"
@@ -54,6 +63,9 @@ create_analysis() {
                 ;;
             cyan)
                 echo -e "\x1b[0;49;36m${msg}\x1b[0m"
+                ;;
+            magenta)
+                echo -e "\x1b[0;49;35m${msg}\x1b[0m"
                 ;;
             bright)
                 echo -e "\x1b[1;49;39m${msg}\x1b[0m"
@@ -145,7 +157,7 @@ create_analysis() {
 
     query_input "cf_analysis_name" "Name of the analysis" "-"
     echo
-    query_input "cf_module_name" "Name of the python module in the analysis directory" "${cf_analysis_name,,}"
+    query_input "cf_module_name" "Name of the python module in the analysis directory" "$( str_lc "${cf_analysis_name}" )"
     echo
     query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "${cf_module_name}"
     echo
@@ -156,8 +168,8 @@ create_analysis() {
 
     # changes
     export cf_short_name="${cf_short_name%_}"
-    export cf_short_name_lc="${cf_short_name,,}"
-    export cf_short_name_uc="${cf_short_name^^}"
+    export cf_short_name_lc="$( str_lc "${cf_short_name}" )"
+    export cf_short_name_uc="$( str_uc "${cf_short_name}" )"
 
     # debug output
     if ${debug}; then
@@ -244,7 +256,8 @@ create_analysis() {
     echo_color cyan "setup submodules"
 
     local gh_prefix="https://github.com/"
-    ${cf_use_ssh,,} && gh_prefix="git@github.com:"
+
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix="git@github.com:"
 
     mkdir -p modules
     if ${debug}; then
@@ -271,7 +284,7 @@ create_analysis() {
 
     echo_color cyan "1. Setup the repository and install the environment."
     echo_color bright "   > cd ${cf_analysis_name}"
-    echo_color bright "   > source setup.sh [optional_setup_name]"
+    echo_color bright "   > source setup.sh [recommended_yet_optional_setup_name]"
 
     echo
 
@@ -324,6 +337,9 @@ create_analysis() {
 
         echo "   d) Create cms-style datacards for the example model in ${cf_module_name}/inference/example.py"
         echo_color bright "      > law run cf.CreateDatacards --version dev1 --inference-model example"
+
+        echo
+        echo "$( echo_color magenta "Please note that the '${cf_analysis_flavor}' example needs access to a few files on" ) $( echo_color bright "/afs/cern.ch" )!"
     fi
 
     echo

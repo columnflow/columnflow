@@ -10,7 +10,7 @@
 <!-- marker-before-badges -->
 
 <p align="center">
-  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yam">
+  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml">
     <img alt="Build status" src="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg" />
   </a>
   <a href="https://pypi.python.org/pypi/columnflow">
@@ -73,7 +73,7 @@ Setup successfull! The next steps are:
 
 1. Setup the repository and install the environment.
    > cd
-   > source setup.sh [optional_setup_name]
+   > source setup.sh [recommended_yet_optional_setup_name]
 
 2. Run local tests & linting checks to verify that the analysis is setup correctly.
    > ./tests/run_all
