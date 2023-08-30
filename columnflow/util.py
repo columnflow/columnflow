@@ -304,7 +304,7 @@ def ensure_proxy(
             return None
 
         # check the proxy validity
-        if not law.wlcg.check_voms_proxy_validity() and not law.arc.check_arc_proxy_validity():
+        if not law.wlcg.check_vomsproxy_validity() and not law.arc.check_arcproxy_validity():
             raise Exception("neither voms nor arc proxy valid")
 
     def call(state):

@@ -254,42 +254,52 @@ def prepare_plot_config(
                 "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
                 "ratio_kwargs": {"norm": h_mc.values()},
             }
+
     # draw lines
     for i, h in enumerate(line_hists):
         line_norm = sum(h.values()) if shape_norm else 1
-        plot_config[f"line_{i}"] = {
+        plot_config[f"line_{i}"] = plot_cfg = {
             "method": "draw_hist",
             "hist": h,
             "kwargs": {
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
-                "yerr": False if line_hide_errors[i] else None,
             },
             # "ratio_kwargs": {
             #     "norm": h.values(),
             #     "color": line_colors[i],
-            #     "yerr": False if line_hide_errors[i] else None,
             # },
         }
+
+        # suppress error bars by overriding `yerr`
+        if line_hide_errors[i]:
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = False
 
     # draw data
     if data_hists:
         data_norm = sum(h_data.values()) if shape_norm else 1
-        plot_config["data"] = {
+        plot_config["data"] = plot_cfg = {
             "method": "draw_errorbars",
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
                 "label": "Data",
-                "yerr": False if any(data_hide_errors) else None,
             },
         }
+
         if h_mc is not None:
             plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
-                "yerr": False if any(data_hide_errors) else None,
             }
+
+        # suppress error bars by overriding `yerr`
+        if any(data_hide_errors):
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = False
 
     return plot_config
 

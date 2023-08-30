@@ -343,11 +343,18 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
         BundleCMSSWSandbox=BundleCMSSWSandbox,
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached BundleRepo requirement to avoid race conditions during checksum calculation
+        self.bundle_repo_req = self.reqs.BundleRepo.req(self)
+
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
-        # add the repository bundle
-        reqs["repo"] = self.reqs.BundleRepo.req(self)
+        # add the repository bundle and trigger the checksum calculation
+        reqs["repo"] = self.bundle_repo_req
+        self.bundle_repo_req.checksum
 
         # main software stack
         if not self.htcondor_share_software:

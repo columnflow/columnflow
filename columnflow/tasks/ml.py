@@ -144,6 +144,10 @@ class PrepareMLEvents(
         ):
             n_events += len(events)
 
+            # optional check for overlapping inputs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping([events] + list(columns))
+
             # add additional columns
             events = update_ak_array(events, *columns)
 
@@ -162,7 +166,7 @@ class PrepareMLEvents(
             events = route_filter(events)
 
             # optional check for finite values
-            if self.check_finite:
+            if self.check_finite_output:
                 self.raise_if_not_finite(events)
 
             # loop over folds, use indices to generate masks and project into files
@@ -189,11 +193,16 @@ class PrepareMLEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-PrepareMLEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+PrepareMLEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=PrepareMLEvents.task_family in check_finite_tasks,
     add_default_to_description=True,
 )
 
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+PrepareMLEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=PrepareMLEvents.task_family in check_overlap_tasks,
+    add_default_to_description=True,
+)
 
 PrepareMLEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
@@ -537,6 +546,10 @@ class MLEvaluation(
             source_type=len(files) * ["awkward_parquet"],
             read_columns=len(files) * [read_columns],
         ):
+            # optional check for overlapping inputs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping([events] + list(columns))
+
             # add additional columns
             events = update_ak_array(events, *columns)
 
@@ -564,7 +577,7 @@ class MLEvaluation(
             events = route_filter(events)
 
             # optional check for finite values
-            if self.check_finite:
+            if self.check_finite_output:
                 self.raise_if_not_finite(events)
 
             # save as parquet via a thread in the same pool
@@ -578,8 +591,14 @@ class MLEvaluation(
 
 
 # overwrite class defaults
-MLEvaluation.check_finite = ChunkedIOMixin.check_finite.copy(
+MLEvaluation.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=MLEvaluation.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+MLEvaluation.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=MLEvaluation.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 
