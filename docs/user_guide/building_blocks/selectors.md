@@ -8,7 +8,8 @@ The results of the selection (which events or objects are to be conserved) are s
 of the {py:class}`~columnflow.selection.SelectionResult` class. Similar to
 {py:class}`~columnflow.production.Producer`s, it is possible to create new columns in
 {py:class}`~columnflow.selection.Selector`s. In the original columnflow setup,
-{py:class}`~columnflow.selection.Selector`s are being run in the ```SelectEvents``` task.
+{py:class}`~columnflow.selection.Selector`s are being run in the
+{py:class}`~columnflow.tasks.selection.SelectEvents` task.
 
 ## Create an instance of the Selector class
 
@@ -74,7 +75,7 @@ An example of an exposed Selector_ext with the ```jet_selection```
 {py:class}`~columnflow.selection.Selector` defined above as Selector_int, assuming the
 ```jet_selection``` exists in ```analysis/selection/jet.py``` is given below. It should be mentioned
 that a few details must be changed for this selector to work within the worklow, the full version
-can be found in the ```Complete example``` section.
+can be found in the {ref}`"Complete Example" <complete_example>` section.
 
 ```python
 
@@ -140,18 +141,20 @@ column/field will be overwritten by the new one!
 under the ```aux``` argument.
 - A combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
 ```"event"``` key. An example with this argument will be shown in the section
-```Complete example```. The final
+{ref}`"Complete Example" <complete_example>`. The final
 {py:class}`~columnflow.selection.SelectionResult` object to be returned by the exposed selector must
 have this field.
 
-While the arguments in the ```aux``` dictionary are discarded after the ```ReduceEvents``` task and are
+While the arguments in the ```aux``` dictionary are discarded after the
+{py:class}`~columnflow.tasks.reduction.ReduceEvents` task and are
 only used for short-lived saving of internal information that might be needed by other
 {py:class}`~columnflow.selection.Selector`s, the ```steps``` and ```objects``` arguments are
-specifically used by the ```ReduceEvents``` task to apply the given masks to the nanoAOD files
-(potentially with additional columns). As described above, the ```steps``` argument is used to reduce
-the number of events to be processed further down the task tree according to the selections, while
-the ```objects``` argument is used to select which objects are to be kept for further processing and
-creates new columns/fields containing specific selected objects.
+specifically used by the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to apply the
+given masks to the nanoAOD files (potentially with additional columns). As described above, the
+```steps``` argument is used to reduce the number of events to be processed further down the task
+tree according to the selections, while the ```objects``` argument is used to select which objects
+are to be kept for further processing and creates new columns/fields containing specific selected
+objects.
 
 Below is an example of a fully written internal Selector with its
 {py:class}`~columnflow.selection.SelectionResult` object without ```main``` argument.
@@ -230,9 +233,9 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
 
 ### Selection using several selection steps
 
-In order for the ```ReduceEvents``` task to apply the final event selection to all events, it is
-necessary to input the resulting boolean array in the ```main``` argument of the returned
-{py:class}`~columnflow.selection.SelectionResult` by the exposed
+In order for the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to apply the final event
+selection to all events, it is necessary to input the resulting boolean array in the ```main```
+argument of the returned {py:class}`~columnflow.selection.SelectionResult` by the exposed
 {py:class}`~columnflow.selection.Selector`.
 When several selection steps do appear in the selection, it is necessary to combine all the masks
 from all the steps in order to obtain the final boolean array to be given to the ```main``` argument
@@ -263,25 +266,29 @@ results.main["event"] = event_sel
 
 
 In order to use the correct values for the weights to be applied to the Monte Carlo samples while
-plotting, it is necessary to save some information which would be lost after the ```ReduceEvents```
+plotting, it is necessary to save some information which would be lost after the
+{py:class}`~columnflow.tasks.reduction.ReduceEvents`
 task. An example for that would be the sum of all the Monte Carlo weights in a simulation, which is
 needed for the normalization weights. In order to propagate this information to tasks further down
 the tree, the ```stats.json``` file is created. As it is a json file, it contains a
 dictionary with the key corresponding to the name of the information to be saved, while the value
-for the key is the information itself. The dictionary is created in the ```SelectEvents``` task and
+for the key is the information itself. The dictionary is created in the
+{py:class}`~columnflow.tasks.selection.SelectEvents` task and
 updated in place in a {py:class}`~columnflow.selection.Selector`. Depending on the weights to be
 used, various additional information might need to be saved in the ```stats``` object.
 
 The keys ```"n_events"```, ```"n_events_selected"```, ```"sum_mc_weight"```,
-```"sum_mc_weight_selected"``` get printed by the ```SelectEvents``` task along with the
+```"sum_mc_weight_selected"``` get printed by the
+{py:class}`~columnflow.tasks.selection.SelectEvents` task along with the
 corresponding efficiency. If they are not set, the default value for floats will be printed instead.
 
 Below is an example of such a {py:class}`~columnflow.selection.Selector` updating the ```stats```
 dictionary in place. This dictionary will be saved in the ```stats.json``` file. For convenience,
 the weights were saved in a weight_map dictionary along with the mask before the sum of the weights
 was saved in the ```stats``` dictionary. In this example, the keys to be printed by the
-```SelectEvents``` task and the sum of the Monte Carlo weights per process (needed for correct
-normalization of the number of Monte Carlo events in the plots) are saved.
+{py:class}`~columnflow.tasks.selection.SelectEvents` task and the sum of the Monte Carlo weights
+per process (needed for correct normalization of the number of Monte Carlo events in the plots)
+are saved.
 
 
 ```python
@@ -347,7 +354,7 @@ def increment_stats(
     return events
 ```
 
-
+(complete_example)=
 ### Complete example
 
 Overall, creating an exposed {py:class}`~columnflow.selection.Selector` with several selections steps
@@ -594,21 +601,24 @@ events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
 - The actual creation of the weights to be applied in the histogramms after the selection should be
-done in the ```ProduceColumns``` task, using the stats object created in this task if needed.
+done in the {py:class}`~columnflow.tasks.production.ProduceColumns` task, using the stats object
+created in this task if needed.
 
 
 
 ## Running the SelectEvents task
 
-The ```SelectEvents``` task runs a specific selection script and saves the created masks for event and
-objects selections in a parquet file, as well as the statistics of the selection in a json file.
+The {py:class}`~columnflow.tasks.selection.SelectEvents` task runs a specific selection script and
+saves the created masks for event and objects selections in a parquet file, as well as the
+statistics of the selection in a json file.
 
 While it is possible to see all the arguments and their explanation for this task using
 ```law run SelectEvents --help```, the only argument created specifically for this task is the
 ```--selector``` argument, through which the exposed {py:class}`~columnflow.selection.Selector` to
 be used can be chosen.
 
-The masks created by this task are then used by the ```ReduceEvents``` task to reduce the number of
+The masks created by this task are then used by the
+{py:class}`~columnflow.tasks.reduction.ReduceEvents` task to reduce the number of
 events (see the ```steps``` argument for the {py:class}`~columnflow.selection.SelectionResult`) and
 create/update new columns/fields with only the selected objects (see the ```objects``` argument for
 the {py:class}`~columnflow.selection.SelectionResult`). The saved statistics are used e.g. for the
@@ -627,10 +637,12 @@ law run SelectEvents --version name_of_your_version \
                      --dataset name_of_the_dataset_to_be_run
 ```
 
-It is to be mentioned that this task is run after the ```CalibrateEvents``` task and therefore uses
+It is to be mentioned that this task is run after the
+{py:class}`~columnflow.tasks.calibration.CalibrateEvents` task and therefore uses
 the default argument for the ```--calibrators``` if not specified otherwise.
 
 Notes:
-- Running the exposed {py:class}`~columnflow.selection.Selector` from the ```Complete example```
+- Running the exposed {py:class}`~columnflow.selection.Selector` from the
+{ref}`"Complete Example" <complete_example>`
 section would simply require you to give the name ```Selector_ext``` in the ```--selector```
 argument.

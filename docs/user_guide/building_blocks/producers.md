@@ -6,19 +6,21 @@ In columnflow, event/object based information (weights, properties, ...) is stor
 The creation of new columns is managed by instances of the
 {py:class}`~columnflow.production.Producer` class. {py:class}`~columnflow.production.Producer`s can
 be called in other classes (e.g. {py:class}`~columnflow.calibration.Calibrator` and
-{py:class}`~columnflow.selection.Selector`), or directly through the ```ProduceColumns``` task. It
-is also possible to create new columns directly within
-{py:class}`~columnflow.calibration.Calibrator`s and {py:class}`~columnflow.selection.Selector`s,
-without using instances of the {py:class}`~columnflow.production.Producer` class, but the process is
+{py:class}`~columnflow.selection.Selector`), or directly through the
+{py:class}`~columnflow.tasks.production.ProduceColumns` task. It is also possible to create new
+columns directly within {py:class}`~columnflow.calibration.Calibrator`s and
+{py:class}`~columnflow.selection.Selector`s, without using instances of the
+{py:class}`~columnflow.production.Producer` class, but the process is
 the same as for the {py:class}`~columnflow.production.Producer` class. Therefore, the
 {py:class}`~columnflow.production.Producer` class, which sole purpose is the creation of new
 columns, will be used to describe the process. The new columns are saved in a parquet file. If the
-column were created before the ```ReduceEvents``` task and are still needed afterwards, it should
-not be forgotten to include them in the ```keep_columns``` auxiliary of the config, as they would
-otherwise not be saved in the output file of the task. If the columns are created further down
-the task tree, e.g. in ```ProduceColumns```, they will be stored in another parquet file, namely as
-the output of the corresponding task, but these parquet files will be loaded similarly to the
-outputs from ```ReduceEvents```.
+column were created before the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task and are
+still needed afterwards, it should not be forgotten to include them in the ```keep_columns```
+auxiliary of the config, as they would otherwise not be saved in the output file of the task. If
+the columns are created further down the task tree, e.g. in
+{py:class}`~columnflow.tasks.production.ProduceColumns`, they will be stored in another parquet
+file, namely as the output of the corresponding task, but these parquet files will be loaded
+similarly to the outputs from {py:class}`~columnflow.tasks.reduction.ReduceEvents`.
 
 ## Usage
 
@@ -124,9 +126,9 @@ to use the {py:class}`~columnflow.columnar_util.Route` class and its
 the returned array in the case of a missing element without throwing an error.
 
 - If the {py:class}`~columnflow.production.Producer` is built in a new file and to be used directly
-by ```ProduceColumns```, you will still need to put the name of the new file along with its path in
-the ```law.cfg``` file under the ```production_modules``` argument for law to be able to find the
-file.
+by {py:class}`~columnflow.tasks.production.ProduceColumns`, you will still need to put the name of
+the new file along with its path in the ```law.cfg``` file under the ```production_modules```
+argument for law to be able to find the file.
 
 - If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
 on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
@@ -141,13 +143,14 @@ collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
 events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
-- The weights for plotting should ideally be created in the ```ProduceColumns``` task when possible,
-after the selection and reduction of the data.
+- The weights for plotting should ideally be created in the
+{py:class}`~columnflow.tasks.production.ProduceColumns` task when possible, after the selection and
+reduction of the data.
 
 
 ## ProduceColumns task
 
-The ```ProduceColumns``` task runs a specific instance of the
+The {py:class}`~columnflow.tasks.production.ProduceColumns` task runs a specific instance of the
 {py:class}`~columnflow.production.Producer` class and stores the additional columns created in a
 parquet file.
 
@@ -159,13 +162,15 @@ can be chosen.
 An example of how to run this task for an analysis with several datasets and configs is given below:
 
 ```shell
-law run SelectEvents --version name_of_your_version \
-                     --config name_of_your_config \
-                     --producer name_of_the_producer \
-                     --dataset name_of_the_dataset_to_be_run
+law run ProduceColumns --version name_of_your_version \
+                       --config name_of_your_config \
+                       --producer name_of_the_producer \
+                       --dataset name_of_the_dataset_to_be_run
 ```
 
-It is to be mentioned that this task is run after the ```SelectEvents``` and ```CalibrateEvents```
+It is to be mentioned that this task is run after the
+{py:class}`~columnflow.tasks.selection.SelectEvents` and
+{py:class}`~columnflow.tasks.calibration.CalibrateEvents`
 tasks and therefore uses the default arguments for the ```--calibrators``` and the ```--selector```
 if not specified otherwise.
 

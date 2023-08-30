@@ -3,7 +3,7 @@
 
 ## Columnflow convenience tools
 
-- Columnflow defines {py:attribute}`~columnflow.columnar_util.EMPTY_FLOAT`, an integer variable
+- Columnflow defines {py:data}`~columnflow.columnar_util.EMPTY_FLOAT`, an integer variable
 containing the value ```-9999```. This variable can be generally used as null value without having
 to considerate the difference in behaviour given by awkward array and matplotlib between integer
 and ```None``` entries in an array.
@@ -40,8 +40,9 @@ TODO
 
 ## General advices
 
-- The weights for plotting should ideally be created in the ```ProduceColumns``` task when possible,
-after the selection and reduction of the data.
+- The weights for plotting should ideally be created in the
+{py:class}`~columnflow.tasks.production.ProduceColumns` task when possible, after the selection
+and reduction of the data.
 
 
 

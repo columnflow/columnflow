@@ -51,8 +51,8 @@ you will be able to create new tasks in such a case, following the corresponding
 {doc}`examples` section of this documentation.
 The full task tree of general columnflow tasks can be seen in
 [this wikipage](https://github.com/columnflow/columnflow/wiki#default-task-graph). Additionally, the
-CMS-specific ```CreatePileUpWeights``` task is implemented, but not present in the graph, as it is
-experiment specific.
+CMS-specific {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights` task is implemented,
+but not present in the graph, as it is experiment specific.
 
 Further informations about tasks and [law](https://github.com/riga/law) can be found in
 {doc}`"Law Introduction" <law>` section of this documentation or in the
@@ -61,7 +61,8 @@ Github repository. In general (at least for cms), using columnflow requires a gr
 dataset files are accessed through it. The grid proxy should be activated after the setup of the
 default environment. It is however possible to create a custom law config file to be used by people
 without a grid certificate, although someone with a grid proxy must run the tasks
-```GetDatasetLFNs``` (and potentially ```CreatePileUpWeights```) for them. Once these
+{py:class}`~columnflow.tasks.external.GetDatasetLFNs` (and potentially
+{py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`) for them. Once these
 tasks are done, the local task outputs can be used without grid certificate by other users if
 they are able to access them with the storage location declared in the custom law config file.
 An example for such a custom config file can be found int he {doc}`examples` section of this
@@ -73,57 +74,69 @@ others to run, the arguments for a task higher in the tree will also be required
 in the tree (sometimes in a slightly different version, e.g. with an "s" if the task allows several
 instances of the parameter to be given at once (e.g. several dataset**s**)):
 
-- ```GetDatasetLFNs```: This task looks for the logical file names of the datasets to be used and
-saves them in a json file. The argument ```--dataset``` followed by the name of the dataset to be
-searched for, as defined in the analysis config is needed for this task to run. TODO: more infos?
+- {py:class}`~columnflow.tasks.external.GetDatasetLFNs`: This task looks for the logical file names
+of the datasets to be used and saves them in a json file. The argument ```--dataset``` followed by
+the name of the dataset to be searched for, as defined in the analysis config is needed for this
+task to run. TODO: more infos?
 
-- ```CalibrateEvents```: Task to implement corrections to be applied on the datasets, e.g. jet-energy
-corrections. This task uses objects of the {py:class}`~columnflow.calibration.Calibrator` class to
-apply the calibration. The argument ```--calibrator``` followed by the name of the
-{py:class}`~columnflow.calibration.Calibrator` object to be run is needed for this task to run.
-A default value for this argument can be set in the analysis config. Similarly, the ```--shift```
-argument can be given, in order to choose which corrections are to be
-used, e.g. which variation (up, down, nominal) of the jet-energy corrections are to be used.
-TODO: more infos, e.g. output type of task?
+- {py:class}`~columnflow.tasks.calibration.CalibrateEvents`: Task to implement corrections to be
+applied on the datasets, e.g. jet-energy corrections. This task uses objects of the
+{py:class}`~columnflow.calibration.Calibrator` class to apply the calibration. The argument
+```--calibrator``` followed by the name of the {py:class}`~columnflow.calibration.Calibrator`
+object to be run is needed for this task to run. A default value for this argument can be set in
+the analysis config. Similarly, the ```--shift``` argument can be given, in order to choose which
+corrections are to be used, e.g. which variation (up, down, nominal) of the jet-energy corrections
+are to be used. TODO: more infos, e.g. output type of task?
 
-- ```SelectEvents```: Task to implement selections to be applied on the datssets. This task uses
-objects of the {py:class}`~columnflow.selection.Selector` class to apply the selection. The output
-are masks for the events and objects to be selected, saved in a parquet file, and some additional
-parameters stored in a dictionary format, like the statistics of the selection
-(which are needed for the plotting tasks further down the task tree), saved in a json
+- {py:class}`~columnflow.tasks.selection.SelectEvents`: Task to implement selections to be applied
+on the datssets. This task uses objects of the {py:class}`~columnflow.selection.Selector` class to
+apply the selection. The output are masks for the events and objects to be selected, saved in a
+parquet file, and some additional parameters stored in a dictionary format, like the statistics of
+the selection (which are needed for the plotting tasks further down the task tree), saved in a json
 file. The mask are not applied to the columns during this task.
 The argument ```--selector``` followed by the name of the
 {py:class}`~columnflow.selection.Selector` object to be run is needed for this task to run.
 A default value for this argument can be set in the analysis config. From this task on, the
 ```--calibrator``` argument is replaced by ```--calibrators```.
 
-- ```ReduceEvents```: Task to apply the masks created in ```SelectEvents``` on the datasets. All
-tasks below ```ReduceEvents``` in the task graph use the parquet file resulting from
-```ReduceEvents``` to work on, not the original dataset. The columns to be conserved after
-```ReduceEvents``` are to be given in the analysis config under the ```config.x.keep_columns```
-argument in a ```DotDict``` structure (from {py:mod}`~columnflow.util`).
+- {py:class}`~columnflow.tasks.reduction.ReduceEvents`: Task to apply the masks created in
+{py:class}`~columnflow.tasks.selection.SelectEvents` on the datasets. All
+tasks below {py:class}`~columnflow.tasks.reduction.ReduceEvents` in the task graph use the parquet
+file resulting from {py:class}`~columnflow.tasks.reduction.ReduceEvents` to work on, not the
+original dataset. The columns to be conserved after
+{py:class}`~columnflow.tasks.reduction.ReduceEvents` are to be given in the analysis config under
+the ```config.x.keep_columns``` argument in a ```DotDict``` structure
+(from {py:mod}`~columnflow.util`).
 
-- ```ProduceColumns```: Task to produce additional columns for the reduced datasets, e.g. for new
-high level variables. This task uses objects of the {py:class}`~columnflow.production.Producer`
-class to create the new columns. The new columns are saved in a parquet file that can be used by
-the task below on the task graph. The argument ```--producer``` followed by the name of the
-{py:class}`~columnflow.production.Producer` object to be run is needed for this task to run.
-A default value for this argument can be set in the analysis config.
+- {py:class}`~columnflow.tasks.production.ProduceColumns`: Task to produce additional columns for
+the reduced datasets, e.g. for new high level variables. This task uses objects of the
+{py:class}`~columnflow.production.Producer` class to create the new columns. The new columns are
+saved in a parquet file that can be used by the task below on the task graph. The argument
+```--producer``` followed by the name of the {py:class}`~columnflow.production.Producer` object
+to be run is needed for this task to run. A default value for this argument can be set in the
+analysis config.
 
-- ```PrepareMLEvents```, ```MLTraining```, ```MLEvaluation``` and ```PlotMLResults```: Tasks to
-train, evaluate neural networks and plot their results. TODO: more informations? output type?
+- {py:class}`~columnflow.tasks.ml.PrepareMLEvents`, {py:class}`~columnflow.tasks.ml.MLTraining`,
+{py:class}`~columnflow.tasks.ml.MLEvaluation`: Tasks to
+train, evaluate neural networks and plot (to be implemented) their results.
+TODO: more informations? output type?
 all tf based? or very general and almost everything must be set in the training scripts?
 and if general, what is taken care of?
 
-- ```CreateHistograms```: Task to create histograms with the python package
-[Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below in the task
-graph. From this task on, the ```--producer``` argument is replaced by ```--producers```. The
-histograms are saved in a pickle file.
+- {py:class}`~columnflow.tasks.histograms.CreateHistograms`: Task to create histograms with the
+python package [Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below
+in the task graph. From this task on, the ```--producer``` argument is replaced by
+```--producers```. The histograms are saved in a pickle file.
 TODO: more informations?
 
-- ```PlotVariables*```, ```PlotShiftedVariables*```: Tasks to plot the histograms created by
-```CreateHistograms``` using the python package [matplotlib](https://matplotlib.org/) with
-[mplhep](https://mplhep.readthedocs.io/en/latest/) style. Several plot types are possible, including
+(PlotVariablesTasks)=
+- ```PlotVariables*```, ```PlotShiftedVariables*``` (e.g.
+{py:class}`~columnflow.tasks.plotting.PlotVariables1D`,
+{py:class}`~columnflow.tasks.plotting.PlotVariables2D`,
+{py:class}`~columnflow.tasks.plotting.PlotShiftedVariables1D`): Tasks to plot the histograms created by
+{py:class}`~columnflow.tasks.histograms.CreateHistograms` using the python package
+[matplotlib](https://matplotlib.org/) with [mplhep](https://mplhep.readthedocs.io/en/latest/) style.
+Several plot types are possible, including
 plots of variables for different physical processes or plots of variables for a single physical
 process but different shifts (e.g. jet-energy correction variations). The argument ```--variables```
 followed by the name of the variables defined in the analysis config, separated by a comma, is
@@ -134,18 +147,27 @@ argument ```shift-sources``` is needed and replaces the argument ```shift```. Th
 these plots can be given with the ```--file-types``` argument. It is possible to set a default for the
 variables in the analysis config.
 
-- ```WriteDatacards```: TODO
+- {py:class}`~columnflow.tasks.cms.inference.CreateDatacards`: TODO
 
-- ```CutflowPlots```: Task to plot the histograms created by ```CreateCutflowHistograms```, in a
-similar way to the ```PlotVariables*``` tasks. The difference is that these plots show the selection
-yields of the different selection steps defined in ```SelectEvents``` instead of only after the
-```ReduceEvents``` procedure. The selection steps to be shown can be chosen with the
-```--selector-steps``` argument.
+- ```PlotCutflow*``` (e.g. {py:class}`~columnflow.tasks.cutflow.PlotCutflow`,
+{py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`): Tasks to plot the histograms created
+by {py:class}`~columnflow.tasks.cutflow.CreateCutflowHistograms`. The
+{py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D` are plotted in a similar way to the
+["PlotVariables*"](PlotVariablesTasks) tasks. The difference is that these plots show the selection
+yields of the different selection steps defined in
+{py:class}`~columnflow.tasks.selection.SelectEvents` instead of only after the
+{py:class}`~columnflow.tasks.reduction.ReduceEvents` procedure. The selection steps to be shown
+can be chosen with the ```--selector-steps``` argument. Without further argument, the outputs are
+as much plots as the number of selector steps given. On the other hand, the
+{py:class}`~columnflow.tasks.cutflow.PlotCutflow` task gives a single histograms containing only
+the total event yields for each selection step given.
 
-- ```Merge``` tasks: Tasks to merge the local outputs from the various occurences of the
-corresponding tasks. TODO: details? why needed?
+- ```Merge``` tasks (e.g. {py:class}`~columnflow.tasks.reduction.MergeReducedEvents`,
+{py:class}`~columnflow.tasks.histograms.MergeHistograms`): Tasks to merge the local outputs from
+the various occurences of the corresponding tasks. TODO: details? why needed? Only convenience?
+Or I/O?
 
-- ```CreatePileUpWeights```: TODO
+- {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`: TODO
 
 maybe TODO: each task separately?
 

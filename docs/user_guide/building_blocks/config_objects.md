@@ -50,7 +50,8 @@ config.add_variable(
 ```
 
 The list of possible keyword arguments can be found in
-{external+order:py:class}`order.variable.Variable`. The values in ```expression``` can be either a
-one-dimensional or a more dimensional array. In this second case the information is flattened before
-plotting. It is to be mentioned that {py:attribute}`~columnflow.columnar_util.EMPTY_FLOAT` is a
-columnflow internal null value and corresponds to the value ```-9999```.
+{external+order:py:class}`order.variable.Variable`. The values in the ```expression``` argument can
+be either a one-dimensional or a more dimensional array. In this second case the information is
+flattened before plotting. It is to be mentioned that
+{py:data}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value and
+corresponds to the value ```-9999```.
