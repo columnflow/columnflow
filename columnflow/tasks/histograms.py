@@ -281,7 +281,7 @@ class MergeHistograms(
     )
 
     def create_branch_map(self):
-        # create a dummy branch map so that this task could as a job
+        # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
 
     def workflow_requires(self):
@@ -299,8 +299,9 @@ class MergeHistograms(
             prefer_cli.clear()
             missing = self.output().count(existing=False, keys=True)[1]
             variables = tuple(sorted(missing, key=variables.index))
-            if not variables:
-                return []
+
+        if not variables:
+            return []
 
         return self.reqs.CreateHistograms.req(
             self,
