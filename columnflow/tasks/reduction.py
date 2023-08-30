@@ -350,6 +350,9 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 20 files into one
     merge_factor = 20
 
+    # the initial default value of the cache_branch_map attribute
+    cache_branch_map_default = False
+
     # upstream requirements
     reqs = Requirements(
         MergeReductionStats=MergeReductionStats,
@@ -361,10 +364,6 @@ class MergeReducedEventsUser(DatasetTask):
         # cached value of the file_merging until it's positive
         self._cached_file_merging = -1
 
-        # in case this is a workflow, do not cache branches by default
-        # (this is enabled in reduced_file_merging once positive)
-        self._cache_branches = False
-
     @property
     def file_merging(self):
         """
@@ -375,7 +374,9 @@ class MergeReducedEventsUser(DatasetTask):
             output = self.reqs.MergeReductionStats.req(self).output()
             if output["stats"].exists():
                 self._cached_file_merging = output["stats"].load(formatter="json")["merge_factor"]
-                self._cache_branches = True
+
+                # as soon as the status file exists, cache the branch map
+                self.cache_branch_map = True
 
         return self._cached_file_merging
 
