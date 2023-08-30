@@ -21,6 +21,13 @@ cf_sandbox() {
     #   > cf_sandbox venv_columnar_dev which python
     #   > cf_sandbox venv_columnar_dev ipython
 
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # check arguments
     local sandbox_file="$1"
     if [ -z "${sandbox_file}" ]; then

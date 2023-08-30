@@ -102,19 +102,21 @@ def plot_variable_variants(
     # add hists
     for label, h in hists.items():
         norm = sum(h.values()) if shape_norm else 1
-        plot_config[f"hist_{label}"] = {
+        plot_config[f"hist_{label}"] = plot_cfg = {
             "method": "draw_hist",
             "hist": h,
             "kwargs": {
                 "norm": norm,
                 "label": selector_step_labels.get(label, label),
-                "yerr": False if hide_errors else None,
             },
             "ratio_kwargs": {
                 "norm": hists["Initial"].values(),
-                "yerr": False if hide_errors else None,
             },
         }
+        if hide_errors:
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = None
 
     # setup style config
     default_style_config = prepare_style_config(
@@ -176,21 +178,23 @@ def plot_shifted_variable(
         if not shift_inst.is_nominal:
             label += " ({0:+.2f}%)".format(diff * 100)
 
-        plot_config[shift_inst.name] = {
+        plot_config[shift_inst.name] = plot_cfg = {
             "method": "draw_hist",
             "hist": h,
             "kwargs": {
                 "norm": sum(h.values()) if shape_norm else 1,
                 "label": label,
                 "color": colors[shift_inst.direction],
-                "yerr": False if hide_errors else None,
             },
             "ratio_kwargs": {
                 "norm": ratio_norm,
                 "color": colors[shift_inst.direction],
-                "yerr": False if hide_errors else None,
             },
         }
+        if hide_errors:
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = None
 
     # legend title setting
     if not legend_title:

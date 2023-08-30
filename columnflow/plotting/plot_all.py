@@ -20,7 +20,12 @@ mplhep = maybe_import("mplhep")
 od = maybe_import("order")
 
 
-def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+def draw_error_bands(
+    ax: plt.Axes,
+    h: hist.Hist,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
     # compute relative errors
     rel_error = h.variances()**0.5 / h.values()
     rel_error[np.isnan(rel_error)] = 0.0
@@ -46,7 +51,12 @@ def draw_error_bands(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) ->
     ax.bar(**defaults)
 
 
-def draw_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) -> None:
+def draw_stack(
+    ax: plt.Axes,
+    h: hist.Stack,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
     # check if norm is a number
     if test_float(norm):
         h = hist.Stack(*[i / norm for i in h])
@@ -72,7 +82,12 @@ def draw_stack(ax: plt.Axes, h: hist.Stack, norm: float = 1.0, **kwargs) -> None
     h.plot(**defaults)
 
 
-def draw_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+def draw_hist(
+    ax: plt.Axes,
+    h: hist.Hist,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
     h = h / norm
     defaults = {
         "ax": ax,
@@ -83,9 +98,14 @@ def draw_hist(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
     h.plot1d(**defaults)
 
 
-def draw_errorbars(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> None:
+def draw_errorbars(
+    ax: plt.Axes,
+    h: hist.Hist,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
     values = h.values() / norm
-    variances = np.sqrt(h.variances()) / norm
+    variances = h.variances() / norm**2
     # compute asymmetric poisson errors for data
     # TODO: passing the output of poisson_interval as yerr to mpl.plothist leads to
     #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
@@ -96,7 +116,7 @@ def draw_errorbars(ax: plt.Axes, h: hist.Hist, norm: float = 1.0, **kwargs) -> N
     yerr[np.isnan(yerr)] = 0
     yerr[0] = values - yerr[0]
     yerr[1] -= values
-
+    yerr[yerr < 0] = 0
     defaults = {
         "x": h.axes[0].centers,
         "y": values,

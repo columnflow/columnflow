@@ -21,23 +21,6 @@ ak = maybe_import("awkward")
 
 
 #
-# selectors used by categories definitions
-# (not "exposed" to be used from the command line)
-#
-
-@selector(uses={"event"})
-def sel_incl(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
-    # fully inclusive selection
-    return ak.ones_like(events.event) == 1
-
-
-@selector(uses={"Jet.pt"})
-def sel_2j(self: Selector, events: ak.Array, **kwargs) -> ak.Array:
-    # two or more jets
-    return ak.num(events.Jet.pt, axis=1) >= 2
-
-
-#
 # other unexposed selectors
 # (not selectable from the command line but used by other, exposed selectors)
 #
@@ -153,7 +136,6 @@ def example(
         "num_events_selected": results.main.event,
     }
     group_map = {}
-    group_combinations = []
     if self.dataset_inst.is_mc:
         weight_map = {
             **weight_map,
@@ -162,20 +144,23 @@ def example(
             "sum_mc_weight_selected": (events.mc_weight, results.main.event),
         }
         group_map = {
-            **group_map,
+            # per process
+            "process": {
+                "values": events.process_id,
+                "mask_fn": (lambda v: events.process_id == v),
+            },
+            # per jet multiplicity
             "njet": {
                 "values": results.x.n_jets,
                 "mask_fn": (lambda v: results.x.n_jets == v),
             },
         }
-        group_combinations.append(("process", "njet"))
-    events = self[increment_stats](
+    events, results = self[increment_stats](
         events,
         results,
         stats,
         weight_map=weight_map,
         group_map=group_map,
-        group_combinations=group_combinations,
         **kwargs,
     )
 

@@ -32,17 +32,18 @@ pygments_style = "sphinx"
 add_module_names = False
 
 html_title = project + " Documentation"
-html_logo = "../assets/logo_dark.png"
 html_favicon = "../assets/fav_bright.ico"
 html_theme = "sphinx_book_theme"
 html_theme_options = {}
 if html_theme == "sphinx_rtd_theme":
+    html_logo = "../assets/logo_dark.png"
     html_theme_options.update({
         "logo_only": True,
         "prev_next_buttons_location": None,
         "collapse_navigation": False,
     })
 elif html_theme == "alabaster":
+    html_logo = "../assets/logo_dark.png"
     html_theme_options.update({
         "github_user": "columnflow",
         "github_repo": "columnflow",
@@ -57,6 +58,10 @@ elif html_theme == "sphinx_book_theme":
         "use_repository_button": True,
         "use_issues_button": True,
         "use_edit_page_button": True,
+        "logo": {
+            "image_light": "../assets/logo_dark.png",
+            "image_dark": "../assets/logo_bright.png",
+        },
     })
 
 extensions = [

@@ -47,6 +47,12 @@ setup___cf_short_name_lc__() {
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
 
     #
     # global variables
@@ -72,12 +78,11 @@ setup___cf_short_name_lc__() {
             query CF_DATA "Local data directory" "\$__cf_short_name_uc___BASE/data" "./data"
             query CF_STORE_NAME "Relative path used in store paths (see next queries)" "__cf_short_name_lc___store"
             query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
-            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
+            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "\$CF_DATA/__cf_short_name_lc___cache"
             export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
             export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
             query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
             query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
-            query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "naf-cms15.desy.de"

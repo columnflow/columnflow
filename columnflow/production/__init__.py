@@ -19,12 +19,14 @@ class Producer(TaskArrayFunction):
     Base class for all producers.
     """
 
+    exposed = True
+
     @classmethod
     def producer(
         cls,
         func: Callable | None = None,
         bases: tuple = (),
-        mc_only: bool = True,
+        mc_only: bool = False,
         data_only: bool = False,
         nominal_only: bool = False,
         shifts_only: Sequence[str] | set[str] | None = None,

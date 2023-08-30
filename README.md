@@ -1,35 +1,61 @@
-<center>
-  <a href="https://github.com/columnflow/columnflow">
-    <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_dark.png" width="480" />
-  </a>
-</center>
+<!-- marker-before-logo -->
 
+<p align="center">
+  <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_dark.png#gh-light-mode-only" width="480" />
+  <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_bright.png#gh-dark-mode-only" width="480" />
+</p>
 
 <!-- marker-after-logo -->
 
+<!-- marker-before-badges -->
 
-[![Build status](https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg)](https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml)
-[![Package version](https://img.shields.io/pypi/v/columnflow.svg?style=flat)](https://pypi.python.org/pypi/columnflow)
-[![Documentation status](https://readthedocs.org/projects/columnflow/badge/?version=stable)](http://columnflow.readthedocs.io)
-[![Code coverge](https://codecov.io/gh/columnflow/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP)](https://codecov.io/gh/columnflow/columnflow)
-[![License](https://img.shields.io/github/license/columnflow/columnflow.svg)](https://github.com/columnflow/columnflow/blob/master/LICENSE)
+<p align="center">
+  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml">
+    <img alt="Build status" src="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg" />
+  </a>
+  <a href="https://pypi.python.org/pypi/columnflow">
+    <img alt="Package version" src="https://img.shields.io/pypi/v/columnflow.svg?style=flat" />
+  </a>
+  <a href="http://columnflow.readthedocs.io">
+    <img alt="Documentation status" src="https://readthedocs.org/projects/columnflow/badge/?version=stable" />
+  </a>
+  <a href="https://codecov.io/gh/columnflow/columnflow">
+    <img alt="Code coverge" src="https://codecov.io/gh/columnflow/columnflow/branch/master/graph/badge.svg?token=33FLINPXFP" />
+  </a>
+  <a href="https://github.com/columnflow/columnflow/blob/master/LICENSE">
+    <img alt="License" src="https://img.shields.io/github/license/columnflow/columnflow.svg" />
+  </a>
+</p>
+
+<!-- marker-after-badges -->
+
+<!-- marker-before-header -->
 
 Backend for columnar, fully orchestrated HEP analyses with pure Python, [law](https://github.com/riga/law) and [order](https://github.com/riga/order).
 
+Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
 
 <!-- marker-after-header -->
 
+<!-- marker-before-note -->
 
 ## Note on current development
 
 This project is currently in a beta phase.
 The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
-At this point (December 2022), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
-The first released version is expected in early 2023.
+At this point (July 2023), four large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
+The first released version is expected in the fall of 2023.
 However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
+
+<!-- marker-after-note -->
+
+<!-- marker-before-analytics -->
 
 ![Columnflow analytics](https://repobeats.axiom.co/api/embed/b6ebc5ba41019de55eb48e195eecb438890442c8.svg "Columnflow analytics")
 
+<!-- marker-after-analytics -->
+
+<!-- marker-before-body -->
 
 ## Quickstart
 
@@ -45,36 +71,41 @@ At the end of the setup, you will see further instructions and suggestions to ru
 ```
 Setup successfull! The next steps are:
 
-  1. Setup the repository and install the environment.
-    > source setup.sh [optional_setup_name]
+1. Setup the repository and install the environment.
+   > cd
+   > source setup.sh [recommended_yet_optional_setup_name]
 
-  2. Run local tests & linting checks to verify that the analysis is setup correctly.
-    > ./tests/run_all
+2. Run local tests & linting checks to verify that the analysis is setup correctly.
+   > ./tests/run_all
 
-  3. Create a GRID proxy if you intend to run tasks that need one
-    > voms-proxy-init -voms cms -rfc -valid 196:00
+3. Create a GRID proxy if you intend to run tasks that need one
+   > voms-proxy-init -rfc -valid 196:00
 
-  4. Checkout the 'Getting started' guide to run your first tasks.
-    https://columnflow.readthedocs.io/en/stable/start.html
+4. Checkout the 'Getting started' guide to run your first tasks.
+   https://columnflow.readthedocs.io/en/stable/start.html
 
-    Suggestions for tasks to run:
+   Suggestions for tasks to run:
 
-    a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
-       default dataset using the default calibrator and default selector
-       (enter the command below and 'tab-tab' to see all arguments or add --help for help)
+   a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
+      default dataset using the default calibrator and default selector
+      (enter the command below and 'tab-tab' to see all arguments or add --help for help)
       > law run cf.ReduceEvents --version dev1 --branch 0
 
-    b) Create the jet1_pt distribution for the single top dataset:
+      Verify what you just run by adding '--print-status -1' (-1 = fully recursive)
+      > law run cf.ReduceEvents --version dev1 --branch 0 --print-status -1
+
+   b) Create the jet1_pt distribution for the single top datasets
+      (if you have an image/pdf viewer installed, add it via '--view-cmd <binary>')
       > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt
 
-    c) Include the ttbar dataset and also plot jet1_eta:
-      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
+      Again, verify what you just ran, now with recursion depth 4
+      > law run cf.PlotVariables1D --version dev1 --datasets 'st*' --variables jet1_pt --print-status 4
 
-    d) Create cms-style datacards for the example model in hgg/inference/example.py:
-      > law run cf.CreateDatacards --version dev1 --inference-model example
+   c) Include the ttbar dataset and also plot jet1_eta
+      > law run cf.PlotVariables1D --version dev1 --datasets 'tt*,st*' --variables jet1_pt,jet1_eta
 ```
 
-For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/issues/25#issue-1258137827).
+For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph).
 
 
 ## Projects using columnflow
@@ -104,13 +135,16 @@ For a better overview of the tasks that are triggered by the commands below, che
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mschrode" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jolange" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4?s=100" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jolange" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/JanekMoels"><img src="https://avatars.githubusercontent.com/u/116348923?v=4?s=100" width="100px;" alt="JanekMoels"/><br /><sub><b>JanekMoels</b></sub></a><br /><a href="#ideas-JanekMoels" title="Ideas, Planning, & Feedback">🤔</a></td>
     </tr>
   </tbody>
 </table>
+
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
@@ -120,6 +154,5 @@ This project follows the [all-contributors](https://github.com/all-contributors/
 
 - Source hosted at [GitHub](https://github.com/columnflow/columnflow)
 - Report issues, questions, feature requests on [GitHub Issues](https://github.com/columnflow/columnflow/issues)
-
 
 <!-- marker-after-body -->

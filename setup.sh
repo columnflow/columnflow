@@ -68,8 +68,6 @@ setup_columnflow() {
     #       interactive setup.
     #   CF_CI_JOB
     #       Set to "1" if a CI environment is detected (e.g. GitHub actions), and "0" otherwise.
-    #   CF_VOMS
-    #       The name of the user's virtual organization. Queried during the interactive setup.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
@@ -164,6 +162,7 @@ setup_columnflow() {
 
     # zsh options
     if ${shell_is_zsh}; then
+        emulate -L bash
         setopt globdots
     fi
 
@@ -194,7 +193,6 @@ setup_columnflow() {
             query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
             [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
             unset CF_VENV_SETUP_MODE_UPDATE
-            query CF_VOMS "Virtual-organization" "cms"
             query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
             if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
                 query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
@@ -456,6 +454,12 @@ cf_setup_software_stack() {
     [ "${setup_name}" = "default" ] && setup_is_default="true"
     local pyv="3.9"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # empty the PYTHONPATH
     export PYTHONPATH=""
 
@@ -535,12 +539,14 @@ EOF
                 cf_color cyan "setting up conda / micromamba environment"
                 micromamba install \
                     libgcc \
+                    bash \
+                    zsh \
                     "python=${pyv}" \
+                    git \
+                    git-lfs \
                     gfal2 \
                     gfal2-util \
                     python-gfal2 \
-                    git \
-                    git-lfs \
                     conda-pack \
                     || return "$?"
                 micromamba clean --yes --all
@@ -575,7 +581,7 @@ EOF
         # source the production sandbox, potentially skipped in CI jobs
         local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
-            bash -c "source \"${CF_BASE}/sandboxes/cf.sh\" \"\" \"silent\""
+            ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
             if [ "${ret}" = "21" ]; then
                 show_version_warning "cf"
@@ -620,6 +626,17 @@ EOF
 cf_setup_git_hooks() {
     # Initializes lfs and custom githooks in the local checkout for both the columnflow
     # (sub)repository, as well as the analysis repository in case a directory bin/githooks is found.
+    #
+    # Optional environments variables:
+    #   CF_REMOTE_JOB
+    #       When "1", no hooks are setup.
+    #   CF_CI_JOB
+    #       When "1", no hooks are setup.
+
+    # do nothing when not local
+    if [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ]; then
+        return "0"
+    fi
 
     # helper to setup hooks
     setup_hooks() {
@@ -674,7 +691,7 @@ cf_setup_git_hooks() {
         # setup all hooks in bin/githooks
         for f in $( ls -1 "${src_dir}" ); do
             # skip scripts and directories
-            ( [ -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
+            ( [ ! -f "${src_dir}/${f}" ] || [[ "${f}" == *.sh ]] ) && continue
             # link files
             ln -s "${src_dir}/${f}" "${dst_dir}/${f}$( hook_postfix "${dst_dir}" "${f}" )"
         done
@@ -749,6 +766,14 @@ cf_init_submodule() {
 [ ! -z "${BASH_VERSION}" ] && export -f cf_init_submodule
 
 cf_color() {
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
+    # get arguments
     local color="$1"
     local msg="${@:2}"
 

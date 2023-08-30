@@ -31,6 +31,7 @@ analysis___cf_short_name_lc__ = ana = od.Analysis(
 )
 
 # analysis-global versions
+# (see cfg.x.versions below for more info)
 ana.x.versions = {}
 
 # files of bash sandboxes that might be required by remote tasks
@@ -239,10 +240,11 @@ cfg.x.event_weights = DotDict({
     "muon_weight": get_shifts("mu"),
 })
 
-# versions per task family and optionally also dataset and shift
-# None can be used as a key to define a default value
+# versions per task family, either referring to strings or to callables receving the invoking
+# task instance and parameters to be passed to the task family
 cfg.x.versions = {
     # "cf.CalibrateEvents": "prod1",
+    # "cf.SelectEvents": (lambda cls, inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
     # ...
 }
 
@@ -255,13 +257,13 @@ cfg.add_channel(name="mutau", id=1)
 add_category(
     cfg,
     name="incl",
-    selection="sel_incl",
+    selection="cat_incl",
     label="inclusive",
 )
 add_category(
     cfg,
     name="2j",
-    selection="sel_2j",
+    selection="cat_2j",
     label="2 jets",
 )
 
