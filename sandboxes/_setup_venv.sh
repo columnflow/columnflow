@@ -52,13 +52,14 @@ setup_venv() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="${PWD}"
 
-    # source the main setup script to access helpers
-    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
-
     # zsh options
     if ${shell_is_zsh}; then
         emulate -L bash
+        setopt globdots
     fi
+
+    # source the main setup script to access helpers
+    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
 
     #
@@ -260,7 +261,8 @@ setup_venv() {
             # compose a list of arguments containing dependencies to install
             local install_reqs=""
             add_requirements() {
-                local args="${@}"
+                local args
+                args="${@}"
                 echo "$( cf_color magenta "install" ) $( cf_color default_bright "${args}" )"
                 [ ! -z "${install_reqs}" ] && install_reqs="${install_reqs} "
                 install_reqs="${install_reqs}${args}"
@@ -275,6 +277,7 @@ setup_venv() {
             fi
 
             # requirement files
+            local f
             for f in ${requirement_files[@]}; do
                 add_requirements -r "${f}"
             done

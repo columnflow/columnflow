@@ -23,6 +23,7 @@ create_analysis() {
 
     # zsh options
     if ${shell_is_zsh}; then
+        emulate -L bash
         setopt globdots
     fi
 
@@ -30,6 +31,14 @@ create_analysis() {
     #
     # helpers
     #
+
+    str_lc() {
+        ${shell_is_zsh} && echo "${(L)1}" || echo "${1,,}"
+    }
+
+    str_uc() {
+        ${shell_is_zsh} && echo "${(U)1}" || echo "${1^^}"
+    }
 
     export_var() {
         local varname="$1"
@@ -148,7 +157,7 @@ create_analysis() {
 
     query_input "cf_analysis_name" "Name of the analysis" "-"
     echo
-    query_input "cf_module_name" "Name of the python module in the analysis directory" "${cf_analysis_name,,}"
+    query_input "cf_module_name" "Name of the python module in the analysis directory" "$( str_lc "${cf_analysis_name}" )"
     echo
     query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "${cf_module_name}"
     echo
@@ -159,8 +168,8 @@ create_analysis() {
 
     # changes
     export cf_short_name="${cf_short_name%_}"
-    export cf_short_name_lc="${cf_short_name,,}"
-    export cf_short_name_uc="${cf_short_name^^}"
+    export cf_short_name_lc="$( str_lc "${cf_short_name}" )"
+    export cf_short_name_uc="$( str_uc "${cf_short_name}" )"
 
     # debug output
     if ${debug}; then
@@ -247,7 +256,8 @@ create_analysis() {
     echo_color cyan "setup submodules"
 
     local gh_prefix="https://github.com/"
-    ${cf_use_ssh,,} && gh_prefix="git@github.com:"
+
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix="git@github.com:"
 
     mkdir -p modules
     if ${debug}; then

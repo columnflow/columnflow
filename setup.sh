@@ -162,6 +162,7 @@ setup_columnflow() {
 
     # zsh options
     if ${shell_is_zsh}; then
+        emulate -L bash
         setopt globdots
     fi
 
@@ -453,6 +454,12 @@ cf_setup_software_stack() {
     [ "${setup_name}" = "default" ] && setup_is_default="true"
     local pyv="3.9"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # empty the PYTHONPATH
     export PYTHONPATH=""
 
@@ -532,12 +539,14 @@ EOF
                 cf_color cyan "setting up conda / micromamba environment"
                 micromamba install \
                     libgcc \
+                    bash \
+                    zsh \
                     "python=${pyv}" \
+                    git \
+                    git-lfs \
                     gfal2 \
                     gfal2-util \
                     python-gfal2 \
-                    git \
-                    git-lfs \
                     conda-pack \
                     || return "$?"
                 micromamba clean --yes --all
@@ -572,7 +581,7 @@ EOF
         # source the production sandbox, potentially skipped in CI jobs
         local ret
         if [ "${CF_CI_JOB}" != "1" ]; then
-            bash -c "source \"${CF_BASE}/sandboxes/cf.sh\" \"\" \"silent\""
+            ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
             if [ "${ret}" = "21" ]; then
                 show_version_warning "cf"
@@ -757,6 +766,14 @@ cf_init_submodule() {
 [ ! -z "${BASH_VERSION}" ] && export -f cf_init_submodule
 
 cf_color() {
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
+    # get arguments
     local color="$1"
     local msg="${@:2}"
 

@@ -11,6 +11,13 @@ cf_create_venv() {
     #   CF_VENV_BASE:
     #       The base path where CF virtual environments are stored.
 
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # check arguments
     local name="$1"
     if [ -z "${name}" ]; then
