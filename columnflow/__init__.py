@@ -37,8 +37,11 @@ law.contrib.load(
 )
 
 # load flavor specific contrib packages
-if flavor == "cms":
-    law.contrib.load("cms")
+# if flavor == "cms":
+#     law.contrib.load("cms")
+# some core tasks (BundleCMSSW) need the cms contrib package, to be refactored, see #155
+law.contrib.load("cms")
+
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
 if law.config.has_option("outputs", "wlcg_file_systems"):
