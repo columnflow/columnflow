@@ -287,6 +287,10 @@ setup_venv() {
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
 
+            # make newly installed packages relocatable
+            cf_make_venv_relocatable "${venv_name_hashed}"
+            [ "$?" != "0" ] && clear_pending && return "28"
+
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
             echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
@@ -326,8 +330,14 @@ setup_venv() {
             fi
         fi
 
+        # let the home variable in pyvenv.cfg point to the conda bin directory
+        sed -i -r \
+            "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
+            "${install_path}/pyvenv.cfg"
+
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"
+
         echo
     fi
 
