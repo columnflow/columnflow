@@ -405,11 +405,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
     def htcondor_job_config(self, config, job_num, branches):
         # include the voms proxy if not skipped
         if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            voms_proxy_file = law.wlcg.get_voms_proxy_file()
-            if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
+            vomsproxy_file = law.wlcg.get_vomsproxy_file()
+            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
                 raise Exception("voms proxy not valid, submission aborted")
-            config.input_files["voms_proxy_file"] = law.JobInputFile(
-                voms_proxy_file,
+            config.input_files["vomsproxy_file"] = law.JobInputFile(
+                vomsproxy_file,
                 share=True,
                 render=False,
             )
@@ -607,10 +607,10 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow):
     def slurm_job_config(self, config, job_num, branches):
         # include the voms proxy if not skipped
         if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            voms_proxy_file = law.wlcg.get_voms_proxy_file()
-            if os.path.exists(voms_proxy_file):
-                config.input_files["voms_proxy_file"] = law.JobInputFile(
-                    voms_proxy_file,
+            vomsproxy_file = law.wlcg.get_vomsproxy_file()
+            if os.path.exists(vomsproxy_file):
+                config.input_files["vomsproxy_file"] = law.JobInputFile(
+                    vomsproxy_file,
                     share=True,
                     render=False,
                 )

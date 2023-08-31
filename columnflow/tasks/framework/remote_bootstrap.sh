@@ -17,7 +17,7 @@ bootstrap_htcondor_standalone() {
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
-    [ ! -z "{{voms_proxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{voms_proxy_file}}"
+    [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -87,7 +87,7 @@ bootstrap_slurm() {
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export KRB5CCNAME="FILE:{{kerberos_proxy_file}}"
-    [ ! -z "{{voms_proxy_file}}" ] && export X509_USER_PROXY="{{voms_proxy_file}}"
+    [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="{{vomsproxy_file}}"
 
     # optional custom command before the setup is sourced
     {{cf_pre_setup_command}}

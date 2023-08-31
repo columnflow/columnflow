@@ -906,16 +906,6 @@ class DatasetTask(ShiftTask):
         # use enumerate for simply indexing
         return dict(enumerate(chunks))
 
-    def htcondor_destination_info(self, info):
-        """
-        Hook to modify the additional info printed along logs of the htcondor workflow.
-        """
-        info.append(self.config_inst.name)
-        info.append(self.dataset_inst.name)
-        if self.global_shift_inst not in (None, law.NO_STR, "nominal"):
-            info.append(self.global_shift_inst.name)
-        return info
-
 
 class CommandTask(AnalysisTask):
     """
