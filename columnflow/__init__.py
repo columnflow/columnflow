@@ -25,6 +25,11 @@ from columnflow.__version__ import (  # noqa
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+# cf flavor
+flavor = os.getenv("CF_FLAVOR")
+if isinstance(flavor, str):
+    flavor = flavor.lower()
+
 # load contrib packages
 law.contrib.load(
     "arc", "awkward", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm", "tasks",
@@ -32,7 +37,7 @@ law.contrib.load(
 )
 
 # load flavor specific contrib packages
-if os.getenv("CF_FLAVOR") == "cms":
+if flavor == "cms":
     law.contrib.load("cms")
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured

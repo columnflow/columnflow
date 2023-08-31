@@ -11,6 +11,7 @@ import math
 import luigi
 import law
 
+from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.util import real_path
 
@@ -724,7 +725,7 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
 # prepare bases of the RemoteWorkflow container class
 remote_workflow_bases = (HTCondorWorkflow, SlurmWorkflow)
 
-if os.getenv("CF_FLAVOR") == "cms":
+if cf_flavor == "cms":
     from columnflow.tasks.cms.base import CrabWorkflow
     remote_workflow_bases += (CrabWorkflow,)
 
