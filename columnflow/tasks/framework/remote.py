@@ -291,7 +291,7 @@ class RemoteWorkflowMixin(object):
             reqs["repo"] = self.bundle_repo_req
         elif "BundleRepo" in self.reqs:
             reqs["repo"] = self.reqs.BundleRepo.req(self)
-        if "rep" in reqs:
+        if "repo" in reqs:
             self.bundle_repo_req.checksum
 
         # main software stack

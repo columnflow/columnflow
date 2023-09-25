@@ -4,6 +4,8 @@
 CMS related base tasks.
 """
 
+from __future__ import annotations
+
 import os
 
 import law
@@ -47,18 +49,18 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         # cached BundleRepo requirement to avoid race conditions during checksum calculation
         self.bundle_repo_req = self.reqs.BundleRepo.req(self)
 
-    def crab_stageout_location(self):
+    def crab_stageout_location(self) -> tuple[str, str]:
         # the storage site and base directory on it for crab specific outputs
         return (
             law.config.get_expanded("job", "crab_storage_element"),
             law.config.get_expanded("job", "crab_base_directory"),
         )
 
-    def crab_output_directory(self):
+    def crab_output_directory(self) -> law.FileSystemDirectoryTarget:
         # the directory where submission meta data and logs should be stored
         return self.local_target(dir=True)
 
-    def crab_bootstrap_file(self):
+    def crab_bootstrap_file(self) -> law.JobInputFile:
         # each job can define a bootstrap file that is executed prior to the actual job
         # in order to setup software and environment variables
         bootstrap_file = os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
@@ -69,7 +71,7 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         # and allow rendering inside the job
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
-    def crab_workflow_requires(self):
+    def crab_workflow_requires(self) -> dict[str, AnalysisTask]:
         reqs = law.cms.CrabWorkflow.crab_workflow_requires(self)
 
         # add requirements dealing with software bundling
@@ -77,7 +79,11 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
 
         return reqs
 
-    def crab_job_config(self, config, submit_jobs):
+    def crab_job_config(
+        self,
+        config: law.BaseJobFileFactory.Config,
+        submit_jobs: dict[int, list[int]],
+    ) -> law.BaseJobFileFactory.Config:
         # include the wlcg specific tools script in the input sandbox
         config.input_files["wlcg_tools"] = law.JobInputFile(
             law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
