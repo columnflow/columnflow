@@ -36,10 +36,10 @@ ana.x.versions = {}
 
 # files of bash sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
-ana.x.bash_sandboxes = [
-    "$CF_BASE/sandboxes/cf.sh",
-    law.config.get("analysis", "default_columnar_sandbox"),
-]
+ana.x.bash_sandboxes = ["$CF_BASE/sandboxes/cf.sh"]
+default_sandbox = law.Sandbox.new(law.config.get("analysis", "default_columnar_sandbox"))
+if default_sandbox.sandbox_type == "bash" and default_sandbox.name not in ana.x.bash_sandboxes:
+    ana.x.bash_sandboxes.append(default_sandbox.name)
 
 # files of cmssw sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
