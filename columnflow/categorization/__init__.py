@@ -52,6 +52,9 @@ class Categorizer(TaskArrayFunction):
             # get the categorizer name
             cls_name = cls_dict.pop("cls_name", func.__name__)
 
+            # disable call caching since the current implementation does not work with multiple returns
+            cls_dict["call_force"] = True
+
             # create the subclass
             subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)
 
