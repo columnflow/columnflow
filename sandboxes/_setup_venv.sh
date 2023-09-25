@@ -305,16 +305,22 @@ setup_venv() {
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
+                2>&1 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                return "30"
+            fi
+
             # fetch the bundle and unpack it
             echo "looking for bash sandbox bundle for venv ${CF_VENV_NAME}"
-            local sandbox_names=(${CF_JOB_BASH_SANDBOX_NAMES})
-            local sandbox_uris=(${CF_JOB_BASH_SANDBOX_URIS})
-            local sandbox_patterns=(${CF_JOB_BASH_SANDBOX_PATTERNS})
+            local sandbox_names=( ${CF_JOB_BASH_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_BASH_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_BASH_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
                 if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
                     echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
                     (
+                        source "${CF_WLCG_TOOLS}" "" &&
                         mkdir -p "${install_path}" &&
                         cd "${install_path}" &&
                         law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&

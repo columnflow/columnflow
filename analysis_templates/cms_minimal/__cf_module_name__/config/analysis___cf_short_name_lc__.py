@@ -44,12 +44,8 @@ ana.x.bash_sandboxes = [
 # files of cmssw sandboxes that might be required by remote tasks
 # (used in cf.HTCondorWorkflow)
 ana.x.cmssw_sandboxes = [
-    # "$CF_BASE/sandboxes/cmssw_default.sh",
+    "$CF_BASE/sandboxes/cmssw_default.sh",
 ]
-
-# clear the list when cmssw bundling is disabled
-if not law.util.flag_to_bool(os.getenv("__cf_short_name_uc___BUNDLE_CMSSW", "1")):
-    del ana.x.cmssw_sandboxes[:]
 
 # config groups for conveniently looping over certain configs
 # (used in wrapper_factory)

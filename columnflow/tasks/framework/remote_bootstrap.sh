@@ -17,7 +17,11 @@ bootstrap_htcondor_standalone() {
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
+    export CF_WLCG_TOOLS="{{wlcg_tools}}"
     [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
+    local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
+    local lcg_setup="{{cf_remote_lcg_setup}}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -32,14 +36,24 @@ bootstrap_htcondor_standalone() {
         echo "found existing software at ${CF_SOFTWARE_BASE}"
     fi
 
+    # when gfal is not available, check that the lcg_setup file exists
+    local skip_lcg_setup="true"
+    if ! type gfal-ls &> /dev/null; then
+        ls "$( dirname "${lcg_setup}" )" &> /dev/null
+        if [ ! -f "${lcg_setup}" ]; then
+            2>&1 echo "lcg setup file ${lcg_setup} not existing"
+            return "1"
+        fi
+        skip_lcg_setup="false"
+    fi
+
     # source the law wlcg tools, mainly for law_wlcg_get_file
-    local lcg_setup="/cvmfs/grid.cern.ch/centos7-ui-160522/etc/profile.d/setup-c7-ui-python3-example.sh"
-    source "{{wlcg_tools}}" "" || return "$?"
+    source "${CF_WLCG_TOOLS}" "" || return "$?"
 
     # load and unpack the software bundle, then source it
     if ${fetch_software}; then
         (
-            source "${lcg_setup}" "" &&
+            { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
             mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
             cd "${CF_SOFTWARE_BASE}/conda" &&
             GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
@@ -50,7 +64,7 @@ bootstrap_htcondor_standalone() {
 
     # load the repo bundle
     (
-        source "${lcg_setup}" "" &&
+        { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
         mkdir -p "${CF_REPO_BASE}" &&
         cd "${CF_REPO_BASE}" &&
         GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
@@ -59,12 +73,14 @@ bootstrap_htcondor_standalone() {
     ) || return "$?"
 
     # export variables used in cf setup script on-the-fly to load sandboxes
-    export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
-    export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
-    export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
-    export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
-    export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
-    export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
+    if ! ${sharing_software}; then
+        export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
+        export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
+        export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
+        export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
+        export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
+        export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
+    fi
 
     # optional custom command before the setup is sourced
     {{cf_pre_setup_command}}
@@ -99,6 +115,75 @@ bootstrap_slurm() {
     {{cf_post_setup_command}}
 }
 
+
+# Bootstrap function for crab jobs.
+bootstrap_crab() {
+    # set env variables
+    export CF_ON_CRAB="1"
+    export CF_REMOTE_JOB="1"
+    export CF_CERN_USER="{{cf_cern_user}}"
+    export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
+    export CF_DATA="${LAW_JOB_HOME}/cf_data"
+    export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    export CF_STORE_NAME="{{cf_store_name}}"
+    export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
+    export CF_WLCG_TOOLS="{{wlcg_tools}}"
+    local lcg_setup="{{cf_remote_lcg_setup}}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+
+    # when gfal is not available, check that the lcg_setup file exists
+    local skip_lcg_setup="true"
+    if ! type gfal-ls &> /dev/null; then
+        ls "$( dirname "${lcg_setup}" )" &> /dev/null
+        if [ ! -f "${lcg_setup}" ]; then
+            2>&1 echo "lcg setup file ${lcg_setup} not existing"
+            return "1"
+        fi
+        skip_lcg_setup="false"
+    fi
+
+    # source the law wlcg tools, mainly for law_wlcg_get_file
+    source "${CF_WLCG_TOOLS}" "" || return "$?"
+
+    # load and unpack the software bundle, then source it
+    (
+        { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
+        mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
+        cd "${CF_SOFTWARE_BASE}/conda" &&
+        GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
+        tar -xzf "software.tgz" &&
+        rm "software.tgz"
+    ) || return "$?"
+
+    # load the repo bundle
+    (
+        { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
+        mkdir -p "${CF_REPO_BASE}" &&
+        cd "${CF_REPO_BASE}" &&
+        GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
+        tar -xzf "repo.tgz" &&
+        rm "repo.tgz"
+    ) || return "$?"
+
+    # export variables used in cf setup script on-the-fly to load sandboxes
+    export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
+    export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
+    export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
+    export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
+    export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
+    export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
+
+    # optional custom command before the setup is sourced
+    {{cf_pre_setup_command}}
+
+    # source the default repo setup
+    source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
+
+    # optional custom command after the setup is sourced
+    {{cf_post_setup_command}}
+
+    return "0"
+}
 
 # job entry point
 bootstrap_{{cf_bootstrap_name}} "$@"
