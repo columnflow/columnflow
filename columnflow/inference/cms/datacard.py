@@ -315,7 +315,6 @@ class DatacardWriter(object):
     def write_shapes(
         self,
         shapes_path: str,
-        fill_empty_bins: float = 1e-5,
     ) -> tuple[
         dict[str, dict[str, float]],
         dict[str, dict[str, dict[str, tuple[float, float]]]],
@@ -352,15 +351,19 @@ class DatacardWriter(object):
         # create the output file
         out_file = uproot.recreate(shapes_path)
 
-        # helper to fill empty bins in-place
-        def fill_empty(h):
-            value = h.view().value
-            mask = value <= 0
-            value[mask] = fill_empty_bins
-            h.view().variance[mask] = fill_empty_bins
-
         # iterate through shapes
         for cat_name, hists in self.histograms.items():
+            cat_obj = self.inference_model_inst.get_category(cat_name)
+
+            # helper to fill empty bins in-place
+            fill_empty = lambda h: None
+            if cat_obj.fill_empty_bins:
+                def fill_empty(h):
+                    value = h.view().value
+                    mask = value <= 0
+                    value[mask] = cat_obj.fill_empty_bins
+                    h.view().variance[mask] = cat_obj.fill_empty_bins
+
             _rates = rates[cat_name] = OrderedDict()
             _effects = effects[cat_name] = OrderedDict()
             for proc_name, _hists in hists.items():
@@ -376,8 +379,7 @@ class DatacardWriter(object):
 
                 # nominal shape
                 h_nom = _hists["nominal"].copy() * scale
-                if fill_empty_bins:
-                    fill_empty(h_nom)
+                fill_empty(h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
                 out_file[nom_name] = h_nom
                 _rates[proc_name] = h_nom.sum().value
@@ -450,9 +452,8 @@ class DatacardWriter(object):
                             continue
 
                     # empty bins are always filled
-                    if fill_empty_bins:
-                        fill_empty(h_down)
-                        fill_empty(h_up)
+                    fill_empty(h_down)
+                    fill_empty(h_up)
 
                     # save them when they represent real shapes
                     if param_obj.type.is_shape:
@@ -478,7 +479,6 @@ class DatacardWriter(object):
                     )
 
             # dedicated data handling
-            cat_obj = self.inference_model_inst.get_category(cat_name)
             if cat_obj.config_data_datasets:
                 if "data" not in hists:
                     raise Exception(
