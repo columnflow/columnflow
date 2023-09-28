@@ -34,8 +34,8 @@ def pdf_weights(
     self: Producer,
     events: ak.Array,
     outlier_threshold: float = 0.5,
-    outlier_mode: str = "keep",
-    outlier_message_type: str = "warning",
+    outlier_action: str = "ignore",
+    outlier_log_mode: str = "warning",
     **kwargs,
 ) -> ak.Array:
     """
@@ -44,27 +44,33 @@ def pdf_weights(
     that the nominal weight is already included in the LHEWeight.
     Can only be called with MC datasets.
 
-    The *outlier_mode* defines the prodcedure of how to handle events with a pdf uncertainty above
-    the *outlier_threshold*. Supported modes are:
+    The *outlier_action* defines the procedure of how to handle events with a pdf
+    uncertainty above the *outlier_threshold*. Supported modes are:
 
-        - ``"keep"``: events are kept unmodified
-        - ``"remove"``: pdf weight nominal/up/down are all set to 0, essentially removing the event
+        - ``"ignore"``: events are kept unmodified
+        - ``"remove"``: pdf weight nominal/up/down are all set to 0
+        - ``"raise"``: an exception is raised
 
-    The *outlier_message_type* allows to define the type of message that is given for datasets with outliers:
+     Additionally, the verbosity of the procedure can be set with *outlier_log_mode*,
+     which offers the following options:
 
-        - ``"ignore"``: no message is given
+        - ``"none"``: no message is given
         - ``"info"``: a `logger.info` message is given
         - ``"debug"``: a `logger.debug` message is given
         - ``"warning"``: a `logger.warning` message is given
-        - ``"raise"``: an Exception is raised
 
     Resources:
 
        - https://arxiv.org/pdf/1510.03865.pdf
     """
 
-    assert outlier_mode in ("keep", "remove")
-    assert outlier_message_type in ("ignore", "info", "debug", "warning", "raise")
+    if not outlier_action:
+        outlier_action = "ignore"
+    if not outlier_log_mode:
+        outlier_log_mode = "none"
+
+    assert outlier_action in ("ignore", "remove", "raise")
+    assert outlier_log_mode in ("none", "info", "debug", "warning")
 
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
@@ -108,26 +114,23 @@ def pdf_weights(
             "entries with pdf uncertainty above 50%"
         )
 
-        if outlier_mode == "remove":
+        if outlier_action == "remove":
             # set all pdf weights to 0 when the *outlier_threshold* is passed
             events = set_ak_column_f32(events, "pdf_weight", ak.where(outlier_mask, 0, events.pdf_weight))
             events = set_ak_column_f32(events, "pdf_weight_up", ak.where(outlier_mask, 0, events.pdf_weight_up))
             events = set_ak_column_f32(events, "pdf_weight_down", ak.where(outlier_mask, 0, events.pdf_weight_down))
 
             msg += ". The nominal/up/down pdf_weight columns have been set to 0 for these events."
-
-        if outlier_message_type == "raise":
+        elif outlier_action == "raise":
             raise Exception(msg)
 
         msg_func = {
-            "ignore": None,
+            "none": lambda msg: None,
             "info": logger.info,
             "warning": logger.warning,
             "debug": logger.debug,
-            "raise": None,
-        }[outlier_message_type]
-        if msg_func:
-            msg_func(msg)
+        }[outlier_log_mode]
+        msg_func(msg)
 
     if ak.any(invalid_pdf_weight := (pdf_weight_nominal == 0)):
         # set all pdf weights to 0 when the nominal pdf weight is 0
