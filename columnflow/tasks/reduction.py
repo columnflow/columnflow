@@ -166,6 +166,10 @@ class ReduceEvents(
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
             read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
         ):
+            # optional check for overlapping inputs within diffs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping(list(diffs))
+
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
 
@@ -221,6 +225,13 @@ class ReduceEvents(
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
 
+
+# overwrite class defaults
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+ReduceEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=ReduceEvents.task_family in check_overlap_tasks,
+    add_default_to_description=True,
+)
 
 ReduceEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
@@ -339,6 +350,9 @@ class MergeReducedEventsUser(DatasetTask):
     # recursively merge 20 files into one
     merge_factor = 20
 
+    # the initial default value of the cache_branch_map attribute
+    cache_branch_map_default = False
+
     # upstream requirements
     reqs = Requirements(
         MergeReductionStats=MergeReductionStats,
@@ -350,10 +364,6 @@ class MergeReducedEventsUser(DatasetTask):
         # cached value of the file_merging until it's positive
         self._cached_file_merging = -1
 
-        # in case this is a workflow, do not cache branches by default
-        # (this is enabled in reduced_file_merging once positive)
-        self._cache_branches = False
-
     @property
     def file_merging(self):
         """
@@ -364,7 +374,9 @@ class MergeReducedEventsUser(DatasetTask):
             output = self.reqs.MergeReductionStats.req(self).output()
             if output["stats"].exists():
                 self._cached_file_merging = output["stats"].load(formatter="json")["merge_factor"]
-                self._cache_branches = True
+
+                # as soon as the status file exists, cache the branch map
+                self.cache_branch_map = True
 
         return self._cached_file_merging
 

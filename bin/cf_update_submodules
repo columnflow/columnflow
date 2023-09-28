@@ -9,6 +9,13 @@ cf_update_submodules() {
     #   CF_REPO_BASE:
     #       The base path of the main analysis repository invoking tasks or scripts.
 
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # load cf setup helpers
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 

@@ -11,6 +11,7 @@ import math
 import luigi
 import law
 
+from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.util import real_path
 
@@ -268,11 +269,135 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         self.transfer(bundle)
 
 
+class RemoteWorkflowMixin(object):
+    """
+    Mixin class for custom remote workflows adding common functionality.
+    """
+
+    skip_destination_info: bool = False
+
+    def add_bundle_requirements(
+        self,
+        reqs: dict[str, AnalysisTask],
+    ) -> None:
+        """
+        Adds requirements related to bundles of the repository, conda environment, bash and cmssw
+        sandboxes to *reqs*.
+
+        :param reqs: Dictionary of workflow requirements to be extended.
+        """
+        # add the repository bundle and trigger the checksum calculation
+        if getattr(self, "bundle_repo_req", None) is not None:
+            reqs["repo"] = self.bundle_repo_req
+        elif "BundleRepo" in self.reqs:
+            reqs["repo"] = self.reqs.BundleRepo.req(self)
+        if "repo" in reqs:
+            self.bundle_repo_req.checksum
+
+        # main software stack
+        if "BundleSoftware" in self.reqs:
+            reqs["software"] = self.reqs.BundleSoftware.req(self)
+
+        # get names of bash and cmssw sandboxes
+        bash_sandboxes = set()
+        cmssw_sandboxes = set()
+        if getattr(self, "analysis_inst", None) is not None:
+            bash_sandboxes |= set(self.analysis_inst.x("bash_sandboxes", []))
+            cmssw_sandboxes |= set(self.analysis_inst.x("cmssw_sandboxes", []))
+        if getattr(self, "config_inst", None) is not None:
+            bash_sandboxes |= set(self.config_inst.x("bash_sandboxes", []))
+            cmssw_sandboxes |= set(self.config_inst.x("cmssw_sandboxes", []))
+
+        # bash-based sandboxes
+        if bash_sandboxes and "BundleBashSandbox" in self.reqs:
+            reqs["bash_sandboxes"] = [
+                self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+                for sandbox_file in sorted(bash_sandboxes)
+            ]
+
+        # optional cmssw sandboxes
+        if cmssw_sandboxes and "BundleCMSSWSandbox" in self.reqs:
+            reqs["cmssw_sandboxes"] = [
+                self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                for sandbox_file in sorted(cmssw_sandboxes)
+            ]
+
+    def add_bundle_render_variables(
+        self,
+        reqs: dict[str, AnalysisTask],
+        config: law.BaseJobFileFactory.Config,
+    ) -> None:
+        """
+        Adds render variables to the job *config* related to repository, conda environment, bash and
+        cmssw sandboxes, depending on which requirements are present in *reqs*.
+
+        :param reqs: Dictionary of workflow requirements.
+        :param config: The job :py:class:`law.BaseJobFileFactory.Config` whose render variables
+            should be set.
+        """
+        join_bash = lambda seq: " ".join(map('"{}"'.format, seq))
+
+        def get_bundle_info(task):
+            uris = task.output().dir.uri(base_name="filecopy", return_all=True)
+            pattern = os.path.basename(task.get_file_pattern())
+            return ",".join(uris), pattern
+
+        # add repo variables
+        if "repo" in reqs:
+            uris, pattern = get_bundle_info(reqs["repo"])
+            config.render_variables["cf_repo_uris"] = uris
+            config.render_variables["cf_repo_pattern"] = pattern
+
+        # add software variables
+        if "software" in reqs:
+            uris, pattern = get_bundle_info(reqs["software"])
+            config.render_variables["cf_software_uris"] = uris
+            config.render_variables["cf_software_pattern"] = pattern
+
+        # add bash sandbox variables
+        if "bash_sandboxes" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
+            names = [
+                os.path.splitext(os.path.basename(t.sandbox_file))[0]
+                for t in reqs["bash_sandboxes"]
+            ]
+            config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
+            config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
+            config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
+
+        # add cmssw sandbox variables
+        if "cmssw_sandboxes" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
+            names = [
+                os.path.splitext(os.path.basename(t.sandbox_file))[0]
+                for t in reqs["cmssw_sandboxes"]
+            ]
+            config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
+            config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
+            config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
+
+    def common_destination_info(self, info: dict[str, str]) -> dict[str, str]:
+        """
+        Hook to modify the additional info printed along logs of the workflow.
+        """
+        if self.skip_destination_info:
+            return info
+
+        if getattr(self, "config_inst", None) is not None:
+            info["config"] = self.config_inst.name
+        if getattr(self, "dataset_inst", None) is not None:
+            info["dataset"] = self.dataset_inst.name
+        if getattr(self, "global_shift_inst", None) not in (None, law.NO_STR, "nominal"):
+            info["shift"] = self.global_shift_inst.name
+
+        return info
+
+
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", "cern")
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 
 
-class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
+class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkflowMixin):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -343,40 +468,17 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
         BundleCMSSWSandbox=BundleCMSSWSandbox,
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # cached BundleRepo requirement to avoid race conditions during checksum calculation
+        self.bundle_repo_req = self.reqs.BundleRepo.req(self)
+
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
-        # add the repository bundle
-        reqs["repo"] = self.reqs.BundleRepo.req(self)
-
-        # main software stack
-        if not self.htcondor_share_software:
-            reqs["software"] = self.reqs.BundleSoftware.req(self)
-
-        # get names of pure bash and cmssw sandboxes
-        bash_sandboxes = None
-        cmssw_sandboxes = None
-        if getattr(self, "analysis_inst", None):
-            bash_sandboxes = self.analysis_inst.x("bash_sandboxes", [])
-            cmssw_sandboxes = self.analysis_inst.x("cmssw_sandboxes", [])
-        if getattr(self, "config_inst", None):
-            bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
-            cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
-
-        # bash-based sandboxes
-        cls = self.reqs.BuildBashSandbox if self.htcondor_share_software else self.reqs.BundleBashSandbox
-        reqs["bash_sandboxes"] = [
-            cls.req(self, sandbox_file=sandbox_file)
-            for sandbox_file in bash_sandboxes
-        ]
-
-        # optional cmssw sandboxes
-        if cmssw_sandboxes:
-            cls = self.reqs.BuildBashSandbox if self.htcondor_share_software else self.reqs.BundleCMSSWSandbox
-            reqs["cmssw_sandboxes"] = [
-                cls.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in cmssw_sandboxes
-            ]
+        # add requirements dealing with software bundling
+        self.add_bundle_requirements(reqs)
 
         return reqs
 
@@ -398,11 +500,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
     def htcondor_job_config(self, config, job_num, branches):
         # include the voms proxy if not skipped
         if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            voms_proxy_file = law.wlcg.get_voms_proxy_file()
-            if not law.wlcg.check_voms_proxy_validity(proxy_file=voms_proxy_file):
+            vomsproxy_file = law.wlcg.get_vomsproxy_file()
+            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
                 raise Exception("voms proxy not valid, submission aborted")
-            config.input_files["voms_proxy_file"] = law.JobInputFile(
-                voms_proxy_file,
+            config.input_files["vomsproxy_file"] = law.JobInputFile(
+                vomsproxy_file,
                 share=True,
                 render=False,
             )
@@ -445,56 +547,15 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
         if self.htcondor_memory > 0:
             config.custom_content.append(("Request_Memory", self.htcondor_memory))
 
-        # helper to return uris and a file pattern for replicated bundles
-        reqs = self.htcondor_workflow_requires()
-        join_bash = lambda seq: " ".join(map('"{}"'.format, seq))
-        def get_bundle_info(task):
-            uris = task.output().dir.uri(base_name="filecopy", return_all=True)
-            pattern = os.path.basename(task.get_file_pattern())
-            return ",".join(uris), pattern
-
-        # add repo variables
-        uris, pattern = get_bundle_info(reqs["repo"])
-        config.render_variables["cf_repo_uris"] = uris
-        config.render_variables["cf_repo_pattern"] = pattern
-
-        if self.htcondor_share_software:
-            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
-        else:
-            # add software variables
-            uris, pattern = get_bundle_info(reqs["software"])
-            config.render_variables["cf_software_uris"] = uris
-            config.render_variables["cf_software_pattern"] = pattern
-
-            # add bash sandbox variables
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
-            names = [
-                os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["bash_sandboxes"]
-            ]
-            config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
-            config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
-            config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
-
-            # add cmssw sandbox variables
-            config.render_variables["cf_cmssw_sandbox_uris"] = ""
-            config.render_variables["cf_cmssw_sandbox_patterns"] = ""
-            config.render_variables["cf_cmssw_sandbox_names"] = ""
-            if "cmssw_sandboxes" in reqs:
-                uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
-                names = [
-                    os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                    for t in reqs["cmssw_sandboxes"]
-                ]
-                config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
-                config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
-                config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
-
-        # other render variables
+        # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
         config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
+        config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
+
+        # add variables related to software bundles
+        self.add_bundle_render_variables(self.htcondor_workflow_requires(), config)
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
@@ -506,12 +567,17 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow):
         # remote jobs should not communicate with ther central scheduler but with a local one
         return True
 
+    def htcondor_destination_info(self, info: dict[str, str]) -> dict[str, str]:
+        info = super().htcondor_destination_info(info)
+        info = self.common_destination_info(info)
+        return info
+
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
 _default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
 
 
-class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow):
+class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -600,10 +666,10 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow):
     def slurm_job_config(self, config, job_num, branches):
         # include the voms proxy if not skipped
         if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            voms_proxy_file = law.wlcg.get_voms_proxy_file()
-            if os.path.exists(voms_proxy_file):
-                config.input_files["voms_proxy_file"] = law.JobInputFile(
-                    voms_proxy_file,
+            vomsproxy_file = law.wlcg.get_vomsproxy_file()
+            if os.path.exists(vomsproxy_file):
+                config.input_files["vomsproxy_file"] = law.JobInputFile(
+                    vomsproxy_file,
                     share=True,
                     render=False,
                 )
@@ -650,11 +716,21 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow):
 
         return config
 
+    def slurm_destination_info(self, info: dict[str, str]) -> dict[str, str]:
+        info = super().slurm_destination_info(info)
+        info = self.common_destination_info(info)
+        return info
 
-class RemoteWorkflow(HTCondorWorkflow, SlurmWorkflow):
+
+# prepare bases of the RemoteWorkflow container class
+remote_workflow_bases = (HTCondorWorkflow, SlurmWorkflow)
+
+if cf_flavor == "cms":
+    from columnflow.tasks.cms.base import CrabWorkflow
+    remote_workflow_bases += (CrabWorkflow,)
+
+
+class RemoteWorkflow(*remote_workflow_bases):
 
     # upstream requirements
-    reqs = Requirements(
-        HTCondorWorkflow.reqs,
-        SlurmWorkflow.reqs,
-    )
+    reqs = Requirements(*(cls.reqs for cls in remote_workflow_bases))

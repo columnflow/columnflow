@@ -44,6 +44,12 @@ setup_cmssw() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="$( pwd )"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # source the main setup script to access helpers
     CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
@@ -228,16 +234,22 @@ setup_cmssw() {
     if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # fetch, unpack and setup the bundle
         if [ ! -d "${install_path}" ]; then
+            if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
+                2>&1 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                return "30"
+            fi
+
             # fetch the bundle and unpack it
             echo "looking for cmssw sandbox bundle for${CF_CMSSW_ENV_NAME}"
-            local sandbox_names=(${CF_JOB_CMSSW_SANDBOX_NAMES})
-            local sandbox_uris=(${CF_JOB_CMSSW_SANDBOX_URIS})
-            local sandbox_patterns=(${CF_JOB_CMSSW_SANDBOX_PATTERNS})
+            local sandbox_names=( ${CF_JOB_CMSSW_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_CMSSW_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_CMSSW_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
                 if [ "${sandbox_names[i]}" = "${CF_CMSSW_ENV_NAME}" ]; then
                     echo "found bundle ${CF_CMSSW_ENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
                     (
+                        source "${CF_WLCG_TOOLS}" "" &&
                         mkdir -p "${install_base}" &&
                         cd "${install_base}" &&
                         law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "cmssw.tgz"
@@ -253,10 +265,12 @@ setup_cmssw() {
 
             # create a new cmssw checkout, unpack the bundle on top and rebuild python symlinks
             (
-                echo "unpacking bundle to ${install_path}"
+                echo "unpacking bundle to ${install_path}" &&
                 cd "${install_base}" &&
-                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" &&
                 export SCRAM_ARCH="${CF_SCRAM_ARCH}" &&
+                export PATH="${LAW_CRAB_ORIGINAL_PATH:-${PATH}}" &&
+                export LD_LIBRARY_PATH="${LAW_CRAB_ORIGINAL_LD_LIBRARY_PATH:-${LD_LIBRARY_PATH}}" &&
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" &&
                 scramv1 project CMSSW "${CF_CMSSW_VERSION}" &&
                 cd "${CF_CMSSW_VERSION}" &&
                 tar -xzf "../cmssw.tgz" &&

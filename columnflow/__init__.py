@@ -4,6 +4,7 @@
 Main entry point for top-level settings and fixes before anything else is imported.
 """
 
+import os
 import re
 import logging
 
@@ -24,11 +25,23 @@ from columnflow.__version__ import (  # noqa
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+# cf flavor
+flavor = os.getenv("CF_FLAVOR")
+if isinstance(flavor, str):
+    flavor = flavor.lower()
+
 # load contrib packages
 law.contrib.load(
-    "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm",
-    "tasks", "wlcg", "matplotlib",
+    "arc", "awkward", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm", "tasks",
+    "wlcg", "matplotlib",
 )
+
+# load flavor specific contrib packages
+# if flavor == "cms":
+#     law.contrib.load("cms")
+# some core tasks (BundleCMSSW) need the cms contrib package, to be refactored, see #155
+law.contrib.load("cms")
+
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
 if law.config.has_option("outputs", "wlcg_file_systems"):
@@ -38,7 +51,7 @@ if law.config.has_option("outputs", "wlcg_file_systems"):
     ]
 
 
-# initialize producers, calibrators, selectors, ml and stat models
+# initialize producers, calibrators, selectors, categorizers, ml models and stat models
 from columnflow.util import maybe_import
 
 import columnflow.production  # noqa
@@ -57,6 +70,12 @@ import columnflow.selection  # noqa
 if law.config.has_option("analysis", "selection_modules"):
     for m in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
         logger.debug(f"loading selection module '{m}'")
+        maybe_import(m.strip())
+
+import columnflow.categorization  # noqa
+if law.config.has_option("analysis", "categorization_modules"):
+    for m in law.config.get_expanded("analysis", "categorization_modules", split_csv=True):
+        logger.debug(f"loading categorization module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.ml  # noqa
