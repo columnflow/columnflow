@@ -41,7 +41,7 @@ bootstrap_htcondor_standalone() {
     if ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
-            2>&1 echo "lcg setup file ${lcg_setup} not existing"
+            >&2 echo "lcg setup file ${lcg_setup} not existing"
             return "1"
         fi
         skip_lcg_setup="false"
@@ -136,7 +136,7 @@ bootstrap_crab() {
     if ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
-            2>&1 echo "lcg setup file ${lcg_setup} not existing"
+            >&2 echo "lcg setup file ${lcg_setup} not existing"
             return "1"
         fi
         skip_lcg_setup="false"

@@ -21,13 +21,13 @@ cf_create_venv() {
     # check arguments
     local name="$1"
     if [ -z "${name}" ]; then
-        2>&1 echo "argument 0 (venv name) must not be empty"
+        >&2 echo "argument 0 (venv name) must not be empty"
         return "1"
     fi
 
     # check environment variables
     if [ -z "${CF_VENV_BASE}" ]; then
-        2>&1 echo "environment variable CF_VENV_BASE must not be empty"
+        >&2 echo "environment variable CF_VENV_BASE must not be empty"
         return "2"
     fi
 
