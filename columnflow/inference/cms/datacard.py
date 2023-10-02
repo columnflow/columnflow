@@ -329,8 +329,6 @@ class DatacardWriter(object):
               "category -> process -> parameter -> (down effect, up effect)",
             - the datacard pattern for extracting nominal shapes, and
             - the datacard pattern for extracting systematic shapes.
-
-        When *fill_empty_bins* is non-zero, empty (and negative!) bins are filled with this value.
         """
         # create the directory
         shapes_path = real_path(shapes_path)
@@ -357,12 +355,12 @@ class DatacardWriter(object):
 
             # helper to fill empty bins in-place
             fill_empty = lambda h: None
-            if cat_obj.fill_empty_bins:
+            if cat_obj.empty_bin_value:
                 def fill_empty(h):
                     value = h.view().value
                     mask = value <= 0
-                    value[mask] = cat_obj.fill_empty_bins
-                    h.view().variance[mask] = cat_obj.fill_empty_bins
+                    value[mask] = cat_obj.empty_bin_value
+                    h.view().variance[mask] = cat_obj.empty_bin_value
 
             _rates = rates[cat_name] = OrderedDict()
             _effects = effects[cat_name] = OrderedDict()
