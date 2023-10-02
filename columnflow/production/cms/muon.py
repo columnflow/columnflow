@@ -94,7 +94,12 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @muon_weights.setup
-def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def muon_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector
@@ -107,4 +112,5 @@ def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets:
     self.muon_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.muon_sf_corrector.version in [1]
+    if self.muon_sf_corrector.version not in (1,):
+        raise Exception(f"unsuppprted muon sf corrector version {self.muon_sf_corrector.version}")

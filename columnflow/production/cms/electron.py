@@ -98,7 +98,12 @@ def electron_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @electron_weights.setup
-def electron_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def electron_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector
@@ -111,4 +116,7 @@ def electron_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targ
     self.electron_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.electron_sf_corrector.version in [2]
+    if self.electron_sf_corrector.version not in (2,):
+        raise Exception(
+            f"unsuppprted electron sf corrector version {self.electron_sf_corrector.version}",
+        )
