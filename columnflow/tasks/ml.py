@@ -608,3 +608,76 @@ MLEvaluationWrapper = wrapper_factory(
     require_cls=MLEvaluation,
     enable=["configs", "skip_configs", "shifts", "skip_shifts", "datasets", "skip_datasets"],
 )
+
+
+class MergeMLEvaluation(
+    MLModelDataMixin,
+    DatasetTask,
+    law.tasks.ForestMerge,
+    RemoteWorkflow,
+):
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    # disable the shift parameter
+    shift = None
+    effective_shift = None
+    allow_empty_shift = True
+
+    # in each step, merge 10 into 1
+    merge_factor = 10
+
+    allow_empty_ml_model = False
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MLEvaluation=MLEvaluation,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # tell ForestMerge to not cache the internal merging structure by default,
+        # (this is enabled in merge_workflow_requires)
+        self._cache_forest = False
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        req = self.reqs.MLEvaluation.req(self, _exclude={"branches"})
+
+        # if the merging stats exist, allow the forest to be cached
+        self._cache_forest = req.merging_stats_exist
+
+        return req
+
+    def merge_requires(self, start_leaf, end_leaf):
+        return [
+            self.reqs.MLEvaluation.req(self, branch=i)
+            for i in range(start_leaf, end_leaf)
+        ]
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs([inp["mlcolumns"] for inp in inputs])
+
+    def merge_output(self):
+        return {"mlcolumns": self.target(f"{self.ml_model}/mlcolumns.parquet")}
+
+    @law.decorator.log
+    def run(self):
+        return super().run()
+
+    def merge(self, inputs, output):
+        if not self.is_leaf():
+            inputs = [inp["mlcolumns"] for inp in inputs]
+
+        law.pyarrow.merge_parquet_task(self, inputs, output["mlcolumns"])
+
+
+MergeMLEvaluationWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeMLEvaluation,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets"],
+)
