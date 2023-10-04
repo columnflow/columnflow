@@ -118,6 +118,15 @@
       "contributions": [
         "ideas"
       ]
+    },
+    {
+      "login": "haddadanas",
+      "name": "haddadanas",
+      "avatar_url": "https://avatars.githubusercontent.com/u/103462379?v=4",
+      "profile": "https://github.com/haddadanas",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"
