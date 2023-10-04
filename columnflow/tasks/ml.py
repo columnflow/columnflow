@@ -628,7 +628,7 @@ class MergeMLEvaluation(
 ):
     """
     Task to merge events for a dataset, where the `MLEvaluation` produces multiple parquet files.
-    The task serves as a helper task for plotting the ML evaluation results in the `PlotMLResults` task
+    The task serves as a helper task for plotting the ML evaluation results in the `PlotMLResults` task.
     """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
