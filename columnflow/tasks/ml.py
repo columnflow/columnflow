@@ -623,10 +623,13 @@ class MergeMLEvaluation(
     CalibratorsMixin,
     ChunkedIOMixin,
     DatasetTask,
-    # MergeReducedEventsUser,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+    """
+    Task to merge events for a dataset, where the `MLEvaluation` produces multiple parquet files.
+    The task serves as a helper task for plotting the ML evaluation results in the `PlotMLResults` task
+    """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # recursively merge 20 files into one
@@ -663,115 +666,9 @@ MergeMLEvaluationWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=MergeMLEvaluation,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    docs="""
+    Wrapper task to merge events for multiple datasets.
+
+    :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+    """
 )
-
-
-class PlotMLEvaluation(
-    ProcessPlotSettingMixin,
-    CategoriesMixin,
-    MLModelMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
-):
-
-    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
-
-    plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
-        add_default_to_description=True,
-    )
-
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeMLEvaluation=MergeMLEvaluation,
-    )
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
-        return parts
-
-    def create_branch_map(self):
-        return [
-            DotDict({"category": cat_name})
-            for cat_name in sorted(self.categories)
-        ]
-
-    def requires(self):
-        return {
-            d: self.reqs.MergeMLEvaluation.req(
-                self,
-                dataset=d,
-                branch=-1,
-                _exclude={"branches"},
-            )
-            for d in self.datasets
-        }
-
-    def workflow_requires(self, only_super: bool = False):
-        reqs = super().workflow_requires()
-        if only_super:
-            return reqs
-
-        reqs["merged_ml_evaluation"] = self.requires_from_branch()
-
-        return reqs
-
-    def output(self):
-        b = self.branch_data
-        return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}.pdf")
-
-    @law.decorator.log
-    @view_output_plots
-    def run(self):
-        import awkward as ak
-
-        category_inst = self.config_inst.get_category(self.branch_data.category)
-        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
-        process_insts = list(map(self.config_inst.get_process, self.processes))
-        sub_process_insts = {
-            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
-            for proc in process_insts
-        }
-
-        with self.publish_step(f"plotting in {category_inst.name}"):
-            all_events = OrderedDict()
-            for dataset, inp in self.input().items():
-                dataset_inst = self.config_inst.get_dataset(dataset)
-                if len(dataset_inst.processes) != 1:
-                    raise NotImplementedError(
-                        f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} assigned, "
-                        "which is not implemented yet.",
-                    )
-
-                events = ak.from_parquet(self.input()[dataset].path)
-
-                # masking with leaf categories
-                category_mask = False
-                for leaf in leaf_category_insts:
-                    category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
-
-                events = events[category_mask]
-
-                # loop per process
-                for process_inst in process_insts:
-                    # skip when the dataset is already known to not contain any sub process
-                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
-                        continue
-
-                    # TODO: use process_ids to correctly assign events to processes e.g. for sample stitching
-                    if process_inst.name in all_events.keys():
-                        all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name], events])
-                    else:
-                        all_events[process_inst] = events
-
-            figs, _ = self.call_plot_func(
-                self.plot_function,
-                all_events,
-                self.config_inst,
-                category_inst,
-            )
