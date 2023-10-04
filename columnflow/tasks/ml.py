@@ -7,6 +7,8 @@ Tasks related to ML workflows.
 import law
 import luigi
 
+from collections import OrderedDict
+
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
@@ -16,11 +18,15 @@ from columnflow.tasks.framework.mixins import (
     MLModelTrainingMixin,
     MLModelMixin,
     ChunkedIOMixin,
+    CategoriesMixin,
+    SelectorStepsMixin,
 )
+from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
-from columnflow.util import dev_sandbox, safe_div
+from columnflow.util import dev_sandbox, safe_div, DotDict
 
 
 class PrepareMLEvents(
@@ -608,3 +614,164 @@ MLEvaluationWrapper = wrapper_factory(
     require_cls=MLEvaluation,
     enable=["configs", "skip_configs", "shifts", "skip_shifts", "datasets", "skip_datasets"],
 )
+
+
+class MergeMLEvaluation(
+    MLModelMixin,
+    ProducersMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    ChunkedIOMixin,
+    DatasetTask,
+    # MergeReducedEventsUser,
+    law.tasks.ForestMerge,
+    RemoteWorkflow,
+):
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    # recursively merge 20 files into one
+    merge_factor = 20
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MLEvaluation=MLEvaluation,
+    )
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return self.reqs.MLEvaluation.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return [
+            self.reqs.MLEvaluation.req(self, branch=b)
+            for b in range(start_branch, end_branch)
+        ]
+
+    def merge_output(self):
+        return {"mlcolumns": self.target("mlcolumns.parquet")}
+
+    def merge(self, inputs, output):
+        inputs = [inp["mlcolumns"] for inp in inputs]
+        law.pyarrow.merge_parquet_task(self, inputs, output["mlcolumns"])
+
+
+MergeMLEvaluationWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeMLEvaluation,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
+class PlotMLEvaluation(
+    ProcessPlotSettingMixin,
+    CategoriesMixin,
+    MLModelMixin,
+    ProducersMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
+
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
+        add_default_to_description=True,
+    )
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeMLEvaluation=MergeMLEvaluation,
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        return parts
+
+    def create_branch_map(self):
+        return [
+            DotDict({"category": cat_name})
+            for cat_name in sorted(self.categories)
+        ]
+
+    def requires(self):
+        return {
+            d: self.reqs.MergeMLEvaluation.req(
+                self,
+                dataset=d,
+                branch=-1,
+                _exclude={"branches"},
+            )
+            for d in self.datasets
+        }
+
+    def workflow_requires(self, only_super: bool = False):
+        reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
+        reqs["merged_ml_evaluation"] = self.requires_from_branch()
+
+        return reqs
+
+    def output(self):
+        b = self.branch_data
+        return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}.pdf")
+
+    @law.decorator.log
+    @view_output_plots
+    def run(self):
+        import awkward as ak
+
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        with self.publish_step(f"plotting in {category_inst.name}"):
+            all_events = OrderedDict()
+            for dataset, inp in self.input().items():
+                dataset_inst = self.config_inst.get_dataset(dataset)
+                if len(dataset_inst.processes) != 1:
+                    raise NotImplementedError(
+                        f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} assigned, "
+                        "which is not implemented yet.",
+                    )
+
+                events = ak.from_parquet(self.input()[dataset].path)
+
+                # masking with leaf categories
+                category_mask = False
+                for leaf in leaf_category_insts:
+                    category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
+
+                events = events[category_mask]
+
+                # loop per process
+                for process_inst in process_insts:
+                    # skip when the dataset is already known to not contain any sub process
+                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                        continue
+
+                    # TODO: use process_ids to correctly assign events to processes e.g. for sample stitching
+                    if process_inst.name in all_events.keys():
+                        all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name], events])
+                    else:
+                        all_events[process_inst] = events
+
+            figs, _ = self.call_plot_func(
+                self.plot_function,
+                all_events,
+                self.config_inst,
+                category_inst,
+            )
