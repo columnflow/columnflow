@@ -195,7 +195,12 @@ def btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @btag_weights.setup
-def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def btag_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the btag sf corrector
@@ -208,4 +213,5 @@ def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets:
     self.btag_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.btag_sf_corrector.version in [3]
+    if self.btag_sf_corrector.version not in (3,):
+        raise Exception(f"unsuppprted btag sf corrector version {self.btag_sf_corrector.version}")

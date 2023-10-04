@@ -69,8 +69,16 @@ def propagate_met(
         azimuthal angle phi.
     """
     # avoid unwanted broadcasting
-    assert jet_pt1.ndim == jet_phi1.ndim
-    assert jet_pt2.ndim == jet_phi2.ndim
+    if jet_pt1.ndim != jet_phi1.ndim:
+        raise Exception(
+            f"dimension of jet_pt1 {jet_pt1.ndim} does not match dimension of jet_phi1 "
+            f"{jet_phi1.ndim}",
+        )
+    if jet_pt2.ndim != jet_phi2.ndim:
+        raise Exception(
+            f"dimension of jet_pt2 {jet_pt2.ndim} does not match dimension of jet_phi2 "
+            f"{jet_phi2.ndim}",
+        )
 
     # build px and py sums before and after
     jet_px1 = jet_pt1 * np.cos(jet_phi1)

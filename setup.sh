@@ -670,7 +670,7 @@ cf_setup_git_hooks() {
         # determine the target hooks directory
         local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
         if [ "$?" != "0" ] || [ ! -d "${dst_dir}" ]; then
-            2>&1 echo "no git hooks directory found, cannot setup hooks"
+            >&2 echo "no git hooks directory found, cannot setup hooks"
             return "30"
         fi
 
@@ -737,7 +737,7 @@ cf_setup_git_hooks() {
             fi
         done
 
-        2>&1 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
+        >&2 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
         return "31"
     }
 

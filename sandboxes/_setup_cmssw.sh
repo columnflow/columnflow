@@ -235,7 +235,7 @@ setup_cmssw() {
         # fetch, unpack and setup the bundle
         if [ ! -d "${install_path}" ]; then
             if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
-                2>&1 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                >&2 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
                 return "30"
             fi
 

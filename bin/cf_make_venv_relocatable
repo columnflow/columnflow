@@ -23,18 +23,18 @@ cf_make_venv_relocatable() {
     # check arguments
     local name="$1"
     if [ -z "${name}" ]; then
-        2>&1 echo "argument 0 (venv name) must not be empty"
+        >&2 echo "argument 0 (venv name) must not be empty"
         return "1"
     fi
 
     # check environment variables
     if [ -z "${CF_VENV_BASE}" ]; then
-        2>&1 echo "environment variable CF_VENV_BASE must not be empty"
+        >&2 echo "environment variable CF_VENV_BASE must not be empty"
         return "2"
     fi
 
     if [ -z "${CF_CONDA_BASE}" ]; then
-        2>&1 echo "environment variable CF_CONDA_BASE must not be empty"
+        >&2 echo "environment variable CF_CONDA_BASE must not be empty"
         return "3"
     fi
 
@@ -84,7 +84,7 @@ cf_make_venv_relocatable() {
         fi
         # complain when a directory is found
         if [ -d "${f}" ]; then
-            2>&1 echo "cannot handle symlinked directory ${f} in venv ${name} for relocation"
+            >&2 echo "cannot handle symlinked directory ${f} in venv ${name} for relocation"
             continue
         fi
         # copy
