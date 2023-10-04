@@ -69,8 +69,15 @@ def pdf_weights(
     if not outlier_log_mode:
         outlier_log_mode = "none"
 
-    assert outlier_action in ("ignore", "remove", "raise")
-    assert outlier_log_mode in ("none", "info", "debug", "warning")
+    if outlier_action not in (known_actions := ("ignore", "remove", "raise")):
+        raise ValueError(
+            f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
+        )
+    if outlier_log_mode not in (known_log_modes := ("none", "info", "debug", "warning")):
+        raise ValueError(
+            f"unknown outlier_log_mode '{outlier_log_mode}', known values are "
+            f"{','.join(known_log_modes)}",
+        )
 
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
