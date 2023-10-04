@@ -114,7 +114,7 @@ class BuildBashSandbox(AnalysisTask):
         # resolve the sandbox file relative to $CF_BASE/sandboxes
         if "sandbox_file" in params:
             path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
-            abs_path = real_path(path)
+            abs_path = real_path(law.Sandbox.remove_type(path))
             path = abs_path if os.path.exists(abs_path) else os.path.join("$CF_BASE", "sandboxes", path)
             params["sandbox_file"] = path
             params["sandbox"] = law.Sandbox.join_key("bash", path)
@@ -153,6 +153,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
         sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+        sandbox_file = law.Sandbox.remove_type(sandbox_file)
         self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
         self.venv_name = os.path.splitext(os.path.basename(sandbox_file))[0]
         self.venv_name_hashed = f"{self.venv_name}_{self.sandbox_file_hash}"
@@ -234,6 +235,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
         sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
+        sandbox_file = law.Sandbox.remove_type(sandbox_file)
         self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
         self.cmssw_env_name = os.path.splitext(os.path.basename(sandbox_file))[0]
         self.cmssw_env_name_hashed = f"{self.cmssw_env_name}_{self.sandbox_file_hash}"
@@ -307,6 +309,10 @@ class RemoteWorkflowMixin(object):
         if getattr(self, "config_inst", None) is not None:
             bash_sandboxes |= set(self.config_inst.x("bash_sandboxes", []))
             cmssw_sandboxes |= set(self.config_inst.x("cmssw_sandboxes", []))
+
+        # remove leading sandbox types
+        bash_sandboxes = {law.Sandbox.remove_type(s) for s in bash_sandboxes}
+        cmssw_sandboxes = {law.Sandbox.remove_type(s) for s in cmssw_sandboxes}
 
         # bash-based sandboxes
         if bash_sandboxes and "BundleBashSandbox" in self.reqs:

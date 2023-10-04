@@ -115,5 +115,7 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: di
     )]
 
     # check versions
-    assert self.met_pt_corrector.version in [1]
-    assert self.met_phi_corrector.version in [1]
+    if self.met_pt_corrector.version not in (1,):
+        raise Exception(f"unsuppprted met pt corrector version {self.met_pt_corrector.version}")
+    if self.met_phi_corrector.version not in (1,):
+        raise Exception(f"unsuppprted met phi corrector version {self.met_phi_corrector.version}")

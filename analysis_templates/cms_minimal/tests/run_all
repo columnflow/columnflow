@@ -31,7 +31,7 @@ action() {
     bash "${this_dir}/run_linting"
     ret="$?"
     if [ "${ret}" != "0" ]; then
-        2>&1 cecho 31 "run_linting failed with exit code ${ret}"
+        >&2 cecho 31 "run_linting failed with exit code ${ret}"
         [ "${mode}" = "force" ] || return "${ret}"
         ret_global="1"
     else
