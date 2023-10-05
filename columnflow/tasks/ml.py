@@ -7,8 +7,6 @@ Tasks related to ML workflows.
 import law
 import luigi
 
-from collections import OrderedDict
-
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
@@ -18,15 +16,11 @@ from columnflow.tasks.framework.mixins import (
     MLModelTrainingMixin,
     MLModelMixin,
     ChunkedIOMixin,
-    CategoriesMixin,
-    SelectorStepsMixin,
 )
-from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
-from columnflow.util import dev_sandbox, safe_div, DotDict
+from columnflow.util import dev_sandbox, safe_div
 
 
 class PrepareMLEvents(
@@ -670,5 +664,5 @@ MergeMLEvaluationWrapper = wrapper_factory(
     Wrapper task to merge events for multiple datasets.
 
     :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
-    """
+    """,
 )
