@@ -64,11 +64,6 @@ def pdf_weights(
        - https://arxiv.org/pdf/1510.03865.pdf
     """
 
-    if not outlier_action:
-        outlier_action = "ignore"
-    if not outlier_log_mode:
-        outlier_log_mode = "none"
-
     if outlier_action not in (known_actions := ("ignore", "remove", "raise")):
         raise ValueError(
             f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
