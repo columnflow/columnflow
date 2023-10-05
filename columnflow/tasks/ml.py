@@ -608,3 +608,61 @@ MLEvaluationWrapper = wrapper_factory(
     require_cls=MLEvaluation,
     enable=["configs", "skip_configs", "shifts", "skip_shifts", "datasets", "skip_datasets"],
 )
+
+
+class MergeMLEvaluation(
+    MLModelMixin,
+    ProducersMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    ChunkedIOMixin,
+    DatasetTask,
+    law.tasks.ForestMerge,
+    RemoteWorkflow,
+):
+    """
+    Task to merge events for a dataset, where the `MLEvaluation` produces multiple parquet files.
+    The task serves as a helper task for plotting the ML evaluation results in the `PlotMLResults` task.
+    """
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    # recursively merge 20 files into one
+    merge_factor = 20
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MLEvaluation=MLEvaluation,
+    )
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return self.reqs.MLEvaluation.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return [
+            self.reqs.MLEvaluation.req(self, branch=b)
+            for b in range(start_branch, end_branch)
+        ]
+
+    def merge_output(self):
+        return {"mlcolumns": self.target("mlcolumns.parquet")}
+
+    def merge(self, inputs, output):
+        inputs = [inp["mlcolumns"] for inp in inputs]
+        law.pyarrow.merge_parquet_task(self, inputs, output["mlcolumns"])
+
+
+MergeMLEvaluationWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeMLEvaluation,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    docs="""
+    Wrapper task to merge events for multiple datasets.
+
+    :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+    """,
+)
