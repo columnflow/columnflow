@@ -748,7 +748,7 @@ class PlotMLEvaluation(
                         "which is not implemented yet.",
                     )
 
-                events = ak.from_parquet(self.input()[dataset]['mlcolumns'].path)
+                events = ak.from_parquet(self.input()[dataset]["mlcolumns"].path)
 
                 # masking with leaf categories
                 category_mask = False
