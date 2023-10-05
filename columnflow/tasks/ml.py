@@ -623,10 +623,13 @@ class MergeMLEvaluation(
     CalibratorsMixin,
     ChunkedIOMixin,
     DatasetTask,
-    # MergeReducedEventsUser,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+    """
+    Task to merge events for a dataset, where the `MLEvaluation` produces multiple parquet files.
+    The task serves as a helper task for plotting the ML evaluation results in the `PlotMLResults` task.
+    """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     # recursively merge 20 files into one
@@ -663,6 +666,11 @@ MergeMLEvaluationWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=MergeMLEvaluation,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+    docs="""
+    Wrapper task to merge events for multiple datasets.
+
+    :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
+    """,
 )
 
 
