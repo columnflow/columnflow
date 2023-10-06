@@ -124,7 +124,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_pool",
+            "htcondor_gpus", "htcondor_memory", "htcondor_pool",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
@@ -905,16 +905,6 @@ class DatasetTask(ShiftTask):
 
         # use enumerate for simply indexing
         return dict(enumerate(chunks))
-
-    def htcondor_destination_info(self, info):
-        """
-        Hook to modify the additional info printed along logs of the htcondor workflow.
-        """
-        info.append(self.config_inst.name)
-        info.append(self.dataset_inst.name)
-        if self.global_shift_inst not in (None, law.NO_STR, "nominal"):
-            info.append(self.global_shift_inst.name)
-        return info
 
 
 class CommandTask(AnalysisTask):

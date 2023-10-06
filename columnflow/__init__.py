@@ -4,6 +4,7 @@
 Main entry point for top-level settings and fixes before anything else is imported.
 """
 
+import os
 import re
 import logging
 
@@ -24,11 +25,23 @@ from columnflow.__version__ import (  # noqa
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+# cf flavor
+flavor = os.getenv("CF_FLAVOR")
+if isinstance(flavor, str):
+    flavor = flavor.lower()
+
 # load contrib packages
 law.contrib.load(
-    "arc", "awkward", "cms", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm",
-    "tasks", "wlcg", "matplotlib",
+    "arc", "awkward", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm", "tasks",
+    "wlcg", "matplotlib",
 )
+
+# load flavor specific contrib packages
+# if flavor == "cms":
+#     law.contrib.load("cms")
+# some core tasks (BundleCMSSW) need the cms contrib package, to be refactored, see #155
+law.contrib.load("cms")
+
 
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
 if law.config.has_option("outputs", "wlcg_file_systems"):

@@ -13,7 +13,7 @@ action() {
     local sandbox="$2"
 
     if [ -z "${mod}" ]; then
-        2>&1 echo "missing module to test (argument 1)"
+        >&2 echo "missing module to test (argument 1)"
         return "1"
     fi
 

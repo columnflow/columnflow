@@ -144,7 +144,6 @@ def get_datasets_from_process(
         return law.util.make_unique(dataset_insts)
 
     # at this point, strategy is exclusive or exclusive_strict
-    assert strategy in ("exclusive", "exclusive_strict")
     dataset_insts = OrderedDict()
     for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
         # check if child processes have matched datasets already

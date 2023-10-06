@@ -31,7 +31,7 @@ cf_sandbox() {
     # check arguments
     local sandbox_file="$1"
     if [ -z "${sandbox_file}" ]; then
-        2>&1 echo "argument 0 (sandbox file) must not be empty"
+        >&2 echo "argument 0 (sandbox file) must not be empty"
         return "1"
     fi
 
@@ -49,22 +49,22 @@ cf_sandbox() {
         sandbox_file_abs="$( ${is_abs} && echo "${sandbox_file}" || echo "${PWD}/${sandbox_file}" )"
         sandbox_file_repr="${sandbox_file}"
     elif ${is_abs}; then
-        2>&1 echo "sandbox file '${sandbox_file}' not existing"
+        >&2 echo "sandbox file '${sandbox_file}' not existing"
         return "2"
     elif [ -z "${CF_REPO_BASE}" ]; then
-        2>&1 echo "environment variable CF_REPO_BASE must not be empty"
+        >&2 echo "environment variable CF_REPO_BASE must not be empty"
         return "3"
     elif [ -f "${CF_REPO_BASE}/sandboxes/${sandbox_file}" ]; then
         sandbox_file_abs="${CF_REPO_BASE}/sandboxes/${sandbox_file}"
         sandbox_file_repr="\${CF_REPO_BASE}/sandboxes/${sandbox_file}"
     elif [ -z "${CF_BASE}" ]; then
-        2>&1 echo "environment variable CF_BASE must not be empty"
+        >&2 echo "environment variable CF_BASE must not be empty"
         return "3"
     elif [ -f "${CF_BASE}/sandboxes/${sandbox_file}" ]; then
         sandbox_file_abs="${CF_BASE}/sandboxes/${sandbox_file}"
         sandbox_file_repr="\${CF_BASE}/sandboxes/${sandbox_file}"
     else
-        2>&1 echo "could not resolve and locate sandbox file '${sandbox_file}'"
+        >&2 echo "could not resolve and locate sandbox file '${sandbox_file}'"
         return "4"
     fi
 

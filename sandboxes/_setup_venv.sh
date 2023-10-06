@@ -287,6 +287,10 @@ setup_venv() {
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
 
+            # make newly installed packages relocatable
+            cf_make_venv_relocatable "${venv_name_hashed}"
+            [ "$?" != "0" ] && clear_pending && return "28"
+
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
             echo "timestamp $( date "+%s" )" >> "${CF_SANDBOX_FLAG_FILE}"
@@ -301,16 +305,22 @@ setup_venv() {
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
+                >&2 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                return "30"
+            fi
+
             # fetch the bundle and unpack it
             echo "looking for bash sandbox bundle for venv ${CF_VENV_NAME}"
-            local sandbox_names=(${CF_JOB_BASH_SANDBOX_NAMES})
-            local sandbox_uris=(${CF_JOB_BASH_SANDBOX_URIS})
-            local sandbox_patterns=(${CF_JOB_BASH_SANDBOX_PATTERNS})
+            local sandbox_names=( ${CF_JOB_BASH_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_BASH_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_BASH_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
                 if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
                     echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
                     (
+                        source "${CF_WLCG_TOOLS}" "" &&
                         mkdir -p "${install_path}" &&
                         cd "${install_path}" &&
                         law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
@@ -326,8 +336,14 @@ setup_venv() {
             fi
         fi
 
+        # let the home variable in pyvenv.cfg point to the conda bin directory
+        sed -i -r \
+            "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
+            "${install_path}/pyvenv.cfg"
+
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"
+
         echo
     fi
 
