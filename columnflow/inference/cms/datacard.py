@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import os
 from collections import OrderedDict
-from typing import Sequence, Any
 
 import law
 
 from columnflow import __version__ as cf_version
+from columnflow.types import Sequence, Any
 from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div
 

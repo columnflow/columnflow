@@ -7,11 +7,11 @@ Object and event selection tools.
 from __future__ import annotations
 
 import inspect
-from typing import Callable, Sequence
 
 import law
 import order as od
 
+from columnflow.types import Callable, Sequence
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources

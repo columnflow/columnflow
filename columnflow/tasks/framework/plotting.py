@@ -5,11 +5,11 @@ Base classes for different types of plotting tasks.
 """
 
 import importlib
-from typing import Any, Callable
 
 import law
 import luigi
 
+from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
