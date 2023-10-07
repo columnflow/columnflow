@@ -26,7 +26,7 @@ import multiprocessing
 import multiprocessing.pool
 from functools import partial
 from collections import namedtuple, OrderedDict
-from typing import Sequence, Callable, Any
+from typing import Sequence, Callable, Any, TypeVar
 
 import law
 import order as od
@@ -47,6 +47,8 @@ maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
+
+T = TypeVar("T")
 
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
@@ -1809,7 +1811,7 @@ class ArrayFunction(Derivable):
             if self.log_runtime:
                 duration = time.perf_counter() - t1
                 logger_perf.info(
-                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                    f"runtime of '{self.cls_name}': {duration:.7f} s",
                 )
 
         # assume result is an event array or tuple with an event array as the first element and
@@ -1957,6 +1959,13 @@ class TaskArrayFunction(ArrayFunction):
        When a bool, this flag decides whether calls of this instance are cached. However, note that
        when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
        this attribute.
+
+    .. py:attribute:: pick_cached_result
+       type: callable
+
+       A callable that is given a previously cached result, and all arguments and keyword arguments
+       of the main calll function, to pick values that should be returned and cached for the next
+       invocation.
     """
 
     # class-level attributes as defaults
@@ -1966,6 +1975,33 @@ class TaskArrayFunction(ArrayFunction):
     call_force = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
+
+    @staticmethod
+    def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
+        """
+        Default implementation for picking a return value from a previously *cached_result* and all
+        *args* and *kwargs* passed to the main call method.
+        """
+        # strategy: when an events array exists within args or kwargs, return it including potential
+        # additional objects that were previously cached; if no events array exists, return the
+        # cached result unchanged
+
+        # look for events
+        if args:
+            events = args[0]
+        elif "events" in kwargs:
+            events = kwargs["events"]
+        else:
+            # no events found, return cached_result unchanged
+            return cached_result
+
+        # when the previous cached result is not a tuple, i.e. the call had just one return value,
+        # only return the events
+        if not isinstance(cached_result, tuple):
+            return events
+
+        # otherwise, also return all but the first cached return value
+        return events, *cached_result[1:]
 
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
@@ -2008,10 +2044,11 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        requires_func: Callable | None = law.no_value,
-        setup_func: Callable | None = law.no_value,
-        sandbox: str | None = law.no_value,
-        call_force: bool | None = law.no_value,
+        requires_func: Callable | law.NoValue | None = law.no_value,
+        setup_func: Callable | law.NoValue | None = law.no_value,
+        sandbox: str | law.NoValue | None = law.no_value,
+        call_force: bool | law.NoValue | None = law.no_value,
+        pick_cached_result: Callable | law.NoValue | None = law.no_value,
         inst_dict: dict | None = None,
         **kwargs,
     ):
@@ -2029,6 +2066,8 @@ class TaskArrayFunction(ArrayFunction):
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
             call_force = self.__class__.call_force
+        if pick_cached_result == law.no_value:
+            pick_cached_result = self.__class__.pick_cached_result
 
         # when custom funcs are passed, bind them to this instance
         if requires_func:
@@ -2039,6 +2078,7 @@ class TaskArrayFunction(ArrayFunction):
         # other attributes
         self.sandbox = sandbox
         self.call_force = call_force
+        self.pick_cached_result = pick_cached_result
 
         # cached results of the main call function per thread id
         self._result_cache = {}
@@ -2208,10 +2248,12 @@ class TaskArrayFunction(ArrayFunction):
         # get the cached result
         result = self._get_cached_result()
 
-        # do the actual call
+        # do the actual call, or prepare the cached return value
         update = call_force or result is law.no_value
         if update:
             result = super().__call__(*args, **kwargs)
+        elif callable(self.pick_cached_result):
+            result = self.pick_cached_result(result, *args, **kwargs)
 
         # clear or update the cache
         if clear_cache:
