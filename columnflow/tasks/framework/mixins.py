@@ -10,12 +10,12 @@ import gc
 import time
 import itertools
 from collections import Counter
-from typing import Sequence, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Any
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector

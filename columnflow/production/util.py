@@ -6,8 +6,7 @@ General producers that might be utilized in various places.
 
 from __future__ import annotations
 
-from typing import Sequence, Union
-
+from columnflow.types import Sequence, Union
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, attach_behavior

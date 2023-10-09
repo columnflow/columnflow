@@ -10,12 +10,12 @@ import os
 import time
 import shutil
 import subprocess
-from typing import Sequence
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from columnflow.util import wget, DotDict
 

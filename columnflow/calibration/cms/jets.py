@@ -5,8 +5,8 @@ Jet energy corrections and jet resolution smearing.
 """
 
 import functools
-from typing import Any
 
+from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior

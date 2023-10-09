@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import enum
 import copy as _copy
-from typing import Generator, Callable, TextIO, Sequence, Any
 
 import law
 import order as od
 
+from columnflow.types import Generator, Callable, TextIO, Sequence, Any
 from columnflow.util import (
     DerivableMeta, Derivable, maybe_import, DotDict, is_pattern, is_regex, pattern_matcher,
 )

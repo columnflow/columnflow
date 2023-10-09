@@ -26,12 +26,12 @@ import multiprocessing
 import multiprocessing.pool
 from functools import partial
 from collections import namedtuple, OrderedDict, defaultdict
-from typing import Sequence, Callable, Any
 
 import law
 import order as od
 from law.util import InsertableDict
 
+from columnflow.types import Sequence, Callable, Any
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
     get_source_code,

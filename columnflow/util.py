@@ -30,12 +30,12 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Callable, Any, Sequence, Union
-from types import ModuleType
 
 import law
 from law.util import InsertableDict  # noqa
 import luigi
+
+from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
 #: Placeholder for an unset value.

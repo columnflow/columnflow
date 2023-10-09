@@ -12,12 +12,12 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence, Callable, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Callable, Any
 from columnflow.util import DotDict
 
 
