@@ -300,7 +300,7 @@ def ensure_proxy(
             return None
 
         # do nothing when explicitly skipped by the law config
-        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False, default=False):
             return None
 
         # check the proxy validity

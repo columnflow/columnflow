@@ -30,6 +30,7 @@ class CalibrateEvents(
     implemented as instances of the :py:class:`~columnflow.calibration.Calibrator` class. For
     further information, please consider the documentation there.
     """
+
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 

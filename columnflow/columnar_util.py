@@ -1360,7 +1360,7 @@ class ArrayFunction(Derivable):
     check_used_columns = True
     check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
-    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
+    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime", False)
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):

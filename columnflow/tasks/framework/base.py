@@ -77,7 +77,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     # defaults for targets
     default_store = "$CF_STORE_LOCAL"
-    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs")
+    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs", "wlcg_fs")
     default_output_location = "config"
 
     @classmethod
@@ -606,7 +606,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if isinstance(location, str):
             location = OutputLocation[location]
         if location == OutputLocation.config:
-            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            location = law.config.get_expanded("outputs", self.task_family, None, split_csv=True)
             if not location:
                 self.logger.debug(
                     f"no option 'outputs::{self.task_family}' found in law.cfg to obtain target "
