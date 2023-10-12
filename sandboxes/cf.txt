@@ -1,6 +1,7 @@
-# version 9
+# version 10
 
 luigi~=3.3
-scinum>=1.4.6
+scinum~=2.0.2
 six~=1.16
 pyyaml==6.*
+typing_extensions~=4.8.0
