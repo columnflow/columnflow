@@ -151,7 +151,9 @@ class UniteColumns(
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         if self.file_type == "parquet":
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
         else:  # root
             law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
 
