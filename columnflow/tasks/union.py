@@ -4,6 +4,7 @@
 Task to unite columns horizontally into a single file for further, possibly external processing.
 """
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
@@ -28,6 +29,12 @@ class UniteColumns(
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    file_type = luigi.ChoiceParameter(
+        default="parquet",
+        choices=("parquet", "root"),
+        description="the file type to create; choices: parquet,root; default: parquet",
+    )
 
     # upstream requirements
     reqs = Requirements(
@@ -80,14 +87,15 @@ class UniteColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"columns": self.target(f"data_{self.branch}.parquet")}
+        return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
     @law.decorator.log
-    @law.decorator.localize(input=True, output=False)
+    @law.decorator.localize(input=True, output=True)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
+            sorted_ak_to_root, EMPTY_FLOAT,
         )
 
         # prepare inputs and outputs
@@ -132,14 +140,20 @@ class UniteColumns(
             if self.check_finite_output:
                 self.raise_if_not_finite(events)
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+            # save as parquet or root via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{pos.index}.{self.file_type}", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+            if self.file_type == "parquet":
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+            else:  # root
+                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.path), {"null_value": EMPTY_FLOAT})
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
+        if self.file_type == "parquet":
+            law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
+        else:  # root
+            law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
 
 
 # overwrite class defaults
