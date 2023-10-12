@@ -11,12 +11,22 @@ from __future__ import annotations
 __all__ = []
 
 
+# warn when imported while _in_ this directory
+import os
+thisdir = os.path.dirname(os.path.abspath(__file__))
+if os.path.realpath(thisdir) == os.path.realpath(os.getcwd()):
+    print("""
+NOTE: you are running a python interpreter inside the columnflow source directory which
+      is highly discouraged as it leads to unintended local imports in builtin packages
+""")
+
+
 from collections.abc import KeysView, ValuesView  # noqa
+from types import ModuleType, GeneratorType, GenericAlias  # noqa
 from typing import (  # noqa
     Any, Union, TypeVar, ClassVar, List, Tuple, Sequence, Set, Dict, Callable, Generator, TextIO,
     Iterable,
 )
-from types import ModuleType, GeneratorType  # noqa
 
 from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType  # noqa
 
