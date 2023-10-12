@@ -416,6 +416,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         significant=False,
         description="maximum runtime; default unit is hours; default: 2",
     )
+    htcondor_logs = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="transfer htcondor internal submission logs to the output directory; "
+        "default: False",
+    )
     htcondor_cpus = luigi.IntParameter(
         default=law.NO_INT,
         significant=False,
@@ -522,9 +528,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
             render=False,
         )
 
-        # some htcondor setups requires a "log" config, but we can safely set it to /dev/null
-        # if you are interested in the logs of the batch system itself, set a meaningful value here
-        config.custom_content.append(("log", "/dev/null"))
+        # some htcondor setups require a "log" config, but we can safely use /dev/null by default
+        config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
         # use cc7 at CERN (https://batchdocs.web.cern.ch/local/submit.html)
         if self.htcondor_flavor == "cern":
