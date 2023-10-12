@@ -107,6 +107,8 @@ class SandboxFileTask(AnalysisTask):
         if params.get("sandbox_file") not in (None, "", law.NO_STR):
             # expand variables
             path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
+            # remove optional sandbox types
+            path = law.Sandbox.remove_type(path)
             # add default file extension
             if not os.path.splitext(path)[1]:
                 path += ".sh"
