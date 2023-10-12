@@ -937,7 +937,7 @@ def fill_ak_optionals(
     not used yet still required by :py:func:`awkward.fill_none` which is used internally.
 
     :param ak_array: The input array.
-    :param null: The value that is used to fill potential None values.
+    :param null_value: The value that is used to fill potential None values.
     :return: The updated array.
     """
     # get the type and check if it's optional in the first place
