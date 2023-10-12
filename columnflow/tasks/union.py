@@ -90,7 +90,7 @@ class UniteColumns(
         return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
     @law.decorator.log
-    @law.decorator.localize(input=True, output=False)
+    @law.decorator.localize(input=True, output=True)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
