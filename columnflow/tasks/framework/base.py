@@ -636,7 +636,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         Returns an option dictionary that can be passed as *writer_opts* to
         :py:meth:`~law.pyarrow.merge_parquet_task`, for instance, at the end of chunked processing
-        steps that produce a single parquet file.
+        steps that produce a single parquet file. See :py:class:`~pyarrow.parquet.ParquetWriter` for
+        valid options.
 
         This method can be overwritten in subclasses to customize this behavior.
 
