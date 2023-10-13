@@ -93,11 +93,33 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         self.transfer(bundle)
 
 
-class BuildBashSandbox(AnalysisTask):
+class SandboxFileTask(AnalysisTask):
 
     sandbox_file = luigi.Parameter(
         description="the sandbox file to install",
     )
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        # update the sandbox file when set
+        if params.get("sandbox_file") not in (None, "", law.NO_STR):
+            # expand variables
+            path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
+            # remove optional sandbox types
+            path = law.Sandbox.remove_type(path)
+            # add default file extension
+            if not os.path.splitext(path)[1]:
+                path += ".sh"
+            # save again
+            params["sandbox_file"] = path
+
+        return params
+
+
+class BuildBashSandbox(SandboxFileTask):
+
     sandbox = luigi.Parameter(
         default=law.NO_STR,
         description="do not set manually",
@@ -113,8 +135,8 @@ class BuildBashSandbox(AnalysisTask):
 
         # resolve the sandbox file relative to $CF_BASE/sandboxes
         if "sandbox_file" in params:
-            path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
-            abs_path = real_path(law.Sandbox.remove_type(path))
+            path = params["sandbox_file"]
+            abs_path = real_path(path)
             path = abs_path if os.path.exists(abs_path) else os.path.join("$CF_BASE", "sandboxes", path)
             params["sandbox_file"] = path
             params["sandbox"] = law.Sandbox.join_key("bash", path)
@@ -152,10 +174,8 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
-        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-        sandbox_file = law.Sandbox.remove_type(sandbox_file)
-        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
-        self.venv_name = os.path.splitext(os.path.basename(sandbox_file))[0]
+        self.sandbox_file_hash = create_sandbox_file_hash(self.sandbox_file)
+        self.venv_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
         self.venv_name_hashed = f"{self.venv_name}_{self.sandbox_file_hash}"
         self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name_hashed)
 
@@ -210,7 +230,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         self.transfer(bundle)
 
 
-class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
+class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
 
     sandbox_file = luigi.Parameter(
         description="name of the cmssw sandbox file; when not absolute, the path is evaluated "
@@ -223,6 +243,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
     version = None
 
     exclude = "^src/tmp"
+    include = ("venv", "venvs")
 
     # upstream requirements
     reqs = Requirements(
@@ -234,10 +255,8 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
-        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-        sandbox_file = law.Sandbox.remove_type(sandbox_file)
-        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
-        self.cmssw_env_name = os.path.splitext(os.path.basename(sandbox_file))[0]
+        self.sandbox_file_hash = create_sandbox_file_hash(self.sandbox_file)
+        self.cmssw_env_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
         self.cmssw_env_name_hashed = f"{self.cmssw_env_name}_{self.sandbox_file_hash}"
 
     def requires(self):
@@ -245,7 +264,12 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     def get_cmssw_path(self):
         # invoking .env will already trigger building the sandbox
-        return self.requires().sandbox_inst.env["CMSSW_BASE"]
+        req = self.requires()
+        if getattr(req, "sandbox_inst", None):
+            return req.sandbox_inst.env["CMSSW_BASE"]
+        if "CMSSW_BASE" in os.environ:
+            return os.environ["CMSSW_BASE"]
+        raise Exception("could not determine CMSSW_BASE")
 
     def single_output(self):
         cmssw_path = os.path.basename(self.get_cmssw_path())
