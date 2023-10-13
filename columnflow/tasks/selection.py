@@ -187,12 +187,16 @@ class SelectEvents(
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, outputs["results"], local=True, writer_opts=self.get_parquet_writer_opts(),
+        )
 
         # merge the column files
         if write_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, outputs["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
         # save stats
         outputs["stats"].dump(stats, indent=4, formatter="json")
@@ -380,7 +384,9 @@ class MergeSelectionMasks(
         else:
             inputs = [inp["masks"] for inp in inputs]
 
-        law.pyarrow.merge_parquet_task(self, inputs, output["masks"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
