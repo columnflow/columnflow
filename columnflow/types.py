@@ -15,10 +15,11 @@ __all__ = []
 import os
 thisdir = os.path.dirname(os.path.abspath(__file__))
 if os.path.realpath(thisdir) == os.path.realpath(os.getcwd()):
-    print("""
+    msg = """
 NOTE: you are running a python interpreter inside the columnflow source directory which
       is highly discouraged as it leads to unintended local imports in builtin packages
-""")
+"""
+    print(msg, flush=True)
 
 
 from collections.abc import KeysView, ValuesView  # noqa
