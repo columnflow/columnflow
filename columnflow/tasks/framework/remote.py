@@ -457,7 +457,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
 
     exclude_params_branch = {
-        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
+        "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
         "htcondor_flavor", "htcondor_share_software",
     }
 
