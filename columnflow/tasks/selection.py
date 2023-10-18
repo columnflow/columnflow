@@ -51,12 +51,12 @@ class SelectEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
-            reqs["calib"] = [
+            reqs["calibrations"] = [
                 self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
-        else:
+        elif self.calibrator_insts:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.CalibrateEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
