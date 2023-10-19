@@ -78,9 +78,6 @@ if __name__ == "__main__":
 
     args = ap.parse_args()
 
-    if not args.files:
-        raise ValueError("at least one file must be provided")
-
     objects = [
         load(fname) for fname in args.files
     ]
