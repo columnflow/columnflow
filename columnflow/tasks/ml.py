@@ -674,7 +674,7 @@ MergeMLEvaluationWrapper = wrapper_factory(
 )
 
 
-class PlotMLEvaluation(
+class PlotMLResultsBase(
     ProcessPlotSettingMixin,
     CategoriesMixin,
     MLModelMixin,
@@ -684,12 +684,20 @@ class PlotMLEvaluation(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """A base class, used for the implementation of the ML plotting tasks. This class implements
+    a `plot_function` parameter for choosing a desired plotting function and a `prepare_inputs` method,
+    that returns a dict with the chosen datasets.
 
+    Raises:
+        NotImplementedError: This error is raised if a givin dataset contains more than one process.
+    """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
         add_default_to_description=True,
+        description="The full path of the desired plot function, that is to be called on the inputs. \
+            The full path should be givin using the dot notation",
     )
 
     # upstream requirements
@@ -756,7 +764,7 @@ class PlotMLEvaluation(
                         "which is not implemented yet.",
                     )
 
-                events = ak.from_parquet(self.input()[dataset]["mlcolumns"].path)
+                events = ak.from_parquet(inp["mlcolumns"].path)
 
                 # masking with leaf categories
                 category_mask = False
@@ -776,10 +784,17 @@ class PlotMLEvaluation(
                         all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name], events])
                     else:
                         all_events[process_inst] = events
-
+            from IPython import embed; embed()
             figs, _ = self.call_plot_func(
                 self.plot_function,
                 events=all_events,
                 config_inst=self.config_inst,
                 category_inst=category_inst,
             )
+
+class PlotMLResults(PlotMLResultsBase):
+
+    def output(self):
+        output = {"plot": super().output(),
+                  "array": self.target(f"plot__proc_{self.processes_repr}.parquet")}
+        return output
