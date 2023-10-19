@@ -4,12 +4,7 @@ action () {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
 
-    [ "$#" -lt 2 ] && {
-        echo "ERROR: at least two files must be provided"
-        return 1
-    }
-
-    cf_sandbox venv_columnar_dev python ${this_dir}/cf_diff.py "$@"
+    cf_sandbox venv_columnar_dev python "${this_dir}/cf_diff.py" "$@"
 }
 
 action "$@"

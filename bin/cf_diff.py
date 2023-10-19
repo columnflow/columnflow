@@ -1,19 +1,18 @@
 # coding: utf8
 """
-utility script for checking multiple CF output files for equality
-
-supported formats: 'parquet'
+utility script for checking the differences betreen multiple CF output files
 """
+from __future__ import annotations
+
 import awkward as ak
 import itertools
-import sys
 
 from columnflow.columnar_util import get_ak_routes
 
 from cf_inspect import load
 
 
-def diff(*arrays):
+def diff(*arrays: ak.Array):
     assert len(arrays) >= 2, "need at least two arrays to compare"
     route_sets = [
         {route for route in get_ak_routes(arr)}
@@ -80,7 +79,7 @@ def diff(*arrays):
     return results
 
 
-def main(files, objects):
+def main(files: list[str], objects: list[ak.Array]):
     diff_results = diff(*objects)
 
     # objects are identical: do noting
@@ -130,8 +129,25 @@ def main(files, objects):
 
 
 if __name__ == "__main__":
-    files = sys.argv[1:]
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description=(
+            "Utility script for checking multiple CF output files for equality.\n\n"
+            "File contents are identified by the file extension. Supported formats are:\n"
+            "    - 'parquet' (columnflow array outputs)\n"
+        ),
+    )
+
+    ap.add_argument("files", metavar="FILE", nargs="+", help="one or more supported files")
+
+    args = ap.parse_args()
+
+    if not args.files:
+        raise ValueError("at least one file must be provided")
+
     objects = [
-        load(fname) for fname in files
+        load(fname) for fname in args.files
     ]
-    main(files, objects)
+
+    main(args.files, objects)

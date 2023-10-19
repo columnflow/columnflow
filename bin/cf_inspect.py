@@ -2,6 +2,8 @@
 """
 utility script for quickly loading event arrays and related objects for interactive processing
 """
+from __future__ import annotations
+
 import awkward as ak
 import coffea.nanoevents
 import hist  # noqa
@@ -15,21 +17,21 @@ import uproot
 __all__ = ["load"]
 
 
-def _load_json(fname):
+def _load_json(fname: str):
     with open(fname, "r") as fobj:
         return json.load(fobj)
 
 
-def _load_pickle(fname):
+def _load_pickle(fname: str):
     with open(fname, "rb") as fobj:
         return pickle.load(fobj)
 
 
-def _load_parquet(fname):
+def _load_parquet(fname: str):
     return ak.from_parquet(fname)
 
 
-def _load_nano_root(fname):
+def _load_nano_root(fname: str):
     source = uproot.open(fname)
     return coffea.nanoevents.NanoEventsFactory.from_root(
         source,
@@ -38,7 +40,7 @@ def _load_nano_root(fname):
     ).events()
 
 
-def load(fname):
+def load(fname: str):
     """
     Load file contents based on file extension.
     """

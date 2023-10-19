@@ -9,7 +9,7 @@ action () {
         return 1
     }
 
-    cf_sandbox venv_columnar_dev ipython -i ${this_dir}/cf_inspect.py "$@"
+    cf_sandbox venv_columnar_dev ipython -i "${this_dir}/cf_inspect.py" "$@"
 }
 
 action "$@"
