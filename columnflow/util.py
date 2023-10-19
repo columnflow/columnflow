@@ -30,12 +30,12 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Callable, Any, Sequence, Union
-from types import ModuleType
 
 import law
 from law.util import InsertableDict  # noqa
 import luigi
+
+from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
 #: Placeholder for an unset value.
@@ -300,7 +300,7 @@ def ensure_proxy(
             return None
 
         # do nothing when explicitly skipped by the law config
-        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False):
             return None
 
         # check the proxy validity

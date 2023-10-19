@@ -10,12 +10,12 @@ import gc
 import time
 import itertools
 from collections import Counter
-from typing import Sequence, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Any
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -1357,44 +1357,6 @@ class ChunkedIOMixin(AnalysisTask):
 
     exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
 
-    def iter_chunked_io(self, *args, **kwargs):
-        from columnflow.columnar_util import ChunkedIOHandler
-
-        # get the chunked io handler from first arg or create a new one with all args
-        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
-            handler = args[0]
-        else:
-            handler = ChunkedIOHandler(*args, **kwargs)
-
-        # iterate in the handler context
-        with handler:
-            self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
-            try:
-                # measure runtimes excluding IO
-                loop_durations = []
-                for obj in self.iter_progress(handler, max(handler.n_chunks, 1), msg=msg):
-                    t1 = time.perf_counter()
-
-                    # yield the object provided by the handler
-                    yield obj
-
-                    # save the runtime
-                    loop_durations.append(time.perf_counter() - t1)
-
-                # print runtimes
-                self.publish_message(
-                    "event processing in loop body took "
-                    f"{law.util.human_duration(seconds=sum(loop_durations))}",
-                )
-
-            finally:
-                self.chunked_io = None
-
-        # eager, overly cautious gc
-        del handler
-        gc.collect()
-
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
         """
@@ -1439,3 +1401,41 @@ class ChunkedIOMixin(AnalysisTask):
                 f"found {len(overlapping_routes)} overlapping columns across {len(ak_arrays)} "
                 f"columns: {','.join(overlapping_routes)}",
             )
+
+    def iter_chunked_io(self, *args, **kwargs):
+        from columnflow.columnar_util import ChunkedIOHandler
+
+        # get the chunked io handler from first arg or create a new one with all args
+        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
+            handler = args[0]
+        else:
+            handler = ChunkedIOHandler(*args, **kwargs)
+
+        # iterate in the handler context
+        with handler:
+            self.chunked_io = handler
+            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
+            try:
+                # measure runtimes excluding IO
+                loop_durations = []
+                for obj in self.iter_progress(handler, max(handler.n_chunks, 1), msg=msg):
+                    t1 = time.perf_counter()
+
+                    # yield the object provided by the handler
+                    yield obj
+
+                    # save the runtime
+                    loop_durations.append(time.perf_counter() - t1)
+
+                # print runtimes
+                self.publish_message(
+                    "event processing in loop body took "
+                    f"{law.util.human_duration(seconds=sum(loop_durations))}",
+                )
+
+            finally:
+                self.chunked_io = None
+
+        # eager, overly cautious gc
+        del handler
+        gc.collect()

@@ -188,7 +188,9 @@ class PrepareMLEvents(
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
             sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, output, local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
         # some logs
         self.publish_message(f"total events: {n_events}")
@@ -296,7 +298,9 @@ class MergeMLEvents(
         if not self.is_leaf():
             inputs = [inp["mlevents"] for inp in inputs]
 
-        law.pyarrow.merge_parquet_task(self, inputs, output["mlevents"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["mlevents"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 MergeMLEventsWrapper = wrapper_factory(
@@ -593,7 +597,9 @@ class MLEvaluation(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["mlcolumns"], local=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, output["mlcolumns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 # overwrite class defaults
@@ -621,7 +627,6 @@ class MergeMLEvaluation(
     ProducersMixin,
     SelectorMixin,
     CalibratorsMixin,
-    ChunkedIOMixin,
     DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
@@ -659,7 +664,9 @@ class MergeMLEvaluation(
 
     def merge(self, inputs, output):
         inputs = [inp["mlcolumns"] for inp in inputs]
-        law.pyarrow.merge_parquet_task(self, inputs, output["mlcolumns"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["mlcolumns"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 MergeMLEvaluationWrapper = wrapper_factory(

@@ -6,11 +6,10 @@ CMS related tasks dealing with external data.
 
 from __future__ import annotations
 
-from typing import Sequence
-
 import luigi
 import law
 
+from columnflow.types import Sequence
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, ConfigTask, wrapper_factory
 from columnflow.tasks.external import BundleExternalFiles
 from columnflow.util import safe_div

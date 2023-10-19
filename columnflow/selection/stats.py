@@ -11,8 +11,8 @@ import itertools
 from functools import reduce
 from collections import defaultdict
 from operator import and_, getitem as getitem_
-from typing import Sequence, Callable
 
+from columnflow.types import Sequence, Callable
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, InsertableDict
 

@@ -6,12 +6,11 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
-import order as od
-
-import functools
 import operator
-
+import functools
 from collections import OrderedDict
+
+import order as od
 
 from columnflow.util import maybe_import
 

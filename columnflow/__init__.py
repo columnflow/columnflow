@@ -47,7 +47,7 @@ law.contrib.load("cms")
 if law.config.has_option("outputs", "wlcg_file_systems"):
     wlcg_file_systems = [
         law.wlcg.WLCGFileSystem(fs.strip())
-        for fs in law.config.get_expanded("outputs", "wlcg_file_systems", split_csv=True)
+        for fs in law.config.get_expanded("outputs", "wlcg_file_systems", [], split_csv=True)
     ]
 
 
@@ -56,37 +56,37 @@ from columnflow.util import maybe_import
 
 import columnflow.production  # noqa
 if law.config.has_option("analysis", "production_modules"):
-    for m in law.config.get_expanded("analysis", "production_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "production_modules", [], split_csv=True):
         logger.debug(f"loading production module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.calibration  # noqa
 if law.config.has_option("analysis", "calibration_modules"):
-    for m in law.config.get_expanded("analysis", "calibration_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "calibration_modules", [], split_csv=True):
         logger.debug(f"loading calibration module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.selection  # noqa
 if law.config.has_option("analysis", "selection_modules"):
-    for m in law.config.get_expanded("analysis", "selection_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "selection_modules", [], split_csv=True):
         logger.debug(f"loading selection module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.categorization  # noqa
 if law.config.has_option("analysis", "categorization_modules"):
-    for m in law.config.get_expanded("analysis", "categorization_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "categorization_modules", [], split_csv=True):
         logger.debug(f"loading categorization module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.ml  # noqa
 if law.config.has_option("analysis", "ml_modules"):
-    for m in law.config.get_expanded("analysis", "ml_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "ml_modules", [], split_csv=True):
         logger.debug(f"loading ml module '{m}'")
         maybe_import(m.strip())
 
 import columnflow.inference  # noqa
 if law.config.has_option("analysis", "inference_modules"):
-    for m in law.config.get_expanded("analysis", "inference_modules", split_csv=True):
+    for m in law.config.get_expanded("analysis", "inference_modules", [], split_csv=True):
         logger.debug(f"loading inference module '{m}'")
         maybe_import(m.strip())
 

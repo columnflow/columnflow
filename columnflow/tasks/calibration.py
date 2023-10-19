@@ -30,6 +30,7 @@ class CalibrateEvents(
     implemented as instances of the :py:class:`~columnflow.calibration.Calibrator` class. For
     further information, please consider the documentation there.
     """
+
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -146,7 +147,9 @@ class CalibrateEvents(
         # merge output files
         with output["columns"].localize("w") as outp:
             sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, outp, local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
 
 # overwrite class defaults

@@ -48,28 +48,34 @@ bootstrap_htcondor_standalone() {
     fi
 
     # source the law wlcg tools, mainly for law_wlcg_get_file
+    echo -e "\nsouring wlcg tools ..."
     source "${CF_WLCG_TOOLS}" "" || return "$?"
+    echo "done sourcing wlcg tools"
 
     # load and unpack the software bundle, then source it
     if ${fetch_software}; then
         (
+            echo -e "\nfetching software bundle ..."
             { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
             mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
             cd "${CF_SOFTWARE_BASE}/conda" &&
             GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
             tar -xzf "software.tgz" &&
-            rm "software.tgz"
+            rm "software.tgz" &&
+            echo "done fetching software bundle"
         ) || return "$?"
     fi
 
     # load the repo bundle
     (
+        echo -e "\nfetching repository bundle ..."
         { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
         mkdir -p "${CF_REPO_BASE}" &&
         cd "${CF_REPO_BASE}" &&
         GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
         tar -xzf "repo.tgz" &&
-        rm "repo.tgz"
+        rm "repo.tgz" &&
+        echo "done fetching repository bundle"
     ) || return "$?"
 
     # export variables used in cf setup script on-the-fly to load sandboxes
@@ -86,7 +92,9 @@ bootstrap_htcondor_standalone() {
     {{cf_pre_setup_command}}
 
     # source the default repo setup
+    echo -e "\nsource repository setup ..."
     source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
+    echo "done sourcing repository setup"
 
     # optional custom command after the setup is sourced
     {{cf_post_setup_command}}
@@ -109,7 +117,9 @@ bootstrap_slurm() {
     {{cf_pre_setup_command}}
 
     # source the default repo setup
+    echo -e "\nsource repository setup ..."
     source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
+    echo "done sourcing repository setup"
 
     # optional custom command after the setup is sourced
     {{cf_post_setup_command}}
@@ -143,26 +153,32 @@ bootstrap_crab() {
     fi
 
     # source the law wlcg tools, mainly for law_wlcg_get_file
+    echo -e "\nsouring wlcg tools ..."
     source "${CF_WLCG_TOOLS}" "" || return "$?"
+    echo "done sourcing wlcg tools"
 
     # load and unpack the software bundle, then source it
     (
+        echo -e "\nfetching software bundle ..."
         { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
         mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
         cd "${CF_SOFTWARE_BASE}/conda" &&
         GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
         tar -xzf "software.tgz" &&
-        rm "software.tgz"
+        rm "software.tgz" &&
+        echo "done fetching software bundle"
     ) || return "$?"
 
     # load the repo bundle
     (
+        echo -e "\nfetching repository bundle ..."
         { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
         mkdir -p "${CF_REPO_BASE}" &&
         cd "${CF_REPO_BASE}" &&
         GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_repo_uris}}' '{{cf_repo_pattern}}' "repo.tgz" &&
         tar -xzf "repo.tgz" &&
-        rm "repo.tgz"
+        rm "repo.tgz" &&
+        echo "done fetching repository bundle"
     ) || return "$?"
 
     # export variables used in cf setup script on-the-fly to load sandboxes
@@ -177,7 +193,9 @@ bootstrap_crab() {
     {{cf_pre_setup_command}}
 
     # source the default repo setup
+    echo -e "\nsource repository setup ..."
     source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
+    echo "done sourcing repository setup"
 
     # optional custom command after the setup is sourced
     {{cf_post_setup_command}}
