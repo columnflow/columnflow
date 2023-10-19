@@ -12,12 +12,12 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence, Callable, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Callable, Any
 from columnflow.util import DotDict
 
 
@@ -77,7 +77,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     # defaults for targets
     default_store = "$CF_STORE_LOCAL"
-    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs")
+    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs", "wlcg_fs")
     default_output_location = "config"
 
     @classmethod
@@ -124,7 +124,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_pool",
+            "htcondor_gpus", "htcondor_memory", "htcondor_pool",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
@@ -606,7 +606,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if isinstance(location, str):
             location = OutputLocation[location]
         if location == OutputLocation.config:
-            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            location = law.config.get_expanded("outputs", self.task_family, None, split_csv=True)
             if not location:
                 self.logger.debug(
                     f"no option 'outputs::{self.task_family}' found in law.cfg to obtain target "
@@ -631,6 +631,22 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return self.wlcg_target(*path, **kwargs)
 
         raise Exception(f"cannot determine output location based on '{location}'")
+
+    def get_parquet_writer_opts(self) -> dict[str, Any]:
+        """
+        Returns an option dictionary that can be passed as *writer_opts* to
+        :py:meth:`~law.pyarrow.merge_parquet_task`, for instance, at the end of chunked processing
+        steps that produce a single parquet file. See :py:class:`~pyarrow.parquet.ParquetWriter` for
+        valid options.
+
+        This method can be overwritten in subclasses to customize this behavior.
+
+        :return: A dictionary with options that can be passed to parquet writer objects.
+        """
+        return {
+            "compression": "ZSTD",
+            "compression_level": 1,
+        }
 
 
 class ConfigTask(AnalysisTask):
@@ -905,16 +921,6 @@ class DatasetTask(ShiftTask):
 
         # use enumerate for simply indexing
         return dict(enumerate(chunks))
-
-    def htcondor_destination_info(self, info):
-        """
-        Hook to modify the additional info printed along logs of the htcondor workflow.
-        """
-        info.append(self.config_inst.name)
-        info.append(self.dataset_inst.name)
-        if self.global_shift_inst not in (None, law.NO_STR, "nominal"):
-            info.append(self.global_shift_inst.name)
-        return info
 
 
 class CommandTask(AnalysisTask):

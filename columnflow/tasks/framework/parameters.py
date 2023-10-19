@@ -24,7 +24,7 @@ class SettingsParameter(law.CSVParameter):
         => {"param1": 10.0, "param2": True, "param3": "text", "param4": False}
 
         p.serialize({"param1": 2, "param2": False})
-        => "param1=2.0,param2=False"
+        => "param1=2,param2=False"
     """
 
     @classmethod
@@ -74,7 +74,7 @@ class MultiSettingsParameter(law.MultiCSVParameter):
         p = MultiSettingsParameter()
 
         p.parse("obj1,k1=10,k2,k3=text:obj2,k4=false")
-        # => {"obj1": {"k1": 10.0, "k2": True, "k3": "text"}, {"obj2": {"k4": False}}}
+        # => {"obj1": {"k1": 10.0, "k2": True, "k3": "text"}, "obj2": {"k4": False}}
 
         p.serialize({"obj1": {"k1": "val"}, "obj2": {"k2": 2}})
         # => "obj1,k1=val:obj2,k2=2"
@@ -92,10 +92,17 @@ class MultiSettingsParameter(law.MultiCSVParameter):
     def parse(self, inp):
         inputs = super().parse(inp)
 
-        outputs = DotDict({
-            settings[0]: DotDict(SettingsParameter.parse_setting(s) for s in settings[1:])
+        if not inputs:
+            # when inputs are empty, return an empty DotDict
+            return DotDict()
+
+        # first, parse settings for each key individually
+        outputs = tuple(
+            DotDict({settings[0]: DotDict(SettingsParameter.parse_setting(s) for s in settings[1:])})
             for settings in inputs
-        })
+        )
+        # next, merge dicts
+        outputs = law.util.merge_dicts(*outputs, deep=True)
 
         return outputs
 
