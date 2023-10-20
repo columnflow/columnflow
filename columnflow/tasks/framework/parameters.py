@@ -92,6 +92,10 @@ class MultiSettingsParameter(law.MultiCSVParameter):
     def parse(self, inp):
         inputs = super().parse(inp)
 
+        if not inputs:
+            # when inputs are empty, return an empty DotDict
+            return DotDict()
+
         # first, parse settings for each key individually
         outputs = tuple(
             DotDict({settings[0]: DotDict(SettingsParameter.parse_setting(s) for s in settings[1:])})
