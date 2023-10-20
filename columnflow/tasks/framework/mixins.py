@@ -115,6 +115,7 @@ class CalibratorsMixin(ConfigTask):
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
         brace_expand=True,
+        parse_empty=True,
     )
 
     # decibes whether the task itself runs the calibrators and implements their shifts
@@ -281,6 +282,7 @@ class SelectorStepsMixin(SelectorMixin):
         description="a subset of steps of the selector to apply; uses all steps when empty; "
         "empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     exclude_params_repr_empty = {"selector_steps"}
@@ -413,6 +415,7 @@ class ProducersMixin(ConfigTask):
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of producers to be applied; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     # decibes whether the task itself runs the producers and implements their shifts
@@ -545,6 +548,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         description="comma-separated names of analysis config to use; should only contain a single "
         "name in case the ml model is bound to a single config; when empty, the ml model is "
         "expected to fully define the configs it uses; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     calibrators = law.MultiCSVParameter(
         default=(),
@@ -552,6 +557,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
         "'default_calibrator' setting of each config is used if set, or the model is expected to "
         "fully define the calibrators it requires upstream; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     selectors = law.CSVParameter(
         default=(),
@@ -559,6 +566,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "config in --configs; when empty, the 'default_selector' setting of each config is used if "
         "set, or the ml model is expected to fully define the selector it uses requires upstream; "
         "empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     producers = law.MultiCSVParameter(
         default=(),
@@ -566,6 +575,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
         "'default_producer' setting of each config is used if set, or ml model is expected to "
         "fully define the producers it requires upstream; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
 
     @classmethod
@@ -873,6 +884,7 @@ class MLModelsMixin(ConfigTask):
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_ml_models = True
@@ -994,6 +1006,7 @@ class CategoriesMixin(ConfigTask):
         "a mapping defined in 'category_groups' auxiliary data of the config; when empty, uses the "
         "auxiliary data enty 'default_categories' when set; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     default_categories = None
@@ -1050,6 +1063,7 @@ class VariablesMixin(ConfigTask):
         "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     default_variables = None
@@ -1163,6 +1177,7 @@ class DatasetsProcessesMixin(ConfigTask):
         "all datasets registered in the config that contain any of the selected --processes; empty "
         "default",
         brace_expand=True,
+        parse_empty=True,
     )
     processes = law.CSVParameter(
         default=(),
@@ -1170,6 +1185,7 @@ class DatasetsProcessesMixin(ConfigTask):
         "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
         "uses all processes of the config when empty; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_datasets = False
@@ -1266,6 +1282,8 @@ class ShiftSourcesMixin(ConfigTask):
         description="comma-separated shift source names (without direction) or patterns to select; "
         "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
         "config; default: ()",
+        brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_shift_sources = False
