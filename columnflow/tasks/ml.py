@@ -76,7 +76,7 @@ class PrepareMLEvents(
         # require the full merge forest
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
-        if not self.pilot and self.producers:
+        if not self.pilot and self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
@@ -90,7 +90,7 @@ class PrepareMLEvents(
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
-        if self.producers:
+        if self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
@@ -141,7 +141,7 @@ class PrepareMLEvents(
 
         # iterate over chunks of events and columns
         files = [inputs["events"]["collection"][0]["events"].path]
-        if self.producers:
+        if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
@@ -466,7 +466,7 @@ class MLEvaluation(
 
         reqs["events"] = self.reqs.MergeReducedEvents.req_different_branching(self)
 
-        if not self.pilot and self.producers:
+        if not self.pilot and self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
@@ -492,7 +492,7 @@ class MLEvaluation(
             ),
         }
 
-        if self.producers:
+        if self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
@@ -549,7 +549,7 @@ class MLEvaluation(
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0]["events"].path]
-        if self.producers:
+        if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
