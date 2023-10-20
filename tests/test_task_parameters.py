@@ -18,6 +18,8 @@ class TaskParametersTest(unittest.TestCase):
         p = SettingsParameter()
 
         # parsing
+        self.assertEqual(p.parse(""), {})
+        self.assertEqual(p.parse("A"), {"A": True})
         self.assertEqual(
             p.parse("param1=10,param2,param3=text,param4=false"),
             {"param1": 10.0, "param2": True, "param3": "text", "param4": False},
@@ -38,6 +40,9 @@ class TaskParametersTest(unittest.TestCase):
         p = MultiSettingsParameter()
 
         # parsing
+        self.assertEqual(p.parse(""), {})
+        self.assertEqual(p.parse("A"), {"A": {}})
+        self.assertEqual(p.parse("A,B"), {"A": {"B": True}})
         self.assertEqual(
             p.parse("obj1,k1=10,k2,k3=text:obj2,k4=false"),
             {"obj1": {"k1": 10.0, "k2": True, "k3": "text"}, "obj2": {"k4": False}},

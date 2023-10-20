@@ -35,7 +35,7 @@ from law.util import InsertableDict
 from columnflow.types import Sequence, Callable, Any
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
-    get_source_code,
+    get_source_code, real_path,
 )
 
 
@@ -1100,7 +1100,7 @@ def sorted_ak_to_root(
         }
 
     # prepare the output path
-    path = os.path.expandvars(os.path.expanduser(path))
+    path = real_path(path)
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
 
