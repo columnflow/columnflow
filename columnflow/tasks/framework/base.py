@@ -646,6 +646,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return {
             "compression": "ZSTD",
             "compression_level": 1,
+            "use_dictionary": False,
         }
 
 
