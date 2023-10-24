@@ -693,10 +693,12 @@ class PlotMLResultsBase(
 ):
     """A base class, used for the implementation of the ML plotting tasks. This class implements
     a `plot_function` parameter for choosing a desired plotting function and a `prepare_inputs` method,
-    that returns a dict with the chosen datasets.
+    that returns a dict with the chosen events.
 
     Raises:
         NotImplementedError: This error is raised if a givin dataset contains more than one process.
+        Exception: This exception is raised if `plot_sub_processes` is used without providing the
+        `process_ids` column in the data
     """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
@@ -705,6 +707,20 @@ class PlotMLResultsBase(
         add_default_to_description=True,
         description="The full path of the desired plot function, that is to be called on the inputs. \
             The full path should be givin using the dot notation",
+    )
+
+    skip_processes = law.CSVParameter(
+        default=("",),
+        description="names of processes to skip; These processes will not be displayed int he plot. \
+           config; default: ('*',)",
+        brace_expand=True,
+    )
+
+    plot_sub_processes = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, each process is divided into the different subprocesses \
+            which will be used as classes for the plot; default: False",
     )
 
     # upstream requirements
@@ -748,9 +764,7 @@ class PlotMLResultsBase(
         b = self.branch_data
         return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}.pdf")
 
-    @law.decorator.log
-    @view_output_plots
-    def run(self):
+    def prepare_inputs(self):
         import awkward as ak
 
         category_inst = self.config_inst.get_category(self.branch_data.category)
@@ -761,47 +775,73 @@ class PlotMLResultsBase(
             for proc in process_insts
         }
 
-        with self.publish_step(f"plotting in {category_inst.name}"):
-            all_events = OrderedDict()
-            for dataset, inp in self.input().items():
-                dataset_inst = self.config_inst.get_dataset(dataset)
-                if len(dataset_inst.processes) != 1:
-                    raise NotImplementedError(
-                        f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} assigned, "
-                        "which is not implemented yet.",
-                    )
+        all_events = OrderedDict()
+        for dataset, inp in self.input().items():
+            dataset_inst = self.config_inst.get_dataset(dataset)
+            if len(dataset_inst.processes) != 1:
+                raise NotImplementedError(
+                    f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} assigned, "
+                    "which is not implemented yet.",
+                )
 
-                events = ak.from_parquet(inp["mlcolumns"].path)
+            events = ak.from_parquet(inp["mlcolumns"].path)
 
-                # masking with leaf categories
-                category_mask = False
-                for leaf in leaf_category_insts:
-                    category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
+            # masking with leaf categories
+            category_mask = False
+            for leaf in leaf_category_insts:
+                category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
 
-                events = events[category_mask]
+            events = events[category_mask]
 
-                # loop per process
-                for process_inst in process_insts:
-                    # skip when the dataset is already known to not contain any sub process
-                    if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
-                        continue
+            # loop per process
+            for process_inst in process_insts:
+                # skip when the dataset is already known to not contain any sub process
+                if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                    continue
 
-                    # TODO: use process_ids to correctly assign events to processes e.g. for sample stitching
+                if not self.plot_sub_processes:
                     if process_inst.name in all_events.keys():
-                        all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name], events])
+                        all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name],
+                                                                        getattr(events, self.ml_model)])
                     else:
-                        all_events[process_inst] = events
-            from IPython import embed; embed()
-            figs, _ = self.call_plot_func(
-                self.plot_function,
-                events=all_events,
-                config_inst=self.config_inst,
-                category_inst=category_inst,
-            )
+                        all_events[process_inst] = getattr(events, self.ml_model)
+                else:
+                    if "process_ids" in events.fields:
+                        for sub_process in sub_process_insts[process_inst]:
+                            if sub_process.name in self.skip_processes:
+                                continue
+
+                            process_mask = ak.where(events.process_ids == sub_process.id, True, False)
+                            if sub_process.name in all_events.keys():
+                                all_events[sub_process.name] = (
+                                    ak.concatenate([all_events[sub_process.name],
+                                                    getattr(events[process_mask], self.ml_model)]))
+                            else:
+                                all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
+                    else:
+                        raise Exception("No `process_ids` column stored in the events! "
+                                f"Process selection for {dataset} cannot not be applied!")
+        return all_events
+
 
 class PlotMLResults(PlotMLResultsBase):
+
+    # override the plot_function parameter to be able to only choose between CM and ROC
 
     def output(self):
         output = {"plot": super().output(),
                   "array": self.target(f"plot__proc_{self.processes_repr}.parquet")}
         return output
+
+    @law.decorator.log
+    @view_output_plots
+    def run(self):
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        with self.publish_step(f"plotting in {category_inst.name}"):  # TODO  what does this do?
+            all_events = self.prepare_inputs()
+            figs, _ = self.call_plot_func(  # TODO implement the plotting function to work
+                self.plot_function,
+                events=all_events,
+                config_inst=self.config_inst,
+                category_inst=category_inst,
+            )
