@@ -124,7 +124,8 @@ the 3rd jet ```events.Jet[:, 2].pt```, even though some events may only contain 
 case, the {py:class}`~columnflow.columnar_util.Route` class and its
 {py:meth}`~columnflow.columnar_util.Route.apply` function can be used to access this object by
 replacing missing values with the given value, e.g.
-```jet3_pt = Route("Jet.pt[:, 2]").apply(events, null_value=EMPTY_FLOAT)``` with ```EMPTY_FLOAT```
+```jet3_pt = Route("Jet.pt[:, 2]").apply(events, null_value=EMPTY_FLOAT)``` with
+{py:attr}`~columnflow.columnar_util.EMPTY_FLOAT`
 being a columnflow internal null value corresponding to the value ```-9999.0```.
 
 - If the {py:class}`~columnflow.production.Producer` is built in a new file and to be used directly
