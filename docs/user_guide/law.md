@@ -68,9 +68,10 @@ An example command to see the location of the output file after running a 1D plo
 with columnflow using only law functions and the default arguments for the tasks would be:
 
 ```shell
-law run PlotVariables1D --version test_plot --print-output 0
+law run cf.PlotVariables1D --version test_plot --print-output 0
 ```
 
+(law_config_section)=
 ## Law Config
 
 TODO

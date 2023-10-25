@@ -277,7 +277,7 @@ for the key is the information itself. The dictionary is created in the
 updated in place in a {py:class}`~columnflow.selection.Selector`. Depending on the weights to be
 used, various additional information might need to be saved in the ```stats``` object.
 
-The keys ```"n_events"```, ```"n_events_selected"```, ```"sum_mc_weight"```,
+The keys ```"num_events"```, ```"num_events_selected"```, ```"sum_mc_weight"```,
 ```"sum_mc_weight_selected"``` get printed by the
 {py:class}`~columnflow.tasks.selection.SelectEvents` task along with the
 corresponding efficiency. If they are not set, the default value for floats will be printed instead.
@@ -322,8 +322,8 @@ def increment_stats(
     event_mask = results.main.event
 
     # increment plain counts
-    stats["n_events"] += len(events)
-    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
+    stats["num_events"] += len(events)
+    stats["num_events_selected"] += ak.sum(event_mask, axis=0)
 
     # get a list of unique process ids present in the chunk
     unique_process_ids = np.unique(events.process_id)
@@ -497,8 +497,8 @@ def increment_stats(
     event_mask = results.main.event
 
     # increment plain counts
-    stats["n_events"] += len(events)
-    stats["n_events_selected"] += ak.sum(event_mask, axis=0)
+    stats["num_events"] += len(events)
+    stats["num_events_selected"] += ak.sum(event_mask, axis=0)
 
     # get a list of unique process ids present in the chunk
     unique_process_ids = np.unique(events.process_id)
@@ -585,7 +585,8 @@ Notes:
 - If you want to build this exposed {py:class}`~columnflow.selection.Selector` along with the inner
 {py:class}`~columnflow.selection.Selector`s in a new file, you will still need to put the name of
 the new file along with its path in the ```law.cfg``` file under the ```selection_modules```
-argument for law to be able to find the file.
+argument for law to be able to find the file. A more detailed explanation of the law config file
+can be found in the {ref}`Law config section <law_config_section>`.
 
 - If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
 on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
@@ -613,7 +614,7 @@ saves the created masks for event and objects selections in a parquet file, as w
 statistics of the selection in a json file.
 
 While it is possible to see all the arguments and their explanation for this task using
-```law run SelectEvents --help```, the only argument created specifically for this task is the
+```law run cf.SelectEvents --help```, the only argument created specifically for this task is the
 ```--selector``` argument, through which the exposed {py:class}`~columnflow.selection.Selector` to
 be used can be chosen.
 
@@ -631,10 +632,10 @@ this dictionary will be loaded and then saved in the reduced parquet file.
 An example of how to run this task for an analysis with several datasets and configs is given below:
 
 ```shell
-law run SelectEvents --version name_of_your_version \
-                     --config name_of_your_config \
-                     --selector name_of_the_selector \
-                     --dataset name_of_the_dataset_to_be_run
+law run cf.SelectEvents --version name_of_your_version \
+                        --config name_of_your_config \
+                        --selector name_of_the_selector \
+                        --dataset name_of_the_dataset_to_be_run
 ```
 
 It is to be mentioned that this task is run after the

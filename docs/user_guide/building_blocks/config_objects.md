@@ -18,14 +18,12 @@ TODO
 
 ## "Variable" creation
 
-In order to plot something out of the processed datasets, columnflow uses
-{external+order:py:class}`order.variable.Variable`s. It is therefore not enough to create a new
-column in a {py:class}`~columnflow.production.Producer` for the plotting tasks, it must also be
-translated in a {external+order:py:class}`order.variable.Variable`, which name can be given
-to the argument ```--variables``` for the plotting/histograming task. These
+In order to create histograms out of the processed datasets, columnflow uses
+{external+order:py:class}`order.variable.Variable`s. These
 {external+order:py:class}`order.variable.Variable`s need to be added to the config using the
 function {external+order:py:meth}`order.config.Config.add_variable`. The standard syntax is as
 follows:
+
 ```python
 config.add_variable(
     name=variable_name,  # this is to be given to the "--variables" argument for the plotting task
@@ -49,9 +47,15 @@ config.add_variable(
 )
 ```
 
+In histogramming tasks such as
+{py:class}`~columnflow.tasks.histograms.CreateHistograms`, one histogram is created per Variable
+given via the ```--variables``` argument, accessing information from columns based on
+the `expression` of the Variable and storing them in histograms with binning defined
+via the `binning` argument of the Variable.
+
 The list of possible keyword arguments can be found in
 {external+order:py:class}`order.variable.Variable`. The values in the ```expression``` argument can
 be either a one-dimensional or a more dimensional array. In this second case the information is
 flattened before plotting. It is to be mentioned that
-{py:data}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value and
-corresponds to the value ```-9999```.
+{ref}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value and
+corresponds to the value ```-9999.0```.

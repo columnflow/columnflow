@@ -12,10 +12,10 @@ columns directly within {py:class}`~columnflow.calibration.Calibrator`s and
 {py:class}`~columnflow.selection.Selector`s, without using instances of the
 {py:class}`~columnflow.production.Producer` class, but the process is
 the same as for the {py:class}`~columnflow.production.Producer` class. Therefore, the
-{py:class}`~columnflow.production.Producer` class, which sole purpose is the creation of new
+{py:class}`~columnflow.production.Producer` class, which main purpose is the creation of new
 columns, will be used to describe the process. The new columns are saved in a parquet file. If the
 column were created before the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task and are
-still needed afterwards, it should not be forgotten to include them in the ```keep_columns```
+still needed afterwards, they should be included in the ```keep_columns```
 auxiliary of the config, as they would otherwise not be saved in the output file of the task. If
 the columns are created further down the task tree, e.g. in
 {py:class}`~columnflow.tasks.production.ProduceColumns`, they will be stored in another parquet
@@ -119,16 +119,19 @@ The ```all_features``` producer creates therefore two new columns, the ```HT``` 
 level, and the ```pt_squared``` column for each object of the ```Jet``` collection.
 
 Notes:
-- If one wants to index the ```events``` array in a way that the index does not exist for every
-event (e.g. ```events.Jet.pt[10]``` does only work for events with 11 or more jets), it is possible
-to use the {py:class}`~columnflow.columnar_util.Route` class and its
-{py:meth}`~columnflow.columnar_util.Route.apply` function, which allows to give a default value to
-the returned array in the case of a missing element without throwing an error.
+- In many cases, one wants to access an object that does not exist for every event (e.g. accessing
+the 3rd jet ```events.Jet[:, 2].pt```, even though some events may only contain two jets). In that
+case, the {py:class}`~columnflow.columnar_util.Route` class and its
+{py:meth}`~columnflow.columnar_util.Route.apply` function can be used to access this object by
+replacing missing values with the given value, e.g.
+```jet3_pt = Route("Jet.pt[:, 2]").apply(events, null_value=EMPTY_FLOAT)``` with ```EMPTY_FLOAT```
+being a columnflow internal null value corresponding to the value ```-9999.0```.
 
 - If the {py:class}`~columnflow.production.Producer` is built in a new file and to be used directly
 by {py:class}`~columnflow.tasks.production.ProduceColumns`, you will still need to put the name of
 the new file along with its path in the ```law.cfg``` file under the ```production_modules```
-argument for law to be able to find the file.
+argument for law to be able to find the file. A more detailed explanation of the law config file
+can be found in the {ref}`Law config section <law_config_section>`.
 
 - If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
 on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
@@ -143,9 +146,9 @@ collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
 events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
-- The weights for plotting should ideally be created in the
-{py:class}`~columnflow.tasks.production.ProduceColumns` task when possible, after the selection and
-reduction of the data.
+- When storage space is a limiting factor, it is good practice to produce and store (if possible)
+columns only after the reduction, using the {py:class}`~columnflow.tasks.production.ProduceColumns`
+task.
 
 
 ## ProduceColumns task
@@ -155,17 +158,17 @@ The {py:class}`~columnflow.tasks.production.ProduceColumns` task runs a specific
 parquet file.
 
 While it is possible to see all the arguments and their explanation for this task using
-```law run ProduceColumns --help```, the only argument created specifically for this task is the
+```law run cf.ProduceColumns --help```, the only argument created specifically for this task is the
 ```--producer``` argument, through which the {py:class}`~columnflow.production.Producer` to be used
 can be chosen.
 
 An example of how to run this task for an analysis with several datasets and configs is given below:
 
 ```shell
-law run ProduceColumns --version name_of_your_version \
-                       --config name_of_your_config \
-                       --producer name_of_the_producer \
-                       --dataset name_of_the_dataset_to_be_run
+law run cf.ProduceColumns --version name_of_your_version \
+                          --config name_of_your_config \
+                          --producer name_of_the_producer \
+                          --dataset name_of_the_dataset_to_be_run
 ```
 
 It is to be mentioned that this task is run after the

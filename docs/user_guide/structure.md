@@ -1,24 +1,20 @@
 # Columnflow Structure
 
 
-Here general discussion of columnflow: columns (and fields, like Jet), awkward arrays, general
-structure of cf tree and the purpose of every task
-
-
-In this section, a general introduction to the structure of Columnflow is provided, starting with
-general considerations, followed by a description of the various so called "tasks" implemented in
-columnflow as a general analysis workflow tool and ending with an introduction to the custom
-configuration file needed to implement your own analysis on top of columnflow, referred further below
-as analysis config.
+In this section, an overview to the structure of Columnflow is provided, starting with
+a general introduction, followed by a description of the various tasks implemented in
+columnflow and ending with an introduction on how to configure your analysis on top
+of columnflow with the analysis and config object from the
+[order](https://github.com/riga/order) package.
 
 
 ## General introduction
 
-Columnflow is a fully orchestrated columnar analysis tool for HEP analyses with pure Python. The
-workflow orchestration is managed by [law](https://github.com/riga/law) and
-[order](https://github.com/riga/order) is used for the metavariables. A short introduction to law is
-given in the {doc}`law section <law>`. If you have never used law before, this section is highly recommended as
-a few very convenient commands are presented there.
+Columnflow is a fully orchestrated columnar analysis tool for HEP analyses with Python. The
+workflow orchestration is managed by [law](https://github.com/riga/law) and the meta data and
+configuration is managed by [order](https://github.com/riga/order). A short introduction to law is
+given in the {doc}`law section <law>`. If you have never used law before, this section is highly
+recommended as a few very convenient commands are presented there.
 
 
 The data processing in columnflow is based on columns in [awkward arrays](https://awkward-array.org/doc/main/)
@@ -197,3 +193,40 @@ The standard syntax to access objects in columnflow is the dot syntax, usable fo
 TODO
 
 here mention the analysis template
+
+### Campaigns
+
+
+### Law config
+
+
+### Analysis config
+
+The analysis config defines all analysis specific variables and objects that need to be defined for
+the analysis to run. Some of them are required for columnflow to run, some are additional and can
+be useful, depending on the analysis.
+
+TODO: explain difference od.Analysis, od.Config and how they are related in the usage.
+-> What I have seen: analysis_hbt.py defines the analysis and afterward decalres the config, which
+needs the analysis object. The behaviour of the config is defined in configs_run2ul.py.
+
+Variables defined in config:
+
+Obtained from the campaign:
+
+year: the year of the measurement, obtained from the campaign
+
+year2: the last two numbers of the year
+
+corr_postfix: postfix added to the year, if several campaigns happened in a year, obtained fromn the campaign.
+
+procs: root processes, obtained from campaign. WHAT IS THAT? TODO
+
+
+new creations:
+
+cfg: add analysis config????? how is that not redundant to the call in analysis_hbt? TODO
+
+process_names: declare the names of the processes we are interested in. Must correspond to the
+processes defined for the datasets.
+
