@@ -53,11 +53,11 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.Parameter(
-        default="wip",
+        default="pw",
         significant=False,
         description="postfix to add behind the CMS logo; when 'skip', no CMS logo is shown at all; "
         "the following special values are expanded into the usual postfixes: wip, pre, pw, sim, "
-        "simwip, simpre, simpw, od, odwip, public; default: 'wip'",
+        "simwip, simpre, simpw, od, odwip, public; default: 'pw'",
     )
 
     @classmethod
