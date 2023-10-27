@@ -723,6 +723,12 @@ class PlotMLResultsBase(
             which will be used as classes for the plot; default: False",
     )
 
+    skip_uncertainties = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, uncertainties are not displayed in the table; default: False",
+    )
+
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
@@ -835,11 +841,11 @@ class PlotMLResults(PlotMLResultsBase):
 
     @law.decorator.log
     @view_output_plots
-    def run(self):
+    def run(self, *args, **kwargs):
         category_inst = self.config_inst.get_category(self.branch_data.category)
         with self.publish_step(f"plotting in {category_inst.name}"):  # TODO  what does this do?
             all_events = self.prepare_inputs()
-            figs, _ = self.call_plot_func(  # TODO implement the plotting function to work
+            figs, _ = self.call_plot_func(
                 self.plot_function,
                 events=all_events,
                 config_inst=self.config_inst,
