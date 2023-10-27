@@ -423,7 +423,7 @@ class RemoteWorkflowMixin(object):
         return info
 
 
-_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", "cern")
+_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 
 
@@ -467,10 +467,10 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
-        choices=("naf", "cern"),
+        choices=("naf", "cern", law.NO_STR),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf,cern; default: '{_default_htcondor_flavor}'",
+        f"naf,cern,NO_STR; default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
         default=_default_htcondor_share_software,
@@ -584,7 +584,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
-        config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
+        if self.htcondor_flavor not in ("", law.NO_STR):
+            config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
