@@ -1031,13 +1031,12 @@ def sorted_ak_to_root(
     Sorts the fields in an awkward array *ak_array* recursively with :py:func:`sort_ak_fields` and
     saves it as a root tree named *tree_name* to a file at *path* using uproot.
 
-    Please note that option types, denoted by e.g. ``"?float32"``, cannot be saved in root trees and
-    are therefore dropped using :py:func:`awkward.drop_none`.
+    Please note that optional types, denoted by e.g. ``"?float32"``, cannot be saved in root trees
+    and are therefore converted to their non-optional equivalent using :py:func:`awkward.drop_none`.
 
     :param ak_array: The input array.
     :param path: The path of the root file to create.
     :param tree_name: The name of the tree to create inside the root file.
-    :param nano_format: A flag whether to use the nano underscore format for branch names.
     """
     # sort fields
     ak_array = sort_ak_fields(ak_array)
