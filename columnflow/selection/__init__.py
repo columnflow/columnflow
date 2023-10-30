@@ -138,22 +138,20 @@ selector = Selector.selector
 
 class SelectionResult(od.AuxDataMixin):
     """
-    Lightweight class that wraps selection decisions (e.g. event and object
-    selection steps).
+    Lightweight class that wraps selection decisions (e.g. event and object selection steps).
 
-    Additionally, this class provides convenience methods to merge them or to dump
-    them into an awkward array. Arbitrary, auxiliary information
-    (additional arrays, or other objects) that should not be stored in dumped
-    akward arrays can be placed in the *aux* dictionary
-    (see :py:class:`~order.mixins.AuxDataMixin`).
+    Additionally, this class provides convenience methods to merge them or to dump them into an
+    awkward array. Arbitrary, auxiliary information (additional arrays, or other objects) that
+    should not be stored in dumped akward arrays can be placed in the *aux* dictionary (see
+    :py:class:`~order.mixins.AuxDataMixin`).
 
     The resulting structure looks like the following example:
 
     .. code-block:: python
 
         results = {
-            # arbitrary, top-level main fields
-            ...
+            # boolean selection mask for events
+            "event": selected_events_mask,
 
             "steps": {
                 # event selection decisions from certain steps
@@ -174,6 +172,8 @@ class SelectionResult(od.AuxDataMixin):
                 },
                 ...,
             },
+
+
             # additionally, you can also save auxiliary data, e.g.
             "aux": {
                 # save the per-object jet selection masks
@@ -182,20 +182,22 @@ class SelectionResult(od.AuxDataMixin):
                 "n_passed_jets": ak.num(array_of_jet_indices, axis=1),
                 ...,
             },
+
+            # other arbitrary top-level fields
             ...
         }
 
-    The fields can be configured through the *main*, *steps* and *objects*
-    keyword arguments. The following example creates the structure above.
+    Specific fields can be configured through *event*, *steps*, *objects* and *aux* keyword
+    arguments. All additional keyword arguments are stored as top-level fields.
+
+    The following example creates the structure above.
 
     .. code-block:: python
 
         # combined event selection after all steps
         event_sel = reduce(and_, results.steps.values())
         res = SelectionResult(
-            main={
-                "event": event_sel,
-            },
+            event=selected_event_mask,
             steps={
                 "jet": array_of_event_masks,
                 "muon": array_of_event_masks,
@@ -208,24 +210,28 @@ class SelectionResult(od.AuxDataMixin):
                 "Muon": {
                     "muon": array, ...
                 }
-            }
+            },
+            # others
+            ...
         )
         res.to_ak()
     """
 
     def __init__(
         self,
-        main: DotDict | dict | None = None,
+        event: ak.array | None = None,
         steps: DotDict | dict | None = None,
         objects: DotDict | dict | None = None,
         aux: DotDict | dict | None = None,
+        **other,
     ):
         super().__init__(aux=aux)
 
         # store fields
-        self.main = DotDict.wrap(main or {})
+        self.event = event
         self.steps = DotDict.wrap(steps or {})
         self.objects = DotDict.wrap(objects or {})
+        self.other = DotDict.wrap(other)
 
     def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
         """
@@ -233,11 +239,9 @@ class SelectionResult(od.AuxDataMixin):
 
         When *None*, *this* instance is returned unchanged.
 
-        :param other: Instance of :py:class:`~.SelectionResult` to be added
-            to current instance
-        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
-            instance
-        :return: This instance after adding operation
+        :param other: Instance of :py:class:`~.SelectionResult` to be added to current instance.
+        :raises TypeError: If *other* is not a :py:class:`~.SelectionResult` instance.
+        :return: This instance.
         """
         # do nothing if the other instance is none
         if other is None:
@@ -247,11 +251,17 @@ class SelectionResult(od.AuxDataMixin):
         if not isinstance(other, SelectionResult):
             raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
 
-        # update fields in-place
-        self.main.update(other.main)
+        # logical AND between event masks
+        if self.event is None:
+            self.event = other.event
+        elif other.event is not None:
+            self.event = self.event & other.event
+        # update steps in-place
         self.steps.update(other.steps)
         # use deep merging for objects
         law.util.merge_dicts(self.objects, other.objects, inplace=True, deep=True)
+        # update other fields in-place
+        self.other.update(other.other)
         # shallow update for aux
         self.aux.update(other.aux)
 
@@ -264,11 +274,9 @@ class SelectionResult(od.AuxDataMixin):
 
         When *None*, a copy of *this* instance is returned.
 
-        :param other: Instance of :py:class:`~.SelectionResult` to be added
-            to current instance
-        :raises TypeError: if *other* is not a :py:class:`~.SelectionResult`
-            instance
-        :return: This instance after adding operation
+        :param other: Instance of :py:class:`~.SelectionResult` to be added to current instance.
+        :raises TypeError: If *other* is not a :py:class:`~.SelectionResult` instance.
+        :return: Copy of this instance after the "add" operation.
         """
         inst = self.__class__()
 
@@ -287,12 +295,21 @@ class SelectionResult(od.AuxDataMixin):
         """
         Converts the contained fields into a nested awkward array and returns it.
 
-        The conversion is performed with multiple calls of
-        :external+ak:py:func:`ak.zip`.
+        The conversion is performed with multiple calls of :external+ak:py:func:`ak.zip`.
 
-        :return: Transformed :py:class:`~.SelectionResult`
+        :raises ValueError: If the main events mask contains a type other than bool.
+        :return: :py:class:`~.SelectionResult` transformed into an awkward array.
         """
+        # complain if the event mask consists of non-boolean values
+        if self.event is not None and getattr(ak.type(self.event).content, "primitive", None) != "bool":
+            raise ValueError(
+                f"SelectionResult event mask must be of type N * bool, but got {ak.type(self.event)}",
+            )
+
+        # prepare objects to merge
         to_merge = {}
+        if self.event is not None:
+            to_merge["event"] = self.event
         if self.steps:
             to_merge["steps"] = ak.zip(self.steps)
         if self.objects:
@@ -300,5 +317,7 @@ class SelectionResult(od.AuxDataMixin):
                 src_name: ak.zip(dst_dict, depth_limit=1)  # limit due to ragged axis 1
                 for src_name, dst_dict in self.objects.items()
             })
+        if self.other:
+            to_merge.update(self.other)
 
-        return ak.zip({**self.main, **to_merge})
+        return ak.zip(to_merge)
