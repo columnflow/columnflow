@@ -13,7 +13,7 @@ od = maybe_import("order")
 np = maybe_import("numpy")
 sci = maybe_import("scinum")
 plt = maybe_import("matplotlib.pyplot")
-hep = maybe_import("mplhep")
+hep  = maybe_import("mplhep")
 colors = maybe_import("matplotlib.colors")
 
 # Define a CF custom color map
@@ -187,10 +187,10 @@ def plot_cm(
                         length=minor_tick_length, width=minor_tick_width)
         plt.xticks(xtick_marks + 0.5, minor=True)
         plt.yticks(ytick_marks + 0.49, minor=True)
-        plt.xticks(xtick_marks, pred_lables, rotation=0)#, fontsize=font_size)
-        plt.yticks(ytick_marks, true_lables)#, fontsize=font_size)
-        plt.xlabel("Predicted process", loc="right", labelpad=10) #,fontsize=font_size + 3)
-        plt.ylabel("True process", loc="top", labelpad=15) #, fontsize=font_size)
+        plt.xticks(xtick_marks, pred_lables, rotation=0, fontsize=font_size)
+        plt.yticks(ytick_marks, true_lables, fontsize=font_size)
+        plt.xlabel("Predicted process", loc="right", labelpad=10,fontsize=font_size + 3)
+        plt.ylabel("True process", loc="top", labelpad=15, fontsize=font_size)
         plt.tight_layout()
 
         # plotting
@@ -198,8 +198,8 @@ def plot_cm(
 
         # Justify Color bar
         colorbar = plt.colorbar(fraction=0.0471, pad=0.01)
-        colorbar.set_label(label=cmap_label)#, fontsize=font_size + 3)
-        # colorbar.ax.tick_params(labelsize=font_size)
+        colorbar.set_label(label=cmap_label, fontsize=font_size + 3)
+        colorbar.ax.tick_params(labelsize=font_size)
         plt.clim(0, max(1, values.max()))
 
         # Add Matrix Elemtns
@@ -207,7 +207,7 @@ def plot_cm(
         # size_offset = 1 if len(class_labels) > 5 else 3
         for i in range(values.shape[0]):
             for j in range(values.shape[1]):
-                plt.text(j, i, value_text(i, j), #fontdict={"size": font_size},
+                plt.text(j, i, value_text(i, j), fontdict={"size": font_size},
                         horizontalalignment="center", verticalalignment="center",
                         color="white" if values[i, j] < thresh else "black")
 
