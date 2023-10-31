@@ -173,7 +173,6 @@ class SelectionResult(od.AuxDataMixin):
                 ...,
             },
 
-
             # additionally, you can also save auxiliary data, e.g.
             "aux": {
                 # save the per-object jet selection masks
@@ -303,7 +302,8 @@ class SelectionResult(od.AuxDataMixin):
         # complain if the event mask consists of non-boolean values
         if self.event is not None and getattr(ak.type(self.event).content, "primitive", None) != "bool":
             raise ValueError(
-                f"SelectionResult event mask must be of type N * bool, but got {ak.type(self.event)}",
+                f"{self.__class__.__name__} event mask must be of type N * bool, "
+                "but got {ak.type(self.event)}",
             )
 
         # prepare objects to merge
@@ -317,7 +317,14 @@ class SelectionResult(od.AuxDataMixin):
                 src_name: ak.zip(dst_dict, depth_limit=1)  # limit due to ragged axis 1
                 for src_name, dst_dict in self.objects.items()
             })
-        if self.other:
-            to_merge.update(self.other)
+
+        # add other fields but verify they do not overwrite existing fields
+        for key in self.other:
+            if key in to_merge:
+                raise KeyError(
+                    f"additional top-level field '{key}' of {self.__class__.__name__} conflicts "
+                    f"with existing special field '{key}'",
+                )
+        to_merge.update(self.other)
 
         return ak.zip(to_merge)
