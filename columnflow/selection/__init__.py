@@ -6,6 +6,7 @@ Object and event selection tools.
 
 from __future__ import annotations
 
+import copy
 import inspect
 
 import law
@@ -252,17 +253,17 @@ class SelectionResult(od.AuxDataMixin):
 
         # logical AND between event masks
         if self.event is None:
-            self.event = other.event
+            self.event = copy.deepcopy(other.event)
         elif other.event is not None:
             self.event = self.event & other.event
         # update steps in-place
-        self.steps.update(other.steps)
+        self.steps.update(copy.deepcopy(other.steps))
         # use deep merging for objects
-        law.util.merge_dicts(self.objects, other.objects, inplace=True, deep=True)
+        law.util.merge_dicts(self.objects, copy.deepcopy(other.objects), inplace=True, deep=True)
         # update other fields in-place
-        self.other.update(other.other)
+        self.other.update(copy.deepcopy(other.other))
         # shallow update for aux
-        self.aux.update(other.aux)
+        self.aux.update(copy.deepcopy(other.aux))
 
         return self
 
