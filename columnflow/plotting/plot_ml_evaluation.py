@@ -215,7 +215,7 @@ def plot_cm(
 
         # adding a color bar on a new axis and adjusting its values
         divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="20%", pad=0.10)
+        cax = divider.append_axes("right", size="5%", pad=0.10)
         colorbar = fig.colorbar(im, cax=cax)
         colorbar.set_label(label=cmap_label, fontsize=font_ax)
         colorbar.ax.tick_params(labelsize=font_ax - 5)
