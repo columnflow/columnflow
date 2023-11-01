@@ -161,6 +161,15 @@ class SelectEvents(
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
+
+            # complain when there is no event mask
+            if results.event is None:
+                raise Exception(
+                    f"selector {self.selector_inst.cls_name} returned {results.__class__.__name__} "
+                    "object that does not contain 'event' mask",
+                )
+
+            # convert to array
             results_array = results.to_ak()
 
             # optional check for finite values
