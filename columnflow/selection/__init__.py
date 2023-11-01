@@ -207,7 +207,22 @@ class SelectionResult(od.AuxDataMixin):
                 "Jet": {
                     "jet": array_of_jet_indices
                 },
-                "Muon": {
+               ```suggestion
+            # section to define new fields in `ReduceEvents`
+            # following example defines new field `BJets`
+            "objects": {
+                # define the field to be used as source for your new field, in this case `Jet`
+                "Jet": {
+                    # Define name of new field and provide the list/array of indices of the corresponding 
+                    # objects in field `Jet`
+                    "BJet": list_of_bjet_indices,
+                 } ,
+                 # You can also overwrite existing fields with specific objects, e.g. only save selected Muons
+                 # after the `ReduceEvents` step
+                 "Muon": {
+                     "Muon": array_of_selected_muon_indices,
+                 },
+            },
                     "muon": array, ...
                 }
             },
