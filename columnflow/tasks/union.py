@@ -95,7 +95,7 @@ class UniteColumns(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
-            sorted_ak_to_root, EMPTY_FLOAT,
+            sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -146,7 +146,7 @@ class UniteColumns(
             if self.file_type == "parquet":
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
             else:  # root
-                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.path), {"null_value": EMPTY_FLOAT})
+                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
