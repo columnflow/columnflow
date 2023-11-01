@@ -697,7 +697,7 @@ class PlotMLResultsBase(
 
     Raises:
         NotImplementedError: This error is raised if a givin dataset contains more than one process.
-        Exception: This exception is raised if `plot_sub_processes` is used without providing the
+        ValueError: This error is raised if `plot_sub_processes` is used without providing the
         `process_ids` column in the data
     """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
@@ -768,7 +768,7 @@ class PlotMLResultsBase(
 
     def output(self):
         b = self.branch_data
-        return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}.pdf")
+        return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}{self.plot_suffix}.pdf")
 
     def prepare_inputs(self):
         import awkward as ak
@@ -798,7 +798,6 @@ class PlotMLResultsBase(
                 category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
 
             events = events[category_mask]
-
             # loop per process
             for process_inst in process_insts:
                 # skip when the dataset is already known to not contain any sub process
@@ -810,7 +809,7 @@ class PlotMLResultsBase(
                         all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name],
                                                                         getattr(events, self.ml_model)])
                     else:
-                        all_events[process_inst] = getattr(events, self.ml_model)
+                        all_events[process_inst.name] = getattr(events, self.ml_model)
                 else:
                     if "process_ids" in events.fields:
                         for sub_process in sub_process_insts[process_inst]:
@@ -825,14 +824,46 @@ class PlotMLResultsBase(
                             else:
                                 all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
                     else:
-                        raise Exception("No `process_ids` column stored in the events! "
+                        raise ValueError("No `process_ids` column stored in the events! "
                                 f"Process selection for {dataset} cannot not be applied!")
         return all_events
 
 
 class PlotMLResults(PlotMLResultsBase):
+    """
+    A task that generates plots for machine learning results.
 
+    This task generates plots for machine learning results, based on the given
+    configuration and category. The plots can be either a confusion matrix (CM) or a
+    receiver operating characteristic (ROC) curve. This task uses the output of the
+    MergeMLEvaluation task as input and saves the plots with the corresponding array
+    used to create the plot.
+
+    Attributes:
+        plot_function (str): The name of the plot function to use. \
+            Can be either "plot_cm" or "plot_roc".
+        processes_repr (str): A string representation of the number of \
+            processes used to generate the plot(s).
+        config_inst (Config): An instance of the Config class that contains \
+            the configuration for this task.
+        branch_data (BranchData): An instance of the BranchData class that \
+            contains the input data for this task.
+    """
     # override the plot_function parameter to be able to only choose between CM and ROC
+    plot_function = luigi.ChoiceParameter(
+        default="plot_cm",
+        choices=["cm", "roc"],
+        description="The name of the plot function to use. \
+            Can be either 'plot_cm' or 'plot_roc'.",
+    )
+
+    def prepare_plot_parameters(self):
+        params = self.get_plot_parameters()
+
+        # parse x_label from general settings
+        x_labels = params.general_settings.get("x_labels", None)
+        if x_labels:
+            params.general_settings["x_labels"] = x_labels.replace("&", "$").split(";")
 
     def output(self):
         output = {"plot": super().output(),
@@ -841,13 +872,20 @@ class PlotMLResults(PlotMLResultsBase):
 
     @law.decorator.log
     @view_output_plots
-    def run(self, *args, **kwargs):
+    def run(self):
+        func_path = {"cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
+                    "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc"}
         category_inst = self.config_inst.get_category(self.branch_data.category)
-        with self.publish_step(f"plotting in {category_inst.name}"):  # TODO  what does this do?
+        self.prepare_plot_parameters()
+        with self.publish_step(f"plotting in {category_inst.name}"):
             all_events = self.prepare_inputs()
-            figs, _ = self.call_plot_func(
-                self.plot_function,
+            fig, array = self.call_plot_func(
+                func_path.get(self.plot_function, self.plot_function),
                 events=all_events,
                 config_inst=self.config_inst,
                 category_inst=category_inst,
+                **self.get_plot_parameters(),
             )
+
+            self.output()["plot"].dump(fig, formatter="mpl")
+            self.output()["array"].dump(array, formatter="pickle")
