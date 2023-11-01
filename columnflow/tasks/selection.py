@@ -161,6 +161,15 @@ class SelectEvents(
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
+
+            # complain when there is no event mask
+            if results.event is None:
+                raise Exception(
+                    f"selector {self.selector_inst.cls_name} returned {results.__class__.__name__} "
+                    "object that does not contain 'event' mask",
+                )
+
+            # convert to array
             results_array = results.to_ak()
 
             # optional check for finite values
@@ -187,8 +196,9 @@ class SelectEvents(
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
+        writer_opts_masks = self.get_parquet_writer_opts(repeating_values=True)
         law.pyarrow.merge_parquet_task(
-            self, sorted_chunks, outputs["results"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            self, sorted_chunks, outputs["results"], local=True, writer_opts=writer_opts_masks,
         )
 
         # merge the column files

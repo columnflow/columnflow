@@ -10,9 +10,9 @@ __all__ = [
     "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
-    "add_ak_alias", "add_ak_aliases", "update_ak_array", "fill_ak_optionals", "flatten_ak_array",
-    "sort_ak_fields", "sorted_ak_to_parquet", "sorted_ak_to_root", "attach_behavior",
-    "layout_ak_array", "flat_np_view", "deferred_column", "optional_column",
+    "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
+    "sorted_ak_to_parquet", "sorted_ak_to_root", "attach_behavior", "layout_ak_array",
+    "flat_np_view", "deferred_column", "optional_column",
 ]
 
 import os
@@ -926,45 +926,6 @@ def update_ak_array(
     return ak_array
 
 
-def fill_ak_optionals(
-    ak_array: ak.Array,
-    null_value: int | float = EMPTY_INT,
-) -> ak.Array:
-    """
-    Fills missing (None) values in a non-nested *ak_array* with *null_value*, preserving the
-    original primitive type but removing the option type. Please note that even if *ak_array* does
-    not contain any None values, but its type contains a option type flag, *null_value* is actually
-    not used yet still required by :py:func:`awkward.fill_none` which is used internally.
-
-    :param ak_array: The input array.
-    :param null_value: The value that is used to fill potential None values.
-    :return: The updated array.
-    """
-    # get the type and check if it's optional in the first place
-    inner_type = ak.type(ak_array)
-    seen = set()
-    while getattr(getattr(inner_type, "content", None), "content", None):
-        # recursion guard
-        if repr(inner_type) in seen:
-            raise Exception(f"cannot determine primitive type of {repr(ak.type(ak_array))}")
-        seen.add(repr(inner_type))
-        # get the next type
-        inner_type = inner_type.content
-
-    # do nothing when the inner type is not an option type
-    if not isinstance(inner_type, ak.types.OptionType):
-        return ak_array
-
-    # determine the np type for the fill value
-    np_type = getattr(getattr(inner_type, "content", None), "primitive", "float32")
-    np_type = getattr(np, np_type, np.float32)
-
-    # fill possible None's with null_value, removing the option type
-    ak_array = ak.fill_none(ak_array, np_type(null_value))
-
-    return ak_array
-
-
 def flatten_ak_array(
     ak_array: ak.Array,
     routes: Sequence | set | Callable[[str], bool] | None = None,
@@ -1065,39 +1026,25 @@ def sorted_ak_to_root(
     ak_array: ak.Array,
     path: str,
     tree_name: str = "events",
-    nano_format: bool = False,
-    null_value: int | float | None = None,
 ) -> None:
     """
     Sorts the fields in an awkward array *ak_array* recursively with :py:func:`sort_ak_fields` and
     saves it as a root tree named *tree_name* to a file at *path* using uproot.
 
-    By default, names of nested columns that will be translated into branch names contain dots.
-    If *nano_format* is *True*, dots are converted to underscores.
-
-    Please note that option types, denoted by e.g. ``"?float32"``, cannot be saved in root trees.
-    However, if a *null_value* is defined, potentially missing entries are filled with this value
-    first. When not set, consider using methods such as ``ak.fill_none()`` to fill empty values
-    manully.
+    Please note that optional types, denoted by e.g. ``"?float32"``, cannot be saved in root trees
+    and are therefore converted to their non-optional equivalent using :py:func:`awkward.drop_none`.
 
     :param ak_array: The input array.
     :param path: The path of the root file to create.
     :param tree_name: The name of the tree to create inside the root file.
-    :param nano_format: A flag whether to use the nano underscore format for branch names.
-    :param null_value: The value that is used to fill potential None values.
     """
     # sort fields
     ak_array = sort_ak_fields(ak_array)
 
-    # flatten
-    data = flatten_ak_array(ak_array, nano_format=nano_format)
-
-    # fill None's
-    if null_value is not None:
-        data = {
-            name: fill_ak_optionals(ak_array_, null_value)
-            for name, ak_array_ in data.items()
-        }
+    # drop nones
+    ak_array = ak.drop_none(ak_array, axis=None)
+    for r in get_ak_routes(ak_array):
+        ak_array = set_ak_column(ak_array, r, ak.drop_none(r.apply(ak_array), axis=-1))
 
     # prepare the output path
     path = real_path(path)
@@ -1106,7 +1053,7 @@ def sorted_ak_to_root(
 
     # create the file
     f = uproot.recreate(path)
-    f[tree_name] = data
+    f[tree_name] = {field: ak_array[field] for field in ak_array.fields}
     f.close()
 
 
