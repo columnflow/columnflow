@@ -632,21 +632,27 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         raise Exception(f"cannot determine output location based on '{location}'")
 
-    def get_parquet_writer_opts(self) -> dict[str, Any]:
+    def get_parquet_writer_opts(self, repeating_values: bool = False) -> dict[str, Any]:
         """
         Returns an option dictionary that can be passed as *writer_opts* to
         :py:meth:`~law.pyarrow.merge_parquet_task`, for instance, at the end of chunked processing
         steps that produce a single parquet file. See :py:class:`~pyarrow.parquet.ParquetWriter` for
         valid options.
 
-        This method can be overwritten in subclasses to customize this behavior.
+        This method can be overwritten in subclasses to customize the exact behavior.
 
+        :param repeating_values: Whether the values to be written have predominantly repeating
+            values, in which case differnt compression and encoding strategies are followed.
         :return: A dictionary with options that can be passed to parquet writer objects.
         """
+        # use dict encoding if values are repeating
+        dict_encoding = bool(repeating_values)
+
+        # build and return options
         return {
             "compression": "ZSTD",
             "compression_level": 1,
-            "use_dictionary": False,
+            "use_dictionary": dict_encoding,
         }
 
 

@@ -196,8 +196,9 @@ class SelectEvents(
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
+        writer_opts_masks = self.get_parquet_writer_opts(repeating_values=True)
         law.pyarrow.merge_parquet_task(
-            self, sorted_chunks, outputs["results"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            self, sorted_chunks, outputs["results"], local=True, writer_opts=writer_opts_masks,
         )
 
         # merge the column files
