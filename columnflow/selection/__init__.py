@@ -163,15 +163,13 @@ class SelectionResult(od.AuxDataMixin):
 
             "objects": {
                 # object selection decisions or indices
-                # define type of this field here, define that `jet` is of
-                # type `Jet`
                 "Jet": {
                     "jet": array_of_jet_indices,
+                    "bjet": array_of_bjet_indices,
                 },
                 "Muon": {
                     "muon": array_of_muon_indices,
                 },
-                ...,
             },
 
             # additionally, you can also save auxiliary data, e.g.
@@ -203,28 +201,18 @@ class SelectionResult(od.AuxDataMixin):
                 "muon": array_of_event_masks,
                 ...
             },
+            # nested mappings of source collections to target collections with different indices
             objects={
+                # collections to be created from the initial "Jet" collection: "jet" and "bjet"
+                # define name of new field and provide indices of the corresponding objects
                 "Jet": {
                     "jet": array_of_jet_indices
+                    "bjet": list_of_bjet_indices,
                 },
-               ```suggestion
-            # section to define new fields in `ReduceEvents`
-            # following example defines new field `BJets`
-            "objects": {
-                # define the field to be used as source for your new field, in this case `Jet`
-                "Jet": {
-                    # Define name of new field and provide the list/array of indices of the corresponding 
-                    # objects in field `Jet`
-                    "BJet": list_of_bjet_indices,
-                 } ,
-                 # You can also overwrite existing fields with specific objects, e.g. only save selected Muons
-                 # after the `ReduceEvents` step
-                 "Muon": {
-                     "Muon": array_of_selected_muon_indices,
-                 },
-            },
-                    "muon": array, ...
-                }
+                # collections to be created from the initial "Muon" collection: "muon"
+                "Muon": {
+                    "muon": array_of_selected_muon_indices,
+                },
             },
             # others
             ...
@@ -313,6 +301,8 @@ class SelectionResult(od.AuxDataMixin):
         The conversion is performed with multiple calls of :external+ak:py:func:`ak.zip`.
 
         :raises ValueError: If the main events mask contains a type other than bool.
+        :raises KeyError: If the additional top-level fields in :py:attr:`other` have a field
+            "event", "step" or "objects" that might overwrite existing special fields.
         :return: :py:class:`~.SelectionResult` transformed into an awkward array.
         """
         # complain if the event mask consists of non-boolean values
