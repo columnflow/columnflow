@@ -365,7 +365,7 @@ subgroups is given below, with `results.event` the event selection mask after al
 having saved during the selection the number of valid jets in each event in the auxiliary field of
 the SelectionResult object under the name `n_jets`.
 
-```{literalinclude} calibrators.md
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 ```
 
 (complete_example)=
