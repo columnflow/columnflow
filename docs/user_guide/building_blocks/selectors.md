@@ -361,9 +361,11 @@ number of events (the name of the feature should start with "num") for given mas
 specific columns (usually weights, the name of the feature should start by "sum") for given columns
 and masks, using a "weight map". These calculations can also be specified for subgroups of objects
 using a "group map". An example of such a call using the number of jets and the processes as
-subgroups is given below.
+subgroups is given below, with `results.event` the event selection mask after all selections and
+having saved during the selection the number of valid jets in each event in the auxiliary field of
+the SelectionResult object under the name `n_jets`.
 
-```{literalinclude} ~analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
+```{literalinclude} ~columnflow/../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
       {start-at} # increment stats
       {end-before} return events, results
 ```
