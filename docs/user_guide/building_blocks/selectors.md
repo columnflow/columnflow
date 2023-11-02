@@ -354,6 +354,20 @@ def increment_stats(
     return events
 ```
 
+Columnflow also provides a helper Selector called
+{py:class}`~columnflow.selection.stats.increment_stats`, which calculates and inputs directly the
+number of events (the name of the feature should start with "num") for given masks
+(`Ellipsis` should be given if no mask is to be used) or sum of
+specific columns (usually weights, the name of the feature should start by "sum") for given columns
+and masks, using a "weight map". These calculations can also be specified for subgroups of objects
+using a "group map". An example of such a call using the number of jets and the processes as
+subgroups is given below.
+
+```{literalinclude} ~analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
+      {start-at} # increment stats
+      {end-before} return events, results
+```
+
 (complete_example)=
 ### Complete example
 
