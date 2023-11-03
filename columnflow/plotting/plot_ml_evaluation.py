@@ -46,10 +46,11 @@ def plot_cm(
         events: dict,
         config_inst: od.Config,
         category_inst: od.Category,
-        sample_weights: np.ndarray = None,
+        sample_weights: list | bool = False,
         normalization: str = "row",
         skip_uncertainties: bool = False,
         x_labels: list[str] = None,
+        y_labels: list[str] = None,
         *args,
         **kwargs,
 ) -> tuple[plt.Figure, np.ndarray]:
@@ -61,32 +62,50 @@ def plot_cm(
                 the events as values.
             config_inst (od.Config): used configuration for the plot
             category_inst (od.Category): used category instance, for which the plot is created
-            sample_weights (np.ndarray, optional): sample weights of the events. Defaults to None.
+            sample_weights (np.ndarray or bool, optional): sample weights of the events. If an explicit array is not
+                            givin the weights are calculated based on the number of eventsDefaults to None.
             normalization (str, optional): type of normalization of the confusion matrix. Defaults to "row".
             skip_uncertainties (bool, optional): calculate errors of the cm elements. Defaults to False.
+            x_labels (list[str], optional): labels for the x-axis. Defaults to None.
+            y_labels (list[str], optional): labels for the y-axis. Defaults to None.
+            *args: Additional arguments to pass to the function.
+            **kwargs: Additional keyword arguments to pass to the function.
 
         Returns:
-            plt.Figure: The plot to be saved in the task. The matrix has
+            tuple[plt.Figure, np.ndarray]: The resulting plot and the confusion matrix.
 
         Raises:
             AssertionError: If both predictions and labels have mismatched shapes, \
                 or if `weights` is not `None` and its shape doesn't match `predictions`.
-    """
+            AssertionError: If `normalization` is not one of `None`, `"row"`, `"column"`.
 
+    """
     # defining some useful properties and output shapes
     true_labels = list(events.keys())
     pred_labels = [s.removeprefix("score_") for s in list(events.values())[0].fields]
     return_type = np.float32 if sample_weights else np.int32
     mat_shape = (len(true_labels), len(pred_labels))
 
-    def get_conf_matrix(*args, **kwargs) -> np.ndarray:
-        # TODO implement weights assertion and processing
+    def create_sample_weights(sample_weights) -> np.ndarray:
+        if not sample_weights:
+            return {label: 1 for label in true_labels}
+        else:
+            assert (isinstance(sample_weights, bool) or (len(sample_weights) == len(true_labels))), (
+                f"Shape of sample_weights {sample_weights.shape} does not match "
+                f"shape of predictions {mat_shape}")
+            if isinstance(sample_weights, bool):
+                size = {label: len(event) for label, event in events.items()}
+                mean = np.mean(list(size.values()))
+                sample_weights = {label: mean / length for label, length in size.items()}
+            return sample_weights
 
+    def get_conf_matrix(sample_weights, *args, **kwargs) -> np.ndarray:
         result = np.zeros(shape=mat_shape, dtype=return_type)
         counts = np.zeros(shape=mat_shape, dtype=return_type)
+        sample_weights = create_sample_weights(sample_weights)
 
         # looping over the datasets
-        for ind, pred in enumerate(events.values()):
+        for ind, (dataset, pred) in enumerate(events.items()):
             # remove awkward structure to use the numpy logic
             pred = ak.to_numpy(pred)
             pred = pred.view(float).reshape((pred.size, len(pred_labels)))
@@ -95,7 +114,7 @@ def plot_cm(
             pred = np.argmax(pred, axis=-1)
 
             for index, count in zip(*np.unique(pred, return_counts=True)):
-                result[ind, index] += count
+                result[ind, index] += count * sample_weights[dataset]
                 counts[ind, index] += count
 
         if not skip_uncertainties:
@@ -115,25 +134,31 @@ def plot_cm(
         return result
 
     def plot_confusion_matrix(cm: np.ndarray,
-                              title="",
+                              title: str = "",
                               colormap: str = "cf_cmap",
                               cmap_label: str = "Accuracy",
                               digits: int = 3,
                               x_labels: list[str] = None,
+                              y_labels: list[str] = None,
                               *args,
                               **kwargs,
                               ) -> plt.figure:
-        """plots a givin confusion matrix
+        """
+        Plots a confusion matrix.
 
         Args:
-            cm (np.ndarray): _description_
-            title (str, optional): _description_. Defaults to "Confusion matrix".
-            colormap (str, optional): _description_. Defaults to "cf_cmap".
-            cmap_label (str, optional): _description_. Defaults to "Accuracy".
-            digits (int, optional): _description_. Defaults to 3.
+            cm (np.ndarray): The confusion matrix to plot.
+            title (str): The title of the plot, displayed in the top right corner. Defaults to ''.
+            colormap (str): The name of the colormap to use. Defaults to "cf_cmap".
+            cmap_label (str): The label of the colorbar. Defaults to "Accuracy".
+            digits (int): The number of digits to display for each value in the matrix. Defaults to 3.
+            x_labels (list[str]): The labels for the x-axis. If not provided, the labels will be "out<i>"
+            y_labels (list[str]): The labels for the y-axis. If not provided, the dataset labels are used.
+            *args: Additional arguments to pass to the function.
+            **kwargs: Additional keyword arguments to pass to the function.
 
         Returns:
-            plt.figure: _description_
+            plt.figure: The resulting plot.
         """
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -180,6 +205,7 @@ def plot_cm(
         n_classes = cm.shape[1]
         cmap = cf_colors.get(colormap, cf_colors["cf_cmap"])
         x_labels = x_labels if x_labels else [f"out{i}" for i in range(n_classes)]
+        y_labels = y_labels if y_labels else true_labels
         font_ax = 20
         font_label = 20
         font_text = calculate_font_size()
@@ -209,7 +235,7 @@ def plot_cm(
         ax.set_xticks(xtick_marks)
         ax.set_xticklabels(x_labels, rotation=0, fontsize=font_label)
         ax.set_yticks(ytick_marks)
-        ax.set_yticklabels(true_labels, fontsize=font_label)
+        ax.set_yticklabels(y_labels, fontsize=font_label)
         ax.set_xlabel("Predicted process", loc="right", labelpad=10, fontsize=font_ax)
         ax.set_ylabel("True process", loc="top", labelpad=15, fontsize=font_ax)
 
@@ -235,7 +261,7 @@ def plot_cm(
 
         return fig
 
-    cm = get_conf_matrix(*args, **kwargs)
-    fig = plot_confusion_matrix(cm, x_labels=x_labels, *args, **kwargs)
+    cm = get_conf_matrix(sample_weights, *args, **kwargs)
+    fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
 
     return fig, cm
