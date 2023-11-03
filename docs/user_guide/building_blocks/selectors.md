@@ -366,7 +366,7 @@ having saved during the selection the number of valid jets in each event in the 
 the SelectionResult object under the name `n_jets`.
 
 ```{include} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
-:start-at:  # increment stats
+:start-after: events = self[cutflow_features](events, results.objects, **kwargs)
 :end-before: return events, results
 ```
 
