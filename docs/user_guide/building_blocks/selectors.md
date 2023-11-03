@@ -366,8 +366,8 @@ having saved during the selection the number of valid jets in each event in the 
 the SelectionResult object under the name `n_jets`.
 
 ```{include} ../../../README.md
-      {start-at} This project is currently in a beta phase.
-      {end-before} ## Quickstart
+:start-at: This project is currently in a beta phase.
+:end-before: ## Quickstart
 ```
 
 (complete_example)=
