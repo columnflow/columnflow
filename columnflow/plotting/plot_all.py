@@ -6,8 +6,8 @@ Example plot function.
 
 from __future__ import annotations
 
-from typing import Sequence
 
+from columnflow.types import Sequence
 from columnflow.util import maybe_import, test_float
 from columnflow.plotting.plot_util import get_position
 

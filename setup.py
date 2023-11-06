@@ -59,7 +59,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,
-    python_requires=">=3.7, <=3.9",
+    python_requires=">=3.7, <=3.10",
     zip_safe=False,
     packages=find_packages(exclude=["tests"]),
 )

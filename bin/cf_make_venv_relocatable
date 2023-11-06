@@ -10,6 +10,8 @@ cf_make_venv_relocatable() {
     # Required environment variables:
     #   CF_VENV_BASE
     #       The base path where AP virtual environments are stored.
+    #   CF_CONDA_BASE
+    #       The directory where conda / micromamba and conda envs are installed.
 
     # zsh options
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
@@ -21,15 +23,33 @@ cf_make_venv_relocatable() {
     # check arguments
     local name="$1"
     if [ -z "${name}" ]; then
-        2>&1 echo "argument 0 (venv name) must not be empty"
+        >&2 echo "argument 0 (venv name) must not be empty"
         return "1"
     fi
 
     # check environment variables
     if [ -z "${CF_VENV_BASE}" ]; then
-        2>&1 echo "environment variable CF_VENV_BASE must not be empty"
+        >&2 echo "environment variable CF_VENV_BASE must not be empty"
         return "2"
     fi
+
+    if [ -z "${CF_CONDA_BASE}" ]; then
+        >&2 echo "environment variable CF_CONDA_BASE must not be empty"
+        return "3"
+    fi
+
+    # remove csh and fish support
+    rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}
+
+    # replace absolute paths in the activation file to make it relocatable for bash and zsh
+    sed -i -r \
+        's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "${ZSH_VERSION}" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
+        "${CF_VENV_BASE}/${name}/bin/activate"
+
+    # let the home variable in pyvenv.cfg point to the conda bin directory
+    sed -i -r \
+        "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
+        "${CF_VENV_BASE}/${name}/pyvenv.cfg"
 
     # use /usr/bin/env in shebang's of bin scripts
     local f
@@ -37,7 +57,7 @@ cf_make_venv_relocatable() {
         # must be readable and executable
         if [ -r "${f}" ] && [ -x "${f}" ]; then
             sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
-            [ "$?" != "0" ] && return "3"
+            [ "$?" != "0" ] && return "5"
         fi
     done
 
@@ -49,11 +69,11 @@ cf_make_venv_relocatable() {
         if [ "${link_f:0:1}" = "/" ]; then
             # absolute link
             real_dir="$( cd "$( dirname "${link_f}" )" && echo "${PWD}" )"
-            [ "$?" != "0" ] && return "5"
+            [ "$?" != "0" ] && return "6"
         elif [ "${link_f:0:1}" = "." ]; then
             # relative link
             real_dir="$( cd "$( dirname "$( dirname "${f}" )/${link_f}" )" && echo "${PWD}" )"
-            [ "$?" != "0" ] && return "5"
+            [ "$?" != "0" ] && return "6"
         else
             # local link, always contained in venv
             continue
@@ -64,14 +84,14 @@ cf_make_venv_relocatable() {
         fi
         # complain when a directory is found
         if [ -d "${f}" ]; then
-            2>&1 echo "cannot handle symlinked directory ${f} in venv ${name} for relocation"
+            >&2 echo "cannot handle symlinked directory ${f} in venv ${name} for relocation"
             continue
         fi
         # copy
         local real_f="${real_dir}/$( basename "${link_f}" )"
         # echo "replace symlink ${f} with ${real_f}"
-        unlink "${f}" || return "6"
-        cp "${real_f}" "${f}" || return "7"
+        unlink "${f}" || return "7"
+        cp "${real_f}" "${f}" || return "8"
     done
 }
 

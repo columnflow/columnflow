@@ -30,24 +30,57 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
     # only run on mc
     mc_only=True,
 )
-def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def pdf_weights(
+    self: Producer,
+    events: ak.Array,
+    outlier_threshold: float = 0.5,
+    outlier_action: str = "ignore",
+    outlier_log_mode: str = "warning",
+    **kwargs,
+) -> ak.Array:
     """
     Producer that determines the pdf up and down variations on an event-by-event basis.
     This producer assumes that the nominal entry is always the first LHEPdfWeight value and
     that the nominal weight is already included in the LHEWeight.
     Can only be called with MC datasets.
 
+    The *outlier_action* defines the procedure of how to handle events with a pdf
+    uncertainty above the *outlier_threshold*. Supported modes are:
+
+        - ``"ignore"``: events are kept unmodified
+        - ``"remove"``: pdf weight nominal/up/down are all set to 0
+        - ``"raise"``: an exception is raised
+
+    Additionally, the verbosity of the procedure can be set with *outlier_log_mode*,
+    which offers the following options:
+
+        - ``"none"``: no message is given
+        - ``"info"``: a `logger.info` message is given
+        - ``"debug"``: a `logger.debug` message is given
+        - ``"warning"``: a `logger.warning` message is given
+
     Resources:
 
        - https://arxiv.org/pdf/1510.03865.pdf
     """
+
+    if outlier_action not in (known_actions := ("ignore", "remove", "raise")):
+        raise ValueError(
+            f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
+        )
+    if outlier_log_mode not in (known_log_modes := ("none", "info", "debug", "warning")):
+        raise ValueError(
+            f"unknown outlier_log_mode '{outlier_log_mode}', known values are "
+            f"{','.join(known_log_modes)}",
+        )
+
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
     bad_mask = (n_weights != 101) & (n_weights != 103)
     if ak.any(bad_mask):
         bad_values = set(n_weights[bad_mask])
         raise Exception(
-            "the number of LHEPdfWeights is expected to be 101 or 103, but also found values " +
+            "the number of LHEPdfWeights is expected to be 101 or 103, but also found values "
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
@@ -56,9 +89,9 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if ak.any(pdf_weight_nominal != 1):
         bad_values = set(pdf_weight_nominal[pdf_weight_nominal != 1])
         logger.debug(
-            "The nominal LHEPdfWeight is expected to be 1 but also found values " +
-            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-            "normalized to the nominal LHEPdfWeight and it is assumed that the nominal " +
+            "The nominal LHEPdfWeight is expected to be 1 but also found values "
+            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be "
+            "normalized to the nominal LHEPdfWeight and it is assumed that the nominal "
             "weight is already included in the LHEWeight.",
         )
 
@@ -73,5 +106,43 @@ def pdf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, "pdf_weight", ak.ones_like(events.event))
     events = set_ak_column_f32(events, "pdf_weight_up", 1 + stddev)
     events = set_ak_column_f32(events, "pdf_weight_down", 1 - stddev)
+
+    if ak.any(outlier_mask := (stddev > outlier_threshold)):
+        # catch events with large pdf variations
+        occurances = ak.sum(outlier_mask)
+        frac = occurances / ak.count(stddev, axis=0) * 100
+        msg = (
+            f"In dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) "
+            "entries with pdf uncertainty above 50%"
+        )
+
+        if outlier_action == "remove":
+            # set all pdf weights to 0 when the *outlier_threshold* is passed
+            events = set_ak_column_f32(events, "pdf_weight", ak.where(outlier_mask, 0, events.pdf_weight))
+            events = set_ak_column_f32(events, "pdf_weight_up", ak.where(outlier_mask, 0, events.pdf_weight_up))
+            events = set_ak_column_f32(events, "pdf_weight_down", ak.where(outlier_mask, 0, events.pdf_weight_down))
+
+            msg += ". The nominal/up/down pdf_weight columns have been set to 0 for these events."
+        elif outlier_action == "raise":
+            raise Exception(msg)
+
+        msg_func = {
+            "none": lambda msg: None,
+            "info": logger.info,
+            "warning": logger.warning,
+            "debug": logger.debug,
+        }[outlier_log_mode]
+        msg_func(msg)
+
+    if ak.any(invalid_pdf_weight := (pdf_weight_nominal == 0)):
+        # set all pdf weights to 0 when the nominal pdf weight is 0
+        logger.warning(
+            f"In dataset {self.dataset_inst.name}, {ak.sum(invalid_pdf_weight)} nominal "
+            "LHEPdfWeights with values 0 have been found. The nominal/up/down pdf_weight "
+            "columns have been set to 0 for these events.",
+        )
+        events = set_ak_column_f32(events, "pdf_weight", ak.where(invalid_pdf_weight, 0, events.pdf_weight))
+        events = set_ak_column_f32(events, "pdf_weight_up", ak.where(invalid_pdf_weight, 0, events.pdf_weight_up))
+        events = set_ak_column_f32(events, "pdf_weight_down", ak.where(invalid_pdf_weight, 0, events.pdf_weight_down))
 
     return events

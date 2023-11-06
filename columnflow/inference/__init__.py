@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import enum
 import copy as _copy
-from typing import Generator, Callable, TextIO, Sequence, Any
 
 import law
 import order as od
 
+from columnflow.types import Generator, Callable, TextIO, Sequence, Any
 from columnflow.util import (
     DerivableMeta, Derivable, maybe_import, DotDict, is_pattern, is_regex, pattern_matcher,
 )
@@ -251,6 +251,7 @@ class InferenceModel(Derivable):
         config_data_datasets: Sequence[str] | None = None,
         data_from_processes: Sequence[str] | None = None,
         mc_stats: float | tuple | None = None,
+        empty_bin_value: float = 1e-5,
     ) -> DotDict:
         """
         Returns a dictionary representing a category (interchangeably called bin or channel in other
@@ -264,6 +265,7 @@ class InferenceModel(Derivable):
               when *config_data_datasets* is not defined, make of a fake data contribution.
             - *mc_stats*: Either *None* to disable MC stat uncertainties, or a float or tuple of
               floats to control the options of MC stat options.
+            - *empty_bin_value*: When bins are no content, they are filled with this value.
         """
         return DotDict([
             ("name", str(name)),
@@ -272,6 +274,7 @@ class InferenceModel(Derivable):
             ("config_data_datasets", list(map(str, config_data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
             ("mc_stats", mc_stats),
+            ("empty_bin_value", empty_bin_value),
             ("processes", []),
         ])
 

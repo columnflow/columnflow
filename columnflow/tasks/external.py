@@ -10,12 +10,12 @@ import os
 import time
 import shutil
 import subprocess
-from typing import Sequence
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from columnflow.util import wget, DotDict
 
@@ -186,7 +186,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 remote_fs = get_remote_fs(task.dataset_inst)
         if not remote_fs:
             # use the law config
-            remote_fs = law.config.get_expanded("outputs", "lfn_sources", split_csv=True)
+            remote_fs = law.config.get_expanded("outputs", "lfn_sources", [], split_csv=True)
         if not remote_fs:
             raise ValueError("no remote_fs given or found to resolve lfns")
         remote_fs = law.util.make_list(remote_fs)

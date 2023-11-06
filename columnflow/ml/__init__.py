@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import abc
 from collections import OrderedDict
-from typing import Any, Sequence
 
 import law
 import order as od
 
+from columnflow.types import Any, Sequence
 from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
 from columnflow.columnar_util import Route
 

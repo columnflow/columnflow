@@ -17,7 +17,7 @@ cf_remove_wlcg_cache_locks() {
 
     # check environment variables
     if [ -z "${CF_WLCG_CACHE_ROOT}" ]; then
-        2>&1 echo "environment variable CF_WLCG_CACHE_ROOT must not be empty"
+        >&2 echo "environment variable CF_WLCG_CACHE_ROOT must not be empty"
         return "1"
     fi
 
