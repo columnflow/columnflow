@@ -45,7 +45,7 @@ def plot_ml_evaluation(
 
 def create_sample_weights(sample_weights: Iterable | bool | None,
                           events: dict,
-                          true_labels: Iterable
+                          true_labels: Iterable,
                           ) -> dict:
     """ Helper function to creates the sample weights for the events, if needed.
 
