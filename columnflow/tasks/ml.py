@@ -4,10 +4,10 @@
 Tasks related to ML workflows.
 """
 
+from collections import OrderedDict
+
 import law
 import luigi
-
-from collections import OrderedDict
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
@@ -27,6 +27,10 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict
+from modules.columnflow.columnflow.util import maybe_import
+
+
+ak = maybe_import("awkward")
 
 
 class PrepareMLEvents(
@@ -705,22 +709,22 @@ class PlotMLResultsBase(
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
         add_default_to_description=True,
-        description="The full path of the desired plot function, that is to be called on the inputs. \
-            The full path should be givin using the dot notation",
+        description="The full path of the desired plot function, that is to be called on the inputs."
+        "The full path should be givin using the dot notation",
     )
 
     skip_processes = law.CSVParameter(
         default=("",),
-        description="names of processes to skip; These processes will not be displayed int he plot. \
-           config; default: ('*',)",
+        description="names of processes to skip; These processes will not be displayed int he plot."
+        "config; default: ('*',)",
         brace_expand=True,
     )
 
     plot_sub_processes = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, each process is divided into the different subprocesses \
-            which will be used as classes for the plot; default: False",
+        description="when True, each process is divided into the different subprocesses"
+        "which will be used as classes for the plot; default: False",
     )
 
     skip_uncertainties = luigi.BoolParameter(
@@ -771,7 +775,6 @@ class PlotMLResultsBase(
         return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}{self.plot_suffix}.pdf")
 
     def prepare_inputs(self):
-        import awkward as ak
 
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
@@ -806,8 +809,9 @@ class PlotMLResultsBase(
 
                 if not self.plot_sub_processes:
                     if process_inst.name in all_events.keys():
-                        all_events[process_inst.name] = ak.concatenate([all_events[process_inst.name],
-                                                                        getattr(events, self.ml_model)])
+                        all_events[process_inst.name] = ak.concatenate([
+                            all_events[process_inst.name], getattr(events, self.ml_model),
+                        ])
                     else:
                         all_events[process_inst.name] = getattr(events, self.ml_model)
                 else:
@@ -818,9 +822,10 @@ class PlotMLResultsBase(
 
                             process_mask = ak.where(events.process_ids == sub_process.id, True, False)
                             if sub_process.name in all_events.keys():
-                                all_events[sub_process.name] = (
-                                    ak.concatenate([all_events[sub_process.name],
-                                                    getattr(events[process_mask], self.ml_model)]))
+                                all_events[sub_process.name] = ak.concatenate([
+                                    all_events[sub_process.name],
+                                    getattr(events[process_mask], self.ml_model),
+                                ])
                             else:
                                 all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
                     else:
@@ -840,21 +845,20 @@ class PlotMLResults(PlotMLResultsBase):
     used to create the plot.
 
     Attributes:
-        plot_function (str): The name of the plot function to use. \
+        plot_function (str): The name of the plot function to use.
             Can be either "plot_cm" or "plot_roc".
-        processes_repr (str): A string representation of the number of \
+        processes_repr (str): A string representation of the number of
             processes used to generate the plot(s).
-        config_inst (Config): An instance of the Config class that contains \
+        config_inst (Config): An instance of the Config class that contains
             the configuration for this task.
-        branch_data (BranchData): An instance of the BranchData class that \
+        branch_data (BranchData): An instance of the BranchData class that
             contains the input data for this task.
     """
     # override the plot_function parameter to be able to only choose between CM and ROC
     plot_function = luigi.ChoiceParameter(
         default="plot_cm",
         choices=["cm", "roc"],
-        description="The name of the plot function to use. \
-            Can be either 'plot_cm' or 'plot_roc'.",
+        description="The name of the plot function to use. Can be either 'plot_cm' or 'plot_roc'.",
     )
 
     def prepare_plot_parameters(self):
@@ -866,16 +870,20 @@ class PlotMLResults(PlotMLResultsBase):
             params.general_settings["x_labels"] = x_labels.replace("&", "$").split(";")
 
     def output(self):
-        output = {"plot": super().output(),
-                  "array": self.target(f"plot__proc_{self.processes_repr}.parquet")}
+        output = {
+            "plot": super().output(),
+            "array": self.target(f"plot__proc_{self.processes_repr}.parquet"),
+        }
         return output
 
     @law.decorator.log
     @view_output_plots
     def run(self):
         from matplotlib.backends.backend_pdf import PdfPages
-        func_path = {"cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
-                    "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc"}
+        func_path = {
+            "cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
+            "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc",
+        }
         category_inst = self.config_inst.get_category(self.branch_data.category)
         self.prepare_plot_parameters()
         with self.publish_step(f"plotting in {category_inst.name}"):
