@@ -67,16 +67,14 @@ def pdf_weights(
     known_actions = ("ignore", "remove", "raise")
     if outlier_action not in known_actions:
         raise ValueError(
-            f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
-        )
-        raise ValueError(
-            f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
+            f"unknown outlier_action '{outlier_action}', "
+            f"known values are {','.join(known_actions)}",
         )
     known_log_modes = ("none", "info", "debug", "warning")
     if outlier_log_mode not in known_log_modes:
         raise ValueError(
-            f"unknown outlier_log_mode '{outlier_log_mode}', known values are "
-            f"{','.join(known_log_modes)}",
+            f"unknown outlier_log_mode '{outlier_log_mode}', "
+            f"known values are {','.join(known_log_modes)}",
         )
 
     # check for the correct amount of weights
