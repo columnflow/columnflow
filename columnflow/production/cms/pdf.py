@@ -51,8 +51,8 @@ def pdf_weights(
         - ``"remove"``: pdf weight nominal/up/down are all set to 0
         - ``"raise"``: an exception is raised
 
-     Additionally, the verbosity of the procedure can be set with *outlier_log_mode*,
-     which offers the following options:
+    Additionally, the verbosity of the procedure can be set with *outlier_log_mode*,
+    which offers the following options:
 
         - ``"none"``: no message is given
         - ``"info"``: a `logger.info` message is given

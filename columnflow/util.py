@@ -803,10 +803,11 @@ class Derivable(object, metaclass=DerivableMeta):
     Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
 
     .. py:classattribute:: cls_name
-       type: str
-       read-only
 
-       A shorthand to access the name of the class.
+        type: str
+        read-only
+
+        A shorthand to access the name of the class.
     """
 
     @classproperty
@@ -821,14 +822,16 @@ class KeyValueMessage(luigi.worker.SchedulerMessage):
     :py:attr:`value` attributes, parsed from the incoming message assuming a format ``key = value``.
 
     .. py:attribute: key
-       type: str
 
-       The key of the message.
+        type: str
+
+        The key of the message.
 
     .. py:attribute: value
-       type: str
 
-       The value of the message.
+        type: str
+
+        The value of the message.
     """
 
     # compile expression for key - value parsing of scheduler messages
