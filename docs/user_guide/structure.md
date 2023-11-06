@@ -50,10 +50,11 @@ The full task tree of general columnflow tasks can be seen in
 CMS-specific {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights` task is implemented,
 but not present in the graph, as it is experiment specific.
 
-Further informations about tasks and [law](https://github.com/riga/law) can be found in
+Further informations about tasks and law can be found in the
 {doc}`"Law Introduction" <law>` section of this documentation or in the
 [example section](https://github.com/riga/law#examples) of the law
-Github repository. In general (at least for cms), using columnflow requires a grid proxy, as the
+Github repository. In general (at least for people working in the CMS experiment),
+using columnflow requires a grid proxy, as the
 dataset files are accessed through it. The grid proxy should be activated after the setup of the
 default environment. It is however possible to create a custom law config file to be used by people
 without a grid certificate, although someone with a grid proxy must run the tasks
@@ -61,7 +62,7 @@ without a grid certificate, although someone with a grid proxy must run the task
 {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`) for them. Once these
 tasks are done, the local task outputs can be used without grid certificate by other users if
 they are able to access them with the storage location declared in the custom law config file.
-An example for such a custom config file can be found int he {doc}`examples` section of this
+An example for such a custom config file can be found in the {doc}`examples` section of this
 documentation.
 
 While the name of each task is fairly descriptive of its purpose, a short introduction of the most
@@ -78,7 +79,7 @@ task to run. TODO: more infos?
 - {py:class}`~columnflow.tasks.calibration.CalibrateEvents`: Task to implement corrections to be
 applied on the datasets, e.g. jet-energy corrections. This task uses objects of the
 {py:class}`~columnflow.calibration.Calibrator` class to apply the calibration. The argument
-```--calibrator``` followed by the name of the {py:class}`~columnflow.calibration.Calibrator`
+```--calibrator``` followed by the name of the Calibrator
 object to be run is needed for this task to run. A default value for this argument can be set in
 the analysis config. Similarly, the ```--shift``` argument can be given, in order to choose which
 corrections are to be used, e.g. which variation (up, down, nominal) of the jet-energy corrections
@@ -91,16 +92,16 @@ parquet file, and some additional parameters stored in a dictionary format, like
 the selection (which are needed for the plotting tasks further down the task tree), saved in a json
 file. The mask are not applied to the columns during this task.
 The argument ```--selector``` followed by the name of the
-{py:class}`~columnflow.selection.Selector` object to be run is needed for this task to run.
+Selector object to be run is needed for this task to run.
 A default value for this argument can be set in the analysis config. From this task on, the
 ```--calibrator``` argument is replaced by ```--calibrators```.
 
 - {py:class}`~columnflow.tasks.reduction.ReduceEvents`: Task to apply the masks created in
 {py:class}`~columnflow.tasks.selection.SelectEvents` on the datasets. All
-tasks below {py:class}`~columnflow.tasks.reduction.ReduceEvents` in the task graph use the parquet
-file resulting from {py:class}`~columnflow.tasks.reduction.ReduceEvents` to work on, not the
+tasks below ReduceEvents in the task graph use the parquet
+file resulting from ReduceEvents to work on, not the
 original dataset. The columns to be conserved after
-{py:class}`~columnflow.tasks.reduction.ReduceEvents` are to be given in the analysis config under
+ReduceEvents are to be given in the analysis config under
 the ```config.x.keep_columns``` argument in a ```DotDict``` structure
 (from {py:mod}`~columnflow.util`).
 
@@ -108,7 +109,7 @@ the ```config.x.keep_columns``` argument in a ```DotDict``` structure
 the reduced datasets, e.g. for new high level variables. This task uses objects of the
 {py:class}`~columnflow.production.Producer` class to create the new columns. The new columns are
 saved in a parquet file that can be used by the task below on the task graph. The argument
-```--producer``` followed by the name of the {py:class}`~columnflow.production.Producer` object
+```--producer``` followed by the name of the Producer object
 to be run is needed for this task to run. A default value for this argument can be set in the
 analysis config.
 
@@ -138,7 +139,7 @@ process but different shifts (e.g. jet-energy correction variations). The argume
 followed by the name of the variables defined in the analysis config, separated by a comma, is
 needed for these tasks to run. It is also possible to replace the ```--datasets``` argument
 for these tasks by the ```--processes``` argument followed by the name of the physical processes to
-be plotted, as defined in the analysis config. For the ```PlotShiftedVariables*```plots, the
+be plotted, as defined in the analysis config. For the ```PlotShiftedVariables*``` plots, the
 argument ```shift-sources``` is needed and replaces the argument ```shift```. The output format for
 these plots can be given with the ```--file-types``` argument. It is possible to set a default for the
 variables in the analysis config.
@@ -155,7 +156,7 @@ yields of the different selection steps defined in
 {py:class}`~columnflow.tasks.reduction.ReduceEvents` procedure. The selection steps to be shown
 can be chosen with the ```--selector-steps``` argument. Without further argument, the outputs are
 as much plots as the number of selector steps given. On the other hand, the
-{py:class}`~columnflow.tasks.cutflow.PlotCutflow` task gives a single histograms containing only
+PlotCutflow task gives a single histograms containing only
 the total event yields for each selection step given.
 
 - ```Merge``` tasks (e.g. {py:class}`~columnflow.tasks.reduction.MergeReducedEvents`,
@@ -165,7 +166,6 @@ Or I/O?
 
 - {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`: TODO
 
-maybe TODO: each task separately?
 
 also, maybe interesting to have examples e.g. for the usage of the
 parameters for the 2d plots. Maybe in the example section, or after the next subsection, such that

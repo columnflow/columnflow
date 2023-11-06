@@ -4,36 +4,36 @@
 
 In columnflow, event/object based information (weights, properties, ...) is stored in columns.
 The creation of new columns is managed by instances of the
-{py:class}`~columnflow.production.Producer` class. {py:class}`~columnflow.production.Producer`s can
+{py:class}`~columnflow.production.Producer` class. Producers can
 be called in other classes (e.g. {py:class}`~columnflow.calibration.Calibrator` and
 {py:class}`~columnflow.selection.Selector`), or directly through the
 {py:class}`~columnflow.tasks.production.ProduceColumns` task. It is also possible to create new
-columns directly within {py:class}`~columnflow.calibration.Calibrator`s and
-{py:class}`~columnflow.selection.Selector`s, without using instances of the
-{py:class}`~columnflow.production.Producer` class, but the process is
-the same as for the {py:class}`~columnflow.production.Producer` class. Therefore, the
-{py:class}`~columnflow.production.Producer` class, which main purpose is the creation of new
+columns directly within Calibrators and
+Selectors, without using instances of the
+Producer class, but the process is
+the same as for the Producer class. Therefore, the
+Producer class, which main purpose is the creation of new
 columns, will be used to describe the process. The new columns are saved in a parquet file. If the
 column were created before the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task and are
 still needed afterwards, they should be included in the ```keep_columns```
 auxiliary of the config, as they would otherwise not be saved in the output file of the task. If
 the columns are created further down the task tree, e.g. in
-{py:class}`~columnflow.tasks.production.ProduceColumns`, they will be stored in another parquet
+ProduceColumns, they will be stored in another parquet
 file, namely as the output of the corresponding task, but these parquet files will be loaded
-similarly to the outputs from {py:class}`~columnflow.tasks.reduction.ReduceEvents`.
+similarly to the outputs from ReduceEvents.
 
 ## Usage
 
 To create new columns, the {py:class}`~columnflow.production.Producer` instance will need to load
 the columns needed for the production of the new columns from the dataset/parquet files. This is
-given by the ```uses``` set of the instance of the {py:class}`~columnflow.production.Producer`
+given by the ```uses``` set of the instance of the Producer
 class. Similarly, the newly created columns within the producer need to be declared in the
-```produces``` set of the instance of the {py:class}`~columnflow.production.Producer` class to be
-stored in the output parquet file. The {py:class}`~columnflow.production.Producer` instance only
+```produces``` set of the instance of the Producer class to be
+stored in the output parquet file. The Producer instance only
 needs to return the ```events``` array with the additional columns. New columns can be set using
 the function {py:func}`~columnflow.columnar_util.set_ak_column`.
 
-An example of a {py:class}`~columnflow.production.Producer` for the ```HT```variable is given below:
+An example of a Producer for the ```HT```variable is given below:
 
 ```python
 # import the Producer class and the producer method
@@ -62,9 +62,9 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     return events
 ```
 
-To call a {py:class}`~columnflow.production.Producer` in an other
-{py:class}`~columnflow.production.Producer`/{py:class}`~columnflow.calibration.Calibrator`/
-{py:class}`~columnflow.selection.Selector`, the following expression might be used:
+To call a Producer in an other
+Producer/Calibrator/
+Selector, the following expression might be used:
 ```python
 events = self[producer_name](arguments_of_the_producer, **kwargs)
 ```
@@ -128,7 +128,7 @@ replacing missing values with the given value, e.g.
 {py:attr}`~columnflow.columnar_util.EMPTY_FLOAT`
 being a columnflow internal null value corresponding to the value ```-9999.0```.
 
-- If the {py:class}`~columnflow.production.Producer` is built in a new file and to be used directly
+- If the Producer is built in a new file and to be used directly
 by {py:class}`~columnflow.tasks.production.ProduceColumns`, you will still need to put the name of
 the new file along with its path in the ```law.cfg``` file under the ```production_modules```
 argument for law to be able to find the file. A more detailed explanation of the law config file
@@ -148,7 +148,7 @@ events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 ```
 
 - When storage space is a limiting factor, it is good practice to produce and store (if possible)
-columns only after the reduction, using the {py:class}`~columnflow.tasks.production.ProduceColumns`
+columns only after the reduction, using the ProduceColumns
 task.
 
 
@@ -160,7 +160,7 @@ parquet file.
 
 While it is possible to see all the arguments and their explanation for this task using
 ```law run cf.ProduceColumns --help```, the only argument created specifically for this task is the
-```--producer``` argument, through which the {py:class}`~columnflow.production.Producer` to be used
+```--producer``` argument, through which the Producer to be used
 can be chosen.
 
 An example of how to run this task for an analysis with several datasets and configs is given below:

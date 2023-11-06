@@ -20,7 +20,7 @@ TODO
 
 In order to create histograms out of the processed datasets, columnflow uses
 {external+order:py:class}`order.variable.Variable`s. These
-{external+order:py:class}`order.variable.Variable`s need to be added to the config using the
+Variables need to be added to the config using the
 function {external+order:py:meth}`order.config.Config.add_variable`. The standard syntax is as
 follows:
 
@@ -54,7 +54,7 @@ the `expression` of the Variable and storing them in histograms with binning def
 via the `binning` argument of the Variable.
 
 The list of possible keyword arguments can be found in
-{external+order:py:class}`order.variable.Variable`. The values in the ```expression``` argument can
+Variable. The values in the ```expression``` argument can
 be either a one-dimensional or a more dimensional array. In this second case the information is
 flattened before plotting. It is to be mentioned that
 {py:attr}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value and

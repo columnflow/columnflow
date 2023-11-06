@@ -7,17 +7,17 @@ This class allows for arbitrary selection criteria on event level as well as obj
 The results of the selection (which events or objects are to be conserved) are saved in an instance
 of the {py:class}`~columnflow.selection.SelectionResult` class. Similar to
 {py:class}`~columnflow.production.Producer`s, it is possible to create new columns in
-{py:class}`~columnflow.selection.Selector`s. In the original columnflow setup,
-{py:class}`~columnflow.selection.Selector`s are being run in the
+Selectors. In the original columnflow setup,
+Selectors are being run in the
 {py:class}`~columnflow.tasks.selection.SelectEvents` task.
 
 ## Create an instance of the Selector class
 
 Similar to {py:class}`~columnflow.production.Producer`s, {py:class}`~columnflow.selection.Selector`s
 need to declare which columns are to be used (produced) by the
-{py:class}`~columnflow.selection.Selector` instance in order for them to be taken out of the parquet files
+Selector instance in order for them to be taken out of the parquet files
 (saved in the new parquet files). An example for this structure is given below (Similar to the
-{py:class}`~columnflow.selection.Selector` documentation.):
+Selector documentation.):
 
 ```python
 
@@ -59,10 +59,10 @@ instance are discussed below in {ref}`SelectionResult`.
 ### Exposed and internal Selectors
 
 {py:class}`~columnflow.selection.Selector`s can be either available directly from the command line
-or only internally, through other selectors. To make a {py:class}`~columnflow.selection.Selector`
+or only internally, through other selectors. To make a Selector
 available from the command line, it should be declared with the ```exposed=True``` argument.
-To call a fully functional {py:class}`~columnflow.selection.Selector` (in the following referred
-as Selector_int) from an other {py:class}`~columnflow.selection.Selector` (in the following referred
+To call a fully functional Selector (in the following referred
+as Selector_int) from an other Selector (in the following referred
 to as Selector_ext), several steps are required:
 - If defined in an other file, Selector_int should be imported in the Selector_ext script,
 - The columns needed for Selector_int should be declared in the ```uses``` argument of Selector_ext
@@ -72,7 +72,7 @@ the ```uses``` set from Selector_int will be added to the ```uses``` set of Sele
 ```self[Selector_int](events, **kwargs)``` call.
 
 An example of an exposed Selector_ext with the ```jet_selection```
-{py:class}`~columnflow.selection.Selector` defined above as Selector_int, assuming the
+Selector defined above as Selector_int, assuming the
 ```jet_selection``` exists in ```analysis/selection/jet.py``` is given below. It should be mentioned
 that a few details must be changed for this selector to work within the worklow, the full version
 can be found in the {ref}`"Complete Example" <complete_example>` section.
@@ -126,7 +126,7 @@ def Selector_ext(self: Selector, events: ak.Array, **kwargs) -> tuple[ak.Array, 
 
 The result of a {py:class}`~columnflow.selection.Selector` is propagated through an instance of the
 {py:class}`~columnflow.selection.SelectionResult` class. The
-{py:class}`~columnflow.selection.SelectionResult` object is instantiated using a dictionary for each
+SelectionResult object is instantiated using a dictionary for each
 argument. There are four arguments that may be set, which contain:
 - Boolean masks to select the events to be kept in the analysis, which is saved under the
 ```steps``` argument. Several selection steps may be defined in a single Selector, each with a unique
@@ -137,19 +137,19 @@ column/field from which the indices are to be taken (first dimension of the dict
 the new column/field to be created with only these objects (second dimension of the dictionary). If the
 name of the column/field to be created is the same as the name of an already existing column/field, the original
 column/field will be overwritten by the new one!
-- Additional informations to be used by other {py:class}`~columnflow.selection.Selector`s, saved
+- Additional informations to be used by other Selectors, saved
 under the ```aux``` argument.
 - A combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
 ```"event"``` key. An example with this argument will be shown in the section
 {ref}`"Complete Example" <complete_example>`. The final
-{py:class}`~columnflow.selection.SelectionResult` object to be returned by the exposed selector must
+SelectionResult object to be returned by the exposed selector must
 have this field.
 
 While the arguments in the ```aux``` dictionary are discarded after the
 {py:class}`~columnflow.tasks.reduction.ReduceEvents` task and are
 only used for short-lived saving of internal information that might be needed by other
-{py:class}`~columnflow.selection.Selector`s, the ```steps``` and ```objects``` arguments are
-specifically used by the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to apply the
+Selectors, the ```steps``` and ```objects``` arguments are
+specifically used by the ReduceEvents task to apply the
 given masks to the nanoAOD files (potentially with additional columns). As described above, the
 ```steps``` argument is used to reduce the number of events to be processed further down the task
 tree according to the selections, while the ```objects``` argument is used to select which objects
@@ -157,7 +157,7 @@ are to be kept for further processing and creates new columns/fields containing 
 objects.
 
 Below is an example of a fully written internal Selector with its
-{py:class}`~columnflow.selection.SelectionResult` object without ```main``` argument.
+SelectionResult object without ```main``` argument.
 
 ```python
 
@@ -239,11 +239,11 @@ argument of the returned {py:class}`~columnflow.selection.SelectionResult` by th
 {py:class}`~columnflow.selection.Selector`.
 When several selection steps do appear in the selection, it is necessary to combine all the masks
 from all the steps in order to obtain the final boolean array to be given to the ```main``` argument
-of the {py:class}`~columnflow.selection.SelectionResult` and for it to be applied to the events.
+of the SelectionResult and for it to be applied to the events.
 This can be achieved in two steps:
 
 - Combining the results from the different selections to a single
-{py:class}`~columnflow.selection.SelectionResult` object:
+SelectionResult object:
 ```python
 results = SelectionResult()
 results += jet_results
@@ -251,7 +251,7 @@ results += fatjet_results
 ```
 
 - Reducing the different steps to a single boolean array and give it to the ```main``` argument of
-the {py:class}`~columnflow.selection.SelectionResult` object.
+the SelectionResult object.
 ```python
 # import the functions to combine the selection masks
 from operator import and_
@@ -279,14 +279,14 @@ used, various additional information might need to be saved in the ```stats``` o
 
 The keys ```"num_events"```, ```"num_events_selected"```, ```"sum_mc_weight"```,
 ```"sum_mc_weight_selected"``` get printed by the
-{py:class}`~columnflow.tasks.selection.SelectEvents` task along with the
+SelectEvents task along with the
 corresponding efficiency. If they are not set, the default value for floats will be printed instead.
 
 Below is an example of such a {py:class}`~columnflow.selection.Selector` updating the ```stats```
 dictionary in place. This dictionary will be saved in the ```stats.json``` file. For convenience,
 the weights were saved in a weight_map dictionary along with the mask before the sum of the weights
 was saved in the ```stats``` dictionary. In this example, the keys to be printed by the
-{py:class}`~columnflow.tasks.selection.SelectEvents` task and the sum of the Monte Carlo weights
+SelectEvents task and the sum of the Monte Carlo weights
 per process (needed for correct normalization of the number of Monte Carlo events in the plots)
 are saved.
 
@@ -598,8 +598,8 @@ def Selector_ext(
 ```
 
 Notes:
-- If you want to build this exposed {py:class}`~columnflow.selection.Selector` along with the inner
-{py:class}`~columnflow.selection.Selector`s in a new file, you will still need to put the name of
+- If you want to build this exposed Selector along with the inner
+Selectors in a new file, you will still need to put the name of
 the new file along with its path in the ```law.cfg``` file under the ```selection_modules```
 argument for law to be able to find the file. A more detailed explanation of the law config file
 can be found in the {ref}`Law config section <law_config_section>`.
@@ -638,7 +638,7 @@ The masks created by this task are then used by the
 {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to reduce the number of
 events (see the ```steps``` argument for the {py:class}`~columnflow.selection.SelectionResult`) and
 create/update new columns/fields with only the selected objects (see the ```objects``` argument for
-the {py:class}`~columnflow.selection.SelectionResult`). The saved statistics are used e.g. for the
+the SelectionResult). The saved statistics are used e.g. for the
 weights needed for plotting.
 
 It should not be forgotten that any column created in this task should be included in the
@@ -659,7 +659,7 @@ It is to be mentioned that this task is run after the
 the default argument for the ```--calibrators``` if not specified otherwise.
 
 Notes:
-- Running the exposed {py:class}`~columnflow.selection.Selector` from the
+- Running the exposed Selector from the
 {ref}`"Complete Example" <complete_example>`
 section would simply require you to give the name ```Selector_ext``` in the ```--selector```
 argument.
