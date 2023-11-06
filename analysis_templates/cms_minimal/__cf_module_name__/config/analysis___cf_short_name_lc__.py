@@ -192,7 +192,7 @@ cfg.add_shift(name="mu_down", id=11, type="shape")
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
-json_mirror = "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-849c6a6e"
+json_mirror = "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c"
 cfg.x.external_files = DotDict.wrap({
     # lumi files
     "lumi": {
