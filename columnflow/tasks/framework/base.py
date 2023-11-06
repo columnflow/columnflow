@@ -133,7 +133,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # overwrite the version when set in the config
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
-            if config_version := cls.get_version_map_value(inst, params):
+            config_version = cls.get_version_map_value(inst, params)
+            if config_version:
                 params["version"] = config_version
 
         return params
@@ -153,7 +154,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             version_map = cls.get_version_map(inst)
 
         # the task family must be in the version map
-        if not (version := version_map.get(cls.task_family)):
+        version = version_map.get(cls.task_family)
+        if not version:
             return None
 
         # when version is a callable, invoke it
@@ -479,7 +481,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand groups recursively
-        if groups_str and (param_groups := container.x(groups_str, {})):
+        if groups_str and container.x(groups_str, {}):
+            param_groups = container.x(groups_str)
             values = []
             lookup = law.util.make_list(param)
             handled_groups = set()
