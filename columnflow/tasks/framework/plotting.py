@@ -5,11 +5,11 @@ Base classes for different types of plotting tasks.
 """
 
 import importlib
-from typing import Any, Callable
 
 import law
 import luigi
 
+from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
@@ -53,11 +53,11 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.Parameter(
-        default="wip",
+        default="pw",
         significant=False,
         description="postfix to add behind the CMS logo; when 'skip', no CMS logo is shown at all; "
         "the following special values are expanded into the usual postfixes: wip, pre, pw, sim, "
-        "simwip, simpre, simpw, od, odwip, public; default: 'wip'",
+        "simwip, simpre, simpw, od, odwip, public; default: 'pw'",
     )
 
     @classmethod

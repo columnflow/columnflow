@@ -120,6 +120,10 @@ setup_columnflow() {
     #       The default slurm flavor setting for the SlurmWorkflow task.
     #   CF_SLURM_PARTITION
     #       The default slurm partition setting for the SlurmWorkflow task.
+    #   CF_CRAB_STORAGE_ELEMENT
+    #       The storage element for storing crab job related outputs.
+    #   CF_CRAB_BASE_DIRECTORY
+    #       The base directory where to store crab job related outputs on CF_CRAB_STORAGE_ELEMENT.
     #   CF_SETUP
     #       A flag that is set to 1 after the setup was successful.
     #   PATH
@@ -179,28 +183,8 @@ setup_columnflow() {
     # interactive setup
     if [ "${CF_REMOTE_JOB}" != "1" ]; then
         cf_setup_interactive_body() {
-            # start querying for variables
-            query CF_CERN_USER "CERN username" "$( whoami )"
-            export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
-            query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
-            query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
-            query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
-            query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
-            export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
-            export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
-            query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
-            query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
-            query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
-            [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
-            unset CF_VENV_SETUP_MODE_UPDATE
-            query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
-            if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
-                query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
-                query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
-            else
-                export_and_save CF_SCHEDULER_HOST "127.0.0.1"
-                export_and_save CF_SCHEDULER_PORT "8082"
-            fi
+            # query common variables
+            cf_setup_interactive_common_variables
         }
         cf_setup_interactive "${CF_SETUP_NAME}" "${CF_BASE}/.setups/${CF_SETUP_NAME}.sh" || return "$?"
     fi
@@ -307,6 +291,44 @@ cf_setup_common_variables() {
     export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
 }
 
+cf_setup_interactive_common_variables() {
+    # Queries for common variables which should be called from called inside custom
+    # cf_setup_interactive_body funtions, which in turn is called by cf_setup_interactive.
+
+    query CF_CERN_USER "CERN username" "$( whoami )"
+    export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
+
+    query CF_DATA "Local data directory" "\$$( [ -z "${CF_REPO_BASE}" ] && echo "CF_BASE" || echo "CF_REPO_BASE" )/data" "./data"
+    query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
+    query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
+
+    query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
+    query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
+    query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
+    export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
+    export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
+
+    query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
+    [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
+    unset CF_VENV_SETUP_MODE_UPDATE
+
+    query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
+    if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
+        query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
+        query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
+    else
+        export_and_save CF_SCHEDULER_HOST "127.0.0.1"
+        export_and_save CF_SCHEDULER_PORT "8082"
+    fi
+
+    query CF_FLAVOR "Flavor of the columnflow setup ('', 'cms')" "${CF_FLAVOR:-''}"
+
+    if [ "${CF_FLAVOR}" = "cms" ]; then
+        query CF_CRAB_STORAGE_ELEMENT "storage element for crab specific job outputs (e.g. T2_DE_DESY)" "''"
+        query CF_CRAB_BASE_DIRECTORY "base directory on storage element for crab specific job outputs" "/store/user/\$CF_CERN_USER/cf_crab_outputs"
+    fi
+}
+
 cf_setup_interactive() {
     # Starts the interactive part of the setup by querying for values of certain environment
     # variables with useful defaults. When a custom, named setup is triggered, the values of all
@@ -356,15 +378,14 @@ cf_setup_interactive() {
         local varname="$1"
         local text="$2"
         local default="$3"
-        local default_text="${4:-$default}"
-        local default_raw="${default}"
+        local default_text="${4:-${default}}"
 
         # when the setup is the default one, use the default value when the env variable is empty,
         # otherwise, query interactively
         local value="${default}"
         if ${setup_is_default}; then
             # set the variable when existing
-            eval "value=\${$varname:-\$value}"
+            eval "value=\${$varname:-\${value}}"
         else
             printf "${text} ($( cf_color default_bright ${varname} ), default $( cf_color default_bright ${default_text} )):  "
             read query_response
@@ -547,6 +568,7 @@ EOF
                     gfal2 \
                     gfal2-util \
                     python-gfal2 \
+                    myproxy \
                     conda-pack \
                     || return "$?"
                 micromamba clean --yes --all
@@ -647,7 +669,7 @@ cf_setup_git_hooks() {
         # determine the target hooks directory
         local dst_dir="$( cd "${repo_dir}" && echo "$( git rev-parse --git-dir )/hooks" )"
         if [ "$?" != "0" ] || [ ! -d "${dst_dir}" ]; then
-            2>&1 echo "no git hooks directory found, cannot setup hooks"
+            >&2 echo "no git hooks directory found, cannot setup hooks"
             return "30"
         fi
 
@@ -714,7 +736,7 @@ cf_setup_git_hooks() {
             fi
         done
 
-        2>&1 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
+        >&2 echo "could not determine hook postfix for ${hook_name} in ${dst_dir}"
         return "31"
     }
 

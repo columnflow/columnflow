@@ -21,10 +21,11 @@ __all__ = [
 import re
 import itertools
 from collections import OrderedDict
-from typing import Callable, Any, Sequence
 
 import law
 import order as od
+
+from columnflow.types import Callable, Any, Sequence
 
 
 def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
@@ -144,7 +145,6 @@ def get_datasets_from_process(
         return law.util.make_unique(dataset_insts)
 
     # at this point, strategy is exclusive or exclusive_strict
-    assert strategy in ("exclusive", "exclusive_strict")
     dataset_insts = OrderedDict()
     for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
         # check if child processes have matched datasets already

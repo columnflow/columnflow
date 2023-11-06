@@ -5,8 +5,8 @@ Jet energy corrections and jet resolution smearing.
 """
 
 import functools
-from typing import Any
 
+from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
 from columnflow.production.util import attach_coffea_behavior
@@ -122,7 +122,7 @@ def get_jec_file_default(self, external_files: DotDict) -> str:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+            "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     :param external_files: Dictionary containing the information about the file location
@@ -183,7 +183,7 @@ def jec(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+            "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     *get_jec_file* can be adapted in a subclass in case it is stored differently in the
@@ -512,7 +512,7 @@ def get_jer_file(self, external_files: DotDict) -> str:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+            "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     :param external_files: Dictionary containing the information about the file location
@@ -576,7 +576,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/jet_jerc.json.gz",
+            "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
         })
 
     *get_jer_file* can be adapted in a subclass in case it is stored differently in the external

@@ -4,6 +4,7 @@
 Task to unite columns horizontally into a single file for further, possibly external processing.
 """
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
@@ -29,6 +30,12 @@ class UniteColumns(
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
+    file_type = luigi.ChoiceParameter(
+        default="parquet",
+        choices=("parquet", "root"),
+        description="the file type to create; choices: parquet,root; default: parquet",
+    )
+
     # upstream requirements
     reqs = Requirements(
         MergeReducedEvents.reqs,
@@ -45,13 +52,13 @@ class UniteColumns(
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
-            if self.producers:
+            if self.producer_insts:
                 reqs["producers"] = [
                     self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            if self.ml_models:
+            if self.ml_model_insts:
                 reqs["ml"] = [
                     self.reqs.MLEvaluation.req(self, ml_model=m)
                     for m in self.ml_models
@@ -64,13 +71,13 @@ class UniteColumns(
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
-        if self.producers:
+        if self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        if self.ml_models:
+        if self.ml_model_insts:
             reqs["ml"] = [
                 self.reqs.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
@@ -80,14 +87,15 @@ class UniteColumns(
 
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
-        return {"columns": self.target(f"data_{self.branch}.parquet")}
+        return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
     @law.decorator.log
-    @law.decorator.localize(input=True, output=False)
+    @law.decorator.localize(input=True, output=True)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
+            sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -109,9 +117,9 @@ class UniteColumns(
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0]["events"].path]
-        if self.producers:
+        if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
-        if self.ml_models:
+        if self.ml_model_insts:
             files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
@@ -132,14 +140,22 @@ class UniteColumns(
             if self.check_finite_output:
                 self.raise_if_not_finite(events)
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+            # save as parquet or root via a thread in the same pool
+            chunk = tmp_dir.child(f"file_{pos.index}.{self.file_type}", type="f")
             output_chunks[pos.index] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+            if self.file_type == "parquet":
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+            else:  # root
+                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
+        if self.file_type == "parquet":
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
+        else:  # root
+            law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
 
 
 # overwrite class defaults
