@@ -873,19 +873,21 @@ class PlotMLResults(PlotMLResultsBase):
     @law.decorator.log
     @view_output_plots
     def run(self):
+        from matplotlib.backends.backend_pdf import PdfPages
         func_path = {"cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
                     "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc"}
         category_inst = self.config_inst.get_category(self.branch_data.category)
         self.prepare_plot_parameters()
         with self.publish_step(f"plotting in {category_inst.name}"):
             all_events = self.prepare_inputs()
-            fig, array = self.call_plot_func(
+            figs, array = self.call_plot_func(
                 func_path.get(self.plot_function, self.plot_function),
                 events=all_events,
                 config_inst=self.config_inst,
                 category_inst=category_inst,
                 **self.get_plot_parameters(),
             )
-
-            self.output()["plot"].dump(fig, formatter="mpl")
             self.output()["array"].dump(array, formatter="pickle")
+            with PdfPages(self.output()["plot"].abspath) as pdf:
+                for f in figs:
+                    f.savefig(pdf, format="pdf")

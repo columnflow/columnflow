@@ -5,6 +5,7 @@ Useful plot functions for ML Evaluation
 """
 
 from __future__ import annotations
+from typing import Iterable
 
 from columnflow.util import maybe_import
 
@@ -40,6 +41,39 @@ def plot_ml_evaluation(
         **kwargs,
 ) -> plt.Figure:
     return None
+
+
+def create_sample_weights(sample_weights: Iterable | bool | None,
+                          events: dict,
+                          true_labels: Iterable
+                          ) -> dict:
+    """ Helper function to creates the sample weights for the events, if needed.
+
+            Args:
+                sample_weights (np.ndarray or bool, optional): sample weights of the events. If an explicit array is not
+                                givin the weights are calculated based on the number of eventsDefaults to None.
+                events (dict): dictionary with the true labels as keys and the model output of \
+                    the events as values.
+                true_labels (np.ndarray): true labels of the events
+
+            Returns:
+                dict: sample weights of the events
+
+            Raises:
+                AssertionError: If both predictions and labels have mismatched shapes, \
+                    or if `weights` is not `None` and its shape doesn't match `predictions`.
+        """
+    if not sample_weights:
+        return {label: 1 for label in true_labels}
+    else:
+        assert (isinstance(sample_weights, bool) or (len(sample_weights) == len(true_labels))), (
+            f"Shape of sample_weights {sample_weights.shape} does not match "
+            f"shape of predictions {len(true_labels)}")
+        if isinstance(sample_weights, bool):
+            size = {label: len(event) for label, event in events.items()}
+            mean = np.mean(list(size.values()))
+            sample_weights = {label: mean / length for label, length in size.items()}
+        return sample_weights
 
 
 def plot_cm(
@@ -86,23 +120,10 @@ def plot_cm(
     return_type = np.float32 if sample_weights else np.int32
     mat_shape = (len(true_labels), len(pred_labels))
 
-    def create_sample_weights(sample_weights) -> np.ndarray:
-        if not sample_weights:
-            return {label: 1 for label in true_labels}
-        else:
-            assert (isinstance(sample_weights, bool) or (len(sample_weights) == len(true_labels))), (
-                f"Shape of sample_weights {sample_weights.shape} does not match "
-                f"shape of predictions {mat_shape}")
-            if isinstance(sample_weights, bool):
-                size = {label: len(event) for label, event in events.items()}
-                mean = np.mean(list(size.values()))
-                sample_weights = {label: mean / length for label, length in size.items()}
-            return sample_weights
-
     def get_conf_matrix(sample_weights, *args, **kwargs) -> np.ndarray:
         result = np.zeros(shape=mat_shape, dtype=return_type)
         counts = np.zeros(shape=mat_shape, dtype=return_type)
-        sample_weights = create_sample_weights(sample_weights)
+        sample_weights = create_sample_weights(sample_weights, events, true_labels)
 
         # looping over the datasets
         for ind, (dataset, pred) in enumerate(events.items()):
@@ -264,4 +285,4 @@ def plot_cm(
     cm = get_conf_matrix(sample_weights, *args, **kwargs)
     fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
 
-    return fig, cm
+    return [fig], cm
