@@ -61,14 +61,19 @@ def pdf_weights(
 
     Resources:
 
-       - https://arxiv.org/pdf/1510.03865.pdf
+        - https://arxiv.org/pdf/1510.03865.pdf
     """
 
-    if outlier_action not in (known_actions := ("ignore", "remove", "raise")):
+    known_actions = ("ignore", "remove", "raise")
+    if outlier_action not in known_actions:
         raise ValueError(
             f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
         )
-    if outlier_log_mode not in (known_log_modes := ("none", "info", "debug", "warning")):
+        raise ValueError(
+            f"unknown outlier_action '{outlier_action}', known values are {','.join(known_actions)}",
+        )
+    known_log_modes = ("none", "info", "debug", "warning")
+    if outlier_log_mode not in known_log_modes:
         raise ValueError(
             f"unknown outlier_log_mode '{outlier_log_mode}', known values are "
             f"{','.join(known_log_modes)}",
@@ -107,7 +112,8 @@ def pdf_weights(
     events = set_ak_column_f32(events, "pdf_weight_up", 1 + stddev)
     events = set_ak_column_f32(events, "pdf_weight_down", 1 - stddev)
 
-    if ak.any(outlier_mask := (stddev > outlier_threshold)):
+    outlier_mask = (stddev > outlier_threshold)
+    if ak.any(outlier_mask):
         # catch events with large pdf variations
         occurances = ak.sum(outlier_mask)
         frac = occurances / ak.count(stddev, axis=0) * 100
@@ -134,7 +140,8 @@ def pdf_weights(
         }[outlier_log_mode]
         msg_func(msg)
 
-    if ak.any(invalid_pdf_weight := (pdf_weight_nominal == 0)):
+    invalid_pdf_weight = (pdf_weight_nominal == 0)
+    if ak.any(invalid_pdf_weight):
         # set all pdf weights to 0 when the nominal pdf weight is 0
         logger.warning(
             f"In dataset {self.dataset_inst.name}, {ak.sum(invalid_pdf_weight)} nominal "
