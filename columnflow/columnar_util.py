@@ -125,36 +125,41 @@ class Route(od.TagMixin):
         # -> "pt.jec_up"
 
     .. py:attribute:: fields
-       type: tuple
-       read-only
 
-       The fields of this route.
+        type: tuple
+        read-only
+
+        The fields of this route.
 
     .. py:attribute:: column
-       type: string
-       read-only
 
-       The name of the corresponding column in dot format.
+        type: string
+        read-only
+
+        The name of the corresponding column in dot format.
 
     .. py:attribute:: nano_column
-       type: string
-       read-only
 
-       The name of the corresponding column in nano-style underscore format.
+        type: string
+        read-only
+
+        The name of the corresponding column in nano-style underscore format.
 
     .. py:attribute:: string_column
-       type: string
-       read-only
 
-       The name of the corresponding column in dot format, but only consisting of string fields,
-       i.e., without slicing or indexing fields.
+        type: string
+        read-only
+
+        The name of the corresponding column in dot format, but only consisting of string fields,
+        i.e., without slicing or indexing fields.
 
     .. py:attribute:: string_nano_column
-       type: string
-       read-only
 
-       The name of the corresponding column in nano-style underscore format, but only consisting of
-       string fields, i.e., without slicing or indexing fields.
+        type: string
+        read-only
+
+        The name of the corresponding column in nano-style underscore format, but only consisting of
+        string fields, i.e., without slicing or indexing fields.
     """
 
     DOT_SEP = "."
@@ -1168,15 +1173,17 @@ class RouteFilter(object):
         # ]
 
     .. py:attribute:: keep_routes
-       type: list
 
-       The routes to keep.
+        type: list
+
+        The routes to keep.
 
     .. py:attribute:: remove_routes
-       type: None, set
 
-       A set of :py:class:`Route` instances that are removed, defined after the first call to this
-       instance.
+        type: None, set
+
+        A set of :py:class:`Route` instances that are removed, defined after the first call to this
+        instance.
     """
 
     def __init__(self, keep_routes: Sequence[Route | str]):
@@ -1285,105 +1292,121 @@ class ArrayFunction(Derivable):
     **produces**. Omitting these flags is identical to using (e.g.) ``my_func.AUTO``.
 
     .. py:classattribute:: uses
-       type: set
 
-       The set of used column names or other dependencies to recursively resolve the names of used
-       columns.
+        type: set
+
+        The set of used column names or other dependencies to recursively resolve the names of used
+        columns.
 
     .. py:classattribute:: produces
-       type: set
 
-       The set of produced column names or other dependencies to recursively resolve the names of
-       produced columns.
+        type: set
+
+        The set of produced column names or other dependencies to recursively resolve the names of
+        produced columns.
 
     .. py:classattribute:: AUTO
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote automatic
-       resolution of column names.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote automatic
+        resolution of column names.
 
     .. py:classattribute:: USES
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`uses` set.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote columns names
+        in the :py:attr:`uses` set.
 
     .. py:classattribute:: PRODUCES
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`produces` set.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote columns names
+        in the :py:attr:`produces` set.
 
     .. py:classattribute:: check_used_columns
-       type: bool
 
-       A flag that decides whether, during the actual call, the input array should be checked for
-       the existence of all non-optional columns defined in :py:attr:`uses`. If a column is missing,
-       an exception is raised. A column, represented by a :py:class:`~.Route` object internally, is
-       considered optional if it has a tag ``"optional"`` as, for instance, added by
-       :py:func:`~.optional_column`.
+        type: bool
+
+        A flag that decides whether, during the actual call, the input array should be checked for
+        the existence of all non-optional columns defined in :py:attr:`uses`. If a column is
+        missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+        internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+        :py:func:`~.optional_column`.
 
     .. py:classattribute:: check_produced_columns
-       type: bool
 
-       A flag that decides whether, after the actual call, the output array should be checked for
-       the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
-       missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
-       internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
-       :py:func:`~.optional_column`.
+        type: bool
+
+        A flag that decides whether, after the actual call, the output array should be checked for
+        the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
+        missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+        internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+        :py:func:`~.optional_column`.
 
     .. py:attribute:: uses_instances
-       type: set
 
-       The set of used column names or instantiated dependencies to recursively resolve the names of
-       used columns. Set during the deferred initialization.
+        type: set
+
+        The set of used column names or instantiated dependencies to recursively resolve the names
+        of used columns. Set during the deferred initialization.
 
     .. py:attribute:: produces_instances
-       type: set
 
-       The set of produces column names or instantiated dependencies to recursively resolve the
-       names of produced columns. Set during the deferred initialization.
+        type: set
+
+        The set of produces column names or instantiated dependencies to recursively resolve the
+        names of produced columns. Set during the deferred initialization.
 
     .. py:attribute:: deps
-       type: dict
 
-       The callstack of dependencies, i.e., a dictionary mapping dependent classes to their
-       instances as to be used by *this* instance. Item access on this instance is forwarded to this
-       object.
+        type: dict
+
+        The callstack of dependencies, i.e., a dictionary mapping dependent classes to their
+        instances as to be used by *this* instance. Item access on this instance is forwarded to
+        this object.
 
     .. py:attribute:: deps_kwargs
-       type: dict
 
-       Optional keyword arguments mapped to dependent classes that are forwarded to their
-       initialization.
+        type: dict
+
+        Optional keyword arguments mapped to dependent classes that are forwarded to their
+        initialization.
 
     .. py::attribute:: used_columns
-       type: set
-       read-only
 
-       The resolved, flat set of used column names.
+        type: set
+        read-only
+
+        The resolved, flat set of used column names.
 
     .. py::attribute:: produced_columns
-       type: set
-       read-only
 
-       The resolved, flat set of produced column names.
+        type: set
+        read-only
+
+        The resolved, flat set of produced column names.
 
     .. py:attribute:: call_func
-       type: callable
 
-       The wrapped function to be called on arrays.
+        type: callable
+
+        The wrapped function to be called on arrays.
 
     .. py:attribute: init_func
-       type: callable
 
-       The registered function defining what to update, or *None*.
+        type: callable
+
+        The registered function defining what to update, or *None*.
 
     .. py:attribute: skip_func
-       type: callable
 
-       The registered function defining when to skip this instance while building dependencies of
-       other instances.
+        type: callable
+
+        The registered function defining when to skip this instance while building dependencies of
+        other instances.
     """
 
     # class-level attributes as defaults
@@ -1865,8 +1888,9 @@ def optional_column(
     *routes: Route | Any | set[Route | Any],
 ) -> Route | set[Route]:
     """
-    Takes one or several objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
-    constructor, and returns a single or a set of route objects being tagged ``"optional"``.
+    Takes one or several objects *routes* whose type can be anything that is accepted by the
+    :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
+    ``"optional"``.
     """
     if not routes:
         raise Exception("at least one route argument must be given")
@@ -1955,44 +1979,51 @@ class TaskArrayFunction(ArrayFunction):
         interfaces.
 
     .. py:classattribute:: shifts
-       type: set
 
-       The set of dependent or produced shifts, or other dependencies to recursively resolve the
-       names of shifts.
+        type: set
+
+        The set of dependent or produced shifts, or other dependencies to recursively resolve the
+        names of shifts.
 
     .. py:attribute:: shifts_instances
-       type: set
 
-       The set of shift names or instantiated dependencies to recursively resolve the names of
-       shifts. Set during the deferred initialization.
+        type: set
+
+        The set of shift names or instantiated dependencies to recursively resolve the names of
+        shifts. Set during the deferred initialization.
 
     .. py:attribute:: all_shifts
-       type: set
-       read-only
 
-       The resolved, flat set of dependent or produced shifts.
+        type: set
+        read-only
+
+        The resolved, flat set of dependent or produced shifts.
 
     .. py:attribute: requires_func
-       type: callable
 
-       The registered function defining requirements, or *None*.
+        type: callable
+
+        The registered function defining requirements, or *None*.
 
     .. py:attribute:: setup_func
-       type: callable
 
-       The registered function performing the custom setup step, or *None*.
+        type: callable
+
+        The registered function performing the custom setup step, or *None*.
 
     .. py:attribute:: sandbox
-       type: str, None
 
-       A optional string referring to a sandbox that is required to run this array function.
+        type: str, None
+
+        A optional string referring to a sandbox that is required to run this array function.
 
     .. py:attribute:: call_force
-       type: None, bool
 
-       When a bool, this flag decides whether calls of this instance are cached. However, note that
-       when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
-       this attribute.
+        type: None, bool
+
+        When a bool, this flag decides whether calls of this instance are cached. However, note that
+        when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence
+        over this attribute.
     """
 
     # class-level attributes as defaults
@@ -2161,8 +2192,8 @@ class TaskArrayFunction(ArrayFunction):
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
-        outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to store targets
-        of columnar data that are to be included in an event chunk loop
+        outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to
+        store targets of columnar data that are to be included in an event chunk loop.
         """
         # default column targets
         if reader_targets is None:

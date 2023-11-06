@@ -298,7 +298,7 @@ cf_setup_interactive_common_variables() {
     query CF_CERN_USER "CERN username" "$( whoami )"
     export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
 
-    query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
+    query CF_DATA "Local data directory" "\$$( [ -z "${CF_REPO_BASE}" ] && echo "CF_BASE" || echo "CF_REPO_BASE" )/data" "./data"
     query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
     query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
 
@@ -379,7 +379,6 @@ cf_setup_interactive() {
         local text="$2"
         local default="$3"
         local default_text="${4:-${default}}"
-        local default_raw="${default}"
 
         # when the setup is the default one, use the default value when the env variable is empty,
         # otherwise, query interactively

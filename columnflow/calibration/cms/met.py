@@ -31,7 +31,7 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "met_phi_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz",  # noqa
+            "met_phi_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/met.json.gz",  # noqa
         })
 
     *get_met_file* can be adapted in a subclass in case it is stored differently in the external
