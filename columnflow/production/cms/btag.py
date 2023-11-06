@@ -39,7 +39,7 @@ def btag_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "btag_sf_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/BTV/2017_UL/btagging.json.gz",  # noqa
+            "btag_sf_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/BTV/2017_UL/btagging.json.gz",  # noqa
         })
 
     *get_btag_file* can be adapted in a subclass in case it is stored differently in the external
