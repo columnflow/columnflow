@@ -18,6 +18,7 @@ bootstrap_htcondor_standalone() {
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
+    export LAW_CONFIG_FILE="{{law_config_file}}"
     [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"
@@ -110,7 +111,7 @@ bootstrap_slurm() {
     export CF_REMOTE_JOB="1"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
-    export KRB5CCNAME="FILE:{{kerberos_proxy_file}}"
+    export KRB5CCNAME="FILE:{{kerberosproxy_file}}"
     [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="{{vomsproxy_file}}"
 
     # optional custom command before the setup is sourced
@@ -138,6 +139,7 @@ bootstrap_crab() {
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
+    export LAW_CONFIG_FILE="{{law_config_file}}"
     local lcg_setup="{{cf_remote_lcg_setup}}"
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
 

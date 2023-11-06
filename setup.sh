@@ -140,9 +140,9 @@ setup_columnflow() {
     #   X509_USER_PROXY
     #       Set to "/tmp/x509up_u$( id -u )" if not already set.
     #   LAW_HOME
-    #       Set to $CF_BASE/.law.
+    #       Set to "$CF_BASE/.law" if not already set.
     #   LAW_CONFIG_FILE
-    #       Set to $CF_BASE/law.cfg.
+    #       Set to "$CF_BASE/law.cfg" if not already set.
 
     # prevent repeated setups
     if [ "${CF_SETUP}" = "1" ]; then
@@ -233,8 +233,8 @@ setup_columnflow() {
     # law setup
     #
 
-    export LAW_HOME="${CF_BASE}/.law"
-    export LAW_CONFIG_FILE="${CF_BASE}/law.cfg"
+    export LAW_HOME="${LAW_HOME:-${CF_BASE}/.law}"
+    export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${CF_BASE}/law.cfg}"
 
     if which law &> /dev/null; then
         # source law's bash completion scipt
