@@ -42,7 +42,7 @@ def muon_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "muon_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
+            "muon_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
         })
 
     *get_muon_file* can be adapted in a subclass in case it is stored differently in the external
