@@ -12,7 +12,7 @@ import inspect
 import law
 import order as od
 
-from columnflow.types import Callable, Sequence
+from columnflow.types import Callable, Sequence, T
 from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources
@@ -254,19 +254,34 @@ class SelectionResult(od.AuxDataMixin):
         if not isinstance(other, SelectionResult):
             raise TypeError(f"cannot add '{other}' to {self.__class__.__name__} instance")
 
+        # helper to create a view without behavior
+        def deepcopy_without_behavior(struct: T) -> T:
+            return copy.deepcopy(law.util.map_struct(
+                (lambda obj: ak.Array(obj, behavior={}) if isinstance(obj, ak.Array) else obj),
+                struct,
+                map_list=True,
+                map_tuple=True,
+                map_dict=True,
+            ))
+
         # logical AND between event masks
         if self.event is None:
-            self.event = copy.deepcopy(other.event)
+            self.event = deepcopy_without_behavior(other.event)
         elif other.event is not None:
             self.event = self.event & other.event
         # update steps in-place
-        self.steps.update(copy.deepcopy(other.steps))
+        self.steps.update(deepcopy_without_behavior(other.steps))
         # use deep merging for objects
-        law.util.merge_dicts(self.objects, copy.deepcopy(other.objects), inplace=True, deep=True)
+        law.util.merge_dicts(
+            self.objects,
+            deepcopy_without_behavior(other.objects),
+            inplace=True,
+            deep=True,
+        )
         # update other fields in-place
-        self.other.update(copy.deepcopy(other.other))
+        self.other.update(deepcopy_without_behavior(other.other))
         # shallow update for aux
-        self.aux.update(copy.deepcopy(other.aux))
+        self.aux.update(deepcopy_without_behavior(other.aux))
 
         return self
 
