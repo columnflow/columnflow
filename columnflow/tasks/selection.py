@@ -411,7 +411,9 @@ class MergeSelectionMasks(
             )
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | set(self.config_inst.x.keep_columns[self.task_family])
+        write_columns = mandatory_coffea_columns
+        write_columns |= {"category_ids", "process_id", "normalization_weight"}
+        write_columns |= set(self.config_inst.x.keep_columns[self.task_family])
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:

@@ -221,7 +221,7 @@ cfg.x.keep_columns = DotDict.wrap({
         "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
     },
     "cf.MergeSelectionMasks": {
-        "normalization_weight", "process_id", "category_ids", "cutflow.*",
+        "cutflow.*",
     },
     "cf.UniteColumns": {
         "*",
