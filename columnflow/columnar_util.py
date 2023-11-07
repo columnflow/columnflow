@@ -26,14 +26,13 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict, defaultdict
-from typing import Sequence, Callable, Any, TypeVar
+from collections import namedtuple, OrderedDict
 
 import law
 import order as od
 from law.util import InsertableDict
 
-from columnflow.types import Sequence, Callable, Any
+from columnflow.types import Sequence, Callable, Any, T
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path,
@@ -49,8 +48,6 @@ maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
-
-T = TypeVar("T")
 
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
@@ -2029,7 +2026,7 @@ class TaskArrayFunction(ArrayFunction):
         over this attribute.
 
     .. py:attribute:: pick_cached_result
- 
+
         type: callable
 
         A callable that is given a previously cached result, and all arguments and keyword arguments
@@ -2049,7 +2046,7 @@ class TaskArrayFunction(ArrayFunction):
     def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
         """
         Default implementation for picking a return value from a previously *cached_result* and all
-        *args* and *kwargs* passed to the main call method.
+        *args* and *kwargs* that were passed to the main call method.
         """
         # strategy: when an events array exists within args or kwargs, return it including potential
         # additional objects that were previously cached; if no events array exists, return the
@@ -2299,25 +2296,26 @@ class TaskArrayFunction(ArrayFunction):
         Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
-        By default, all return values are cached per thread identifier while dependent
-        :py:class:`TaskArrayFunction`s are evaluted. This can be bypassed if either *call_force* is
-        *True*, or when it is *None* and the :py:attr:`call_force` attribute of this instance is
-        *True*.
+        By default, all return values are cached per thread identifier. This is bypassed either if
+        *call_force* is *True*, or when it is *None* and the :py:attr:`call_force` attribute of this
+        instance is *True*. If not *None*, the cache decision is passed on to all dependent
+        :py:class:`TaskArrayFunction`'s calls.
         """
         clear_cache = kwargs.get("_clear_cache", True)
         kwargs["_clear_cache"] = False
-
-        # pass the call_force setting
-        kwargs["call_force"] = call_force
 
         # call_force default for this call
         if call_force is None:
             call_force = self.call_force
 
+        # pass on the call_force setting when specified
+        if call_force is not None:
+            kwargs["call_force"] = call_force
+
         # get the cached result
         result = self._get_cached_result()
 
-        # do the actual call, or prepare the cached return value
+        # do the actual call if forced or no value was cached before
         update = call_force or result is law.no_value
         if update:
             result = super().__call__(*args, **kwargs)
@@ -2327,7 +2325,7 @@ class TaskArrayFunction(ArrayFunction):
         # clear or update the cache
         if clear_cache:
             self._clear_cache(dependencies=True)
-        elif update:
+        else:
             self._cache_result(result)
 
         return result
