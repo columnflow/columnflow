@@ -128,8 +128,8 @@ setup___cf_short_name_lc__() {
     # law setup
     #
 
-    export LAW_HOME="${__cf_short_name_uc___BASE}/.law"
-    export LAW_CONFIG_FILE="${__cf_short_name_uc___BASE}/law.cfg"
+    export LAW_HOME="${LAW_HOME:-${__cf_short_name_uc___BASE}/.law}"
+    export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${__cf_short_name_uc___BASE}/law.cfg}"
 
     if which law &> /dev/null; then
         # source law's bash completion scipt
