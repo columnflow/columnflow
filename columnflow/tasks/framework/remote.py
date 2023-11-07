@@ -93,11 +93,33 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         self.transfer(bundle)
 
 
-class BuildBashSandbox(AnalysisTask):
+class SandboxFileTask(AnalysisTask):
 
     sandbox_file = luigi.Parameter(
         description="the sandbox file to install",
     )
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        # update the sandbox file when set
+        if params.get("sandbox_file") not in (None, "", law.NO_STR):
+            # expand variables
+            path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
+            # remove optional sandbox types
+            path = law.Sandbox.remove_type(path)
+            # add default file extension
+            if not os.path.splitext(path)[1]:
+                path += ".sh"
+            # save again
+            params["sandbox_file"] = path
+
+        return params
+
+
+class BuildBashSandbox(SandboxFileTask):
+
     sandbox = luigi.Parameter(
         default=law.NO_STR,
         description="do not set manually",
@@ -113,8 +135,8 @@ class BuildBashSandbox(AnalysisTask):
 
         # resolve the sandbox file relative to $CF_BASE/sandboxes
         if "sandbox_file" in params:
-            path = os.path.expandvars(os.path.expanduser(params["sandbox_file"]))
-            abs_path = real_path(law.Sandbox.remove_type(path))
+            path = params["sandbox_file"]
+            abs_path = real_path(path)
             path = abs_path if os.path.exists(abs_path) else os.path.join("$CF_BASE", "sandboxes", path)
             params["sandbox_file"] = path
             params["sandbox"] = law.Sandbox.join_key("bash", path)
@@ -152,10 +174,8 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
 
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
-        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-        sandbox_file = law.Sandbox.remove_type(sandbox_file)
-        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
-        self.venv_name = os.path.splitext(os.path.basename(sandbox_file))[0]
+        self.sandbox_file_hash = create_sandbox_file_hash(self.sandbox_file)
+        self.venv_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
         self.venv_name_hashed = f"{self.venv_name}_{self.sandbox_file_hash}"
         self.venv_path = os.path.join(os.environ["CF_VENV_BASE"], self.venv_name_hashed)
 
@@ -210,7 +230,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         self.transfer(bundle)
 
 
-class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
+class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.TransferLocalFile):
 
     sandbox_file = luigi.Parameter(
         description="name of the cmssw sandbox file; when not absolute, the path is evaluated "
@@ -223,6 +243,7 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
     version = None
 
     exclude = "^src/tmp"
+    include = ("venv", "venvs")
 
     # upstream requirements
     reqs = Requirements(
@@ -234,10 +255,8 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
         # get the name and install path of the sandbox
         from cf_sandbox_file_hash import create_sandbox_file_hash
-        sandbox_file = os.path.expandvars(os.path.expanduser(self.sandbox_file))
-        sandbox_file = law.Sandbox.remove_type(sandbox_file)
-        self.sandbox_file_hash = create_sandbox_file_hash(sandbox_file)
-        self.cmssw_env_name = os.path.splitext(os.path.basename(sandbox_file))[0]
+        self.sandbox_file_hash = create_sandbox_file_hash(self.sandbox_file)
+        self.cmssw_env_name = os.path.splitext(os.path.basename(self.sandbox_file))[0]
         self.cmssw_env_name_hashed = f"{self.cmssw_env_name}_{self.sandbox_file_hash}"
 
     def requires(self):
@@ -245,7 +264,12 @@ class BundleCMSSWSandbox(AnalysisTask, law.cms.BundleCMSSW, law.tasks.TransferLo
 
     def get_cmssw_path(self):
         # invoking .env will already trigger building the sandbox
-        return self.requires().sandbox_inst.env["CMSSW_BASE"]
+        req = self.requires()
+        if getattr(req, "sandbox_inst", None):
+            return req.sandbox_inst.env["CMSSW_BASE"]
+        if "CMSSW_BASE" in os.environ:
+            return os.environ["CMSSW_BASE"]
+        raise Exception("could not determine CMSSW_BASE")
 
     def single_output(self):
         cmssw_path = os.path.basename(self.get_cmssw_path())
@@ -330,8 +354,8 @@ class RemoteWorkflowMixin(object):
 
     def add_bundle_render_variables(
         self,
-        reqs: dict[str, AnalysisTask],
         config: law.BaseJobFileFactory.Config,
+        reqs: dict[str, AnalysisTask],
     ) -> None:
         """
         Adds render variables to the job *config* related to repository, conda environment, bash and
@@ -382,6 +406,76 @@ class RemoteWorkflowMixin(object):
             config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
             config.render_variables["cf_cmssw_sandbox_names"] = join_bash(names)
 
+    def add_common_configs(
+        self,
+        config: law.BaseJobFileFactory.Config,
+        reqs: dict[str, AnalysisTask],
+        *,
+        law_config: bool = True,
+        voms: bool = True,
+        kerberos: bool = False,
+        wlcg: bool = True,
+    ) -> None:
+        """
+        Adds job settings like common input files or render variables to the job *config*. Workflow
+        requirements are given as *reqs* to let common options potentially depend on them.
+        Additional keyword arguments control specific behavior of this method.
+
+        :param reqs: Dictionary of workflow requirements.
+        :param config: The job :py:class:`law.BaseJobFileFactory.Config`.
+        :param law_config: Whether the law config should be forwarded (via render variables or input
+            file).
+        :param voms: Whether the voms proxy file should be forwarded.
+        :param kerberos: Whether the kerberos proxy file should be forwarded.
+        :param wlcg: Whether WLCG specific settings should be added.
+        """
+        # when the law config file is located within CF_REPO_BASE, just set a render variable,
+        # but otherwise send it as an input file
+        if law_config:
+            rel_path = os.path.relpath(os.environ["LAW_CONFIG_FILE"], os.environ["CF_REPO_BASE"])
+            if not rel_path.startswith(".."):
+                config.render_variables["law_config_file"] = os.path.join("$CF_REPO_BASE", rel_path)
+            else:
+                config.input_files["law_config_file"] = law.JobInputFile(
+                    "$LAW_CONFIG_FILE",
+                    share=True,
+                    render=False,
+                )
+
+        # forward voms proxy
+        if voms and not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False):
+            vomsproxy_file = law.wlcg.get_vomsproxy_file()
+            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
+                raise Exception("voms proxy not valid, submission aborted")
+            config.input_files["vomsproxy_file"] = law.JobInputFile(
+                vomsproxy_file,
+                share=True,
+                render=False,
+            )
+
+        # forward kerberos proxy
+        if kerberos and "KRB5CCNAME" in os.environ:
+            kfile = os.environ["KRB5CCNAME"]
+            kerberos_proxy_file = os.sep + kfile.split(os.sep, 1)[-1]
+            if os.path.exists(kerberos_proxy_file):
+                config.input_files["kerberosproxy_file"] = law.JobInputFile(
+                    kerberos_proxy_file,
+                    share=True,
+                    render=False,
+                )
+
+                # set the pre command to extend potential afs permissions
+                if not config.render_variables.get("cf_pre_setup_command"):
+                    config.render_variables["cf_pre_setup_command"] = "aklog"
+
+        # add the wlcg tools
+        if wlcg:
+            config.input_files["wlcg_tools"] = law.JobInputFile(
+                law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
+                share=True,
+                render=False,
+            )
+
     def common_destination_info(self, info: dict[str, str]) -> dict[str, str]:
         """
         Hook to modify the additional info printed along logs of the workflow.
@@ -399,7 +493,7 @@ class RemoteWorkflowMixin(object):
         return info
 
 
-_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", "cern")
+_default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 
 
@@ -415,6 +509,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         unit="h",
         significant=False,
         description="maximum runtime; default unit is hours; default: 2",
+    )
+    htcondor_logs = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="transfer htcondor internal submission logs to the output directory; "
+        "default: False",
     )
     htcondor_cpus = luigi.IntParameter(
         default=law.NO_INT,
@@ -437,10 +537,10 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
-        choices=("naf", "cern"),
+        choices=("naf", "cern", law.NO_STR),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf,cern; default: '{_default_htcondor_flavor}'",
+        f"naf,cern,NO_STR; default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
         default=_default_htcondor_share_software,
@@ -451,7 +551,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
 
     exclude_params_branch = {
-        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
+        "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
         "htcondor_flavor", "htcondor_share_software",
     }
 
@@ -504,27 +604,22 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def htcondor_job_config(self, config, job_num, branches):
-        # include the voms proxy if not skipped
-        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            vomsproxy_file = law.wlcg.get_vomsproxy_file()
-            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
-                raise Exception("voms proxy not valid, submission aborted")
-            config.input_files["vomsproxy_file"] = law.JobInputFile(
-                vomsproxy_file,
-                share=True,
-                render=False,
-            )
-
-        # include the wlcg specific tools script in the input sandbox
-        config.input_files["wlcg_tools"] = law.JobInputFile(
-            law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
-            share=True,
-            render=False,
+        # add common config settings
+        workflow_reqs = self.htcondor_workflow_requires()
+        self.add_common_configs(
+            config,
+            workflow_reqs,
+            law_config=True,
+            voms=True,
+            kerberos=False,
+            wlcg=True,
         )
 
-        # some htcondor setups requires a "log" config, but we can safely set it to /dev/null
-        # if you are interested in the logs of the batch system itself, set a meaningful value here
-        config.custom_content.append(("log", "/dev/null"))
+        # add variables related to software bundles
+        self.add_bundle_render_variables(config, workflow_reqs)
+
+        # some htcondor setups require a "log" config, but we can safely use /dev/null by default
+        config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
         # use cc7 at CERN (https://batchdocs.web.cern.ch/local/submit.html)
         if self.htcondor_flavor == "cern":
@@ -555,13 +650,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
-        config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
+        if self.htcondor_flavor not in ("", law.NO_STR):
+            config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
-
-        # add variables related to software bundles
-        self.add_bundle_render_variables(self.htcondor_workflow_requires(), config)
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
@@ -670,26 +763,15 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         return law.JobInputFile(bootstrap_file, share=True, render_job=True)
 
     def slurm_job_config(self, config, job_num, branches):
-        # include the voms proxy if not skipped
-        if not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
-            vomsproxy_file = law.wlcg.get_vomsproxy_file()
-            if os.path.exists(vomsproxy_file):
-                config.input_files["vomsproxy_file"] = law.JobInputFile(
-                    vomsproxy_file,
-                    share=True,
-                    render=False,
-                )
-
-        # include the kerberos ticket when existing
-        if "KRB5CCNAME" in os.environ:
-            kfile = os.environ["KRB5CCNAME"]
-            kerberos_proxy_file = os.sep + kfile.split(os.sep, 1)[-1]
-            if os.path.exists(kerberos_proxy_file):
-                config.input_files["kerberos_proxy_file"] = law.JobInputFile(
-                    kerberos_proxy_file,
-                    share=True,
-                    render=False,
-                )
+        # add common config settings
+        self.add_common_configs(
+            config,
+            {},
+            law_config=False,
+            voms=True,
+            kerberos=True,
+            wlcg=False,
+        )
 
         # set job time and nodes
         job_time = law.util.human_duration(
@@ -701,14 +783,14 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
 
         # custom, flavor dependent settings
         if self.slurm_flavor == "maxwell":
-            # extend kerberos privileges to afs on NAF
-            if "kerberos_proxy_file" in config.input_files:
-                config.render_variables["cf_pre_setup_command"] = "aklog"
+            # nothing yet
+            pass
 
         # render variales
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
+
         # custom tmp dir since slurm uses the job submission dir as the main job directory, and law
         # puts the tmp directory in this job directory which might become quite long; then,
         # python's default multiprocessing puts socket files into that tmp directory which comes

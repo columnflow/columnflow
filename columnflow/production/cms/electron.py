@@ -42,7 +42,7 @@ def electron_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "electron_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/EGM/2017_UL/electron.json.gz",  # noqa
+            "electron_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/EGM/2017_UL/electron.json.gz",  # noqa
         })
 
     *get_electron_file* can be adapted in a subclass in case it is stored differently in the

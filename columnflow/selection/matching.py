@@ -6,8 +6,7 @@ Distance-based methods.
 
 from __future__ import annotations
 
-from typing import Callable, Union
-
+from columnflow.types import Callable, Union
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import
 

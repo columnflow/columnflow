@@ -140,9 +140,9 @@ setup_columnflow() {
     #   X509_USER_PROXY
     #       Set to "/tmp/x509up_u$( id -u )" if not already set.
     #   LAW_HOME
-    #       Set to $CF_BASE/.law.
+    #       Set to "$CF_BASE/.law" if not already set.
     #   LAW_CONFIG_FILE
-    #       Set to $CF_BASE/law.cfg.
+    #       Set to "$CF_BASE/law.cfg" if not already set.
 
     # prevent repeated setups
     if [ "${CF_SETUP}" = "1" ]; then
@@ -233,8 +233,8 @@ setup_columnflow() {
     # law setup
     #
 
-    export LAW_HOME="${CF_BASE}/.law"
-    export LAW_CONFIG_FILE="${CF_BASE}/law.cfg"
+    export LAW_HOME="${LAW_HOME:-${CF_BASE}/.law}"
+    export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${CF_BASE}/law.cfg}"
 
     if which law &> /dev/null; then
         # source law's bash completion scipt
@@ -298,7 +298,7 @@ cf_setup_interactive_common_variables() {
     query CF_CERN_USER "CERN username" "$( whoami )"
     export_and_save CF_CERN_USER_FIRSTCHAR "\${CF_CERN_USER:0:1}"
 
-    query CF_DATA "Local data directory" "\$CF_BASE/data" "./data"
+    query CF_DATA "Local data directory" "\$$( [ -z "${CF_REPO_BASE}" ] && echo "CF_BASE" || echo "CF_REPO_BASE" )/data" "./data"
     query CF_SOFTWARE_BASE "Local directory for installing software" "\$CF_DATA/software"
     query CF_JOB_BASE "Local directory for storing job files" "\$CF_DATA/jobs"
 
@@ -379,7 +379,6 @@ cf_setup_interactive() {
         local text="$2"
         local default="$3"
         local default_text="${4:-${default}}"
-        local default_raw="${default}"
 
         # when the setup is the default one, use the default value when the env variable is empty,
         # otherwise, query interactively

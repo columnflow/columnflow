@@ -84,12 +84,19 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         config: law.BaseJobFileFactory.Config,
         submit_jobs: dict[int, list[int]],
     ) -> law.BaseJobFileFactory.Config:
-        # include the wlcg specific tools script in the input sandbox
-        config.input_files["wlcg_tools"] = law.JobInputFile(
-            law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
-            share=True,
-            render=False,
+        # add common config settings
+        workflow_reqs = self.crab_workflow_requires()
+        self.add_common_configs(
+            config,
+            workflow_reqs,
+            law_config=True,
+            voms=False,
+            kerberos=False,
+            wlcg=True,
         )
+
+        # add variables related to software bundles
+        self.add_bundle_render_variables(config, workflow_reqs)
 
         # customize memory
         if self.crab_memory > 0:
@@ -100,9 +107,6 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
-
-        # add variables related to software bundles
-        self.add_bundle_render_variables(self.crab_workflow_requires(), config)
 
         # forward env variables
         for ev, rv in self.crab_forward_env_variables.items():

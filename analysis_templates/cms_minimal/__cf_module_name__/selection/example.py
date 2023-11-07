@@ -118,7 +118,7 @@ def example(
     results += jet_results
 
     # combined event selection after all steps
-    results.main["event"] = results.steps.muon & results.steps.jet
+    results.event = results.steps.muon & results.steps.jet
 
     # create process ids
     events = self[process_ids](events, **kwargs)
@@ -133,7 +133,7 @@ def example(
     # increment stats
     weight_map = {
         "num_events": Ellipsis,
-        "num_events_selected": results.main.event,
+        "num_events_selected": results.event,
     }
     group_map = {}
     if self.dataset_inst.is_mc:
@@ -141,7 +141,7 @@ def example(
             **weight_map,
             # mc weight for all events
             "sum_mc_weight": (events.mc_weight, Ellipsis),
-            "sum_mc_weight_selected": (events.mc_weight, results.main.event),
+            "sum_mc_weight_selected": (events.mc_weight, results.event),
         }
         group_map = {
             # per process

@@ -51,12 +51,12 @@ class SelectEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
-            reqs["calib"] = [
+            reqs["calibrations"] = [
                 self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
-        else:
+        elif self.calibrator_insts:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.CalibrateEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
@@ -161,6 +161,15 @@ class SelectEvents(
 
             # invoke the selection function
             events, results = self.selector_inst(events, stats)
+
+            # complain when there is no event mask
+            if results.event is None:
+                raise Exception(
+                    f"selector {self.selector_inst.cls_name} returned {results.__class__.__name__} "
+                    "object that does not contain 'event' mask",
+                )
+
+            # convert to array
             results_array = results.to_ak()
 
             # optional check for finite values
@@ -187,12 +196,17 @@ class SelectEvents(
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
+        writer_opts_masks = self.get_parquet_writer_opts(repeating_values=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, outputs["results"], local=True, writer_opts=writer_opts_masks,
+        )
 
         # merge the column files
         if write_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, outputs["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
         # save stats
         outputs["stats"].dump(stats, indent=4, formatter="json")
@@ -380,7 +394,9 @@ class MergeSelectionMasks(
         else:
             inputs = [inp["masks"] for inp in inputs]
 
-        law.pyarrow.merge_parquet_task(self, inputs, output["masks"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
@@ -395,7 +411,9 @@ class MergeSelectionMasks(
             )
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | set(self.config_inst.x.keep_columns[self.task_family])
+        write_columns = mandatory_coffea_columns
+        write_columns |= {"category_ids", "process_id", "normalization_weight"}
+        write_columns |= set(self.config_inst.x.keep_columns[self.task_family])
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:

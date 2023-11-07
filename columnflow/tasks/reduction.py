@@ -223,7 +223,9 @@ class ReduceEvents(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["events"], local=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 # overwrite class defaults
@@ -471,7 +473,9 @@ class MergeReducedEvents(
 
     def merge(self, inputs, output):
         inputs = [inp["events"] for inp in inputs]
-        law.pyarrow.merge_parquet_task(self, inputs, output["events"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 MergeReducedEventsWrapper = wrapper_factory(

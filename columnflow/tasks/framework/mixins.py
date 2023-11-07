@@ -10,12 +10,12 @@ import gc
 import time
 import itertools
 from collections import Counter
-from typing import Sequence, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Any
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -52,7 +52,8 @@ class CalibratorMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             # add the default calibrator when empty
             params["calibrator"] = cls.resolve_config_default(
                 params,
@@ -70,7 +71,8 @@ class CalibratorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        if calibrator_inst := params.get("calibrator_inst"):
+        calibrator_inst = params.get("calibrator_inst")
+        if calibrator_inst:
             if cls.register_calibrator_shifts:
                 shifts |= calibrator_inst.all_shifts
             else:
@@ -115,6 +117,7 @@ class CalibratorsMixin(ConfigTask):
         description="comma-separated names of calibrators to be applied; default: value of the "
         "'default_calibrator' config in a 1-tuple",
         brace_expand=True,
+        parse_empty=True,
     )
 
     # decibes whether the task itself runs the calibrators and implements their shifts
@@ -139,7 +142,8 @@ class CalibratorsMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["calibrators"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("calibrators"),
@@ -219,7 +223,8 @@ class SelectorMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default selector when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["selector"] = cls.resolve_config_default(
                 params,
                 params.get("selector"),
@@ -236,7 +241,8 @@ class SelectorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        if selector_inst := params.get("selector_inst"):
+        selector_inst = params.get("selector_inst")
+        if selector_inst:
             if cls.register_selector_shifts:
                 shifts |= selector_inst.all_shifts
             else:
@@ -281,6 +287,7 @@ class SelectorStepsMixin(SelectorMixin):
         description="a subset of steps of the selector to apply; uses all steps when empty; "
         "empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     exclude_params_repr_empty = {"selector_steps"}
@@ -292,7 +299,8 @@ class SelectorStepsMixin(SelectorMixin):
         params = super().resolve_param_values(params)
 
         # apply selector_steps_groups and default_selector_steps from config
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["selector_steps"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("selector_steps"),
@@ -351,7 +359,8 @@ class ProducerMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default producer when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["producer"] = cls.resolve_config_default(
                 params,
                 params.get("producer"),
@@ -368,7 +377,8 @@ class ProducerMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        if producer_inst := params.get("producer_inst"):
+        producer_inst = params.get("producer_inst")
+        if producer_inst:
             if cls.register_producer_shifts:
                 shifts |= producer_inst.all_shifts
             else:
@@ -413,6 +423,7 @@ class ProducersMixin(ConfigTask):
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of producers to be applied; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     # decibes whether the task itself runs the producers and implements their shifts
@@ -435,7 +446,8 @@ class ProducersMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["producers"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("producers"),
@@ -545,6 +557,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         description="comma-separated names of analysis config to use; should only contain a single "
         "name in case the ml model is bound to a single config; when empty, the ml model is "
         "expected to fully define the configs it uses; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     calibrators = law.MultiCSVParameter(
         default=(),
@@ -552,6 +566,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
         "'default_calibrator' setting of each config is used if set, or the model is expected to "
         "fully define the calibrators it requires upstream; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     selectors = law.CSVParameter(
         default=(),
@@ -559,6 +575,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "config in --configs; when empty, the 'default_selector' setting of each config is used if "
         "set, or the ml model is expected to fully define the selector it uses requires upstream; "
         "empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
     producers = law.MultiCSVParameter(
         default=(),
@@ -566,6 +584,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
         "'default_producer' setting of each config is used if set, or ml model is expected to "
         "fully define the producers it requires upstream; empty default",
+        brace_expand=True,
+        parse_empty=True,
     )
 
     @classmethod
@@ -873,6 +893,7 @@ class MLModelsMixin(ConfigTask):
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of ML models to be applied; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_ml_models = True
@@ -883,7 +904,9 @@ class MLModelsMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if (analysis_inst := params.get("analysis_inst")) and (config_inst := params.get("config_inst")):
+        analysis_inst = params.get("analysis_inst")
+        config_inst = params.get("config_inst")
+        if analysis_inst and config_inst:
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 params,
@@ -951,7 +974,8 @@ class InferenceModelMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["inference_model"] = cls.resolve_config_default(
                 params,
                 params.get("inference_model"),
@@ -994,6 +1018,7 @@ class CategoriesMixin(ConfigTask):
         "a mapping defined in 'category_groups' auxiliary data of the config; when empty, uses the "
         "auxiliary data enty 'default_categories' when set; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     default_categories = None
@@ -1050,6 +1075,7 @@ class VariablesMixin(ConfigTask):
         "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
         "all variables of the config; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     default_variables = None
@@ -1163,6 +1189,7 @@ class DatasetsProcessesMixin(ConfigTask):
         "all datasets registered in the config that contain any of the selected --processes; empty "
         "default",
         brace_expand=True,
+        parse_empty=True,
     )
     processes = law.CSVParameter(
         default=(),
@@ -1170,6 +1197,7 @@ class DatasetsProcessesMixin(ConfigTask):
         "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
         "uses all processes of the config when empty; empty default",
         brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_datasets = False
@@ -1266,6 +1294,8 @@ class ShiftSourcesMixin(ConfigTask):
         description="comma-separated shift source names (without direction) or patterns to select; "
         "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
         "config; default: ()",
+        brace_expand=True,
+        parse_empty=True,
     )
 
     allow_empty_shift_sources = False
@@ -1357,44 +1387,6 @@ class ChunkedIOMixin(AnalysisTask):
 
     exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
 
-    def iter_chunked_io(self, *args, **kwargs):
-        from columnflow.columnar_util import ChunkedIOHandler
-
-        # get the chunked io handler from first arg or create a new one with all args
-        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
-            handler = args[0]
-        else:
-            handler = ChunkedIOHandler(*args, **kwargs)
-
-        # iterate in the handler context
-        with handler:
-            self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
-            try:
-                # measure runtimes excluding IO
-                loop_durations = []
-                for obj in self.iter_progress(handler, max(handler.n_chunks, 1), msg=msg):
-                    t1 = time.perf_counter()
-
-                    # yield the object provided by the handler
-                    yield obj
-
-                    # save the runtime
-                    loop_durations.append(time.perf_counter() - t1)
-
-                # print runtimes
-                self.publish_message(
-                    "event processing in loop body took "
-                    f"{law.util.human_duration(seconds=sum(loop_durations))}",
-                )
-
-            finally:
-                self.chunked_io = None
-
-        # eager, overly cautious gc
-        del handler
-        gc.collect()
-
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
         """
@@ -1439,3 +1431,41 @@ class ChunkedIOMixin(AnalysisTask):
                 f"found {len(overlapping_routes)} overlapping columns across {len(ak_arrays)} "
                 f"columns: {','.join(overlapping_routes)}",
             )
+
+    def iter_chunked_io(self, *args, **kwargs):
+        from columnflow.columnar_util import ChunkedIOHandler
+
+        # get the chunked io handler from first arg or create a new one with all args
+        if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
+            handler = args[0]
+        else:
+            handler = ChunkedIOHandler(*args, **kwargs)
+
+        # iterate in the handler context
+        with handler:
+            self.chunked_io = handler
+            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
+            try:
+                # measure runtimes excluding IO
+                loop_durations = []
+                for obj in self.iter_progress(handler, max(handler.n_chunks, 1), msg=msg):
+                    t1 = time.perf_counter()
+
+                    # yield the object provided by the handler
+                    yield obj
+
+                    # save the runtime
+                    loop_durations.append(time.perf_counter() - t1)
+
+                # print runtimes
+                self.publish_message(
+                    "event processing in loop body took "
+                    f"{law.util.human_duration(seconds=sum(loop_durations))}",
+                )
+
+            finally:
+                self.chunked_io = None
+
+        # eager, overly cautious gc
+        del handler
+        gc.collect()

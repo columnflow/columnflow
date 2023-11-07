@@ -6,12 +6,11 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
-import order as od
-
-import functools
 import operator
-
+import functools
 from collections import OrderedDict
+
+import order as od
 
 from columnflow.util import maybe_import
 
@@ -201,11 +200,9 @@ def prepare_plot_config(
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
-        proc_hide_errors = (
-            phe
-            if (phe := getattr(process_inst, "hide_errors", None)) is not None
-            else hide_errors
-        )
+        proc_hide_errors = hide_errors
+        if getattr(process_inst, "hide_errors", None) is not None:
+            proc_hide_errors = process_inst.hide_errors
         if process_inst.is_data:
             data_hists.append(h)
             data_hide_errors.append(proc_hide_errors)

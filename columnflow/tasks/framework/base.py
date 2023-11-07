@@ -12,12 +12,12 @@ import importlib
 import itertools
 import inspect
 import functools
-from typing import Sequence, Callable, Any
 
 import luigi
 import law
 import order as od
 
+from columnflow.types import Sequence, Callable, Any
 from columnflow.util import DotDict
 
 
@@ -77,7 +77,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     # defaults for targets
     default_store = "$CF_STORE_LOCAL"
-    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs")
+    default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs", "wlcg_fs")
     default_output_location = "config"
 
     @classmethod
@@ -133,7 +133,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # overwrite the version when set in the config
         if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
-            if config_version := cls.get_version_map_value(inst, params):
+            config_version = cls.get_version_map_value(inst, params)
+            if config_version:
                 params["version"] = config_version
 
         return params
@@ -153,7 +154,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             version_map = cls.get_version_map(inst)
 
         # the task family must be in the version map
-        if not (version := version_map.get(cls.task_family)):
+        version = version_map.get(cls.task_family)
+        if not version:
             return None
 
         # when version is a callable, invoke it
@@ -479,7 +481,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return param
 
         # expand groups recursively
-        if groups_str and (param_groups := container.x(groups_str, {})):
+        if groups_str and container.x(groups_str, {}):
+            param_groups = container.x(groups_str)
             values = []
             lookup = law.util.make_list(param)
             handled_groups = set()
@@ -606,7 +609,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if isinstance(location, str):
             location = OutputLocation[location]
         if location == OutputLocation.config:
-            location = law.config.get_expanded("outputs", self.task_family, split_csv=True)
+            location = law.config.get_expanded("outputs", self.task_family, None, split_csv=True)
             if not location:
                 self.logger.debug(
                     f"no option 'outputs::{self.task_family}' found in law.cfg to obtain target "
@@ -631,6 +634,29 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return self.wlcg_target(*path, **kwargs)
 
         raise Exception(f"cannot determine output location based on '{location}'")
+
+    def get_parquet_writer_opts(self, repeating_values: bool = False) -> dict[str, Any]:
+        """
+        Returns an option dictionary that can be passed as *writer_opts* to
+        :py:meth:`~law.pyarrow.merge_parquet_task`, for instance, at the end of chunked processing
+        steps that produce a single parquet file. See :py:class:`~pyarrow.parquet.ParquetWriter` for
+        valid options.
+
+        This method can be overwritten in subclasses to customize the exact behavior.
+
+        :param repeating_values: Whether the values to be written have predominantly repeating
+            values, in which case differnt compression and encoding strategies are followed.
+        :return: A dictionary with options that can be passed to parquet writer objects.
+        """
+        # use dict encoding if values are repeating
+        dict_encoding = bool(repeating_values)
+
+        # build and return options
+        return {
+            "compression": "ZSTD",
+            "compression_level": 1,
+            "use_dictionary": dict_encoding,
+        }
 
 
 class ConfigTask(AnalysisTask):

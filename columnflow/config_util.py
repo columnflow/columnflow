@@ -21,10 +21,11 @@ __all__ = [
 import re
 import itertools
 from collections import OrderedDict
-from typing import Callable, Any, Sequence
 
 import law
 import order as od
+
+from columnflow.types import Callable, Any, Sequence
 
 
 def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
