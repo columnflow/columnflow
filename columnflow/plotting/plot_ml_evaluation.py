@@ -45,7 +45,7 @@ cf_colors = {
 
 
 def create_sample_weights(
-    sample_weights: Sequence[float] | bool | None,
+    sample_weights: Sequence[float] | bool,
     events: dict,
     true_labels: np.ndarray,
 ) -> dict:
@@ -62,7 +62,7 @@ def create_sample_weights(
     """
     if not sample_weights:
         return {label: 1 for label in true_labels}
-    if (isinstance(sample_weights, bool) or (len(sample_weights) == len(true_labels))):
+    if not (isinstance(sample_weights, bool) or (len(sample_weights) == len(true_labels))):
         raise ValueError(f"Shape of sample_weights {len(sample_weights)} does not match "
             f"shape of predictions {len(true_labels)}")
     if isinstance(sample_weights, bool):
