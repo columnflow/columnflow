@@ -24,7 +24,6 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.util import maybe_import
 
-
 ak = maybe_import("awkward")
 
 

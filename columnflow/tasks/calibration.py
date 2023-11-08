@@ -12,7 +12,6 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 
-
 ak = maybe_import("awkward")
 
 

@@ -20,7 +20,6 @@ from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 
-
 ak = maybe_import("awkward")
 
 

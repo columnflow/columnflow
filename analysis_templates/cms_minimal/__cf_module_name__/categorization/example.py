@@ -7,7 +7,6 @@ Exemplary selection methods.
 from columnflow.categorization import Categorizer, categorizer
 from columnflow.util import maybe_import
 
-
 ak = maybe_import("awkward")
 
 
