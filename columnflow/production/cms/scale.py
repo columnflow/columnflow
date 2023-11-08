@@ -13,9 +13,9 @@ from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 from columnflow.columnar_util import DotDict
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
 
 logger = law.logger.get_logger(__name__)
 

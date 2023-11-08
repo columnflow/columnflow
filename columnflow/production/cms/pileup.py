@@ -10,9 +10,9 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
 
 # helper
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)

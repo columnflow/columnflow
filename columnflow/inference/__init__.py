@@ -11,14 +11,12 @@ import copy as _copy
 
 import law
 import order as od
+import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any
 from columnflow.util import (
-    DerivableMeta, Derivable, maybe_import, DotDict, is_pattern, is_regex, pattern_matcher,
+    DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher,
 )
-
-
-yaml = maybe_import("yaml")
 
 
 class ParameterType(enum.Enum):

@@ -11,7 +11,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, attach_behavior
 
-
 ak = maybe_import("awkward")
 
 

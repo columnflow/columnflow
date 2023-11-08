@@ -16,7 +16,6 @@ from columnflow.types import Any, Sequence
 from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
 from columnflow.columnar_util import Route
 
-
 ak = maybe_import("awkward")
 
 

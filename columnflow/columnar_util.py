@@ -38,7 +38,6 @@ from columnflow.util import (
     get_source_code, real_path,
 )
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 dak = maybe_import("dask_awkward")
@@ -49,9 +48,10 @@ maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
+
+# loggers
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
-
 
 #: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}

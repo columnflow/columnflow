@@ -7,9 +7,7 @@ packages.
 
 from __future__ import annotations
 
-
 __all__ = []
-
 
 # warn when imported while _in_ this directory
 import os
@@ -21,7 +19,6 @@ NOTE: you are running a python interpreter inside the columnflow source director
 """
     print(msg, flush=True)
 
-
 from collections.abc import KeysView, ValuesView  # noqa
 from types import ModuleType, GeneratorType, GenericAlias  # noqa
 from typing import (  # noqa
@@ -30,6 +27,7 @@ from typing import (  # noqa
 )
 
 from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType  # noqa
+
 
 #: Generic type variable, more stringent than Any.
 T = TypeVar("T")

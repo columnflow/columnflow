@@ -11,7 +11,6 @@ from columnflow.selection import Selector, selector, SelectionResult
 from columnflow.util import maybe_import
 from columnflow.columnar_util import Route
 
-
 ak = maybe_import("awkward")
 
 

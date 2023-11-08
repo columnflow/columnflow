@@ -17,7 +17,6 @@ from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources
 
-
 ak = maybe_import("awkward")
 
 
