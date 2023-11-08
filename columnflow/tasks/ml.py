@@ -55,7 +55,7 @@ class PrepareMLEvents(
         super().__init__(*args, **kwargs)
 
         # cache for producer inst
-        self._producer_inst = None
+        self._preparation_producer_inst = None
 
         # complain when this task is run for events that are not needed for training
         if not self.events_used_in_training(
@@ -71,16 +71,16 @@ class PrepareMLEvents(
             )
 
     @property
-    def producer_inst(self):
+    def preparation_producer_inst(self):
         producer = self.ml_model_inst.preparation_producer(self.config_inst)
-        if producer and self._producer_inst is None:
-            self._producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+        if producer and self._preparation_producer_inst is None:
+            self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
             # overwrite the sandbox when set
-            if self._producer_inst.sandbox:
-                self.sandbox = self._producer_inst.sandbox
+            if self._preparation_producer_inst.sandbox:
+                self.sandbox = self._preparation_producer_inst.sandbox
 
-        return self._producer_inst
+        return self._preparation_producer_inst
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -89,8 +89,8 @@ class PrepareMLEvents(
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         # add producer dependent requirements
-        if self.producer_inst:
-            reqs["producer"] = self.producer_inst.run_requires()
+        if self.preparation_producer_inst:
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
 
         # add producers to requirements
         if not self.pilot and self.producer_insts:
@@ -106,8 +106,8 @@ class PrepareMLEvents(
         reqs = {
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
-        if self.producer_inst:
-            reqs["producer"] = self.producer_inst.run_requires()
+        if self.preparation_producer_inst:
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -147,8 +147,11 @@ class PrepareMLEvents(
 
         # run the setup of the optional producer
         reader_targets = {}
-        if self.producer_inst:
-            reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        if self.preparation_producer_inst:
+            reader_targets = self.preparation_producer_inst.run_setup(
+                reqs["preparation_producer"],
+                inputs["preparation_producer"],
+            )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -163,8 +166,8 @@ class PrepareMLEvents(
 
         # define columns that need to be read
         read_columns = write_columns | {"deterministic_seed"} | set(aliases.values())
-        if self.producer_inst:
-            read_columns |= self.producer_inst.used_columns
+        if self.preparation_producer_inst:
+            read_columns |= self.preparation_producer_inst.used_columns
         read_columns = {Route(c) for c in read_columns}
 
         # stats for logging
@@ -203,13 +206,12 @@ class PrepareMLEvents(
                     remove_src=True,
                     missing_strategy=self.missing_column_alias_strategy,
                 )
-                from hbw.util import debugger; debugger()
 
                 # generate fold indices
                 fold_indices = events.deterministic_seed % self.ml_model_inst.folds
                 # invoke the optional producer
-                if len(events) and self.producer_inst:
-                    events = self.producer_inst(
+                if len(events) and self.preparation_producer_inst:
+                    events = self.preparation_producer_inst(
                         events,
                         stats=stats,
                         fold_indices=fold_indices,
