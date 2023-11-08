@@ -138,7 +138,7 @@ class PrepareMLEvents(
 
         # stats for logging
         n_events = 0
-        n_fold_events = self.ml_model_inst.folds * [0]
+        num_fold_events = {f: 0 for f in range(self.ml_model_inst.folds)}
 
         # iterate over chunks of events and columns
         files = [inputs["events"]["collection"][0]["events"].path]
@@ -181,8 +181,8 @@ class PrepareMLEvents(
                 fold_events = events[fold_indices == f]
 
                 # gather stats
-                self.ml_model_inst.increment_stats(fold_events, f, stats)
-                n_fold_events[f] += len(fold_events)
+                self.ml_model_inst.increment_stats(fold_events, stats, f)
+                num_fold_events[f] += len(fold_events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
@@ -197,13 +197,13 @@ class PrepareMLEvents(
             )
 
         # save stats
-        if not getattr(stats, "n_fold_events", None):
-            stats["n_fold_events"] = n_fold_events
+        if not getattr(stats, "num_fold_events", None):
+            stats["num_fold_events"] = num_fold_events
         outputs["stats"].dump(stats, indent=4, formatter="json")
 
         # some logs
         self.publish_message(f"total events: {n_events}")
-        for f, n in enumerate(n_fold_events):
+        for f, n in enumerate(num_fold_events):
             r = 100 * safe_div(n, n_events)
             self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
@@ -225,6 +225,83 @@ PrepareMLEventsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=PrepareMLEvents,
     enable=["configs", "skip_configs", "datasets", "skip_datasets"],
+)
+
+
+class MergeMLEventsStats(
+    MLModelDataMixin,
+    ProducersMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    DatasetTask,
+    law.tasks.ForestMerge,
+):
+    # recursively merge 20 files into one
+    merge_factor = 20
+
+    # skip receiving some parameters via req
+    exclude_params_req_get = {"workflow"}
+
+    # upstream requirements
+    reqs = Requirements(
+        PrepareMLEvents=PrepareMLEvents,
+    )
+
+    def create_branch_map(self):
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
+
+    def merge_workflow_requires(self):
+        return self.reqs.PrepareMLEvents.req(self, _exclude={"branches"})
+
+    def merge_requires(self, start_branch, end_branch):
+        return self.reqs.PrepareMLEvents.req(
+            self,
+            branches=((start_branch, end_branch),),
+            workflow="local",
+            _exclude={"branch"},
+        )
+
+    def merge_output(self):
+        return {"stats": self.target("stats.json")}
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs(inputs["collection"].targets.values())
+
+    @law.decorator.log
+    def run(self):
+        return super().run()
+
+    def merge(self, inputs, output):
+        # merge input stats
+        merged_stats = defaultdict(float)
+        for inp in inputs:
+            stats = inp["stats"].load(formatter="json", cache=False)
+            self.merge_counts(merged_stats, stats)
+
+        # write the output
+        output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
+
+    @classmethod
+    def merge_counts(cls, dst: dict, src: dict) -> dict:
+        """
+        Adds counts (integers or floats) in a *src* dictionary recursively into a *dst* dictionary.
+        *dst* is updated in-place and also returned.
+        """
+        for key, obj in src.items():
+            if isinstance(obj, dict):
+                cls.merge_counts(dst.setdefault(key, {}), obj)
+            else:
+                if key not in dst:
+                    dst[key] = 0.0
+                dst[key] += obj
+        return dst
+
+
+MergeMLEventsStatsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeMLEventsStats,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 
 
