@@ -82,20 +82,6 @@ class PrepareMLEvents(
 
         return self._producer_inst
 
-    @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
-
-        # add the preparation producer
-        config_inst = params.get("config_inst")
-        ml_model_inst = params.get("ml_model_inst")
-        if config_inst and ml_model_inst:
-            producer = ml_model_inst.preparation_producer(config_inst)
-            if producer:
-                params["producer_inst"] = ProducerMixin.get_producer_inst(producer, params)
-
-        return params
-
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -160,8 +146,9 @@ class PrepareMLEvents(
         stats = defaultdict(float)
 
         # run the setup of the optional producer
+        reader_targets = {}
         if self.producer_inst:
-            reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])  # noqa
+            reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -185,77 +172,84 @@ class PrepareMLEvents(
         num_fold_events = {f: 0 for f in range(self.ml_model_inst.folds)}
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0]["events"].path]
+        files = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"].path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_io(
-            files,
-            source_type=len(files) * ["awkward_parquet"],
-            read_columns=len(files) * [read_columns],
-        ):
-            n_events += len(events)
+            files.extend([inp["columns"] for inp in inputs["producers"]])
+        if reader_targets:
+            files.extend(reader_targets.values())
 
-            # optional check for overlapping inputs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping([events] + list(columns))
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [*files, *reader_targets.values()],
+            mode="r",
+        ) as inps:
+            for (events, *columns), pos in self.iter_chunked_io(
+                [inp.path for inp in inps],
+                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+            ):
+                n_events += len(events)
 
-            # add additional columns
-            events = update_ak_array(events, *columns)
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(columns))
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
-
-            # generate fold indices
-            fold_indices = events.deterministic_seed % self.ml_model_inst.folds
-
-            # invoke the optional producer
-            if len(events) and self.producer_inst:
-                events = self.producer_inst(
+                # add additional columns
+                events = update_ak_array(events, *columns)
+                # add aliases
+                events = add_ak_aliases(
                     events,
-                    stats=stats,
-                    fold_indices=fold_indices,
-                    ml_model_inst=self.ml_model_inst,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
+                )
+                from hbw.util import debugger; debugger()
+
+                # generate fold indices
+                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                # invoke the optional producer
+                if len(events) and self.producer_inst:
+                    events = self.producer_inst(
+                        events,
+                        stats=stats,
+                        fold_indices=fold_indices,
+                        ml_model_inst=self.ml_model_inst,
+                    )
+
+                # remove columns
+                events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite_output:
+                    self.raise_if_not_finite(events)
+
+                # loop over folds, use indices to generate masks and project into files
+                for f in range(self.ml_model_inst.folds):
+                    fold_events = events[fold_indices == f]
+                    num_fold_events[f] += len(fold_events)
+
+                    # save as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
+                    output_chunks[f][pos.index] = chunk
+                    self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
+
+            # merge output files of all folds
+            for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
+                sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
+                law.pyarrow.merge_parquet_task(
+                    self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
                 )
 
-            # remove columns
-            events = route_filter(events)
+            # save stats
+            if not getattr(stats, "num_fold_events", None):
+                stats["num_fold_events"] = num_fold_events
+            outputs["stats"].dump(stats, indent=4, formatter="json")
 
-            # optional check for finite values
-            if self.check_finite_output:
-                self.raise_if_not_finite(events)
-
-            # loop over folds, use indices to generate masks and project into files
-            for f in range(self.ml_model_inst.folds):
-                fold_events = events[fold_indices == f]
-                num_fold_events[f] += len(fold_events)
-
-                # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
-                output_chunks[f][pos.index] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
-
-        # merge output files of all folds
-        for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
-            sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
-            law.pyarrow.merge_parquet_task(
-                self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
-            )
-
-        # save stats
-        if not getattr(stats, "num_fold_events", None):
-            stats["num_fold_events"] = num_fold_events
-        outputs["stats"].dump(stats, indent=4, formatter="json")
-
-        # some logs
-        self.publish_message(f"total events: {n_events}")
-        for f, n in num_fold_events.items():
-            r = 100 * safe_div(n, n_events)
-            self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
+            # some logs
+            self.publish_message(f"total events: {n_events}")
+            for f, n in num_fold_events.items():
+                r = 100 * safe_div(n, n_events)
+                self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
 
 # overwrite class defaults
