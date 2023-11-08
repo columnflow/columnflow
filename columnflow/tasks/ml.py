@@ -13,6 +13,7 @@ from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetT
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
     SelectorMixin,
+    ProducerMixin,
     ProducersMixin,
     MLModelDataMixin,
     MLModelTrainingMixin,
@@ -53,6 +54,9 @@ class PrepareMLEvents(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # cache for producer inst
+        self._producer_inst = None
+
         # complain when this task is run for events that are not needed for training
         if not self.events_used_in_training(
             self.config_inst,
@@ -66,12 +70,43 @@ class PrepareMLEvents(
                 f"{self.__class__.__name__}",
             )
 
+    @property
+    def producer_inst(self):
+        producer = self.ml_model_inst.preparation_producer(self.config_inst)
+        if producer and self._producer_inst is None:
+            self._producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+
+            # overwrite the sandbox when set
+            if self._producer_inst.sandbox:
+                self.sandbox = self._producer_inst.sandbox
+
+        return self._producer_inst
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        # add the preparation producer
+        config_inst = params.get("config_inst")
+        ml_model_inst = params.get("ml_model_inst")
+        if config_inst and ml_model_inst:
+            producer = ml_model_inst.preparation_producer(config_inst)
+            if producer:
+                params["producer_inst"] = ProducerMixin.get_producer_inst(producer, params)
+
+        return params
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
         # require the full merge forest
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
+        # add producer dependent requirements
+        if self.producer_inst:
+            reqs["producer"] = self.producer_inst.run_requires()
+
+        # add producers to requirements
         if not self.pilot and self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
@@ -85,6 +120,8 @@ class PrepareMLEvents(
         reqs = {
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
+        if self.producer_inst:
+            reqs["producer"] = self.producer_inst.run_requires()
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -116,10 +153,15 @@ class PrepareMLEvents(
         )
 
         # prepare inputs and outputs
+        reqs = self.requires()
         inputs = self.input()
         outputs = self.output()
         output_chunks = [{} for _ in range(self.ml_model_inst.folds)]
         stats = defaultdict(float)
+
+        # run the setup of the optional producer
+        if self.producer_inst:
+            reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])  # noqa
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -134,6 +176,8 @@ class PrepareMLEvents(
 
         # define columns that need to be read
         read_columns = write_columns | {"deterministic_seed"} | set(aliases.values())
+        if self.producer_inst:
+            read_columns |= self.producer_inst.used_columns
         read_columns = {Route(c) for c in read_columns}
 
         # stats for logging
@@ -169,6 +213,10 @@ class PrepareMLEvents(
             # generate fold indices
             fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
+            # invoke the optional producer
+            if len(events) and self.producer_inst:
+                events = self.producer_inst(events, stats, fold_indices)
+
             # remove columns
             events = route_filter(events)
 
@@ -179,9 +227,6 @@ class PrepareMLEvents(
             # loop over folds, use indices to generate masks and project into files
             for f in range(self.ml_model_inst.folds):
                 fold_events = events[fold_indices == f]
-
-                # gather stats
-                self.ml_model_inst.increment_stats(fold_events, stats, f)
                 num_fold_events[f] += len(fold_events)
 
                 # save as parquet via a thread in the same pool
@@ -203,7 +248,7 @@ class PrepareMLEvents(
 
         # some logs
         self.publish_message(f"total events: {n_events}")
-        for f, n in enumerate(num_fold_events):
+        for f, n in num_fold_events.items():
             r = 100 * safe_div(n, n_events)
             self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
@@ -228,7 +273,7 @@ PrepareMLEventsWrapper = wrapper_factory(
 )
 
 
-class MergeMLEventsStats(
+class MergeMLStats(
     MLModelDataMixin,
     ProducersMixin,
     SelectorMixin,
@@ -298,9 +343,9 @@ class MergeMLEventsStats(
         return dst
 
 
-MergeMLEventsStatsWrapper = wrapper_factory(
+MergeMLStatsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
-    require_cls=MergeMLEventsStats,
+    require_cls=MergeMLStats,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 

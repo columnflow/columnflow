@@ -7,7 +7,7 @@ Definition of basic objects for describing and creating ML models.
 from __future__ import annotations
 
 import abc
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import law
 import order as od
@@ -42,8 +42,8 @@ class MLModel(Derivable):
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
     :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`). The optional `py:meth:`increment_stats`` hook
-    allows gathering stats from the prepared input columns.
+    declarations (:py:meth:`parameter_pairs`). The optional `py:meth:`preparation_producer`` allows
+    setting a producer that is run during the initial preparation of ML columns.
 
     .. py:classattribute:: single_config
 
@@ -259,7 +259,7 @@ class MLModel(Derivable):
 
     @property
     def used_columns(self) -> dict[od.Config, set[Route | str]]:
-        self._assert_configs("cannot determined used columns")
+        self._assert_configs("cannot determine used columns")
         return {
             config_inst: set(self.uses(config_inst))
             for config_inst in self.config_insts
@@ -267,7 +267,7 @@ class MLModel(Derivable):
 
     @property
     def produced_columns(self) -> dict[od.Config, set[Route | str]]:
-        self._assert_configs("cannot determined produced columns")
+        self._assert_configs("cannot determine produced columns")
         return {
             config_inst: set(self.produces(config_inst))
             for config_inst in self.config_insts
@@ -275,7 +275,7 @@ class MLModel(Derivable):
 
     @property
     def used_datasets(self) -> dict[od.Config, set[od.Dataset]]:
-        self._assert_configs("cannot determined used datasets")
+        self._assert_configs("cannot determine used datasets")
         return {
             config_inst: set(self.datasets(config_inst))
             for config_inst in self.config_insts
@@ -286,10 +286,6 @@ class MLModel(Derivable):
         Hook that is called after the model has been setup and its :py:attr:`config_insts` were
         assigned.
         """
-        return
-
-    def increment_stats(self, events: ak.Array, stats: defaultdict, fold: int) -> None:
-        """ Hook that is called during ``cf.PrepareMLEvents`` to gather stats from training events """
         return
 
     def requires(self, task: law.Task) -> Any:
@@ -349,6 +345,16 @@ class MLModel(Derivable):
         as the required input columns are intended to diverge.
         """
         return list(requested_producers)
+
+    def preparation_producer(
+        self,
+        config_inst: od.Config,
+    ) -> str | None:
+        """
+        This method allows setting a producer that can be called as part of the preparation of the
+        ML input columns.
+        """
+        return None
 
     @abc.abstractmethod
     def sandbox(self, task: law.Task) -> str:
