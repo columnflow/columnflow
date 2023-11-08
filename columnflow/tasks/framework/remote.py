@@ -630,22 +630,23 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
             config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
 
         # maximum runtime, compatible with multiple batch systems
-        max_runtime = int(math.floor(self.max_runtime * 3600)) - 1
-        config.custom_content.append(("+MaxRuntime", max_runtime))
-        config.custom_content.append(("+RequestRuntime", max_runtime))
+        if self.max_runtime is not None:
+            max_runtime = int(math.floor(self.max_runtime * 3600)) - 1
+            config.custom_content.append(("+MaxRuntime", max_runtime))
+            config.custom_content.append(("+RequestRuntime", max_runtime))
 
         # request cpus
-        if self.htcondor_cpus > 0:
+        if self.htcondor_cpus is not None and self.htcondor_cpus > 0:
             config.custom_content.append(("RequestCpus", self.htcondor_cpus))
 
         # request gpus
-        if self.htcondor_gpus > 0:
+        if self.htcondor_gpus is not None and self.htcondor_gpus > 0:
             # TODO: the exact setting might be flavor dependent in the future
             # e.g. https://confluence.desy.de/display/IS/GPU+on+NAF
             config.custom_content.append(("Request_GPUs", self.htcondor_gpus))
 
         # request memory
-        if self.htcondor_memory > 0:
+        if self.htcondor_memory is not None and self.htcondor_memory > 0:
             config.custom_content.append(("Request_Memory", self.htcondor_memory))
 
         # render variables
@@ -773,12 +774,15 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
             wlcg=False,
         )
 
-        # set job time and nodes
-        job_time = law.util.human_duration(
-            seconds=int(math.floor(self.max_runtime * 3600)) - 1,
-            colon_format=True,
-        )
-        config.custom_content.append(("time", job_time))
+        # set job time
+        if self.max_runtime is not None:
+            job_time = law.util.human_duration(
+                seconds=int(math.floor(self.max_runtime * 3600)) - 1,
+                colon_format=True,
+            )
+            config.custom_content.append(("time", job_time))
+
+        # set nodes
         config.custom_content.append(("nodes", 1))
 
         # custom, flavor dependent settings

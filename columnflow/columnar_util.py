@@ -2378,7 +2378,8 @@ class DaskArrayReader(object):
 
     def __init__(
         self: DaskArrayReader,
-        path: str, open_options: dict | None = None,
+        path: str,
+        open_options: dict | None = None,
         materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
     ):
         super().__init__()
