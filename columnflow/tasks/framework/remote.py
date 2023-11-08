@@ -630,7 +630,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
             config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
 
         # maximum runtime, compatible with multiple batch systems
-        if self.max_runtime is not None:
+        if self.max_runtime is not None and self.max_runtime > 0:
             max_runtime = int(math.floor(self.max_runtime * 3600)) - 1
             config.custom_content.append(("+MaxRuntime", max_runtime))
             config.custom_content.append(("+RequestRuntime", max_runtime))
