@@ -38,7 +38,7 @@ ak = maybe_import("awkward")
     # define some additional information here, e.g.
     # what columns are needed for this Selector?
     uses={
-        "Jet.pt", "Jet.eta"
+        "Jet.pt", "Jet.eta",
     },
     # does this Selector produce any columns?
     produces=set(),
@@ -178,7 +178,7 @@ ak = maybe_import("awkward")
     # define some additional information here, e.g.
     # what columns are needed for this Selector?
     uses={
-        "Jet.pt", "Jet.eta"
+        "Jet.pt", "Jet.eta",
     },
     # does this Selector produce any columns?
     produces=set(),
@@ -282,7 +282,7 @@ The keys ```"num_events"```, ```"num_events_selected"```, ```"sum_mc_weight"```,
 SelectEvents task along with the
 corresponding efficiency. If they are not set, the default value for floats will be printed instead.
 
-Below is an example of such a {py:class}`~columnflow.selection.Selector` updating the ```stats```
+Below is an example of such a Selector updating the ```stats```
 dictionary in place. This dictionary will be saved in the ```stats.json``` file. For convenience,
 the weights were saved in a weight_map dictionary along with the mask before the sum of the weights
 was saved in the ```stats``` dictionary. In this example, the keys to be printed by the
@@ -363,7 +363,8 @@ and masks, using a "weight map". These calculations can also be specified for su
 using a "group map". An example of such a call using the number of jets and the processes as
 subgroups is given below, with `results.event` the event selection mask after all selections and
 having saved during the selection the number of valid jets in each event in the auxiliary field of
-the SelectionResult object under the name `n_jets`.
+the SelectionResult object under the name `n_jets`. This example stems from the analysis template 
+present in the columnflow Github repository. 
 
 ```{include} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 :start-after: events = self[cutflow_features](events, results.objects, **kwargs)
@@ -405,7 +406,7 @@ from collections import defaultdict, OrderedDict
     # define some additional information here, e.g.
     # what columns are needed for this Selector?
     uses={
-        "Jet.pt", "Jet.eta"
+        "Jet.pt", "Jet.eta",
     },
     # does this Selector produce any columns?
     produces=set(),
@@ -598,10 +599,9 @@ def Selector_ext(
 ```
 
 Notes:
-- If you want to build this exposed Selector along with the inner
-Selectors in a new file, you will still need to put the name of
-the new file along with its path in the ```law.cfg``` file under the ```selection_modules```
-argument for law to be able to find the file. A more detailed explanation of the law config file
+- If you want to use an exposed {py:class}`~columnflow.selection.Selector` in a task call, and if
+this new Selector is created in a new file, you need to include this file in the ```law.cfg``` file
+under the ```selection_modules``` argument. A more detailed explanation of the law config file
 can be found in the {ref}`Law config section <law_config_section>`.
 
 - If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations

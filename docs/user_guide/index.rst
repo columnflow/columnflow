@@ -13,3 +13,4 @@ User Guide
    law.md
    best_practices.md
    special_usecases.md
+   cms_specializations.md

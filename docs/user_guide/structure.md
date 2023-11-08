@@ -46,9 +46,9 @@ stearing options or even completely new tasks. Thankfully, columnflow is not a f
 you will be able to create new tasks in such a case, following the corresponding example in the
 {doc}`examples` section of this documentation.
 The full task tree of general columnflow tasks can be seen in
-[this wikipage](https://github.com/columnflow/columnflow/wiki#default-task-graph). Additionally, the
-CMS-specific {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights` task is implemented,
-but not present in the graph, as it is experiment specific.
+[this wikipage](https://github.com/columnflow/columnflow/wiki#default-task-graph). There are also
+experiment-specific tasks which are not present in this graph. However, these are introduced in the
+{ref}`CMS specializations section <cms_specializations_section>`.
 
 Further informations about tasks and law can be found in the
 {doc}`"Law Introduction" <law>` section of this documentation or in the
@@ -58,18 +58,28 @@ using columnflow requires a grid proxy, as the
 dataset files are accessed through it. The grid proxy should be activated after the setup of the
 default environment. It is however possible to create a custom law config file to be used by people
 without a grid certificate, although someone with a grid proxy must run the tasks
-{py:class}`~columnflow.tasks.external.GetDatasetLFNs` (and potentially
+{py:class}`~columnflow.tasks.external.GetDatasetLFNs` (and potentially the cms-specific
 {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`) for them. Once these
 tasks are done, the local task outputs can be used without grid certificate by other users if
 they are able to access them with the storage location declared in the custom law config file.
 An example for such a custom config file can be found in the {doc}`examples` section of this
 documentation.
 
+
 While the name of each task is fairly descriptive of its purpose, a short introduction of the most
 important facts and parameters about each task group is provided below. As some tasks require
 others to run, the arguments for a task higher in the tree will also be required for tasks below
 in the tree (sometimes in a slightly different version, e.g. with an "s" if the task allows several
-instances of the parameter to be given at once (e.g. several dataset**s**)):
+instances of the parameter to be given at once (e.g. several dataset**s**)).
+
+It should be mentioned that in your analysis, the command line argument for running the columnflow
+tasks described below will contain an additional "cf."-prefix
+before the name of the task, as these are columnflow tasks and not new tasks created explicitely
+for your analysis. For example, running the {py:class}`~columnflow.tasks.selection.SelectEvents`
+task will require the following syntax:
+```shell
+law run cf.SelectEvents --your-parameters parameter_value
+```
 
 - {py:class}`~columnflow.tasks.external.GetDatasetLFNs`: This task looks for the logical file names
 of the datasets to be used and saves them in a json file. The argument ```--dataset``` followed by
@@ -164,10 +174,15 @@ the total event yields for each selection step given.
 the various occurences of the corresponding tasks. TODO: details? why needed? Only convenience?
 Or I/O?
 
-- {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`: TODO
 
+There are also CMS-specialized tasks, like
+{py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`, which are described in the
+{ref}`CMS specializations section <cms_specializations_section>`. As a note, the CreatePileUpWeights task is
+interesting from a workflow point of view as it is an example of a task required through an object
+of the {py:class}`~columnflow.production.Producer` class. This behaviour can be observed in the
+{py:meth}`~columnflow.production.cms.pileup.pu_weight_requires` method.
 
-also, maybe interesting to have examples e.g. for the usage of the
+TODO: maybe interesting to have examples e.g. for the usage of the
 parameters for the 2d plots. Maybe in the example section, or after the next subsection, such that
 all parameters are explained? If so, at least to be mentioned here.
 
