@@ -2447,7 +2447,19 @@ class DaskArrayReader(object):
     to be read more than once, another instance of this class should be used.
     """
 
-    def __init__(self, path: str, open_options: dict | None = None):
+    class MaterializationStrategy(enum.Flag):
+        """
+        Flag to define which materialization strategy to follow.
+        """
+        SLICES = enum.auto()
+        PARTITIONS = enum.auto()
+
+    def __init__(
+        self: DaskArrayReader,
+        path: str,
+        open_options: dict | None = None,
+        materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
+    ):
         super().__init__()
 
         # open the file
@@ -2456,51 +2468,93 @@ class DaskArrayReader(object):
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
-        # fixed mapping of chunk to partition indices, created once in _materialize_via_partitions
-        self.chunk_to_partitions = {}
+        # strategy dependent attributes and setup
+        self.materialization_strategy = materialization_strategy
+        if materialization_strategy == self.MaterializationStrategy.PARTITIONS:
+            # fixed mapping of chunk to partition indices, created in _materialize_via_partitions
+            self.chunk_to_partitions = {}
 
-        # temporary mapping of partition indices to cache information (chunks still to be handled
-        # and a cached array) that changes during the read process in _materialize_via_partitions
-        self.partition_cache = {
-            p: DotDict(chunks=[], array=None)
-            for p in range(self.dak_array.npartitions)
-        }
+            # mapping of partition indices to cache information (chunks still to be handled and a
+            # cached array) that changes during the read process in _materialize_via_partitions
+            self.partition_cache = {
+                p: DotDict(chunks=[], array=None)
+                for p in range(self.dak_array.npartitions)
+            }
 
-        # locks to protect against RCs during read operations by different threads
-        self.chunk_to_partitions_lock = threading.Lock()
-        self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
+            # locks to protect against RCs during read operations by different threads
+            self.chunk_to_partitions_lock = threading.Lock()
+            self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
 
-    def __del__(self):
+    def __del__(self: DaskArrayReader) -> None:
         self.close()
 
-    def __len__(self) -> int:
+    def __len__(self: DaskArrayReader) -> int:
         return len(self.dak_array)
 
     @property
-    def closed(self) -> bool:
+    def closed(self: DaskArrayReader) -> bool:
         return self.dak_array is None
 
-    def close(self) -> None:
+    def close(self: DaskArrayReader) -> None:
         # free memory and perform an eager, overly cautious gc round
         self.dak_array = None
         if getattr(self, "partition_cache", None):
             self.partition_cache.clear()
         gc.collect()
 
-    def _materialize_via_partitions(
-        self,
+    def materialize(self: DaskArrayReader, *args, **kwargs) -> ak.Array:
+        """
+        Materializes (reads from disk) a slice of the array using the configured
+        :py:attr:`materialization_strategy`. All *args* and *kwargs* are forwarded to the internal
+        implementations.
+
+        :return: The materialized array.
+        """
+        if self.materialization_strategy == self.MaterializationStrategy.SLICES:
+            return self._materialize_via_slices(*args, **kwargs)
+
+        if self.materialization_strategy == self.MaterializationStrategy.PARTITIONS:
+            return self._materialize_via_partitions(*args, **kwargs)
+
+        raise NotImplementedError(
+            f"unknown materialization strategy {self.materialization_strategy}",
+        )
+
+    def _materialize_via_slices(
+        self: DaskArrayReader,
+        *,
         chunk_index: int,
         entry_start: int,
         entry_stop: int,
         max_chunk_size: int,
-    ) -> ak.array:
-        """
-        Strategy: read from disk with granularity given by partition divisions
-            - use chunk info to determine which partitions need to be read
-            - guard each read operation of a partition by locks
-            - add materialized partitions that might overlap with another chunk in a temporary cache
-            - remove cached partitions eagerly once it becomes clear that no chunk will need it
-        """
+    ) -> ak.Array:
+        return self.dak_array[entry_start:entry_stop].compute()
+
+    def _materialize_via_partitions(
+        self,
+        *,
+        chunk_index: int,
+        entry_start: int,
+        entry_stop: int,
+        max_chunk_size: int,
+    ) -> ak.Array:
+        # slicing on dak arrays was not supported for a long time, i.e. arr[start:stop].compute()
+        # used to raise a DaskAwkwardNotImplemented, but it seems to be supported now, so the
+        # following code might be obsolete, but it is kept for now as a fallback and as a potential
+        # alternative in case the slicing implementation is not as efficient as the partition one,
+        # reasons:
+        # 1. in cf, there are typically no parquet files from external sources, but they are all
+        #    created within cf and thus, they typical partition sizes exactly match the desired
+        #    chunk size (as they were created in a chunked way and eventually merged), leading to
+        #    zero overhead and no caching / overlap issues
+        # 2. it seems far more performant to read full partitions from disk rather than parts of
+        #    them (if possible at all) since meta data might have to be read in any case
+        # strategy: read from disk with granularity given by partition divisions
+        #   - use chunk info to determine which partitions need to be read
+        #   - guard each read operation of a partition by locks
+        #   - add materialized partitions that might overlap with another chunk in a temporary cache
+        #   - remove cached partitions eagerly once it becomes clear that no chunk will need it
+
         # fill the chunk -> partitions mapping once
         with self.chunk_to_partitions_lock:
             if not self.chunk_to_partitions:
@@ -2555,20 +2609,6 @@ class DaskArrayReader(object):
         gc.collect()
 
         return arr
-
-    def materialize(self, *args, **kwargs) -> ak.array:
-        # for now, it seems like the only method for materializing slices of dak arrays to ak arrays
-        # is through invoking the "compute()" operation on partitions, and in fact, slicing on dak
-        # arrays is not supported at this time (arr[start:stop] raises DaskAwkwardNotImplemented);
-        # therefore, the only way to perform parallel, chunked read operations is through partitions
-        # and while potentially being to coarse on disk, there might even be two advantages:
-        # 1. in cf, there are typically no parquet files from external sources, but they are all
-        #    created within cf and thus, they typical partition sizes exactly match the desired
-        #    chunk size (as they were created in a chunked way and eventually merged), leading to
-        #    zero overhead and no caching / overlap issues
-        # 2. it seems far more performant to read full partitions from disk rather than parts of
-        #    them (if possible at all) since meta data might have to be read in any case
-        return self._materialize_via_partitions(*args, **kwargs)
 
 
 class ChunkedIOHandler(object):
@@ -3120,10 +3160,10 @@ class ChunkedIOHandler(object):
         """
         # get the materialized ak array for that chunk
         return source_object.materialize(
-            chunk_pos.index,
-            chunk_pos.entry_start,
-            chunk_pos.entry_stop,
-            chunk_pos.max_chunk_size,
+            chunk_index=chunk_pos.index,
+            entry_start=chunk_pos.entry_start,
+            entry_stop=chunk_pos.entry_stop,
+            max_chunk_size=chunk_pos.max_chunk_size,
         )
 
     @property
