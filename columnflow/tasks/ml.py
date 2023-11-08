@@ -4,6 +4,8 @@
 Tasks related to ML workflows.
 """
 
+from collections import defaultdict
+
 import law
 import luigi
 
@@ -96,10 +98,14 @@ class PrepareMLEvents(
     @MergeReducedEventsUser.maybe_dummy
     def output(self):
         k = self.ml_model_inst.folds
-        return {"mlevents": law.SiblingFileCollection([
-            self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
-            for f in range(k)
-        ])}
+        outputs = {
+            "mlevents": law.SiblingFileCollection([
+                self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
+                for f in range(k)
+            ]),
+            "stats": self.target(f"stats_{self.branch}.parquet"),
+        }
+        return outputs
 
     @law.decorator.log
     @law.decorator.localize
@@ -113,6 +119,7 @@ class PrepareMLEvents(
         inputs = self.input()
         outputs = self.output()
         output_chunks = [{} for _ in range(self.ml_model_inst.folds)]
+        stats = defaultdict(float)
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -172,6 +179,9 @@ class PrepareMLEvents(
             # loop over folds, use indices to generate masks and project into files
             for f in range(self.ml_model_inst.folds):
                 fold_events = events[fold_indices == f]
+
+                # gather stats
+                self.ml_model_inst.increment_stats(fold_events, f, stats)
                 n_fold_events[f] += len(fold_events)
 
                 # save as parquet via a thread in the same pool
@@ -185,6 +195,11 @@ class PrepareMLEvents(
             law.pyarrow.merge_parquet_task(
                 self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
             )
+
+        # save stats
+        if not getattr(stats, "n_fold_events", None):
+            stats["n_fold_events"] = n_fold_events
+        outputs["stats"].dump(stats, indent=4, formatter="json")
 
         # some logs
         self.publish_message(f"total events: {n_events}")

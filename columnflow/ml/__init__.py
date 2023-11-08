@@ -7,7 +7,7 @@ Definition of basic objects for describing and creating ML models.
 from __future__ import annotations
 
 import abc
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
@@ -42,7 +42,8 @@ class MLModel(Derivable):
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
     :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`).
+    declarations (:py:meth:`parameter_pairs`). The optional `py:meth:`increment_stats`` hook
+    allows gathering stats from the prepared input columns.
 
     .. py:classattribute:: single_config
 
@@ -285,6 +286,10 @@ class MLModel(Derivable):
         Hook that is called after the model has been setup and its :py:attr:`config_insts` were
         assigned.
         """
+        return
+
+    def increment_stats(self, events: ak.Array, stats: defaultdict, fold: int) -> None:
+        """ Hook that is called during ``cf.PrepareMLEvents`` to gather stats from training events """
         return
 
     def requires(self, task: law.Task) -> Any:
