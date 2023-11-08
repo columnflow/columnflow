@@ -215,7 +215,12 @@ class PrepareMLEvents(
 
             # invoke the optional producer
             if len(events) and self.producer_inst:
-                events = self.producer_inst(events, stats, fold_indices)
+                events = self.producer_inst(
+                    events,
+                    stats=stats,
+                    fold_indices=fold_indices,
+                    ml_model_inst=self.ml_model_inst,
+                )
 
             # remove columns
             events = route_filter(events)
