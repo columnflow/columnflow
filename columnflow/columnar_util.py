@@ -1436,7 +1436,7 @@ class ArrayFunction(Derivable):
 
         @classmethod
         def deferred_column(
-            cls,
+            cls: ArrayFunction.DeferredColumn,
             call_func: Callable[[ArrayFunction], Any | set[Any]] | None = None,
         ) -> ArrayFunction.DeferredColumn | Callable:
             """
@@ -1465,7 +1465,7 @@ class ArrayFunction(Derivable):
 
             return decorator(call_func) if call_func else decorator
 
-        def __init__(self, *columns: Any):
+        def __init__(self, *columns: Any) -> None:
             super().__init__()
 
             # save columns as set, specially handling the case where a single set is given
@@ -1527,7 +1527,7 @@ class ArrayFunction(Derivable):
         cls.skip_func = func
 
     def __init__(
-        self,
+        self: ArrayFunction,
         call_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
@@ -1537,7 +1537,7 @@ class ArrayFunction(Derivable):
         log_runtime: bool | None = None,
         deferred_init: bool | None = True,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__()
 
         # add class-level attributes as defaults for unset arguments (no_value)
@@ -1598,13 +1598,13 @@ class ArrayFunction(Derivable):
         if deferred_init:
             self.deferred_init(instance_cache=instance_cache)
 
-    def __getitem__(self, dep_cls: DerivableMeta) -> ArrayFunction:
+    def __getitem__(self: ArrayFunction, dep_cls: DerivableMeta) -> ArrayFunction:
         """
         Item access to dependencies.
         """
         return self.deps[dep_cls]
 
-    def deferred_init(self, instance_cache: dict | None = None) -> dict:
+    def deferred_init(self: ArrayFunction, instance_cache: dict | None = None) -> dict:
         """
         Controls the deferred part of the initialization process.
         """
@@ -1622,7 +1622,7 @@ class ArrayFunction(Derivable):
         return instance_cache
 
     def create_dependencies(
-        self,
+        self: ArrayFunction,
         instance_cache: dict,
         only_update: bool = False,
     ) -> None:
@@ -1715,7 +1715,11 @@ class ArrayFunction(Derivable):
                 if cls not in added_deps:
                     del self.deps[cls]
 
-    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> ArrayFunction:
+    def instantiate_dependency(
+        self: ArrayFunction,
+        cls: DerivableMeta,
+        **kwargs: Any,
+    ) -> ArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*. The
         latter update optional keyword arguments in :py:attr:`self.deps_kwargs` and are then
@@ -1728,7 +1732,10 @@ class ArrayFunction(Derivable):
 
         return cls(**kwargs)
 
-    def get_dependencies(self, include_others: bool = False) -> set[ArrayFunction | Any]:
+    def get_dependencies(
+        self: ArrayFunction,
+        include_others: bool = False,
+    ) -> set[ArrayFunction | Any]:
         """
         Returns a set of instances of all dependencies. When *include_others* is *True*, also
         non-ArrayFunction types are returned.
@@ -1748,7 +1755,7 @@ class ArrayFunction(Derivable):
         return deps
 
     def _get_columns(
-        self,
+        self: ArrayFunction,
         io_flag: IOFlag,
         dependencies: bool = True,
         _cache: set | None = None,
@@ -1790,21 +1797,21 @@ class ArrayFunction(Derivable):
 
         return columns
 
-    def _get_used_columns(self, _cache: set | None = None) -> set[str]:
+    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
         return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
-    def used_columns(self) -> set[str]:
+    def used_columns(self: ArrayFunction) -> set[str]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, _cache: set | None = None) -> set[str]:
+    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
-    def produced_columns(self) -> set[str]:
+    def produced_columns(self: ArrayFunction) -> set[str]:
         return self._get_produced_columns()
 
-    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
+    def _check_columns(self: ArrayFunction, ak_array: ak.Array, io_flag: IOFlag) -> None:
         """
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
@@ -1836,7 +1843,7 @@ class ArrayFunction(Derivable):
         missing = ", ".join(sorted(map(str, missing)))
         raise Exception(f"'{self.cls_name}' did not {action} any columns matching: {missing}")
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self: ArrayFunction, *args, **kwargs) -> Any:
         """
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
         raised if :py:attr:`call_func` is not callable.

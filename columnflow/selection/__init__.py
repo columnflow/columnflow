@@ -27,7 +27,7 @@ class Selector(TaskArrayFunction):
 
     exposed = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self: Selector, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # when not exposed and call_force is not specified,
@@ -220,13 +220,13 @@ class SelectionResult(od.AuxDataMixin):
     """
 
     def __init__(
-        self,
-        event: ak.array | None = None,
+        self: SelectionResult,
+        event: ak.Array | None = None,
         steps: DotDict | dict | None = None,
         objects: DotDict | dict | None = None,
         aux: DotDict | dict | None = None,
         **other,
-    ):
+    ) -> None:
         super().__init__(aux=aux)
 
         # store fields
@@ -235,7 +235,7 @@ class SelectionResult(od.AuxDataMixin):
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
 
-    def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
+    def __iadd__(self: SelectionResult, other: SelectionResult | None) -> SelectionResult:
         """
         Adds the field of an *other* instance in-place.
 
@@ -284,7 +284,7 @@ class SelectionResult(od.AuxDataMixin):
 
         return self
 
-    def __add__(self, other: SelectionResult | None) -> SelectionResult:
+    def __add__(self: SelectionResult, other: SelectionResult | None) -> SelectionResult:
         """
         Returns a new instance with all fields of *this* and an *other*
         instance merged.
@@ -308,7 +308,7 @@ class SelectionResult(od.AuxDataMixin):
 
         return inst
 
-    def to_ak(self) -> ak.Array:
+    def to_ak(self: SelectionResult) -> ak.Array:
         """
         Converts the contained fields into a nested awkward array and returns it.
 
