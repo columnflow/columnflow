@@ -26,6 +26,10 @@ ak = maybe_import("awkward")
         process_ids, mc_weight, "category_ids",
     },
     exposed=True,
+    # hard-coded category ids
+    category_ids=None,
+    # name of the inclusive category for looking it up
+    inclusive_category_name="incl",
 )
 def empty(
     self: Selector,
@@ -53,7 +57,7 @@ def empty(
         events = self[mc_weight](events, **kwargs)
 
     # inclusive category id
-    category_ids = (np.ones(len(events), dtype=np.int64) * self.inclusive_category_id)[..., None]
+    category_ids = np.array(len(events) * [self.category_ids], dtype=np.int64)
     events = set_ak_column(events, "category_ids", category_ids)
 
     # empty selection result with a trivial event mask
@@ -89,14 +93,19 @@ def empty(
 @empty.init
 def empty_init(self: Selector) -> None:
     """
-    Initializes the selector by finding the id of the inclusive category.
+    Initializes the selector by finding the id of the inclusive category if no hard-coded category
+    ids are given on class-level.
 
     :raises ValueError: If the inclusive category cannot be found.
     """
+    # do nothing when category ids are set
+    if self.category_ids is not None:
+        return
+
     # find the id of the inclusive category
-    if "incl" in self.config_inst.categories:
-        self.inclusive_category_id = self.config_inst.categories.n.incl.id
+    if self.inclusive_category_name in self.config_inst.categories:
+        self.category_ids = [self.config_inst.categories.get(self.inclusive_category_name).id]
     elif 1 in self.config_inst.categories:
-        self.inclusive_category_id = 1
+        self.category_ids = [1]
     else:
         raise ValueError(f"could not find inclusive category for {self.cls_name} selector")

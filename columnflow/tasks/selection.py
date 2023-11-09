@@ -118,7 +118,7 @@ class SelectEvents(
         # show an early warning in case the selector does not produce some mandatory columns
         produced_columns = self.selector_inst.produced_columns
         for c in self.reqs.get("CreateHistograms", CreateHistograms).mandatory_columns:
-            if c not in produced_columns:
+            if Route(c) not in produced_columns:
                 self.logger.warning(
                     f"selector {self.selector_inst.cls_name} does not produce column {c} "
                     "which might be required later on for creating histograms downstream",
