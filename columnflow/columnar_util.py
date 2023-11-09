@@ -533,7 +533,7 @@ class Route(od.TagMixin):
 
 class ColumnCollection(enum.Flag):
     """
-    Enumeration containing flags that describe arbitrary collection of columns.
+    Enumeration containing flags that describe arbitrary collections of columns.
     """
 
     ALL_FROM_CALIBRATOR = enum.auto()
