@@ -42,8 +42,8 @@ def empty(
     :param **kwargs: Additional keyword arguments that are passed to all other
         :py:class:`TaskArrayFunction`'s.
 
-    :returns: A tuple containing the original events and a SelectionResult object with a trivial
-        event mask.
+    :returns: A tuple containing the original events and a :py:class:`SelectionResult` object with a
+        trivial event mask.
     """
     # create process ids
     events = self[process_ids](events, **kwargs)
