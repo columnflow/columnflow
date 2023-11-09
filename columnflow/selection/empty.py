@@ -56,7 +56,7 @@ def empty(
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
 
-    # inclusive category id
+    # category id
     category_ids = np.array(len(events) * [self.category_ids], dtype=np.int64)
     events = set_ak_column(events, "category_ids", category_ids)
 
