@@ -27,6 +27,9 @@ from columnflow.util import maybe_import
 ak = maybe_import("awkward")
 
 
+logger = law.logger.get_logger(__name__)
+
+
 class CalibratorMixin(ConfigTask):
 
     calibrator = luigi.Parameter(
