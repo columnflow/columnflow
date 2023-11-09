@@ -7,7 +7,7 @@ Helpers and utilities for working with columnar libraries.
 from __future__ import annotations
 
 __all__ = [
-    "mandatory_coffea_columns", "EMPTY_INT", "EMPTY_FLOAT",
+    "mandatory_coffea_columns", "ColumnCollection", "EMPTY_INT", "EMPTY_FLOAT",
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
@@ -529,6 +529,18 @@ class Route(od.TagMixin):
                         res = ak.fill_none(res, null_value)
 
         return res
+
+
+class ColumnCollection(enum.Flag):
+    """
+    Enumeration containing flags that describe arbitrary collection of columns.
+    """
+
+    ALL_FROM_CALIBRATOR = enum.auto()
+    ALL_FROM_CALIBRATORS = enum.auto()
+    ALL_FROM_SELECTOR = enum.auto()
+    ALL_FROM_PRODUCER = enum.auto()
+    ALL_FROM_PRODUCERS = enum.auto()
 
 
 def get_ak_routes(

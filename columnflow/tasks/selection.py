@@ -398,7 +398,9 @@ class MergeSelectionMasks(
         )
 
     def zip_results_and_columns(self, inputs, tmp_dir):
-        from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
+        from columnflow.columnar_util import (
+            ColumnCollection, Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
+        )
 
         chunks = []
 
@@ -412,7 +414,11 @@ class MergeSelectionMasks(
         # define columns that will be written
         write_columns = mandatory_coffea_columns
         write_columns |= {"category_ids", "process_id", "normalization_weight"}
-        write_columns |= set(self.config_inst.x.keep_columns[self.task_family])
+        for c in self.config_inst.x.keep_columns.get(self.task_family, []):
+            if isinstance(c, ColumnCollection):
+                write_columns |= self.find_keep_columns(c)
+            else:
+                write_columns.add(Route(c))
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:

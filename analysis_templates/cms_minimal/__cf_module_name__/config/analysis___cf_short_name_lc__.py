@@ -11,7 +11,7 @@ import order as od
 from scinum import Number
 
 from columnflow.util import DotDict, maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT
+from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
     verify_config_processes,
@@ -217,8 +217,8 @@ cfg.x.keep_columns = DotDict.wrap({
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
         "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
         "PV.npvs",
-        # columns added during selection
-        "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
+        # all columns added during selection using a ColumnCollection flag
+        ColumnCollection.ALL_FROM_SELECTOR,
     },
     "cf.MergeSelectionMasks": {
         "cutflow.*",

@@ -22,6 +22,7 @@ from columnflow.selection import Selector
 from columnflow.production import Producer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
+from columnflow.columnar_util import Route, ColumnCollection
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -107,6 +108,12 @@ class CalibratorMixin(ConfigTask):
         parts = super().store_parts()
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator}")
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_CALIBRATOR:
+            return self.calibrator_inst.produced_columns
+
+        return super().find_keep_columns(collection)
 
 
 class CalibratorsMixin(ConfigTask):
@@ -196,6 +203,15 @@ class CalibratorsMixin(ConfigTask):
 
         return parts
 
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_CALIBRATORS:
+            return set.union(*(
+                calibrator_inst.produced_columns
+                for calibrator_inst in self.calibrator_insts
+            ))
+
+        return super().find_keep_columns(collection)
+
 
 class SelectorMixin(ConfigTask):
 
@@ -277,6 +293,12 @@ class SelectorMixin(ConfigTask):
         parts = super().store_parts()
         parts.insert_before("version", "selector", f"sel__{self.selector}")
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_SELECTOR:
+            return self.selector_inst.produced_columns
+
+        return super().find_keep_columns(collection)
 
 
 class SelectorStepsMixin(SelectorMixin):
@@ -415,6 +437,12 @@ class ProducerMixin(ConfigTask):
         parts.insert_before("version", "producer", producer)
         return parts
 
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_PRODUCER:
+            return self.producer_inst.produced_columns
+
+        return super().find_keep_columns(collection)
+
 
 class ProducersMixin(ConfigTask):
 
@@ -501,6 +529,15 @@ class ProducersMixin(ConfigTask):
         parts.insert_before("version", "producers", f"prod__{part or 'none'}")
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_PRODUCERS:
+            return set.union(*(
+                producer_inst.produced_columns
+                for producer_inst in self.producer_insts
+            ))
+
+        return super().find_keep_columns(collection)
 
 
 class MLModelMixinBase(AnalysisTask):
