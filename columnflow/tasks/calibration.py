@@ -108,8 +108,8 @@ class CalibrateEvents(
         tmp_dir.touch()
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.calibrator_inst.used_columns
 
         # define columns that will be written
         write_columns = self.calibrator_inst.produced_columns

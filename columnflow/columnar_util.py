@@ -1773,7 +1773,7 @@ class ArrayFunction(Derivable):
         io_flag: IOFlag,
         dependencies: bool = True,
         _cache: set | None = None,
-    ) -> set[str]:
+    ) -> set[Route]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1811,18 +1811,18 @@ class ArrayFunction(Derivable):
 
         return columns
 
-    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
+    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
-    def used_columns(self: ArrayFunction) -> set[str]:
+    def used_columns(self: ArrayFunction) -> set[Route]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
+    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
-    def produced_columns(self: ArrayFunction) -> set[str]:
+    def produced_columns(self: ArrayFunction) -> set[Route]:
         return self._get_produced_columns()
 
     def _check_columns(self: ArrayFunction, ak_array: ak.Array, io_flag: IOFlag) -> None:
@@ -2309,6 +2309,9 @@ class NoThreadPool(object):
 
     def close(self) -> None:
         self.opened = False
+
+    def join(self) -> None:
+        return
 
     def terminate(self) -> None:
         return
@@ -3228,58 +3231,53 @@ class ChunkedIOHandler(object):
 
         # strategy: setup the pool and manually keep it filled up to pool_size and do not insert all
         # chunks right away as this could swamp the memory if processing is slower than IO
-        with self.pool_cls(self.pool_size) as self.pool:
-            results = []
-            no_result = object()
-
-            try:
-                while self.task_queue or results:
-                    # find the first done result and remove it from the list
-                    # this will do nothing in the first iteration
-                    result_obj = no_result
-                    for i, result in enumerate(list(results)):
-                        if not result.ready():
-                            continue
-
-                        result_obj = result.get()
-                        results.pop(i)
-                        break
-
-                    # if no result was ready, sleep and try again
-                    if results and result_obj == no_result:
-                        time.sleep(0.05)
+        self.pool = self.pool_cls(self.pool_size)
+        results = []
+        no_result = object()
+        try:
+            while self.task_queue or results:
+                # find the first done result and remove it from the list
+                # this will do nothing in the first iteration
+                result_obj = no_result
+                for i, result in enumerate(list(results)):
+                    if not result.ready():
                         continue
 
-                    # immediately try to fill up the pool
-                    while len(results) < self.pool_size and self.task_queue:
-                        task = self.task_queue.get_next()
-                        results.append(self.pool.apply_async(task.func, task.args, task.kwargs))
+                    result_obj = result.get()
+                    results.pop(i)
+                    break
 
-                    # if a result was ready and it returned a ReadResult, yield it
-                    if isinstance(result_obj, self.ReadResult):
-                        if self.iter_message:
-                            print(self.iter_message.format(pos=result_obj.chunk_pos))
+                # if no result was ready, sleep and try again
+                if results and result_obj == no_result:
+                    time.sleep(0.05)
+                    continue
 
-                        # probably overly-cautious, but run garbage collection before and after
-                        gc.collect()
-                        t1 = time.perf_counter()
-                        try:
-                            yield (result_obj.chunk, result_obj.chunk_pos)
-                        finally:
-                            duration = time.perf_counter() - t1
-                            logger_perf.debug(
-                                f"processing of chunk {result_obj.chunk_pos.index} took " +
-                                law.util.human_duration(seconds=duration),
-                            )
-                        gc.collect()
+                # immediately try to fill up the pool
+                while len(results) < self.pool_size and self.task_queue:
+                    task = self.task_queue.get_next()
+                    results.append(self.pool.apply_async(task.func, task.args, task.kwargs))
 
-            except:
-                self.pool.close()
-                self.pool.terminate()
-                raise
+                # if a result was ready and it returned a ReadResult, yield it
+                if isinstance(result_obj, self.ReadResult):
+                    if self.iter_message:
+                        print(self.iter_message.format(pos=result_obj.chunk_pos))
 
-            finally:
-                self.pool = None
+                    # probably overly-cautious, but run garbage collection before and after
+                    gc.collect()
+                    t1 = time.perf_counter()
+                    try:
+                        yield (result_obj.chunk, result_obj.chunk_pos)
+                    finally:
+                        duration = time.perf_counter() - t1
+                        logger_perf.debug(
+                            f"processing of chunk {result_obj.chunk_pos.index} took " +
+                            law.util.human_duration(seconds=duration),
+                        )
+                    gc.collect()
+        finally:
+            self.pool.terminate()
+            self.pool.join()
+            self.pool = None
 
     def __del__(self):
         """

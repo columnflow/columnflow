@@ -122,11 +122,13 @@ class SelectEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.selector_inst.used_columns
+        read_columns |= set(map(Route, aliases.values()))
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | self.selector_inst.produced_columns
+        write_columns = set(map(Route, mandatory_coffea_columns))
+        write_columns |= self.selector_inst.produced_columns
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
