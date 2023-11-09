@@ -210,8 +210,8 @@ cfg.x.reduced_file_size = 512.0
 # columns to keep after certain steps
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
-        # general event info
-        "run", "luminosityBlock", "event",
+        # general event info, mandatory for reading files with coffea
+        ColumnCollection.MANDATORY_COFFEA,
         # object info
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",

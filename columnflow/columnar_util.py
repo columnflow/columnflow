@@ -536,11 +536,13 @@ class ColumnCollection(enum.Flag):
     Enumeration containing flags that describe arbitrary collections of columns.
     """
 
+    MANDATORY_COFFEA = enum.auto()
     ALL_FROM_CALIBRATOR = enum.auto()
     ALL_FROM_CALIBRATORS = enum.auto()
     ALL_FROM_SELECTOR = enum.auto()
     ALL_FROM_PRODUCER = enum.auto()
     ALL_FROM_PRODUCERS = enum.auto()
+    ALL_FROM_ML_EVALUATION = enum.auto()
 
 
 def get_ak_routes(
