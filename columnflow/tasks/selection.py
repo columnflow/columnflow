@@ -97,6 +97,7 @@ class SelectEvents(
     @law.decorator.localize
     @law.decorator.safe_output
     def run(self):
+        from columnflow.tasks.histograms import CreateHistograms
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
@@ -114,6 +115,15 @@ class SelectEvents(
         # run the selector setup
         self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
 
+        # show an early warning in case the selector does not produce some mandatory columns
+        produced_columns = self.selector_inst.produced_columns
+        for c in self.reqs.get("CreateHistograms", CreateHistograms).mandatory_columns:
+            if c not in produced_columns:
+                self.logger.warning(
+                    f"selector {self.selector_inst.cls_name} does not produce column {c} "
+                    "which might be required later on for creating histograms downstream",
+                )
+
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
@@ -126,7 +136,7 @@ class SelectEvents(
         read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | self.selector_inst.produced_columns
+        write_columns = mandatory_coffea_columns | produced_columns
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
