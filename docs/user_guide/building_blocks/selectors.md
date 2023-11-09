@@ -139,8 +139,8 @@ name of the column/field to be created is the same as the name of an already exi
 column/field will be overwritten by the new one!
 - Additional informations to be used by other Selectors, saved
 under the ```aux``` argument.
-- A combined boolean mask of all steps used, which is saved under the ```main``` argument, with the
-```"event"``` key. An example with this argument will be shown in the section
+- A combined boolean mask of all steps used, which is saved under the ```event``` argument. An
+example with this argument will be shown in the section
 {ref}`"Complete Example" <complete_example>`. The final
 SelectionResult object to be returned by the exposed selector must
 have this field.
@@ -157,7 +157,7 @@ are to be kept for further processing and creates new columns/fields containing 
 objects.
 
 Below is an example of a fully written internal Selector with its
-SelectionResult object without ```main``` argument.
+SelectionResult object without ```event``` argument.
 
 ```python
 
@@ -234,11 +234,11 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
 ### Selection using several selection steps
 
 In order for the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to apply the final event
-selection to all events, it is necessary to input the resulting boolean array in the ```main```
+selection to all events, it is necessary to input the resulting boolean array in the ```event```
 argument of the returned {py:class}`~columnflow.selection.SelectionResult` by the exposed
 {py:class}`~columnflow.selection.Selector`.
 When several selection steps do appear in the selection, it is necessary to combine all the masks
-from all the steps in order to obtain the final boolean array to be given to the ```main``` argument
+from all the steps in order to obtain the final boolean array to be given to the ```event``` argument
 of the SelectionResult and for it to be applied to the events.
 This can be achieved in two steps:
 
@@ -250,7 +250,7 @@ results += jet_results
 results += fatjet_results
 ```
 
-- Reducing the different steps to a single boolean array and give it to the ```main``` argument of
+- Reducing the different steps to a single boolean array and give it to the ```event``` argument of
 the SelectionResult object.
 ```python
 # import the functions to combine the selection masks
@@ -259,7 +259,7 @@ from functools import reduce
 
 # combined event selection after all steps
 event_sel = reduce(and_, results.steps.values())
-results.main["event"] = event_sel
+results.event = event_sel
 ```
 
 ### Selection stats
@@ -319,7 +319,7 @@ def increment_stats(
     *stats* in-place based on all input *events* and the final selection *mask*.
     """
     # get event masks
-    event_mask = results.main.event
+    event_mask = results.event
 
     # increment plain counts
     stats["num_events"] += len(events)
@@ -363,8 +363,8 @@ and masks, using a "weight map". These calculations can also be specified for su
 using a "group map". An example of such a call using the number of jets and the processes as
 subgroups is given below, with `results.event` the event selection mask after all selections and
 having saved during the selection the number of valid jets in each event in the auxiliary field of
-the SelectionResult object under the name `n_jets`. This example stems from the analysis template 
-present in the columnflow Github repository. 
+the SelectionResult object under the name `n_jets`. This example stems from the analysis template
+present in the columnflow Github repository.
 
 ```{include} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 :start-after: events = self[cutflow_features](events, results.objects, **kwargs)
@@ -511,7 +511,7 @@ def increment_stats(
     *stats* in-place based on all input *events* and the final selection *mask*.
     """
     # get event masks
-    event_mask = results.main.event
+    event_mask = results.event
 
     # increment plain counts
     stats["num_events"] += len(events)
@@ -587,7 +587,7 @@ def Selector_ext(
 
     # combined event selection after all steps
     event_sel = reduce(and_, results.steps.values())
-    results.main["event"] = event_sel
+    results.event = event_sel
 
     # create process ids, used by increment_stats
     events = self[process_ids](events, **kwargs)
