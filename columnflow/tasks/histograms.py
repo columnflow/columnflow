@@ -117,6 +117,13 @@ class CreateHistograms(
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
 
+        # prepare event weights
+        event_weights = (
+            self.get_event_weights(self.config_inst, self.event_weights)
+            if self.dataset_inst.is_mc
+            else None
+        )
+
         # define columns that need to be read
         read_columns = {"process_id"} | set(self.category_id_columns) | set(aliases.values())
         read_columns |= {
@@ -132,8 +139,9 @@ class CreateHistograms(
                 else variable_inst.x("inputs", [])
             )
         }
+
         if self.dataset_inst.is_mc:
-            read_columns |= {Route(column) for column in self.config_inst.x.event_weights}
+            read_columns |= {Route(column) for column in event_weights}
             read_columns |= {Route(column) for column in self.dataset_inst.x("event_weights", [])}
         read_columns = {Route(c) for c in read_columns}
 
@@ -167,9 +175,9 @@ class CreateHistograms(
             )
 
             # build the full event weight
-            weight = ak.Array(np.ones(len(events)))
+            weight = ak.Array(np.ones(len(events), dtype=np.float32))
             if self.dataset_inst.is_mc and len(events):
-                for column in self.config_inst.x.event_weights:
+                for column in event_weights:
                     weight = weight * Route(column).apply(events)
                 for column in self.dataset_inst.x("event_weights", []):
                     if has_ak_column(events, column):

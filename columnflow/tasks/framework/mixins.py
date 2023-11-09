@@ -1349,13 +1349,73 @@ class ShiftSourcesMixin(ConfigTask):
 
 class EventWeightMixin(ConfigTask):
 
+    event_weights = law.CSVParameter(
+        default=("default",),
+        description="names of sets of event weights in the auxiliary data 'event_weights' of the "
+        "config to use (in the given order); when empty or NO_STR, no weights are applied; "
+        "default: 'default'",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    @classmethod
+    def get_event_weights(
+        cls,
+        config_inst: od.Config,
+        names: str | Sequence[str],
+    ) -> dict[str, list[str]]:
+        """
+        Returns event weights from the given configuration instance *config_inst* according to
+        *names*. Each name should correspond to one set of event weights in the auxiliary data field
+        ``event_weights`` of the config. Event weights of corresponding to latter names have
+        precedence over leading ones.
+
+        :param config_inst: The configuration instance to get the event weights from.
+        :param names: The names of the set of event weights to get.
+        :return: A dictionary containing the requested event weights.
+        :raises ValueError: If the requested event weights are found to be unnamed in the config.
+        :raises KeyError: If the requested event weights are not found in the config.
+        """
+        # first check if the weights are not stored in a nested way (legacy behavior)
+        all_weights = config_inst.x.event_weights
+        first_key = list(all_weights.keys())[0]
+        is_nested = isinstance(all_weights[first_key], dict)
+
+        # collect weights, looping over names
+        event_weights = {}
+        for name in law.util.make_list(names):
+            # emtpy case
+            if name in ("", law.NO_STR):
+                continue
+
+            # use weights as is if they are not nested and the "default" was requested
+            if not is_nested:
+                msg = (
+                    "event weights are found to be unnamed (not nested) in the config, consider "
+                    "updating them accordingly (confit_inst.x.event_weights.some_name = {...})",
+                )
+                if name == "default":
+                    logger.warning(msg)
+                    event_weights.update(all_weights)
+                raise ValueError(f"requested event weights '{name}' but {msg}")
+
+            # check if they exist
+            if name not in all_weights:
+                raise KeyError(f"requested event weights '{name}' not found in the config")
+
+            # add them
+            event_weights.update(all_weights[name])
+
+        return event_weights
+
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # add shifts introduced by event weights
         if config_inst.has_aux("event_weights"):
-            for shift_insts in config_inst.x.event_weights.values():
+            event_weights = cls.get_event_weights(config_inst, params.get("event_weights", ()))
+            for shift_insts in event_weights.values():
                 shifts |= {shift_inst.name for shift_inst in shift_insts}
 
         # optionally also for weights defined by a dataset
@@ -1363,9 +1423,8 @@ class EventWeightMixin(ConfigTask):
             requested_dataset = params.get("dataset")
             if requested_dataset not in (None, law.NO_STR):
                 dataset_inst = config_inst.get_dataset(requested_dataset)
-                if dataset_inst.has_aux("event_weights"):
-                    for shift_insts in dataset_inst.x.event_weights.values():
-                        shifts |= {shift_inst.name for shift_inst in shift_insts}
+                for shift_insts in dataset_inst.x("event_weights", {}).values():
+                    shifts |= {shift_inst.name for shift_inst in shift_insts}
 
         return shifts, upstream_shifts
 

@@ -228,11 +228,14 @@ cfg.x.keep_columns = DotDict.wrap({
     },
 })
 
-# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
+# named sets of event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
 get_shifts = functools.partial(get_shifts_from_sources, cfg)
-cfg.x.event_weights = DotDict({
-    "normalization_weight": [],
-    "muon_weight": get_shifts("mu"),
+cfg.x.event_weights = DotDict.wrap({
+    # the default set of event weights
+    "default": {
+        "normalization_weight": [],
+        "muon_weight": get_shifts("mu"),
+    },
 })
 
 # versions per task family, either referring to strings or to callables receving the invoking
