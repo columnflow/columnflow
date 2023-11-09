@@ -1759,7 +1759,7 @@ class ArrayFunction(Derivable):
         io_flag: IOFlag,
         dependencies: bool = True,
         _cache: set | None = None,
-    ) -> set[str]:
+    ) -> set[Route]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1797,18 +1797,18 @@ class ArrayFunction(Derivable):
 
         return columns
 
-    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
+    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
-    def used_columns(self: ArrayFunction) -> set[str]:
+    def used_columns(self: ArrayFunction) -> set[Route]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[str]:
+    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
-    def produced_columns(self: ArrayFunction) -> set[str]:
+    def produced_columns(self: ArrayFunction) -> set[Route]:
         return self._get_produced_columns()
 
     def _check_columns(self: ArrayFunction, ak_array: ak.Array, io_flag: IOFlag) -> None:
