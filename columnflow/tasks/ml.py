@@ -454,6 +454,7 @@ class MLTraining(
     reqs = Requirements(
         RemoteWorkflow.reqs,
         MergeMLEvents=MergeMLEvents,
+        MergeMLStats=MergeMLStats,
     )
 
     @property
@@ -490,6 +491,25 @@ class MLTraining(
                         tree_index=-1)
                     for fold in range(self.ml_model_inst.folds)
                 ]
+                for dataset_inst in dataset_insts
+            }
+            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
+                self.ml_model_inst.used_datasets.items(),
+                self.calibrators,
+                self.selectors,
+                self.producers,
+            )
+        }
+        reqs["stats"] = {
+            config_inst.name: {
+                dataset_inst.name: self.reqs.MergeMLStats.req(
+                    self,
+                    config=config_inst.name,
+                    dataset=dataset_inst.name,
+                    calibrators=_calibrators,
+                    selector=_selector,
+                    producers=_producers,
+                    tree_index=-1)
                 for dataset_inst in dataset_insts
             }
             for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
