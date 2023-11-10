@@ -292,3 +292,151 @@ def plot_cm(
     fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
 
     return [fig], cm
+
+
+def plot_roc(
+    events: dict,
+    config_inst: od.Config,
+    category_inst: od.Category,
+    sample_weights: Sequence | bool = False,
+    skip_uncertainties: bool = False,
+    n_thresholds: int = 200 + 1,
+    *args,
+    **kwargs,
+) -> tuple[plt.Figure, dict]:
+    """ Generates the figure of the ROC curve given the events output of the ML evaluation
+
+        Args:
+            events (dict): dictionary with the true labels as keys and the model output of
+                the events as values.
+            config_inst (od.Config): used configuration for the plot
+            category_inst (od.Category): used category instance, for which the plot is created
+            sample_weights (np.ndarray or bool, optional): sample weights of the events. If an explicit array is not
+                            givin the weights are calculated based on the number of eventsDefaults to None.
+            skip_uncertainties (bool, optional): calculate errors of the cm elements. Defaults to False.
+            n_thresholds (int): number of thresholds used for the ROC curve
+            *args: Additional arguments to pass to the function.
+            **kwargs: Additional keyword arguments to pass to the function.
+
+        Returns:
+            tuple[plt.Figure, dict]: The resulting plot and the ROC curve data.
+
+        Raises:
+            AssertionError: If both predictions and labels have mismatched shapes,
+                or if *weights* is not *None* and its shape doesn't match *predictions*.
+            AssertionError: If *normalization* is not one of *None*, "row", "column".
+
+    """
+    # defining some useful properties and output shapes
+    thresholds = np.geomspace(1e-6, 1, n_thresholds)
+    weights = create_sample_weights(sample_weights, events, list(events.keys()))
+    discriminators = list(events.values())[0].fields
+
+    def create_histograms(events: dict, sample_weights: dict, *args, **kwargs) -> dict:
+        hists = {}
+        for cls, predictions in events.items():
+            hists[cls] = {}
+            for disc in discriminators:
+                hists[cls][disc] = weights[cls] * ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0])
+        return hists
+
+    def binary_roc_data(positiv_hist: np.ndarray, negativ_hist: np.ndarray, *args, **kwargs) -> tuple:
+        """
+        Compute binary Receiver operating characteristic (ROC) values.
+        Used as a helper function for the multi-dimensional ROC curve
+        """
+
+        # Calculate the different rates
+        fn = np.cumsum(positiv_hist)
+        tn = np.cumsum(negativ_hist)
+        tp = fn[-1] - fn
+        fp = tn[-1] - tn
+
+        tpr = tp / (tp + fn)
+        fpr = fp / (fp + tn)
+
+        return fpr, tpr
+
+    def roc_curve_data(
+        evaluation_type: str,
+        histograms: dict,
+        *args,
+        **kwargs
+    ) -> dict:
+        """
+        Compute Receiver operating characteristic (ROC) values for a multi-dimensional output.
+        """
+
+        def one_vs_rest(names):
+            result = {}
+            for ind, cls_name in enumerate(names):
+                positiv_inputs = model_output[:, ind]
+                fpr, tpr, th = binary_roc_data(true_labels=(true_labels == ind),
+                                            model_output_positive=positiv_inputs,
+                                            sample_weights=sample_weights,
+                                            *args,
+                                            thresholds=thresholds,
+                                            errors=errors,
+                                            output_length=output_length)
+                result[f"{cls_name}_vs_rest"] = {"fpr": fpr,
+                                                "tpr": tpr,
+                                                "thresholds": th}
+            return result
+
+        def one_vs_one(names):
+            result = {}
+            for pos_ind, cls_name in enumerate(names):
+                for neg_ind, cls_name2 in enumerate(names):
+                    if (pos_ind == neg_ind):
+                        continue
+
+                    # Event selection masks only for the 2 classes analysed
+                    inputs_mask = np.logical_or(true_labels == pos_ind,
+                                                true_labels == neg_ind)
+                    select_input = model_output[inputs_mask]
+                    select_labels = true_labels[inputs_mask]
+                    select_weights = None if sample_weights is None else sample_weights[inputs_mask]
+
+                    positiv_inputs = select_input[:, pos_ind]
+                    fpr, tpr, th = binary_roc_data(true_labels=(select_labels == pos_ind),
+                                                model_output_positive=positiv_inputs,
+                                                sample_weights=select_weights,
+                                                *args,
+                                                thresholds=thresholds,
+                                                errors=errors,
+                                                output_length=output_length)
+                    result[f"{cls_name}_vs_{cls_name2}"] = {"fpr": fpr,
+                                                            "tpr": tpr,
+                                                            "thresholds": th}
+            return result
+
+        is_input_valid(true_labels, model_output)
+
+        # reshape in case only predictions for the positive class are givin
+        if model_output.ndim != 2:
+            model_output = model_output.reshape((model_output.size, 1))
+
+        # Generate class names if not givin
+        if class_names is None:
+            class_names = list(range(model_output.shape[1]))
+
+        assert (len(class_names) == model_output.shape[1]), (
+            "Number of givin class names does not match the number of output nodes in the *model_output* argument!")
+
+        # Cast trues labels to class numers
+        if true_labels.dtype.name == "bool":
+            true_labels = np.logical_not(true_labels).astype(dtype=np.int32)
+
+        # Map true labels to integers if needed
+        if "int" not in true_labels.dtype.name:
+            for ind, name in enumerate(class_names):
+                true_labels = np.where(true_labels == name, ind, true_labels)
+
+        # Choose the evaluation type
+        if (evaluation_type == "OvO"):
+            return one_vs_one(class_names)
+        elif (evaluation_type == "OvR"):
+            return one_vs_rest(class_names)
+        else:
+            raise ValueError("Illeagal Argument! Evaluation Type can only be choosen as \"OvO\" (One vs One) \
+                            or \"OvR\" (One vs Rest)")
