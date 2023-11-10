@@ -599,27 +599,17 @@ def Selector_ext(
 ```
 
 Notes:
-- If you want to use an exposed {py:class}`~columnflow.selection.Selector` in a task call, and if
+- If you want to use an exposed Selector in a task call, and if
 this new Selector is created in a new file, you need to include this file in the ```law.cfg``` file
 under the ```selection_modules``` argument. A more detailed explanation of the law config file
 can be found in the {ref}`Law config section <law_config_section>`.
 
-- If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
-on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
-function can be applied on the ```events``` array using
-```python
-events = self[attach_coffea_behavior](events, **kwargs)
-```
-If the name of the field does not correspond to a standard field name, e.g. "BtaggedJets", which
-should provide the same behaviour as a normal jet, the behaviour can still be set, using
-```python
-collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
-events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
-```
-
-- The actual creation of the weights to be applied in the histogramms after the selection should be
+- The actual creation of the weights to be applied in the histogramms after the selection might be
 done in the {py:class}`~columnflow.tasks.production.ProduceColumns` task, using the stats object
 created in this task if needed.
+
+- Other useful functions (e.g. for easier handling of columns) can be found in the
+{doc}`best_practices` section of this documentation.
 
 
 

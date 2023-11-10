@@ -119,37 +119,16 @@ The ```all_features``` producer creates therefore two new columns, the ```HT``` 
 level, and the ```pt_squared``` column for each object of the ```Jet``` collection.
 
 Notes:
-- In many cases, one wants to access an object that does not exist for every event (e.g. accessing
-the 3rd jet ```events.Jet[:, 2].pt```, even though some events may only contain two jets). In that
-case, the {py:class}`~columnflow.columnar_util.Route` class and its
-{py:meth}`~columnflow.columnar_util.Route.apply` function can be used to access this object by
-replacing missing values with the given value, e.g.
-```jet3_pt = Route("Jet.pt[:, 2]").apply(events, null_value=EMPTY_FLOAT)``` with
-{py:attr}`~columnflow.columnar_util.EMPTY_FLOAT`
-being a columnflow internal null value corresponding to the value ```-9999.0```.
-
-- If the Producer is built in a new file and to be used directly
-by {py:class}`~columnflow.tasks.production.ProduceColumns`, you will still need to put the name of
-the new file along with its path in the ```law.cfg``` file under the ```production_modules```
-argument for law to be able to find the file. A more detailed explanation of the law config file
+- If you want to use an exposed Producer in a task call, and if
+this new Producer is created in a new file, you need to include this file in the ```law.cfg``` file
+under the ```production_modules``` argument. A more detailed explanation of the law config file
 can be found in the {ref}`Law config section <law_config_section>`.
 
-- If you want to use some fields, like the ```Jet``` field, as a Lorentz vector to apply operations
-on, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function. This
-function can be applied on the ```events``` array using
-```python
-events = self[attach_coffea_behavior](events, **kwargs)
-```
-If the name of the field does not correspond to a standard field name, e.g. "BtaggedJets", which
-should provide the same behaviour as a normal jet, the behaviour can still be set, using
-```python
-collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
-events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
-```
-
 - When storage space is a limiting factor, it is good practice to produce and store (if possible)
-columns only after the reduction, using the ProduceColumns
-task.
+columns only after the reduction, using the ProduceColumns task.
+
+- Other useful functions (e.g. for easier handling of columns) can be found in the
+{doc}`best_practices` section of this documentation.
 
 
 ## ProduceColumns task

@@ -8,8 +8,8 @@ containing the value ```-99999.0```. This variable is typically used to replace 
 in awkward arrays.
 
 - In many cases, one wants to access an object that does not exist for every event (e.g. accessing
-the 3rd jet ```events.Jet[:, 2].pt```, even though some events may only contain two jets). In that
-case, the {py:class}`~columnflow.columnar_util.Route` class and its
+the transverse momentum of the 3rd jet ```events.Jet[:, 2].pt```, even though some events may only
+contain two jets). In that case, the {py:class}`~columnflow.columnar_util.Route` class and its
 {py:meth}`~columnflow.columnar_util.Route.apply` function can be used to access this object by
 replacing missing values with the given value, e.g.
 ```jet3_pt = Route("Jet.pt[:, 2]").apply(events, null_value=EMPTY_FLOAT)```.
