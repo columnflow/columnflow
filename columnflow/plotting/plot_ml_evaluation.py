@@ -47,7 +47,7 @@ cf_colors = {
 def create_sample_weights(
     sample_weights: Sequence[float] | bool,
     events: dict,
-    true_labels: np.ndarray,
+    true_labels: Sequence[str],
 ) -> dict:
     """
     Helper function to create the sample weights for the events, if needed.
@@ -58,7 +58,7 @@ def create_sample_weights(
     :param true_labels: true labels of the events
     :return: sample weights of the events
     :raises ValueError: If both predictions and labels have mismatched shapes, or
-        if `weights` is not `None` and its shape doesn't match `predictions`.
+        if *weights* is not *None* and its shape doesn't match the predictions length.
     """
     if not sample_weights:
         return {label: 1 for label in true_labels}
@@ -69,7 +69,7 @@ def create_sample_weights(
         size = {label: len(event) for label, event in events.items()}
         mean = np.mean(list(size.values()))
         return {label: mean / length for label, length in size.items()}
-    return {label: weight for label, weight in zip(true_labels, sample_weights)}
+    return dict(zip(true_labels, sample_weights))
 
 
 def plot_cm(
@@ -85,25 +85,25 @@ def plot_cm(
     **kwargs,
 ) -> tuple[plt.Figure, np.ndarray]:
     """ Generates the figure of the confusion matrix given the output of the nodes
-    and a true labels array. The Cronfusion matrix can also be weighted.
+    and an array of true labels. The Cronfusion matrix can also be weighted.
 
     :param events: dictionary with the true labels as keys and the model output of the events as values.
     :param config_inst: used configuration for the plot.
     :param category_inst: used category instance, for which the plot is created.
     :param sample_weights: sample weights of the events. If an explicit array is not given, the weights are
-        calculated based on the number of events. Defaults to None.
-    :param normalization: type of normalization of the confusion matrix. Defaults to "row".
-    :param skip_uncertainties: calculate errors of the cm elements. Defaults to False.
-    :param x_labels: labels for the x-axis. Defaults to None.
-    :param y_labels: labels for the y-axis. Defaults to None.
+        calculated based on the number of events.
+    :param normalization: type of normalization of the confusion matrix. If not provided, the matrix is row normalized.
+    :param skip_uncertainties: If true, no uncertainty of the cells will be shown in the plot.
+    :param x_labels: labels for the x-axis.
+    :param y_labels: labels for the y-axis.
     :param *args: Additional arguments to pass to the function.
     :param **kwargs: Additional keyword arguments to pass to the function.
 
     :return: The resulting plot and the confusion matrix.
 
-    :raises AssertionError: If both predictions and labels have mismatched shapes, or if `weights`
-        is not `None` and its shape doesn't match `predictions`.
-    :raises AssertionError: If `normalization` is not one of `None`, `"row"`, `"column"`.
+    :raises AssertionError: If both predictions and labels have mismatched shapes, or if *weights*
+        is not *None* and its shape doesn't match *predictions*.
+    :raises AssertionError: If *normalization* is not one of *None*, "row", "column".
     """
     # defining some useful properties and output shapes
     true_labels = list(events.keys())
@@ -136,9 +136,11 @@ def plot_cm(
         # Normalize Matrix if needed
         if normalization:
             valid = {"row": 1, "column": 0}
-            assert (normalization in valid.keys()), (
-                f"\"{normalization}\" is no valid argument for normalization. If givin, normalization "
-                "should only take \"row\" or \"column\"")
+            if normalization not in valid.keys():
+                raise ValueError(
+                    f"\"{normalization}\" is not a valid argument for normalization. If given, normalization "
+                    "should only take \"row\" or \"column\"",
+                )
 
             row_sums = result.sum(axis=valid.get(normalization))
             result = result / row_sums[:, np.newaxis]
@@ -160,12 +162,13 @@ def plot_cm(
         Plots a confusion matrix.
 
         :param cm: The confusion matrix to plot.
-        :param title: The title of the plot, displayed in the top right corner. Defaults to ''.
-        :param colormap: The name of the colormap to use. Defaults to "cf_cmap".
-        :param cmap_label: The label of the colorbar. Defaults to "Accuracy".
-        :param digits: The number of digits to display for each value in the matrix. Defaults to 3.
+        :param title: The title of the plot, displayed in the top right corner.
+        :param colormap: The name of the colormap to use. Can be selected from the following:
+            "cf_cmap", "cf_green_cmap", "cf_ygb_cmap", "viridis".
+        :param cmap_label: The label of the colorbar.
+        :param digits: The number of digits to display for each value in the matrix.
         :param x_labels: The labels for the x-axis. If not provided, the labels will be "out<i>"
-        :param y_labels: The labels for the y-axis. If not provided, the dataset labels are used.
+        :param y_labels: The labels for the y-axis. If not provided, the dataset names are used.
         :param *args: Additional arguments to pass to the function.
         :param **kwargs: Additional keyword arguments to pass to the function.
 
@@ -189,7 +192,9 @@ def plot_cm(
             return font_size
 
         def get_errors(matrix):
-            """Useful for seperating the error from the data"""
+            """
+            Useful for seperating the error from the data
+            """
             if matrix.dtype.name == "object":
                 get_errors_vec = np.vectorize(lambda x: x.get(sci.UP, unc=True))
                 return get_errors_vec(matrix)
@@ -197,14 +202,15 @@ def plot_cm(
                 return np.zeros_like(matrix)
 
         def value_text(i, j):
-            """Format the inputs as 'Number +- Uncertainty' """
+            """
+            Format the inputs as 'Number +- Uncertainty'
+            """
             def fmt(v):
                 s = "{{:.{}f}}".format(digits).format(v)
                 return s if re.sub(r"(0|\.)", "", s) else ("<" + s[:-1] + "1")
             if skip_uncertainties:
                 return fmt(values[i][j])
-            else:
-                return "{}\n\u00B1{}".format(fmt(values[i][j]), fmt(np.nan_to_num(uncs[i][j])))
+            return "{}\n\u00B1{}".format(fmt(values[i][j]), fmt(np.nan_to_num(uncs[i][j])))
 
         # create the plot
         plt.style.use(hep.style.CMS)

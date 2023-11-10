@@ -5,6 +5,7 @@ Tasks related to ML workflows.
 """
 
 from collections import OrderedDict
+from typing import Dict, TypeVar
 
 import law
 import luigi
@@ -695,42 +696,39 @@ class PlotMLResultsBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    """A base class, used for the implementation of the ML plotting tasks. This class implements
-    a `plot_function` parameter for choosing a desired plotting function and a `prepare_inputs` method,
+    """
+    A base class, used for the implementation of the ML plotting tasks. This class implements
+    a ``plot_function`` parameter for choosing a desired plotting function and a ``prepare_inputs`` method,
     that returns a dict with the chosen events.
-
-    Raises:
-        NotImplementedError: This error is raised if a givin dataset contains more than one process.
-        ValueError: This error is raised if `plot_sub_processes` is used without providing the
-        `process_ids` column in the data
     """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    Self = TypeVar("Self", bound="PlotMLResultsBase")  # TODO add comment
 
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
         add_default_to_description=True,
-        description="The full path of the desired plot function, that is to be called on the inputs."
-        "The full path should be givin using the dot notation",
+        description="the full path given using the dot notation of the desired plot function.",
     )
 
     skip_processes = law.CSVParameter(
         default=("",),
-        description="names of processes to skip; These processes will not be displayed int he plot."
-        "config; default: ('*',)",
+        description="names of processes to skip; these processes will not be included in the plots."
+        "config; default: ('',)",
         brace_expand=True,
     )
 
     plot_sub_processes = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, each process is divided into the different subprocesses"
-        "which will be used as classes for the plot; default: False",
+        description="when True, each process is divided into the different subprocesses; "
+        "this option requires a ``process_ids`` column to be stored in the events; default: False",
     )
 
     skip_uncertainties = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, uncertainties are not displayed in the table; default: False",
+        description="when True, count uncertainties (if available) are not included in the plot; default: False",
     )
 
     # upstream requirements
@@ -739,18 +737,18 @@ class PlotMLResultsBase(
         MergeMLEvaluation=MergeMLEvaluation,
     )
 
-    def store_parts(self):
+    def store_parts(self: Self):
         parts = super().store_parts()
         parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
         return parts
 
-    def create_branch_map(self):
+    def create_branch_map(self: Self):
         return [
             DotDict({"category": cat_name})
             for cat_name in sorted(self.categories)
         ]
 
-    def requires(self):
+    def requires(self: Self):
         return {
             d: self.reqs.MergeMLEvaluation.req(
                 self,
@@ -761,7 +759,7 @@ class PlotMLResultsBase(
             for d in self.datasets
         }
 
-    def workflow_requires(self, only_super: bool = False):
+    def workflow_requires(self: Self, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
@@ -770,12 +768,22 @@ class PlotMLResultsBase(
 
         return reqs
 
-    def output(self):
+    def output(self: Self):
         b = self.branch_data
         return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}{self.plot_suffix}.pdf")
 
-    def prepare_inputs(self):
+    def prepare_inputs(self: Self) -> Dict[str, ak.Array]:
+        """prepare the inputs for the plot function, based on the given configuration and category.
 
+        Raises:
+            NotImplementedError: This error is raised if a givin dataset contains more than one process.
+            ValueError: This error is raised if ``plot_sub_processes`` is used without providing the
+                ``process_ids`` column in the data
+
+        Returns:
+            Dict[str, ak.Array]: A dictionary with the dataset names as keys and
+                the corresponding predictions as values.
+        """
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
         process_insts = list(map(self.config_inst.get_process, self.processes))
@@ -815,22 +823,21 @@ class PlotMLResultsBase(
                     else:
                         all_events[process_inst.name] = getattr(events, self.ml_model)
                 else:
-                    if "process_ids" in events.fields:
-                        for sub_process in sub_process_insts[process_inst]:
-                            if sub_process.name in self.skip_processes:
-                                continue
-
-                            process_mask = ak.where(events.process_ids == sub_process.id, True, False)
-                            if sub_process.name in all_events.keys():
-                                all_events[sub_process.name] = ak.concatenate([
-                                    all_events[sub_process.name],
-                                    getattr(events[process_mask], self.ml_model),
-                                ])
-                            else:
-                                all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
-                    else:
+                    if "process_ids" not in events.fields:
                         raise ValueError("No `process_ids` column stored in the events! "
                                 f"Process selection for {dataset} cannot not be applied!")
+                    for sub_process in sub_process_insts[process_inst]:
+                        if sub_process.name in self.skip_processes:
+                            continue
+
+                        process_mask = ak.where(events.process_ids == sub_process.id, True, False)
+                        if sub_process.name in all_events.keys():
+                            all_events[sub_process.name] = ak.concatenate([
+                                all_events[sub_process.name],
+                                getattr(events[process_mask], self.ml_model),
+                            ])
+                        else:
+                            all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
         return all_events
 
 
@@ -838,27 +845,17 @@ class PlotMLResults(PlotMLResultsBase):
     """
     A task that generates plots for machine learning results.
 
-    This task generates plots for machine learning results, based on the given
+    This task generates plots for machine learning results based on the given
     configuration and category. The plots can be either a confusion matrix (CM) or a
     receiver operating characteristic (ROC) curve. This task uses the output of the
     MergeMLEvaluation task as input and saves the plots with the corresponding array
     used to create the plot.
-
-    Attributes:
-        plot_function (str): The name of the plot function to use.
-            Can be either "plot_cm" or "plot_roc".
-        processes_repr (str): A string representation of the number of
-            processes used to generate the plot(s).
-        config_inst (Config): An instance of the Config class that contains
-            the configuration for this task.
-        branch_data (BranchData): An instance of the BranchData class that
-            contains the input data for this task.
     """
     # override the plot_function parameter to be able to only choose between CM and ROC
     plot_function = luigi.ChoiceParameter(
         default="plot_cm",
         choices=["cm", "roc"],
-        description="The name of the plot function to use. Can be either 'plot_cm' or 'plot_roc'.",
+        description="The name of the plot function to use. Can be either 'cm' or 'roc'.",
     )
 
     def prepare_plot_parameters(self):
@@ -867,7 +864,7 @@ class PlotMLResults(PlotMLResultsBase):
         # parse x_label from general settings
         x_labels = params.general_settings.get("x_labels", None)
         if x_labels:
-            params.general_settings["x_labels"] = x_labels.replace("&", "$").split(";")
+            params.general_settings["x_labels"] = x_labels.split(";")
 
     def output(self):
         output = {
@@ -893,6 +890,7 @@ class PlotMLResults(PlotMLResultsBase):
                 events=all_events,
                 config_inst=self.config_inst,
                 category_inst=category_inst,
+                skip_uncertainties=self.skip_uncertainties,
                 **self.get_plot_parameters(),
             )
             self.output()["array"].dump(array, formatter="pickle")
