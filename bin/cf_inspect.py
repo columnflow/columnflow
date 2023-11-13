@@ -1,20 +1,20 @@
 # coding: utf8
+
 """
-utility script for quickly loading event arrays and related objects for interactive processing
+Utility script for quickly loading event arrays and related objects for interactive processing.
 """
+
 from __future__ import annotations
+
+__all__ = ["load"]
+
+import os
+import json
+import pickle
 
 import awkward as ak
 import coffea.nanoevents
-import hist  # noqa
-import json
-import numpy as np  # noqa
-import os
-import pickle
 import uproot
-
-
-__all__ = ["load"]
 
 
 def _load_json(fname: str):
@@ -47,16 +47,13 @@ def load(fname: str):
     basename, ext = os.path.splitext(fname)
     if ext == ".pickle":
         return _load_pickle(fname)
-    elif ext == ".parquet":
+    if ext == ".parquet":
         return _load_parquet(fname)
-    elif ext == ".root":
+    if ext == ".root":
         return _load_nano_root(fname)
-    elif ext == ".json":
+    if ext == ".json":
         return _load_json(fname)
-    else:
-        raise NotImplementedError(
-            f"no loader implemented for extension '{ext}'",
-        )
+    raise NotImplementedError(f"no loader implemented for extension '{ext}'")
 
 
 if __name__ == "__main__":

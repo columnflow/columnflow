@@ -8,7 +8,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, has_ak_column, optional_column as optional
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

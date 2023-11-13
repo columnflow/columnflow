@@ -136,8 +136,9 @@ class PrepareMLEvents(
         route_filter = RouteFilter(write_columns)
 
         # define columns that need to be read
-        read_columns = write_columns | {"deterministic_seed"} | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = {Route("deterministic_seed")}
+        read_columns |= set(map(Route, aliases.values()))
+        read_columns |= write_columns
 
         # stats for logging
         n_events = 0
@@ -543,9 +544,9 @@ class MLEvaluation(
         )
 
         # define columns that need to be read
-        read_columns = {"deterministic_seed"} | set(aliases.values())
+        read_columns = {Route("deterministic_seed")}
+        read_columns |= set(map(Route, aliases.values()))
         read_columns |= set.union(*self.ml_model_inst.used_columns.values())
-        read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
         write_columns = set.union(*self.ml_model_inst.produced_columns.values())

@@ -7,7 +7,6 @@ Entry point for all tests.
 
 __all__ = []
 
-
 # adjust the path to import the package
 import os
 import sys

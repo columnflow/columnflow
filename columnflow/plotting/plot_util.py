@@ -14,7 +14,6 @@ import order as od
 
 from columnflow.util import maybe_import
 
-
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
