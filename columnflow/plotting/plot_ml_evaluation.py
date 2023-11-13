@@ -198,8 +198,7 @@ def plot_cm(
             if matrix.dtype.name == "object":
                 get_errors_vec = np.vectorize(lambda x: x.get(sci.UP, unc=True))
                 return get_errors_vec(matrix)
-            else:
-                return np.zeros_like(matrix)
+            return np.zeros_like(matrix)
 
         def value_text(i, j):
             """

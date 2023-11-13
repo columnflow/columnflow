@@ -3,9 +3,9 @@
 """
 Tasks related to ML workflows.
 """
+from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Dict, TypeVar
 
 import law
 import luigi
@@ -29,6 +29,7 @@ from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvent
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict
 from columnflow.util import maybe_import
+from columnflow.types import Dict, TypeVar, List
 
 
 ak = maybe_import("awkward")
@@ -703,8 +704,6 @@ class PlotMLResultsBase(
     """
     sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
 
-    Self = TypeVar("Self", bound="PlotMLResultsBase")  # TODO add comment
-
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
         add_default_to_description=True,
@@ -713,8 +712,8 @@ class PlotMLResultsBase(
 
     skip_processes = law.CSVParameter(
         default=("",),
-        description="names of processes to skip; these processes will not be included in the plots."
-        "config; default: ('',)",
+        description="comma seperated list of process names to skip; these processes will not be included in the plots. "
+        "default: ('',)",
         brace_expand=True,
     )
 
@@ -722,7 +721,9 @@ class PlotMLResultsBase(
         default=False,
         significant=False,
         description="when True, each process is divided into the different subprocesses; "
-        "this option requires a ``process_ids`` column to be stored in the events; default: False",
+        "this option requires a ``process_ids`` column to be stored in the events; "
+        "the ``process_ids`` column assignes a subprocess id number (predefined in the config) to each event; "
+        "default: False",
     )
 
     skip_uncertainties = luigi.BoolParameter(
@@ -737,18 +738,18 @@ class PlotMLResultsBase(
         MergeMLEvaluation=MergeMLEvaluation,
     )
 
-    def store_parts(self: Self):
+    def store_parts(self: PlotMLResultsBase):
         parts = super().store_parts()
         parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
         return parts
 
-    def create_branch_map(self: Self):
+    def create_branch_map(self: PlotMLResultsBase):
         return [
             DotDict({"category": cat_name})
             for cat_name in sorted(self.categories)
         ]
 
-    def requires(self: Self):
+    def requires(self: PlotMLResultsBase):
         return {
             d: self.reqs.MergeMLEvaluation.req(
                 self,
@@ -759,7 +760,7 @@ class PlotMLResultsBase(
             for d in self.datasets
         }
 
-    def workflow_requires(self: Self, only_super: bool = False):
+    def workflow_requires(self: PlotMLResultsBase, only_super: bool = False):
         reqs = super().workflow_requires()
         if only_super:
             return reqs
@@ -768,21 +769,23 @@ class PlotMLResultsBase(
 
         return reqs
 
-    def output(self: Self):
+    def output(self: PlotMLResultsBase) -> Dict[str, List]:
         b = self.branch_data
-        return self.target(f"plot__proc_{self.processes_repr}__cat_{b.category}{self.plot_suffix}.pdf")
+        return {"plots": [
+            self.target(name)
+            for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}")
+        ]}
 
-    def prepare_inputs(self: Self) -> Dict[str, ak.Array]:
-        """prepare the inputs for the plot function, based on the given configuration and category.
+    def prepare_inputs(self: PlotMLResultsBase) -> Dict[str, ak.Array]:
+        """
+        prepare the inputs for the plot function, based on the given configuration and category.
 
-        Raises:
-            NotImplementedError: This error is raised if a givin dataset contains more than one process.
-            ValueError: This error is raised if ``plot_sub_processes`` is used without providing the
-                ``process_ids`` column in the data
+        :raises NotImplementedError: This error is raised if a given dataset contains more than one process.
+        :raises ValueError: This error is raised if ``plot_sub_processes`` is used without providing the
+            ``process_ids`` column in the data
 
-        Returns:
-            Dict[str, ak.Array]: A dictionary with the dataset names as keys and
-                the corresponding predictions as values.
+        :return: Dict[str, ak.Array]: A dictionary with the dataset names as keys and
+            the corresponding predictions as values.
         """
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
@@ -851,6 +854,7 @@ class PlotMLResults(PlotMLResultsBase):
     MergeMLEvaluation task as input and saves the plots with the corresponding array
     used to create the plot.
     """
+
     # override the plot_function parameter to be able to only choose between CM and ROC
     plot_function = luigi.ChoiceParameter(
         default="plot_cm",
@@ -858,31 +862,38 @@ class PlotMLResults(PlotMLResultsBase):
         description="The name of the plot function to use. Can be either 'cm' or 'roc'.",
     )
 
-    def prepare_plot_parameters(self):
+    def prepare_plot_parameters(self: PlotMLResults):
+        """
+        Helper function to prepare the plot parameters for the plot function.
+        Implemented to parse the axes labels from the general settings.
+        """
         params = self.get_plot_parameters()
 
-        # parse x_label from general settings
-        x_labels = params.general_settings.get("x_labels", None)
-        if x_labels:
-            params.general_settings["x_labels"] = x_labels.split(";")
+        # parse x_label and y_label from general settings
+        for label in ["x_labels", "y_labels"]:
+            if label in params.general_settings.keys():
+                params.general_settings[label] = params.general_settings[label].split(";")
 
-    def output(self):
-        output = {
-            "plot": super().output(),
-            "array": self.target(f"plot__proc_{self.processes_repr}.parquet"),
+    def output(self: PlotMLResults):
+        b = self.branch_data
+        return {"plots": [
+            self.target(name)
+            for name in self.get_plot_names(f"0_plot__proc_{self.processes_repr}__cat_{b.category}")
+        ],
+            "array": self.target(f"plot__proc_{self.processes_repr}.parquet")
         }
-        return output
 
     @law.decorator.log
     @view_output_plots
-    def run(self):
-        from matplotlib.backends.backend_pdf import PdfPages
+    def run(self: PlotMLResults):
         func_path = {
             "cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
             "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc",
         }
         category_inst = self.config_inst.get_category(self.branch_data.category)
         self.prepare_plot_parameters()
+
+        # call the plot function
         with self.publish_step(f"plotting in {category_inst.name}"):
             all_events = self.prepare_inputs()
             figs, array = self.call_plot_func(
@@ -893,7 +904,16 @@ class PlotMLResults(PlotMLResultsBase):
                 skip_uncertainties=self.skip_uncertainties,
                 **self.get_plot_parameters(),
             )
+
+            # save the outputs
             self.output()["array"].dump(array, formatter="pickle")
-            with PdfPages(self.output()["plot"].abspath) as pdf:
-                for f in figs:
-                    f.savefig(pdf, format="pdf")
+            for file_path in self.output()["plots"]:
+                if file_path.ext() == "pdf":
+                    from matplotlib.backends.backend_pdf import PdfPages
+                    with PdfPages(file_path.abspath) as pdf:
+                        for f in figs:
+                            f.savefig(pdf, format="pdf")
+                    continue
+
+                for index, f in enumerate(figs):
+                    f.savefig(file_path.abs_dirname + "/" + f"{index}_{file_path.basename[2:]}", format=file_path.ext())
