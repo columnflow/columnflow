@@ -23,7 +23,7 @@ class RouteTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # setting standardcases
+        # setting standard cases
         self.route = Route(["i", "like", "trains"])
         self.empty_route = Route()
 
@@ -118,7 +118,7 @@ class RouteTest(unittest.TestCase):
 
         # fields should never be shared among Route instances
         # this is tested because of the tricky behavior of
-        # mutuable objects in init
+        # mutable objects in init
         self.assertFalse(self.route._fields is self.empty_route._fields)
         self.assertFalse(Route() is self.empty_route._fields)
 
@@ -179,7 +179,7 @@ class RouteTest(unittest.TestCase):
 
     def test__bool__(self):
         # SHOULD: Return if fields are empty or not
-        # Since fields cannnot be nested, bool check of _fields is enough
+        # Since fields cannot be nested, bool check of _fields is enough
         self.assertFalse(bool(self.empty_route._fields))
         self.assertTrue(bool(self.route._fields))
 
@@ -378,7 +378,7 @@ class ArrayFunctionTest(unittest.TestCase):
     def test_AUTO(self):
         # SHOULD:   Named tuple of instance and unique class id
 
-        #           check uniquennes between instances
+        #           check uniqueness between instances
         self.assertIsNot(self.empty_arr_func.AUTO, self.add_arr_func.AUTO)
 
     def test_USES(self):
@@ -410,7 +410,7 @@ class ArrayFunctionTest(unittest.TestCase):
         self.assertIsInstance(used_columns, set)
         self.assertIsInstance(produced_columns, set)
 
-        # everythin within Set is a string
+        # everything within Set is a string
         self.assertTrue(all(
             isinstance(column, Route)
             for column in used_columns.union(produced_columns)
@@ -542,7 +542,7 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
             {"event", "Jet.pt", "Jet.eta", "Muon.pt", "Muon.eta"},
         )
 
-        # original array is unchangned
+        # original array is unchanged
         self.test_get_ak_routes()
 
         # removal at level 1
