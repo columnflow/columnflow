@@ -56,6 +56,12 @@ if law.config.has_option("analysis", "production_modules"):
         logger.debug(f"loading production module '{m}'")
         maybe_import(m.strip())
 
+import columnflow.weight  # noqa
+if law.config.has_option("analysis", "weight_production_modules"):
+    for m in law.config.get_expanded("analysis", "weight_production_modules", [], split_csv=True):
+        logger.debug(f"loading weight production module '{m}'")
+        maybe_import(m.strip())
+
 import columnflow.calibration  # noqa
 if law.config.has_option("analysis", "calibration_modules"):
     for m in law.config.get_expanded("analysis", "calibration_modules", [], split_csv=True):

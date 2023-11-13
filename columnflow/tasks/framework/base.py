@@ -217,6 +217,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
+    def get_weight_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(*args, **kwargs)
+
+    @classmethod
     def find_config_objects(
         cls,
         names: str | Sequence[str] | set[str],

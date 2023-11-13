@@ -1704,8 +1704,7 @@ class ArrayFunction(Derivable):
                         instances.add(obj)
 
                 else:
-                    # here, obj must be anything that is accepted by route
-                    instances.add(obj if isinstance(obj, Route) else Route(obj))
+                    instances.add(obj)
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1732,13 +1731,9 @@ class ArrayFunction(Derivable):
 
         return cls(**kwargs)
 
-    def get_dependencies(
-        self: ArrayFunction,
-        include_others: bool = False,
-    ) -> set[ArrayFunction | Any]:
+    def get_dependencies(self: ArrayFunction) -> set[ArrayFunction | Any]:
         """
-        Returns a set of instances of all dependencies. When *include_others* is *True*, also
-        non-ArrayFunction types are returned.
+        Returns a set of instances of all dependencies.
         """
         deps = set()
 
@@ -1748,8 +1743,6 @@ class ArrayFunction(Derivable):
                 if isinstance(obj, self.IOFlagged):
                     obj = obj.wrapped
                 if isinstance(obj, ArrayFunction):
-                    deps.add(obj)
-                elif include_others:
                     deps.add(obj)
 
         return deps
@@ -1793,7 +1786,7 @@ class ArrayFunction(Derivable):
                 # add the columns
                 columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
             else:
-                columns.add(obj)
+                columns.add(Route(obj))
 
         return columns
 
@@ -2211,19 +2204,19 @@ class TaskArrayFunction(ArrayFunction):
             _cache = set()
 
         # add shifts and consider _this_ call cached
-        shifts = {
-            shift
-            for shift in self.shifts
-            if not isinstance(shift, (ArrayFunction, self.IOFlagged))
-        }
+        shifts = set()
+        for shift in self.shifts:
+            if isinstance(shift, od.Shift):
+                shifts.add(shift.name)
+            elif isinstance(shift, str):
+                shifts.add(shift)
         _cache.add(self)
 
         # add shifts of all dependent objects
-        for obj in self.get_dependencies(include_others=False):
-            if isinstance(obj, TaskArrayFunction):
-                if obj not in _cache:
-                    _cache.add(obj)
-                    shifts |= obj._get_all_shifts(_cache=_cache)
+        for obj in self.get_dependencies():
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                shifts |= obj._get_all_shifts(_cache=_cache)
 
         return shifts
 
@@ -2254,7 +2247,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in _cache:
+            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
                 _cache.add(dep)
                 dep.run_requires(reqs=reqs, _cache=_cache)
 
@@ -2287,7 +2280,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in _cache:
+            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
                 _cache.add(dep)
                 dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
 

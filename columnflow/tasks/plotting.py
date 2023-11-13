@@ -12,7 +12,7 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.framework.plotting import (
@@ -29,6 +29,7 @@ class PlotVariablesBase(
     ProcessPlotSettingMixin,
     CategoriesMixin,
     MLModelsMixin,
+    WeightProducerMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,

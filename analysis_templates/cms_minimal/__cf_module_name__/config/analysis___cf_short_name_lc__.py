@@ -112,6 +112,7 @@ verify_config_processes(cfg, warn=True)
 cfg.x.default_calibrator = "example"
 cfg.x.default_selector = "example"
 cfg.x.default_producer = "example"
+cfg.x.default_weight_producer = "example"
 cfg.x.default_ml_model = None
 cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
@@ -225,16 +226,6 @@ cfg.x.keep_columns = DotDict.wrap({
     },
     "cf.UniteColumns": {
         "*",
-    },
-})
-
-# named sets of event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
-get_shifts = functools.partial(get_shifts_from_sources, cfg)
-cfg.x.event_weights = DotDict.wrap({
-    # the default set of event weights
-    "default": {
-        "normalization_weight": [],
-        "muon_weight": get_shifts("mu"),
     },
 })
 
