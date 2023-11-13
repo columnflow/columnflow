@@ -903,9 +903,17 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
+
         if self.ml_model_inst:
             parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
+            return set.union(*self.ml_model_inst.produced_columns().values())
+
+        return super().find_keep_columns(collection)
 
 
 class MLModelDataMixin(MLModelMixin):
@@ -991,10 +999,19 @@ class MLModelsMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            part = "__".join(self.ml_models)
+            part = "__".join(model_inst.cls_name for model_inst in self.ml_model_insts)
             parts.insert_before("version", "ml_models", f"ml__{part}")
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION:
+            return set.union(*(
+                set.union(*model_inst.produced_columns().values())
+                for model_inst in self.ml_model_insts
+            ))
+
+        return super().find_keep_columns(collection)
 
 
 class InferenceModelMixin(ConfigTask):

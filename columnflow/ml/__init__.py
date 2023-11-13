@@ -260,7 +260,7 @@ class MLModel(Derivable):
     def used_columns(self: MLModel) -> dict[od.Config, set[Route]]:
         self._assert_configs("cannot determined used columns")
         return {
-            config_inst: set(self.uses(config_inst))
+            config_inst: set(map(Route, self.uses(config_inst)))
             for config_inst in self.config_insts
         }
 
@@ -268,7 +268,7 @@ class MLModel(Derivable):
     def produced_columns(self: MLModel) -> dict[od.Config, set[Route]]:
         self._assert_configs("cannot determined produced columns")
         return {
-            config_inst: set(self.produces(config_inst))
+            config_inst: set(map(Route, self.produces(config_inst)))
             for config_inst in self.config_insts
         }
 
