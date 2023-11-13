@@ -94,7 +94,7 @@ class SelectEvents(
 
     @law.decorator.log
     @ensure_proxy
-    @law.decorator.localize
+    @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.tasks.histograms import CreateHistograms
@@ -113,7 +113,8 @@ class SelectEvents(
         stats = defaultdict(float)
 
         # run the selector setup
-        self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        n_ext = len(reader_targets)
 
         # show an early warning in case the selector does not produce some mandatory columns
         produced_columns = self.selector_inst.produced_columns
@@ -144,66 +145,75 @@ class SelectEvents(
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-        # open the input file with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [
+                input_file,
+                *(inp["columns"] for inp in inputs["calibrations"]),
+                *reader_targets.values(),
+            ],
+            mode="r",
+        ) as (local_input_file, *inps):
+            # open with uproot
+            with self.publish_step("load and open ..."):
+                nano_file = local_input_file.load(formatter="uproot")
 
-        # iterate over chunks of events and diffs
-        n_calib = len(inputs["calibrations"])
-        for (events, *diffs), pos in self.iter_chunked_io(
-            [nano_file] + [inp["columns"].path for inp in inputs["calibrations"]],
-            source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
-            read_columns=(1 + n_calib) * [read_columns],
-        ):
-            # optional check for overlapping inputs within diffs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping(list(diffs))
+            # iterate over chunks of events and diffs
+            n_calib = len(inputs["calibrations"])
+            for (events, *cols), pos in self.iter_chunked_io(
+                [nano_file, *(inp.path for inp in inps)],
+                source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
+                read_columns=[read_columns] * (1 + n_calib + n_ext),
+            ):
+                # optional check for overlapping inputs within additional columns
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping(list(cols))
 
-            # apply the calibrated diffs
-            events = update_ak_array(events, *diffs)
+                # insert additional columns
+                events = update_ak_array(events, *cols)
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
-
-            # invoke the selection function
-            events, results = self.selector_inst(events, stats)
-
-            # complain when there is no event mask
-            if results.event is None:
-                raise Exception(
-                    f"selector {self.selector_inst.cls_name} returned {results.__class__.__name__} "
-                    "object that does not contain 'event' mask",
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
                 )
 
-            # convert to array
-            results_array = results.to_ak()
+                # invoke the selection function
+                events, results = self.selector_inst(events, stats)
 
-            # optional check for finite values
-            if self.check_finite_output:
-                self.raise_if_not_finite(results_array)
+                # complain when there is no event mask
+                if results.event is None:
+                    raise Exception(
+                        f"selector {self.selector_inst.cls_name} returned {results!r} object that "
+                        "does not contain 'event' mask",
+                    )
 
-            # save results as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
-            result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
-
-            # remove columns
-            if write_columns:
-                events = route_filter(events)
+                # convert to array
+                results_array = results.to_ak()
 
                 # optional check for finite values
                 if self.check_finite_output:
-                    self.raise_if_not_finite(events)
+                    self.raise_if_not_finite(results_array)
 
-                # save additional columns as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
-                column_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # save results as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
+                result_chunks[(lfn_index, pos.index)] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
+
+                # remove columns
+                if write_columns:
+                    events = route_filter(events)
+
+                    # optional check for finite values
+                    if self.check_finite_output:
+                        self.raise_if_not_finite(events)
+
+                    # save additional columns as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
+                    column_chunks[(lfn_index, pos.index)] = chunk
+                    self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
