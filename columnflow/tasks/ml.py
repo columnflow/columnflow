@@ -29,7 +29,7 @@ from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvent
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict
 from columnflow.util import maybe_import
-from columnflow.types import Dict, TypeVar, List
+from columnflow.types import Dict, List
 
 
 ak = maybe_import("awkward")
@@ -880,7 +880,7 @@ class PlotMLResults(PlotMLResultsBase):
             self.target(name)
             for name in self.get_plot_names(f"0_plot__proc_{self.processes_repr}__cat_{b.category}")
         ],
-            "array": self.target(f"plot__proc_{self.processes_repr}.parquet")
+            "array": self.target(f"plot__proc_{self.processes_repr}.parquet"),
         }
 
     @law.decorator.log
