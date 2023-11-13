@@ -34,7 +34,7 @@ class SelectionResultTests(unittest.TestCase):
                 "some_mask": ak.Array([True, False, True, True]),
             },
             "some_top_level_field": {
-                "foo": ak.Array([f"bar{i}" for i in range(4)])
+                "foo": ak.Array([f"bar{i}" for i in range(4)]),
             },
         }
 
