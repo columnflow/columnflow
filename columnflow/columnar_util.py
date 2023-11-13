@@ -26,13 +26,13 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict, defaultdict
+from collections import namedtuple, OrderedDict
 
 import law
 import order as od
 from law.util import InsertableDict
 
-from columnflow.types import Sequence, Callable, Any
+from columnflow.types import Sequence, Callable, Any, T
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path,
@@ -1889,7 +1889,7 @@ class ArrayFunction(Derivable):
             if self.log_runtime:
                 duration = time.perf_counter() - t1
                 logger_perf.info(
-                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                    f"runtime of '{self.cls_name}': {duration:.7f} s",
                 )
 
         # assume result is an event array or tuple with an event array as the first element and
@@ -2045,6 +2045,14 @@ class TaskArrayFunction(ArrayFunction):
         When a bool, this flag decides whether calls of this instance are cached. However, note that
         when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence
         over this attribute.
+
+    .. py:attribute:: pick_cached_result
+
+        type: callable
+
+        A callable that is given a previously cached result, and all arguments and keyword arguments
+        of the main call function, to pick values that should be returned and cached for the next
+        invocation.
     """
 
     # class-level attributes as defaults
@@ -2054,6 +2062,33 @@ class TaskArrayFunction(ArrayFunction):
     call_force = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
+
+    @staticmethod
+    def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
+        """
+        Default implementation for picking a return value from a previously *cached_result* and all
+        *args* and *kwargs* that were passed to the main call method.
+        """
+        # strategy: when an events array exists within args or kwargs, return it including potential
+        # additional objects that were previously cached; if no events array exists, return the
+        # cached result unchanged
+
+        # look for events
+        if args:
+            events = args[0]
+        elif "events" in kwargs:
+            events = kwargs["events"]
+        else:
+            # no events found, return cached_result unchanged
+            return cached_result
+
+        # when the previous cached result is not a tuple, i.e. the call had just one return value,
+        # only return the events
+        if not isinstance(cached_result, tuple):
+            return events
+
+        # otherwise, also return all but the first cached return value
+        return events, *cached_result[1:]
 
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
@@ -2096,10 +2131,11 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        requires_func: Callable | None = law.no_value,
-        setup_func: Callable | None = law.no_value,
-        sandbox: str | None = law.no_value,
-        call_force: bool | None = law.no_value,
+        requires_func: Callable | law.NoValue | None = law.no_value,
+        setup_func: Callable | law.NoValue | None = law.no_value,
+        sandbox: str | law.NoValue | None = law.no_value,
+        call_force: bool | law.NoValue | None = law.no_value,
+        pick_cached_result: Callable | law.NoValue | None = law.no_value,
         inst_dict: dict | None = None,
         **kwargs,
     ):
@@ -2117,6 +2153,8 @@ class TaskArrayFunction(ArrayFunction):
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
             call_force = self.__class__.call_force
+        if pick_cached_result == law.no_value:
+            pick_cached_result = self.__class__.pick_cached_result
 
         # when custom funcs are passed, bind them to this instance
         if requires_func:
@@ -2127,6 +2165,11 @@ class TaskArrayFunction(ArrayFunction):
         # other attributes
         self.sandbox = sandbox
         self.call_force = call_force
+        self.pick_cached_result = pick_cached_result
+
+        # cached results of the main call function per thread id
+        self._result_cache = {}
+        self._result_cache_lock = threading.RLock()
 
     def __getattr__(self, attr: str) -> Any:
         """
@@ -2147,6 +2190,34 @@ class TaskArrayFunction(ArrayFunction):
             kwargs.setdefault("inst_dict", self.inst_dict)
 
         return super().instantiate_dependency(cls, **kwargs)
+
+    def _get_cached_result(self) -> Any | law.NoValue:
+        """
+        Returns the last cached result or :py:attr:`law.no_value` if no cached result was found.
+        """
+        with self._result_cache_lock:
+            return self._result_cache.get(threading.get_ident(), law.no_value)
+
+    def _cache_result(self, obj: Any) -> None:
+        """
+        Adds a new result *obj* to the cache.
+        """
+        with self._result_cache_lock:
+            self._result_cache[threading.get_ident()] = obj
+
+    def _clear_cache(self, dependencies: bool = False) -> None:
+        """
+        Removes any previously cached result. When *dependencies* is *True*, caches of all
+        dependencies are cleared recursively.
+        """
+        with self._result_cache_lock:
+            self._result_cache.pop(threading.get_ident(), None)
+
+        # also clear dependencies
+        if dependencies:
+            for obj in self.get_dependencies():
+                if isinstance(obj, TaskArrayFunction):
+                    obj._clear_cache(dependencies=dependencies)
 
     def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
@@ -2239,39 +2310,46 @@ class TaskArrayFunction(ArrayFunction):
     def __call__(
         self,
         *args,
-        call_cache: bool | defaultdict | None = None,
         call_force: bool | None = None,
-        n_return: int = 1,
         **kwargs,
     ) -> Any:
         """
         Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
-        Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before, it is not called again but the first *n_return* elements of
-        *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
-        when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
+        By default, all return values are cached per thread identifier. This is bypassed either if
+        *call_force* is *True*, or when it is *None* and the :py:attr:`call_force` attribute of this
+        instance is *True*. If not *None*, the cache decision is passed on to all dependent
+        :py:class:`TaskArrayFunction`'s calls.
         """
-        # call caching
-        if call_cache is not False:
-            # setup a new call cache when not present yet
-            if not isinstance(call_cache, dict):
-                call_cache = defaultdict(int)
+        clear_cache = kwargs.get("_clear_cache", True)
+        kwargs["_clear_cache"] = False
 
-            # check if the instance was called before or wether the call is forced
-            if call_force is None:
-                call_force = self.call_force
-            if call_cache[self] > 0 and not call_force:
-                return args[0] if n_return == 1 else args[:n_return]
+        # call_force default for this call
+        if call_force is None:
+            call_force = self.call_force
 
-            # increase the count and set kwargs for the call downstream
-            call_cache[self] += 1
+        # pass on the call_force setting when specified
+        if call_force is not None:
+            kwargs["call_force"] = call_force
 
-        # stack all kwargs
-        kwargs = {**kwargs, "call_cache": call_cache}
+        # get the cached result
+        result = self._get_cached_result()
 
-        return super().__call__(*args, **kwargs)
+        # do the actual call if forced or no value was cached before
+        update = call_force or result is law.no_value
+        if update:
+            result = super().__call__(*args, **kwargs)
+        elif callable(self.pick_cached_result):
+            result = self.pick_cached_result(result, *args, **kwargs)
+
+        # clear or update the cache
+        if clear_cache:
+            self._clear_cache(dependencies=True)
+        else:
+            self._cache_result(result)
+
+        return result
 
 
 class NoThreadPool(object):
