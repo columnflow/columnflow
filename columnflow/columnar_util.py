@@ -2037,7 +2037,7 @@ class TaskArrayFunction(ArrayFunction):
         type: callable
 
         A callable that is given a previously cached result, and all arguments and keyword arguments
-        of the main calll function, to pick values that should be returned and cached for the next
+        of the main call function, to pick values that should be returned and cached for the next
         invocation.
     """
 
