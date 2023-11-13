@@ -84,6 +84,7 @@ class ProduceColumns(
 
         # run the producer setup
         reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -109,8 +110,8 @@ class ProduceColumns(
             # iterate over chunks of events and diffs
             for (events, *cols), pos in self.iter_chunked_io(
                 [inp.path for inp in inps],
-                source_type=["awkward_parquet"] + [None] * len(reader_targets),
-                read_columns=[read_columns] * (len(reader_targets) + 1),
+                source_type=["awkward_parquet"] + [None] * n_ext,
+                read_columns=[read_columns] * (1 + n_ext),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:

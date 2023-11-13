@@ -4,6 +4,8 @@
 Task to produce and merge histograms.
 """
 
+from __future__ import annotations
+
 import luigi
 import law
 
@@ -51,6 +53,10 @@ class CreateHistograms(
 
     # register shifts found in the chosen weight producer to this task
     register_weight_producer_shifts = True
+
+    @law.util.classproperty
+    def mandatory_columns(cls) -> set[str]:
+        return set(cls.category_id_columns) | {"process_id"}
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
