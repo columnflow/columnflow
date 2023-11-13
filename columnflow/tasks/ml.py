@@ -603,8 +603,31 @@ class MLEvaluation(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # cache for producer inst
+        self._preparation_producer_inst = None
+
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
+
+    @property
+    def preparation_producer_inst(self):
+        producer = None
+        if self.ml_model_inst.preparation_producer_in_ml_evaluation:
+            producer = self.ml_model_inst.preparation_producer(self.config_inst)
+        if producer and self._preparation_producer_inst is None:
+            self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+
+            # check that preparation_producer does not clash with ml_model_inst sandbox
+            if (
+                self._preparation_producer_inst.sandbox and
+                self.sandbox != self._preparation_producer_inst.sandbox
+            ):
+                raise Exception(
+                    f"Task {self.__class__.__name__} got different sandboxes from the MLModel ({self.sandbox}) "
+                    f"than from the preparation_producer ({self._preparation_producer_inst.sandbox})",
+                )
+
+        return self._preparation_producer_inst
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -618,6 +641,10 @@ class MLEvaluation(
         )
 
         reqs["events"] = self.reqs.MergeReducedEvents.req_different_branching(self)
+
+        # add producer dependent requirements
+        if self.preparation_producer_inst:
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
 
         if not self.pilot and self.producer_insts:
             reqs["producers"] = [
@@ -644,6 +671,8 @@ class MLEvaluation(
                 branch=-1,
             ),
         }
+        if self.preparation_producer_inst:
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -667,13 +696,23 @@ class MLEvaluation(
         )
 
         # prepare inputs and outputs
+        reqs = self.requires()
         inputs = self.input()
         output = self.output()
         output_chunks = {}
+        stats = defaultdict(float)
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
+
+        # run the setup of the optional producer
+        reader_targets = {}
+        if self.preparation_producer_inst:
+            reader_targets = self.preparation_producer_inst.run_setup(
+                reqs["preparation_producer"],
+                inputs["preparation_producer"],
+            )
 
         # open all model files
         models = [
@@ -695,58 +734,78 @@ class MLEvaluation(
         read_columns = {Route("deterministic_seed")}
         read_columns |= set(map(Route, aliases.values()))
         read_columns |= set.union(*self.ml_model_inst.used_columns.values())
+        if self.preparation_producer_inst:
+            read_columns |= self.preparation_producer_inst.used_columns
+        read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
         write_columns = set.union(*self.ml_model_inst.produced_columns.values())
         route_filter = RouteFilter(write_columns)
 
-        # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0]["events"].path]
+        # iterate over chunks of events and columns
+        files = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"].path for inp in inputs["producers"]])
-        for (events, *columns), pos in self.iter_chunked_io(
-            files,
-            source_type=len(files) * ["awkward_parquet"],
-            read_columns=len(files) * [read_columns],
-        ):
-            # optional check for overlapping inputs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping([events] + list(columns))
+            files.extend([inp["columns"] for inp in inputs["producers"]])
+        if reader_targets:
+            files.extend(reader_targets.values())
 
-            # add additional columns
-            events = update_ak_array(events, *columns)
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [*files, *reader_targets.values()],
+            mode="r",
+        ) as inps:
+            for (events, *columns), pos in self.iter_chunked_io(
+                [inp.path for inp in inps],
+                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+            ):
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(columns))
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
+                # add additional columns
+                events = update_ak_array(events, *columns)
 
-            # asdasd
-            fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
+                )
 
-            # evaluate the model
-            events = self.ml_model_inst.evaluate(
-                self,
-                events,
-                models,
-                fold_indices,
-                events_used_in_training=events_used_in_training,
-            )
+                # asdasd
+                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
-            # remove columns
-            events = route_filter(events)
+                # invoke the optional producer
+                if len(events) and self.preparation_producer_inst:
+                    events = self.preparation_producer_inst(
+                        events,
+                        stats=stats,
+                        fold_indices=fold_indices,
+                        ml_model_inst=self.ml_model_inst,
+                    )
 
-            # optional check for finite values
-            if self.check_finite_output:
-                self.raise_if_not_finite(events)
+                # evaluate the model
+                events = self.ml_model_inst.evaluate(
+                    self,
+                    events,
+                    models,
+                    fold_indices,
+                    events_used_in_training=events_used_in_training,
+                )
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-            output_chunks[pos.index] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # remove columns
+                events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite_output:
+                    self.raise_if_not_finite(events)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
+                output_chunks[pos.index] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

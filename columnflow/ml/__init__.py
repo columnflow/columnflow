@@ -116,9 +116,12 @@ class MLModel(Derivable):
     # falls back to cls_name if None
     store_name: str | None = None
 
+    # default setting wether to run the preparation_producer in MLEvaluation
+    preparation_producer_in_ml_evaluation: bool = True
+
     # names of attributes that are automatically extracted from init kwargs and
     # fall back to classmembers in case they are missing
-    init_attributes: list[str] = ["single_config", "folds", "store_name"]
+    init_attributes: list[str] = ["single_config", "folds", "store_name", "preparation_producer_in_ml_evaluation"]
 
     def __init__(
         self: MLModel,
