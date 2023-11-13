@@ -110,10 +110,12 @@ class CalibratorMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
-        if collection == ColumnCollection.ALL_FROM_CALIBRATOR:
-            return self.calibrator_inst.produced_columns
+        columns = super().find_keep_columns(collection)
 
-        return super().find_keep_columns(collection)
+        if collection == ColumnCollection.ALL_FROM_CALIBRATOR:
+            columns |= self.calibrator_inst.produced_columns
+
+        return columns
 
 
 class CalibratorsMixin(ConfigTask):
@@ -204,13 +206,15 @@ class CalibratorsMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
         if collection == ColumnCollection.ALL_FROM_CALIBRATORS:
-            return set.union(*(
+            columns |= set.union(*(
                 calibrator_inst.produced_columns
                 for calibrator_inst in self.calibrator_insts
             ))
 
-        return super().find_keep_columns(collection)
+        return columns
 
 
 class SelectorMixin(ConfigTask):
@@ -295,10 +299,12 @@ class SelectorMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
-        if collection == ColumnCollection.ALL_FROM_SELECTOR:
-            return self.selector_inst.produced_columns
+        columns = super().find_keep_columns(collection)
 
-        return super().find_keep_columns(collection)
+        if collection == ColumnCollection.ALL_FROM_SELECTOR:
+            columns |= self.selector_inst.produced_columns
+
+        return columns
 
 
 class SelectorStepsMixin(SelectorMixin):
@@ -438,10 +444,12 @@ class ProducerMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
-        if collection == ColumnCollection.ALL_FROM_PRODUCER:
-            return self.producer_inst.produced_columns
+        columns = super().find_keep_columns(collection)
 
-        return super().find_keep_columns(collection)
+        if collection == ColumnCollection.ALL_FROM_PRODUCER:
+            columns |= self.producer_inst.produced_columns
+
+        return columns
 
 
 class ProducersMixin(ConfigTask):
@@ -531,13 +539,15 @@ class ProducersMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
         if collection == ColumnCollection.ALL_FROM_PRODUCERS:
-            return set.union(*(
+            columns |= set.union(*(
                 producer_inst.produced_columns
                 for producer_inst in self.producer_insts
             ))
 
-        return super().find_keep_columns(collection)
+        return columns
 
 
 class MLModelMixinBase(AnalysisTask):
@@ -910,10 +920,12 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
-        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
-            return set.union(*self.ml_model_inst.produced_columns().values())
+        columns = super().find_keep_columns(collection)
 
-        return super().find_keep_columns(collection)
+        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
+            columns |= set.union(*self.ml_model_inst.produced_columns().values())
+
+        return columns
 
 
 class MLModelDataMixin(MLModelMixin):
@@ -1005,13 +1017,15 @@ class MLModelsMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
         if collection == ColumnCollection.ALL_FROM_ML_EVALUATION:
-            return set.union(*(
+            columns |= set.union(*(
                 set.union(*model_inst.produced_columns().values())
                 for model_inst in self.ml_model_insts
             ))
 
-        return super().find_keep_columns(collection)
+        return columns
 
 
 class InferenceModelMixin(ConfigTask):

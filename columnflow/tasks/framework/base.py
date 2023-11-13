@@ -719,10 +719,12 @@ class ConfigTask(AnalysisTask):
         :param collection: The collection to return.
         :return: A set of :py:class:`Route` objects.
         """
-        if collection == ColumnCollection.MANDATORY_COFFEA:
-            return set(Route(c) for c in mandatory_coffea_columns)
+        columns = set()
 
-        return set()
+        if collection == ColumnCollection.MANDATORY_COFFEA:
+            columns |= set(Route(c) for c in mandatory_coffea_columns)
+
+        return columns
 
 
 class ShiftTask(ConfigTask):
