@@ -35,7 +35,7 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
-    # decibes whether the task itself runs the calibrator and implements its shifts
+    # decides whether the task itself runs the calibrator and implements its shifts
     register_calibrator_shifts = False
 
     @classmethod
@@ -119,7 +119,7 @@ class CalibratorsMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the calibrators and implements their shifts
+    # decides whether the task itself runs the calibrators and implements their shifts
     register_calibrators_shifts = False
 
     @classmethod
@@ -205,7 +205,7 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
-    # decibes whether the task itself runs the selector and implements its shifts
+    # decides whether the task itself runs the selector and implements its shifts
     register_selector_shifts = False
 
     @classmethod
@@ -341,7 +341,7 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
-    # decibes whether the task itself runs the producer and implements its shifts
+    # decides whether the task itself runs the producer and implements its shifts
     register_producer_shifts = False
 
     @classmethod
@@ -425,7 +425,7 @@ class ProducersMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the producers and implements their shifts
+    # decides whether the task itself runs the producers and implements their shifts
     register_producers_shifts = False
 
     @classmethod
