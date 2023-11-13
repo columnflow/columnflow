@@ -10,16 +10,14 @@ import logging
 
 import law
 
-
-logger = logging.getLogger(__name__)
-
-
 # package infos
 from columnflow.__version__ import (  # noqa
     __doc__, __author__, __email__, __copyright__, __credits__, __contact__, __license__,
     __status__, __version__,
 )
 
+
+logger = logging.getLogger(__name__)
 
 # version info
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
@@ -42,14 +40,12 @@ law.contrib.load(
 # some core tasks (BundleCMSSW) need the cms contrib package, to be refactored, see #155
 law.contrib.load("cms")
 
-
 # initialize wlcg file systems once so that their cache cleanup is triggered if configured
 if law.config.has_option("outputs", "wlcg_file_systems"):
     wlcg_file_systems = [
         law.wlcg.WLCGFileSystem(fs.strip())
         for fs in law.config.get_expanded("outputs", "wlcg_file_systems", [], split_csv=True)
     ]
-
 
 # initialize producers, calibrators, selectors, categorizers, ml models and stat models
 from columnflow.util import maybe_import
@@ -90,13 +86,11 @@ if law.config.has_option("analysis", "inference_modules"):
         logger.debug(f"loading inference module '{m}'")
         maybe_import(m.strip())
 
-
 # preload all task modules so that task parameters are globally known and accepted
 if law.config.has_section("modules"):
     for m in law.config.options("modules"):
         logger.debug(f"loading task module '{m}'")
         maybe_import(m.strip())
-
 
 # cleanup
 del m

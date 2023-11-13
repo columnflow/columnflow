@@ -16,7 +16,6 @@ from columnflow.types import Sequence, Callable
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, InsertableDict
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

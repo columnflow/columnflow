@@ -93,8 +93,9 @@ class ProduceColumns(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.producer_inst.used_columns
+        read_columns |= set(map(Route, set(aliases.values())))
 
         # define columns that will be written
         write_columns = self.producer_inst.produced_columns

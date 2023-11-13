@@ -15,7 +15,6 @@ from columnflow.util import maybe_import
 
 from __cf_module_name__.production.example import cutflow_features
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

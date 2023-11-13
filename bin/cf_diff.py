@@ -1,14 +1,16 @@
 # coding: utf8
+
 """
-utility script for checking the differences betreen multiple CF output files
+Utility script for checking the differences betreen multiple CF output files.
 """
+
 from __future__ import annotations
 
-import awkward as ak
 import itertools
 
-from columnflow.columnar_util import get_ak_routes
+import awkward as ak
 
+from columnflow.columnar_util import get_ak_routes
 from cf_inspect import load
 
 

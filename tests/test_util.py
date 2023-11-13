@@ -3,7 +3,6 @@
 
 __all__ = ["UtilTest"]
 
-
 import unittest
 
 from columnflow.util import create_random_name

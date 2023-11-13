@@ -14,6 +14,7 @@ from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.tasks.framework.remote import (
     RemoteWorkflowMixin, BundleRepo, BundleSoftware, BundleBashSandbox, BundleCMSSWSandbox,
 )
+from columnflow.util import expand_path
 
 
 class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
@@ -63,7 +64,7 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
     def crab_bootstrap_file(self) -> law.JobInputFile:
         # each job can define a bootstrap file that is executed prior to the actual job
         # in order to setup software and environment variables
-        bootstrap_file = os.path.expandvars("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
+        bootstrap_file = expand_path("$CF_BASE/columnflow/tasks/framework/remote_bootstrap.sh")
         if "CF_REMOTE_BOOTSTRAP_FILE" in os.environ:
             bootstrap_file = os.environ["CF_REMOTE_BOOTSTRAP_FILE"]
 
@@ -84,25 +85,32 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         config: law.BaseJobFileFactory.Config,
         submit_jobs: dict[int, list[int]],
     ) -> law.BaseJobFileFactory.Config:
-        # include the wlcg specific tools script in the input sandbox
-        config.input_files["wlcg_tools"] = law.JobInputFile(
-            law.util.law_src_path("contrib/wlcg/scripts/law_wlcg_tools.sh"),
-            share=True,
-            render=False,
+        # add common config settings
+        workflow_reqs = self.crab_workflow_requires()
+        self.add_common_configs(
+            config,
+            workflow_reqs,
+            law_config=True,
+            voms=False,
+            kerberos=False,
+            wlcg=True,
         )
 
+        # add variables related to software bundles
+        self.add_bundle_render_variables(config, workflow_reqs)
+
         # customize memory
-        if self.crab_memory > 0:
+        if self.crab_memory is not None and self.crab_memory > 0:
             config.crab.JobType.maxMemoryMB = int(round(self.crab_memory))
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "crab"
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
-        config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
-
-        # add variables related to software bundles
-        self.add_bundle_render_variables(self.crab_workflow_requires(), config)
+        config.render_variables.setdefault(
+            "cf_remote_lcg_setup",
+            law.config.get_expanded("job", "remote_lcg_setup"),
+        )
 
         # forward env variables
         for ev, rv in self.crab_forward_env_variables.items():

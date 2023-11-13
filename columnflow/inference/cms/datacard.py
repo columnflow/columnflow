@@ -16,10 +16,10 @@ from columnflow.types import Sequence, Any
 from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div
 
-
 np = maybe_import("np")
 hist = maybe_import("hist")
 uproot = maybe_import("uproot")
+
 
 logger = law.logger.get_logger(__name__)
 

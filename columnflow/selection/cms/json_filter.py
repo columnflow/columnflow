@@ -9,7 +9,6 @@ from __future__ import annotations
 from columnflow.selection import Selector, selector, SelectionResult
 from columnflow.util import maybe_import, InsertableDict, DotDict
 
-
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
