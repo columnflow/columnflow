@@ -42,7 +42,7 @@ class MLModel(Derivable):
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
     :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`). The optional `py:meth:`preparation_producer`` allows
+    declarations (:py:meth:`parameter_pairs`). The optional py:meth:`preparation_producer` allows
     setting a producer that is run during the initial preparation of ML columns.
 
     .. py:classattribute:: single_config
@@ -116,7 +116,7 @@ class MLModel(Derivable):
     # falls back to cls_name if None
     store_name: str | None = None
 
-    # default setting wether to run the preparation_producer in MLEvaluation
+    # flag denoting whether the preparation_producer is invoked before evaluate()
     preparation_producer_in_ml_evaluation: bool = True
 
     # names of attributes that are automatically extracted from init kwargs and
@@ -350,12 +350,15 @@ class MLModel(Derivable):
         return list(requested_producers)
 
     def preparation_producer(
-        self,
+        self: MLModel,
         config_inst: od.Config,
     ) -> str | None:
         """
-        This method allows setting a producer that can be called as part of the preparation of the
-        ML input columns.
+        This method allows setting a producer that can be called as part of the preparation
+        of the ML input columns given a *config_inst*.
+
+        :param config_inst: :py:class:`~order.Config` object for which the producer should run.
+        :return: Name of a :py:class:`Producer` class or *None*.
         """
         return None
 

@@ -55,7 +55,7 @@ class PrepareMLEvents(
         super().__init__(*args, **kwargs)
 
         # cache for producer inst
-        self._preparation_producer_inst = None
+        self._preparation_producer_inst = law.no_value
 
         # complain when this task is run for events that are not needed for training
         if not self.events_used_in_training(
@@ -72,8 +72,12 @@ class PrepareMLEvents(
 
     @property
     def preparation_producer_inst(self):
+        if self._preparation_producer_inst is not law.no_value:
+            # producer has already been cached
+            return self._preparation_producer_inst
+
         producer = self.ml_model_inst.preparation_producer(self.config_inst)
-        if producer and self._preparation_producer_inst is None:
+        if producer:
             self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
             # overwrite the sandbox when set
@@ -604,17 +608,23 @@ class MLEvaluation(
         super().__init__(*args, **kwargs)
 
         # cache for producer inst
-        self._preparation_producer_inst = None
+        self._preparation_producer_inst = law.no_value
 
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
 
     @property
     def preparation_producer_inst(self):
+        if self._preparation_producer_inst is not law.no_value:
+            # producer has already been cached
+            return self._preparation_producer_inst
+
         producer = None
         if self.ml_model_inst.preparation_producer_in_ml_evaluation:
+            # only consider preparation_producer in MLEvaluation if requested by model
             producer = self.ml_model_inst.preparation_producer(self.config_inst)
-        if producer and self._preparation_producer_inst is None:
+
+        if producer:
             self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
             # check that preparation_producer does not clash with ml_model_inst sandbox
@@ -736,7 +746,6 @@ class MLEvaluation(
         read_columns |= set.union(*self.ml_model_inst.used_columns.values())
         if self.preparation_producer_inst:
             read_columns |= self.preparation_producer_inst.used_columns
-        read_columns = {Route(c) for c in read_columns}
 
         # define columns that will be written
         write_columns = set.union(*self.ml_model_inst.produced_columns.values())
@@ -774,7 +783,7 @@ class MLEvaluation(
                     missing_strategy=self.missing_column_alias_strategy,
                 )
 
-                # asdasd
+                # generate fold indices
                 fold_indices = events.deterministic_seed % self.ml_model_inst.folds
 
                 # invoke the optional producer
