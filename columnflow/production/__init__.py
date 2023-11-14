@@ -33,29 +33,32 @@ class Producer(TaskArrayFunction):
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`Producer` subclass with
-        additional, optional *bases* and attaching the decorated function to it
-        as :py:meth:`~Producer.call_func`.
+        Decorator for creating a new :py:class:`Producer` subclass with additional, optional *bases*
+        and attaching the decorated function to it as :py:meth:`~Producer.call_func`.
 
-        When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
-        other calibrators, selectors and producers in case they are evalauted on a
+        When *mc_only* (*data_only*) is *True*, the producer is skipped and not considered by
+        other calibrators, selectors and producers in case they are evaluated on a
         :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose ``is_mc``
         (``is_data``) attribute is *False*.
 
-        When *nominal_only* is *True* or *shifts_only* is set, the calibrator is skipped and not
-        considered by other calibrators, selectors and producers in case they are evalauted on a
+        When *nominal_only* is *True* or *shifts_only* is set, the producer is skipped and not
+        considered by other calibrators, selectors and producers in case they are evaluated on a
         :py:class:`order.Shift` (using the :py:attr:`global_shift_inst` attribute) whose name does
         not match.
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Callable function that produces new columns
-        :param bases: Additional bases for new Producer instance
-        :param mc_only: boolean flag indicating that this Producer instance
-            should only run on Monte Carlo simulation
-        :param data_only: boolean flag indicating that this Producer instance
-            should only run on observed data
-        :return: new Producer instance
+        :param func: Function to be wrapped and integrated into new :py:class:`Producer` class.
+        :param bases: Additional bases for the new :py:class:`Producer`.
+        :param mc_only: Boolean flag indicating that this :py:class:`Producer` should only run on
+            Monte Carlo simulation and skipped for real data.
+        :param data_only: Boolean flag indicating that this :py:class:`Producer` should only run on
+            real data and skipped for Monte Carlo simulation.
+        :param nominal_only: Boolean flag indicating that this :py:class:`Producer` should only run
+            on the nominal shift and skipped on any other shifts.
+        :param shifts_only: Shift names that this :py:class:`Producer` should only run on, skipping
+            all other shifts.
+        :return: New :py:class:`Producer` subclass.
         """
         # prepare shifts_only
         if shifts_only:
@@ -99,7 +102,7 @@ class Producer(TaskArrayFunction):
                         if data_only and not self.dataset_inst.is_data:
                             return True
 
-                    # check nominal_only
+                    # check nominal_only and shifts_only
                     if getattr(self, "global_shift_inst", None):
                         if nominal_only and not self.global_shift_inst.is_nominal:
                             return True
