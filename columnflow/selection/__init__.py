@@ -371,13 +371,34 @@ class SelectionResult(od.AuxDataMixin):
                 for src_name, dst_dict in self.objects.items()
             })
 
-        # add other fields but verify they do not overwrite existing fields
-        for key in self.other:
-            if key in to_merge:
-                raise KeyError(
-                    f"additional top-level field '{key}' of {self.__class__.__name__} conflicts "
-                    f"with existing special field '{key}'",
-                )
-        to_merge.update(self.other)
+        # other fields can be nested in principle, so disentangle nested and flat entries
+        def convert_multi_struct_to_ak(input_structure, depth=0):
+            nested_entries = dict()
+            flat_entries = dict()
+            for key, entry in input_structure.items():
+                # add other fields but verify they do not overwrite existing fields
+
+                if depth == 0 and key in to_merge:
+                    raise KeyError(
+                        f"additional top-level field '{key}' of {self.__class__.__name__} conflicts "
+                        f"with existing special field '{key}'",
+                    )
+                if isinstance(entry, dict):
+                    if depth > 1:
+                        raise ValueError("Depth of nested structures in "
+                                         f"SelectionResults cannot exceed 1, found {depth}")
+                    _, sub_flat = convert_multi_struct_to_ak(entry, depth=depth + 1)
+                    nested_entries.update({key: sub_flat})
+                elif isinstance(entry, ak.Array):
+                    flat_entries.update({key: entry})
+                else:
+                    raise NotImplementedError("Cannot handle object of type "
+                                              f"{type(entry)} at depth {depth} in SelectionResul")
+            return nested_entries, flat_entries
+
+        nested, flat = convert_multi_struct_to_ak(self.other)
+
+        to_merge.update(flat)
+        to_merge.update({k: ak.zip(entry) for k, entry in nested.items()})
 
         return ak.zip(to_merge)
