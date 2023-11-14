@@ -268,9 +268,38 @@ class SelectionResult(od.AuxDataMixin):
             self.event = deepcopy_without_behavior(other.event)
         elif other.event is not None:
             self.event = self.event & other.event
+
+        def check_for_repeating_keys(
+            this_dict: DotDict,
+            other_dict: DotDict,
+            prefix: str = None,
+        ) -> None:
+            """
+            checks whether the same step is defined in two separate SelectionResults
+            """
+            these_keys = set(this_dict.keys())
+            other_keys = set(other_dict.keys())
+
+            # find same keys in both sets
+            double_keys = these_keys.intersection(other_keys)
+            if len(double_keys) > 0:
+                final_list = [f"{prefix}/{x}" for x in double_keys] if prefix else double_keys
+                problem_keys = ", ".join(final_list)
+                msg = (f"Following keys are defined by both SelectionResult instances:"
+                       f"{problem_keys}. This is not supported!")
+                raise KeyError(msg)
+
+        check_for_repeating_keys(self.steps, other.steps)
         # update steps in-place
         self.steps.update(deepcopy_without_behavior(other.steps))
         # use deep merging for objects
+        object_keys = list(self.objects.keys())
+        for k in object_keys:
+            check_for_repeating_keys(
+                this_dict=self.objects[k],
+                other_dict=other.objects.get(k, DotDict()),
+                prefix=k,
+            )
         law.util.merge_dicts(
             self.objects,
             deepcopy_without_behavior(other.objects),
