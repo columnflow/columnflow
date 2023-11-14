@@ -130,7 +130,7 @@ def plot_cm(
                 counts[ind, index] += count
 
         if not skip_uncertainties:
-            vecNumber = np.vectorize(lambda n, count: sci.Number(n, float(n / np.sqrt(count))))
+            vecNumber = np.vectorize(lambda n, count: sci.Number(n, float(n / np.sqrt(count) if count else 0)))
             result = vecNumber(result, counts)
 
         # Normalize Matrix if needed
@@ -143,7 +143,7 @@ def plot_cm(
                 )
 
             row_sums = result.sum(axis=valid.get(normalization))
-            result = result / row_sums[:, np.newaxis]
+            result = result / row_sums[:, np.newaxis] if valid.get(normalization) else result / row_sums
 
         return result
 
