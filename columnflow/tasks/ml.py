@@ -77,12 +77,17 @@ class PrepareMLEvents(
             return self._preparation_producer_inst
 
         producer = self.ml_model_inst.preparation_producer(self.config_inst)
-        if producer:
-            self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
-            # overwrite the sandbox when set
-            if self._preparation_producer_inst.sandbox:
-                self.sandbox = self._preparation_producer_inst.sandbox
+        if not producer:
+            # set producer inst to None when no producer is requested
+            self._preparation_producer_inst = None
+            return self._preparation_producer_inst
+
+        self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+
+        # overwrite the sandbox when set
+        if self._preparation_producer_inst.sandbox:
+            self.sandbox = self._preparation_producer_inst.sandbox
 
         return self._preparation_producer_inst
 
@@ -624,18 +629,22 @@ class MLEvaluation(
             # only consider preparation_producer in MLEvaluation if requested by model
             producer = self.ml_model_inst.preparation_producer(self.config_inst)
 
-        if producer:
-            self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+        if not producer:
+            # set producer inst to None when no producer is requested
+            self._preparation_producer_inst = None
+            return self._preparation_producer_inst
 
-            # check that preparation_producer does not clash with ml_model_inst sandbox
-            if (
-                self._preparation_producer_inst.sandbox and
-                self.sandbox != self._preparation_producer_inst.sandbox
-            ):
-                raise Exception(
-                    f"Task {self.__class__.__name__} got different sandboxes from the MLModel ({self.sandbox}) "
-                    f"than from the preparation_producer ({self._preparation_producer_inst.sandbox})",
-                )
+        self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+
+        # check that preparation_producer does not clash with ml_model_inst sandbox
+        if (
+            self._preparation_producer_inst.sandbox and
+            self.sandbox != self._preparation_producer_inst.sandbox
+        ):
+            raise Exception(
+                f"Task {self.__class__.__name__} got different sandboxes from the MLModel ({self.sandbox}) "
+                f"than from the preparation_producer ({self._preparation_producer_inst.sandbox})",
+            )
 
         return self._preparation_producer_inst
 
