@@ -13,7 +13,6 @@ from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import maybe_import, InsertableDict, DotDict
 from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 correctionlib = maybe_import("correctionlib")

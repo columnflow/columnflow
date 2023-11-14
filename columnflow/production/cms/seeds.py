@@ -15,7 +15,6 @@ from columnflow.columnar_util import (
     optional_column as optional,
 )
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

@@ -4,6 +4,8 @@
 Task to produce and merge histograms.
 """
 
+from __future__ import annotations
+
 import luigi
 import law
 
@@ -48,6 +50,10 @@ class CreateHistograms(
     # names of columns that contain category ids
     # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
+
+    @law.util.classproperty
+    def mandatory_columns(cls) -> set[str]:
+        return set(cls.category_id_columns) | {"process_id"}
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

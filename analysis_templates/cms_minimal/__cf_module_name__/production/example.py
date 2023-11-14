@@ -15,7 +15,6 @@ from columnflow.selection.util import create_collections_from_masks
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

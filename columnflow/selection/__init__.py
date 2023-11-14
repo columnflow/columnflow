@@ -17,7 +17,6 @@ from columnflow.util import maybe_import, DotDict, DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources
 
-
 ak = maybe_import("awkward")
 
 
@@ -28,7 +27,7 @@ class Selector(TaskArrayFunction):
 
     exposed = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self: Selector, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # when not exposed and call_force is not specified,
@@ -51,25 +50,29 @@ class Selector(TaskArrayFunction):
         Decorator for creating a new :py:class:`~.Selector` subclass with additional, optional
         *bases* and attaching the decorated function to it as ``call_func``.
 
-        When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
-        other calibrators, selectors and producers in case they are evalauted on a
+        When *mc_only* (*data_only*) is *True*, the selector is skipped and not considered by
+        other calibrators, selectors and producers in case they are evaluated on a
         :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose ``is_mc``
         (``is_data``) attribute is *False*.
 
-        When *nominal_only* is *True* or *shifts_only* is set, the calibrator is skipped and not
-        considered by other calibrators, selectors and producers in case they are evalauted on a
+        When *nominal_only* is *True* or *shifts_only* is set, the selector is skipped and not
+        considered by other calibrators, selectors and producers in case they are evaluated on a
         :py:class:`order.Shift` (using the :py:attr:`global_shift_inst` attribute) whose name does
         not match.
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Callable that is used to perform the selections
-        :param bases: Additional bases for new subclass
-        :param mc_only: Flag to indicate that this Selector should only run
-            on Monte Carlo Simulation
-        :param data_only: Flag to indicate that this Selector should only run
-            on observed data
-        :return: New Selector instance
+        :param func: Function to be wrapped and integrated into new :py:class:`Selector` class.
+        :param bases: Additional bases for the new :py:class:`Selector`.
+        :param mc_only: Boolean flag indicating that this :py:class:`Selector` should only run on
+            Monte Carlo simulation and skipped for real data.
+        :param data_only: Boolean flag indicating that this :py:class:`Selector` should only run on
+            real data and skipped for Monte Carlo simulation.
+        :param nominal_only: Boolean flag indicating that this :py:class:`Selector` should only run
+            on the nominal shift and skipped on any other shifts.
+        :param shifts_only: Shift names that this :py:class:`Selector` should only run on,
+            skipping all other shifts.
+        :return: New :py:class:`Selector` subclass.
         """
         # prepare shifts_only
         if shifts_only:
@@ -113,7 +116,7 @@ class Selector(TaskArrayFunction):
                         if data_only and not self.dataset_inst.is_data:
                             return True
 
-                    # check nominal_only
+                    # check nominal_only and shifts_only
                     if getattr(self, "global_shift_inst", None):
                         if nominal_only and not self.global_shift_inst.is_nominal:
                             return True
@@ -221,13 +224,13 @@ class SelectionResult(od.AuxDataMixin):
     """
 
     def __init__(
-        self,
-        event: ak.array | None = None,
+        self: SelectionResult,
+        event: ak.Array | None = None,
         steps: DotDict | dict | None = None,
         objects: DotDict | dict | None = None,
         aux: DotDict | dict | None = None,
         **other,
-    ):
+    ) -> None:
         super().__init__(aux=aux)
 
         # store fields
@@ -236,7 +239,7 @@ class SelectionResult(od.AuxDataMixin):
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
 
-    def __iadd__(self, other: SelectionResult | None) -> SelectionResult:
+    def __iadd__(self: SelectionResult, other: SelectionResult | None) -> SelectionResult:
         """
         Adds the field of an *other* instance in-place.
 
@@ -285,7 +288,7 @@ class SelectionResult(od.AuxDataMixin):
 
         return self
 
-    def __add__(self, other: SelectionResult | None) -> SelectionResult:
+    def __add__(self: SelectionResult, other: SelectionResult | None) -> SelectionResult:
         """
         Returns a new instance with all fields of *this* and an *other*
         instance merged.
@@ -309,7 +312,7 @@ class SelectionResult(od.AuxDataMixin):
 
         return inst
 
-    def to_ak(self) -> ak.Array:
+    def to_ak(self: SelectionResult) -> ak.Array:
         """
         Converts the contained fields into a nested awkward array and returns it.
 

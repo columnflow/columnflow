@@ -3,7 +3,6 @@
 
 __all__ = ["TaskParametersTest"]
 
-
 import unittest
 
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
