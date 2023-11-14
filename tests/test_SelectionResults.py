@@ -49,19 +49,37 @@ class SelectionResultTests(unittest.TestCase):
                 },
             },
         }
-        self.add_test_same_objects = {
-            "event": ak.Array([True, True, False, True]),
-            "steps": {
-                "step3": ak.Array([True, False, True, False]),
-            },
-            "objects": {
-                "Jet": {
-                    "Jet": ak.Array([[0, 3], [2, 6], [0], [1]]),
+
+        self.not_addable = {
+            KeyError: [
+                # same object field must raise error
+                {
+                    "event": ak.Array([True, True, False, True]),
+                    "steps": {
+                        "step3": ak.Array([True, False, True, False]),
+                    },
+                    "objects": {
+                        "Jet": {
+                            "Jet": ak.Array([[0, 3], [2, 6], [0], [1]]),
+                        },
+                        "Muon": {
+                            "Muon": ak.Array([[0, 1], [2, 3], [0], [0]]),
+                        },
+                    },
                 },
-                "Muon": {
-                    "Muon": ak.Array([[0, 1], [2, 3], [0], [0]]),
+                # same step field must raise error
+                {
+                    "event": ak.Array([True, True, False, True]),
+                    "steps": {
+                        "step2": ak.Array([True, False, True, False]),
+                    },
+                    "objects": {
+                        "Muon": {
+                            "Muon": ak.Array([[0, 1], [2, 3], [0], [0]]),
+                        },
+                    },
                 },
-            },
+            ],
         }
         sub_dict = deepcopy(self.working_init)
         self.test_configurations = {"full": deepcopy(self.working_init)}
@@ -114,10 +132,14 @@ class SelectionResultTests(unittest.TestCase):
 
         self.full_result = self.selection_results["full"]
         self.result_to_add = SelectionResult(**self.add_test)
-        self.result_to_add_same_objects = SelectionResult(**self.add_test_same_objects)
-        self.not_convertable_results = dict()
-        for exception_type, configurations in self.not_convertable.items():
-            self.not_convertable_results[exception_type] = [SelectionResult(**config) for config in configurations]
+        self.not_addable_results = {
+            exc: [SelectionResult(**config) for config in configurations]
+            for exc, configurations in self.not_addable.items()
+        }
+        self.not_convertable_results = {
+            exc: [SelectionResult(**config) for config in configurations]
+            for exc, configurations in self.not_convertable.items()
+        }
 
     def test_add(self):
 
@@ -157,14 +179,18 @@ class SelectionResultTests(unittest.TestCase):
             convert_to_plain_objects(added.objects), convert_to_plain_objects(added_objects),
         )
 
-        # TODO: add test based on add_test_same_objects, following issue
-        # https://github.com/columnflow/columnflow/issues/351
+    def test_not_addable(self):
+        # Ensure exception if same object field is defined
+        # in two different selection results (add_test_same_objects)
+        for exception_type, results in self.not_addable_results.items():
+            for result in results:
+                self.assertRaises(exception_type, self.full_result.__add__, result)
 
         # Ensure that add only works with Selection results
         for other in self.invalid_types_to_add:
             self.assertRaises(TypeError, self.full_result.__add__, other)
 
-    def test_to_ak(self):
+    def test_not_convertable_to_ak(self):
         """Test conversion to ak.Array
         """
         # first, test that invalid configurations throw the right error
