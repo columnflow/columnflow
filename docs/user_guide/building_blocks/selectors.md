@@ -307,7 +307,7 @@ from collections import defaultdict, OrderedDict
 
 
 @selector(uses={"process_id", "mc_weight"})
-def increment_stats(
+def custom_increment_stats(
     self: Selector,
     events: ak.Array,
     results: SelectionResult,
@@ -351,7 +351,7 @@ def increment_stats(
                 weights[(events.process_id == p) & joinable_mask],
             )
 
-    return events
+    return events, results
 ```
 
 Columnflow also provides a helper Selector called
@@ -367,6 +367,7 @@ the SelectionResult object under the name `n_jets`. This example stems from the 
 present in the columnflow Github repository.
 
 ```{include} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
+:language: python
 :start-after: events = self[cutflow_features](events, results.objects, **kwargs)
 :end-before: return events, results
 ```
@@ -499,7 +500,7 @@ def fatjet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> 
 # Implement the task to update the stats object
 
 @selector(uses={"process_id", "mc_weight"})
-def increment_stats(
+def custom_increment_stats(
     self: Selector,
     events: ak.Array,
     results: SelectionResult,
@@ -543,7 +544,7 @@ def increment_stats(
                 weights[(events.process_id == p) & joinable_mask],
             )
 
-    return events
+    return events, results
 
 
 # Now create the exposed Selector using the three above defined Selectors
@@ -553,7 +554,7 @@ def increment_stats(
     # e.g., if we want to use some internal Selector, make
     # sure that you have all the relevant information
     uses={
-        mc_weight, jet_selection_with_result, fatjet_selection_with_result, increment_stats,
+        mc_weight, jet_selection_with_result, fatjet_selection_with_result, custom_increment_stats,
         process_ids,
     },
     produces={
@@ -589,11 +590,11 @@ def Selector_ext(
     event_sel = reduce(and_, results.steps.values())
     results.event = event_sel
 
-    # create process ids, used by increment_stats
+    # create process ids, used by custom_increment_stats
     events = self[process_ids](events, **kwargs)
 
     # use increment stats selector to update dictionary to be saved in json format
-    events = self[increment_stats](events, results, stats, **kwargs)
+    events, results = self[custom_increment_stats](events, results, stats, **kwargs)
 
     return events, results
 ```
