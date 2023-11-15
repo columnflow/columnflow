@@ -84,10 +84,37 @@ class SelectionResultTests(unittest.TestCase):
                         "some_mask": ak.Array([True, False, True, True]),
                     },
                 },
+                # SelectionResults with optional additional top-level fields
+                # with nested structures > 1 are not supported at the moment
+                {
+                    "some_top_level_field": {
+                        "foo": {
+                            "bar": {
+                                "this": ak.Array(["is", "not", "allowed", "atm"]),
+                            },
+                        },
+                    },
+                },
             ],
-            # TODO: add test for KeyError in to_ak function
-            # Is this even possible?
-            # --> yes, but not at initialization!
+            # handling anything but an ak.Array in the additional fields is
+            # not implemented right now
+            NotImplementedError: [
+                {
+                    "some_top_level_field": {
+                        "foo": list(("this", "will", "not", "work")),
+                    },
+                },
+                {
+                    "some_top_level_field": {
+                        "foo": set(("this", "will", "not", "work")),
+                    },
+                },
+                {
+                    "some_top_level_field": {
+                        "foo": DotDict({"this": "will", "not": "work"}),
+                    },
+                },
+            ],
         }
         self.not_addable = {
             KeyError: [
