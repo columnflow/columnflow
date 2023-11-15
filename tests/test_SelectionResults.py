@@ -87,6 +87,7 @@ class SelectionResultTests(unittest.TestCase):
             ],
             # TODO: add test for KeyError in to_ak function
             # Is this even possible?
+            # --> yes, but not at initialization!
         }
         self.not_addable = {
             KeyError: [
@@ -218,7 +219,22 @@ class SelectionResultTests(unittest.TestCase):
             for result in results:
                 self.assertRaises(exception_type, result.to_ak)
 
-    def test_convert_to_ak(self):
+        # also account for the case if someone manually adds something to the
+        # 'other' field that would overwrite something, e.g. objects
+
+        result_copy = deepcopy(self.full_result)
+
+        # manually add something to the 'other' field
+        result_copy.other["objects"] = ak.Array(["this", "cannot", "be", "happening"])
+
+        self.assertRaises(KeyError, result_copy.to_ak)
+
+    def test_partial_conversion_to_ak(self):
+        # test conversion also with partial SelectionResults
+        for result in self.selection_results.values():
+            self.assertIsInstance(result.to_ak(), ak.Array)
+
+    def test_full_conversion_to_ak(self):
         converted_result = self.full_result.to_ak()
 
         # check output format
@@ -241,7 +257,8 @@ class SelectionResultTests(unittest.TestCase):
                     # an awkward array here with the `to_list` function
                     self.assertListEqual(sub_this.to_list(), other[k].to_list())
 
-        # test conversion
+        # test conversion of full SelectionResult in more detail
+        # first, test event mask
         self.assertListEqual(converted_result.event.to_list(), self.full_result.event.to_list())
 
         # test steps
