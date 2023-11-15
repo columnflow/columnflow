@@ -396,9 +396,15 @@ class SelectionResult(od.AuxDataMixin):
                                               f"{type(entry)} at depth {depth} in SelectionResul")
             return nested_entries, flat_entries
 
-        nested, flat = convert_multi_struct_to_ak(self.other)
+        if self.other:
+            nested, flat = convert_multi_struct_to_ak(self.other)
 
-        to_merge.update(flat)
-        to_merge.update({k: ak.zip(entry) for k, entry in nested.items()})
+            to_merge.update(flat)
+            to_merge.update({k: ak.zip(entry) for k, entry in nested.items()})
 
-        return ak.zip(to_merge)
+        # ak.zip cannot handle empty dictionaries, so just return an empty
+        # array in case of an empty SelectionResult
+        if len(to_merge) > 0:
+            return ak.zip(to_merge)
+        else:
+            return ak.Array([])
