@@ -3,6 +3,7 @@ from __future__ import annotations
 __all__ = ["SelectionResultTests"]
 
 import unittest
+import os
 from copy import deepcopy
 
 from columnflow.selection import SelectionResult
@@ -18,6 +19,33 @@ class SelectionResultTests(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(SelectionResultTests, self).__init__(*args, **kwargs)
+        self.tmp_parquet_file = "tmp.parquet"
+
+        def recursive_assert(this, other):
+            if not isinstance(this, DotDict):
+                raise TypeError(f"The first instance in this function must be of"
+                                f"type DotDict, received {type(this)}")
+
+            keys = list(this.keys())
+            for k in keys:
+                sub_this = this[k]
+                if isinstance(sub_this, dict):
+                    # if this is a dictionary, we have a nested structure,
+                    # so iterate through it accordingly
+                    recursive_assert(sub_this, other[k])
+                else:
+                    # otherwise, we are at the lowest level. There should be
+                    # an awkward array here with the `to_list` function
+                    self.assertListEqual(sub_this.to_list(), other[k].to_list())
+        self.recursive_assert = recursive_assert
+
+        def internal_test_suit(original_result, loaded_array):
+            self.assertListEqual(original_result.event.to_list(), loaded_array.event.to_list())
+            self.recursive_assert(original_result.steps, loaded_array.steps)
+            self.recursive_assert(original_result.objects, loaded_array.objects)
+            self.recursive_assert(original_result.other, loaded_array)
+        
+        self.internal_test_suit = internal_test_suit
 
         # inputs for various tests
         self.working_init = {
@@ -267,23 +295,6 @@ class SelectionResultTests(unittest.TestCase):
         # check output format
         self.assertIsInstance(converted_result, ak.Array)
 
-        def recursive_assert(this, other):
-            if not isinstance(this, DotDict):
-                raise TypeError(f"The first instance in this function must be of"
-                                f"type DotDict, received {type(this)}")
-
-            keys = list(this.keys())
-            for k in keys:
-                sub_this = this[k]
-                if isinstance(sub_this, dict):
-                    # if this is a dictionary, we have a nested structure,
-                    # so iterate through it accordingly
-                    recursive_assert(sub_this, other[k])
-                else:
-                    # otherwise, we are at the lowest level. There should be
-                    # an awkward array here with the `to_list` function
-                    self.assertListEqual(sub_this.to_list(), other[k].to_list())
-
         # test conversion of full SelectionResult in more detail
         # first, test event mask
         self.assertListEqual(converted_result.event.to_list(), self.full_result.event.to_list())
@@ -295,25 +306,54 @@ class SelectionResultTests(unittest.TestCase):
         self.assertListEqual(converted_steps, original_steps)
 
         # test if entries are really the same
-        recursive_assert(self.full_result.steps, converted_result.steps)
+        self.recursive_assert(self.full_result.steps, converted_result.steps)
 
         # test object arrays
         converted_objects = converted_result.objects.fields
         original_objects = list(self.full_result.objects.keys())
         self.assertListEqual(converted_objects, original_objects)
 
-        recursive_assert(self.full_result.objects, converted_result.objects)
+        self.recursive_assert(self.full_result.objects, converted_result.objects)
 
         # assert that aux is not part of the awkward array
         self.assertNotIn("aux", converted_result.fields)
 
         # check parsing of other objects
-        recursive_assert(self.full_result.other, converted_result)
+        self.recursive_assert(self.full_result.other, converted_result)
 
         # make sure there's nothing else in the ak.Array
         full_list = ["event", "steps", "objects"] + list(self.full_result.other.keys())
 
         self.assertListEqual(full_list, converted_result.fields)
+
+    def test_write_read(self):
+        """Test to try reading and writing SelectionResults to/from parquet.
+        This has been an issue in the past due to unforeseen features in
+        awkward and dask awkward. However this test might be obsolete/superseeded
+        by a unit test for loading/writing parquet files in general
+        """
+        # save the SelectionResult
+        converted = self.full_result.to_ak()
+        ak.to_parquet(converted, self.tmp_parquet_file)
+
+        # load parquet file with parquet
+        loaded_array = ak.from_parquet(self.tmp_parquet_file)
+
+        self.internal_test_suit(self.full_result, loaded_array)
+    
+    def test_write_read_dask_awkward(self):
+        converted = self.full_result.to_ak()
+        ak.to_parquet(converted, self.tmp_parquet_file)
+
+        # load parquet file with parquet
+        loaded_array = dak.from_parquet(self.tmp_parquet_file)
+
+        self.internal_test_suit(self.full_result, loaded_array.compute())
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.tmp_parquet_file):
+            os.remove(self.tmp_parquet_file)
+        return super().tearDown()
 
 
 if __name__ == "__main__":
