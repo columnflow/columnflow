@@ -44,7 +44,7 @@ class SelectionResultTests(unittest.TestCase):
             self.recursive_assert(original_result.steps, loaded_array.steps)
             self.recursive_assert(original_result.objects, loaded_array.objects)
             self.recursive_assert(original_result.other, loaded_array)
-        
+
         self.internal_test_suit = internal_test_suit
 
         # inputs for various tests
@@ -340,7 +340,7 @@ class SelectionResultTests(unittest.TestCase):
         loaded_array = ak.from_parquet(self.tmp_parquet_file)
 
         self.internal_test_suit(self.full_result, loaded_array)
-    
+
     def test_write_read_dask_awkward(self):
         converted = self.full_result.to_ak()
         ak.to_parquet(converted, self.tmp_parquet_file)
