@@ -368,8 +368,8 @@ present in the columnflow Github repository.
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 :language: python
-:start-after: events = self[cutflow_features](events, results.objects, **kwargs)
-:end-before: return events, results
+:start-at: # increment stats
+:end-at: )
 ```
 
 (complete_example)=
