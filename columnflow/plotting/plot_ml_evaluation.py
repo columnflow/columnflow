@@ -84,7 +84,7 @@ def plot_cm(
     y_labels: list[str] | None = None,
     *args,
     **kwargs,
-) -> tuple[plt.Figure, np.ndarray]:
+) -> Tuple[List[plt.Figure], np.ndarray]:
     """ Generates the figure of the confusion matrix given the output of the nodes
     and an array of true labels. The Cronfusion matrix can also be weighted.
 
