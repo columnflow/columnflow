@@ -3,7 +3,6 @@
 
 __all__ = ["RouteTest", "ArrayFunctionTest", "ColumnarUtilFunctionsTest"]
 
-
 import unittest
 
 from columnflow.util import maybe_import

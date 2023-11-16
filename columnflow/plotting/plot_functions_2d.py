@@ -22,7 +22,6 @@ from columnflow.plotting.plot_util import (
     reduce_with,
 )
 
-
 hist = maybe_import("hist")
 np = maybe_import("numpy")
 mpl = maybe_import("matplotlib")

@@ -10,7 +10,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

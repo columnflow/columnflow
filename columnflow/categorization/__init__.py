@@ -33,10 +33,9 @@ class Categorizer(TaskArrayFunction):
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Function to be wrapped and integrated into new :py:class:`Categorizer`
-            instance.
+        :param func: Function to be wrapped and integrated into new :py:class:`Categorizer` class.
         :param bases: Additional base classes for new :py:class:`Categorizer`.
-        :return: The new :py:class:`Categorizer` instance.
+        :return: The new :py:class:`Categorizer` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict

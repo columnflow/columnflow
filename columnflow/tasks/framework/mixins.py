@@ -24,7 +24,6 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.util import maybe_import
 
-
 ak = maybe_import("awkward")
 
 
@@ -36,7 +35,7 @@ class CalibratorMixin(ConfigTask):
         "'default_calibrator' config",
     )
 
-    # decibes whether the task itself runs the calibrator and implements its shifts
+    # decides whether the task itself runs the calibrator and implements its shifts
     register_calibrator_shifts = False
 
     @classmethod
@@ -52,7 +51,8 @@ class CalibratorMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             # add the default calibrator when empty
             params["calibrator"] = cls.resolve_config_default(
                 params,
@@ -70,7 +70,8 @@ class CalibratorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
-        if calibrator_inst := params.get("calibrator_inst"):
+        calibrator_inst = params.get("calibrator_inst")
+        if calibrator_inst:
             if cls.register_calibrator_shifts:
                 shifts |= calibrator_inst.all_shifts
             else:
@@ -118,7 +119,7 @@ class CalibratorsMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the calibrators and implements their shifts
+    # decides whether the task itself runs the calibrators and implements their shifts
     register_calibrators_shifts = False
 
     @classmethod
@@ -140,7 +141,8 @@ class CalibratorsMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["calibrators"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("calibrators"),
@@ -203,7 +205,7 @@ class SelectorMixin(ConfigTask):
         "'default_selector' config",
     )
 
-    # decibes whether the task itself runs the selector and implements its shifts
+    # decides whether the task itself runs the selector and implements its shifts
     register_selector_shifts = False
 
     @classmethod
@@ -220,7 +222,8 @@ class SelectorMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default selector when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["selector"] = cls.resolve_config_default(
                 params,
                 params.get("selector"),
@@ -237,7 +240,8 @@ class SelectorMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
-        if selector_inst := params.get("selector_inst"):
+        selector_inst = params.get("selector_inst")
+        if selector_inst:
             if cls.register_selector_shifts:
                 shifts |= selector_inst.all_shifts
             else:
@@ -294,7 +298,8 @@ class SelectorStepsMixin(SelectorMixin):
         params = super().resolve_param_values(params)
 
         # apply selector_steps_groups and default_selector_steps from config
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["selector_steps"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("selector_steps"),
@@ -336,7 +341,7 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
-    # decibes whether the task itself runs the producer and implements its shifts
+    # decides whether the task itself runs the producer and implements its shifts
     register_producer_shifts = False
 
     @classmethod
@@ -353,7 +358,8 @@ class ProducerMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default producer when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["producer"] = cls.resolve_config_default(
                 params,
                 params.get("producer"),
@@ -370,7 +376,8 @@ class ProducerMixin(ConfigTask):
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
-        if producer_inst := params.get("producer_inst"):
+        producer_inst = params.get("producer_inst")
+        if producer_inst:
             if cls.register_producer_shifts:
                 shifts |= producer_inst.all_shifts
             else:
@@ -418,7 +425,7 @@ class ProducersMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the producers and implements their shifts
+    # decides whether the task itself runs the producers and implements their shifts
     register_producers_shifts = False
 
     @classmethod
@@ -438,7 +445,8 @@ class ProducersMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["producers"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("producers"),
@@ -895,7 +903,9 @@ class MLModelsMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if (analysis_inst := params.get("analysis_inst")) and (config_inst := params.get("config_inst")):
+        analysis_inst = params.get("analysis_inst")
+        config_inst = params.get("config_inst")
+        if analysis_inst and config_inst:
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 params,
@@ -963,7 +973,8 @@ class InferenceModelMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
-        if config_inst := params.get("config_inst"):
+        config_inst = params.get("config_inst")
+        if config_inst:
             params["inference_model"] = cls.resolve_config_default(
                 params,
                 params.get("inference_model"),
