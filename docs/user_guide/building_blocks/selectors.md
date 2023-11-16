@@ -363,10 +363,11 @@ and masks, using a "weight map". These calculations can also be specified for su
 using a "group map". An example of such a call using the number of jets and the processes as
 subgroups is given below, with `results.event` the event selection mask after all selections and
 having saved during the selection the number of valid jets in each event in the auxiliary field of
-the SelectionResult object under the name `n_jets`. This example stems from the analysis template
-present in the columnflow Github repository, where the increment_stats method from columnflow was
-imported (using `from columnflow.selection.stats import increment_stats`) and its `uses` columns
-were declared in the `uses` set of the Selector.
+the SelectionResult object under the name `n_jets`. This example stems from the cms_minimal example
+of the analysis templates present in the columnflow repository, more specifically in the
+example.py script under the selection directory. In this script, the increment_stats method from
+columnflow was imported (using `from columnflow.selection.stats import increment_stats`) and its
+`uses` columns were declared in the `uses` set of the Selector.
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 :language: python

@@ -221,26 +221,4 @@ The analysis config defines all analysis specific variables and objects that nee
 the analysis to run. Some of them are required for columnflow to run, some are additional and can
 be useful, depending on the analysis.
 
-TODO: explain difference od.Analysis, od.Config and how they are related in the usage.
--> What I have seen: analysis_hbt.py defines the analysis and afterward declares the config, which
-needs the analysis object. The behaviour of the config is defined in configs_run2ul.py.
-
-Variables defined in config:
-
-Obtained from the campaign:
-
-year: the year of the measurement, obtained from the campaign
-
-year2: the last two numbers of the year
-
-corr_postfix: postfix added to the year, if several campaigns happened in a year, obtained fromn the campaign.
-
-procs: root processes, obtained from campaign. WHAT IS THAT? TODO
-
-
-new creations:
-
-cfg: add analysis config????? how is that not redundant to the call in analysis_hbt? TODO
-
-process_names: declare the names of the processes we are interested in. Must correspond to the
-processes defined for the datasets.
+TODO
