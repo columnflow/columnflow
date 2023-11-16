@@ -5,10 +5,11 @@ Useful plot functions for ML Evaluation
 """
 
 from __future__ import annotations
+from calendar import c
 
 import re
 
-from columnflow.types import Sequence
+from columnflow.types import Sequence, Dict, List, Tuple
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -300,9 +301,11 @@ def plot_roc(
     sample_weights: Sequence | bool = False,
     skip_uncertainties: bool = False,
     n_thresholds: int = 200 + 1,
+    skip_discriminators: list[str] = [],
+    evaluation_type: str = "OvR",
     *args,
     **kwargs,
-) -> tuple[plt.Figure, dict]:
+) -> tuple[List[plt.Figure], dict]:
     """ Generates the figure of the ROC curve given the events output of the ML evaluation
 
         Args:
@@ -330,16 +333,26 @@ def plot_roc(
     thresholds = np.geomspace(1e-6, 1, n_thresholds)
     weights = create_sample_weights(sample_weights, events, list(events.keys()))
     discriminators = list(events.values())[0].fields
+    figs = []
 
-    def create_histograms(events: dict, sample_weights: dict, *args, **kwargs) -> dict:
+    if evaluation_type not in ["OvO", "OvR"]:
+        raise ValueError("Illeagal Argument! Evaluation Type can only be choosen as \"OvO\" (One vs One) \
+                        or \"OvR\" (One vs Rest)")
+
+    def create_histograms(events: dict, sample_weights: dict, *args, **kwargs) -> Dict[str, Dict[str, np.ndarray]]:
         hists = {}
-        for cls, predictions in events.items():
-            hists[cls] = {}
-            for disc in discriminators:
-                hists[cls][disc] = weights[cls] * ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0])
+        for disc in discriminators:
+            hists[disc] = {}
+            for cls, predictions in events.items():
+                hists[disc][cls] = weights[cls] * ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0])
         return hists
 
-    def binary_roc_data(positiv_hist: np.ndarray, negativ_hist: np.ndarray, *args, **kwargs) -> tuple:
+    def binary_roc_data(
+        positiv_hist: np.ndarray,
+        negativ_hist: np.ndarray,
+        *args,
+        **kwargs,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute binary Receiver operating characteristic (ROC) values.
         Used as a helper function for the multi-dimensional ROC curve
@@ -361,81 +374,81 @@ def plot_roc(
         histograms: dict,
         *args,
         **kwargs
-    ) -> dict:
+    ) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Compute Receiver operating characteristic (ROC) values for a multi-dimensional output.
         """
 
-        def one_vs_rest(names):
-            result = {}
-            for ind, cls_name in enumerate(names):
-                positiv_inputs = model_output[:, ind]
-                fpr, tpr, th = binary_roc_data(true_labels=(true_labels == ind),
-                                            model_output_positive=positiv_inputs,
-                                            sample_weights=sample_weights,
-                                            *args,
-                                            thresholds=thresholds,
-                                            errors=errors,
-                                            output_length=output_length)
-                result[f"{cls_name}_vs_rest"] = {"fpr": fpr,
-                                                "tpr": tpr,
-                                                "thresholds": th}
-            return result
+        result = {}
 
-        def one_vs_one(names):
-            result = {}
-            for pos_ind, cls_name in enumerate(names):
-                for neg_ind, cls_name2 in enumerate(names):
-                    if (pos_ind == neg_ind):
-                        continue
+        for disc in discriminators:
+            tmp = {}
 
-                    # Event selection masks only for the 2 classes analysed
-                    inputs_mask = np.logical_or(true_labels == pos_ind,
-                                                true_labels == neg_ind)
-                    select_input = model_output[inputs_mask]
-                    select_labels = true_labels[inputs_mask]
-                    select_weights = None if sample_weights is None else sample_weights[inputs_mask]
+            if disc in skip_discriminators:
+                continue
 
-                    positiv_inputs = select_input[:, pos_ind]
-                    fpr, tpr, th = binary_roc_data(true_labels=(select_labels == pos_ind),
-                                                model_output_positive=positiv_inputs,
-                                                sample_weights=select_weights,
-                                                *args,
-                                                thresholds=thresholds,
-                                                errors=errors,
-                                                output_length=output_length)
-                    result[f"{cls_name}_vs_{cls_name2}"] = {"fpr": fpr,
-                                                            "tpr": tpr,
-                                                            "thresholds": th}
-            return result
+            # Choose the evaluation type
+            if (evaluation_type == "OvO"):
+                for pos_cls, pos_hist in histograms[disc].items():
+                    for neg_cls, neg_hist in histograms[disc].items():
 
-        is_input_valid(true_labels, model_output)
+                        fpr, tpr = binary_roc_data(
+                            positiv_hist=pos_hist,
+                            negativ_hist=neg_hist,
+                            *args,
+                            **kwargs,
+                        )
+                        tmp[f"{pos_cls}_vs_{neg_hist}"] = {"fpr": fpr, "tpr": tpr}
 
-        # reshape in case only predictions for the positive class are givin
-        if model_output.ndim != 2:
-            model_output = model_output.reshape((model_output.size, 1))
+            elif (evaluation_type == "OvR"):
+                for pos_cls, pos_hist in histograms[disc].items():
+                    neg_hist = np.zeros_like(pos_hist)
+                    for neg_cls, neg_pred in histograms[disc].items():
+                        if (pos_cls == neg_cls):
+                            continue
+                        neg_hist += neg_pred
 
-        # Generate class names if not givin
-        if class_names is None:
-            class_names = list(range(model_output.shape[1]))
+                    fpr, tpr = binary_roc_data(
+                        positiv_hist=pos_hist,
+                        negativ_hist=neg_hist,
+                        *args,
+                        **kwargs,
+                    )
+                    tmp[f"{pos_cls}_vs_rest"] = {"fpr": fpr, "tpr": tpr}
 
-        assert (len(class_names) == model_output.shape[1]), (
-            "Number of givin class names does not match the number of output nodes in the *model_output* argument!")
+            result[disc] = tmp
 
-        # Cast trues labels to class numers
-        if true_labels.dtype.name == "bool":
-            true_labels = np.logical_not(true_labels).astype(dtype=np.int32)
+        return result
 
-        # Map true labels to integers if needed
-        if "int" not in true_labels.dtype.name:
-            for ind, name in enumerate(class_names):
-                true_labels = np.where(true_labels == name, ind, true_labels)
+    def plot_roc_curve(
+        roc_data: dict,
+        title: str,
+        cmap_label: str = "Accuracy",
+        digits: int = 3,
+        *args,
+        **kwargs,
+    ) -> plt.figure:
+        """
+        Plots a ROC curve.
 
-        # Choose the evaluation type
-        if (evaluation_type == "OvO"):
-            return one_vs_one(class_names)
-        elif (evaluation_type == "OvR"):
-            return one_vs_rest(class_names)
-        else:
-            raise ValueError("Illeagal Argument! Evaluation Type can only be choosen as \"OvO\" (One vs One) \
-                            or \"OvR\" (One vs Rest)")
+        :param roc_data: The ROC curve data to plot.
+        :param title: The title of the plot, displayed in the top right corner.
+        :param colormap: The name of the colormap to use. Can be selected from the following:
+            "cf_cmap", "cf_green_cmap", "cf_ygb_cmap", "viridis".
+        :param cmap_label: The label of the colorbar.
+        :param digits: The number of digits to display for each value in the matrix.
+        :param *args: Additional arguments to pass to the function.
+        :param **kwargs: Additional keyword arguments to pass to the function.
+
+        :return: The resulting plot.
+        """
+        title = ax.set_title("\n".join(wrap(
+            "Some really really long long long title I really really need - and just can't - just can't - make it any - simply any - shorter - at all.", 60)))
+
+    histograms = create_histograms(events, weights, *args, **kwargs)
+
+    results = roc_curve_data(evaluation_type, histograms, *args, **kwargs)
+    from IPython import embed
+    embed(header="ROC Curve Data")
+    results["thresholds"] = thresholds
+    return figs, results
