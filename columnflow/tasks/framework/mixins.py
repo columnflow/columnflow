@@ -10,6 +10,7 @@ import gc
 import time
 import itertools
 from collections import Counter
+from typing import Iterable
 
 import luigi
 import law
@@ -921,7 +922,7 @@ class MLModelMixinBase(AnalysisTask):
         cls,
         ml_model: str,
         analysis_inst: od.Analysis,
-        requested_configs: Union[list[str], None] = None,
+        requested_configs: list[str] or None = None,
         **kwargs,
     ) -> MLModel:
         """Get requested *ml_model*.
