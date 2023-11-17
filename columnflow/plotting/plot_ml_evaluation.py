@@ -293,7 +293,15 @@ def plot_cm(
     cm = get_conf_matrix(sample_weights, *args, **kwargs)
     print("Confusion matrix calculated!")
 
-    fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
+    fig = plot_confusion_matrix(
+        cm,
+        x_labels=x_labels,
+        y_labels=y_labels,
+        cms_llabel=cms_llabel,
+        cms_rlabel=cms_rlabel,
+        *args,
+        **kwargs,
+    )
     print("Confusion matrix plotted!")
 
     return [fig], cm
