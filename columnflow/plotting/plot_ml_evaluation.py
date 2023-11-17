@@ -331,9 +331,9 @@ def plot_roc(
 
     :return: The resulting plot and the ROC curve.
 
-    :raises AssertionError: If both predictions and labels have mismatched shapes, or if *weights*
+    :raises ValueError: If both predictions and labels have mismatched shapes, or if *weights*
         is not *None* and its shape doesn't match *predictions*.
-    :raises AssertionError: If *normalization* is not one of *None*, "row", "column".
+    :raises ValueError: If *normalization* is not one of *None*, "row", "column".
     """
     # defining some useful properties and output shapes
     thresholds = np.geomspace(1e-6, 1, n_thresholds)
