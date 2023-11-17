@@ -81,6 +81,8 @@ def plot_cm(
     skip_uncertainties: bool = False,
     x_labels: list[str] | None = None,
     y_labels: list[str] | None = None,
+    cms_rlabel: str = "",
+    cms_llabel: str = "private work",
     *args,
     **kwargs,
 ) -> Tuple[List[plt.Figure], np.ndarray]:
@@ -149,12 +151,13 @@ def plot_cm(
 
     def plot_confusion_matrix(
         cm: np.ndarray,
-        title: str = "",
         colormap: str = "cf_cmap",
         cmap_label: str = "Accuracy",
         digits: int = 3,
         x_labels: list[str] | None = None,
         y_labels: list[str] | None = None,
+        cms_rlabel: str = "",
+        cms_llabel: str = "private work",
         *args,
         **kwargs,
     ) -> plt.figure:
@@ -282,12 +285,23 @@ def plot_cm(
                 )
 
         # final touches
-        hep.cms.label(ax=ax, llabel="private work", rlabel=title if title else "")
+        hep.cms.label(ax=ax, llabel={"pw": "private work"}.get(cms_llabel, cms_llabel), rlabel=cms_rlabel)
         plt.tight_layout()
 
         return fig
 
     cm = get_conf_matrix(sample_weights, *args, **kwargs)
-    fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
+    print("Confusion matrix calculated!")
+
+    fig = plot_confusion_matrix(
+        cm,
+        x_labels=x_labels,
+        y_labels=y_labels,
+        cms_llabel=cms_llabel,
+        cms_rlabel=cms_rlabel,
+        *args,
+        **kwargs
+    )
+    print("Confusion matrix plotted!")
 
     return [fig], cm
