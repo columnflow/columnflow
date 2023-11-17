@@ -737,7 +737,7 @@ class DerivableMeta(abc.ABCMeta):
         silent: bool = False,
     ) -> DerivableMeta | None:
         """Returns a previously created subclass named *cls_name*.
-        
+
         When *deep* is ``True``, the lookup is recursive through all levels of
         subclasses. When no such subclass was found an exception is
         raised, unless *silent* is *True* in which case *None* is returned.
@@ -786,7 +786,7 @@ class DerivableMeta(abc.ABCMeta):
     ) -> DerivableMeta:
         """Creates a subclass named *cls_name* inheriting from *this* class an
         additional, optional *bases*.
-        
+
         *cls_dict* will be attached as class-level attributes.
 
         :param cls_name: Name of the newly-derived class
