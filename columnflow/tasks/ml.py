@@ -1114,9 +1114,13 @@ class PlotMLResults(PlotMLResultsBase):
         b = self.branch_data
         return {"plots": [
             self.target(name)
-            for name in self.get_plot_names(f"0_plot__proc_{self.processes_repr}__cat_{b.category}")
+            for name in self.get_plot_names(
+                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/plot__0",
+            )
         ],
-            "array": self.target(f"plot__proc_{self.processes_repr}.parquet"),
+            "array": self.target(
+                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.parquet",
+        ),
         }
 
     @law.decorator.log
@@ -1138,6 +1142,7 @@ class PlotMLResults(PlotMLResultsBase):
                 config_inst=self.config_inst,
                 category_inst=category_inst,
                 skip_uncertainties=self.skip_uncertainties,
+                cms_llabel=self.cms_label,
                 **self.get_plot_parameters(),
             )
 
@@ -1152,4 +1157,7 @@ class PlotMLResults(PlotMLResultsBase):
                     continue
 
                 for index, f in enumerate(figs):
-                    f.savefig(file_path.abs_dirname + "/" + f"{index}_{file_path.basename[2:]}", format=file_path.ext())
+                    f.savefig(
+                        file_path.abs_dirname + "/" + file_path.basename.replace("0", str(index)),
+                        format=file_path.ext(),
+                    )
