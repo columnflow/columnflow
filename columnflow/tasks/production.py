@@ -84,6 +84,7 @@ class ProduceColumns(
 
         # run the producer setup
         reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -93,8 +94,9 @@ class ProduceColumns(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.producer_inst.used_columns | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.producer_inst.used_columns
+        read_columns |= set(map(Route, set(aliases.values())))
 
         # define columns that will be written
         write_columns = self.producer_inst.produced_columns
@@ -108,9 +110,13 @@ class ProduceColumns(
             # iterate over chunks of events and diffs
             for (events, *cols), pos in self.iter_chunked_io(
                 [inp.path for inp in inps],
-                source_type=["awkward_parquet"] + [None] * len(reader_targets),
-                read_columns=[read_columns] * (len(reader_targets) + 1),
+                source_type=["awkward_parquet"] + [None] * n_ext,
+                read_columns=[read_columns] * (1 + n_ext),
             ):
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(cols))
+
                 # apply the optional columns from custom requirements
                 events = update_ak_array(events, *cols)
 
@@ -130,7 +136,7 @@ class ProduceColumns(
                 events = route_filter(events)
 
                 # optional check for finite values
-                if self.check_finite:
+                if self.check_finite_output:
                     self.raise_if_not_finite(events)
 
                 # save as parquet via a thread in the same pool
@@ -140,13 +146,21 @@ class ProduceColumns(
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, output["columns"], local=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, output["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-ProduceColumns.check_finite = ChunkedIOMixin.check_finite.copy(
+ProduceColumns.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=ProduceColumns.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+ProduceColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=ProduceColumns.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 

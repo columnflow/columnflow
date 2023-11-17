@@ -8,7 +8,6 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -31,7 +30,7 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "met_phi_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-f018adfb/POG/JME/2017_UL/met.json.gz",  # noqa
+            "met_phi_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/met.json.gz",  # noqa
         })
 
     *get_met_file* can be adapted in a subclass in case it is stored differently in the external
@@ -115,5 +114,7 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: di
     )]
 
     # check versions
-    assert self.met_pt_corrector.version in [1]
-    assert self.met_phi_corrector.version in [1]
+    if self.met_pt_corrector.version not in (1,):
+        raise Exception(f"unsuppprted met pt corrector version {self.met_pt_corrector.version}")
+    if self.met_phi_corrector.version not in (1,):
+        raise Exception(f"unsuppprted met phi corrector version {self.met_phi_corrector.version}")

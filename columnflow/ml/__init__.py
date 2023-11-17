@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import abc
 from collections import OrderedDict
-from typing import Any, Sequence
 
 import law
 import order as od
 
+from columnflow.types import Any, Sequence
 from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
 from columnflow.columnar_util import Route
-
 
 ak = maybe_import("awkward")
 
@@ -43,7 +42,8 @@ class MLModel(Derivable):
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
     :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`).
+    declarations (:py:meth:`parameter_pairs`). The optional py:meth:`preparation_producer` allows
+    setting a producer that is run during the initial preparation of ML columns.
 
     .. py:classattribute:: single_config
 
@@ -107,26 +107,29 @@ class MLModel(Derivable):
     """
 
     # default setting mark whether this model accepts only a single config
-    single_config = False
+    single_config: bool = False
 
     # default number of folds
-    folds = 2
+    folds: int = 2
 
     # default name for storing e.g. input data
     # falls back to cls_name if None
-    store_name = None
+    store_name: str | None = None
+
+    # flag denoting whether the preparation_producer is invoked before evaluate()
+    preparation_producer_in_ml_evaluation: bool = True
 
     # names of attributes that are automatically extracted from init kwargs and
     # fall back to classmembers in case they are missing
-    init_attributes = ["single_config", "folds", "store_name"]
+    init_attributes: list[str] = ["single_config", "folds", "store_name", "preparation_producer_in_ml_evaluation"]
 
     def __init__(
-        self,
+        self: MLModel,
         analysis_inst: od.Analysis,
         *,
         parameters: OrderedDict | None = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__()
 
         # store attributes
@@ -150,7 +153,7 @@ class MLModel(Derivable):
             self._setup(kwargs["configs"])
 
     @property
-    def config_inst(self):
+    def config_inst(self: MLModel) -> od.Config:
         if self.single_config and len(self.config_insts) != 1:
             raise Exception(
                 f"the config_inst property requires MLModel '{self.cls_name}' to have the "
@@ -160,14 +163,14 @@ class MLModel(Derivable):
 
         return self.config_insts[0]
 
-    def _assert_configs(self, msg: str) -> None:
+    def _assert_configs(self: MLModel, msg: str) -> None:
         """
         Raises an exception showing *msg* in case this model's :py:attr:`config_insts` is empty.
         """
         if not self.config_insts:
             raise Exception(f"MLModel '{self.cls_name}' has no config instances, {msg}")
 
-    def _format_value(self, value: Any) -> str:
+    def _format_value(self: MLModel, value: Any) -> str:
         """
         Formats any paramter *value* to a readable string.
         """
@@ -182,7 +185,7 @@ class MLModel(Derivable):
         # any other case
         return str(value)
 
-    def _join_parameter_pairs(self, only_significant: bool = True) -> str:
+    def _join_parameter_pairs(self: MLModel, only_significant: bool = True) -> str:
         """
         Returns a joined string representation of all significant parameters. In this context,
         significant parameters are those that potentially lead to different results (e.g. network
@@ -193,7 +196,7 @@ class MLModel(Derivable):
             for name, value in self.parameter_pairs(only_significant=True)
         )
 
-    def parameter_pairs(self, only_significant: bool = False) -> list[tuple[str, Any]]:
+    def parameter_pairs(self: MLModel, only_significant: bool = False) -> list[tuple[str, Any]]:
         """
         Returns a list of all parameter name-value tuples. In this context, significant parameters
         are those that potentially lead to different results (e.g. network architecture parameters
@@ -202,7 +205,7 @@ class MLModel(Derivable):
         return list(self.parameters.items())
 
     @property
-    def accepts_scheduler_messages(self) -> bool:
+    def accepts_scheduler_messages(self: MLModel) -> bool:
         """
         Whether the training or evaluation loop expects and works with messages sent from a central
         luigi scheduler through the active worker to the underlying task. See
@@ -210,7 +213,7 @@ class MLModel(Derivable):
         """
         return True
 
-    def get_scheduler_messages(self, task: law.Task) -> DotDict[str, KeyValueMessage]:
+    def get_scheduler_messages(self: MLModel, task: law.Task) -> DotDict[str, KeyValueMessage]:
         """
         Checks if the *task* obtained messages from a central luigi scheduler, parses them expecting
         key - value pairs, and returns them in an ordered :py:class:`DotDict`. All values are
@@ -229,7 +232,7 @@ class MLModel(Derivable):
 
         return messages
 
-    def _set_configs(self, configs: list[str | od.Config]) -> None:
+    def _set_configs(self: MLModel, configs: list[str | od.Config]) -> None:
         # complain when only a single config is accepted
         if self.single_config and len(configs) > 1:
             raise Exception(
@@ -249,7 +252,7 @@ class MLModel(Derivable):
             )
             self.config_insts.append(config_inst)
 
-    def _setup(self, configs: list[str | od.Config] | None = None) -> None:
+    def _setup(self: MLModel, configs: list[str | od.Config] | None = None) -> None:
         # setup configs
         if configs:
             self._set_configs(configs)
@@ -258,7 +261,7 @@ class MLModel(Derivable):
         self.setup()
 
     @property
-    def used_columns(self) -> dict[od.Config, set[Route | str]]:
+    def used_columns(self: MLModel) -> dict[od.Config, set[Route]]:
         self._assert_configs("cannot determined used columns")
         return {
             config_inst: set(self.uses(config_inst))
@@ -266,7 +269,7 @@ class MLModel(Derivable):
         }
 
     @property
-    def produced_columns(self) -> dict[od.Config, set[Route | str]]:
+    def produced_columns(self: MLModel) -> dict[od.Config, set[Route]]:
         self._assert_configs("cannot determined produced columns")
         return {
             config_inst: set(self.produces(config_inst))
@@ -274,28 +277,28 @@ class MLModel(Derivable):
         }
 
     @property
-    def used_datasets(self) -> dict[od.Config, set[od.Dataset]]:
+    def used_datasets(self: MLModel) -> dict[od.Config, set[od.Dataset]]:
         self._assert_configs("cannot determined used datasets")
         return {
             config_inst: set(self.datasets(config_inst))
             for config_inst in self.config_insts
         }
 
-    def setup(self) -> None:
+    def setup(self: MLModel) -> None:
         """
         Hook that is called after the model has been setup and its :py:attr:`config_insts` were
         assigned.
         """
         return
 
-    def requires(self, task: law.Task) -> Any:
+    def requires(self: MLModel, task: law.Task) -> Any:
         """
         Returns tasks that are required for the training to run and whose outputs are needed.
         """
         return {}
 
     def training_configs(
-        self,
+        self: MLModel,
         requested_configs: Sequence[str],
     ) -> list[str]:
         """
@@ -308,7 +311,7 @@ class MLModel(Derivable):
         return list(requested_configs)
 
     def training_calibrators(
-        self,
+        self: MLModel,
         config_inst: od.Config,
         requested_calibrators: Sequence[str],
     ) -> list[str]:
@@ -321,7 +324,7 @@ class MLModel(Derivable):
         return list(requested_calibrators)
 
     def training_selector(
-        self,
+        self: MLModel,
         config_inst: od.Config,
         requested_selector: str,
     ) -> str:
@@ -334,7 +337,7 @@ class MLModel(Derivable):
         return requested_selector
 
     def training_producers(
-        self,
+        self: MLModel,
         config_inst: od.Config,
         requested_producers: Sequence[str],
     ) -> list[str]:
@@ -346,8 +349,21 @@ class MLModel(Derivable):
         """
         return list(requested_producers)
 
+    def preparation_producer(
+        self: MLModel,
+        config_inst: od.Config,
+    ) -> str | None:
+        """
+        This method allows setting a producer that can be called as part of the preparation
+        of the ML input columns given a *config_inst*.
+
+        :param config_inst: :py:class:`~order.Config` object for which the producer should run.
+        :return: Name of a :py:class:`Producer` class or *None*.
+        """
+        return None
+
     @abc.abstractmethod
-    def sandbox(self, task: law.Task) -> str:
+    def sandbox(self: MLModel, task: law.Task) -> str:
         """
         Given a *task*, returns the name of a sandbox that is needed to perform model training and
         evaluation.
@@ -355,7 +371,7 @@ class MLModel(Derivable):
         return
 
     @abc.abstractmethod
-    def datasets(self, config_inst: od.Config) -> set[od.Dataset]:
+    def datasets(self: MLModel, config_inst: od.Config) -> set[od.Dataset]:
         """
         Returns a set of all required datasets for a certain *config_inst*. To be implemented in
         subclasses.
@@ -363,7 +379,7 @@ class MLModel(Derivable):
         return
 
     @abc.abstractmethod
-    def uses(self, config_inst: od.Config) -> set[Route | str]:
+    def uses(self: MLModel, config_inst: od.Config) -> set[Route]:
         """
         Returns a set of all required columns for a certain *config_inst*. To be implemented in
         subclasses.
@@ -371,7 +387,7 @@ class MLModel(Derivable):
         return
 
     @abc.abstractmethod
-    def produces(self, config_inst: od.Config) -> set[Route | str]:
+    def produces(self: MLModel, config_inst: od.Config) -> set[Route]:
         """
         Returns a set of all produced columns for a certain *config_inst*. To be implemented in
         subclasses.
@@ -379,14 +395,14 @@ class MLModel(Derivable):
         return
 
     @abc.abstractmethod
-    def output(self, task: law.Task) -> Any:
+    def output(self: MLModel, task: law.Task) -> Any:
         """
         Returns a structure of output targets. To be implemented in subclasses.
         """
         return
 
     @abc.abstractmethod
-    def open_model(self, target: Any) -> Any:
+    def open_model(self: MLModel, target: Any) -> Any:
         """
         Implemenents the opening of a trained model from *target* (corresponding to the structure
         returned by :py:meth:`output`). To be implemented in subclasses.
@@ -395,7 +411,7 @@ class MLModel(Derivable):
 
     @abc.abstractmethod
     def train(
-        self,
+        self: MLModel,
         task: law.Task,
         input: Any,
         output: Any,
@@ -408,7 +424,7 @@ class MLModel(Derivable):
 
     @abc.abstractmethod
     def evaluate(
-        self,
+        self: MLModel,
         task: law.Task,
         events: ak.Array,
         models: list[Any],

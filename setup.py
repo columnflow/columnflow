@@ -9,8 +9,8 @@ this_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 keywords = [
-    "physics", "analysis", "experiment", "columnar", "vectoized",
-    "law", "order", "luigi", "lhc", "cms",
+    "physics", "analysis", "experiment", "columnar", "vectorized",
+    "law", "order", "luigi", "workflow", "automation", "lhc", "cern",
 ]
 
 
@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Development Status :: 4 - Beta",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: BSD License",
@@ -36,7 +37,7 @@ with open(os.path.join(this_dir, "README.md"), "r") as f:
 
 
 # load installation requirements
-with open(os.path.join(this_dir, "requirements_prod.txt"), "r") as f:
+with open(os.path.join(this_dir, "sandboxes", "cf.txt"), "r") as f:
     install_requires = [line.strip() for line in f.readlines() if line.strip()]
 
 
@@ -59,7 +60,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,
-    python_requires=">=3.7, <4",
+    python_requires=">=3.7, <=3.11",
     zip_safe=False,
     packages=find_packages(exclude=["tests"]),
 )

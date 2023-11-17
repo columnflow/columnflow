@@ -1,4 +1,4 @@
-# version 4
+# version 5
 
 # documentation packages
 sphinx~=6.2.1
@@ -9,7 +9,7 @@ autodocsumm~=0.2.11
 myst-parser~=2.0.0
 
 # prod packages
--r ../requirements_prod.txt
+-r ../sandboxes/cf.txt
 
 # selection of packages from sandboxes
 -r ../sandboxes/columnar.txt

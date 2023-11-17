@@ -7,8 +7,8 @@ Object and event calibration tools.
 from __future__ import annotations
 
 import inspect
-from typing import Callable, Sequence
 
+from columnflow.types import Callable, Sequence
 from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources
@@ -48,15 +48,17 @@ class Calibrator(TaskArrayFunction):
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Function to be wrapped and integrated into new :py:class:`Calibrator`
-            instance , defaults to None
-        :param bases: additional bases for new :py:class:`Calibrator`, defaults to ()
-        :param mc_only: only run this :py:class:`Calibrator` on Monte Carlo simulation
-            , defaults to False
-        :param data_only: only run this :py:class:`Calibrator` on observed data,
-            defaults to False
-        :return: new :py:class:`Calibrator` instance with *func* as the `call_func`
-            or the decorator itself
+        :param func: Function to be wrapped and integrated into new :py:class:`Calibrator` class.
+        :param bases: Additional bases for the new :py:class:`Calibrator`.
+        :param mc_only: Boolean flag indicating that this :py:class:`Calibrator` should only run on
+            Monte Carlo simulation and skipped for real data.
+        :param data_only: Boolean flag indicating that this :py:class:`Calibrator` should only run
+            on real data and skipped for Monte Carlo simulation.
+        :param nominal_only: Boolean flag indicating that this :py:class:`Calibrator` should only
+            run on the nominal shift and skipped on any other shifts.
+        :param shifts_only: Shift names that this :py:class:`Calibrator` should only run on,
+            skipping all other shifts.
+        :return: New :py:class:`Calibrator` subclass.
         """
         # prepare shifts_only
         if shifts_only:
@@ -100,7 +102,7 @@ class Calibrator(TaskArrayFunction):
                         if data_only and not self.dataset_inst.is_data:
                             return True
 
-                    # check nominal_only
+                    # check nominal_only and shifts_only
                     if getattr(self, "global_shift_inst", None):
                         if nominal_only and not self.global_shift_inst.is_nominal:
                             return True

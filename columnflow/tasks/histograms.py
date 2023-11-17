@@ -4,6 +4,8 @@
 Task to produce and merge histograms.
 """
 
+from __future__ import annotations
+
 import luigi
 import law
 
@@ -49,6 +51,10 @@ class CreateHistograms(
     # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
 
+    @law.util.classproperty
+    def mandatory_columns(cls) -> set[str]:
+        return set(cls.category_id_columns) | {"process_id"}
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -56,16 +62,16 @@ class CreateHistograms(
         reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
 
         if not self.pilot:
-            if self.producers:
+            if self.producer_insts:
                 reqs["producers"] = [
                     self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            if self.ml_models:
+            if self.ml_model_insts:
                 reqs["ml"] = [
-                    self.reqs.MLEvaluation.req(self, ml_model=m)
-                    for m in self.ml_models
+                    self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+                    for ml_model_inst in self.ml_model_insts
                 ]
 
         return reqs
@@ -75,16 +81,16 @@ class CreateHistograms(
             "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
         }
 
-        if self.producers:
+        if self.producer_insts:
             reqs["producers"] = [
                 self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        if self.ml_models:
+        if self.ml_model_insts:
             reqs["ml"] = [
-                self.reqs.MLEvaluation.req(self, ml_model=m)
-                for m in self.ml_models
+                self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+                for ml_model_inst in self.ml_model_insts
             ]
 
         return reqs
@@ -142,15 +148,19 @@ class CreateHistograms(
 
         # iterate over chunks of events and diffs
         files = [inputs["events"]["collection"][0]["events"].path]
-        if self.producers:
+        if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
-        if self.ml_models:
+        if self.ml_model_insts:
             files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
             read_columns=len(files) * [read_columns],
         ):
+            # optional check for overlapping inputs
+            if self.check_overlapping_inputs:
+                self.raise_if_overlapping([events] + list(columns))
+
             # add additional columns
             events = update_ak_array(events, *columns)
 
@@ -232,6 +242,14 @@ class CreateHistograms(
         self.output()["hists"].dump(histograms, formatter="pickle")
 
 
+# overwrite class defaults
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+CreateHistograms.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=CreateHistograms.task_family in check_overlap_tasks,
+    add_default_to_description=True,
+)
+
+
 CreateHistogramsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CreateHistograms,
@@ -269,7 +287,7 @@ class MergeHistograms(
     )
 
     def create_branch_map(self):
-        # create a dummy branch map so that this task could as a job
+        # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
 
     def workflow_requires(self):
@@ -287,8 +305,9 @@ class MergeHistograms(
             prefer_cli.clear()
             missing = self.output().count(existing=False, keys=True)[1]
             variables = tuple(sorted(missing, key=variables.index))
-            if not variables:
-                return []
+
+        if not variables:
+            return []
 
         return self.reqs.CreateHistograms.req(
             self,

@@ -12,7 +12,6 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 
-
 ak = maybe_import("awkward")
 
 
@@ -30,6 +29,7 @@ class CalibrateEvents(
     implemented as instances of the :py:class:`~columnflow.calibration.Calibrator` class. For
     further information, please consider the documentation there.
     """
+
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -83,14 +83,14 @@ class CalibrateEvents(
 
     @law.decorator.log
     @ensure_proxy
-    @law.decorator.localize(input=False, output=True)
+    @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         """
         Run method of this task.
         """
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, sorted_ak_to_parquet, update_ak_array,
         )
 
         # prepare inputs and outputs
@@ -101,15 +101,16 @@ class CalibrateEvents(
         output_chunks = {}
 
         # run the calibrator setup
-        self.calibrator_inst.run_setup(reqs["calibrator"], inputs["calibrator"])
+        reader_targets = self.calibrator_inst.run_setup(reqs["calibrator"], inputs["calibrator"])
+        n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.calibrator_inst.used_columns
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.calibrator_inst.used_columns
 
         # define columns that will be written
         write_columns = self.calibrator_inst.produced_columns
@@ -118,41 +119,61 @@ class CalibrateEvents(
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-        # open with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [input_file, *reader_targets.values()],
+            mode="r",
+        ) as (local_input_file, *inps):
+            # open with uproot
+            with self.publish_step("load and open ..."):
+                nano_file = local_input_file.load(formatter="uproot")
 
-        # iterate over chunks
-        for events, pos in self.iter_chunked_io(
-            nano_file,
-            source_type="coffea_root",
-            read_columns=read_columns,
-        ):
-            # just invoke the calibration function
-            events = self.calibrator_inst(events)
+            # iterate over chunks
+            for (events, *cols), pos in self.iter_chunked_io(
+                [nano_file, *(inp.path for inp in inps)],
+                source_type=["coffea_root"] + [None] * n_ext,
+                read_columns=[read_columns] * (1 + n_ext),
+            ):
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(cols))
 
-            # remove columns
-            events = route_filter(events)
+                # insert additional columns
+                events = update_ak_array(events, *cols)
 
-            # optional check for finite values
-            if self.check_finite:
-                self.raise_if_not_finite(events)
+                # just invoke the calibration function
+                events = self.calibrator_inst(events)
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
-            output_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # remove columns
+                events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite_output:
+                    self.raise_if_not_finite(events)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[(lfn_index, pos.index)] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge output files
         with output["columns"].localize("w") as outp:
             sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outp, local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, outp, local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-CalibrateEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+CalibrateEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=CalibrateEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+CalibrateEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=CalibrateEvents.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 

@@ -16,7 +16,6 @@ from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.production import Producer
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -51,12 +50,12 @@ class SelectEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         if not self.pilot:
-            reqs["calib"] = [
+            reqs["calibrations"] = [
                 self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
-        else:
+        elif self.calibrator_insts:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.CalibrateEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
@@ -95,9 +94,10 @@ class SelectEvents(
 
     @law.decorator.log
     @ensure_proxy
-    @law.decorator.localize
+    @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
+        from columnflow.tasks.histograms import CreateHistograms
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
@@ -113,7 +113,17 @@ class SelectEvents(
         stats = defaultdict(float)
 
         # run the selector setup
-        self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        n_ext = len(reader_targets)
+
+        # show an early warning in case the selector does not produce some mandatory columns
+        produced_columns = self.selector_inst.produced_columns
+        for c in self.reqs.get("CreateHistograms", CreateHistograms).mandatory_columns:
+            if Route(c) not in produced_columns:
+                self.logger.warning(
+                    f"selector {self.selector_inst.cls_name} does not produce column {c} "
+                    "which might be required later on for creating histograms downstream",
+                )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -123,72 +133,101 @@ class SelectEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = mandatory_coffea_columns | self.selector_inst.used_columns | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.selector_inst.used_columns
+        read_columns |= set(map(Route, aliases.values()))
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | self.selector_inst.produced_columns
+        write_columns = set(map(Route, mandatory_coffea_columns))
+        write_columns |= self.selector_inst.produced_columns
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-        # open the input file with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [
+                input_file,
+                *(inp["columns"] for inp in inputs["calibrations"]),
+                *reader_targets.values(),
+            ],
+            mode="r",
+        ) as (local_input_file, *inps):
+            # open with uproot
+            with self.publish_step("load and open ..."):
+                nano_file = local_input_file.load(formatter="uproot")
 
-        # iterate over chunks of events and diffs
-        n_calib = len(inputs["calibrations"])
-        for (events, *diffs), pos in self.iter_chunked_io(
-            [nano_file] + [inp["columns"].path for inp in inputs["calibrations"]],
-            source_type=["coffea_root"] + n_calib * ["awkward_parquet"],
-            read_columns=(1 + n_calib) * [read_columns],
-        ):
-            # apply the calibrated diffs
-            events = update_ak_array(events, *diffs)
+            # iterate over chunks of events and diffs
+            n_calib = len(inputs["calibrations"])
+            for (events, *cols), pos in self.iter_chunked_io(
+                [nano_file, *(inp.path for inp in inps)],
+                source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
+                read_columns=[read_columns] * (1 + n_calib + n_ext),
+            ):
+                # optional check for overlapping inputs within additional columns
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping(list(cols))
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
+                # insert additional columns
+                events = update_ak_array(events, *cols)
 
-            # invoke the selection function
-            events, results = self.selector_inst(events, stats)
-            results_array = results.to_ak()
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
+                )
 
-            # optional check for finite values
-            if self.check_finite:
-                self.raise_if_not_finite(results_array)
+                # invoke the selection function
+                events, results = self.selector_inst(events, stats)
 
-            # save results as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
-            result_chunks[(lfn_index, pos.index)] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
+                # complain when there is no event mask
+                if results.event is None:
+                    raise Exception(
+                        f"selector {self.selector_inst.cls_name} returned {results!r} object that "
+                        "does not contain 'event' mask",
+                    )
 
-            # remove columns
-            if write_columns:
-                events = route_filter(events)
+                # convert to array
+                results_array = results.to_ak()
 
                 # optional check for finite values
-                if self.check_finite:
-                    self.raise_if_not_finite(events)
+                if self.check_finite_output:
+                    self.raise_if_not_finite(results_array)
 
-                # save additional columns as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
-                column_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # save results as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
+                result_chunks[(lfn_index, pos.index)] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
+
+                # remove columns
+                if write_columns:
+                    events = route_filter(events)
+
+                    # optional check for finite values
+                    if self.check_finite_output:
+                        self.raise_if_not_finite(events)
+
+                    # save additional columns as parquet via a thread in the same pool
+                    chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
+                    column_chunks[(lfn_index, pos.index)] = chunk
+                    self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
-        law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["results"], local=True)
+        writer_opts_masks = self.get_parquet_writer_opts(repeating_values=True)
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, outputs["results"], local=True, writer_opts=writer_opts_masks,
+        )
 
         # merge the column files
         if write_columns:
             sorted_chunks = [column_chunks[key] for key in sorted(column_chunks)]
-            law.pyarrow.merge_parquet_task(self, sorted_chunks, outputs["columns"], local=True)
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, outputs["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
         # save stats
         outputs["stats"].dump(stats, indent=4, formatter="json")
@@ -208,8 +247,14 @@ class SelectEvents(
 
 # overwrite class defaults
 check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
-SelectEvents.check_finite = ChunkedIOMixin.check_finite.copy(
+SelectEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
     default=SelectEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
+check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
+SelectEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
+    default=SelectEvents.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
 
@@ -370,7 +415,9 @@ class MergeSelectionMasks(
         else:
             inputs = [inp["masks"] for inp in inputs]
 
-        law.pyarrow.merge_parquet_task(self, inputs, output["masks"])
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts(),
+        )
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
@@ -385,7 +432,9 @@ class MergeSelectionMasks(
             )
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns | set(self.config_inst.x.keep_columns[self.task_family])
+        write_columns = mandatory_coffea_columns
+        write_columns |= {"category_ids", "process_id", "normalization_weight"}
+        write_columns |= set(self.config_inst.x.keep_columns[self.task_family])
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:

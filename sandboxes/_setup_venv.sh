@@ -15,7 +15,7 @@
 #       The name of the virtual environment. It will be installed into $CF_VENV_BASE/$CF_VENV_NAME.
 #   CF_VENV_REQUIREMENTS
 #       The requirements file containing packages that are installed on top of
-#       $CF_BASE/requirements_prod.txt.
+#       $CF_BASE/sandboxes/cf.txt.
 #
 # Upon venv activation, two environment variables are set in addition to those exported by the venv:
 #   CF_DEV
@@ -52,13 +52,14 @@ setup_venv() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="${PWD}"
 
-    # source the main setup script to access helpers
-    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
-
     # zsh options
     if ${shell_is_zsh}; then
         emulate -L bash
+        setopt globdots
     fi
+
+    # source the main setup script to access helpers
+    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
 
     #
@@ -113,7 +114,7 @@ setup_venv() {
 
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
-    local requirement_files_contains_prod="false"
+    local requirement_files_contains_cf="false"
     if ${shell_is_zsh}; then
         requirement_files=(${(@s:,:)CF_VENV_REQUIREMENTS})
     else
@@ -124,8 +125,8 @@ setup_venv() {
             >&2 echo "requirement file '${f}' does not exist"
             return "13"
         fi
-        if [ "${f}" = "${CF_BASE}/requirements_prod.txt" ]; then
-            requirement_files_contains_prod="true"
+        if [ "${f}" = "${CF_BASE}/sandboxes/cf.txt" ]; then
+            requirement_files_contains_cf="true"
         fi
     done
     local first_requirement_file="${requirement_files[0]}"
@@ -247,7 +248,7 @@ setup_venv() {
 
         # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            cf_color cyan "installing venv at ${install_path} from ${sandbox_file}"
+            cf_color cyan "installing venv ${CF_VENV_NAME} from ${sandbox_file} at ${install_path}"
 
             rm -rf "${install_path}"
             cf_create_venv "${venv_name_hashed}"
@@ -257,33 +258,38 @@ setup_venv() {
             source "${install_path}/bin/activate" ""
             [ "$?" != "0" ] && clear_pending && return "26"
 
-            # update pip
-            cf_color magenta "updating pip"
-            python -m pip install -U pip
+            # compose a list of arguments containing dependencies to install
+            local install_reqs=""
+            add_requirements() {
+                local args
+                args="${@}"
+                echo "$( cf_color magenta "install" ) $( cf_color default_bright "${args}" )"
+                [ ! -z "${install_reqs}" ] && install_reqs="${install_reqs} "
+                install_reqs="${install_reqs}${args}"
+            }
+
+            # update packaging tools
+            add_requirements pip setuptools
+
+            # basic cf requirements
+            if ! ${requirement_files_contains_cf}; then
+                add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
+            fi
+
+            # requirement files
+            local f
+            for f in ${requirement_files[@]}; do
+                add_requirements -r "${f}"
+            done
+
+            # actual installation
+            eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
 
-            # install basic production requirements
-            if ! ${requirement_files_contains_prod}; then
-                cf_color magenta "installing requirement file ${CF_BASE}/requirements_prod.txt"
-                pip install -r "${CF_BASE}/requirements_prod.txt"
-                [ "$?" != "0" ] && clear_pending && return "28"
-            fi
-
-            # install requirement files
-            for f in ${requirement_files[@]}; do
-                cf_color magenta "installing requirement file ${f}"
-                pip install -r "${f}"
-                [ "$?" != "0" ] && clear_pending && return "29"
-                echo
-            done
-
-            # clear the pip cache
-            pip cache -q purge 2> /dev/null
-
-            # ensure that the venv is relocateable
-            cf_make_venv_relocateable "${venv_name_hashed}"
-            [ "$?" != "0" ] && clear_pending && return "30"
+            # make newly installed packages relocatable
+            cf_make_venv_relocatable "${venv_name_hashed}"
+            [ "$?" != "0" ] && clear_pending && return "28"
 
             # write the version and a timestamp into the flag file
             echo "version ${venv_version}" > "${CF_SANDBOX_FLAG_FILE}"
@@ -299,16 +305,22 @@ setup_venv() {
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
+                >&2 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                return "30"
+            fi
+
             # fetch the bundle and unpack it
             echo "looking for bash sandbox bundle for venv ${CF_VENV_NAME}"
-            local sandbox_names=(${CF_JOB_BASH_SANDBOX_NAMES})
-            local sandbox_uris=(${CF_JOB_BASH_SANDBOX_URIS})
-            local sandbox_patterns=(${CF_JOB_BASH_SANDBOX_PATTERNS})
+            local sandbox_names=( ${CF_JOB_BASH_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_BASH_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_BASH_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
                 if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
                     echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
                     (
+                        source "${CF_WLCG_TOOLS}" "" &&
                         mkdir -p "${install_path}" &&
                         cd "${install_path}" &&
                         law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
@@ -324,8 +336,14 @@ setup_venv() {
             fi
         fi
 
+        # let the home variable in pyvenv.cfg point to the conda bin directory
+        sed -i -r \
+            "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
+            "${install_path}/pyvenv.cfg"
+
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"
+
         echo
     fi
 

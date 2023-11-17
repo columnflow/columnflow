@@ -7,8 +7,8 @@ Event categorization tools.
 from __future__ import annotations
 
 import inspect
-from typing import Callable
 
+from columnflow.types import Callable
 from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 
@@ -33,10 +33,9 @@ class Categorizer(TaskArrayFunction):
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Function to be wrapped and integrated into new :py:class:`Categorizer`
-            instance.
+        :param func: Function to be wrapped and integrated into new :py:class:`Categorizer` class.
         :param bases: Additional base classes for new :py:class:`Categorizer`.
-        :return: The new :py:class:`Categorizer` instance.
+        :return: The new :py:class:`Categorizer` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
@@ -51,6 +50,9 @@ class Categorizer(TaskArrayFunction):
 
             # get the categorizer name
             cls_name = cls_dict.pop("cls_name", func.__name__)
+
+            # disable call caching since the current implementation does not work with multiple returns
+            cls_dict["call_force"] = True
 
             # create the subclass
             subclass = cls.derive(cls_name, bases=bases, cls_dict=cls_dict, module=module)

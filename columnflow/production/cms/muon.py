@@ -10,7 +10,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -42,7 +41,7 @@ def muon_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "muon_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
+            "muon_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
         })
 
     *get_muon_file* can be adapted in a subclass in case it is stored differently in the external
@@ -94,7 +93,12 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @muon_weights.setup
-def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def muon_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector
@@ -107,4 +111,5 @@ def muon_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets:
     self.muon_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.muon_sf_corrector.version in [1]
+    if self.muon_sf_corrector.version not in (1,):
+        raise Exception(f"unsuppprted muon sf corrector version {self.muon_sf_corrector.version}")

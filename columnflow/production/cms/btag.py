@@ -10,7 +10,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -39,7 +38,7 @@ def btag_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "btag_sf_corr": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/BTV/2017_UL/btagging.json.gz",  # noqa
+            "btag_sf_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/BTV/2017_UL/btagging.json.gz",  # noqa
         })
 
     *get_btag_file* can be adapted in a subclass in case it is stored differently in the external
@@ -195,7 +194,12 @@ def btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @btag_weights.setup
-def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def btag_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the btag sf corrector
@@ -208,4 +212,5 @@ def btag_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets:
     self.btag_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.btag_sf_corrector.version in [3]
+    if self.btag_sf_corrector.version not in (3,):
+        raise Exception(f"unsuppprted btag sf corrector version {self.btag_sf_corrector.version}")

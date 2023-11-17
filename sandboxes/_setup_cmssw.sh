@@ -4,6 +4,11 @@
 # depending on whether the installation is already present, and whether the script is called as part
 # of a remote (law) job (CF_REMOTE_JOB=1).
 #
+# In case a function or executable named "cf_cmssw_custom_install" is defined, it is invoked inside
+# the src directory of the CMSSW checkout after a first "scram build" pass and followed by a second
+# pass. If its refers to a file, that file is sourced. Likewise, if defined, a function or
+# executable named "cf_cmssw_custom_setup" is invoked after the sandbox is activated.
+#
 # Six environment variables are expected to be set before this script is called:
 #   CF_SANDBOX_FILE
 #       The path of the file that contained the sandbox definition and that sourced _this_ script.
@@ -44,6 +49,12 @@ setup_cmssw() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig_dir="$( pwd )"
 
+    # zsh options
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
     # source the main setup script to access helpers
     CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
 
@@ -56,11 +67,8 @@ setup_cmssw() {
 
     # default mode
     if [ -z "${mode}" ]; then
-        if [ ! -z "${CF_SANDBOX_SETUP_MODE}" ]; then
-            mode="${CF_SANDBOX_SETUP_MODE}"
-        else
-            mode="install"
-        fi
+        mode="install"
+        [ ! -z "${CF_SANDBOX_SETUP_MODE}" ] && mode="${CF_SANDBOX_SETUP_MODE}"
     fi
 
     # force install mode for remote jobs
@@ -155,10 +163,10 @@ setup_cmssw() {
                 # wait at most 20 minutes
                 sleep_counter="$(( $sleep_counter + 1 ))"
                 if [ "${sleep_counter}" -ge 120 ]; then
-                    >&2 echo "cmssw ${CF_CMSSW_VERSION} is setup in different process, but number of sleeps exceeded"
+                    >&2 echo "${CF_CMSSW_VERSION} is setup in different process, but number of sleeps exceeded"
                     return "20"
                 fi
-                cf_color yellow "cmssw ${CF_CMSSW_VERSION} already being setup in different process, sleep ${sleep_counter} / 120"
+                cf_color yellow "${CF_CMSSW_VERSION} already being setup in different process, sleep ${sleep_counter} / 120"
                 sleep 10
             done
         fi
@@ -202,22 +210,44 @@ setup_cmssw() {
             echo
             cf_color cyan "installing ${CF_CMSSW_VERSION} on ${CF_SCRAM_ARCH} in ${install_base}"
 
+            # first install pass
             (
                 mkdir -p "${install_base}"
                 cd "${install_base}"
-                source "/cvmfs/cms.cern.ch/cmsset_default.sh" ""
                 export SCRAM_ARCH="${CF_SCRAM_ARCH}"
-                scramv1 project CMSSW "${CF_CMSSW_VERSION}"
-                cd "${CF_CMSSW_VERSION}/src"
-                eval "$( scramv1 runtime -sh )"
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" &&
+                scramv1 project CMSSW "${CF_CMSSW_VERSION}" &&
+                cd "${CF_CMSSW_VERSION}/src" &&
+                eval "$( scramv1 runtime -sh )" &&
                 scram b
-
-                # write the flag into a file
-                echo "version ${CF_CMSSW_FLAG}" > "${CF_SANDBOX_FLAG_FILE}"
-                rm -f "${pending_flag_file}"
             )
             local ret="$?"
             [ "${ret}" != "0" ] && clear_pending && return "${ret}"
+
+            # custom install hook and second install pass
+            (
+                cd "${install_path}/src"
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" ""
+                eval "$( scramv1 runtime -sh )"
+
+                if command -v cf_cmssw_custom_install &> /dev/null; then
+                    echo -e "\nrunning cf_cmssw_custom_install"
+                    cf_cmssw_custom_install &&
+                    cd "${install_path}/src" &&
+                    scram b
+                elif [ ! -z "${cf_cmssw_custom_install}" ] && [ -f "${cf_cmssw_custom_install}" ]; then
+                    echo -e "\nsourcing cf_cmssw_custom_install file"
+                    source "${cf_cmssw_custom_install}" "" &&
+                    cd "${install_path}/src" &&
+                    scram b
+                fi
+            )
+            ret="$?"
+            [ "${ret}" != "0" ] && clear_pending && return "${ret}"
+
+            # write the flag into a file
+            echo "version ${CF_CMSSW_FLAG}" > "${CF_SANDBOX_FLAG_FILE}"
+            clear_pending
         fi
 
         # remove the pending_flag
@@ -228,16 +258,22 @@ setup_cmssw() {
     if [ "${CF_REMOTE_JOB}" = "1" ]; then
         # fetch, unpack and setup the bundle
         if [ ! -d "${install_path}" ]; then
+            if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
+                >&2 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
+                return "30"
+            fi
+
             # fetch the bundle and unpack it
             echo "looking for cmssw sandbox bundle for${CF_CMSSW_ENV_NAME}"
-            local sandbox_names=(${CF_JOB_CMSSW_SANDBOX_NAMES})
-            local sandbox_uris=(${CF_JOB_CMSSW_SANDBOX_URIS})
-            local sandbox_patterns=(${CF_JOB_CMSSW_SANDBOX_PATTERNS})
+            local sandbox_names=( ${CF_JOB_CMSSW_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_CMSSW_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_CMSSW_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
                 if [ "${sandbox_names[i]}" = "${CF_CMSSW_ENV_NAME}" ]; then
                     echo "found bundle ${CF_CMSSW_ENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
                     (
+                        source "${CF_WLCG_TOOLS}" "" &&
                         mkdir -p "${install_base}" &&
                         cd "${install_base}" &&
                         law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "cmssw.tgz"
@@ -253,10 +289,12 @@ setup_cmssw() {
 
             # create a new cmssw checkout, unpack the bundle on top and rebuild python symlinks
             (
-                echo "unpacking bundle to ${install_path}"
+                echo "unpacking bundle to ${install_path}" &&
                 cd "${install_base}" &&
-                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" &&
                 export SCRAM_ARCH="${CF_SCRAM_ARCH}" &&
+                export PATH="${LAW_CRAB_ORIGINAL_PATH:-${PATH}}" &&
+                export LD_LIBRARY_PATH="${LAW_CRAB_ORIGINAL_LD_LIBRARY_PATH:-${LD_LIBRARY_PATH}}" &&
+                source "/cvmfs/cms.cern.ch/cmsset_default.sh" "" &&
                 scramv1 project CMSSW "${CF_CMSSW_VERSION}" &&
                 cd "${CF_CMSSW_VERSION}" &&
                 tar -xzf "../cmssw.tgz" &&
@@ -282,7 +320,15 @@ setup_cmssw() {
     export SCRAM_ARCH="${CF_SCRAM_ARCH}"
     export CMSSW_VERSION="${CF_CMSSW_VERSION}"
     cd "${install_path}/src"
-    eval "$( scramv1 runtime -sh )"
+    eval "$( scramv1 runtime -sh )" || return "$?"
+
+    # custom setup
+    if command -v cf_cmssw_custom_setup &> /dev/null; then
+        cf_cmssw_custom_setup || return "$?"
+    elif [ ! -z "${cf_cmssw_custom_setup}" ] && [ -f "${cf_cmssw_custom_setup}" ]; then
+        source "${cf_cmssw_custom_setup}" "" || return "$?"
+    fi
+
     cd "${orig_dir}"
 
     # prepend persistent path fragments again to ensure priority for local packages and

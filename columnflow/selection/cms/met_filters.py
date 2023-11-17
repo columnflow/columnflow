@@ -6,12 +6,10 @@ Selector related to MET filters.
 
 from __future__ import annotations
 
-from typing import Iterable
-
+from columnflow.types import Iterable
 from columnflow.selection import Selector, selector, SelectionResult
 from columnflow.util import maybe_import
 from columnflow.columnar_util import Route
-
 
 ak = maybe_import("awkward")
 

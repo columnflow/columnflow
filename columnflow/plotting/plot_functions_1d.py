@@ -7,10 +7,10 @@ Example plot functions for one-dimensional plots.
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Iterable
 
 import law
 
+from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
@@ -21,7 +21,6 @@ from columnflow.plotting.plot_util import (
     apply_process_settings,
     apply_density_to_hists,
 )
-
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")

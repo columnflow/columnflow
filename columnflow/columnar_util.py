@@ -11,10 +11,11 @@ __all__ = [
     "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
     "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
     "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet", "attach_behavior", "layout_ak_array", "flat_np_view",
-    "deferred_column", "optional_column",
+    "sorted_ak_to_parquet", "sorted_ak_to_root", "attach_behavior", "layout_ak_array",
+    "flat_np_view", "deferred_column", "optional_column",
 ]
 
+import os
 import gc
 import re
 import math
@@ -25,18 +26,17 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict, defaultdict
-from typing import Sequence, Callable, Any
+from collections import namedtuple, OrderedDict
 
 import law
 import order as od
 from law.util import InsertableDict
 
+from columnflow.types import Sequence, Callable, Any, T
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
-    get_source_code,
+    get_source_code, real_path,
 )
-
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -48,9 +48,10 @@ maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
 
+
+# loggers
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
-
 
 #: Columns that are always required when opening a nano file with coffea.
 mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
@@ -124,36 +125,41 @@ class Route(od.TagMixin):
         # -> "pt.jec_up"
 
     .. py:attribute:: fields
-       type: tuple
-       read-only
 
-       The fields of this route.
+        type: tuple
+        read-only
+
+        The fields of this route.
 
     .. py:attribute:: column
-       type: string
-       read-only
 
-       The name of the corresponding column in dot format.
+        type: string
+        read-only
+
+        The name of the corresponding column in dot format.
 
     .. py:attribute:: nano_column
-       type: string
-       read-only
 
-       The name of the corresponding column in nano-style underscore format.
+        type: string
+        read-only
+
+        The name of the corresponding column in nano-style underscore format.
 
     .. py:attribute:: string_column
-       type: string
-       read-only
 
-       The name of the corresponding column in dot format, but only consisting of string fields,
-       i.e., without slicing or indexing fields.
+        type: string
+        read-only
+
+        The name of the corresponding column in dot format, but only consisting of string fields,
+        i.e., without slicing or indexing fields.
 
     .. py:attribute:: string_nano_column
-       type: string
-       read-only
 
-       The name of the corresponding column in nano-style underscore format, but only consisting of
-       string fields, i.e., without slicing or indexing fields.
+        type: string
+        read-only
+
+        The name of the corresponding column in nano-style underscore format, but only consisting of
+        string fields, i.e., without slicing or indexing fields.
     """
 
     DOT_SEP = "."
@@ -1021,6 +1027,41 @@ def sorted_ak_to_parquet(
     ak.to_parquet(ak_array, *args, **kwargs)
 
 
+def sorted_ak_to_root(
+    ak_array: ak.Array,
+    path: str,
+    tree_name: str = "events",
+) -> None:
+    """
+    Sorts the fields in an awkward array *ak_array* recursively with :py:func:`sort_ak_fields` and
+    saves it as a root tree named *tree_name* to a file at *path* using uproot.
+
+    Please note that optional types, denoted by e.g. ``"?float32"``, cannot be saved in root trees
+    and are therefore converted to their non-optional equivalent using :py:func:`awkward.drop_none`.
+
+    :param ak_array: The input array.
+    :param path: The path of the root file to create.
+    :param tree_name: The name of the tree to create inside the root file.
+    """
+    # sort fields
+    ak_array = sort_ak_fields(ak_array)
+
+    # drop nones
+    ak_array = ak.drop_none(ak_array, axis=None)
+    for r in get_ak_routes(ak_array):
+        ak_array = set_ak_column(ak_array, r, ak.drop_none(r.apply(ak_array), axis=-1))
+
+    # prepare the output path
+    path = real_path(path)
+    if not os.path.exists(os.path.dirname(path)):
+        os.makedirs(os.path.dirname(path))
+
+    # create the file
+    f = uproot.recreate(path)
+    f[tree_name] = {field: ak_array[field] for field in ak_array.fields}
+    f.close()
+
+
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
@@ -1132,15 +1173,17 @@ class RouteFilter(object):
         # ]
 
     .. py:attribute:: keep_routes
-       type: list
 
-       The routes to keep.
+        type: list
+
+        The routes to keep.
 
     .. py:attribute:: remove_routes
-       type: None, set
 
-       A set of :py:class:`Route` instances that are removed, defined after the first call to this
-       instance.
+        type: None, set
+
+        A set of :py:class:`Route` instances that are removed, defined after the first call to this
+        instance.
     """
 
     def __init__(self, keep_routes: Sequence[Route | str]):
@@ -1249,105 +1292,121 @@ class ArrayFunction(Derivable):
     **produces**. Omitting these flags is identical to using (e.g.) ``my_func.AUTO``.
 
     .. py:classattribute:: uses
-       type: set
 
-       The set of used column names or other dependencies to recursively resolve the names of used
-       columns.
+        type: set
+
+        The set of used column names or other dependencies to recursively resolve the names of used
+        columns.
 
     .. py:classattribute:: produces
-       type: set
 
-       The set of produced column names or other dependencies to recursively resolve the names of
-       produced columns.
+        type: set
+
+        The set of produced column names or other dependencies to recursively resolve the names of
+        produced columns.
 
     .. py:classattribute:: AUTO
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote automatic
-       resolution of column names.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote automatic
+        resolution of column names.
 
     .. py:classattribute:: USES
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`uses` set.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote columns names
+        in the :py:attr:`uses` set.
 
     .. py:classattribute:: PRODUCES
-       type: ArrayFunction.IOFlag
 
-       Flag that can be used in nested dependencies between array functions to denote columns names
-       in the :py:attr:`produces` set.
+        type: ArrayFunction.IOFlag
+
+        Flag that can be used in nested dependencies between array functions to denote columns names
+        in the :py:attr:`produces` set.
 
     .. py:classattribute:: check_used_columns
-       type: bool
 
-       A flag that decides whether, during the actual call, the input array should be checked for
-       the existence of all non-optional columns defined in :py:attr:`uses`. If a column is missing,
-       an exception is raised. A column, represented by a :py:class:`~.Route` object internally, is
-       considered optional if it has a tag ``"optional"`` as, for instance, added by
-       :py:func:`~.optional_column`.
+        type: bool
+
+        A flag that decides whether, during the actual call, the input array should be checked for
+        the existence of all non-optional columns defined in :py:attr:`uses`. If a column is
+        missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+        internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+        :py:func:`~.optional_column`.
 
     .. py:classattribute:: check_produced_columns
-       type: bool
 
-       A flag that decides whether, after the actual call, the output array should be checked for
-       the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
-       missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
-       internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
-       :py:func:`~.optional_column`.
+        type: bool
+
+        A flag that decides whether, after the actual call, the output array should be checked for
+        the existence of all non-optional columns defined in :py:attr:`produces`. If a column is
+        missing, an exception is raised. A column, represented by a :py:class:`~.Route` object
+        internally, is considered optional if it has a tag ``"optional"`` as, for instance, added by
+        :py:func:`~.optional_column`.
 
     .. py:attribute:: uses_instances
-       type: set
 
-       The set of used column names or instantiated dependencies to recursively resolve the names of
-       used columns. Set during the deferred initialization.
+        type: set
+
+        The set of used column names or instantiated dependencies to recursively resolve the names
+        of used columns. Set during the deferred initialization.
 
     .. py:attribute:: produces_instances
-       type: set
 
-       The set of produces column names or instantiated dependencies to recursively resolve the
-       names of produced columns. Set during the deferred initialization.
+        type: set
+
+        The set of produces column names or instantiated dependencies to recursively resolve the
+        names of produced columns. Set during the deferred initialization.
 
     .. py:attribute:: deps
-       type: dict
 
-       The callstack of dependencies, i.e., a dictionary mapping dependent classes to their
-       instances as to be used by *this* instance. Item access on this instance is forwarded to this
-       object.
+        type: dict
+
+        The callstack of dependencies, i.e., a dictionary mapping dependent classes to their
+        instances as to be used by *this* instance. Item access on this instance is forwarded to
+        this object.
 
     .. py:attribute:: deps_kwargs
-       type: dict
 
-       Optional keyword arguments mapped to dependent classes that are forwarded to their
-       initialization.
+        type: dict
+
+        Optional keyword arguments mapped to dependent classes that are forwarded to their
+        initialization.
 
     .. py::attribute:: used_columns
-       type: set
-       read-only
 
-       The resolved, flat set of used column names.
+        type: set
+        read-only
+
+        The resolved, flat set of used column names.
 
     .. py::attribute:: produced_columns
-       type: set
-       read-only
 
-       The resolved, flat set of produced column names.
+        type: set
+        read-only
+
+        The resolved, flat set of produced column names.
 
     .. py:attribute:: call_func
-       type: callable
 
-       The wrapped function to be called on arrays.
+        type: callable
+
+        The wrapped function to be called on arrays.
 
     .. py:attribute: init_func
-       type: callable
 
-       The registered function defining what to update, or *None*.
+        type: callable
+
+        The registered function defining what to update, or *None*.
 
     .. py:attribute: skip_func
-       type: callable
 
-       The registered function defining when to skip this instance while building dependencies of
-       other instances.
+        type: callable
+
+        The registered function defining when to skip this instance while building dependencies of
+        other instances.
     """
 
     # class-level attributes as defaults
@@ -1360,7 +1419,7 @@ class ArrayFunction(Derivable):
     check_used_columns = True
     check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
-    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime")
+    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime", False)
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -1377,7 +1436,7 @@ class ArrayFunction(Derivable):
 
         @classmethod
         def deferred_column(
-            cls,
+            cls: ArrayFunction.DeferredColumn,
             call_func: Callable[[ArrayFunction], Any | set[Any]] | None = None,
         ) -> ArrayFunction.DeferredColumn | Callable:
             """
@@ -1406,7 +1465,7 @@ class ArrayFunction(Derivable):
 
             return decorator(call_func) if call_func else decorator
 
-        def __init__(self, *columns: Any):
+        def __init__(self, *columns: Any) -> None:
             super().__init__()
 
             # save columns as set, specially handling the case where a single set is given
@@ -1468,7 +1527,7 @@ class ArrayFunction(Derivable):
         cls.skip_func = func
 
     def __init__(
-        self,
+        self: ArrayFunction,
         call_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
@@ -1478,7 +1537,7 @@ class ArrayFunction(Derivable):
         log_runtime: bool | None = None,
         deferred_init: bool | None = True,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__()
 
         # add class-level attributes as defaults for unset arguments (no_value)
@@ -1539,13 +1598,13 @@ class ArrayFunction(Derivable):
         if deferred_init:
             self.deferred_init(instance_cache=instance_cache)
 
-    def __getitem__(self, dep_cls: DerivableMeta) -> ArrayFunction:
+    def __getitem__(self: ArrayFunction, dep_cls: DerivableMeta) -> ArrayFunction:
         """
         Item access to dependencies.
         """
         return self.deps[dep_cls]
 
-    def deferred_init(self, instance_cache: dict | None = None) -> dict:
+    def deferred_init(self: ArrayFunction, instance_cache: dict | None = None) -> dict:
         """
         Controls the deferred part of the initialization process.
         """
@@ -1563,7 +1622,7 @@ class ArrayFunction(Derivable):
         return instance_cache
 
     def create_dependencies(
-        self,
+        self: ArrayFunction,
         instance_cache: dict,
         only_update: bool = False,
     ) -> None:
@@ -1645,8 +1704,7 @@ class ArrayFunction(Derivable):
                         instances.add(obj)
 
                 else:
-                    # here, obj must be anything that is accepted by route
-                    instances.add(obj if isinstance(obj, Route) else Route(obj))
+                    instances.add(obj)
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1656,7 +1714,11 @@ class ArrayFunction(Derivable):
                 if cls not in added_deps:
                     del self.deps[cls]
 
-    def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> ArrayFunction:
+    def instantiate_dependency(
+        self: ArrayFunction,
+        cls: DerivableMeta,
+        **kwargs: Any,
+    ) -> ArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*. The
         latter update optional keyword arguments in :py:attr:`self.deps_kwargs` and are then
@@ -1669,10 +1731,9 @@ class ArrayFunction(Derivable):
 
         return cls(**kwargs)
 
-    def get_dependencies(self, include_others: bool = False) -> set[ArrayFunction | Any]:
+    def get_dependencies(self: ArrayFunction) -> set[ArrayFunction | Any]:
         """
-        Returns a set of instances of all dependencies. When *include_others* is *True*, also
-        non-ArrayFunction types are returned.
+        Returns a set of instances of all dependencies.
         """
         deps = set()
 
@@ -1683,17 +1744,15 @@ class ArrayFunction(Derivable):
                     obj = obj.wrapped
                 if isinstance(obj, ArrayFunction):
                     deps.add(obj)
-                elif include_others:
-                    deps.add(obj)
 
         return deps
 
     def _get_columns(
-        self,
+        self: ArrayFunction,
         io_flag: IOFlag,
         dependencies: bool = True,
         _cache: set | None = None,
-    ) -> set[str]:
+    ) -> set[Route]:
         if io_flag == self.IOFlag.AUTO:
             raise ValueError("io_flag in internal _get_columns method must not be AUTO")
 
@@ -1727,25 +1786,25 @@ class ArrayFunction(Derivable):
                 # add the columns
                 columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
             else:
-                columns.add(obj)
+                columns.add(Route(obj))
 
         return columns
 
-    def _get_used_columns(self, _cache: set | None = None) -> set[str]:
+    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
-    def used_columns(self) -> set[str]:
+    def used_columns(self: ArrayFunction) -> set[Route]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self, _cache: set | None = None) -> set[str]:
+    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
-    def produced_columns(self) -> set[str]:
+    def produced_columns(self: ArrayFunction) -> set[Route]:
         return self._get_produced_columns()
 
-    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
+    def _check_columns(self: ArrayFunction, ak_array: ak.Array, io_flag: IOFlag) -> None:
         """
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
@@ -1777,7 +1836,7 @@ class ArrayFunction(Derivable):
         missing = ", ".join(sorted(map(str, missing)))
         raise Exception(f"'{self.cls_name}' did not {action} any columns matching: {missing}")
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self: ArrayFunction, *args, **kwargs) -> Any:
         """
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
         raised if :py:attr:`call_func` is not callable.
@@ -1809,7 +1868,7 @@ class ArrayFunction(Derivable):
             if self.log_runtime:
                 duration = time.perf_counter() - t1
                 logger_perf.info(
-                    f"runtime of '{self.cls_name}': {law.util.human_duration(seconds=duration)}",
+                    f"runtime of '{self.cls_name}': {duration:.7f} s",
                 )
 
         # assume result is an event array or tuple with an event array as the first element and
@@ -1829,8 +1888,9 @@ def optional_column(
     *routes: Route | Any | set[Route | Any],
 ) -> Route | set[Route]:
     """
-    Takes one or several objects *routes* whose type can be anything that is accepted by the :py:class:`~.Route`
-    constructor, and returns a single or a set of route objects being tagged ``"optional"``.
+    Takes one or several objects *routes* whose type can be anything that is accepted by the
+    :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
+    ``"optional"``.
     """
     if not routes:
         raise Exception("at least one route argument must be given")
@@ -1919,44 +1979,59 @@ class TaskArrayFunction(ArrayFunction):
         interfaces.
 
     .. py:classattribute:: shifts
-       type: set
 
-       The set of dependent or produced shifts, or other dependencies to recursively resolve the
-       names of shifts.
+        type: set
+
+        The set of dependent or produced shifts, or other dependencies to recursively resolve the
+        names of shifts.
 
     .. py:attribute:: shifts_instances
-       type: set
 
-       The set of shift names or instantiated dependencies to recursively resolve the names of
-       shifts. Set during the deferred initialization.
+        type: set
+
+        The set of shift names or instantiated dependencies to recursively resolve the names of
+        shifts. Set during the deferred initialization.
 
     .. py:attribute:: all_shifts
-       type: set
-       read-only
 
-       The resolved, flat set of dependent or produced shifts.
+        type: set
+        read-only
+
+        The resolved, flat set of dependent or produced shifts.
 
     .. py:attribute: requires_func
-       type: callable
 
-       The registered function defining requirements, or *None*.
+        type: callable
+
+        The registered function defining requirements, or *None*.
 
     .. py:attribute:: setup_func
-       type: callable
 
-       The registered function performing the custom setup step, or *None*.
+        type: callable
+
+        The registered function performing the custom setup step, or *None*.
 
     .. py:attribute:: sandbox
-       type: str, None
 
-       A optional string referring to a sandbox that is required to run this array function.
+        type: str, None
+
+        A optional string referring to a sandbox that is required to run this array function.
 
     .. py:attribute:: call_force
-       type: None, bool
 
-       When a bool, this flag decides whether calls of this instance are cached. However, note that
-       when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence over
-       this attribute.
+        type: None, bool
+
+        When a bool, this flag decides whether calls of this instance are cached. However, note that
+        when the *call_force* flag passed to :py:meth:`__call__` is specified, it has precedence
+        over this attribute.
+
+    .. py:attribute:: pick_cached_result
+
+        type: callable
+
+        A callable that is given a previously cached result, and all arguments and keyword arguments
+        of the main call function, to pick values that should be returned and cached for the next
+        invocation.
     """
 
     # class-level attributes as defaults
@@ -1966,6 +2041,33 @@ class TaskArrayFunction(ArrayFunction):
     call_force = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
+
+    @staticmethod
+    def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
+        """
+        Default implementation for picking a return value from a previously *cached_result* and all
+        *args* and *kwargs* that were passed to the main call method.
+        """
+        # strategy: when an events array exists within args or kwargs, return it including potential
+        # additional objects that were previously cached; if no events array exists, return the
+        # cached result unchanged
+
+        # look for events
+        if args:
+            events = args[0]
+        elif "events" in kwargs:
+            events = kwargs["events"]
+        else:
+            # no events found, return cached_result unchanged
+            return cached_result
+
+        # when the previous cached result is not a tuple, i.e. the call had just one return value,
+        # only return the events
+        if not isinstance(cached_result, tuple):
+            return events
+
+        # otherwise, also return all but the first cached return value
+        return events, *cached_result[1:]
 
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
@@ -2008,10 +2110,11 @@ class TaskArrayFunction(ArrayFunction):
     def __init__(
         self,
         *args,
-        requires_func: Callable | None = law.no_value,
-        setup_func: Callable | None = law.no_value,
-        sandbox: str | None = law.no_value,
-        call_force: bool | None = law.no_value,
+        requires_func: Callable | law.NoValue | None = law.no_value,
+        setup_func: Callable | law.NoValue | None = law.no_value,
+        sandbox: str | law.NoValue | None = law.no_value,
+        call_force: bool | law.NoValue | None = law.no_value,
+        pick_cached_result: Callable | law.NoValue | None = law.no_value,
         inst_dict: dict | None = None,
         **kwargs,
     ):
@@ -2029,6 +2132,8 @@ class TaskArrayFunction(ArrayFunction):
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
             call_force = self.__class__.call_force
+        if pick_cached_result == law.no_value:
+            pick_cached_result = self.__class__.pick_cached_result
 
         # when custom funcs are passed, bind them to this instance
         if requires_func:
@@ -2039,6 +2144,11 @@ class TaskArrayFunction(ArrayFunction):
         # other attributes
         self.sandbox = sandbox
         self.call_force = call_force
+        self.pick_cached_result = pick_cached_result
+
+        # cached results of the main call function per thread id
+        self._result_cache = {}
+        self._result_cache_lock = threading.RLock()
 
     def __getattr__(self, attr: str) -> Any:
         """
@@ -2060,25 +2170,53 @@ class TaskArrayFunction(ArrayFunction):
 
         return super().instantiate_dependency(cls, **kwargs)
 
+    def _get_cached_result(self) -> Any | law.NoValue:
+        """
+        Returns the last cached result or :py:attr:`law.no_value` if no cached result was found.
+        """
+        with self._result_cache_lock:
+            return self._result_cache.get(threading.get_ident(), law.no_value)
+
+    def _cache_result(self, obj: Any) -> None:
+        """
+        Adds a new result *obj* to the cache.
+        """
+        with self._result_cache_lock:
+            self._result_cache[threading.get_ident()] = obj
+
+    def _clear_cache(self, dependencies: bool = False) -> None:
+        """
+        Removes any previously cached result. When *dependencies* is *True*, caches of all
+        dependencies are cleared recursively.
+        """
+        with self._result_cache_lock:
+            self._result_cache.pop(threading.get_ident(), None)
+
+        # also clear dependencies
+        if dependencies:
+            for obj in self.get_dependencies():
+                if isinstance(obj, TaskArrayFunction):
+                    obj._clear_cache(dependencies=dependencies)
+
     def _get_all_shifts(self, _cache: set | None = None) -> set[str]:
         # init the call cache
         if _cache is None:
             _cache = set()
 
         # add shifts and consider _this_ call cached
-        shifts = {
-            shift
-            for shift in self.shifts
-            if not isinstance(shift, (ArrayFunction, self.IOFlagged))
-        }
+        shifts = set()
+        for shift in self.shifts:
+            if isinstance(shift, od.Shift):
+                shifts.add(shift.name)
+            elif isinstance(shift, str):
+                shifts.add(shift)
         _cache.add(self)
 
         # add shifts of all dependent objects
-        for obj in self.get_dependencies(include_others=False):
-            if isinstance(obj, TaskArrayFunction):
-                if obj not in _cache:
-                    _cache.add(obj)
-                    shifts |= obj._get_all_shifts(_cache=_cache)
+        for obj in self.get_dependencies():
+            if isinstance(obj, TaskArrayFunction) and obj not in _cache:
+                _cache.add(obj)
+                shifts |= obj._get_all_shifts(_cache=_cache)
 
         return shifts
 
@@ -2109,7 +2247,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in _cache:
+            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
                 _cache.add(dep)
                 dep.run_requires(reqs=reqs, _cache=_cache)
 
@@ -2125,8 +2263,8 @@ class TaskArrayFunction(ArrayFunction):
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
-        outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to store targets
-        of columnar data that are to be included in an event chunk loop
+        outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to
+        store targets of columnar data that are to be included in an event chunk loop.
         """
         # default column targets
         if reader_targets is None:
@@ -2142,7 +2280,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
-            if dep not in _cache:
+            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
                 _cache.add(dep)
                 dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
 
@@ -2151,39 +2289,46 @@ class TaskArrayFunction(ArrayFunction):
     def __call__(
         self,
         *args,
-        call_cache: bool | defaultdict | None = None,
         call_force: bool | None = None,
-        n_return: int = 1,
         **kwargs,
     ) -> Any:
         """
         Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
 
-        Also, all calls are cached unless *call_cache* is *False*. In case caching is active and
-        this instance was called before, it is not called again but the first *n_return* elements of
-        *args* are returned unchanged. This check is bypassed when either *call_force* is *True*, or
-        when it is *None* and the :py:attr:`call_force` attribute of this instance is *True*.
+        By default, all return values are cached per thread identifier. This is bypassed either if
+        *call_force* is *True*, or when it is *None* and the :py:attr:`call_force` attribute of this
+        instance is *True*. If not *None*, the cache decision is passed on to all dependent
+        :py:class:`TaskArrayFunction`'s calls.
         """
-        # call caching
-        if call_cache is not False:
-            # setup a new call cache when not present yet
-            if not isinstance(call_cache, dict):
-                call_cache = defaultdict(int)
+        clear_cache = kwargs.get("_clear_cache", True)
+        kwargs["_clear_cache"] = False
 
-            # check if the instance was called before or wether the call is forced
-            if call_force is None:
-                call_force = self.call_force
-            if call_cache[self] > 0 and not call_force:
-                return args[0] if n_return == 1 else args[:n_return]
+        # call_force default for this call
+        if call_force is None:
+            call_force = self.call_force
 
-            # increase the count and set kwargs for the call downstream
-            call_cache[self] += 1
+        # pass on the call_force setting when specified
+        if call_force is not None:
+            kwargs["call_force"] = call_force
 
-        # stack all kwargs
-        kwargs = {**kwargs, "call_cache": call_cache}
+        # get the cached result
+        result = self._get_cached_result()
 
-        return super().__call__(*args, **kwargs)
+        # do the actual call if forced or no value was cached before
+        update = call_force or result is law.no_value
+        if update:
+            result = super().__call__(*args, **kwargs)
+        elif callable(self.pick_cached_result):
+            result = self.pick_cached_result(result, *args, **kwargs)
+
+        # clear or update the cache
+        if clear_cache:
+            self._clear_cache(dependencies=True)
+        else:
+            self._cache_result(result)
+
+        return result
 
 
 class NoThreadPool(object):
@@ -2221,6 +2366,9 @@ class NoThreadPool(object):
 
     def close(self) -> None:
         self.opened = False
+
+    def join(self) -> None:
+        return
 
     def terminate(self) -> None:
         return
@@ -2295,7 +2443,19 @@ class DaskArrayReader(object):
     to be read more than once, another instance of this class should be used.
     """
 
-    def __init__(self, path: str, open_options: dict | None = None):
+    class MaterializationStrategy(enum.Flag):
+        """
+        Flag to define which materialization strategy to follow.
+        """
+        SLICES = enum.auto()
+        PARTITIONS = enum.auto()
+
+    def __init__(
+        self: DaskArrayReader,
+        path: str,
+        open_options: dict | None = None,
+        materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
+    ):
         super().__init__()
 
         # open the file
@@ -2304,50 +2464,93 @@ class DaskArrayReader(object):
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
-        # fixed mapping of chunk to partition indices, created once in _materialize_via_partitions
-        self.chunk_to_partitions = {}
+        # strategy dependent attributes and setup
+        self.materialization_strategy = materialization_strategy
+        if materialization_strategy == self.MaterializationStrategy.PARTITIONS:
+            # fixed mapping of chunk to partition indices, created in _materialize_via_partitions
+            self.chunk_to_partitions = {}
 
-        # temporary mapping of partition indices to cache information (chunks still to be handled
-        # and a cached array) that changes during the read process in _materialize_via_partitions
-        self.partition_cache = {
-            p: DotDict(chunks=[], array=None)
-            for p in range(self.dak_array.npartitions)
-        }
+            # mapping of partition indices to cache information (chunks still to be handled and a
+            # cached array) that changes during the read process in _materialize_via_partitions
+            self.partition_cache = {
+                p: DotDict(chunks=[], array=None)
+                for p in range(self.dak_array.npartitions)
+            }
 
-        # locks to protect against RCs during read operations by different threads
-        self.chunk_to_partitions_lock = threading.Lock()
-        self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
+            # locks to protect against RCs during read operations by different threads
+            self.chunk_to_partitions_lock = threading.Lock()
+            self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
 
-    def __del__(self):
+    def __del__(self: DaskArrayReader) -> None:
         self.close()
 
-    def __len__(self) -> int:
+    def __len__(self: DaskArrayReader) -> int:
         return len(self.dak_array)
 
     @property
-    def closed(self) -> bool:
+    def closed(self: DaskArrayReader) -> bool:
         return self.dak_array is None
 
-    def close(self) -> None:
+    def close(self: DaskArrayReader) -> None:
         # free memory and perform an eager, overly cautious gc round
         self.dak_array = None
-        self.partition_cache.clear()
+        if getattr(self, "partition_cache", None):
+            self.partition_cache.clear()
         gc.collect()
 
-    def _materialize_via_partitions(
-        self,
+    def materialize(self: DaskArrayReader, *args, **kwargs) -> ak.Array:
+        """
+        Materializes (reads from disk) a slice of the array using the configured
+        :py:attr:`materialization_strategy`. All *args* and *kwargs* are forwarded to the internal
+        implementations.
+
+        :return: The materialized array.
+        """
+        if self.materialization_strategy == self.MaterializationStrategy.SLICES:
+            return self._materialize_via_slices(*args, **kwargs)
+
+        if self.materialization_strategy == self.MaterializationStrategy.PARTITIONS:
+            return self._materialize_via_partitions(*args, **kwargs)
+
+        raise NotImplementedError(
+            f"unknown materialization strategy {self.materialization_strategy}",
+        )
+
+    def _materialize_via_slices(
+        self: DaskArrayReader,
+        *,
         chunk_index: int,
         entry_start: int,
         entry_stop: int,
         max_chunk_size: int,
-    ) -> ak.array:
-        """
-        Strategy: read from disk with granularity given by partition divisions
-            - use chunk info to determine which partitions need to be read
-            - guard each read operation of a partition by locks
-            - add materialized partitions that might overlap with another chunk in a temporary cache
-            - remove cached partitions eagerly once it becomes clear that no chunk will need it
-        """
+    ) -> ak.Array:
+        return self.dak_array[entry_start:entry_stop].compute()
+
+    def _materialize_via_partitions(
+        self,
+        *,
+        chunk_index: int,
+        entry_start: int,
+        entry_stop: int,
+        max_chunk_size: int,
+    ) -> ak.Array:
+        # slicing on dak arrays was not supported for a long time, i.e. arr[start:stop].compute()
+        # used to raise a DaskAwkwardNotImplemented, but it seems to be supported now, so the
+        # following code might be obsolete, but it is kept for now as a fallback and as a potential
+        # alternative in case the slicing implementation is not as efficient as the partition one,
+        # reasons:
+        # 1. in cf, there are typically no parquet files from external sources, but they are all
+        #    created within cf and thus, they typical partition sizes exactly match the desired
+        #    chunk size (as they were created in a chunked way and eventually merged), leading to
+        #    zero overhead and no caching / overlap issues
+        # 2. it seems far more performant to read full partitions from disk rather than parts of
+        #    them (if possible at all) since meta data might have to be read in any case
+        # strategy: read from disk with granularity given by partition divisions
+        #   - use chunk info to determine which partitions need to be read
+        #   - guard each read operation of a partition by locks
+        #   - add materialized partitions that might overlap with another chunk in a temporary cache
+        #   - remove cached partitions eagerly once it becomes clear that no chunk will need it
+
         # fill the chunk -> partitions mapping once
         with self.chunk_to_partitions_lock:
             if not self.chunk_to_partitions:
@@ -2402,20 +2605,6 @@ class DaskArrayReader(object):
         gc.collect()
 
         return arr
-
-    def materialize(self, *args, **kwargs) -> ak.array:
-        # for now, it seems like the only method for materializing slices of dak arrays to ak arrays
-        # is through invoking the "compute()" operation on partitions, and in fact, slicing on dak
-        # arrays is not supported at this time (arr[start:stop] raises DaskAwkwardNotImplemented);
-        # therefore, the only way to perform parallel, chunked read operations is through partitions
-        # and while potentially being to coarse on disk, there might even be two advantages:
-        # 1. in cf, there are typically no parquet files from external sources, but they are all
-        #    created within cf and thus, they typical partition sizes exactly match the desired
-        #    chunk size (as they were created in a chunked way and eventually merged), leading to
-        #    zero overhead and no caching / overlap issues
-        # 2. it seems far more performant to read full partitions from disk rather than parts of
-        #    them (if possible at all) since meta data might have to be read in any case
-        return self._materialize_via_partitions(*args, **kwargs)
 
 
 class ChunkedIOHandler(object):
@@ -2967,10 +3156,10 @@ class ChunkedIOHandler(object):
         """
         # get the materialized ak array for that chunk
         return source_object.materialize(
-            chunk_pos.index,
-            chunk_pos.entry_start,
-            chunk_pos.entry_stop,
-            chunk_pos.max_chunk_size,
+            chunk_index=chunk_pos.index,
+            entry_start=chunk_pos.entry_start,
+            entry_stop=chunk_pos.entry_stop,
+            max_chunk_size=chunk_pos.max_chunk_size,
         )
 
     @property
@@ -3099,58 +3288,53 @@ class ChunkedIOHandler(object):
 
         # strategy: setup the pool and manually keep it filled up to pool_size and do not insert all
         # chunks right away as this could swamp the memory if processing is slower than IO
-        with self.pool_cls(self.pool_size) as self.pool:
-            results = []
-            no_result = object()
-
-            try:
-                while self.task_queue or results:
-                    # find the first done result and remove it from the list
-                    # this will do nothing in the first iteration
-                    result_obj = no_result
-                    for i, result in enumerate(list(results)):
-                        if not result.ready():
-                            continue
-
-                        result_obj = result.get()
-                        results.pop(i)
-                        break
-
-                    # if no result was ready, sleep and try again
-                    if results and result_obj == no_result:
-                        time.sleep(0.05)
+        self.pool = self.pool_cls(self.pool_size)
+        results = []
+        no_result = object()
+        try:
+            while self.task_queue or results:
+                # find the first done result and remove it from the list
+                # this will do nothing in the first iteration
+                result_obj = no_result
+                for i, result in enumerate(list(results)):
+                    if not result.ready():
                         continue
 
-                    # immediately try to fill up the pool
-                    while len(results) < self.pool_size and self.task_queue:
-                        task = self.task_queue.get_next()
-                        results.append(self.pool.apply_async(task.func, task.args, task.kwargs))
+                    result_obj = result.get()
+                    results.pop(i)
+                    break
 
-                    # if a result was ready and it returned a ReadResult, yield it
-                    if isinstance(result_obj, self.ReadResult):
-                        if self.iter_message:
-                            print(self.iter_message.format(pos=result_obj.chunk_pos))
+                # if no result was ready, sleep and try again
+                if results and result_obj == no_result:
+                    time.sleep(0.05)
+                    continue
 
-                        # probably overly-cautious, but run garbage collection before and after
-                        gc.collect()
-                        t1 = time.perf_counter()
-                        try:
-                            yield (result_obj.chunk, result_obj.chunk_pos)
-                        finally:
-                            duration = time.perf_counter() - t1
-                            logger_perf.debug(
-                                f"processing of chunk {result_obj.chunk_pos.index} took " +
-                                law.util.human_duration(seconds=duration),
-                            )
-                        gc.collect()
+                # immediately try to fill up the pool
+                while len(results) < self.pool_size and self.task_queue:
+                    task = self.task_queue.get_next()
+                    results.append(self.pool.apply_async(task.func, task.args, task.kwargs))
 
-            except:
-                self.pool.close()
-                self.pool.terminate()
-                raise
+                # if a result was ready and it returned a ReadResult, yield it
+                if isinstance(result_obj, self.ReadResult):
+                    if self.iter_message:
+                        print(self.iter_message.format(pos=result_obj.chunk_pos))
 
-            finally:
-                self.pool = None
+                    # probably overly-cautious, but run garbage collection before and after
+                    gc.collect()
+                    t1 = time.perf_counter()
+                    try:
+                        yield (result_obj.chunk, result_obj.chunk_pos)
+                    finally:
+                        duration = time.perf_counter() - t1
+                        logger_perf.debug(
+                            f"processing of chunk {result_obj.chunk_pos.index} took " +
+                            law.util.human_duration(seconds=duration),
+                        )
+                    gc.collect()
+        finally:
+            self.pool.terminate()
+            self.pool.join()
+            self.pool = None
 
     def __del__(self):
         """

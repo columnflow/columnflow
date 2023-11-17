@@ -5,7 +5,7 @@
 action() {
     # just lint
     if [ ! -d "${CF_BASE}" ]; then
-        2>&1 echo "CF_BASE not setup, skip linting"
+        >&2 echo "CF_BASE not setup, skip linting"
     elif [ "${CF_SKIP_POST_COMMIT}" != "1" ]; then
         echo "post-commit linting ..."
         bash "${CF_BASE}/tests/run_linting"

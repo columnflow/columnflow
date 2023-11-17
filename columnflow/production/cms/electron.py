@@ -10,7 +10,6 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
@@ -42,7 +41,7 @@ def electron_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "electron_sf": "/afs/cern.ch/user/m/mrieger/public/mirrors/jsonpog-integration-d0a522ea/POG/EGM/2017_UL/electron.json.gz",  # noqa
+            "electron_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/EGM/2017_UL/electron.json.gz",  # noqa
         })
 
     *get_electron_file* can be adapted in a subclass in case it is stored differently in the
@@ -98,7 +97,12 @@ def electron_weights_requires(self: Producer, reqs: dict) -> None:
 
 
 @electron_weights.setup
-def electron_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def electron_weights_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     bundle = reqs["external_files"]
 
     # create the corrector
@@ -111,4 +115,7 @@ def electron_weights_setup(self: Producer, reqs: dict, inputs: dict, reader_targ
     self.electron_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    assert self.electron_sf_corrector.version in [2]
+    if self.electron_sf_corrector.version not in (2,):
+        raise Exception(
+            f"unsuppprted electron sf corrector version {self.electron_sf_corrector.version}",
+        )

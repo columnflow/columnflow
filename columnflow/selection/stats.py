@@ -11,11 +11,10 @@ import itertools
 from functools import reduce
 from collections import defaultdict
 from operator import and_, getitem as getitem_
-from typing import Sequence, Callable
 
+from columnflow.types import Sequence, Callable
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, InsertableDict
-
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -56,10 +55,10 @@ def increment_stats(
         weight_map = {
             # "num" operations
             "num_events": Ellipsis,  # all events
-            "num_events_selected": results.main.event,  # selected events only
+            "num_events_selected": results.event,  # selected events only
             # "sum" operations
             "sum_mc_weight": events.mc_weight,  # weights of all events
-            "sum_mc_weight_selected": (events.mc_weight, results.main.event),  # weights of selected events
+            "sum_mc_weight_selected": (events.mc_weight, results.event),  # weights of selected events
         }
 
         # usage within an exposed selector
@@ -235,6 +234,6 @@ def increment_event_stats(
     """
     weight_map = {
         "num_events": Ellipsis,
-        "num_events_selected": results.main.event,
+        "num_events_selected": results.event,
     }
     return self[increment_stats](events, results, stats, weight_map=weight_map, **kwargs)

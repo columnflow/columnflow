@@ -30,12 +30,12 @@ import multiprocessing
 import multiprocessing.pool
 from functools import wraps
 from collections import OrderedDict
-from typing import Callable, Any, Sequence, Union
-from types import ModuleType
 
 import law
 from law.util import InsertableDict  # noqa
 import luigi
+
+from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
 #: Placeholder for an unset value.
@@ -300,11 +300,11 @@ def ensure_proxy(
             return None
 
         # do nothing when explicitly skipped by the law config
-        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", default=False):
+        if law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False):
             return None
 
         # check the proxy validity
-        if not law.wlcg.check_voms_proxy_validity() and not law.arc.check_arc_proxy_validity():
+        if not law.wlcg.check_vomsproxy_validity() and not law.arc.check_arcproxy_validity():
             raise Exception("neither voms nor arc proxy valid")
 
     def call(state):
@@ -823,10 +823,11 @@ class Derivable(object, metaclass=DerivableMeta):
     Derivable base class with features provided by the meta :py:class:`DerivableMeta`.
 
     .. py:classattribute:: cls_name
-       type: str
-       read-only
 
-       A shorthand to access the name of the class.
+        type: str
+        read-only
+
+        A shorthand to access the name of the class.
     """
 
     @classproperty
@@ -841,14 +842,16 @@ class KeyValueMessage(luigi.worker.SchedulerMessage):
     :py:attr:`value` attributes, parsed from the incoming message assuming a format ``key = value``.
 
     .. py:attribute: key
-       type: str
 
-       The key of the message.
+        type: str
+
+        The key of the message.
 
     .. py:attribute: value
-       type: str
 
-       The value of the message.
+        type: str
+
+        The value of the message.
     """
 
     # compile expression for key - value parsing of scheduler messages

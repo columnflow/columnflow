@@ -10,7 +10,7 @@
 <!-- marker-before-badges -->
 
 <p align="center">
-  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yam">
+  <a href="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml">
     <img alt="Build status" src="https://github.com/columnflow/columnflow/actions/workflows/lint_and_test.yaml/badge.svg" />
   </a>
   <a href="https://pypi.python.org/pypi/columnflow">
@@ -73,7 +73,7 @@ Setup successfull! The next steps are:
 
 1. Setup the repository and install the environment.
    > cd
-   > source setup.sh [optional_setup_name]
+   > source setup.sh [recommended_yet_optional_setup_name]
 
 2. Run local tests & linting checks to verify that the analysis is setup correctly.
    > ./tests/run_all
@@ -131,13 +131,14 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/nprouvost"><img src="https://avatars.githubusercontent.com/u/49162277?v=4?s=100" width="100px;" alt="nprouvost"/><br /><sub><b>nprouvost</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=nprouvost" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/commits?author=nprouvost" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Bogdan-Wiederspan"><img src="https://avatars.githubusercontent.com/u/79155113?v=4?s=100" width="100px;" alt="Bogdan-Wiederspan"/><br /><sub><b>Bogdan-Wiederspan</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=Bogdan-Wiederspan" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/commits?author=Bogdan-Wiederspan" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=kramerto" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/kramerto"><img src="https://avatars.githubusercontent.com/u/18616159?v=4?s=100" width="100px;" alt="Tobias Kramer"/><br /><sub><b>Tobias Kramer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=kramerto" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Akramerto" title="Reviewed Pull Requests">👀</a></td>
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mschrode"><img src="https://avatars.githubusercontent.com/u/5065234?v=4?s=100" width="100px;" alt="Matthias Schroeder"/><br /><sub><b>Matthias Schroeder</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mschrode" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jolange"><img src="https://avatars.githubusercontent.com/u/6584443?v=4?s=100" width="100px;" alt="Johannes Lange"/><br /><sub><b>Johannes Lange</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jolange" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/BalduinLetzer"><img src="https://avatars.githubusercontent.com/u/70058868?v=4?s=100" width="100px;" alt="BalduinLetzer"/><br /><sub><b>BalduinLetzer</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=BalduinLetzer" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/JanekMoels"><img src="https://avatars.githubusercontent.com/u/116348923?v=4?s=100" width="100px;" alt="JanekMoels"/><br /><sub><b>JanekMoels</b></sub></a><br /><a href="#ideas-JanekMoels" title="Ideas, Planning, & Feedback">🤔</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/haddadanas"><img src="https://avatars.githubusercontent.com/u/103462379?v=4?s=100" width="100px;" alt="haddadanas"/><br /><sub><b>haddadanas</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=haddadanas" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
