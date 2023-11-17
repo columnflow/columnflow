@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from columnflow.types import Sequence
+from columnflow.types import Sequence, Dict, List, Tuple
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -81,9 +81,11 @@ def plot_cm(
     skip_uncertainties: bool = False,
     x_labels: list[str] | None = None,
     y_labels: list[str] | None = None,
+    cms_rlabel: str = "",
+    cms_llabel: str = "private work",
     *args,
     **kwargs,
-) -> tuple[plt.Figure, np.ndarray]:
+) -> Tuple[List[plt.Figure], np.ndarray]:
     """ Generates the figure of the confusion matrix given the output of the nodes
     and an array of true labels. The Cronfusion matrix can also be weighted.
 
@@ -149,12 +151,13 @@ def plot_cm(
 
     def plot_confusion_matrix(
         cm: np.ndarray,
-        title: str = "",
         colormap: str = "cf_cmap",
         cmap_label: str = "Accuracy",
         digits: int = 3,
         x_labels: list[str] | None = None,
         y_labels: list[str] | None = None,
+        cms_rlabel: str = "",
+        cms_llabel: str = "private work",
         *args,
         **kwargs,
     ) -> plt.figure:
@@ -282,12 +285,212 @@ def plot_cm(
                 )
 
         # final touches
-        hep.cms.label(ax=ax, llabel="private work", rlabel=title if title else "")
+        hep.cms.label(ax=ax, llabel={"pw": "private work"}.get(cms_llabel, cms_llabel), rlabel=cms_rlabel)
         plt.tight_layout()
 
         return fig
 
     cm = get_conf_matrix(sample_weights, *args, **kwargs)
+    print("Confusion matrix calculated!")
+
     fig = plot_confusion_matrix(cm, x_labels=x_labels, y_labels=y_labels, *args, **kwargs)
+    print("Confusion matrix plotted!")
 
     return [fig], cm
+
+
+def plot_roc(
+    events: dict,
+    config_inst: od.Config,
+    category_inst: od.Category,
+    sample_weights: Sequence | bool = False,
+    n_thresholds: int = 200 + 1,
+    skip_discriminators: list[str] = [],
+    evaluation_type: str = "OvR",
+    cms_rlabel: str = "",
+    cms_llabel: str = "private work",
+    *args,
+    **kwargs,
+) -> tuple[List[plt.Figure], dict]:
+    """
+    Generates the figure of the ROC curve given the output of the nodes
+    and an array of true labels. The ROC curve can also be weighted.
+
+    :param events: dictionary with the true labels as keys and the model output of the events as values.
+    :param config_inst: used configuration for the plot.
+    :param category_inst: used category instance, for which the plot is created.
+    :param sample_weights: sample weights of the events. If an explicit array is not given, the weights are
+        calculated based on the number of events.
+    :param n_thresholds: number of thresholds to use for the ROC curve.
+    :param skip_discriminators: list of discriminators to skip.
+    :param evaluation_type: type of evaluation to use for the ROC curve. If not provided, the type is "OvR".
+    :param cms_rlabel: right label of the CMS label.
+    :param cms_llabel: left label of the CMS label.
+    :param *args: Additional arguments to pass to the function.
+    :param **kwargs: Additional keyword arguments to pass to the function.
+
+    :return: The resulting plot and the ROC curve.
+
+    :raises AssertionError: If both predictions and labels have mismatched shapes, or if *weights*
+        is not *None* and its shape doesn't match *predictions*.
+    :raises AssertionError: If *normalization* is not one of *None*, "row", "column".
+    """
+    # defining some useful properties and output shapes
+    thresholds = np.geomspace(1e-6, 1, n_thresholds)
+    weights = create_sample_weights(sample_weights, events, list(events.keys()))
+    discriminators = list(events.values())[0].fields
+    figs = []
+
+    if evaluation_type not in ["OvO", "OvR"]:
+        raise ValueError("Illeagal Argument! Evaluation Type can only be choosen as \"OvO\" (One vs One) \
+                        or \"OvR\" (One vs Rest)")
+
+    def create_histograms(events: dict, sample_weights: dict, *args, **kwargs) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Helper function to create histograms for the different discriminators and classes.
+        """
+        hists = {}
+        for disc in discriminators:
+            hists[disc] = {}
+            for cls, predictions in events.items():
+                hists[disc][cls] = weights[cls] * ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0])
+        return hists
+
+    def binary_roc_data(
+        positiv_hist: np.ndarray,
+        negativ_hist: np.ndarray,
+        *args,
+        **kwargs,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute binary Receiver operating characteristic (ROC) values.
+        Used as a helper function for the multi-dimensional ROC curve
+        """
+        # Calculate the different rates
+        fn = np.cumsum(positiv_hist)
+        tn = np.cumsum(negativ_hist)
+        tp = fn[-1] - fn
+        fp = tn[-1] - tn
+
+        tpr = tp / (tp + fn)
+        fpr = fp / (fp + tn)
+
+        return fpr, tpr
+
+    def roc_curve_data(
+        evaluation_type: str,
+        histograms: dict,
+        *args,
+        **kwargs,
+    ) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        Compute Receiver operating characteristic (ROC) values for a multi-dimensional output.
+        """
+        result = {}
+
+        for disc in discriminators:
+            tmp = {}
+
+            if disc in skip_discriminators:
+                continue
+
+            # Choose the evaluation type
+            if (evaluation_type == "OvO"):
+                for pos_cls, pos_hist in histograms[disc].items():
+                    for neg_cls, neg_hist in histograms[disc].items():
+
+                        fpr, tpr = binary_roc_data(
+                            positiv_hist=pos_hist,
+                            negativ_hist=neg_hist,
+                            *args,
+                            **kwargs,
+                        )
+                        tmp[f"{pos_cls}_vs_{neg_cls}"] = {"fpr": fpr, "tpr": tpr}
+
+            elif (evaluation_type == "OvR"):
+                for pos_cls, pos_hist in histograms[disc].items():
+                    neg_hist = np.zeros_like(pos_hist)
+                    for neg_cls, neg_pred in histograms[disc].items():
+                        if (pos_cls == neg_cls):
+                            continue
+                        neg_hist += neg_pred
+
+                    fpr, tpr = binary_roc_data(
+                        positiv_hist=pos_hist,
+                        negativ_hist=neg_hist,
+                        *args,
+                        **kwargs,
+                    )
+                    tmp[f"{pos_cls}_vs_rest"] = {"fpr": fpr, "tpr": tpr}
+
+            result[disc] = tmp
+
+        return result
+
+    def plot_roc_curve(
+        roc_data: dict,
+        title: str,
+        cms_rlabel: str = "",
+        cms_llabel: str = "private work",
+        *args,
+        **kwargs,
+    ) -> plt.figure:
+        """
+        Plots a ROC curve.
+        """
+        def auc_score(fpr: list, tpr: list, *args) -> np.float64:
+            """
+            Compute the area under the curve using the trapezoidal rule.
+            """
+            sign = 1
+            if np.any(np.diff(fpr) < 0):
+                if np.all(np.diff(fpr) <= 0):
+                    sign = -1
+                else:
+                    raise ValueError("x is neither increasing nor decreasing : {}.".format(fpr))
+
+            return sign * np.trapz(tpr, fpr)
+
+        fpr = roc_data["fpr"]
+        tpr = roc_data["tpr"]
+
+        plt.style.use(hep.style.CMS)
+        fig, ax = plt.subplots(dpi=300)
+        ax.set_xlabel("FPR", loc="right", labelpad=10, fontsize=25)
+        ax.set_ylabel("TPR", loc="top", labelpad=15, fontsize=25)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+        ax.plot(
+            fpr,
+            tpr,
+            color="#67cf02",
+            label=f"AUC = {auc_score(roc_data['fpr'], roc_data['tpr']):.3f}",
+        )
+        ax.plot([0, 1], [0, 1], color="black", linestyle="--")
+
+        # setting titles and legend
+        ax.legend(loc="lower right", fontsize=15)
+        ax.set_title(title, wrap=True, pad=50, fontsize=30)
+        hep.cms.label(ax=ax, llabel={"pw": "private work"}.get(cms_llabel, cms_llabel), rlabel=cms_rlabel)
+        plt.tight_layout()
+
+        return fig
+
+    # create historgrams and calculate FPR and TPR
+    histograms = create_histograms(events, weights, *args, **kwargs)
+    print("histograms created!")
+
+    results = roc_curve_data(evaluation_type, histograms, *args, **kwargs)
+    print("ROC data calculated!")
+
+    # plotting
+    for disc, roc in results.items():
+        for cls, roc_data in roc.items():
+            title = rf"{cls.replace('_vs_', ' VS ')} with {disc}$"
+            figs.append(plot_roc_curve(roc_data, title, cms_llabel=cms_llabel, cms_rlabel=cms_rlabel, *args, **kwargs))
+    print("ROC curves plotted!")
+
+    results["thresholds"] = thresholds
+
+    return figs, results
