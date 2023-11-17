@@ -300,7 +300,7 @@ def plot_cm(
         cms_llabel=cms_llabel,
         cms_rlabel=cms_rlabel,
         *args,
-        **kwargs
+        **kwargs,
     )
     print("Confusion matrix plotted!")
 
