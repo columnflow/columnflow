@@ -71,6 +71,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosectionlabel",
+    "sphinxcontrib.mermaid",
     "sphinx_lfs_content",
     "autodocsumm",
     "myst_parser",
