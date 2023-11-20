@@ -10,4 +10,5 @@
    :maxdepth: 1
    
    base
+   decorators
    mixins
