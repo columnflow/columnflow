@@ -1,11 +1,155 @@
 # Plotting
 
-This section showcases how to use the various plotting tasks in columnflow.
+In columnflow, there are multiple tasks to create plots. This section showcases, how to create and
+customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task. A
+detailed overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
+
+## Creating your first plot
+
+Assuming you used the analysis template to setup your analysis, you can create a first plot by running
+```
+law run cf.PlotVariables1D --version v1 --calibrators example --selector example --producer example --processes tt,st --variables n_jet
+```
+This will run the full analysis chain for the given processes (tt, st) and should create a plot looking like this:
+
+(Include plot?)
+
+The PlotVariables1D task is located at the bottom of our
+[task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that
+all tasks leading to PlotVariables1D will be run for all datasets corresponding to the
+```--processes``` we requested using the Calibrators, Selector, and Producers
+(often referred to as CSPs) as requested. Examples on how to
+implement your own CSPs can be found in the [calibrators](building_blocks/calibrators),
+[selectors](building_blocks/selectors), and [producers](building_blocks/producers) sections of the
+user guide. The ```--variables``` parameter defines, for which variables we want to create histograms
+and plots. Variables are order objects that need to be defined in the config as shown in the
+[config objects](building_blocks/config_objects) section and the column corresponding to the expression
+statement needs to be stored either after the {py:class}`~columnflow.tasks.reduction.ReduceEvents`
+task or by a requested Producer.
+
+
+## Customization of plots
+
+There are many different parameters implemented that allow customizing the style of a plot. A short
+description to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md)
+
+Per default, this task creates one plot per variable with all Monte Carlo backgrounds being included
+in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
+and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
+
+(go through some examples for the most important parameters? e.g. process-settings unstack, shape norm,
+general-settings, variable-settings, yscale)
+
+
+## Creating 2D plots
+
+TODO
+
+
+## Creating cutflow plots
+
+The previously discussed plotting functions only create plots after applying the full event selection.
+To allow inspecting and optimizing an event and object selection, Columnflow also includes plotting
+tasks that can be run before applying any event selections.
+
+To create a simple cutflow plots, displaying event yields after each individual selection step,
+you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
+```
+law run cf.PlotCutflow --version v1 --calibrators example --selector example --processes tt,st --selector-steps jet,muon
+```
+This will produce a plot with three bins, containing the event yield before applying any selection
+and after each selector step, where we always apply the locical and of all previous selector steps.
+
+To create plots of variables as part of the cutflow, we also provide the
+{py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the
+PlotVariables1D task.
+
+The main difference is that it also includes the ```--selector-steps``` parameter.... (TODO)
+
+
+## Creating plots for different shifts
+
+Like most tasks, our plotting tasks also contain the ```--shift``` parameter that allows requesting
+the outputs for a certain type of systematic variation. Per default, the ```shift```parameter is set
+to "nominal", but you could also produce your plot with a certain systematic uncertainty varied
+up or down, e.g. via running
+```
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --shift mu_up
+```
+If you already ran the same task call with ```--shift nominal``` before, this will only require to
+produce new histograms and plots, as a shift such as the ```mu_up``` is typically implemented as an
+event weight and therefore does not require to reproduce any columns. Other shifts such as ```jec_up```
+also impact our event selection and therefore also need to re-run anything starting from
+{py:class}`~columnflow.tasks.selection.SelectEvents`. A detailed overview on how to implement different
+types of systematic uncertainties is given in the [systematics](systematics)
+section (TODO: not existing).
+
+For directly comparing differences introduced by one shift source, we provide the
+{py:class}`~columnflow.tasks.plotting.PlotShiftedVariables1D` task. Instead of the ```--shift```
+parameter, this task implements the ```--shift-sources``` task and creates one plot per shift source
+displaying the nominal distribution (black) compared to the shift source varied up (red) and down (blue).
+The task can be called e.g. via
+```
+law run cf.PlotShiftedVariables1D --version v1 --processes tt,st --variables n_jet --shift-sources mu
+```
+and produces the following plot:
+
+(TODO: include plot?)
+
+This produces per default only one plot containing the sum of all processes. To produce this plot
+per process, you can use the {py:class}`~columnflow.tasks.plotting.PlotShiftedVariablesPerProcess1D`
+task
+
+
+## Directly displaying plots in the terminal
+
+All plotting tasks also include a ```--view-cmd``` parameter that allows directly printing the plot
+during the runtime of the task:
+```
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --view-cmd imgcat
+```
+(TODO: examples on how to setup view-cmd)
+
+
 
 Note: which tasks, how to trigger them, ALL POSSIBLE PARAMETERS!!, variables
 
 TODO
 
+examples!!
+
+## Plotting parameters
+
+(This section should be in the task_overview/plotting)
+
+
+## Using you own plotting function
+
+While all plotting tasks provide default plotting functions, which implement many parameters to
+customize the plot, it might be necessary to write your own plotting functions if you want to create
+a specific type of plot. In that case, you can simply write a function that follows the signature
+of all other plotting functions and call a plotting task with this function using the
+`--plot-function` parameter.
+
+(TODO: include very simple plotting function in skeleton and use this as an example?)
+
+
+
 ## Variables creation
 
 see the Variables creation section in the Config Objects section of the documentation
+
+
+
+(TODO)
+
+For more information on how to display your results and access/manage the outputs created by tasks, visit the [Outputs](outputs.md) page.
+To find out how to further customize the style of the plot, visit the [Plotting](plotting) page.
+
+To produce a cutflow plot, run
+```
+law run cf.PlotCutflow --version v1 --calibrators example --selector example --processes tt,st --selector-steps jet,muon
+```
+This produces a plot that displays the event yields after each individual selection step. It should look like this:
+
+(TODO)
