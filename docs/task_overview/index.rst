@@ -5,4 +5,4 @@ Task Overview
    :maxdepth: 3
 
    introduction.md
-   plotting.md
+   plotting.rst
