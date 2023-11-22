@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 import order as od
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, test_int
 
 math = maybe_import("math")
 hist = maybe_import("hist")
@@ -66,32 +66,31 @@ def apply_variable_settings(
     applies settings from `variable_settings` dictionary to the `variable_insts`;
     the `rebin` setting is directly applied to the histograms
     """
-    # check if there are variable settings to apply
-    if not variable_settings:
-        return hists
 
-    # apply all settings
+    # apply all settings on variable insts
+    if variable_settings:
+        for var_inst in variable_insts:
+            # check if there are variable settings to apply for this variable
+            if var_inst.name not in variable_settings.keys():
+                continue
+
+            var_settings = variable_settings[var_inst.name]
+
+            # apply all other variable settings to the variable_inst
+            for setting_key, setting_value in var_settings.items():
+                try:
+                    setattr(var_inst, setting_key, setting_value)
+                except AttributeError:
+                    var_inst.set_aux(setting_key, setting_value)
+
+    # apply rebinning setting directly to histograms
     for var_inst in variable_insts:
-        # check if there are variable settings to apply for this variable
-        if var_inst.name not in variable_settings.keys():
-            continue
-
-        var_settings = variable_settings[var_inst.name]
-
-        for proc_inst, h in list(hists.items()):
-            # apply rebinning setting
-            rebin_factor = int(var_settings.pop("rebin", 1))
-            h = h[{var_inst.name: hist.rebin(rebin_factor)}]
-
-            # override the histogram
-            hists[proc_inst] = h
-
-        # apply all other variable settings to the variable_inst
-        for setting_key, setting_value in var_settings.items():
-            try:
-                setattr(var_inst, setting_key, setting_value)
-            except AttributeError:
-                var_inst.set_aux(setting_key, setting_value)
+        rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
+        if test_int(rebin_factor):
+            for proc_inst, h in list(hists.items()):
+                rebin_factor = int(rebin_factor)
+                h = h[{var_inst.name: hist.rebin(rebin_factor)}]
+                hists[proc_inst] = h
 
     return hists
 
