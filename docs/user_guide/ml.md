@@ -74,6 +74,11 @@ Columnflow manages sandboxes by using a version number at very first line, style
 
 For more information, refer to the official [pip documentation](https://pip.pypa.io/en/stable/reference/requirements-file-format/).
 
+One may ask, how to work with namespaces of certain modules, if it is not guarantee, that this module is available.
+For this case `maybe_import` is there. This utility function handles the import for you and makes the namespace available. Remember to use this within a function if you use the module once, and at the beginning if you intend to use it by multiple functions. The input of `maybe_import` is the name of the module, but as string. For example this tutorial uses TensorFlow in multiple occurrences, and therefore `maybe_import` of this module is right at the start:
+```python
+tf = maybe_import("tensorflow")
+```
 
 ## datasets:
 In the `datasets` function, you specify which datasets are important for your machine learning model and which dataset instance should be extracted from your config. To use this function your datasets needs to be added to your campaign, as defined by the `Order` Module. An example can be found (here)[]. It is recommended to return this as `set`, to prevent double counting.
@@ -91,13 +96,14 @@ return set(dataset_inst)
 ```
 
 ## produces:
-By default, intermediate columns are not saved within the columnflow framework but are filtered out afterwards. If you want to prevent certain columns to be filtered out, you need to mark them. This is done in the `produces` function.
-In the following the number of muons and electrons are preserved. For more information about producers look into [TODO]()
+By default, intermediate columns are not saved within the columnflow framework but are filtered out afterwards. If you want to prevent certain columns to be filtered out, you need to tell columnflow by writing them in the `produces`function. This is always done by writing a iterable with strings. These strings are of the form "class_name_that_produces_the_column.name_of_the_column".
+In the following the number of muons and electrons are preserved, but we also want to preserve for example the output of the neural network. For more information about producers look into [TODO]()
 ```python
     def produces(self, config_inst: od.Config) -> set[Route | str]:
         preseve_columns = {
             f"{self.cls_name}.n_muon",
             f"{self.cls_name}.n_electron",
+            f"{self.cls_name}.ml_prediction",
         }
         return
 ```
@@ -133,7 +139,8 @@ By default train has access to the location of the models `inputs` and `outputs`
 In columnflow, k-fold is enabled by default. The `Self` argument in `train` referes to the instance of the fold. Using `Self`, you have access to the entire `analysis_inst`ance the `config_inst`ance of the current fold, and, of course, to all the derived parameters of your model.
 
 With this information, you can call and prepare the columns to be used by the model for training.
-It is considered good practice to define the model building and column preprocessing in functions outside of `train`, keeping to keep the definition of the trainings loop and the preparation apart. An example about how to prepare columns is can be found [here](TODO Link)
+It is considered good practice to define the model building and column preprocessing in functions outside of `train`, keeping to keep the definition of the trainings loop and the preparation apart.
+An example about how to prepare columns is can be found [here](TODO Link)
 
 E.g. for a very simple trainings loop using Keras fit function.
 
@@ -179,7 +186,9 @@ After a model is trained, it can be employed to evaluate new data. This evaluati
 
 It is important to note that `evaluate` function has a dependency on prior training. If training has not been executed yet, the function will initiate the training process. The loading of the trained model is implemented in `open_model` function.
 
-In contrast to `train`ing, there is not need to specify the used columns explicitly, since all columns used in training are taken automatically. If you want to preserve columns and write them out, return the columns and add them to `produces`.
+In contrast to `train`ing, there is not need to specify the used columns explicitly, since all columns used in training are taken automatically for evaluation. Don't confuse this behavior with the parameter `events_used_in_training`. This flag determines if a certain `dataset` and shift combination can be used by the task.
+
+If you want to preserve columns and write them out into a parquet file, append the columns to `events` using `set_ak_column` and return `events`. All columns not present in `produces` are then filtered out.
 
 E.g. for an evaluation, where the models prediction is saved within the column:
 
@@ -193,7 +202,7 @@ E.g. for an evaluation, where the models prediction is saved within the column:
         events_used_in_training: bool = False,
     ) -> ak.Array:
         # fake evaluation
-
+        from IPython import embed; embed()
 
         events = set_ak_column(events, f"{self.cls_name}.n_muon", 1)
         events = set_ak_column(events, f"{self.cls_name}.n_electron", 1)
@@ -201,6 +210,9 @@ E.g. for an evaluation, where the models prediction is saved within the column:
         return events
 
 ```
+The evaluations output is saved as parquet file with the name of the model as field name. To get the file afterwards rerun the same law command again, but with `--print-output 0` at the end.
+
+
 
 # Step 2: Initialization of the machine learning model
 After defining all ABC function in Step 1, the model needs to be initialized with a unique `name`. The model gets access to hyper parameter settings by deriving from a configuration dictionary. All items of the dictionary are accessible as attribute from within the model.
@@ -222,8 +234,8 @@ test_model = TestModel.derive("test_model", cls_dict=**configuration_dict)
 
 ```
 
-After the initialization, `law` needs to be informed in the `law.cfg` about the existence of the new machine learning model. In the `law.cfg`, in the section of your `analysis`, add the path to the Python file where the model's definition and initialization are done to the entries: `ml_modules`, `inference_modules`.
-The path is relative to the analysis root directory.
+After the initialization, `law` needs to be informed in the `law.cfg` about the existence of the new machine learning model. Add in the `law.cfg`, in the section of your `analysis`, the path to the Python file where the model's definition and initialization are done to the entries: `ml_modules`, `inference_modules`. (TODO what exactly does these modules do?)
+The given path is relative to the analysis root directory.
 ```bash
 [analysis]
 # any other entries
@@ -232,7 +244,24 @@ ml_modules: hbt.ml.{test}
 inference_modules: hbt.inference.test
 ```
 # Commands to start training and evaluation
+To start the machine learning training `law run cf.MLTraining`, while for evaluation use `law run cf.MLEvaluation`.
+When not using the `config`, `calibrators`, `selector`s or `dataset`
+```bash
+law run cf.MLTraining \
+    --version your_current_version \
+    --ml-model test_model_name \
+    --config run2_2017_nano_uhh_v11_limited \
+    --calibrators calibrator_name \
+    --selector selector_name \
+    --dataset datasets_1,dataset_2,dataset_3,...
 
+law run cf.MLEvaluation \
+    --version v1 \
+    --ml-model test_model \
+    --config run2_2017_nano_uhh_v11_limited \
+    --calibrators skip_jecunc
+
+```
 
 # Useful optional functions
 
