@@ -8,9 +8,9 @@ detailed overview of all plotting tasks is given in the [Plotting tasks](../task
 
 Assuming you used the analysis template to setup your analysis, you can create a first plot by running
 ```
-law run cf.PlotVariables1D --version v1 --calibrators example --selector example --producer example --processes tt,st --variables n_jet
+law run cf.PlotVariables1D --version v1 --calibrators example --selector example --producer example --processes data,tt,st --variables n_jet
 ```
-This will run the full analysis chain for the given processes (tt, st) and should create a plot looking like this:
+This will run the full analysis chain for the given processes (data, tt, st) and should create a plot looking like this:
 
 (Include plot?)
 
@@ -31,11 +31,56 @@ task or by a requested Producer.
 ## Customization of plots
 
 There are many different parameters implemented that allow customizing the style of a plot. A short
-description to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md)
+description to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
+In the following, a few exemplary task calls are given to present the usage of our plotting parameters.
 
-Per default, this task creates one plot per variable with all Monte Carlo backgrounds being included
+Per default, the PlotVariables1D task creates one plot per variable with all Monte Carlo backgrounds being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
 and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
+To compare shapes of multiple processes, you might want to plot each process separately as one line.
+To achieve this, you can use the ```unstack``` option of the ```--process-settings``` parameter. This
+parameter can also be used to change other attributes of your process instances, such as color, label,
+and the scale. To better compare shapes of processes, we can normalize each line with the
+```--shape-norm``` parameter. Combining all the previously discussed parameters might lead to a task
+call such as
+
+```
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
+    --skip-ratio --shape-norm --process-settings "tt,unstack,color=#e41a1c:st,unstack,label=Single Top"
+```
+
+to produce the following plot:
+
+(TODO)
+
+
+Parameters that only contain a single value can also be passed via the ```--general-settings```.
+We can also change the y-scale of the plot to a log scale by adding ```--yscale log``` and change some
+properties of specific variables via the ```variable-settings``` parameter. An exemplary task call
+might be
+
+```
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
+    --general-settings "skip_ratio,shape_norm,yscale=log" \
+    --variable-settings "n_jet,x_title=N_{jets}:jet1_pt,rebin=4"
+```
+
+For the ```general_settings```, ```process_settings```, and ```variable_settings``` you can define
+defaults and groups in the config, e.g. via
+
+```
+config_inst.x.variable_settings_default = {"n_jet": {"rebin": 4}}
+config_inst.x.process_settings_groups = {"unstack_processes": {proc: {"unstack": True} for proc in ("tt", "st")}}
+}
+```
+The default is automatically used when no parameter is given in the task call, and the groups can
+be used directly on the command line and will be resolved automatically. Our previously defined
+defaults and groups will be used e.g. by the following task call:
+```
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
+    --process-settings unstack_processes
+```
+
 
 (go through some examples for the most important parameters? e.g. process-settings unstack, shape norm,
 general-settings, variable-settings, yscale)
