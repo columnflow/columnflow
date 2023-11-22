@@ -37,6 +37,7 @@ In the following, a few exemplary task calls are given to present the usage of o
 Per default, the PlotVariables1D task creates one plot per variable with all Monte Carlo backgrounds being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
 and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
+To change the text next to the label, you can add the ```--cms-label``` parameter.
 To compare shapes of multiple processes, you might want to plot each process separately as one line.
 To achieve this, you can use the ```unstack``` option of the ```--process-settings``` parameter. This
 parameter can also be used to change other attributes of your process instances, such as color, label,
@@ -46,7 +47,8 @@ call such as
 
 ```
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
-    --skip-ratio --shape-norm --process-settings "tt,unstack,color=#e41a1c:st,unstack,label=Single Top"
+    --skip-ratio --shape-norm --cms-label simpw \
+    --process-settings "tt,unstack,color=#e41a1c:st,unstack,label=Single Top"
 ```
 
 to produce the following plot:
@@ -61,16 +63,20 @@ might be
 
 ```
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
-    --general-settings "skip_ratio,shape_norm,yscale=log" \
-    --variable-settings "n_jet,x_title=N_{jets}:jet1_pt,rebin=4"
+    --general-settings "skip_ratio,shape_norm,yscale=log,cms-label=simpw" \
+    --variable-settings "n_jet,x_title=$N_{jets}$:jet1_pt,rebin=4,x_title=Leading jet pT"
 ```
 
 For the ```general_settings```, ```process_settings```, and ```variable_settings``` you can define
 defaults and groups in the config, e.g. via
 
 ```
-config_inst.x.variable_settings_default = {"n_jet": {"rebin": 4}}
-config_inst.x.process_settings_groups = {"unstack_processes": {proc: {"unstack": True} for proc in ("tt", "st")}}
+config_inst.x.default_variable_settings = {"jet1_pt": {"rebin": 4, "x_title": r"Leading jet $p_{T}$"}}
+config_inst.x.process_settings_groups = {
+    "unstack_processes": {proc: {"unstack": True} for proc in ("tt", "st")},
+}
+config_inst.x.general_settings_groups = {
+    "compare_shapes": {"skip_ratio": True, "shape_norm": True, "yscale": "log", "cms_label": "simpw"},
 }
 ```
 The default is automatically used when no parameter is given in the task call, and the groups can
@@ -78,12 +84,8 @@ be used directly on the command line and will be resolved automatically. Our pre
 defaults and groups will be used e.g. by the following task call:
 ```
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
-    --process-settings unstack_processes
+    --process-settings unstack_processes --general-settings compare_shapes
 ```
-
-
-(go through some examples for the most important parameters? e.g. process-settings unstack, shape norm,
-general-settings, variable-settings, yscale)
 
 
 ## Creating 2D plots
@@ -151,21 +153,8 @@ task
 All plotting tasks also include a ```--view-cmd``` parameter that allows directly printing the plot
 during the runtime of the task:
 ```
-law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --view-cmd imgcat
+law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --view-cmd evince-previewer
 ```
-(TODO: examples on how to setup view-cmd)
-
-
-
-Note: which tasks, how to trigger them, ALL POSSIBLE PARAMETERS!!, variables
-
-TODO
-
-examples!!
-
-## Plotting parameters
-
-(This section should be in the task_overview/plotting)
 
 
 ## Using you own plotting function
@@ -177,24 +166,3 @@ of all other plotting functions and call a plotting task with this function usin
 `--plot-function` parameter.
 
 (TODO: include very simple plotting function in skeleton and use this as an example?)
-
-
-
-## Variables creation
-
-see the Variables creation section in the Config Objects section of the documentation
-
-
-
-(TODO)
-
-For more information on how to display your results and access/manage the outputs created by tasks, visit the [Outputs](outputs.md) page.
-To find out how to further customize the style of the plot, visit the [Plotting](plotting) page.
-
-To produce a cutflow plot, run
-```
-law run cf.PlotCutflow --version v1 --calibrators example --selector example --processes tt,st --selector-steps jet,muon
-```
-This produces a plot that displays the event yields after each individual selection step. It should look like this:
-
-(TODO)
