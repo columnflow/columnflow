@@ -60,11 +60,11 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.Parameter(
-        default="pw",
+        default=law.NO_STR,
         significant=False,
         description="postfix to add behind the CMS logo; when 'skip', no CMS logo is shown at all; "
         "the following special values are expanded into the usual postfixes: wip, pre, pw, sim, "
-        "simwip, simpre, simpw, od, odwip, public; default: 'pw'",
+        "simwip, simpre, simpw, od, odwip, public; no default",
     )
 
     @classmethod
@@ -99,7 +99,7 @@ class PlotBase(ConfigTask):
         # convert parameters to usable values during plotting
         params = DotDict()
         dict_add_strict(params, "skip_legend", self.skip_legend)
-        dict_add_strict(params, "cms_label", self.cms_label)
+        dict_add_strict(params, "cms_label", None if self.cms_label == law.NO_STR else self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
         return params
@@ -163,20 +163,8 @@ class PlotBase(ConfigTask):
         for key, value in general_settings.items():
             kwargs.setdefault(key, value)
 
-        # resolve custom_style_config
-        custom_style_config = kwargs.get("custom_style_config", None)
-        if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
-
-        groups = self.config_inst.x("custom_style_config_groups", {})
-        if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
-            custom_style_config = groups[custom_style_config]
-
-        # update style_config
-        style_config = kwargs.get("style_config", {})
-        if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
-            style_config = law.util.merge_dicts(custom_style_config, style_config)
-            kwargs["style_config"] = style_config
+        # update defaults after application of `general_settings`
+        kwargs.setdefault("cms_label", "pw")
 
         return kwargs
 
