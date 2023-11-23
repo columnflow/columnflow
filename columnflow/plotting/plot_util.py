@@ -6,6 +6,8 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+from columnflow.types import Iterable, Any
+
 import operator
 import functools
 from collections import OrderedDict
@@ -21,6 +23,28 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 
 
+def apply_settings(containers: Iterable[od.AuxDataMixin], settings: dict[dict, Any] | None):
+    """
+    applies settings from `settings` dictionary to a list of order objects `containers`
+
+    :param containers: list of order objects
+    :param settings: dictionary of settings to apply on the *containers*. Each key should correspond
+        to the name of a container and each value should be a dictionary. The inner dictionary contains
+        keys and values that will be applied on the corresponding container either as an attribute
+        or alternatively as an auxiliary.
+    """
+    if not settings:
+        return
+
+    for inst in containers:
+        inst_settings = settings.get(inst.name, {})
+        for setting_key, setting_value in inst_settings.items():
+            try:
+                setattr(inst, setting_key, setting_value)
+            except AttributeError:
+                inst.set_aux(setting_key, setting_value)
+
+
 def apply_process_settings(
         hists: dict,
         process_settings: dict | None = None,
@@ -29,30 +53,18 @@ def apply_process_settings(
     applies settings from `process_settings` dictionary to the `process_insts`;
     the `scale` setting is directly applied to the histograms
     """
+    # apply all settings on process insts
+    process_insts = hists.keys()
+    apply_settings(process_insts, process_settings)
 
-    if not process_settings:
-        return hists
-
-    for proc_inst, h in list(hists.items()):
-        # check if there are process settings to apply for this variable
-        if proc_inst.name not in process_settings.keys():
-            continue
-
-        proc_settings = process_settings[proc_inst.name]
-
-        # apply "scale" setting if given
-        if "scale" in proc_settings.keys():
-            scale_factor = proc_settings.pop("scale")
+    # apply "scale" setting directly to the hists
+    for proc_inst, h in hists.items():
+        scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        if test_int(scale_factor):
+            scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
             # TODO: there might be a prettier way for the label
             proc_inst.label = f"{proc_inst.label} x{scale_factor}"
-
-        # apply all other process settings to the process_inst
-        for setting_key, setting_value in proc_settings.items():
-            try:
-                setattr(proc_inst, setting_key, setting_value)
-            except AttributeError:
-                proc_inst.set_aux(setting_key, setting_value)
 
     return hists
 
@@ -66,22 +78,8 @@ def apply_variable_settings(
     applies settings from `variable_settings` dictionary to the `variable_insts`;
     the `rebin` setting is directly applied to the histograms
     """
-
     # apply all settings on variable insts
-    if variable_settings:
-        for var_inst in variable_insts:
-            # check if there are variable settings to apply for this variable
-            if var_inst.name not in variable_settings.keys():
-                continue
-
-            var_settings = variable_settings[var_inst.name]
-
-            # apply all other variable settings to the variable_inst
-            for setting_key, setting_value in var_settings.items():
-                try:
-                    setattr(var_inst, setting_key, setting_value)
-                except AttributeError:
-                    var_inst.set_aux(setting_key, setting_value)
+    apply_settings(variable_insts, variable_settings)
 
     # apply rebinning setting directly to histograms
     for var_inst in variable_insts:
