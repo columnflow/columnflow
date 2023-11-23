@@ -64,8 +64,18 @@ might be
 ```
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
     --general-settings "skip_ratio,shape_norm,yscale=log,cms-label=simpw" \
-    --variable-settings "n_jet,x_title=$N_{jets}$:jet1_pt,rebin=4,x_title=Leading jet pT"
+    --variable-settings "n_jet,y_title=Events,x_title=N jets:jet1_pt,rebin=10,x_title=Leading jet \$p_{T}\$"
 ```
+
+(TODO: dropdown not working)
+::{dropdown} Limitations of the ```variable_settings```
+While in theory, we can change anything inside the variable and process instances via the
+```variable_settings```, there are certain attributes that are already used during the creation
+of the histograms (e.g. the ```expression``` and the ```binning```) and since our ```variable_settings```
+parameter only modifies these attributes during the runtime of our plotting task, this will not
+impact our final results.
+::
+
 
 For the ```general_settings```, ```process_settings```, and ```variable_settings``` you can define
 defaults and groups in the config, e.g. via
@@ -165,4 +175,11 @@ a specific type of plot. In that case, you can simply write a function that foll
 of all other plotting functions and call a plotting task with this function using the
 `--plot-function` parameter.
 
-(TODO: include very simple plotting function in skeleton and use this as an example?)
+An example on how to implement such a plotting function is shown in the following:
+
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/plotting/example.py
+:language: python
+:start-at: def my_plot1d_func(
+:end-at: return fig, (ax,)
+```
