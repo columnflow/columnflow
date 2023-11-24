@@ -255,6 +255,8 @@ class PlotVariablesBaseMultiShifts(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+    """
+    """
 
     exclude_index = True
 
