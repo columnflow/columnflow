@@ -7,25 +7,56 @@ detailed overview of all plotting tasks is given in the [Plotting tasks](../task
 ## Creating your first plot
 
 Assuming you used the analysis template to setup your analysis, you can create a first plot by running
-```
-law run cf.PlotVariables1D --version v1 --calibrators example --selector example --producer example --processes data,tt,st --variables n_jet
+```shell
+law run cf.PlotVariables1D --version v1 \
+    --calibrators example --selector example --producer example \
+    --processes data,tt,st --variables n_jet --categories incl,1mu
 ```
 This will run the full analysis chain for the given processes (data, tt, st) and should create a plot looking like this:
 
-(Include plot?)
+:::{figure} ../plots/cutflow__cat_incl.pdf
+:::
+
+:::{dropdown} Where do I find that plot?
+You can add ```--print-output 0``` to every task call, which will print the full filename of all
+outputs of the requested task. Alternatively, you can add ```--fetch-output 0,a``` to directly
+copy all outputs of this task into the directory you are currently in.
+Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during
+the runtime of the task, e.g. via ```--view-cmd evince-previewer```.
+:::
+
 
 The PlotVariables1D task is located at the bottom of our
 [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that
 all tasks leading to PlotVariables1D will be run for all datasets corresponding to the
 ```--processes``` we requested using the Calibrators, Selector, and Producers
-(often referred to as CSPs) as requested. Examples on how to
+(often referred to as CSPs) as requested. In the following examples, we will skip the
+```--calibrators```, ```selector``` and ```producers``` parameters, which means that the defaults
+defined in the config will be used automatically. Examples on how to
 implement your own CSPs can be found in the [calibrators](building_blocks/calibrators),
 [selectors](building_blocks/selectors), and [producers](building_blocks/producers) sections of the
 user guide. The ```--variables``` parameter defines, for which variables we want to create histograms
 and plots. Variables are order objects that need to be defined in the config as shown in the
 [config objects](building_blocks/config_objects) section and the column corresponding to the expression
 statement needs to be stored either after the {py:class}`~columnflow.tasks.reduction.ReduceEvents`
-task or by a requested Producer.
+For each of the category given with the ```--categories``` parameter, one plot will be produced.
+A detailed guide on how to implement categories in Columnflow is given in the
+[categories](building_blocks/categories) section.
+
+To define, which processes and datasets to consider when plotting, you can use the ```--processes```
+and ```--datasets``` parameter. When only processes are given, all datasets corresponding to the
+requested processes will be considered. When only datasets are given, all processes in the config
+will be considered.
+The ```processes``` parameter can be used to change the order of processes in the stack and the legend
+(try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes
+(e.g. via ```--processses, tt_sl,tt_dl,tt_fh```).
+
+:::{dropdown} Note:
+At the time of writing this documentation, there is still an issue present that histograms corresponding
+to a dataset can accidentally be used multiple times. For example, when adding ```--processes tt,tt_sl```,
+the events corresponding to the dataset ```tt_sl_powheg``` will be displayed twice in the resulting
+plot.
+:::
 
 
 ## Customization of plots
@@ -45,7 +76,7 @@ and the scale. To better compare shapes of processes, we can normalize each line
 ```--shape-norm``` parameter. Combining all the previously discussed parameters might lead to a task
 call such as
 
-```
+```shell
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
     --skip-ratio --shape-norm --cms-label simpw \
     --process-settings "tt,unstack,color=#e41a1c:st,unstack,label=Single Top"
@@ -61,26 +92,28 @@ We can also change the y-scale of the plot to a log scale by adding ```--yscale 
 properties of specific variables via the ```variable-settings``` parameter. An exemplary task call
 might be
 
-```
+```shell
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
     --general-settings "skip_ratio,shape_norm,yscale=log,cms-label=simpw" \
     --variable-settings "n_jet,y_title=Events,x_title=N jets:jet1_pt,rebin=10,x_title=Leading jet \$p_{T}\$"
 ```
 
-(TODO: dropdown not working)
-::{dropdown} Limitations of the ```variable_settings```
+
+
+
+:::{dropdown} Limitations of the ```variable_settings```
 While in theory, we can change anything inside the variable and process instances via the
 ```variable_settings```, there are certain attributes that are already used during the creation
 of the histograms (e.g. the ```expression``` and the ```binning```) and since our ```variable_settings```
 parameter only modifies these attributes during the runtime of our plotting task, this will not
 impact our final results.
-::
+:::
 
 
 For the ```general_settings```, ```process_settings```, and ```variable_settings``` you can define
 defaults and groups in the config, e.g. via
 
-```
+```python
 config_inst.x.default_variable_settings = {"jet1_pt": {"rebin": 4, "x_title": r"Leading jet $p_{T}$"}}
 config_inst.x.process_settings_groups = {
     "unstack_processes": {proc: {"unstack": True} for proc in ("tt", "st")},
@@ -92,7 +125,8 @@ config_inst.x.general_settings_groups = {
 The default is automatically used when no parameter is given in the task call, and the groups can
 be used directly on the command line and will be resolved automatically. Our previously defined
 defaults and groups will be used e.g. by the following task call:
-```
+
+```shell
 law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1_pt \
     --process-settings unstack_processes --general-settings compare_shapes
 ```
@@ -111,9 +145,17 @@ tasks that can be run before applying any event selections.
 
 To create a simple cutflow plots, displaying event yields after each individual selection step,
 you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
+```shell
+law run cf.PlotCutflow --version v1 \
+    --calibrators example --selector example \
+    --yscale log --shape-norm --process-settings all,unstack
+    --processes tt,st --selector-steps jet,muon
 ```
-law run cf.PlotCutflow --version v1 --calibrators example --selector example --processes tt,st --selector-steps jet,muon
-```
+
+:::{figure} ../plots/cutflow__cat_incl.pdf
+:::
+
+The
 This will produce a plot with three bins, containing the event yield before applying any selection
 and after each selector step, where we always apply the locical and of all previous selector steps.
 
@@ -121,17 +163,25 @@ To create plots of variables as part of the cutflow, we also provide the
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the
 PlotVariables1D task.
 
-The main difference is that it also includes the ```--selector-steps``` parameter.... (TODO)
+```shell
+law run cf.PlotCutflowVariables1D --version v1 \
+    --calibrators example --selector example \
+    --processes data,tt,st --variables cf_jet1_pt --categories incl,1mu \
+    --selector-steps jet,muon --per-plot processes
+```
+The ```per-plot``` parameter defines whether to produce one plot per selector step ```per-plot processes```
+
 
 
 ## Creating plots for different shifts
 
 Like most tasks, our plotting tasks also contain the ```--shift``` parameter that allows requesting
-the outputs for a certain type of systematic variation. Per default, the ```shift```parameter is set
+the outputs for a certain type of systematic variation. Per default, the ```shellift```parameter is set
 to "nominal", but you could also produce your plot with a certain systematic uncertainty varied
 up or down, e.g. via running
-```
-law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --shift mu_up
+```shell
+law run cf.PlotVariables1D --version v1 \
+    --processes tt,st --variables n_jet --shift mu_up
 ```
 If you already ran the same task call with ```--shift nominal``` before, this will only require to
 produce new histograms and plots, as a shift such as the ```mu_up``` is typically implemented as an
@@ -146,8 +196,9 @@ For directly comparing differences introduced by one shift source, we provide th
 parameter, this task implements the ```--shift-sources``` task and creates one plot per shift source
 displaying the nominal distribution (black) compared to the shift source varied up (red) and down (blue).
 The task can be called e.g. via
-```
-law run cf.PlotShiftedVariables1D --version v1 --processes tt,st --variables n_jet --shift-sources mu
+```shell
+law run cf.PlotShiftedVariables1D --version v1 \
+    --processes tt,st --variables n_jet --shift-sources mu
 ```
 and produces the following plot:
 
@@ -162,8 +213,9 @@ task
 
 All plotting tasks also include a ```--view-cmd``` parameter that allows directly printing the plot
 during the runtime of the task:
-```
-law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet --view-cmd evince-previewer
+```shell
+law run cf.PlotVariables1D --version v1 \
+    --processes tt,st --variables n_jet --view-cmd evince-previewer
 ```
 
 
