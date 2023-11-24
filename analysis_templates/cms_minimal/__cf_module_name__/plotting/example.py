@@ -8,9 +8,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-import law
-
-from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_util import (
     remove_residual_axis,
