@@ -32,6 +32,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+
     validate = law.OptionalBoolParameter(
         default=None,
         significant=False,
@@ -39,7 +40,12 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         "expected from the dataset info; default: obtained from 'validate_dataset_lfns' auxiliary "
         "entry in config",
     )
+
     version = None
+    """Version parameter - deactivated for :py:class:`~columnflow.tasks.external.GetDatasetLFNs`
+
+    This is an example.
+    """
 
     @classmethod
     def resolve_param_values(cls, params: DotDict) -> DotDict:
