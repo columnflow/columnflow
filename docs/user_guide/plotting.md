@@ -10,12 +10,22 @@ Assuming you used the analysis template to setup your analysis, you can create a
 ```shell
 law run cf.PlotVariables1D --version v1 \
     --calibrators example --selector example --producer example \
-    --processes data,tt,st --variables n_jet --categories incl,1mu
+    --processes data,tt,st --variables n_jet --categories incl,2j
 ```
-This will run the full analysis chain for the given processes (data, tt, st) and should create a plot looking like this:
+This will run the full analysis chain for the given processes (data, tt, st) and should create
+plots looking like this:
 
-:::{figure} ../plots/cutflow__cat_incl.pdf
+
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_incl__var_n_jet.pdf
+:width: 100%
 :::
+
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_2j__var_n_jet.pdf
+:width: 100%
+:::
+::::
+
 
 :::{dropdown} Where do I find that plot?
 You can add ```--print-output 0``` to every task call, which will print the full filename of all
@@ -51,7 +61,7 @@ The ```processes``` parameter can be used to change the order of processes in th
 (try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes
 (e.g. via ```--processses, tt_sl,tt_dl,tt_fh```).
 
-:::{dropdown} Note:
+:::{dropdown} Note! Do not add the same dataset via multiple processes!
 At the time of writing this documentation, there is still an issue present that histograms corresponding
 to a dataset can accidentally be used multiple times. For example, when adding ```--processes tt,tt_sl```,
 the events corresponding to the dataset ```tt_sl_powheg``` will be displayed twice in the resulting
@@ -84,7 +94,15 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 
 to produce the following plot:
 
-(TODO)
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c1.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c1.pdf
+:width: 100%
+:::
+::::
 
 
 Parameters that only contain a single value can also be passed via the ```--general-settings```.
@@ -98,6 +116,15 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
     --variable-settings "n_jet,y_title=Events,x_title=N jets:jet1_pt,rebin=10,x_title=Leading jet \$p_{T}\$"
 ```
 
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c2.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c2.pdf
+:width: 100%
+:::
+::::
 
 
 
@@ -131,11 +158,35 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
     --process-settings unstack_processes --general-settings compare_shapes
 ```
 
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c3.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c3.pdf
+:width: 100%
+:::
+::::
+
 
 ## Creating 2D plots
+(TODO: text)
 
-TODO
+Exemplary task call:
+```shell
+law run cf.PlotVariables2D --version v1 \
+    --processes tt,st --variables n_jet-jet1_pt,jet1_pt-n_jet
+```
 
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt-n_jet.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_n_jet-jet1_pt.pdf
+:width: 100%
+:::
+::::
 
 ## Creating cutflow plots
 
@@ -147,15 +198,21 @@ To create a simple cutflow plots, displaying event yields after each individual 
 you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
 ```shell
 law run cf.PlotCutflow --version v1 \
-    --calibrators example --selector example \
-    --yscale log --shape-norm --process-settings all,unstack
+    --calibrators example --selector example --categories incl,2j \
+    --shape-norm --process-settings tt,unstack:st,unstack \
     --processes tt,st --selector-steps jet,muon
 ```
 
-:::{figure} ../plots/cutflow__cat_incl.pdf
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_incl.pdf
+:width: 100%
 :::
 
-The
+:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_2j.pdf
+:width: 100%
+:::
+::::
+
 This will produce a plot with three bins, containing the event yield before applying any selection
 and after each selector step, where we always apply the locical and of all previous selector steps.
 
@@ -166,11 +223,46 @@ PlotVariables1D task.
 ```shell
 law run cf.PlotCutflowVariables1D --version v1 \
     --calibrators example --selector example \
-    --processes data,tt,st --variables cf_jet1_pt --categories incl,1mu \
+    --processes tt,st --variables cf_jet1_pt --categories incl \
     --selector-steps jet,muon --per-plot processes
 ```
-The ```per-plot``` parameter defines whether to produce one plot per selector step ```per-plot processes```
 
+::::{grid} 1 1 3 3
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step0_Initial__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step1_jet__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step2_muon__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:width: 100%
+:::
+::::
+
+The ```per-plot``` parameter defines whether to produce one plot per selector step
+(```per-plot processes```) or one plot per process (```per-plot steps```)
+
+
+(TODO: text)
+
+```shell
+law run cf.PlotCutflowVariables1D --version v1 \
+    --calibrators example --selector example \
+    --processes tt,st --variables cf_jet1_pt --categories incl \
+    --selector-steps jet,muon --per-plot steps
+```
+
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_st__cat_incl__var_cf_jet1_pt.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_tt__cat_incl__var_cf_jet1_pt.pdf
+:width: 100%
+:::
+::::
 
 
 ## Creating plots for different shifts
@@ -183,6 +275,7 @@ up or down, e.g. via running
 law run cf.PlotVariables1D --version v1 \
     --processes tt,st --variables n_jet --shift mu_up
 ```
+
 If you already ran the same task call with ```--shift nominal``` before, this will only require to
 produce new histograms and plots, as a shift such as the ```mu_up``` is typically implemented as an
 event weight and therefore does not require to reproduce any columns. Other shifts such as ```jec_up```
@@ -198,11 +291,19 @@ displaying the nominal distribution (black) compared to the shift source varied 
 The task can be called e.g. via
 ```shell
 law run cf.PlotShiftedVariables1D --version v1 \
-    --processes tt,st --variables n_jet --shift-sources mu
+    --processes tt,st --variables jet1_pt,n_jet --shift-sources mu
 ```
 and produces the following plot:
 
-(TODO: include plot?)
+::::{grid} 1 1 2 2
+:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_jet1_pt.pdf
+:width: 100%
+:::
+
+:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_n_jet.pdf
+:width: 100%
+:::
+::::
 
 This produces per default only one plot containing the sum of all processes. To produce this plot
 per process, you can use the {py:class}`~columnflow.tasks.plotting.PlotShiftedVariablesPerProcess1D`
