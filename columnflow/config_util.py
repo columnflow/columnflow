@@ -59,7 +59,7 @@ def get_events_from_categories(
         # get category insts
         categories = [config_inst.get_category(cat) for cat in categories]
 
-    leaf_category_insts = set.union(*map(set, (cat.get_leaf_categories() for cat in categories)))
+    leaf_category_insts = set.union(*map(set, (cat.get_leaf_categories() or {cat} for cat in categories)))
 
     # do the "or" of all leaf categories
     mask = np.zeros(len(events), dtype=bool)
