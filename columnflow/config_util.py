@@ -39,18 +39,18 @@ def get_events_from_categories(
 ) -> ak.Array:
     """
     Helper function that returns all events from an awkward array *events* that are categorized
-    into one the leafs of one of the *categories*.
+    into one of the leafs of one of the *categories*.
 
     :param events: awkward array. Requires the 'category_ids' field to be present.
     :param categories: sequence of category instances. Can also be a sequence of strings when passing a
         *config_inst*.
     :param config_inst: optional config instance to load category instances.
-    :raises Exception: If "category_ids" is not present in the *events* fields.
+    :raises ValueError: If "category_ids" is not present in the *events* fields.
     :return: awkward array of all events that are categorized into one of the leafs of one of the
         *categories*
     """
     if "category_ids" not in events.fields:
-        raise Exception(
+        raise ValueError(
             f"{get_events_from_categories.__name__} requires the 'category_ids' field to be present",
         )
 

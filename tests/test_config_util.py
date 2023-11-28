@@ -52,7 +52,7 @@ class ConfigUtilTests(unittest.TestCase):
         self.assertTrue(ak.all(ak.any(events.category_ids == 221, axis=1)))
         self.assertTrue(ak.all(events.dummy_field == ak.Array([2, 4])))
 
-        # check that leaf category is working
+        # check that passing multiple categories is working
         events = get_events_from_categories(self.events, ["main_1", "main_2"], self.config_inst)
         self.assertTrue(ak.all(events.dummy_field == ak.Array([1, 2, 3, 4])))
 
@@ -64,3 +64,15 @@ class ConfigUtilTests(unittest.TestCase):
         # never select events from non-leaf categories or not existing categories
         events = get_events_from_categories(ak.Array({"category_ids": [[2], [-1], [99]]}), ["main_2"], self.config_inst)
         self.assertEqual(len(events), 0)
+
+        # raises ValueError, when passing events without "category_ids" field
+        with self.assertRaises(ValueError):
+            get_events_from_categories(ak.Array({"no_category_ids": [1, 2, 3]}), ["main_2", self.config_inst])
+
+        # raises AttributeError, when passing categories as string, but not config_inst
+        with self.assertRaises(AttributeError):
+            get_events_from_categories(self.events, ["main_1", "main_2"])
+
+        # raises ValueError, when passing strings of nonexisting categories
+        with self.assertRaises(ValueError):
+            get_events_from_categories(self.events, ["nonexisting", "categories", "main_1"], self.config_inst)
