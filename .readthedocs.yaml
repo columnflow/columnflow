@@ -6,7 +6,7 @@ build:
     python: "3.9"
   jobs:
     pre_build:
-      - source setup.sh ""
+      - bash setup.sh ""
 
 
 submodules:
