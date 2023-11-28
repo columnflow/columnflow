@@ -253,6 +253,11 @@ cf_setup_common_variables() {
     # environment variables (or their defaults).
 
     # lang defaults
+    if [ "${READTHEDOCS,,}" = "true" ]; then
+        export LANGUAGE="${READTHEDOCS_LANGUAGE}"
+        export LANG="${READTHEDOCS_LANGUAGE}"
+        export LC_ALL="${READTHEDOCS_LANGUAGE}"
+    fi
     export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
     export LANG="${LANG:-en_US.UTF-8}"
     export LC_ALL="${LC_ALL:-en_US.UTF-8}"
