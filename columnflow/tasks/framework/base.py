@@ -18,6 +18,7 @@ import law
 import order as od
 
 from columnflow.types import Sequence, Callable, Any
+from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
 from columnflow.util import DotDict
 
 
@@ -717,6 +718,21 @@ class ConfigTask(AnalysisTask):
         parts.insert_after("task_family", "config", self.config_inst.name)
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        """
+        Returns a set of :py:class:`Route` objects describing columns that should be kept given a
+        type of column *collection*.
+
+        :param collection: The collection to return.
+        :return: A set of :py:class:`Route` objects.
+        """
+        columns = set()
+
+        if collection == ColumnCollection.MANDATORY_COFFEA:
+            columns |= set(Route(c) for c in mandatory_coffea_columns)
+
+        return columns
 
 
 class ShiftTask(ConfigTask):
