@@ -266,6 +266,8 @@ cf_setup_common_variables() {
         export CF_WLCG_CACHE_CLEANUP="true"
         export CF_WORKER_KEEP_ALIVE="false"
     elif [ "${CF_CI_JOB}" = "1" ]; then
+        export CF_WLCG_USE_CACHE="false"
+        export CF_WLCG_CACHE_CLEANUP="false"
         export CF_WORKER_KEEP_ALIVE="false"
     fi
 

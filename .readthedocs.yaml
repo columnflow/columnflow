@@ -5,7 +5,7 @@ build:
   tools:
     python: "3.9"
   jobs:
-    pre_build:
+    pre_create_environment:
       - bash setup.sh ""
 
 
