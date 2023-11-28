@@ -10,6 +10,7 @@ import gc
 import time
 import itertools
 from collections import Counter
+from typing import Iterable
 
 import luigi
 import law
@@ -29,18 +30,45 @@ ak = maybe_import("awkward")
 
 
 class CalibratorMixin(ConfigTask):
+    """Mixin to include a single :py:class:`~columnflow.calibration.Calibrator` into tasks.
 
+    Inheriting from this mixin will give access to instantiate and access a
+    :py:class:`~columnflow.calibration.Calibrator` instance with name *calibrator*,
+    which is an input parameter for this task.
+    """
     calibrator = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the calibrator to be applied; default: value of the "
         "'default_calibrator' config",
     )
+    calibrator.__annotations__ = " ".join("""
+        the name of the calibrator to be applied; default: value of the
+        'default_calibrator' config""".split())
 
-    # decibes whether the task itself runs the calibrator and implements its shifts
+    # decides whether the task itself runs the calibrator and implements its shifts
     register_calibrator_shifts = False
 
     @classmethod
-    def get_calibrator_inst(cls, calibrator, kwargs=None):
+    def get_calibrator_inst(cls, calibrator: str, kwargs=None) -> Calibrator:
+        """Initialize :py:class:`~columnflow.calibration.Calibrator` instance.
+
+        Extracts relevant *kwargs* for this calibrator instance using the
+        :py:meth:`~columnflow.tasks.framework.base.AnalaysisTask.get_calibrator_kwargs`
+        method.
+        After this process, the previously initialized instance of a
+        :py:class:`~columnflow.calibration.Calibrator` with the name
+        *calibrator* is initialized using the
+        :py:meth:`~columnflow.util.DerivableMeta.get_cls` method with the
+        relevant keyword arguments.
+
+        :param calibrator: Name of the calibrator instance
+        :param kwargs: Any set keyword argument that is potentially relevant for
+            this :py:class:`~columnflow.calibration.Calibrator` instance
+        :raises RuntimeError: if requested :py:class:`~columnflow.calibration.Calibrator` instance
+            is not :py:attr:`~columnflow.calibration.Calibrator.exposed`
+        :return: The initialized :py:class:`~columnflow.calibration.Calibrator`
+            instance.
+        """
         calibrator_cls = Calibrator.get_cls(calibrator)
         if not calibrator_cls.exposed:
             raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
@@ -49,7 +77,21 @@ class CalibratorMixin(ConfigTask):
         return calibrator_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict) -> dict:
+        """Resolve parameter values *params* relevant for the
+        :py:class:`CalibratorMixin` and all classes it inherits from.
+
+        Loads the ``config_inst`` and loads the parameter ``"calibrator"``.
+        In case the parameter is not found, defaults to ``"default_calibrator"``.
+        Finally, this function adds the keyword ``"calibrator_inst"``, which
+        contains the :py:class:`~columnflow.calibration.Calibrator` instance
+        obtained using :py:meth:`~.CalibratorMixin.get_calibrator_inst` method.
+
+        :param params: Dictionary with parameters provided by the user at
+            commandline level.
+        :return: Dictionary of parameters that now includes new value for
+            ``"calibrator_inst"``.
+        """
         params = super().resolve_param_values(params)
 
         config_inst = params.get("config_inst")
@@ -68,6 +110,23 @@ class CalibratorMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of shifts that the current ``calibrator_inst`` registers to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`CalibratorMixin`
+        inherits from.
+        Afterwards, check if the current ``calibrator_inst`` registers shifts.
+        If :py:attr:`~CalibratorMixin.register_calibrator_shifts` is ``True``,
+        add them to the current set of ``shifts``. Otherwise, add the
+        shifts obtained from the ``calibrator_inst`` to ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrator, update it and add its shifts
@@ -94,7 +153,16 @@ class CalibratorMixin(ConfigTask):
         self._calibrator_inst = None
 
     @property
-    def calibrator_inst(self):
+    def calibrator_inst(self) -> Calibrator:
+        """Access current :py:class:`~columnflow.calibration.Calibrator` instance.
+
+        Loads the current :py:class:`~columnflow.calibration.Calibrator` *calibrator_inst* from
+        the cache or initializes it.
+        If the calibrator requests a specific ``sandbox``, set this sandbox as
+        the environment for the current :py:class:`~law.task.base.Task`.
+
+        :return: Current :py:class:`~columnflow.calibration.Calibrator` instance
+        """
         if self._calibrator_inst is None:
             self._calibrator_inst = self.get_calibrator_inst(self.calibrator, {"task": self})
 
@@ -104,7 +172,16 @@ class CalibratorMixin(ConfigTask):
 
         return self._calibrator_inst
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"calibrator": "calib__{self.calibrator}"}` before keyword ``version``.
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator}")
         return parts
@@ -119,6 +196,12 @@ class CalibratorMixin(ConfigTask):
 
 
 class CalibratorsMixin(ConfigTask):
+    """Mixin to include multiple :py:class:`~columnflow.calibration.Calibrator` instances into tasks.
+
+    Inheriting from this mixin will allow a task to instantiate and access a set of
+    :py:class:`~columnflow.calibration.Calibrator` instances with names *calibrators*,
+    which is a comma-separated list of calibrator names and is an input parameter for this task.
+    """
 
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -128,11 +211,23 @@ class CalibratorsMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the calibrators and implements their shifts
+    # decides whether the task itself runs the calibrators and implements their shifts
     register_calibrators_shifts = False
 
     @classmethod
-    def get_calibrator_insts(cls, calibrators, kwargs=None):
+    def get_calibrator_insts(cls, calibrators: Iterable[str], kwargs=None) -> list[Calibrator]:
+        """Get all requested *calibrators*.
+
+        :py:class:`~columnflow.calibration.Calibrator` instances are either
+        initalized or loaded from cache.
+
+        :param calibrators: Names of Calibrators to load
+        :param kwargs: Additional keyword arguments to forward to individual
+            :py:class:`~columnflow.calibration.Calibrator` instances
+        :raises RuntimeError: if requested calibrators are not
+            :py:attr:`~columnflow.calibration.Calibrator.exposed`
+        :return: List of :py:class:`~columnflow.calibration.Calibrator` instances.
+        """
         inst_dict = cls.get_calibrator_kwargs(**kwargs) if kwargs else None
 
         insts = []
@@ -147,7 +242,21 @@ class CalibratorsMixin(ConfigTask):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: law.util.InsertableDict) -> law.util.InsertableDict:
+        """Resolve values *params* and check against possible default values and
+        calibrator groups.
+
+        Check the values in *params* against the default value ``"default_calibrator"``
+        and possible group definitions ``"calibrator_groups"`` in the current config inst.
+        For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.ConfigTask.resolve_config_default_and_groups`.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the list requested
+            :py:class:`~columnflow.calibration.Calibrator` instances under the
+            keyword ``"calibrator_insts"``. See :py:meth:`~.CalibratorsMixin.get_calibrator_insts`
+            for more information.
+        """
         params = super().resolve_param_values(params)
 
         config_inst = params.get("config_inst")
@@ -165,6 +274,24 @@ class CalibratorsMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of all shifts that the list of ``calibrator_insts`` register to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`CalibratorsMixin`
+        inherits from.
+        Afterwards, loop through the list of :py:class:`~columnflow.calibration.Calibrator`
+        and check if they register shifts.
+        If :py:attr:`~CalibratorsMixin.register_calibrators_shifts` is ``True``,
+        add them to the current set of ``shifts``. Otherwise, add the
+        shifts to ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the calibrators, update them and add their shifts
@@ -190,12 +317,31 @@ class CalibratorsMixin(ConfigTask):
         self._calibrator_insts = None
 
     @property
-    def calibrator_insts(self):
+    def calibrator_insts(self) -> list[Calibrator]:
+        """Access current list of :py:class:`~columnflow.calibration.Calibrator` instances.
+
+        Loads the current :py:class:`~columnflow.calibration.Calibrator` *calibrator_insts* from
+        the cache or initializes it.
+
+        :return: Current list :py:class:`~columnflow.calibration.Calibrator` instances
+        """
         if self._calibrator_insts is None:
             self._calibrator_insts = self.get_calibrator_insts(self.calibrators, {"task": self})
         return self._calibrator_insts
 
     def store_parts(self):
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"calibrator": "calib__{HASH}"}` before keyword ``version``.
+        Here, ``HASH`` is the joint string of the first five calibrator names
+        + a hash created with :py:meth:`law.util.create_hash` based on
+        the list of calibrators, starting at its 5th element (i.e. ``self.calibrators[5:]``)
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
 
         part = "__".join(self.calibrators[:5])
@@ -218,18 +364,38 @@ class CalibratorsMixin(ConfigTask):
 
 
 class SelectorMixin(ConfigTask):
+    """Mixin to include a single :py:class:`~columnflow.selection.Selector`
+    instances into tasks.
 
+    Inheriting from this mixin will allow a task to instantiate and access a
+    :py:class:`~columnflow.selection.Selector` instance with name *selector*,
+    which is an input parameter for this task.
+    """
     selector = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the selector to be applied; default: value of the "
         "'default_selector' config",
     )
 
-    # decibes whether the task itself runs the selector and implements its shifts
+    # decides whether the task itself runs the selector and implements its shifts
     register_selector_shifts = False
 
     @classmethod
-    def get_selector_inst(cls, selector, kwargs=None):
+    def get_selector_inst(
+        cls,
+        selector: str,
+        kwargs=None,
+    ) -> Selector:
+        """Get requested *selector*.
+
+        :py:class:`~columnflow.selection.Selector` instance is either
+        initalized or loaded from cache.
+
+        :param selector: Name of :py:class:`~columnflow.selection.Selector` to load
+        :param kwargs: Additional keyword arguments to forward to the
+            :py:class:`~columnflow.selection.Selector` instance
+        :return: :py:class:`~columnflow.selection.Selector` instance.
+        """
         selector_cls = Selector.get_cls(selector)
         if not selector_cls.exposed:
             raise RuntimeError(f"cannot use unexposed selector '{selector}' in {cls.__name__}")
@@ -238,7 +404,19 @@ class SelectorMixin(ConfigTask):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict) -> dict:
+        """Resolve values *params* and check against possible default values and
+        selector groups.
+
+        Check the values in *params* against the default value ``"default_selector"``
+        in the current config inst. For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.AnalysisTask.resolve_config_default`.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the requested
+            :py:class:`~columnflow.selection.Selector` instance under the
+            keyword ``"selector_inst"``.
+        """
         params = super().resolve_param_values(params)
 
         # add the default selector when empty
@@ -256,7 +434,28 @@ class SelectorMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict,
+    ) -> tuple[set[str], set[str]]:
+        """Adds set of shifts that the current ``selector_inst`` registers to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`SelectorMixin`
+        inherits from.
+        Afterwards, check if the current ``selector_inst`` registers shifts.
+        If :py:attr:`~SelectorMixin.register_selector_shifts` is ``True``,
+        add them to the current set of ``shifts``. Otherwise, add the
+        shifts obtained from the ``selector_inst`` to ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the selector, update it and add its shifts
@@ -284,6 +483,15 @@ class SelectorMixin(ConfigTask):
 
     @property
     def selector_inst(self):
+        """Access current :py:class:`~columnflow.selection.Selector` instance.
+
+        Loads the current :py:class:`~columnflow.selection.Selector` *selector_inst* from
+        the cache or initializes it.
+        If the selector requests a specific ``sandbox``, set this sandbox as
+        the environment for the current :py:class:`~law.task.base.Task`.
+
+        :return: Current :py:class:`~columnflow.selection.Selector` instance
+        """
         if self._selector_inst is None:
             self._selector_inst = self.get_selector_inst(self.selector, {"task": self})
 
@@ -294,6 +502,15 @@ class SelectorMixin(ConfigTask):
         return self._selector_inst
 
     def store_parts(self):
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"selector": "sel__{SELECTOR_NAME}"}` before keyword ``version``.
+        Here, ``SELECTOR_NAME`` is the name of the current ``selector_inst``.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
         parts.insert_before("version", "selector", f"sel__{self.selector}")
         return parts
@@ -308,6 +525,12 @@ class SelectorMixin(ConfigTask):
 
 
 class SelectorStepsMixin(SelectorMixin):
+    """Mixin to include multiple selector steps into tasks.
+
+    Inheriting from this mixin will allow a task to access selector steps,
+    which can be a comma-separated list of selector step names and is an input
+    parameter for this task.
+    """
 
     selector_steps = law.CSVParameter(
         default=(),
@@ -323,6 +546,20 @@ class SelectorStepsMixin(SelectorMixin):
 
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """Resolve values *params* and check against possible default values and
+        selector step groups.
+
+        Check the values in *params* against the default value ``"default_selector_steps"``
+        and the group ``"selector_step_groups"`` in the current config inst.
+        For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.AnalysisTask.resolve_config_default`.
+        If :py:attr:`SelectorStepsMixin.selector_steps_order_sensitive` is ``True``,
+        :py:func:`sort <sorted>` the selector steps.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the requested
+            selector steps under the keyword ``"selector_steps"``.
+        """
         params = super().resolve_param_values(params)
 
         # apply selector_steps_groups and default_selector_steps from config
@@ -350,6 +587,17 @@ class SelectorStepsMixin(SelectorMixin):
         return super().req_params(inst, **kwargs)
 
     def store_parts(self) -> law.util.InsertableDict:
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"selector": "__steps__LIST_OF_STEPS"}`, where ``LIST_OF_STEPS`` is the
+        sorted list of selector steps.
+        For more information, see e.g.
+        :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
 
         steps = self.selector_steps
@@ -362,6 +610,12 @@ class SelectorStepsMixin(SelectorMixin):
 
 
 class ProducerMixin(ConfigTask):
+    """Mixin to include a single :py:class:`~columnflow.production.Producer` into tasks.
+
+    Inheriting from this mixin will give access to instantiate and access a
+    :py:class:`~columnflow.production.Producer` instance with name *producer*,
+    which is an input parameter for this task.
+    """
 
     producer = luigi.Parameter(
         default=RESOLVE_DEFAULT,
@@ -369,11 +623,31 @@ class ProducerMixin(ConfigTask):
         "'default_producer' config",
     )
 
-    # decibes whether the task itself runs the producer and implements its shifts
+    # decides whether the task itself runs the producer and implements its shifts
     register_producer_shifts = False
 
     @classmethod
-    def get_producer_inst(cls, producer, kwargs=None):
+    def get_producer_inst(cls, producer: str, kwargs=None) -> Producer:
+        """Initialize :py:class:`~columnflow.production.Producer` instance.
+
+        Extracts relevant *kwargs* for this producer instance using the
+        :py:meth:`~columnflow.tasks.framework.base.AnalaysisTask.get_producer_kwargs`
+        method.
+        After this process, the previously initialized instance of a
+        :py:class:`~columnflow.production.Producer` with the name
+        *producer* is initialized using the
+        :py:meth:`~columnflow.util.DerivableMeta.get_cls` method with the
+        relevant keyword arguments.
+
+        :param producer: Name of the :py:class:`~columnflow.production.Producer`
+            instance
+        :param kwargs: Any set keyword argument that is potentially relevant for
+            this :py:class:`~columnflow.production.Producer` instance
+        :raises RuntimeError: if requested :py:class:`~columnflow.production.Producer` instance
+            is not :py:attr:`~columnflow.production.Producer.exposed`
+        :return: The initialized :py:class:`~columnflow.production.Producer`
+            instance.
+        """
         producer_cls = Producer.get_cls(producer)
         if not producer_cls.exposed:
             raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
@@ -382,7 +656,21 @@ class ProducerMixin(ConfigTask):
         return producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict) -> dict:
+        """Resolve parameter values *params* relevant for the
+        :py:class:`ProducerMixin` and all classes it inherits from.
+
+        Loads the ``config_inst`` and loads the parameter ``"producer"``.
+        In case the parameter is not found, defaults to ``"default_producer"``.
+        Finally, this function adds the keyword ``"producer_inst"``, which
+        contains the :py:class:`~columnflow.production.Producer` instance
+        obtained using :py:meth:`~.ProducerMixin.get_producer_inst` method.
+
+        :param params: Dictionary with parameters provided by the user at
+            commandline level.
+        :return: Dictionary of parameters that now includes new value for
+            ``"producer_inst"``.
+        """
         params = super().resolve_param_values(params)
 
         # add the default producer when empty
@@ -401,6 +689,23 @@ class ProducerMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of shifts that the current ``producer_inst`` registers to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`ProducerMixin`
+        inherits from.
+        Afterwards, check if the current ``producer_inst`` registers shifts.
+        If :py:attr:`~ProducerMixin.register_producer_shifts` is ``True``,
+        add them to the current set of ``shifts``. Otherwise, add the
+        shifts obtained from the ``producer_inst`` to ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producer, update it and add its shifts
@@ -427,7 +732,16 @@ class ProducerMixin(ConfigTask):
         self._producer_inst = None
 
     @property
-    def producer_inst(self):
+    def producer_inst(self) -> Producer:
+        """Access current :py:class:`~columnflow.production.Producer` instance.
+
+        Loads the current :py:class:`~columnflow.production.Producer` *producer_inst* from
+        the cache or initializes it.
+        If the producer requests a specific ``sandbox``, set this sandbox as
+        the environment for the current :py:class:`~law.task.base.Task`.
+
+        :return: Current :py:class:`~columnflow.production.Producer` instance
+        """
         if self._producer_inst is None:
             self._producer_inst = self.get_producer_inst(self.producer, {"task": self})
 
@@ -437,7 +751,16 @@ class ProducerMixin(ConfigTask):
 
         return self._producer_inst
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"producer": "prod__{self.producer}"}` before keyword ``version``.
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
         producer = f"prod__{self.producer}" if self.producer != law.NO_STR else "none"
         parts.insert_before("version", "producer", producer)
@@ -453,6 +776,12 @@ class ProducerMixin(ConfigTask):
 
 
 class ProducersMixin(ConfigTask):
+    """Mixin to include multiple :py:class:`~columnflow.production.Producer` instances into tasks.
+
+    Inheriting from this mixin will allow a task to instantiate and access a set of
+    :py:class:`~columnflow.production.Producer` instances with names *producers*,
+    which is a comma-separated list of producer names and is an input parameter for this task.
+    """
 
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -461,11 +790,24 @@ class ProducersMixin(ConfigTask):
         parse_empty=True,
     )
 
-    # decibes whether the task itself runs the producers and implements their shifts
+    # decides whether the task itself runs the producers and implements their shifts
     register_producers_shifts = False
 
     @classmethod
-    def get_producer_insts(cls, producers, kwargs=None):
+    def get_producer_insts(cls, producers: Iterable[str], kwargs=None) -> list[Producer]:
+        """Get all requested *producers*.
+
+        :py:class:`~columnflow.production.Producer` instances are either
+        initalized or loaded from cache.
+
+        :param producers: Names of :py:class:`~columnflow.production.Producer`
+            instances to load
+        :param kwargs: Additional keyword arguments to forward to individual
+            :py:class:`~columnflow.production.Producer` instances
+        :raises RuntimeError: if requested producers are not
+            :py:attr:`~columnflow.production.Producer.exposed`
+        :return: List of :py:class:`~columnflow.production.Producer` instances.
+        """
         inst_dict = cls.get_producer_kwargs(**kwargs) if kwargs else None
 
         insts = []
@@ -478,7 +820,21 @@ class ProducersMixin(ConfigTask):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: law.util.InsertableDict) -> law.util.InsertableDict:
+        """Resolve values *params* and check against possible default values and
+        producer groups.
+
+        Check the values in *params* against the default value ``"default_producer"``
+        and possible group definitions ``"producer_groups"`` in the current config inst.
+        For more information, see
+        :py:meth:`~columnflow.tasks.framework.base.ConfigTask.resolve_config_default_and_groups`.
+
+        :param params: Parameter values to resolve
+        :return: Dictionary of parameters that contains the list requested
+            :py:class:`~columnflow.production.Producer` instances under the
+            keyword ``"producer_insts"``. See :py:meth:`~.ProducersMixin.get_producer_insts`
+            for more information.
+        """
         params = super().resolve_param_values(params)
 
         config_inst = params.get("config_inst")
@@ -496,6 +852,24 @@ class ProducersMixin(ConfigTask):
 
     @classmethod
     def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+        """Adds set of all shifts that the list of ``producer_insts`` register to the
+        set of known ``shifts`` and ``upstream_shifts``.
+
+        First, the set of ``shifts`` and ``upstream_shifts`` are obtained from
+        the *config_inst* and the current set of parameters *params* using the
+        ``get_known_shifts`` methods of all classes that :py:class:`ProducersMixin`
+        inherits from.
+        Afterwards, loop through the list of :py:class:`~columnflow.production.Producer`
+        and check if they register shifts.
+        If :py:attr:`~ProducersMixin.register_producers_shifts` is ``True``,
+        add them to the current set of ``shifts``. Otherwise, add the
+        shifts to ``upstream_shifts``.
+
+        :param config_inst: Config instance for the current task.
+        :param params: Dictionary containing the current set of parameters provided
+            by the user at commandline level
+        :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
+        """
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
         # get the producers, update them and add their shifts
@@ -521,12 +895,31 @@ class ProducersMixin(ConfigTask):
         self._producer_insts = None
 
     @property
-    def producer_insts(self):
+    def producer_insts(self) -> list[Producer]:
+        """Access current list of :py:class:`~columnflow.production.Producer` instances.
+
+        Loads the current :py:class:`~columnflow.production.Producer` *producer_insts* from
+        the cache or initializes it.
+
+        :return: Current list :py:class:`~columnflow.production.Producer` instances
+        """
         if self._producer_insts is None:
             self._producer_insts = self.get_producer_insts(self.producers, {"task": self})
         return self._producer_insts
 
     def store_parts(self):
+        """Create parts to create the output path to store intermediary results
+        for the current :py:class:`~law.task.base.Task`.
+
+        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        `{"producers": "prod__{HASH}"}` before keyword ``version``.
+        Here, ``HASH`` is the joint string of the first five producer names
+        + a hash created with :py:meth:`law.util.create_hash` based on
+        the list of producers, starting at its 5th element (i.e. ``self.producers[5:]``)
+        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
+
+        :return: Updated parts to create output path to store intermediary results.
+        """
         parts = super().store_parts()
 
         part = "none"
@@ -551,6 +944,12 @@ class ProducersMixin(ConfigTask):
 
 
 class MLModelMixinBase(AnalysisTask):
+    """Base Mixin to include a machine learning applications into tasks.
+
+    Inheriting from this mixin will allow a task to instantiate and access a
+    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*,
+    which is an input parameter for this task.
+    """
 
     ml_model = luigi.Parameter(
         description="the name of the ML model to be applied",
@@ -570,9 +969,25 @@ class MLModelMixinBase(AnalysisTask):
         cls,
         ml_model: str,
         analysis_inst: od.Analysis,
-        requested_configs: list[str] | None = None,
+        requested_configs: list[str] or None = None,
         **kwargs,
     ) -> MLModel:
+        """Get requested *ml_model*.
+
+        :py:class:`~columnflow.ml.MLModel` instance is either initalized or
+        loaded from cache.
+        During the initialization, the *analysis_inst* as well as all *kwargs*
+        are forwarded to the init function of the *ml_model* class.
+
+        :param ml_model: Name of :py:class:`~columnflow.ml.MLModel` to load
+        :param analysis_inst: Forward this analysis inst to the init function of
+            new MLModel sub class
+        :param requested_configs: Configs needed for the training of the ML
+            application
+        :param kwargs: Additional keyword arguments to forward to the
+            :py:class:`~columnflow.ml.MLModel` instance
+        :return: :py:class:`~columnflow.ml.MLModel` instance.
+        """
         ml_model_inst = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
 
         if requested_configs:

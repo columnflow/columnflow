@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.join(projdir, "docs", "_extensions"))
 sys.path.insert(0, os.path.join(projdir, "modules", "law"))
 sys.path.insert(0, os.path.join(projdir, "modules", "order"))
 sys.path.insert(0, projdir)
-os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
+# os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
+os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "law.cfg")
 
 import columnflow as cf
 

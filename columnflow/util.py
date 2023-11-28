@@ -736,10 +736,23 @@ class DerivableMeta(abc.ABCMeta):
         deep: bool = True,
         silent: bool = False,
     ) -> DerivableMeta | None:
-        """
-        Returns a previously created subclass named *cls_name*. When *deep* is *True*, the lookup is
-        recursive through all levels of subclasses. When no such subclass was found an exception is
+        """Returns a previously created subclass named *cls_name*.
+
+        When *deep* is ``True``, the lookup is recursive through all levels of
+        subclasses. When no such subclass was found an exception is
         raised, unless *silent* is *True* in which case *None* is returned.
+
+        :param cls_name: Name of the subclass to load
+        :param deep: Search for the subclass *cls_name* throughout the whole
+            inheritance tree of this class (``True``) or just in the direct
+            inheritance line (``False``)
+        :param silent: If ``True``, raise an error if no subclass *cls_name* was
+            found, otherwise return ``None``
+        :raises ValueError: If *deep* is ``False`` and the name *cls_name* is not
+            found in the direct line of subclasses of this class
+        :raises ValueError: If *deep* is ``True`` and the name *cls_name* is not
+            found at any level of the inheritance tree starting at this class
+        :return: The requested subclass
         """
         if not deep:
             if cls_name not in cls._subclasses:
@@ -768,12 +781,19 @@ class DerivableMeta(abc.ABCMeta):
         cls,
         cls_name: str,
         bases: tuple = (),
-        cls_dict: dict | None = None,
-        module: str | None = None,
+        cls_dict: Union[dict, None] = None,
+        module: Union[str, None] = None,
     ) -> DerivableMeta:
-        """
-        Creates a subclass named *cls_name* inheriting from *this* class an additional, optional
-        *bases*. *cls_dict* will be attached as class-level attributes.
+        """Creates a subclass named *cls_name* inheriting from *this* class an
+        additional, optional *bases*.
+
+        *cls_dict* will be attached as class-level attributes.
+
+        :param cls_name: Name of the newly-derived class
+        :param bases: Additional bases to derive new class from
+        :param cls_dict: Dictionary to forward to init function of derived class
+        :param module: extract module name from this module
+        :return: Newly derived class instance
         """
         # prepare bases
         bases = tuple(bases) if isinstance(bases, (list, tuple)) else (bases,)
