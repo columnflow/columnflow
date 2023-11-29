@@ -170,9 +170,11 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 
 
 ## Creating 2D plots
-(TODO: text)
 
-Exemplary task call:
+Columnflow also provides the {py:class}`~columnflow.tasks.plotting.PlotVariables2D` to create
+two-dimensional plots. Two-dimensional histograms are created by passing two variables to the
+```--variables``` parameter, separated by a ```-```. Here is an exemplary task call and their
+outputs.
 ```shell
 law run cf.PlotVariables2D --version v1 \
     --processes tt,st --variables n_jet-jet1_pt,jet1_pt-n_jet
@@ -187,6 +189,9 @@ law run cf.PlotVariables2D --version v1 \
 :width: 100%
 :::
 ::::
+
+For more information on the task parameters of the ```PlotVariables2D``` task, take a look into the
+[plotting task overview](../task_overview/plotting.md).
 
 ## Creating cutflow plots
 
@@ -242,10 +247,8 @@ law run cf.PlotCutflowVariables1D --version v1 \
 ::::
 
 The ```per-plot``` parameter defines whether to produce one plot per selector step
-(```per-plot processes```) or one plot per process (```per-plot steps```)
-
-
-(TODO: text)
+(```per-plot processes```) or one plot per process (```per-plot steps```).
+For the ```per-plot steps``` option, try the following task call:
 
 ```shell
 law run cf.PlotCutflowVariables1D --version v1 \
