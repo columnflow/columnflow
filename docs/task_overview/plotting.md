@@ -1,3 +1,71 @@
+```{mermaid}
+:name: plotting-tasks
+:theme: forest
+:zoom:
+:align: center
+:caption: Class diagram of all plotting tasks
+classDiagram
+    PlotBase <|-- PlotBase1D
+    PlotBase <|-- PlotBase2D
+    PlotBase <|-- VariablePlotSettingMixin
+    PlotBase <|-- ProcessPlotSettingMixin
+
+    PlotBase1D <|-- PlotVariables1D
+    PlotBase1D <|-- PlotShiftedVariables1D
+
+    VariablePlotSettingMixin <|-- PlotVariablesBase
+    ProcessPlotSettingMixin <|-- PlotVariablesBase
+    PlotVariablesBase <|-- PlotVariablesBaseSingleShift
+    PlotVariablesBaseSingleShift <|-- PlotVariables1D
+    PlotVariablesBaseSingleShift <|-- PlotVariables2D
+
+    PlotBase2D <|-- PlotVariables2D
+    PlotVariables2D <|-- PlotVariablesPerProcess2D
+    PlotVariablesBase <|-- PlotVariablesBaseMultiShifts
+    PlotVariablesBaseMultiShifts <|-- PlotShiftedVariables1D
+    PlotShiftedVariables1D <|-- PlotShiftedVariablesPerProcess1D
+
+    class PlotBase{
+        plot_function: luigi.Parameter
+        file_types: law.CSVParameter
+        plot_suffix: luigi.Parameter
+        view_cmd: luigi.Parameter
+        general_settings: SettingParameter
+        skip_legend: law.OptionalBoolParameter
+        cms_label: luigi.Parameter
+    }
+
+    class PlotBase1D{
+        skip_ratio: law.OptionalBoolParameter
+        density: law.OptionalBoolParameter
+        yscale: luigi.ChoiceParameter
+        shape_norm: law.OptionalBoolParameter
+        hide_errors: law.OptionalBoolParameter
+    }
+
+    class PlotBase2D{
+        zscale: luigi.ChoiceParameter
+        density: law.OptionalBoolParameter
+        shape_norm: law.OptionalBoolParameter
+        colormap: luigi.Parameter
+        zlim: law.CSVParameter
+        extremes: luigi.ChoiceParameter
+        extreme_colors: law.CSVParameter
+    }
+
+    class ProcessPlotSettingMixin{
+        process_settings: MultiSettingsParameter
+    }
+
+    class VariablePlotSettingMixin{
+        variable_settings: MultiSettingsParameter
+    }
+
+    class PlotVariablesBaseMultiShifts{
+        legend: luigi.Parameter
+    }
+```
+
 # Plotting tasks
 
 The following tasks are dedicated to plotting.
