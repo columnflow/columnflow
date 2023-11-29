@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -23,11 +23,11 @@ from columnflow.util import dev_sandbox
 
 class CreateHistograms(
     VariablesMixin,
+    WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
-    EventWeightMixin,
     ChunkedIOMixin,
     MergeReducedEventsUser,
     law.LocalWorkflow,
@@ -50,6 +50,9 @@ class CreateHistograms(
     # names of columns that contain category ids
     # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
+
+    # register shifts found in the chosen weight producer to this task
+    register_weight_producer_shifts = True
 
     @law.util.classproperty
     def mandatory_columns(cls) -> set[str]:
@@ -124,7 +127,10 @@ class CreateHistograms(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that need to be read
-        read_columns = {"process_id"} | set(self.category_id_columns) | set(aliases.values())
+        read_columns = {Route("process_id")}
+        read_columns |= set(map(Route, self.category_id_columns))
+        read_columns |= set(self.weight_producer_inst.used_columns)
+        read_columns |= set(map(Route, aliases.values()))
         read_columns |= {
             Route(inp)
             for variable_inst in (
@@ -138,10 +144,6 @@ class CreateHistograms(
                 else variable_inst.x("inputs", [])
             )
         }
-        if self.dataset_inst.is_mc:
-            read_columns |= {Route(column) for column in self.config_inst.x.event_weights}
-            read_columns |= {Route(column) for column in self.dataset_inst.x("event_weights", [])}
-        read_columns = {Route(c) for c in read_columns}
 
         # empty float array to use when input files have no entries
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
@@ -173,18 +175,11 @@ class CreateHistograms(
             )
 
             # build the full event weight
-            weight = ak.Array(np.ones(len(events)))
-            if self.dataset_inst.is_mc and len(events):
-                for column in self.config_inst.x.event_weights:
-                    weight = weight * Route(column).apply(events)
-                for column in self.dataset_inst.x("event_weights", []):
-                    if has_ak_column(events, column):
-                        weight = weight * Route(column).apply(events)
-                    else:
-                        self.logger.warning_once(
-                            f"missing_dataset_weight_{column}",
-                            f"weight '{column}' for dataset {self.dataset_inst.name} not found",
-                        )
+            weight = (
+                ak.Array(np.ones(len(events), dtype=np.float32))
+                if self.weight_producer_inst.skip_func()
+                else self.weight_producer_inst(events)
+            )
 
             # define and fill histograms, taking into account multiple axes
             for var_key, var_names in self.variable_tuples.items():
@@ -259,6 +254,7 @@ CreateHistogramsWrapper = wrapper_factory(
 
 class MergeHistograms(
     VariablesMixin,
+    WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
@@ -359,6 +355,7 @@ MergeHistogramsWrapper = wrapper_factory(
 class MergeShiftedHistograms(
     VariablesMixin,
     ShiftSourcesMixin,
+    WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
