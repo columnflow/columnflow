@@ -195,7 +195,7 @@ setup_columnflow() {
     export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
-    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
+    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS,,}" = "true" -o "${READTHEDOCS,,}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
@@ -253,6 +253,11 @@ cf_setup_common_variables() {
     # environment variables (or their defaults).
 
     # lang defaults
+    if [ "${READTHEDOCS,,}" = "true" ]; then
+        export LANGUAGE="${READTHEDOCS_LANGUAGE}"
+        export LANG="${READTHEDOCS_LANGUAGE}"
+        export LC_ALL="${READTHEDOCS_LANGUAGE}"
+    fi
     export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
     export LANG="${LANG:-en_US.UTF-8}"
     export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -266,6 +271,8 @@ cf_setup_common_variables() {
         export CF_WLCG_CACHE_CLEANUP="true"
         export CF_WORKER_KEEP_ALIVE="false"
     elif [ "${CF_CI_JOB}" = "1" ]; then
+        export CF_WLCG_USE_CACHE="false"
+        export CF_WLCG_CACHE_CLEANUP="false"
         export CF_WORKER_KEEP_ALIVE="false"
     fi
 
