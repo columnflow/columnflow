@@ -32,6 +32,12 @@ action() {
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 
+    # test_plotting
+    echo
+    bash "${this_dir}/run_test" test_plotting "${cf_dir}/sandboxes/venv_columnar${dev}.sh"
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
     return "${gret}"
 }
 action "$@"
