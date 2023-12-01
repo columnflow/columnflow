@@ -344,7 +344,7 @@ def plot_roc(
     :raises ValueError: If *normalization* is not one of *None*, "row", "column".
     """
     # defining some useful properties and output shapes
-    thresholds = np.geomspace(1e-6, 1, n_thresholds)
+    thresholds = np.linspace(0, 1, n_thresholds)
     weights = create_sample_weights(sample_weights, events, list(events.keys()))
     discriminators = list(events.values())[0].fields
     figs = []
@@ -361,7 +361,8 @@ def plot_roc(
         for disc in discriminators:
             hists[disc] = {}
             for cls, predictions in events.items():
-                hists[disc][cls] = weights[cls] * ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0])
+                hists[disc][cls] = (sample_weights[cls] *
+                    ak.to_numpy(np.histogram(predictions[disc], bins=thresholds)[0]))
         return hists
 
     def binary_roc_data(
@@ -495,8 +496,15 @@ def plot_roc(
     # plotting
     for disc, roc in results.items():
         for cls, roc_data in roc.items():
-            title = rf"{cls.replace('_vs_', ' VS ')} with {disc}$"
-            figs.append(plot_roc_curve(roc_data, title, cms_llabel=cms_llabel, cms_rlabel=cms_rlabel, *args, **kwargs))
+            title = rf"{cls.replace('_vs_', ' VS ')} with {disc}"
+            figs.append(plot_roc_curve(
+                roc_data=roc_data,
+                title=title,
+                cms_rlabel=cms_rlabel,
+                cms_llabel=cms_llabel,
+                *args,
+                **kwargs,
+            ))
     print("ROC curves plotted!")
 
     results["thresholds"] = thresholds
