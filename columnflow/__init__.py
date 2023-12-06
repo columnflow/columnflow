@@ -63,11 +63,11 @@ if not env_is_rtd:
             ]
         except:
             print("Prints work!")
-            raise Exception(f""""
+            raise Exception(f"""
 CF_RDT_JOB: {os.getenv('CF_RDT_JOB')}
 READTHEDOCS: {os.getenv('READTHEDOCS')}
 CF_BBASE: {os.getenv('CF_BBASE')}
-            "")
+            """)
 
     # initialize producers, calibrators, selectors, categorizers, ml models and stat models
     from columnflow.util import maybe_import
