@@ -23,18 +23,19 @@ logger = logging.getLogger(__name__)
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
-# #: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_JOB``).
-# env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_JOB", "0"))
+#: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_JOB``).
+env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_JOB", "0"))
 
-# #: Boolean denoting whether the environment is in a remote job on the WLCG (based on ``CF_ON_GRID``).
-# env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "0"))
+#: Boolean denoting whether the environment is in a remote job on the WLCG (based on ``CF_ON_GRID``).
+env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "0"))
 
-# #: Boolean denoting whether the environment is used for development (based on ``CF_DEV``).
-# env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "0"))
+#: Boolean denoting whether the environment is used for development (based on ``CF_DEV``).
+env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "0"))
 
-env_is_rtd = law.util.flag_to_bool(os.getenv("CF_RTD_JOB", "0"))
+#: Boolean denoting whether the environment is in a readthedocs env (based on ``CF_RTD_JOBS``, or `READTHEDOCS`).
+env_is_rtd = law.util.flag_to_bool(os.getenv("CF_RTD_JOB" if "CF_RTD" in os.environ else "READTHEDOCS", "0"))
 
-# cf flavor
+#: String refering to the "flavor" of the cf setup.
 flavor = os.getenv("CF_FLAVOR")
 if isinstance(flavor, str):
     flavor = flavor.lower()
