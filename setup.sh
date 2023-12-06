@@ -182,9 +182,6 @@ setup_columnflow() {
     export CF_BASE="${this_dir}"
     export CF_SETUP_NAME="${setup_name}"
 
-    # detect environments
-    cf_detect_envs || return "$?"
-
     # interactive setup
     if [ "${CF_REMOTE_ENV}" != "1" ]; then
         cf_setup_interactive_body() {
@@ -205,11 +202,12 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
-    # show a warning in case no CF_REPO_BASE_ALIAS is set
-    if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
-        cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
-        cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
-    fi
+
+    #
+    # common variables
+    #
+
+    cf_setup_common_variables || return "$?"
 
 
     #
@@ -217,13 +215,6 @@ setup_columnflow() {
     #
 
     cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
-
-
-    #
-    # common variables
-    #
-
-    cf_setup_common_variables || return "$?"
 
 
     #
@@ -274,11 +265,20 @@ cf_detect_envs() {
     else
         export CF_LOCAL_ENV="1"
     fi
+
+    # for a limited amount of time, also set the previously used env variables to ease the transition
+    export CF_LOCAL_JOB="${CF_LOCAL_ENV}"
+    export CF_REMOTE_JOB="${CF_REMOTE_ENV}"
+    export CF_CI_JOB="${CF_CI_ENV}"
+    export CF_RTD_JOB="${CF_RTD_ENV}"
 }
 
 cf_setup_common_variables() {
     # Exports variables that might be commonly used across analyses, such as host and job
     # environment variables (or their defaults).
+
+    # detect environments
+    cf_detect_envs || return "$?"
 
     # lang defaults
     if [ "${CF_RTD_ENV}" = "1" ]; then
@@ -325,6 +325,12 @@ cf_setup_common_variables() {
     export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
     export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
     export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
+
+    # show a warning in case no CF_REPO_BASE_ALIAS is set
+    if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
+        cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
+        cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
+    fi
 }
 
 cf_setup_interactive_common_variables() {

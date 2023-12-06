@@ -69,9 +69,6 @@ setup___cf_short_name_lc__() {
     # load cf setup helpers
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 
-    # detect environments
-    cf_detect_envs || return "$?"
-
     # interactive setup
     if [ "${CF_REMOTE_ENV}" != "1" ]; then
         cf_setup_interactive_body() {
