@@ -8,7 +8,6 @@ build:
     pre_create_environment:
       - LAW_CONFIG_FILE="$PWD/docs/law.cfg" bash setup.sh ""
 
-
 submodules:
   include: all
   recursive: true
