@@ -834,7 +834,7 @@ cf_color() {
     local color="$1"
     local msg="${@:2}"
 
-    # just echo the message in certain conditions
+    # just echo the message as is in certain conditions
     if [ "${CF_REMOTE_ENV}" = "1" ] || [ "${CF_RTD_ENV}" = "1" ]; then
         echo "${msg}"
         return "0"

@@ -24,7 +24,7 @@ m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
-env_is_remote = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "0"))
+env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "0"))
 
 #: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_ENV``).
 env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_ENV", "0"))
