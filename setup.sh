@@ -68,6 +68,8 @@ setup_columnflow() {
     #       interactive setup.
     #   CF_CI_JOB
     #       Set to "1" if a CI environment is detected (e.g. GitHub actions), and "0" otherwise.
+    #   CF_RTD_JOB
+    #       Set to "1" if a READTHEDOCS environment is detected, and "0" otherwise.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
@@ -195,7 +197,8 @@ setup_columnflow() {
     export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
-    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS,,}" = "true" -o "${READTHEDOCS,,}" = "true" ] && echo 1 || echo 0 )"
+    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS,,}" = "true" ] && echo 1 || echo 0 )"
+    export CF_RTD_JOB="$( [ "${GITHUB_ACTIONS,,}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
@@ -205,6 +208,17 @@ setup_columnflow() {
     if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
         cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
         cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
+    fi
+
+    # show a message when non-local environment is detected
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+        cf_color yellow "detected remote job environment"
+    fi
+    if [ "${CF_CI_JOB}" = "1" ]; then
+        cf_color yellow "detected CI environment"
+    fi
+    if [ "${CF_RTD_JOB}" = "1" ]; then
+        cf_color yellow "detected READTHEDOCS environment"
     fi
 
 
@@ -253,14 +267,15 @@ cf_setup_common_variables() {
     # environment variables (or their defaults).
 
     # lang defaults
-    if [ "${READTHEDOCS,,}" = "true" ]; then
-        export LANGUAGE="${READTHEDOCS_LANGUAGE}"
-        export LANG="${READTHEDOCS_LANGUAGE}"
-        export LC_ALL="${READTHEDOCS_LANGUAGE}"
+    if [ "${CF_RTD_JOB}" = "1" ]; then
+        export LANGUAGE="${READTHEDOCS_LANGUAGE:-en}"
+        export LANG="${READTHEDOCS_LANGUAGE:-en}"
+        export LC_ALL="${READTHEDOCS_LANGUAGE:-en}"
+    else
+        export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
+        export LANG="${LANG:-en_US.UTF-8}"
+        export LC_ALL="${LC_ALL:-en_US.UTF-8}"
     fi
-    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
-    export LANG="${LANG:-en_US.UTF-8}"
-    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
     # proxy
     export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
@@ -270,7 +285,7 @@ cf_setup_common_variables() {
         export CF_WLCG_USE_CACHE="true"
         export CF_WLCG_CACHE_CLEANUP="true"
         export CF_WORKER_KEEP_ALIVE="false"
-    elif [ "${CF_CI_JOB}" = "1" ]; then
+    elif [ "${CF_CI_JOB}" = "1" ] || [ "${CF_RTD_JOB}" = "1" ]; then
         export CF_WLCG_USE_CACHE="false"
         export CF_WLCG_CACHE_CLEANUP="false"
         export CF_WORKER_KEEP_ALIVE="false"
