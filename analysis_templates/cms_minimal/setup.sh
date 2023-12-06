@@ -69,8 +69,11 @@ setup___cf_short_name_lc__() {
     # load cf setup helpers
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 
+    # detect environments
+    cf_detect_envs || return "$?"
+
     # interactive setup
-    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+    if [ "${CF_REMOTE_ENV}" != "1" ]; then
         cf_setup_interactive_body() {
             # pre-export the CF_FLAVOR which will be cms
             export CF_FLAVOR="cms"
@@ -88,7 +91,6 @@ setup___cf_short_name_lc__() {
     export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
-    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS}" = "true" ] && echo 1 || echo 0 )"
 
 
     #
