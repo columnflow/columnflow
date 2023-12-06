@@ -6,7 +6,7 @@ build:
     python: "3.9"
   jobs:
     pre_create_environment:
-      - bash setup.sh ""
+      - LAW_CONFIG_FILE="$PWD/docs/law.cfg" bash setup.sh ""
 
 
 submodules:
