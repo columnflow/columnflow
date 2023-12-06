@@ -56,10 +56,18 @@ law.contrib.load("cms")
 if not env_is_rtd:
     # initialize wlcg file systems once so that their cache cleanup is triggered if configured
     if law.config.has_option("outputs", "wlcg_file_systems"):
-        wlcg_file_systems = [
-            law.wlcg.WLCGFileSystem(fs.strip())
-            for fs in law.config.get_expanded("outputs", "wlcg_file_systems", [], split_csv=True)
-        ]
+        try:
+            wlcg_file_systems = [
+                law.wlcg.WLCGFileSystem(fs.strip())
+                for fs in law.config.get_expanded("outputs", "wlcg_file_systems", [], split_csv=True)
+            ]
+        except:
+            print("Prints work!")
+            raise Exception(f""""
+CF_RDT_JOB: {os.getenv('CF_RDT_JOB')}
+READTHEDOCS: {os.getenv('READTHEDOCS')}
+CF_BBASE: {os.getenv('CF_BBASE')}
+            "")
 
     # initialize producers, calibrators, selectors, categorizers, ml models and stat models
     from columnflow.util import maybe_import
