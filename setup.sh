@@ -204,21 +204,22 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
+    # check if this is a local job, show a message when otherwise
+    export CF_LOCAL_JOB="0"
+    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+        cf_color yellow "detected remote job environment"
+    elif [ "${CF_CI_JOB}" = "1" ]; then
+        cf_color yellow "detected CI environment"
+    elif [ "${CF_RTD_JOB}" = "1" ]; then
+        cf_color yellow "detected READTHEDOCS environment"
+    else
+        export CF_LOCAL_JOB="1"
+    fi
+
     # show a warning in case no CF_REPO_BASE_ALIAS is set
     if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
         cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
         cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
-    fi
-
-    # show a message when non-local environment is detected
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
-        cf_color yellow "detected remote job environment"
-    fi
-    if [ "${CF_CI_JOB}" = "1" ]; then
-        cf_color yellow "detected CI environment"
-    fi
-    if [ "${CF_RTD_JOB}" = "1" ]; then
-        cf_color yellow "detected READTHEDOCS environment"
     fi
 
 
@@ -240,7 +241,10 @@ setup_columnflow() {
     # git hooks
     #
 
-    cf_setup_git_hooks || return "$?"
+    # only in local env
+    if [ "${CF_LOCAL_JOB}" = "1" ]; then
+        cf_setup_git_hooks || return "$?"
+    fi
 
 
     #
@@ -549,8 +553,8 @@ cf_setup_software_stack() {
         # conda / micromamba setup
         #
 
-        # not needed in CI jobs
-        if [ "${CF_CI_JOB}" != "1" ]; then
+        # not needed in CI or RTD jobs
+        if [ "${CF_CI_JOB}" != "1" ] && [ "${CF_RTD_JOB}" != "1" ]; then
             # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
@@ -622,9 +626,9 @@ EOF
             >&2 echo
         }
 
-        # source the production sandbox, potentially skipped in CI jobs
+        # source the production sandbox, potentially skipped in CI and RTD jobs
         local ret
-        if [ "${CF_CI_JOB}" != "1" ]; then
+        if [ "${CF_CI_JOB}" != "1" ] && [ "${CF_RTD_JOB}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
             if [ "${ret}" = "21" ]; then
