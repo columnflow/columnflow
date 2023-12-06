@@ -814,16 +814,22 @@ cf_init_submodule() {
 [ ! -z "${BASH_VERSION}" ] && export -f cf_init_submodule
 
 cf_color() {
+    # get arguments
+    local color="$1"
+    local msg="${@:2}"
+
+    # just echo the message in certain conditions
+    if [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_RTD_JOB}" = "1" ]; then
+        echo "${msg}"
+        return "0"
+    fi
+
     # zsh options
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     if ${shell_is_zsh}; then
         emulate -L bash
         setopt globdots
     fi
-
-    # get arguments
-    local color="$1"
-    local msg="${@:2}"
 
     # disable coloring in remote jobs
     ( [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ] ) && color="none"
