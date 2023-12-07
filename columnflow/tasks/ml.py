@@ -5,9 +5,7 @@ Tasks related to ML workflows.
 """
 from __future__ import annotations
 
-from collections import OrderedDict
-
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 import law
 import luigi
@@ -32,7 +30,6 @@ from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvent
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict
 from columnflow.util import maybe_import
-from columnflow.types import Dict, List
 
 
 ak = maybe_import("awkward")
@@ -947,9 +944,9 @@ class PlotMLResultsBase(
     )
 
     skip_processes = law.CSVParameter(
-        default=("",),
+        default=(),
         description="comma seperated list of process names to skip; these processes will not be included in the plots. "
-        "default: ('',)",
+        "default: ()",
         brace_expand=True,
     )
 
@@ -1005,14 +1002,14 @@ class PlotMLResultsBase(
 
         return reqs
 
-    def output(self: PlotMLResultsBase) -> Dict[str, List]:
+    def output(self: PlotMLResultsBase) -> dict[str, list]:
         b = self.branch_data
         return {"plots": [
             self.target(name)
             for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}")
         ]}
 
-    def prepare_inputs(self: PlotMLResultsBase) -> Dict[str, ak.Array]:
+    def prepare_inputs(self: PlotMLResultsBase) -> dict[str, ak.Array]:
         """
         prepare the inputs for the plot function, based on the given configuration and category.
 
@@ -1020,7 +1017,7 @@ class PlotMLResultsBase(
         :raises ValueError: This error is raised if ``plot_sub_processes`` is used without providing the
             ``process_ids`` column in the data
 
-        :return: Dict[str, ak.Array]: A dictionary with the dataset names as keys and
+        :return: dict[str, ak.Array]: A dictionary with the dataset names as keys and
             the corresponding predictions as values.
         """
         category_inst = self.config_inst.get_category(self.branch_data.category)
@@ -1063,8 +1060,10 @@ class PlotMLResultsBase(
                         all_events[process_inst.name] = getattr(events, self.ml_model)
                 else:
                     if "process_ids" not in events.fields:
-                        raise ValueError("No `process_ids` column stored in the events! "
-                                f"Process selection for {dataset} cannot not be applied!")
+                        raise ValueError(
+                            "No `process_ids` column stored in the events! "
+                            f"Process selection for {dataset} cannot not be applied!",
+                        )
                     for sub_process in sub_process_insts[process_inst]:
                         if sub_process.name in self.skip_processes:
                             continue
@@ -1112,15 +1111,16 @@ class PlotMLResults(PlotMLResultsBase):
 
     def output(self: PlotMLResults):
         b = self.branch_data
-        return {"plots": [
-            self.target(name)
-            for name in self.get_plot_names(
-                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/plot__0",
-            )
-        ],
+        return {
+            "plots": [
+                self.target(name)
+                for name in self.get_plot_names(
+                    f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/plot__0",
+                )
+            ],
             "array": self.target(
                 f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.parquet",
-        ),
+            ),
         }
 
     @law.decorator.log

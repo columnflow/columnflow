@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from columnflow.types import Sequence, List, Tuple
+from columnflow.types import Sequence
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -19,7 +19,7 @@ plt = maybe_import("matplotlib.pyplot")
 hep = maybe_import("mplhep")
 colors = maybe_import("matplotlib.colors")
 
-# Define a CF custom color maps
+# define a CF custom color maps
 cf_colors = {
     "cf_green_cmap": colors.ListedColormap([
         "#212121", "#242723", "#262D25", "#283426", "#2A3A26", "#2C4227", "#2E4927",
@@ -85,23 +85,26 @@ def plot_cm(
     cms_llabel: str = "private work",
     *args,
     **kwargs,
-) -> Tuple[List[plt.Figure], np.ndarray]:
-    """ Generates the figure of the confusion matrix given the output of the nodes
+) -> tuple[list[plt.Figure], np.ndarray]:
+    """
+    Generates the figure of the confusion matrix given the output of the nodes
     and an array of true labels. The Cronfusion matrix can also be weighted.
 
-    :param events: dictionary with the true labels as keys and the model output of the events as values.
-    :param config_inst: used configuration for the plot.
-    :param category_inst: used category instance, for which the plot is created.
-    :param sample_weights: sample weights of the events. If an explicit array is not given, the weights are
-        calculated based on the number of events.
-    :param normalization: type of normalization of the confusion matrix. If not provided, the matrix is row normalized.
+    :param events: Dictionary with the true labels as keys and the model output of the events as values.
+    :param config_inst: The used config instance, for which the plot is created.
+    :param category_inst: The used category instance, for which the plot is created.
+    :param sample_weights: Sample weights applied to the confusion matrix the events.
+        If an explicit array is not given, the weights are calculated based on the number of events when set to *True*.
+    :param normalization: The type of normalization of the confusion matrix.
+        This parameter takes 'row', 'col' or '' (empty string) as argument.
+        If not provided, the matrix is row normalized.
     :param skip_uncertainties: If true, no uncertainty of the cells will be shown in the plot.
-    :param x_labels: labels for the x-axis.
-    :param y_labels: labels for the y-axis.
+    :param x_labels: The labels for the x-axis. If not provided, the labels will be 'out<i>'
+    :param y_labels: The labels for the y-axis. If not provided, the dataset names are used.
     :param *args: Additional arguments to pass to the function.
     :param **kwargs: Additional keyword arguments to pass to the function.
 
-    :return: The resulting plot and the confusion matrix.
+    :return: Returns the resulting plot and the confusion matrix.
 
     :raises AssertionError: If both predictions and labels have mismatched shapes, or if *weights*
         is not *None* and its shape doesn't match *predictions*.
@@ -135,13 +138,13 @@ def plot_cm(
             vecNumber = np.vectorize(lambda n, count: sci.Number(n, float(n / np.sqrt(count) if count else 0)))
             result = vecNumber(result, counts)
 
-        # Normalize Matrix if needed
+        # normalize Matrix if needed
         if normalization:
             valid = {"row": 1, "column": 0}
             if normalization not in valid.keys():
                 raise ValueError(
-                    f"\"{normalization}\" is not a valid argument for normalization. If given, normalization "
-                    "should only take \"row\" or \"column\"",
+                    f"'{normalization}' is not a valid argument for normalization. If given, normalization "
+                    "should only take 'row' or 'column'",
                 )
 
             row_sums = result.sum(axis=valid.get(normalization))
@@ -180,15 +183,15 @@ def plot_cm(
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         def calculate_font_size():
-            # Get cell width
+            # get cell width
             bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
             width, height = fig.dpi * bbox.width, fig.dpi * bbox.height
 
-            # Size of each cell in pixels
+            # size of each cell in pixels
             cell_width = width / n_classes
             cell_height = height / n_processes
 
-            # Calculate the font size based on the cell size to ensure font is not too large
+            # calculate the font size based on the cell size to ensure font is not too large
             font_size = min(cell_width, cell_height) / 10
             font_size = max(min(font_size, 18), 8)
 
@@ -218,7 +221,7 @@ def plot_cm(
         plt.style.use(hep.style.CMS)
         fig, ax = plt.subplots(dpi=300)
 
-        # Some useful variables and functions
+        # some useful variables and functions
         n_processes = cm.shape[0]
         n_classes = cm.shape[1]
         cmap = cf_colors.get(colormap, cf_colors["cf_cmap"])
@@ -228,11 +231,11 @@ def plot_cm(
         font_label = 20
         font_text = calculate_font_size()
 
-        # Get values and (if available) their uncertenties
+        # get values and (if available) their uncertenties
         values = cm.astype(np.float32)
         uncs = get_errors(cm)
 
-        # Remove Major ticks and edit minor ticks
+        # remove Major ticks and edit minor ticks
         minor_tick_length = max(int(120 / n_classes), 12) / 2
         minor_tick_width = max(6 / n_classes, 0.6)
         xtick_marks = np.arange(n_classes)
@@ -241,7 +244,7 @@ def plot_cm(
         # plot the data
         im = ax.imshow(values, interpolation="nearest", cmap=cmap)
 
-        # Plot settings
+        # plot settings
         thresh = values.max() / 2.
         ax.tick_params(axis="both", which="major", bottom=False, top=False, left=False, right=False)
         ax.tick_params(
@@ -271,7 +274,7 @@ def plot_cm(
         colorbar.ax.tick_params(labelsize=font_ax - 5)
         im.set_clim(0, max(1, values.max()))
 
-        # Add Matrix Elemtns
+        # add Matrix Elemtns
         for i in range(values.shape[0]):
             for j in range(values.shape[1]):
                 ax.text(
