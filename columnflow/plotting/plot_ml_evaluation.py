@@ -355,7 +355,7 @@ def plot_roc(
     if evaluation_type not in ["OvO", "OvR"]:
         raise ValueError(
             "Illeagal Argument! Evaluation Type can only be choosen as 'OvO' (One vs One)"
-            "or 'OvR' (One vs Rest)"
+            "or 'OvR' (One vs Rest)",
         )
 
     def create_histograms(events: dict, sample_weights: dict, *args, **kwargs) -> dict[str, dict[str, np.ndarray]]:
