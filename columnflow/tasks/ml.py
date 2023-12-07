@@ -28,8 +28,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
-from columnflow.util import dev_sandbox, safe_div, DotDict
-from columnflow.util import maybe_import
+from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
 
 
 ak = maybe_import("awkward")
