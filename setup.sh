@@ -15,7 +15,7 @@ setup_columnflow() {
     #       When "1", any existing software stack is removed and freshly installed.
     #   CF_REINSTALL_HOOKS
     #       When "1", existing git hooks are removed and linked again.
-    #   CF_REMOTE_JOB
+    #   CF_REMOTE_ENV
     #       When "1", applies configurations for remote job. Remote jobs will set this value if needed
     #       and there is no need to set this by hand.
     #   CF_LCG_SETUP
@@ -66,8 +66,10 @@ setup_columnflow() {
     #   CF_STORE_LOCAL
     #       The default local output store path, ammended by $CF_STORE_NAME. Queried during the
     #       interactive setup.
-    #   CF_CI_JOB
+    #   CF_CI_ENV
     #       Set to "1" if a CI environment is detected (e.g. GitHub actions), and "0" otherwise.
+    #   CF_RTD_ENV
+    #       Set to "1" if a READTHEDOCS environment is detected, and "0" otherwise.
     #   CF_LCG_SETUP
     #       The location of a custom LCG software setup file. See above.
     #   CF_PERSISTENT_PATH
@@ -112,8 +114,8 @@ setup_columnflow() {
     #       Set to "8082" when $CF_LOCAL_SCHEDULER was set to "true", or otherwise queried during
     #       the interactive setup. Used in law.cfg.
     #   CF_WORKER_KEEP_ALIVE
-    #       Set to "false" when not already set, or when a remote ($CF_REMOTE_JOB) or CI environment
-    #       ($CF_CI_JOB) is detected. Used in law.cfg.
+    #       Set to "false" when not already set, or when a remote ($CF_REMOTE_ENV) or CI environment
+    #       ($CF_CI_ENV) is detected. Used in law.cfg.
     #   CF_HTCONDOR_FLAVOR
     #       The default htcondor flavor setting for the HTCondorWorkflow task.
     #   CF_SLURM_FLAVOR
@@ -181,7 +183,7 @@ setup_columnflow() {
     export CF_SETUP_NAME="${setup_name}"
 
     # interactive setup
-    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+    if [ "${CF_REMOTE_ENV}" != "1" ]; then
         cf_setup_interactive_body() {
             # query common variables
             cf_setup_interactive_common_variables
@@ -195,24 +197,10 @@ setup_columnflow() {
     export CF_CONDA_BASE="${CF_CONDA_BASE:-${CF_SOFTWARE_BASE}/conda}"
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
-    export CF_CI_JOB="$( [ "${GITHUB_ACTIONS,,}" = "true" -o "${READTHEDOCS,,}" = "true" ] && echo 1 || echo 0 )"
     export CF_ORIG_PATH="${PATH}"
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
-
-    # show a warning in case no CF_REPO_BASE_ALIAS is set
-    if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
-        cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
-        cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
-    fi
-
-
-    #
-    # minimal local software setup
-    #
-
-    cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
 
 
     #
@@ -223,10 +211,20 @@ setup_columnflow() {
 
 
     #
+    # minimal local software setup
+    #
+
+    cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
+
+
+    #
     # git hooks
     #
 
-    cf_setup_git_hooks || return "$?"
+    # only in local env
+    if [ "${CF_LOCAL_ENV}" = "1" ]; then
+        cf_setup_git_hooks || return "$?"
+    fi
 
 
     #
@@ -248,29 +246,61 @@ setup_columnflow() {
     export CF_SETUP="1"
 }
 
+cf_detect_envs() {
+    # Uses specific environment variables to detect if the current environment is a special one, e.g. in a remote job,
+    # in a CI job, or in a READTHEDOCS build.
+
+    # detect variables
+    export CF_CI_ENV="$( [ "$( cf_lower_case "${GITHUB_ACTIONS}" )" = "true" ] && echo 1 || echo 0 )"
+    export CF_RTD_ENV="$( [ "$( cf_lower_case "${READTHEDOCS}" )" = "true" ] && echo 1 || echo 0 )"
+
+    # store env flags
+    export CF_LOCAL_ENV="0"
+    if [ "${CF_REMOTE_ENV}" = "1" ]; then
+        cf_color yellow "detected remote job environment"
+    elif [ "${CF_CI_ENV}" = "1" ]; then
+        cf_color yellow "detected CI environment"
+    elif [ "${CF_RTD_ENV}" = "1" ]; then
+        cf_color yellow "detected READTHEDOCS environment"
+    else
+        export CF_LOCAL_ENV="1"
+    fi
+
+    # for a limited amount of time, also set the previously used env variables to ease the transition
+    export CF_LOCAL_JOB="${CF_LOCAL_ENV}"
+    export CF_REMOTE_JOB="${CF_REMOTE_ENV}"
+    export CF_CI_JOB="${CF_CI_ENV}"
+    export CF_RTD_JOB="${CF_RTD_ENV}"
+}
+[ ! -z "${BASH_VERSION}" ] && export -f cf_detect_envs
+
 cf_setup_common_variables() {
     # Exports variables that might be commonly used across analyses, such as host and job
     # environment variables (or their defaults).
 
+    # detect environments
+    cf_detect_envs || return "$?"
+
     # lang defaults
-    if [ "${READTHEDOCS,,}" = "true" ]; then
-        export LANGUAGE="${READTHEDOCS_LANGUAGE}"
-        export LANG="${READTHEDOCS_LANGUAGE}"
-        export LC_ALL="${READTHEDOCS_LANGUAGE}"
+    if [ "${CF_RTD_ENV}" = "1" ]; then
+        export LANGUAGE="${READTHEDOCS_LANGUAGE:-en}"
+        export LANG="${READTHEDOCS_LANGUAGE:-en}"
+        export LC_ALL="${READTHEDOCS_LANGUAGE:-en}"
+    else
+        export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
+        export LANG="${LANG:-en_US.UTF-8}"
+        export LC_ALL="${LC_ALL:-en_US.UTF-8}"
     fi
-    export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
-    export LANG="${LANG:-en_US.UTF-8}"
-    export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
     # proxy
     export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
 
     # overwrite some variables in remote and ci jobs
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ]; then
         export CF_WLCG_USE_CACHE="true"
         export CF_WLCG_CACHE_CLEANUP="true"
         export CF_WORKER_KEEP_ALIVE="false"
-    elif [ "${CF_CI_JOB}" = "1" ]; then
+    elif [ "${CF_CI_ENV}" = "1" ] || [ "${CF_RTD_ENV}" = "1" ]; then
         export CF_WLCG_USE_CACHE="false"
         export CF_WLCG_CACHE_CLEANUP="false"
         export CF_WORKER_KEEP_ALIVE="false"
@@ -296,6 +326,12 @@ cf_setup_common_variables() {
     export CF_HTCONDOR_FLAVOR="${CF_HTCONDOR_FLAVOR:-${cf_htcondor_flavor_default}}"
     export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
     export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
+
+    # show a warning in case no CF_REPO_BASE_ALIAS is set
+    if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
+        cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
+        cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
+    fi
 }
 
 cf_setup_interactive_common_variables() {
@@ -454,9 +490,9 @@ cf_setup_software_stack() {
     #       The base directory were virtual envs are installed.
     #
     # Optional environments variables:
-    #   CF_REMOTE_JOB
+    #   CF_REMOTE_ENV
     #       When "1", the software stack is sourced but not built.
-    #   CF_CI_JOB
+    #   CF_CI_ENV
     #       When "1", the "cf" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
@@ -520,7 +556,7 @@ cf_setup_software_stack() {
     # setup in local envs (not remote)
     #
 
-    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+    if [ "${CF_REMOTE_ENV}" != "1" ]; then
         # remote directories first if requested
         if [ "${CF_REINSTALL_SOFTWARE}" = "1" ]; then
             echo "removing conda setup at $( cf_color magenta ${CF_CONDA_BASE})"
@@ -534,8 +570,8 @@ cf_setup_software_stack() {
         # conda / micromamba setup
         #
 
-        # not needed in CI jobs
-        if [ "${CF_CI_JOB}" != "1" ]; then
+        # not needed in CI or RTD jobs
+        if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
@@ -607,9 +643,9 @@ EOF
             >&2 echo
         }
 
-        # source the production sandbox, potentially skipped in CI jobs
+        # source the production sandbox, potentially skipped in CI and RTD jobs
         local ret
-        if [ "${CF_CI_JOB}" != "1" ]; then
+        if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
             if [ "${ret}" = "21" ]; then
@@ -641,7 +677,7 @@ EOF
     # setup in remote jobs
     #
 
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ]; then
         # initialize conda
         source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
         micromamba activate || return "$?"
@@ -657,13 +693,13 @@ cf_setup_git_hooks() {
     # (sub)repository, as well as the analysis repository in case a directory bin/githooks is found.
     #
     # Optional environments variables:
-    #   CF_REMOTE_JOB
+    #   CF_REMOTE_ENV
     #       When "1", no hooks are setup.
-    #   CF_CI_JOB
+    #   CF_CI_ENV
     #       When "1", no hooks are setup.
 
     # do nothing when not local
-    if [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ] || [ "${CF_CI_ENV}" = "1" ]; then
         return "0"
     fi
 
@@ -773,7 +809,7 @@ cf_init_submodule() {
     local submodule_path="${2}"
 
     # do nothing in remote jobs
-    [ "$CF_REMOTE_JOB" = "1" ] && return "0"
+    [ "$CF_REMOTE_ENV" = "1" ] && return "0"
 
     # do nothing when the path does not exist or it is not a submodule
     if [ ! -e "${base_path}/${submodule_path}" ]; then
@@ -795,6 +831,16 @@ cf_init_submodule() {
 [ ! -z "${BASH_VERSION}" ] && export -f cf_init_submodule
 
 cf_color() {
+    # get arguments
+    local color="$1"
+    local msg="${@:2}"
+
+    # just echo the message as is in certain conditions
+    if [ "${CF_REMOTE_ENV}" = "1" ] || [ "${CF_RTD_ENV}" = "1" ]; then
+        echo "${msg}"
+        return "0"
+    fi
+
     # zsh options
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     if ${shell_is_zsh}; then
@@ -802,12 +848,8 @@ cf_color() {
         setopt globdots
     fi
 
-    # get arguments
-    local color="$1"
-    local msg="${@:2}"
-
     # disable coloring in remote jobs
-    ( [ "${CF_REMOTE_JOB}" = "1" ] || [ "${CF_CI_JOB}" = "1" ] ) && color="none"
+    ( [ "${CF_REMOTE_ENV}" = "1" ] || [ "${CF_CI_ENV}" = "1" ] ) && color="none"
 
     case "${color}" in
         default)
@@ -858,6 +900,16 @@ cf_color() {
     esac
 }
 [ ! -z "${BASH_VERSION}" ] && export -f cf_color
+
+cf_lower_case() {
+    # cross-shell lower case helper
+    echo "$1" | tr "[:upper:]" "[:lower:]"
+}
+
+cf_upper_case() {
+    # cross-shell upper case helper
+    echo "$1" | tr "[:lower:]" "[:upper:]"
+}
 
 main() {
     # Invokes the main action of this script, catches possible error codes and prints a message.
