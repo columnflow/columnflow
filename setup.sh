@@ -251,8 +251,8 @@ cf_detect_envs() {
     # in a CI job, or in a READTHEDOCS build.
 
     # detect variables
-    export CF_CI_ENV="$( [ "${GITHUB_ACTIONS,,}" = "true" ] && echo 1 || echo 0 )"
-    export CF_RTD_ENV="$( [ "${READTHEDOCS,,}" = "true" ] && echo 1 || echo 0 )"
+    export CF_CI_ENV="$( [ "$( cf_lower_case "${GITHUB_ACTIONS}" )" = "true" ] && echo 1 || echo 0 )"
+    export CF_RTD_ENV="$( [ "$( cf_lower_case "${READTHEDOCS}" )" = "true" ] && echo 1 || echo 0 )"
 
     # store env flags
     export CF_LOCAL_ENV="0"
@@ -272,6 +272,7 @@ cf_detect_envs() {
     export CF_CI_JOB="${CF_CI_ENV}"
     export CF_RTD_JOB="${CF_RTD_ENV}"
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_detect_envs
 
 cf_setup_common_variables() {
     # Exports variables that might be commonly used across analyses, such as host and job
@@ -899,6 +900,16 @@ cf_color() {
     esac
 }
 [ ! -z "${BASH_VERSION}" ] && export -f cf_color
+
+cf_lower_case() {
+    # cross-shell lower case helper
+    echo "$1" | tr "[:upper:]" "[:lower:]"
+}
+
+cf_upper_case() {
+    # cross-shell upper case helper
+    echo "$1" | tr "[:lower:]" "[:upper:]"
+}
 
 main() {
     # Invokes the main action of this script, catches possible error codes and prints a message.
