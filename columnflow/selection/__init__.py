@@ -272,9 +272,38 @@ class SelectionResult(od.AuxDataMixin):
             self.event = deepcopy_without_behavior(other.event)
         elif other.event is not None:
             self.event = self.event & other.event
+
+        def check_for_repeating_keys(
+            this_dict: DotDict,
+            other_dict: DotDict,
+            prefix: str = None,
+        ) -> None:
+            """
+            checks whether the same step is defined in two separate SelectionResults
+            """
+            these_keys = set(this_dict.keys())
+            other_keys = set(other_dict.keys())
+
+            # find same keys in both sets
+            double_keys = these_keys.intersection(other_keys)
+            if len(double_keys) > 0:
+                final_list = [f"{prefix}/{x}" for x in double_keys] if prefix else double_keys
+                problem_keys = ", ".join(final_list)
+                msg = (f"Following keys are defined by both SelectionResult instances:"
+                       f"{problem_keys}. This is not supported!")
+                raise KeyError(msg)
+
+        check_for_repeating_keys(self.steps, other.steps)
         # update steps in-place
         self.steps.update(deepcopy_without_behavior(other.steps))
         # use deep merging for objects
+        object_keys = list(self.objects.keys())
+        for k in object_keys:
+            check_for_repeating_keys(
+                this_dict=self.objects[k],
+                other_dict=other.objects.get(k, DotDict()),
+                prefix=k,
+            )
         law.util.merge_dicts(
             self.objects,
             deepcopy_without_behavior(other.objects),
@@ -342,13 +371,40 @@ class SelectionResult(od.AuxDataMixin):
                 for src_name, dst_dict in self.objects.items()
             })
 
-        # add other fields but verify they do not overwrite existing fields
-        for key in self.other:
-            if key in to_merge:
-                raise KeyError(
-                    f"additional top-level field '{key}' of {self.__class__.__name__} conflicts "
-                    f"with existing special field '{key}'",
-                )
-        to_merge.update(self.other)
+        # other fields can be nested in principle, so disentangle nested and flat entries
+        def convert_multi_struct_to_ak(input_structure, depth=0):
+            nested_entries = dict()
+            flat_entries = dict()
+            for key, entry in input_structure.items():
+                # add other fields but verify they do not overwrite existing fields
 
-        return ak.zip(to_merge)
+                if depth == 0 and key in to_merge:
+                    raise KeyError(
+                        f"additional top-level field '{key}' of {self.__class__.__name__} conflicts "
+                        f"with existing special field '{key}'",
+                    )
+                if isinstance(entry, dict):
+                    if depth > 1:
+                        raise ValueError("Depth of nested structures in "
+                                         f"SelectionResults cannot exceed 1, found {depth}")
+                    _, sub_flat = convert_multi_struct_to_ak(entry, depth=depth + 1)
+                    nested_entries.update({key: sub_flat})
+                elif isinstance(entry, ak.Array):
+                    flat_entries.update({key: entry})
+                else:
+                    raise NotImplementedError("Cannot handle object of type "
+                                              f"{type(entry)} at depth {depth} in SelectionResul")
+            return nested_entries, flat_entries
+
+        if self.other:
+            nested, flat = convert_multi_struct_to_ak(self.other)
+
+            to_merge.update(flat)
+            to_merge.update({k: ak.zip(entry) for k, entry in nested.items()})
+
+        # ak.zip cannot handle empty dictionaries, so just return an empty
+        # array in case of an empty SelectionResult
+        if len(to_merge) > 0:
+            return ak.zip(to_merge)
+        else:
+            return ak.Array([])
