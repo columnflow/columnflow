@@ -8,8 +8,6 @@ import unittest
 from columnflow.util import maybe_import
 from columnflow.config_util import get_events_from_categories
 
-# from columnflow.analysis_templates.cms_minimal.__cf_module_name__.config.analysis__cf_short_name_lc__.py import cfg
-
 import order as od
 
 np = maybe_import("numpy")
