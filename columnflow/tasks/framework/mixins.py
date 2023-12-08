@@ -23,6 +23,7 @@ from columnflow.selection import Selector
 from columnflow.production import Producer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
+from columnflow.columnar_util import Route, ColumnCollection
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -185,6 +186,14 @@ class CalibratorMixin(ConfigTask):
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator}")
         return parts
 
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_CALIBRATOR:
+            columns |= self.calibrator_inst.produced_columns
+
+        return columns
+
 
 class CalibratorsMixin(ConfigTask):
     """Mixin to include multiple :py:class:`~columnflow.calibration.Calibrator` instances into tasks.
@@ -342,6 +351,17 @@ class CalibratorsMixin(ConfigTask):
 
         return parts
 
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_CALIBRATORS:
+            columns |= set.union(*(
+                calibrator_inst.produced_columns
+                for calibrator_inst in self.calibrator_insts
+            ))
+
+        return columns
+
 
 class SelectorMixin(ConfigTask):
     """Mixin to include a single :py:class:`~columnflow.selection.Selector`
@@ -494,6 +514,14 @@ class SelectorMixin(ConfigTask):
         parts = super().store_parts()
         parts.insert_before("version", "selector", f"sel__{self.selector}")
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_SELECTOR:
+            columns |= self.selector_inst.produced_columns
+
+        return columns
 
 
 class SelectorStepsMixin(SelectorMixin):
@@ -738,6 +766,14 @@ class ProducerMixin(ConfigTask):
         parts.insert_before("version", "producer", producer)
         return parts
 
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_PRODUCER:
+            columns |= self.producer_inst.produced_columns
+
+        return columns
+
 
 class ProducersMixin(ConfigTask):
     """Mixin to include multiple :py:class:`~columnflow.production.Producer` instances into tasks.
@@ -894,6 +930,17 @@ class ProducersMixin(ConfigTask):
         parts.insert_before("version", "producers", f"prod__{part or 'none'}")
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_PRODUCERS:
+            columns |= set.union(*(
+                producer_inst.produced_columns
+                for producer_inst in self.producer_insts
+            ))
+
+        return columns
 
 
 class MLModelMixinBase(AnalysisTask):
@@ -1281,9 +1328,19 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
+
         if self.ml_model_inst:
             parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
+            columns |= set.union(*self.ml_model_inst.produced_columns().values())
+
+        return columns
 
 
 class MLModelDataMixin(MLModelMixin):
@@ -1369,10 +1426,21 @@ class MLModelsMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            part = "__".join(self.ml_models)
+            part = "__".join(model_inst.cls_name for model_inst in self.ml_model_insts)
             parts.insert_before("version", "ml_models", f"ml__{part}")
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_ML_EVALUATION:
+            columns |= set.union(*(
+                set.union(*model_inst.produced_columns().values())
+                for model_inst in self.ml_model_insts
+            ))
+
+        return columns
 
 
 class InferenceModelMixin(ConfigTask):
