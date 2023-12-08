@@ -10,6 +10,7 @@ import re
 
 from columnflow.types import Sequence
 from columnflow.util import maybe_import
+from columnflow.plotting.plot_util import get_cms_label
 
 ak = maybe_import("awkward")
 od = maybe_import("order")
@@ -70,39 +71,6 @@ def create_sample_weights(
         mean = np.mean(list(size.values()))
         return {label: mean / length for label, length in size.items()}
     return dict(zip(true_labels, sample_weights))
-
-
-def get_cms_config(ax: plt.Axes, llabel: str, rlabel: str) -> dict:
-    """
-    Helper function to get the CMS label configuration.
-
-    :param ax: The axis to plot the CMS label on.
-    :param llabel: The left label of the CMS label.
-    :param rlabel: The right label of the CMS label.
-    :return: A dictionary with the CMS label configuration.
-    """
-    label_options = {
-        "wip": "Work in progress",
-        "pre": "Preliminary",
-        "pw": "Private work",
-        "sim": "Simulation",
-        "simwip": "Simulation work in progress",
-        "simpre": "Simulation preliminary",
-        "simpw": "Simulation private work",
-        "od": "OpenData",
-        "odwip": "OpenData work in progress",
-        "odpw": "OpenData private work",
-        "public": "",
-    }
-    cms_label_kwargs = {
-        "ax": ax,
-        "llabel": label_options.get(llabel, llabel),
-        "rlabel": rlabel,
-        "fontsize": 22,
-        "data": False,
-    }
-
-    return cms_label_kwargs
 
 
 def plot_cm(
@@ -322,7 +290,8 @@ def plot_cm(
 
         # final touches
         if cms_llabel != "skip":
-            cms_label_kwargs = get_cms_config(ax=ax, llabel=cms_llabel, rlabel=cms_rlabel)
+            cms_label_kwargs = get_cms_label(ax=ax, llabel=cms_llabel)
+            cms_label_kwargs["rlabel"] = cms_rlabel
             hep.cms.label(**cms_label_kwargs)
         plt.tight_layout()
 
@@ -528,7 +497,8 @@ def plot_roc(
         ax.legend(loc="lower right", fontsize=15)
         ax.set_title(title, wrap=True, pad=50, fontsize=30)
         if cms_llabel != "skip":
-            cms_label_kwargs = get_cms_config(ax=ax, llabel=cms_llabel, rlabel=cms_rlabel)
+            cms_label_kwargs = get_cms_label(ax=ax, llabel=cms_llabel)
+            cms_label_kwargs["rlabel"] = cms_rlabel
             hep.cms.label(**cms_label_kwargs)
         plt.tight_layout()
 
