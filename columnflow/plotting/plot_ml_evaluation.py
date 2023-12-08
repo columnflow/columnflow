@@ -468,6 +468,7 @@ def plot_roc(
                             for neg_cls, neg_pred in histograms[disc].items()
                             if neg_cls != pos_cls
                         ),
+                        np.zeros_like(pos_hist),
                     )
 
                     fpr, tpr = binary_roc_data(

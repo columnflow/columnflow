@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 from contextlib import redirect_stdout
 
 from columnflow.util import maybe_import
-from columnflow.plotting.plot_ml_evaluation import plot_cm, plot_roc
 
 
 np = maybe_import("numpy")
@@ -21,6 +20,8 @@ plt = maybe_import("matplotlib.pyplot")
 class TestPlotCM(unittest.TestCase):
 
     def setUp(self):
+        from columnflow.plotting.plot_ml_evaluation import plot_cm
+        self.plot_cm = plot_cm
         self.events = {
             "dataset_1": ak.Array({
                 "out1": [0.1, 0.1, 0.3, 0.5],
@@ -50,7 +51,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -68,7 +69,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_no_weights(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -85,7 +86,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_skip_uncertainties(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -103,7 +104,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_no_labels(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -120,7 +121,7 @@ class TestPlotCM(unittest.TestCase):
         x_labels = ["vbf", "ggf", "other"]
         y_labels = ["Higgs", "Graviton"]
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -135,7 +136,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_invalid_normalization(self):
         with self.assertRaises(ValueError), redirect_stdout(self.text_trap):
-            plot_cm(
+            self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -148,7 +149,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_no_normalization(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -162,7 +163,7 @@ class TestPlotCM(unittest.TestCase):
 
     def test_plot_cm_column_normalization(self):
         with redirect_stdout(self.text_trap):
-            fig, cm = plot_cm(
+            fig, cm = self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -177,7 +178,7 @@ class TestPlotCM(unittest.TestCase):
     def test_plot_cm_mismatched_weights_shape(self):
         sample_weights = [1, 2, 3]
         with self.assertRaises(ValueError), redirect_stdout(self.text_trap):
-            plot_cm(
+            self.plot_cm(
                 events=self.events,
                 config_inst=self.config_inst,
                 category_inst=self.category_inst,
@@ -192,6 +193,8 @@ class TestPlotCM(unittest.TestCase):
 class TestPlotROC(unittest.TestCase):
 
     def setUp(self):
+        from columnflow.plotting.plot_ml_evaluation import plot_roc
+        self.plot_roc = plot_roc
         self.events = {
             "dataset_1": ak.Array({
                 "out1": [0.9, 0.9, 0.7, 0.4],
@@ -220,21 +223,21 @@ class TestPlotROC(unittest.TestCase):
 
     def test_plot_roc_returns_figures_and_results(self):
         with redirect_stdout(self.text_trap):
-            figs, results = plot_roc(self.events, self.config_inst, self.category_inst)
+            figs, results = self.plot_roc(self.events, self.config_inst, self.category_inst)
         self.assertIsInstance(figs, list)
         self.assertIsInstance(results, dict)
 
     def test_plot_roc_returns_correct_number_of_figures(self):
         with redirect_stdout(self.text_trap):
-            figs_ovr, _ = plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvR")
-            figs_ovo, _ = plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvO")
+            figs_ovr, _ = self.plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvR")
+            figs_ovo, _ = self.plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvO")
 
         self.assertEqual(len(figs_ovr), self.n_discriminators * len(self.events))
         self.assertEqual(len(figs_ovo), self.n_discriminators * len(self.events) * (len(self.events) - 1))
 
     def test_plot_roc_returns_correct_results(self):
         with redirect_stdout(self.text_trap):
-            _, results = plot_roc(
+            _, results = self.plot_roc(
                 self.events,
                 self.config_inst,
                 self.category_inst,
@@ -252,4 +255,4 @@ class TestPlotROC(unittest.TestCase):
 
     def test_plot_roc_raises_value_error_for_invalid_evaluation_type(self):
         with self.assertRaises(ValueError), redirect_stdout(self.text_trap):
-            plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="InvalidType")
+            self.plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="InvalidType")
