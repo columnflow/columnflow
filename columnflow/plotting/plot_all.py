@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from columnflow.types import Sequence
 from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import get_position
+from columnflow.plotting.plot_util import get_position, get_cms_label
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -273,25 +273,7 @@ def plot_all(
 
     # cms label
     if cms_label != "skip":
-        label_options = {
-            "wip": "Work in progress",
-            "pre": "Preliminary",
-            "pw": "Private work",
-            "sim": "Simulation",
-            "simwip": "Simulation work in progress",
-            "simpre": "Simulation preliminary",
-            "simpw": "Simulation private work",
-            "od": "OpenData",
-            "odwip": "OpenData work in progress",
-            "odpw": "OpenData private work",
-            "public": "",
-        }
-        cms_label_kwargs = {
-            "ax": ax,
-            "llabel": label_options.get(cms_label, cms_label),
-            "fontsize": 22,
-            "data": False,
-        }
+        cms_label_kwargs = get_cms_label(ax, cms_label)
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)

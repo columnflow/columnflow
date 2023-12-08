@@ -18,3 +18,5 @@ import columnflow as cf  # noqa
 from .test_util import *
 from .test_columnar_util import *
 from .test_config_util import *
+from .test_task_parameters import *
+from .test_plotting import *
