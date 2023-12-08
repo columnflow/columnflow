@@ -202,7 +202,7 @@ class TestPlotROC(unittest.TestCase):
                 "out2": [0.8, 0.8, 0.6, 0.2],
             }),
         }
-        self.N_discriminators = 2
+        self.n_discriminators = 2
         self.config_inst = MagicMock()
         self.category_inst = MagicMock()
         # The following results are calculated by hand
@@ -214,7 +214,6 @@ class TestPlotROC(unittest.TestCase):
             "out2": {
                 "fpr": [0.75, 0.75, 0.5, 0],
                 "tpr": [0.5, 0.25, 0, 0],
-
             },
         }
         self.text_trap = io.StringIO()
@@ -230,8 +229,8 @@ class TestPlotROC(unittest.TestCase):
             figs_ovr, _ = plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvR")
             figs_ovo, _ = plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="OvO")
 
-        self.assertEqual(len(figs_ovr), self.N_discriminators * len(self.events))
-        self.assertEqual(len(figs_ovo), self.N_discriminators * len(self.events) * (len(self.events)))
+        self.assertEqual(len(figs_ovr), self.n_discriminators * len(self.events))
+        self.assertEqual(len(figs_ovo), self.n_discriminators * len(self.events) * (len(self.events) - 1))
 
     def test_plot_roc_returns_correct_results(self):
         with redirect_stdout(self.text_trap):
@@ -254,7 +253,3 @@ class TestPlotROC(unittest.TestCase):
     def test_plot_roc_raises_value_error_for_invalid_evaluation_type(self):
         with self.assertRaises(ValueError), redirect_stdout(self.text_trap):
             plot_roc(self.events, self.config_inst, self.category_inst, evaluation_type="InvalidType")
-
-
-if __name__ == "__main__":
-    unittest.main()
