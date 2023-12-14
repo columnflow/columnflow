@@ -41,6 +41,7 @@ class TestModel(MLModel):
                 binning=(4, -1.5, 2.5),
                 x_title="Predicted number of electrons",
             )
+        return
 
     def sandbox(self, task: law.Task) -> str:
         return "bash::$HBT_BASE/sandboxes/venv_columnar_tf.sh"
@@ -54,7 +55,7 @@ class TestModel(MLModel):
             dataset_inst.append(config_inst.get_dataset(dataset_name))
 
         # ... but you can also add one dataset by using its name
-        config_inst.get_dataset("tt_sl_powheg")
+        dataset_inst.append(config_inst.get_dataset("tt_sl_powheg"))
 
         return set(dataset_inst)
 
@@ -178,6 +179,7 @@ class TestModel(MLModel):
 
         # save your model and everything you want to keep
         output.dump(model, formatter="tf_keras_model")
+        return
 
     def evaluate(
         self,
