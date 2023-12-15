@@ -212,13 +212,95 @@ here mention the analysis template
 
 ### Law config
 
-### Analysis
+(analysis_campaign_config)=
+### Analysis, Campaign and Config
 
-### Campaigns
+Columnflow uses the {external+order:py:class}`order.analysis.Analysis` class from the [order](https://github.com/riga/order) package to define a specific analysis.
+This object does not contain most of the analysis information by itself, it is to be linked to objects of the {external+order:py:class}`order.config.Campaign` and {external+order:py:class}`order.config.Config` classes, as described in
+[the Analysis, Campaign and Config section](https://python-order.readthedocs.io/en/latest/quickstart.html#analysis-campaign-and-config)
+of the Quickstart section of the order documentation.
+An example of an analysis with its full Analysis, Campaign and Config definitions in the same directory is given in the [Analysis Grand Challenge Columnflow repository](https://github.com/columnflow/agc_cms_ttbar/) repository and [its config directory](https://github.com/columnflow/agc_cms_ttbar/tree/master/agc/config).
 
-### Config
+A Campaign object contains the analysis-independent information related to a specific and well-defined experimental campaign.
+This means general informations like the center of mass energy of the collisions (argument `ecm`) as well as the datasets created during/for the specific campaign.
+An example of a Campaign declaration (from the AGC Columnflow repository linked above) might be:
+```python
+from order import Campaign
 
-Columnflow uses a {external+order:py:class}`order.config.Config` object for each analysis, saving the variables specific to the analysis. The
-[order](https://github.com/riga/order) library is used for the conservation and use of the
-metavariables. A more detailed description of the most important objects to be defined in the Config object are presented in the {doc}`building_blocks/config_objects` section of this documentation.
+campaign_cms_opendata_2015_agc = cpn = Campaign(
+    name="cms_opendata_2015_agc",
+    id=1,
+    ecm=13,
+    aux={
+        "tier": "NanoAOD",
+        "year": 2015,
+        "location": "https://xrootd-local.unl.edu:1094//store/user/AGC/nanoAOD",
+        "wlcg_fs": "wlcg_fs_unl",
+    },
+)
+```
+
+An example of dataset definition with scale variations for this campaign would then be (values taken from [the analysis-grand-challenge GitHub repository](https://github.com/iris-hep/analysis-grand-challenge/blob/be91d2c80225b7a91ce6b153591f8605167bf555/analyses/cms-open-data-ttbar/nanoaod_inputs.json)):
+```python
+import agc.config.processes as procs
+from order import DatasetInfo
+
+cpn.add_dataset(
+    name="tt_powheg",
+    id=1,
+    processes=[procs.tt],
+    info={
+        "nominal": DatasetInfo(
+            keys=["TT_TuneCUETP8M1_13TeV-powheg-pythia8"],
+            n_files=242,
+            n_events=276079127),
+        "scale_down": DatasetInfo(
+            keys=["TT_TuneCUETP8M1_13TeV-powheg-scaledown-pythia8"],
+            n_files=32,
+            n_events=39329663),
+        "scale_up": DatasetInfo(
+            keys=["TT_TuneCUETP8M1_13TeV-powheg-scaleup-pythia8"],
+            n_files=33,
+            n_events=38424467),
+    },
+    aux={
+        "agc_process": "ttbar",
+        "agc_shifts": {
+            "scale_down": "scaledown",
+            "scale_up": "scaleup",
+        },
+    },
+)
+```
+
+And the corresponding process definition in `agc.config.processes` would be:
+```python
+from scinum import Number
+from order import Process
+
+tt = Process(
+    name="tt",
+    id=1000,
+    label=r"$t\bar{t}$ + Jets",
+    color=(128, 76, 153),
+    xsecs={
+        13: Number(831.76, {
+            "scale": (19.77, 29.20),
+            "pdf": 35.06,
+            "mtop": (23.18, 22.45),
+        }),
+    },
+)
+```
+
+A Config object is saving the variables specific to the analysis.
+It is associated to an Analysis and a Campaign object.
+It is to be created using the {external+order:py:meth}`order.analysis.Analysis.add_config` method on the analysis object, with the associated Campaign object as argument.
+An example would be:
+```python
+cfg = analysis.add_config(campaign, name=config_name, id=config_id)
+```
+
+Several classes of the order library are used for the conservation and use of the metavariables.
+A more detailed description of the most important objects to be defined in the Config object is presented in the {doc}`building_blocks/config_objects` section of this documentation.
 

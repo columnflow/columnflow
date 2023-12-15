@@ -263,7 +263,7 @@ which must be mapped to either None (triggering the default behaviour and obtain
 from DAS) or a custom function with three parameters (`dataset_inst`, the order {external+order:py:class}`order.dataset.Dataset`
 object, `shift_inst`, the order {external+order:py:class}`order.shift.Shift` object and
 `dataset_key`, the key given in the info dictionary of the dataset when defining it
-(TODO: example of a dataset definition). From these parameters, the custom function should implement
+as shown in the {ref}`Analysis, Campaign and Config section <analysis_campaign_config>`. From these parameters, the custom function should implement
 a way to create the list of LFNs (= the paths to the root files starting from `/store`) corresponding to this dataset and
 return this list. Two other auxiliary parameters can be changed, these are called
 `cfg.x.get_dataset_lfns_sandbox` and `cfg.x.get_dataset_lfns_remote_fs`. `get_dataset_lfns_sandbox`
