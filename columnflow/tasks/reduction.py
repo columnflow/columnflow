@@ -82,8 +82,8 @@ class ReduceEvents(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            ColumnCollection, Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
+            add_ak_aliases, sorted_ak_to_parquet,
         )
         from columnflow.selection.util import create_collections_from_masks
 
@@ -101,10 +101,12 @@ class ReduceEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will be written
-        write_columns = {
-            Route(c)
-            for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"])
-        }
+        write_columns = set()
+        for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
+            if isinstance(c, ColumnCollection):
+                write_columns |= self.find_keep_columns(c)
+            else:
+                write_columns.add(Route(c))
         route_filter = RouteFilter(write_columns)
 
         # map routes to write to their top level column

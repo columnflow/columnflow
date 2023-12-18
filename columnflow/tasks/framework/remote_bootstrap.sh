@@ -8,7 +8,7 @@
 bootstrap_htcondor_standalone() {
     # set env variables
     export CF_ON_HTCONDOR="1"
-    export CF_REMOTE_JOB="1"
+    export CF_REMOTE_ENV="1"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
@@ -108,7 +108,7 @@ bootstrap_htcondor_standalone() {
 bootstrap_slurm() {
     # set env variables
     export CF_ON_SLURM="1"
-    export CF_REMOTE_JOB="1"
+    export CF_REMOTE_ENV="1"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export KRB5CCNAME="FILE:{{kerberosproxy_file}}"
@@ -130,8 +130,8 @@ bootstrap_slurm() {
 # Bootstrap function for crab jobs.
 bootstrap_crab() {
     # set env variables
-    export CF_ON_CRAB="1"
-    export CF_REMOTE_JOB="1"
+    export CF_ON_GRID="1"
+    export CF_REMOTE_ENV="1"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"

@@ -2,7 +2,7 @@
 
 # Script that installs, removes and / or sources a CMSSW environment. Distinctions are made
 # depending on whether the installation is already present, and whether the script is called as part
-# of a remote (law) job (CF_REMOTE_JOB=1).
+# of a remote (law) job (CF_REMOTE_ENV=1).
 #
 # In case a function or executable named "cf_cmssw_custom_install" is defined, it is invoked inside
 # the src directory of the CMSSW checkout after a first "scram build" pass and followed by a second
@@ -39,7 +39,7 @@
 #      is defined, its value is used instead.
 #
 # Note on remote jobs:
-# When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
+# When the CF_REMOTE_ENV variable is found to be "1" (usually set by a remote job bootstrap script),
 # no mode is supported and no installation will happen but the desired CMSSW setup is reused from a
 # pre-compiled CMSSW bundle that is fetched from a local or remote location and unpacked.
 
@@ -72,7 +72,7 @@ setup_cmssw() {
     fi
 
     # force install mode for remote jobs
-    [ "${CF_REMOTE_JOB}" = "1" ] && mode="install"
+    [ "${CF_REMOTE_ENV}" = "1" ] && mode="install"
 
     # value checks
     if [ "${mode}" != "install" ] && [ "${mode}" != "clear" ] && [ "${mode}" != "reinstall" ] && [ "${mode}" != "update" ]; then
@@ -134,7 +134,7 @@ setup_cmssw() {
     # ensure CF_CMSSW_BASE exists
     mkdir -p "${CF_CMSSW_BASE}"
 
-    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+    if [ "${CF_REMOTE_ENV}" != "1" ]; then
         # optionally remove the current installation
         if [ "${mode}" = "clear" ] || [ "${mode}" = "reinstall" ]; then
             echo "removing current installation at ${install_path} (mode '${mode}')"
@@ -255,7 +255,7 @@ setup_cmssw() {
     fi
 
     # handle remote job environments
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ]; then
         # fetch, unpack and setup the bundle
         if [ ! -d "${install_path}" ]; then
             if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
