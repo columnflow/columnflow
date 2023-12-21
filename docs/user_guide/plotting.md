@@ -1,8 +1,8 @@
 # Plotting
 
 In columnflow, there are multiple tasks to create plots. This section showcases how to create and
-customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task. A
-detailed overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
+customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task. An
+overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
 
 ## Creating your first plot
 
@@ -36,19 +36,24 @@ the runtime of the task, e.g. via ```--view-cmd evince-previewer```.
 :::
 
 
-The PlotVariables1D task is located at the bottom of our
+The ```PlotVariables1D``` task is located at the bottom of our
 [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that
-all tasks leading to PlotVariables1D will be run for all datasets corresponding to the
-```--processes``` we requested using the Calibrators, Selector, and Producers
+all tasks leading to ```PlotVariables1D``` will be run for all datasets corresponding to the
+```--processes``` we requested using the
+{py:class}`~columnflow.calibration.Calibrator`s, {py:class}`~columnflow.selection.Selector`, and
+{py:class}`~columnflow.production.Producer`s
 (often referred to as CSPs) as requested. In the following examples, we will skip the
-```--calibrators```, ```selector``` and ```producers``` parameters, which means that the defaults
+```--calibrators```, ```--selector``` and ```--producers``` parameters, which means that the defaults
 defined in the config will be used automatically. Examples on how to
 implement your own CSPs can be found in the [calibrators](building_blocks/calibrators),
 [selectors](building_blocks/selectors), and [producers](building_blocks/producers) sections of the
 user guide. The ```--variables``` parameter defines, for which variables we want to create histograms
-and plots. Variables are order objects that need to be defined in the config as shown in the
+and plots. Variables are [order](https://github.com/riga/order) objects that need to be defined
+in the config as shown in the
 [config objects](building_blocks/config_objects) section. The column corresponding to the expression
 statement needs to be stored either after the {py:class}`~columnflow.tasks.reduction.ReduceEvents`
+task or as part of a ```Producer``` used in the {py:class}`~columnflow.tasks.production.ProduceColumns`
+task.
 For each of the category given with the ```--categories``` parameter, one plot will be produced.
 A detailed guide on how to implement categories in Columnflow is given in the
 [categories](building_blocks/categories) section.
@@ -57,7 +62,7 @@ To define which processes and datasets to consider when plotting, you can use th
 and ```--datasets``` parameter. When only processes are given, all datasets corresponding to the
 requested processes will be considered. When only datasets are given, all processes in the config
 will be considered.
-The ```processes``` parameter can be used to change the order of processes in the stack and the legend
+The ```--processes``` parameter can be used to change the order of processes in the stack and the legend
 (try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes
 (e.g. via ```--processses tt_sl,tt_dl,tt_fh```).
 
@@ -75,10 +80,21 @@ There are many different parameters implemented that allow customizing the style
 overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
 In the following, a few exemplary task calls are given to present the usage of our plotting parameters.
 
-Per default, the PlotVariables1D task creates one plot per variable with all Monte Carlo backgrounds being included
+Per default, the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task creates one plot
+per variable with all Monte Carlo backgrounds being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
 and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
 To change the text next to the label, you can add the ```--cms-label``` parameter.
+:::{dropdown} What are the ```cms-label``` options?
+In general, this parameter accepts all types of strings, but there is a set of shortcuts for commonly
+usedabels that will automatically be resolved:
+```{literalinclude} ../../columnflow/plotting/plot_all.py
+:language: python
+:start-at: label_options
+:end-at: "}"
+```
+:::
+
 To compare shapes of multiple processes, you might want to plot each process separately as one line.
 To achieve this, you can use the ```unstack``` option of the ```--process-settings``` parameter. This
 parameter can also be used to change other attributes of your process instances, such as color, label,
@@ -107,7 +123,9 @@ to produce the following plot:
 
 Parameters that only contain a single value can also be passed via the ```--general-settings```.
 We can also change the y-scale of the plot to a log scale by adding ```--yscale log``` and change some
-properties of specific variables via the ```variable-settings``` parameter. For example, we might want to create the plots of our two obserables in one call, but would like to try out a rebinned version of `jet1_pt` that only consideres every tenth bin. A corresponding task call
+properties of specific variables via the ```variable-settings``` parameter. For example, we might
+want to create the plots of our two obserables in one call, but would like to try out a
+rebinned version of `jet1_pt` that merges bins by a factor of 10. A corresponding task call
 might be
 
 ```shell
@@ -130,7 +148,7 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 
 :::{dropdown} Limitations of the ```variable_settings```
 While in theory we can change anything inside the variable and process instances via the
-```variable_settings```, there are certain attributes that are already used during the creation
+```variable_settings``` parameter, there are certain attributes that are already used during the creation
 of the histograms (e.g. the ```expression``` and the ```binning```). Since our ```variable_settings```
 parameter only modifies these attributes during the runtime of our plotting task, this will not
 impact our final results.
@@ -223,7 +241,7 @@ and after each selector step, where we always apply the logical ```and``` of all
 
 To create plots of variables as part of the cutflow, we also provide the
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the
-PlotVariables1D task.
+{py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
 
 ```shell
 law run cf.PlotCutflowVariables1D --version v1 \

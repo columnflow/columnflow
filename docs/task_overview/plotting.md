@@ -69,7 +69,9 @@ classDiagram
 # Plotting tasks
 
 The following tasks are dedicated to plotting.
-For more informaiton, see {doc}`"Plotting <plotting documentation>"`.
+For more information, check out the [plotting user guide](../user_guide/plotting.md)
+
+ {doc}`Plotting <plotting documentation>`.
 
 (PlotVariablesTasks)=
 - ```PlotVariables*```, ```PlotShiftedVariables*``` (e.g.
