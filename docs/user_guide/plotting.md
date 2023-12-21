@@ -1,8 +1,11 @@
 # Plotting
 
 In columnflow, there are multiple tasks to create plots. This section showcases how to create and
-customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task. An
-overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
+customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
+The usage of other plotting tasks is mostly analogous to the ```PlotVariables1D``` task. The most
+important differences compared to ```PlotVariables1D``` are presented in a separate section
+for each of the other plotting tasks.
+An overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
 
 ## Creating your first plot
 
@@ -78,9 +81,10 @@ plot.
 
 There are many different parameters implemented that allow customizing the style of a plot. A short
 overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
-In the following, a few exemplary task calls are given to present the usage of our plotting parameters.
+In the following, a few exemplary task calls are given to present the usage of our plotting parameters,
+using the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
 
-Per default, the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task creates one plot
+Per default, the ```PlotVariables1D``` task creates one plot
 per variable with all Monte Carlo backgrounds being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
 and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
@@ -145,7 +149,6 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 ::::
 
 
-
 :::{dropdown} Limitations of the ```variable_settings```
 While in theory we can change anything inside the variable and process instances via the
 ```variable_settings``` parameter, there are certain attributes that are already used during the creation
@@ -189,7 +192,7 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 
 ## Creating 2D plots
 
-Columnflow also provides the {py:class}`~columnflow.tasks.plotting.PlotVariables2D` to create
+Columnflow also provides the {py:class}`~columnflow.tasks.plotting.PlotVariables2D` task to create
 two-dimensional plots. Two-dimensional histograms are created by passing two variables to the
 ```--variables``` parameter, separated by a ```-```. Here is an exemplary task call and their
 outputs.
@@ -208,6 +211,8 @@ law run cf.PlotVariables2D --version v1 \
 :::
 ::::
 
+While most of the plotting parameters used in the ```PlotVariables1D``` task can be reused for this
+task, there are also some additional parameters only available for 2D plotting tasks.
 For more information on the task parameters of the ```PlotVariables2D``` task, take a look into the
 [plotting task overview](../task_overview/plotting.md).
 
@@ -215,7 +220,7 @@ For more information on the task parameters of the ```PlotVariables2D``` task, t
 
 The previously discussed plotting functions only create plots after applying the full event selection.
 To allow inspecting and optimizing an event and object selection, Columnflow also includes plotting
-tasks that can be run before applying any event selections.
+tasks that can produce plots after each individual selection step.
 
 To create a simple cutflow plot, displaying event yields after each individual selection step,
 you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
@@ -238,6 +243,23 @@ law run cf.PlotCutflow --version v1 \
 
 This will produce a plot with three bins, containing the event yield before applying any selection
 and after each selector step, where we always apply the logical ```and``` of all previous selector steps.
+
+:::{dropdown} What are the options for the ```--selector-steps```? Can I customize the step labels?
+The steps listed in the ```--selector-steps``` parameter need to be defined by the
+{py:class}`~columnflow.selection.Selector` that has been used.
+A detailed guide on how to implement your own selector can be found in the
+[Selections](building_blocks/selectors) guide.
+
+Per default, the name of the selector step is used on the x-axis, but you can also provide custom
+step labels via the config:
+```python
+config_inst.x.selector_step_labels = {
+    "muon": r"$N_{muon} = 1$",
+    "jet": r"$N_{jets}^{AK4} \geq 1$",
+}
+```
+:::
+
 
 To create plots of variables as part of the cutflow, we also provide the
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the

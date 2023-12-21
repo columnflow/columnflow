@@ -54,7 +54,8 @@ Further informations about tasks in general and law can be found in the
 {doc}`"Law Introduction" <law>` section of this documentation or in the
 [example section](https://github.com/riga/law#examples) of the law
 Github repository.
-For an overview of the tasks that are available with columnflow, please see the {doc}`"Task Overview"`.
+For an overview of the tasks that are available with columnflow, please see the
+[Task Overview](../task_overview/introduction.md).
 
 ## Important note on required parameters
 
