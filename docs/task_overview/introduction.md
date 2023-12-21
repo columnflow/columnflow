@@ -33,7 +33,7 @@ law run cf.SelectEvents --your-parameters parameter_value
 - {py:class}`~columnflow.tasks.external.GetDatasetLFNs`: This task looks for the logical file names
 of the datasets to be used and saves them in a json file. The argument ```--dataset``` followed by
 the name of the dataset to be searched for, as defined in the analysis config is needed for this
-task to run. TODO: more infos?
+task to run.
 
 - {py:class}`~columnflow.tasks.calibration.CalibrateEvents`: Task to implement corrections to be
 applied on the datasets, e.g. jet-energy corrections. This task uses objects of the
@@ -42,7 +42,7 @@ applied on the datasets, e.g. jet-energy corrections. This task uses objects of 
 object to be run is needed for this task to run. A default value for this argument can be set in
 the analysis config. Similarly, the ```--shift``` argument can be given, in order to choose which
 corrections are to be used, e.g. which variation (up, down, nominal) of the jet-energy corrections
-are to be used. TODO: more infos, e.g. output type of task?
+are to be used.
 
 - {py:class}`~columnflow.tasks.selection.SelectEvents`: Task to implement selections to be applied
 on the datssets. This task uses objects of the {py:class}`~columnflow.selection.Selector` class to
@@ -75,22 +75,17 @@ analysis config.
 - {py:class}`~columnflow.tasks.ml.PrepareMLEvents`, {py:class}`~columnflow.tasks.ml.MLTraining`,
 {py:class}`~columnflow.tasks.ml.MLEvaluation`: Tasks to
 train, evaluate neural networks and plot (to be implemented) their results.
-TODO: more informations? output type?
-all tf based? or very general and almost everything must be set in the training scripts?
-and if general, what is taken care of?
 
 - {py:class}`~columnflow.tasks.histograms.CreateHistograms`: Task to create histograms with the
 python package [Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below
 in the task graph. From this task on, the ```--producer``` argument is replaced by
 ```--producers```. The histograms are saved in a pickle file.
-TODO: more informations?
 
 - {py:class}`~columnflow.tasks.cms.inference.CreateDatacards`: TODO
 
 - ```Merge``` tasks (e.g. {py:class}`~columnflow.tasks.reduction.MergeReducedEvents`,
 {py:class}`~columnflow.tasks.histograms.MergeHistograms`): Tasks to merge the local outputs from
-the various occurences of the corresponding tasks. TODO: details? why needed? Only convenience?
-Or I/O?
+the various occurences of the corresponding tasks.
 
 There are also CMS-specialized tasks, like
 {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`, which are described in the
