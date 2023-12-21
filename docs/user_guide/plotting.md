@@ -1,6 +1,6 @@
 # Plotting
 
-In columnflow, there are multiple tasks to create plots. This section showcases, how to create and
+In columnflow, there are multiple tasks to create plots. This section showcases how to create and
 customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task. A
 detailed overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
 
@@ -47,21 +47,21 @@ implement your own CSPs can be found in the [calibrators](building_blocks/calibr
 [selectors](building_blocks/selectors), and [producers](building_blocks/producers) sections of the
 user guide. The ```--variables``` parameter defines, for which variables we want to create histograms
 and plots. Variables are order objects that need to be defined in the config as shown in the
-[config objects](building_blocks/config_objects) section and the column corresponding to the expression
+[config objects](building_blocks/config_objects) section. The column corresponding to the expression
 statement needs to be stored either after the {py:class}`~columnflow.tasks.reduction.ReduceEvents`
 For each of the category given with the ```--categories``` parameter, one plot will be produced.
 A detailed guide on how to implement categories in Columnflow is given in the
 [categories](building_blocks/categories) section.
 
-To define, which processes and datasets to consider when plotting, you can use the ```--processes```
+To define which processes and datasets to consider when plotting, you can use the ```--processes```
 and ```--datasets``` parameter. When only processes are given, all datasets corresponding to the
 requested processes will be considered. When only datasets are given, all processes in the config
 will be considered.
 The ```processes``` parameter can be used to change the order of processes in the stack and the legend
 (try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes
-(e.g. via ```--processses, tt_sl,tt_dl,tt_fh```).
+(e.g. via ```--processses tt_sl,tt_dl,tt_fh```).
 
-:::{dropdown} Note! Do not add the same dataset via multiple processes!
+:::{dropdown} IMPORTANT! Do not add the same dataset via multiple processes!
 At the time of writing this documentation, there is still an issue present that histograms corresponding
 to a dataset can accidentally be used multiple times. For example, when adding ```--processes tt,tt_sl```,
 the events corresponding to the dataset ```tt_sl_powheg``` will be displayed twice in the resulting
@@ -72,7 +72,7 @@ plot.
 ## Customization of plots
 
 There are many different parameters implemented that allow customizing the style of a plot. A short
-description to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
+overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
 In the following, a few exemplary task calls are given to present the usage of our plotting parameters.
 
 Per default, the PlotVariables1D task creates one plot per variable with all Monte Carlo backgrounds being included
@@ -107,7 +107,7 @@ to produce the following plot:
 
 Parameters that only contain a single value can also be passed via the ```--general-settings```.
 We can also change the y-scale of the plot to a log scale by adding ```--yscale log``` and change some
-properties of specific variables via the ```variable-settings``` parameter. An exemplary task call
+properties of specific variables via the ```variable-settings``` parameter. For example, we might want to create the plots of our two obserables in one call, but would like to try out a rebinned version of `jet1_pt` that only consideres every tenth bin. A corresponding task call
 might be
 
 ```shell
@@ -129,9 +129,9 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 
 
 :::{dropdown} Limitations of the ```variable_settings```
-While in theory, we can change anything inside the variable and process instances via the
+While in theory we can change anything inside the variable and process instances via the
 ```variable_settings```, there are certain attributes that are already used during the creation
-of the histograms (e.g. the ```expression``` and the ```binning```) and since our ```variable_settings```
+of the histograms (e.g. the ```expression``` and the ```binning```). Since our ```variable_settings```
 parameter only modifies these attributes during the runtime of our plotting task, this will not
 impact our final results.
 :::
@@ -199,7 +199,7 @@ The previously discussed plotting functions only create plots after applying the
 To allow inspecting and optimizing an event and object selection, Columnflow also includes plotting
 tasks that can be run before applying any event selections.
 
-To create a simple cutflow plots, displaying event yields after each individual selection step,
+To create a simple cutflow plot, displaying event yields after each individual selection step,
 you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
 ```shell
 law run cf.PlotCutflow --version v1 \
@@ -219,7 +219,7 @@ law run cf.PlotCutflow --version v1 \
 ::::
 
 This will produce a plot with three bins, containing the event yield before applying any selection
-and after each selector step, where we always apply the locical and of all previous selector steps.
+and after each selector step, where we always apply the logical ```and``` of all previous selector steps.
 
 To create plots of variables as part of the cutflow, we also provide the
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the
@@ -271,7 +271,7 @@ law run cf.PlotCutflowVariables1D --version v1 \
 ## Creating plots for different shifts
 
 Like most tasks, our plotting tasks also contain the ```--shift``` parameter that allows requesting
-the outputs for a certain type of systematic variation. Per default, the ```shellift```parameter is set
+the outputs for a certain type of systematic variation. Per default, the ```shift``` parameter is set
 to "nominal", but you could also produce your plot with a certain systematic uncertainty varied
 up or down, e.g. via running
 ```shell
@@ -289,7 +289,7 @@ section (TODO: not existing).
 
 For directly comparing differences introduced by one shift source, we provide the
 {py:class}`~columnflow.tasks.plotting.PlotShiftedVariables1D` task. Instead of the ```--shift```
-parameter, this task implements the ```--shift-sources``` task and creates one plot per shift source
+parameter, this task implements the ```--shift-sources``` option and creates one plot per shift source
 displaying the nominal distribution (black) compared to the shift source varied up (red) and down (blue).
 The task can be called e.g. via
 ```shell
@@ -323,9 +323,9 @@ law run cf.PlotVariables1D --version v1 \
 ```
 
 
-## Using you own plotting function
+## Using your own plotting function
 
-While all plotting tasks provide default plotting functions, which implement many parameters to
+While all plotting tasks provide default plotting functions which implement many parameters to
 customize the plot, it might be necessary to write your own plotting functions if you want to create
 a specific type of plot. In that case, you can simply write a function that follows the signature
 of all other plotting functions and call a plotting task with this function using the

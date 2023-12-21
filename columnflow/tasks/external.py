@@ -43,8 +43,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
     version = None
     """Version parameter - deactivated for :py:class:`~columnflow.tasks.external.GetDatasetLFNs`
-
-    This is an example.
     """
 
     @classmethod
