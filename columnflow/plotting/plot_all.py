@@ -135,6 +135,8 @@ def plot_all(
     shape_norm: bool = False,
     skip_legend: bool = False,
     cms_label: str = "wip",
+    whitespace_fraction: float = 0.3,
+    magnitudes: float = 4,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -192,8 +194,8 @@ def plot_all(
     # some default ylim settings based on yscale
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
 
-    ax_ymin = ax.get_ylim()[1] / 10**4 if log_y else 0.00001
-    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1.4, logscale=log_y)
+    ax_ymin = ax.get_ylim()[1] / 10**magnitudes if log_y else 0.0000001
+    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1 / (1 - whitespace_fraction), logscale=log_y)
     ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
     # prioritize style_config ax settings
