@@ -26,6 +26,23 @@ law.contrib.load("tensorflow")
 
 class TestModel(MLModel):
 
+    datasets: dict = {
+        "datasets_name": [
+            "hh_ggf_bbtautau_madgraph",
+            "tt_sl_powheg",
+        ],
+    }
+
+    def __init__(
+            self,
+            *args,
+            folds: int | None = None,
+            **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        # your instance variables
+
+
     def setup(self):
         # dynamically add variables for the quantities produced by this model
         if f"{self.cls_name}.n_muon" not in self.config_inst.variables:
@@ -60,18 +77,17 @@ class TestModel(MLModel):
         return set(dataset_inst)
 
     def uses(self, config_inst: od.Config) -> set[Route | str]:
-        return set(self.input_features) | set(self.target_features) | {"normalization_weight", "deterministic_seed"}
+        used_columns = set(self.input_features) | set(self.target_features) | {"normalization_weight",}
+        return used_columns
 
     def produces(self, config_inst: od.Config) -> set[Route | str]:
         # mark columns that you don't want to be filtered out
-        input_columns = set(self.input_features)
-        target_columns = set(self.target_features)
         ml_predictions = {f"{self.cls_name}.fold{fold}.{feature}"
             for fold in range(self.folds)
             for feature in target_columns}
         util_columns = {f"{self.cls_name}.fold_indices"}
 
-        preserved_columns = input_columns | target_columns | ml_predictions | util_columns
+        preserved_columns = ml_predictions | util_columns
         return preserved_columns
 
     def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
@@ -83,7 +99,6 @@ class TestModel(MLModel):
         target = task.target(f"mlmodel_f{current_fold}of{max_folds}", dir=True)
         return target
 
-        return task.target(f"mlmodel_f{task.fold}of{self.folds}", dir=True)
 
     def open_model(self, target: law.FileSystemDirectoryTarget):
         # if a formatter exists use formatter
@@ -247,12 +262,7 @@ hyperparameters = {
     "epochs": 5,
 }
 
-datasets = {
-    "datasets_name": [
-        "hh_ggf_bbtautau_madgraph",
-        "tt_sl_powheg",
-    ],
-}
+
 
 
 configuration_dict = {
@@ -267,8 +277,7 @@ configuration_dict = {
 }
 
 # combine configuration dictionary
-configuration_dict.update(datasets)
 configuration_dict.update(hyperparameters)
 
 # init model instance with config dictionary
-test_model = TestModel.derive("test_model", cls_dict=configuration_dict)
+test_model = TestModel.derive(cls_name="test_model", cls_dict=configuration_dict)
