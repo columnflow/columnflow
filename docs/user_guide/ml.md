@@ -22,52 +22,15 @@ class TestModel(MLModel):
 In following we will go through several abstract functions that you must overwrite, in order to be able to use your custom ML class with columnflow.
 
 ## sandbox:
-In the {py:meth}`~columnflow.ml.MLModel.sandbox`, you specify which sandbox setup file should be sourced to configure the environments.
-The return value of {py:meth}`~columnflow.ml.MLModel.sandbox` is the path to your shell file, e.g:
+In {py:meth}`~columnflow.ml.MLModel.sandbox`, you specify which sandbox setup file should be sourced to setup the environment for ML usage.
+The return value of {py:meth}`~columnflow.ml.MLModel.sandbox` is the path to your shell (sh) file, e.g:
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def sandbox
 :end-at: return "bash::$HBT_BASE/sandboxes/venv_columnar_tf.sh"
 ```
-
-To keep things organized, store your {py:meth}`~columnflow.ml.MLModel.sandbox` setup and requirement file in `$CF_BASE/sandboxes/`.
-It is also recommended to start the path with `bash::`, to indicate that you want to source the {py:meth}`~columnflow.ml.MLModel.sandbox` with `bash`.
-
-The content of the {py:meth}`~columnflow.ml.MLModel.sandbox` setup file is a modification of the `cf.sh`.
-So copy this file and modify the copy, by pointing `export CF_VENV_REQUIREMENTS` to your `requirement.txt`, in the following case our requirement file is called `ml_tf_training.txt` e.g:
-```bash
-action() {
-    # code we don't care about
-
-    # only thing you need to change
-    export CF_VENV_REQUIREMENTS="${this_dir}/ml_tf_training.txt"
-
-    # more code we don't care about
-}
-action "$@"
-```
-
-The `requirement.txt` uses pip notation, e.g:
-```bash
-# version 1
-git+https://github.com/riga/coffea.git@9ecdee5#egg=coffea
-dask-awkward~=2023.2
-tensorflow~=2.11
-```
-Columnflow manages sandboxes by using a version number at very first line, styled as:`# version ANY_FLOAT`.
-This version defines a software packet, and it is good practice to change the version number, whenever environment is altered.
-
-For more information, refer to the official [pip documentation](https://pip.pypa.io/en/stable/reference/requirements-file-format/).
-
-One may ask, how to work with namespaces of certain modules, if it is not guarantee, that this module is available.
-For this case {py:meth}`~columnflow.util.maybe_import` is there.
-This utility function handles the import for you and makes the namespace available.
-Remember to use this within a function if you use the module once, and at the beginning if you intend to use it by multiple functions.
-The input of {py:meth}`~columnflow.util.maybe_import` is the name of the module, but as string.
-For example this tutorial uses TensorFlow in multiple occurrences, and therefore {py:meth}`~columnflow.util.maybe_import` of this module is right at the start:
-```python
-tf = maybe_import("tensorflow")
-```
+It is recommended to start the path with `bash::`, to indicate that you want to source the {py:meth}`~columnflow.ml.MLModel.sandbox` with `bash`.
+How to actual write the setup and requirement file can be found in the section about [setting up a sandbox](building_blocks/sandbox).
 
 ## datasets:
 In the {py:meth}`~columnflow.ml.MLModel.datasets` function, you specify which datasets are important for your machine learning model and which dataset instance should be extracted from your config.
@@ -96,6 +59,9 @@ To avoid confusion, we are not producing the columns in this function, we only t
 :start-at: def produces
 :end-at: return preserved_columns
 ```
+
+## uses:
+
 
 ## output:
 In the {py:meth}`~columnflow.ml.MLModel.output` function, you define your local target directory that your current model instance will have access to.
