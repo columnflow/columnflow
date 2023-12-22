@@ -2,20 +2,46 @@
 
 In this section, the users will learn how to implement machine learning in their analysis with columnflow.
 
-# General procedure:
-In columnflow, the utilization of machine learning models involves a two-step process:
-- defining a class
-- initialize an instance of that class with your trainings config
-
-# Step 1: Defining your custom machine learning class:
+# Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the MLModel class.
 This inheritance ensures the availability of functions to manage and access config and model instances, as well as the necessary producers.
+The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py::meth}`~columnflo.util.derive` e.g.
+```{literalinclude} ./ml_code.py
+:language: python
+:start-at: test_model
+:end-at: test_model
+```
+The second argument in {py::meth}`~columnflo.util.derive` is a `cls_dict` which configure your subclass.
+The `cls_dict` needs to be flat.
+The keys of the dictionary are set as class attributes and are therefore also accessible by using self.
+The configuration with derive has 2 main advantages:
+- manageability, since the dictionary can come from loading a config file and these can be changed fairly easy
+- flexibility, multiple settings require only different configuration files
+```{literalinclude} ./ml_code.py
+:language: python
+:start-at: hyperparameters =
+:end-at: test_model = TestModel.derive(
+```
+One can also simply define class variables within the model.
+This is can be useful for attributes that don't change often, for example to define the datasets your model uses.
+Since these are also class attributes, they are accessible by using self and also shared between all instances of this model.
+```{literalinclude} ./ml_code.py
+:language: python
+:start-at: class TestModel(
+:end-at: your instance variables
+```
+If you have settings that should not be shared between all instances, define them within `__init__`.
 
-The name of your custom ML class can be arbitrary, e.g:
-```python
-# define your model
-class TestModel(MLModel):
-    ...
+# After the configuration
+After the configuration of your ML model, `law` needs to be informed in the `law.cfg` about the existence of the new machine learning model.
+Add in your `law.cfg`, under the sections `analysis`, an `ml_modules`, where you point to the Python file where the model's definition and derivation happens.
+These path are relative to the analysis root directory.
+```bash
+[analysis]
+# any other config entries
+
+ml_modules: hbt.ml.{test}
+inference_modules: hbt.inference.test
 ```
 
 # ABC functions
@@ -52,16 +78,25 @@ If you want to prevent certain columns from being filtered out, you need to tell
 This is always done by writing an iterable containing the name of the producer as string.
 More information can be found in the official documentation about [producers](building_blocks/producers).
 
-In the following example, I want to preserve the number of muons and electrons, but we also want to preserve for example the output of the neural network.
+In the following example, I want to preserve the number of muons and electrons, we also want to preserve the output of the neural network.
 To avoid confusion, we are not producing the columns in this function, we only tell columnflow to not throwing them away.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def produces
 :end-at: return preserved_columns
 ```
+ATTENTION: Sometimes one also want to preserve the used input and target features, for example to make plots.
+Remember that you already have a copy of all the input and target features in your parquet files used for training.
+In General it is not advised to create a new separate copy of these, otherwise it can be convenient to have everything within one place.
+Thus, the choice to include these columns is your choice.
 
 ## uses:
-
+In `uses` you define the columns that are needed by your machine learning model, and there that are not filtered out.
+In this case we want to preserve the input and target features, as well as some weights:
+```{literalinclude} ./ml_code.py
+:language: python
+:pyobject: MLModel.uses
+```
 
 ## output:
 In the {py:meth}`~columnflow.ml.MLModel.output` function, you define your local target directory that your current model instance will have access to.
@@ -72,7 +107,7 @@ In this example we want to save each fold separately e.g:
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def output
-:end-at: return loaded_model
+:end-at: return target
 ```
 
 
@@ -87,7 +122,6 @@ In the the following example a TensorFlow model saved with Keras API is loaded a
 :start-at: def open_model
 :end-at: return loaded_model
 ```
-
 
 ## train:
 In the {py:meth}`~columnflow.ml.MLModel.train` function, you implement the initialization of your models and the training loop.
@@ -134,8 +168,6 @@ The actual building of the model is also handled by a separate function.
 With this little example one can see why it is of good practice to separate this process into small chunks.
 
 ## evaluate:
-TODO EVALUATION CHANGED WITH new PR. This chapter needs to be modified.
-
 Within {py:meth}`~columnflow.ml.MLModel.train` one defined the trainings process of the ML model, while in {py:meth}`~columnflow.ml.MLModel.evaluate` its evaluation is defined.
 The corresponding `task` is {py:class}`~columnflow.tasks.ml.MLEvaluation` and depends on {py:class}`~columnflow.tasks.ml.MLTraining` and will therefore trigger a training if no training was performed before.
 
@@ -162,28 +194,6 @@ This flag determines if a certain `dataset` and shift combination can be used by
 The evaluations output is saved as parquet file with the name of the model as field name.
 To get the files path afterwards, rerun the same law command again, but with `--print-output 0` at the end.
 
-(init_of_ml_model)=
-# Step 2: Initialization of the machine learning model
-After defining all ABC function in Step 1, the model needs to be initialized with a unique `name`.
-The model gets access to hyper parameter settings by deriving from a configuration dictionary.
-All items of the dictionary are accessible as attribute from within the model.
-
-```{literalinclude} ./ml_code.py
-:language: python
-:start-at: hyperparameters =
-:end-at: test_model = TestModel.derive(
-```
-
-After the initialization, `law` needs to be informed in the `law.cfg` about the existence of the new machine learning model.
-Add in the `law.cfg`, in the section of your `analysis`, the path to the Python file where the model's definition and initialization are done to the entries: `ml_modules`, `inference_modules`. (TODO what exactly does these modules do?)
-The given path is relative to the analysis root directory.
-```bash
-[analysis]
-# any other config entries
-
-ml_modules: hbt.ml.{test}
-inference_modules: hbt.inference.test
-```
 # Commands to start training and evaluation
 To start the machine learning training `law run cf.MLTraining`, while for evaluation use `law run cf.MLEvaluation`.
 When not using the `config`, `calibrators`, `selector`s or `dataset`
