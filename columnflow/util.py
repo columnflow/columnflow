@@ -477,14 +477,14 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
     if pattern in ["*", "^.*$"]:
         return lambda s: True
 
-    # identify fnmatch patterns
-    if is_pattern(pattern):
-        return lambda s: fnmatch.fnmatch(s, pattern)
-
     # identify regular expressions
     if is_regex(pattern):
         cre = re.compile(pattern)
         return lambda s: cre.match(s) is not None
+
+    # identify fnmatch patterns
+    if is_pattern(pattern):
+        return lambda s: fnmatch.fnmatch(s, pattern)
 
     # fallback to string comparison
     return lambda s: s == pattern
@@ -627,7 +627,7 @@ class MockModule(object):
 
 class FunctionArgs(object):
     """
-    Leight-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
+    Light-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
     different functions with them.
     """
 
