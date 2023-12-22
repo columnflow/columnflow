@@ -34,3 +34,5 @@ data
 .data
 .law
 .setups
+.mypy_cache
+.vscode

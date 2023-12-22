@@ -7,7 +7,7 @@ Collection of general helpers and utilities.
 from __future__ import annotations
 
 __all__ = [
-    "UNSET", "env_is_remote", "env_is_dev", "primes",
+    "UNSET",
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
     "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
     "safe_div", "test_float", "test_int", "is_pattern", "is_regex", "pattern_matcher",
@@ -35,20 +35,12 @@ import law
 from law.util import InsertableDict  # noqa
 import luigi
 
+from columnflow import env_is_dev, env_is_remote
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
 #: Placeholder for an unset value.
 UNSET = object()
-
-#: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_JOB``).
-env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_JOB", "0"))
-
-#: Boolean denoting whether the environment is in a remote job on the WLCG (based on ``CF_ON_GRID``).
-env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "0"))
-
-#: Boolean denoting whether the environment is used for development (based on ``CF_DEV``).
-env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "0"))
 
 #: List of the first 100 primes.
 primes = [
@@ -602,9 +594,10 @@ class MockModule(object):
     or b) to provide type hints for documentation purposes.
 
     .. py:attribute:: _name
-       type: str
 
-       The name of the mock module.
+        type: str
+
+        The name of the mock module.
     """
 
     def __init__(self, name: str):
