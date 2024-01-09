@@ -53,7 +53,7 @@ processes defined for the datasets and added to the Campaign object associated t
 It is possible to get all root processes from a specific campaign using the
 {py:func}`~columnflow.config_util.get_root_processes_from_campaign()` function from columnflow.
 Examples of information carried by a process could be the cross section of the process, registered
-under the {external+order:py:attr}`order.process.Process.xsecs` attribute, and a color for the plotting scripts, which can be set using
+under the {external+order:py:attr}`order.process.Process.xsecs` attribute and further used for normalization_weights in columnflow, and a color for the plotting scripts, which can be set using
 the {external+order:py:attr}`order.mixins.ColorMixin.color1` attribute of the process.
 An example of a Process definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 More informations about processes can be found in the
