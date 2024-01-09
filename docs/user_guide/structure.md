@@ -245,6 +245,7 @@ An example of dataset definition with scale variations for this campaign would t
 import agc.config.processes as procs
 from order import DatasetInfo
 
+# cpn is the Campaign object defined in the previous code block
 cpn.add_dataset(
     name="tt_powheg",
     id=1,

@@ -7,7 +7,7 @@ metavariables of an Analysis. The order documentation and its {external+order:do
 provide an introduction to these different classes. In this section we will concentrate on the use
 of the order classes to define your analysis.
 
-The three classes main classes needed to define your analysis are
+The three main classes needed to define your analysis are
 {external+order:py:class}`order.analysis.Analysis`, {external+order:py:class}`order.config.Campaign`
 and {external+order:py:class}`order.config.Config`. Their purpose and definition can be found in
 [the Analysis, Campaign and Config section](https://python-order.readthedocs.io/en/latest/quickstart.html#analysis-campaign-and-config)
@@ -52,8 +52,10 @@ Config must correspond to the
 processes defined for the datasets and added to the Campaign object associated to the Config.
 It is possible to get all root processes from a specific campaign using the
 {py:func}`~columnflow.config_util.get_root_processes_from_campaign()` function from columnflow.
-As an example of information carried by a process, a color for the plotting scripts can be set using
+Examples of information carried by a process could be the cross section of the process, registered
+under the {external+order:py:attr}`order.process.Process.xsecs` attribute, and a color for the plotting scripts, which can be set using
 the {external+order:py:attr}`order.mixins.ColorMixin.color1` attribute of the process.
+An example of a Process definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 More informations about processes can be found in the
 {external+order:py:class}`order.process.Process` and the
 {external+order:doc}`quickstart` sections of the order documentation.
@@ -82,6 +84,8 @@ for info in dataset.info.values():
 Once the processes and datasets have both been added to the config, one can check that the root
 process of all datasets is part of any of the registered processes, using the columnflow function
 {py:func}`~columnflow.config_util.verify_config_processes()`.
+
+An example of a Dataset definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 
 
 ### Variables
@@ -151,7 +155,9 @@ add_category(
 ```
 
 It is recommended to always add an inclusive category with id=1 or name="incl" which is used
-in various places, e.g. for the inclusive cutflow plots and the "empty" selector
+in various places, e.g. for the inclusive cutflow plots and the "empty" selector.
+
+A more detailed description of the usage of categories in columnflow is given in the {ref}`Categories <categories>` section of this documentation.
 
 ### Channel
 
@@ -397,8 +403,12 @@ cfg.x.selector_step_groups = {
 
 With this group defined in the Config object, running over the "muon" and "jet" selector_steps in this order in a cutflow task can done with the argument `--selector-steps default`.
 
-All other parameters for which groups are possible are given below:
+All parameters for which groups are possible are given below:
 ```python
+# selector step groups for conveniently looping over certain steps
+# (used in cutflow tasks)
+cfg.x.selector_step_groups = {}
+
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 cfg.x.process_groups = {}
@@ -418,6 +428,30 @@ cfg.x.variable_groups = {}
 # shift groups for conveniently looping over certain shifts
 # (used during plotting)
 cfg.x.shift_groups = {}
+
+# general_settings groups for conveniently looping over different values for the general-settings parameter
+# (used during plotting)
+cfg.x.general_settings_groups = {}
+
+# process_settings groups for conveniently looping over different values for the process-settings parameter
+# (used during plotting)
+cfg.x.process_settings_groups = {}
+
+# variable_settings groups for conveniently looping over different values for the variable-settings parameter
+# (used during plotting)
+cfg.x.variable_settings_groups = {}
+
+# calibrator groups for conveniently looping over certain calibrators
+# (used during calibration)
+cfg.x.calibrator_groups = {}
+
+# producer groups for conveniently looping over certain producers
+# (used during the ProduceColumns task)
+cfg.x.producer_groups = {}
+
+# ml_model groups for conveniently looping over certain ml_models
+# (used during the machine learning tasks)
+cfg.x.ml_model_groups = {}
 ```
 
 ### Reduced Files size
