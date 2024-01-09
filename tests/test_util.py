@@ -101,6 +101,22 @@ class UtilTest(unittest.TestCase):
         })
         self.assertEqual(my_dict.C, [3, 4])
 
+        # DotDict can also be constructed from Iterable of key-value pairs
+        self.assertEqual(
+            DotDict([(1, 2), (3, 4)]),
+            DotDict({1: 2, 3: 4}),
+        )
+
+        # check that DotDict can not be created from something other than a dict-like object
+        with self.assertRaises(TypeError):
+            DotDict(1)
+        with self.assertRaises(TypeError):
+            # each element needs to be an Iterable of lenght 2
+            DotDict([1, 2])
+        with self.assertRaises(ValueError):
+            # each element needs to be an Iterable of lenght 2
+            DotDict([(1, 2, 3), (4, 5, 6)])
+
     def test_Derivable(self):
         class MyClass(Derivable):
             A = 1
