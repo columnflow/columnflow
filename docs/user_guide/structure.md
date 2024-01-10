@@ -61,7 +61,7 @@ For an overview of the tasks that are available with columnflow, please see the
 
 It should also be added that there are additional parameters specific for the tasks in columnflow,
 required by the fact that columnflow's purpose is for HEP analysis. These are the ```--analysis```
-and ```-config``` parameters, which defaults can be set in the law.cfg. These two parameters
+and ```--config``` parameters, which defaults can be set in the law.cfg. These two parameters
 respectively define the config file for the different analyses to be used (where the different
 analyses and their parameters should be defined) and the name of the config file for the specific
 analysis to be used.
