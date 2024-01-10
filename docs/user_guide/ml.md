@@ -95,7 +95,8 @@ In `uses` you define the columns that are needed by your machine learning model,
 In this case we want to preserve the input and target features, as well as some weights:
 ```{literalinclude} ./ml_code.py
 :language: python
-:pyobject: MLModel.uses
+:start-at: def uses(
+:end-at: return used_columns
 ```
 
 ## output:
