@@ -441,6 +441,10 @@ cfg.x.process_settings_groups = {}
 # (used during plotting)
 cfg.x.variable_settings_groups = {}
 
+# custom_style_config groups for conveniently looping over certain style configs
+# (used during plotting)
+cfg.x.custom_style_config_groups = {}
+
 # calibrator groups for conveniently looping over certain calibrators
 # (used during calibration)
 cfg.x.calibrator_groups = {}
