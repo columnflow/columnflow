@@ -51,7 +51,6 @@ These import structures are relative to the analysis root directory.
 ml_modules: hbt.ml.{test}
 inference_modules: hbt.inference.test
 ```
-
 # ABC functions
 In the following we will go through several abstract functions that you must overwrite, in order to be able to use your custom ML class with columnflow.
 
@@ -234,11 +233,14 @@ These functions take always the `config_inst` as first, and the requested_{confi
 If this function is defined the evaluation will use the externally-defined `config`,`calibrator`, `selector` or `producer`, while the training will use one defined in the function.
 
 In the following case, training will use a fixed selector and producer called `default`, and a custom-defined calibrator called `skip_jecunc`:
-
+the calibrator for the evaluation is provided by the used command.
+Take special note on the numerus of the functions name and of course of the type hint.
+The selector expects only a string, since we typically apply only 1 selection, while the calibrator or producers expect a sequence of strings.
+In this special case we use an own defined calibrator called "skip_jecunc", which is of course defined within the law.cfg.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def training_selector
-:end-at: return ["default"]
+:end-at: return "default"
 ```
 ```{literalinclude} ./ml_code.py
 :language: python
