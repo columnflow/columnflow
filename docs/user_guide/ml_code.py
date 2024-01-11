@@ -42,7 +42,6 @@ class TestModel(MLModel):
         super().__init__(*args, **kwargs)
         # your instance variables
 
-
     def setup(self):
         # dynamically add variables for the quantities produced by this model
         if f"{self.cls_name}.n_muon" not in self.config_inst.variables:
@@ -77,14 +76,15 @@ class TestModel(MLModel):
         return set(dataset_inst)
 
     def uses(self, config_inst: od.Config) -> set[Route | str]:
-        used_columns = set(self.input_features) | set(self.target_features) | {"normalization_weight",}
-        return used_columns
+        columns = set(self.input_features) | set(self.target_features) | {"normalization_weight"}
+        return columns
 
     def produces(self, config_inst: od.Config) -> set[Route | str]:
         # mark columns that you don't want to be filtered out
         ml_predictions = {f"{self.cls_name}.fold{fold}.{feature}"
             for fold in range(self.folds)
-            for feature in target_columns}
+            for feature in self.target_columns}
+
         util_columns = {f"{self.cls_name}.fold_indices"}
 
         preserved_columns = ml_predictions | util_columns
@@ -98,7 +98,6 @@ class TestModel(MLModel):
         # create directory at task.target, if it does not exist
         target = task.target(f"mlmodel_f{current_fold}of{max_folds}", dir=True)
         return target
-
 
     def open_model(self, target: law.FileSystemDirectoryTarget):
         # if a formatter exists use formatter
@@ -236,7 +235,7 @@ class TestModel(MLModel):
         requested_selector: str,
     ) -> str:
         # training uses the default selector
-        return ["default"]
+        return "default"
 
     def training_producers(
         self,
@@ -262,9 +261,7 @@ hyperparameters = {
     "epochs": 5,
 }
 
-
-
-
+# input and target features
 configuration_dict = {
     "input_features": (
         "n_jet",
