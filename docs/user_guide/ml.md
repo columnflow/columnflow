@@ -3,9 +3,9 @@
 In this section, the users will learn how to implement machine learning in their analysis with columnflow.
 
 # Configure your custom machine learning class:
-To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the MLModel class.
+To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
 This inheritance ensures the availability of functions to manage and access config and model instances, as well as the necessary producers.
-The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py::meth}`~columnflo.util.derive` e.g.
+The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py::meth}`~columnflow.util.DerivableMeta.derive`, e.g.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: test_model
