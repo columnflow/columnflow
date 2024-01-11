@@ -2,6 +2,13 @@
 
 In this section, the users will learn how to implement machine learning in their analysis with columnflow.
 
+# How training happens in Columnflow: K-fold cross validation 
+Machine learning in columnflow is implemented in a way that k-fold cross validation is enabled by default.
+In k-fold cross validation the dataset is split in k-parts of equal size.
+For each training, k-1 parts are used for the actual training and the remaining part is used for validation of the model.
+This process is repeated k-times, resulting in the training of k-model instances.
+In the end of the training columnflow will save all k-models, which are then usable for evaluation. 
+
 # Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
 This inheritance ensures the availability of functions to manage and access config and model instances, as well as the necessary producers.
@@ -15,8 +22,8 @@ The second argument in {py::meth}`~columnflow.util.DerivableMeta.derive` is a `c
 The `cls_dict` needs to be flat.
 The keys of the dictionary are set as class attributes and are therefore also accessible by using `self`.
 The configuration with `derive` has two main advantages:
-- manageability, since the dictionary can come from loading a config file and these can be changed fairly easy
-- flexibility, multiple settings require only different configuration files
+- ==manageability==, since the dictionary can come from loading a config file and these can be changed fairly easy
+- ==flexibility==, multiple settings require only different configuration files
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: hyperparameters =
@@ -76,8 +83,8 @@ This ensures that you properly use the correct dataset.
 
 ## produces:
 By default, intermediate columns are not saved within the columnflow framework but are filtered out afterwards.
-If you want to prevent certain columns from being filtered out, you need to tell columnflow by writing them in the {py:meth}`~columnflow.ml.MLModel.produces`function.
-This is always done by writing an iterable containing the name of the producer as string.
+If you want to prevent certain columns from being filtered out, you need to tell columnflow.
+You can tell columnsflow, by return the names of all columns that should be preserved, as strings within an interable, in {py:meth}`~columnflow.ml.MLModel.produces`.
 More information can be found in the official documentation about [producers](building_blocks/producers).
 
 In the following example, I want to preserve the number of muons and electrons, we also want to preserve the output of the neural network.
@@ -87,9 +94,6 @@ To avoid confusion, we are not producing the columns in this function, we only t
 :start-at: def produces
 :end-at: return preserved_columns
 ```
-ATTENTION: Sometimes one also wants to preserve the used input and target features, for example to make plots.
-Remember that you already have a copy of all the input and target features in your parquet files used for training.
-In General it is not advised to create a new separate copy of these, otherwise it can be convenient to have everything within one place.
 Thus, the choice to include these columns is your choice.
 
 ## uses:
