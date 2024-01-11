@@ -11,7 +11,7 @@ The name of your custom ML class can be arbitrary, since `law` accesses your mac
 :start-at: test_model
 :end-at: test_model
 ```
-The second argument in {py::meth}`~columnflo.util.derive` is a `cls_dict` which configure your subclass.
+The second argument in {py::meth}`~columnflow.util.DerivableMeta.derive` is a `cls_dict` which configures your subclass.
 The `cls_dict` needs to be flat.
 The keys of the dictionary are set as class attributes and are therefore also accessible by using self.
 The configuration with derive has 2 main advantages:
@@ -95,7 +95,8 @@ In `uses` you define the columns that are needed by your machine learning model,
 In this case we want to preserve the input and target features, as well as some weights:
 ```{literalinclude} ./ml_code.py
 :language: python
-:pyobject: MLModel.uses
+:start-at: def uses
+:end-at: return used_columns
 ```
 
 ## output:
@@ -177,7 +178,7 @@ The actual loading, of the trained model stored in the list, is defined in {py:m
 The awkward array `events` is loaded in chunks and contains the merged events of all folds.
 To filter out the test set, create a mask with `fold_indices`.
 
-If you want to preserve columns and write them out into a parquet file, append the columns to `events` using `set_ak_column` and return `events`.
+If you want to preserve columns and write them out into a parquet file, append the columns to `events` using {py:func}`~columnflow.columnar_util.set_ak_column` and return `events`.
 All columns not present in {py:meth}`~columnflow.ml.MLModel.produces` are then filtered out.
 
 In the following example, the models prediction as well as the number of muons and electrons are saved, all the other columns in events are thrown away, since they are not present in `use`:
