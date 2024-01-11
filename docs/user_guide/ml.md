@@ -13,8 +13,8 @@ The name of your custom ML class can be arbitrary, since `law` accesses your mac
 ```
 The second argument in {py::meth}`~columnflow.util.DerivableMeta.derive` is a `cls_dict` which configures your subclass.
 The `cls_dict` needs to be flat.
-The keys of the dictionary are set as class attributes and are therefore also accessible by using self.
-The configuration with derive has 2 main advantages:
+The keys of the dictionary are set as class attributes and are therefore also accessible by using `self`.
+The configuration with `derive` has two main advantages:
 - manageability, since the dictionary can come from loading a config file and these can be changed fairly easy
 - flexibility, multiple settings require only different configuration files
 ```{literalinclude} ./ml_code.py
@@ -24,7 +24,7 @@ The configuration with derive has 2 main advantages:
 ```
 One can also simply define class variables within the model.
 This is can be useful for attributes that don't change often, for example to define the datasets your model uses.
-Since these are also class attributes, they are accessible by using self and also shared between all instances of this model.
+Since these are also class attributes, they are accessible by using `self` and also shared between all instances of this model.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: class TestModel(
@@ -34,18 +34,19 @@ If you have settings that should not be shared between all instances, define the
 
 # After the configuration
 After the configuration of your ML model, `law` needs to be informed in the `law.cfg` about the existence of the new machine learning model.
-Add in your `law.cfg`, under the sections `analysis`, an `ml_modules`, where you point to the Python file where the model's definition and derivation happens.
-These path are relative to the analysis root directory.
+Add in your `law.cfg`, under the sections `analysis`, a `ml_modules` keyword, where you point to the Python module where the model's definition and derivation happens.
+These import structures are relative to the analysis root directory.
 ```bash
 [analysis]
 # any other config entries
 
+# if you want to include multiple things from the same parent module, you can use a comma-separated list in {}
 ml_modules: hbt.ml.{test}
 inference_modules: hbt.inference.test
 ```
 
 # ABC functions
-In following we will go through several abstract functions that you must overwrite, in order to be able to use your custom ML class with columnflow.
+In the following we will go through several abstract functions that you must overwrite, in order to be able to use your custom ML class with columnflow.
 
 ## sandbox:
 In {py:meth}`~columnflow.ml.MLModel.sandbox`, you specify which sandbox setup file should be sourced to setup the environment for ML usage.
@@ -56,14 +57,14 @@ The return value of {py:meth}`~columnflow.ml.MLModel.sandbox` is the path to you
 :end-at: return "bash::$HBT_BASE/sandboxes/venv_columnar_tf.sh"
 ```
 It is recommended to start the path with `bash::`, to indicate that you want to source the {py:meth}`~columnflow.ml.MLModel.sandbox` with `bash`.
-How to actual write the setup and requirement file can be found in the section about [setting up a sandbox](building_blocks/sandbox).
+How to actually write the setup and requirement files can be found in the section about [setting up a sandbox](building_blocks/sandbox).
 
 ## datasets:
-In the {py:meth}`~columnflow.ml.MLModel.datasets` function, you specify which datasets are important for your machine learning model and which dataset instance should be extracted from your config.
-To use this function your datasets needs to be added to your campaign, as defined by the [Order](https://python-order.readthedocs.io/en/latest/>) Module.
+In the {py:meth}`~columnflow.ml.MLModel.datasets` function, you specify which datasets are important for your machine learning model and which dataset instance(s) should be extracted from your config.
+To use this function your datasets needs to be added to your campaign, as defined by the [Order](https://python-order.readthedocs.io/en/latest/) Module.
 An example can be found [here](https://github.com/uhh-cms/cmsdb/blob/d83fb085d6e43fe9fc362df75bbc12816b68d413/cmsdb/campaigns/run2_2018_nano_uhh_v11/top.py).
 It is recommended to return this as `set`, to prevent double counting.
-In the following example all datasets given by the {ref} external config <init_of_ml_model> are taken, but also an additional is given.
+In the following example all datasets given by the {ref}`external config <init_of_ml_model>` are taken, but also an additional is given.
 Note how the name of each dataset is used to get an `dataset instance` from your `config instance`, this ensures that you properly use the correct dataset.
 ```{literalinclude} ./ml_code.py
 :language: python
