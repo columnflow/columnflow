@@ -25,7 +25,7 @@ law.contrib.load("tensorflow")
 
 
 class TestModel(MLModel):
-# shared between all model instances
+    # shared between all model instances
     datasets: dict = {
         "datasets_name": [
             "hh_ggf_bbtautau_madgraph",
@@ -87,11 +87,11 @@ class TestModel(MLModel):
         ml_predictions = {f"{self.cls_name}.fold{fold}.{feature}"
             for fold in range(self.folds)
             for feature in self.target_columns}
-        
-        # save indices used to create the folds 
+
+        # save indices used to create the folds
         util_columns = {f"{self.cls_name}.fold_indices"}
 
-        # combine all columns to a unique set 
+        # combine all columns to a unique set
         preserved_columns = ml_predictions | util_columns
         return preserved_columns
 
@@ -129,6 +129,8 @@ class TestModel(MLModel):
         return all_events
 
     def prepare_events(self, events):
+        # helper function to extract events and prepare them for training
+
         column_names = set(events.fields)
         input_features = set(self.input_features)
         target_features = set(self.target_features)
@@ -159,6 +161,7 @@ class TestModel(MLModel):
         return tf.convert_to_tensor(input_data), tf.convert_to_tensor(target_data)
 
     def build_model(self):
+        # helper function to handle model building
         x = tf.keras.Input(shape=(2,))
         a1 = tf.keras.layers.Dense(10, activation="elu")(x)
         y = tf.keras.layers.Dense(2, activation="softmax")(a1)
@@ -172,6 +175,7 @@ class TestModel(MLModel):
         output: law.FileSystemDirectoryTarget,
     ) -> None:
 
+        # use helper functions to define model, open input parquet files and prepare events
         # init a model structure
         model = self.build_model()
 
