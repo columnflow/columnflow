@@ -89,7 +89,8 @@ If you want to prevent certain columns from being filtered out, you need to tell
 You can tell columnflow, by let {py:meth}`~columnflow.ml.MLModel.produces` return the names of all columns that should be preserved, do this by define the names as strings within an interable.
 More information can be found in the official documentation about [producers](building_blocks/producers).
 
-In the following example, I want to preserve the number of muons and electrons, we also want to preserve the output of the neural network.
+In the following example, I want tell columnflow to preserve the output of the neural network, but also the fold indices, that are used to create the trainings and test fold.
+I do not store the input and target columns of that fold to save disk space, since they are already stored in the training set parquet file.
 To avoid confusion, we are not producing the columns in this function, we only tell columnflow to not throwing them away.
 ```{literalinclude} ./ml_code.py
 :language: python
@@ -224,12 +225,13 @@ law run cf.MLEvaluation \
 ```
 Most of these settings should sound familiar, if not look into the corresponding tutorial.
 `version` defines a setup configuration of your ML task, think more of a label than of an actual `version`.
-If you change the label, you
+If you change the version label, columnflow will rerun all dependencies that are unique for this label, this typically just means you will retrain a new model. You can then switch freely between both models version.
 
 # Optional useful functions:
 ## Separate training and evaluation configuration for configs, calibrators, selector and producers:
 By default chosen configs, calibrators, selector and producer are used for both training and evaluation.
 Sometimes one does not want to share the same environment or does not need all the columns in evaluation as in training.
+Another possible scenario is the usage of different selectors or datasets, to be able to explore different phase spaces. 
 This is where a separation of both comes in handy.
 
 To separate this behavior one need to define the training_{configs,calibrators, selector,producers}.
