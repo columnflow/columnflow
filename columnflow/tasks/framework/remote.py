@@ -621,11 +621,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # some htcondor setups require a "log" config, but we can safely use /dev/null by default
         config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
-        # use cc7 at CERN (https://batchdocs.web.cern.ch/local/submit.html)
+        # use el9 at CERN
         if self.htcondor_flavor == "cern":
-            config.custom_content.append(("requirements", "(OpSysAndVer =?= \"CentOS7\")"))
+            # https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
+            config.custom_content.append(("MY.WantOS", "el9"))
 
-        # same on naf with case insensitive comparison (https://confluence.desy.de/display/IS/BIRD)
+        # use cc7 on naf (https://confluence.desy.de/display/IS/BIRD)
         if self.htcondor_flavor == "naf":
             config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
 
