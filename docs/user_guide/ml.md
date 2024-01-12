@@ -7,7 +7,9 @@ Machine learning in columnflow is implemented in a way that k-fold cross validat
 In k-fold cross validation the dataset is split in k-parts of equal size.
 For each training, k-1 parts are used for the actual training and the remaining part is used for validation of the model.
 This process is repeated k-times, resulting in the training of k-model instances.
-In the end of the training columnflow will save all k-models, which are then usable for evaluation. 
+In the end of the training columnflow will save all k-models, which are then usable for evaluation.
+An overview and further details about possible variations of k-fold cross validation can be found in the [sci-kit documentation](https://scikit-learn.org/stable/modules/cross_validation.html).
+)
 
 # Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
@@ -22,8 +24,9 @@ The second argument in {py::meth}`~columnflow.util.DerivableMeta.derive` is a `c
 The `cls_dict` needs to be flat.
 The keys of the dictionary are set as class attributes and are therefore also accessible by using `self`.
 The configuration with `derive` has two main advantages:
-- ==manageability==, since the dictionary can come from loading a config file and these can be changed fairly easy
-- ==flexibility==, multiple settings require only different configuration files
+- manageability, since the dictionary can come from loading a config file and these can be changed fairly easy
+- flexibility, multiple settings require only different configuration files
+A possible configuration and model initialization for such a model could look like this:
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: hyperparameters =
@@ -31,7 +34,7 @@ The configuration with `derive` has two main advantages:
 ```
 One can also simply define class variables within the model.
 This is can be useful for attributes that don't change often, for example to define the datasets your model uses.
-Since these are also class attributes, they are accessible by using `self` and also shared between all instances of this model.
+Since these are also class attributes, they are accessible by using `self` and are also shared between all instances of this model.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: class TestModel(
@@ -83,7 +86,7 @@ This ensures that you properly use the correct dataset.
 ## produces:
 By default, intermediate columns are not saved within the columnflow framework but are filtered out afterwards.
 If you want to prevent certain columns from being filtered out, you need to tell columnflow.
-You can tell columnsflow, by return the names of all columns that should be preserved, as strings within an interable, in {py:meth}`~columnflow.ml.MLModel.produces`.
+You can tell columnflow, by let {py:meth}`~columnflow.ml.MLModel.produces` return the names of all columns that should be preserved, do this by define the names as strings within an interable.
 More information can be found in the official documentation about [producers](building_blocks/producers).
 
 In the following example, I want to preserve the number of muons and electrons, we also want to preserve the output of the neural network.

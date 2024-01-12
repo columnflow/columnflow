@@ -25,7 +25,7 @@ law.contrib.load("tensorflow")
 
 
 class TestModel(MLModel):
-
+# shared between all model instances
     datasets: dict = {
         "datasets_name": [
             "hh_ggf_bbtautau_madgraph",
@@ -41,6 +41,7 @@ class TestModel(MLModel):
     ):
         super().__init__(*args, **kwargs)
         # your instance variables
+        # these are exclusive to your model instance
 
     def setup(self):
         # dynamically add variables for the quantities produced by this model
@@ -81,12 +82,16 @@ class TestModel(MLModel):
 
     def produces(self, config_inst: od.Config) -> set[Route | str]:
         # mark columns that you don't want to be filtered out
+        # preserve the networks prediction of a specific feature for each fold
+        # cls_name would be the name of your model
         ml_predictions = {f"{self.cls_name}.fold{fold}.{feature}"
             for fold in range(self.folds)
             for feature in self.target_columns}
-
+        
+        # save indices used to create the folds 
         util_columns = {f"{self.cls_name}.fold_indices"}
 
+        # combine all columns to a unique set 
         preserved_columns = ml_predictions | util_columns
         return preserved_columns
 
