@@ -7,7 +7,7 @@ import unittest
 
 from columnflow.util import (
     create_random_name, maybe_import, MockModule, DotDict, Derivable,
-    safe_div, test_float, test_int, is_regex, is_pattern, pattern_matcher,
+    safe_div, try_float, try_int, is_regex, is_pattern, pattern_matcher,
 )
 
 
@@ -33,16 +33,16 @@ class UtilTest(unittest.TestCase):
         self.assertEqual(safe_div(10, 2), 5)
         self.assertEqual(safe_div(10, 0), 0)
 
-    def test_test_int_test_float(self):
-        for test_number in (test_int, test_float):
-            self.assertIsInstance(test_number(1), bool)
-            self.assertIsInstance(test_number("some_string"), bool)
-            self.assertTrue(test_number(1))
-            self.assertTrue(test_number(1.5))
-            self.assertTrue(test_number(-1.5))
-            self.assertFalse(test_number("some_string"))
-            self.assertFalse(test_number(1j))
-            self.assertFalse(test_number([1, 2]))
+    def test_try_int_try_float(self):
+        for try_number in (try_int, try_float):
+            self.assertIsInstance(try_number(1), bool)
+            self.assertIsInstance(try_number("some_string"), bool)
+            self.assertTrue(try_number(1))
+            self.assertTrue(try_number(1.5))
+            self.assertTrue(try_number(-1.5))
+            self.assertFalse(try_number("some_string"))
+            self.assertFalse(try_number(1j))
+            self.assertFalse(try_number([1, 2]))
 
     def test_is_regex(self):
         self.assertTrue(is_regex(r"^foo\d+.*$"))

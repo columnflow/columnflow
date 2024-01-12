@@ -14,7 +14,7 @@ from collections import OrderedDict
 
 import order as od
 
-from columnflow.util import maybe_import, test_int
+from columnflow.util import maybe_import, try_int
 
 math = maybe_import("math")
 hist = maybe_import("hist")
@@ -92,7 +92,7 @@ def apply_process_settings(
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
-        if test_int(scale_factor):
+        if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
             # TODO: there might be a prettier way for the label
@@ -116,7 +116,7 @@ def apply_variable_settings(
     # apply rebinning setting directly to histograms
     for var_inst in variable_insts:
         rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
-        if test_int(rebin_factor):
+        if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
