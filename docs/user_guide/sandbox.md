@@ -22,7 +22,7 @@ Begin your setup file with "venv," for example, `venv_YOUR_ENVIRONMENT.sh`, and 
 Begin your setup file by referencing an existing setup file within the `$CF_BASE/sandboxes/` directory.
 In this example, we start from a copy of `venv_columnar.sh`:
 We start from `venv_columnar.sh`
-```{literalinclude} $../sandboxes/venv_columnar.sh
+```{literalinclude} ../../sandboxes/venv_columnar.sh
 :language: bash
 ```
 You only need to change `CF_VENV_REQUIREMENTS` to point to your new requirement file

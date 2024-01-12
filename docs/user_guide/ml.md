@@ -103,7 +103,7 @@ In this case we want to request the input and target features, as well as some w
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def uses(
-:end-at: return used_columns
+:end-at: return columns
 ```
 
 ## output:
@@ -142,6 +142,7 @@ Using `self`, you have also access to the entire `analysis_inst`ance the `config
 
 With this information, you can call and prepare the columns to be used by the model for training.
 In the following example a very simple dummy trainings loop is performed using the Keras fit function.
+Within this function some helper functions are used that are further explained in the following chapter about good practices.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def train
