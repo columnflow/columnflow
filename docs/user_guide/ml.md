@@ -7,12 +7,9 @@ Machine learning in columnflow is implemented in a way that k-fold cross validat
 In k-fold cross validation the dataset is split in k-parts of equal size.
 For each training, k-1 parts are used for the actual training and the remaining part is used for validation of the model.
 This process is repeated k-times, resulting in the training of k-model instances.
-<<<<<<< HEAD
-In the end of the training columnflow will save all k-models, which are then usable for evaluation. 
-=======
 In the end of the training columnflow will save all k-models, which are then usable for evaluation.
 An overview and further details about possible variations of k-fold cross validation can be found in the [sci-kit documentation](https://scikit-learn.org/stable/modules/cross_validation.html).
->>>>>>> 3f69a28 (Apply suggestions from code review)
+)
 
 # Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
@@ -106,9 +103,8 @@ In `uses` you define the columns that are needed by your machine learning model,
 In this case we want to request the input and target features, as well as some weights:
 ```{literalinclude} ./ml_code.py
 :language: python
-:start-at: def uses
-)
-:end-at: return used_columns
+:start-at: def uses(
+:end-at: return columns
 ```
 
 ## output:
@@ -147,6 +143,7 @@ Using `self`, you have also access to the entire `analysis_inst`ance the `config
 
 With this information, you can call and prepare the columns to be used by the model for training.
 In the following example a very simple dummy trainings loop is performed using the Keras fit function.
+Within this function some helper functions are used that are further explained in the following chapter about good practices.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: def train
