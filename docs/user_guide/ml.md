@@ -5,7 +5,7 @@ In this section, the users will learn how to implement machine learning in their
 # How training happens in Columnflow: K-fold cross validation
 Machine learning in columnflow is implemented in a way that k-fold cross validation is enabled by default.
 In k-fold cross validation the dataset is split in k-parts of equal size.
-For each training, k-1 parts are used for the actual training and the remaining part is used for validation of the model.
+For each training, k-1 parts are used for the actual training and the remaining part is used to test the model.
 This process is repeated k-times, resulting in the training of k-model instances.
 In the end of the training columnflow will save all k-models, which are then usable for evaluation.
 An overview and further details about possible variations of k-fold cross validation can be found in the [sci-kit documentation](https://scikit-learn.org/stable/modules/cross_validation.html).
@@ -13,18 +13,19 @@ An overview and further details about possible variations of k-fold cross valida
 # Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
 This inheritance ensures the availability of functions to manage and access config and model instances, as well as the necessary producers.
-The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py::meth}`~columnflow.util.DerivableMeta.derive`, e.g.
+The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py:meth}`~columnflow.util.DerivableMeta.derive`, e.g.
 ```{literalinclude} ./ml_code.py
 :language: python
 :start-at: test_model
 :end-at: test_model
 ```
-The second argument in {py::meth}`~columnflow.util.DerivableMeta.derive` is a `cls_dict` which configures your subclass.
+The second argument in {py:meth}`~columnflow.util.DerivableMeta.derive` is a `cls_dict` which configures your subclass.
 The `cls_dict` needs to be flat.
 The keys of the dictionary are set as class attributes and are therefore also accessible by using `self`.
 The configuration with `derive` has two main advantages:
-- manageability, since the dictionary can come from loading a config file and these can be changed fairly easy
-- flexibility, multiple settings require only different configuration files
+- **manageability**, since the dictionary can come from loading a config file and these can be changed fairly easy
+- **flexibility**, multiple settings require only different configuration files
+
 A possible configuration and model initialization for such a model could look like this:
 ```{literalinclude} ./ml_code.py
 :language: python
@@ -142,7 +143,7 @@ The `self` argument in {py:meth}`~columnflow.ml.MLModel.train` referes to the in
 Using `self`, you have also access to the entire `analysis_inst`ance the `config_inst`ance of the current fold, and to all the derived parameters of your model.
 
 With this information, you can call and prepare the columns to be used by the model for training.
-In the following example a very simple dummy trainings loop is performed using the Keras fit function.
+In the following example a very simple dummy training loop is performed using the Keras fit function.
 Within this function some helper functions are used that are further explained in the following chapter about good practices.
 ```{literalinclude} ./ml_code.py
 :language: python
@@ -215,7 +216,8 @@ law run cf.MLTraining \
     --calibrators calibrator_name \
     --selector selector_name \
     --dataset datasets_1,dataset_2,dataset_3,...
-
+```
+```bash
 law run cf.MLEvaluation \
     --version your_current_version \
     --ml-model test_model_name \
