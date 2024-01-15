@@ -13,19 +13,20 @@ A Columnflow environment consists of two files:
 
 ## Where to Store the Corresponding Files
 
-For organizational purposes, it is recommended to store your setup and requirement files in `$CF_BASE/sandboxes/`.
+For organizational purposes, it is recommended to store your setup and requirement files in `$ANALYSIS_BASE/sandboxes/`, where `$ANALYSIS_BASE` is the root directory for your analysis.
+The latter is usually the abbreviated form you specified for your analysis in upper case, e.g. the root directory for analysis `hbt` is `$HBT_BASE`. 
 It is of good practice to follow the naming conventions used by Columnflow.
 Begin your setup file with "venv," for example, `venv_YOUR_ENVIRONMENT.sh`, and use only the environment name (without "venv") for your requirement file, e.g., `YOUR_ENVIRONMENT.txt`.
 
 ## The Setup File
 
-Begin your setup file by referencing an existing setup file within the `$CF_BASE/sandboxes/` directory.
+Begin your setup file by referencing an existing setup file within the `$ANALYSIS_BASE/sandboxes/` directory.
 In this example, we start from a copy of `venv_columnar.sh`:
 We start from `venv_columnar.sh`
 ```{literalinclude} ../../sandboxes/venv_columnar.sh
 :language: bash
 ```
-You only need to change `CF_VENV_REQUIREMENTS` to point to your new requirement file
+You only need to change `CF_VENV_REQUIREMENTS` to point to your new requirement file.
 
 ## The requirement file
 The requirement.txt uses pip notation.
@@ -41,7 +42,7 @@ dask-awkward~=2023.2
 For more information, refer to the official [pip documentation](https://pip.pypa.io/en/stable/reference/requirements-file-format/).
 
 Columnflow manages sandboxes by using a version number at the very first line (`# version ANY_FLOAT`).
-This version defines a software packet, and it is good practice to change the version number whenever an environment is altered.
+This version defines a software package, and it is good practice to change the version number whenever an environment is altered.
 
 ## How to Use the Namespace
 One may wonder how to work with namespaces of certain modules when it is not guaranteed that this module is available.
@@ -54,5 +55,5 @@ The input of {py:meth}`~columnflow.util.maybe_import` is the name of the module,
 # import tensorflow as tf
 tf = maybe_import("tensorflow")
 ```
-It is good practice to use `maybe_import` within the local namespace if you use the module once, and at the global namespace level if you intend to use it in multiple spaces.
+It is good practice to use `maybe_import` within the local namespace if you use the module once, and at the global namespace level if you intend to use multiple times.
 
