@@ -7,7 +7,7 @@ Example plot function.
 from __future__ import annotations
 
 from columnflow.types import Sequence
-from columnflow.util import maybe_import, test_float
+from columnflow.util import maybe_import, try_float
 from columnflow.plotting.plot_util import get_position, get_cms_label
 
 hist = maybe_import("hist")
@@ -56,7 +56,7 @@ def draw_stack(
     **kwargs,
 ) -> None:
     # check if norm is a number
-    if test_float(norm):
+    if try_float(norm):
         h = hist.Stack(*[i / norm for i in h])
     else:
         if not isinstance(norm, Sequence) and not isinstance(norm, np.ndarray):
