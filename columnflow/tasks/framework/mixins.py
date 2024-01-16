@@ -10,13 +10,12 @@ import gc
 import time
 import itertools
 from collections import Counter
-from typing import Iterable
 
 import luigi
 import law
 import order as od
 
-from columnflow.types import Sequence, Any
+from columnflow.types import Sequence, Any, Dict, Iterable
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -69,7 +68,7 @@ class CalibratorMixin(ConfigTask):
         :return: The initialized :py:class:`~columnflow.calibration.Calibrator`
             instance.
         """
-        calibrator_cls = Calibrator.get_cls(calibrator)
+        calibrator_cls: Calibrator = Calibrator.get_cls(calibrator)
         if not calibrator_cls.exposed:
             raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
 
@@ -140,7 +139,15 @@ class CalibratorMixin(ConfigTask):
         return shifts, upstream_shifts
 
     @classmethod
-    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+    def req_params(cls, inst: law.Task, **kwargs) -> Dict[str, Any]:
+        """
+        Returns the required parameters for the task.
+        It prefers `--calibrator` set on task-level via command line.
+
+        :param inst: The current task instance.
+        :param kwargs: Additional keyword arguments.
+        :return: Dictionary of required parameters.
+        """
         # prefer --calibrator set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"calibrator"}
 
@@ -156,8 +163,8 @@ class CalibratorMixin(ConfigTask):
     def calibrator_inst(self) -> Calibrator:
         """Access current :py:class:`~columnflow.calibration.Calibrator` instance.
 
-        Loads the current :py:class:`~columnflow.calibration.Calibrator` *calibrator_inst* from
-        the cache or initializes it.
+        This method loads the current :py:class:`~columnflow.calibration.Calibrator`
+        *calibrator_inst* from the cache or initializes it.
         If the calibrator requests a specific ``sandbox``, set this sandbox as
         the environment for the current :py:class:`~law.task.base.Task`.
 
@@ -172,11 +179,11 @@ class CalibratorMixin(ConfigTask):
 
         return self._calibrator_inst
 
-    def store_parts(self) -> law.util.InsertableDict:
+    def store_parts(self) -> law.util.InsertableDict[str, str]:
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
 
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
+        This method calls :py:meth:`store_parts` of the ``super`` class and inserts
         `{"calibrator": "calib__{self.calibrator}"}` before keyword ``version``.
         For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
 
@@ -187,6 +194,14 @@ class CalibratorMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        """
+        Finds the columns to keep based on the *collection*.
+
+        If the collection is `ALL_FROM_CALIBRATOR`, it includes the columns produced by the calibrator.
+
+        :param collection: The collection of columns.
+        :return: Set of columns to keep.
+        """
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_CALIBRATOR:
@@ -242,7 +257,10 @@ class CalibratorsMixin(ConfigTask):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params: law.util.InsertableDict) -> law.util.InsertableDict:
+    def resolve_param_values(
+        cls,
+        params: law.util.InsertableDict[str, Any],
+    ) -> law.util.InsertableDict[str, Any]:
         """Resolve values *params* and check against possible default values and
         calibrator groups.
 
@@ -304,7 +322,17 @@ class CalibratorsMixin(ConfigTask):
         return shifts, upstream_shifts
 
     @classmethod
-    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
+        """
+        Returns the required parameters for the task.
+
+        It prefers ``--calibrators`` set on task-level via command line.
+
+        :param inst: The current task instance.
+        :param kwargs: Additional keyword arguments.
+        :return: Dictionary of required parameters.
+        """
+
         # prefer --calibrators set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"calibrators"}
 
@@ -352,7 +380,15 @@ class CalibratorsMixin(ConfigTask):
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
-        columns = super().find_keep_columns(collection)
+        """
+        Finds the columns to keep based on the *collection*.
+
+        If the collection is ``ALL_FROM_CALIBRATORS``, it includes the columns produced by the calibrators.
+
+        :param collection: The collection of columns.
+        :return: Set of columns to keep.
+        """
+        columns: set[Route] = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_CALIBRATORS:
             columns |= set.union(*(
