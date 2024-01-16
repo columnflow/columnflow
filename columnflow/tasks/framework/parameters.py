@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import law
 
-from columnflow.util import test_float, DotDict
+from columnflow.util import try_float, DotDict
 
 
 class SettingsParameter(law.CSVParameter):
@@ -31,7 +31,7 @@ class SettingsParameter(law.CSVParameter):
     def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
-        if test_float(value):
+        if try_float(value):
             value = float(value)
         elif value.lower() == "true":
             value = True
