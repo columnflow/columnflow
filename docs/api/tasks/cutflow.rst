@@ -1,8 +1,9 @@
-``columnflow.tasks.cutflow``
-==============================
+``cutflow``
+===========
 
 .. currentmodule:: columnflow.tasks.cutflow
 .. automodule:: columnflow.tasks.cutflow
-   :autosummary:
-   :members:
-   :undoc-members:
+    :autosummary:
+    :members:
+    :undoc-members:
+
