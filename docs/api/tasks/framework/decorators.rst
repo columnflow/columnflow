@@ -1,5 +1,5 @@
-``columnflow.tasks.framework.decorators``
-===================================
+``decorators``
+==============
 
 .. currentmodule:: columnflow.tasks.framework.decorators
 .. automodule:: columnflow.tasks.framework.decorators
