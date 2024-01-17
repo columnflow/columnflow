@@ -1315,7 +1315,8 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :param ml_model_inst: The ML model instance.
         :param params: A dictionary of parameters that may contain the producers.
         :return: A tuple of tuples containing the resolved producers.
-        :raises Exception: If the number of producer sequences does not match the number of configs used by the ML model.
+        :raises Exception: If the number of producer sequences does not match
+            the number of configs used by the ML model.
         """
         producers = params.get("producers") or ((),)
 
