@@ -74,7 +74,7 @@ In the {py:meth}`~columnflow.ml.MLModel.datasets` function, you specify which da
 To use this function your datasets needs to be added to your campaign, as defined by the [Order](https://python-order.readthedocs.io/en/latest/) Module.
 An example can be found [here](https://github.com/uhh-cms/cmsdb/blob/d83fb085d6e43fe9fc362df75bbc12816b68d413/cmsdb/campaigns/run2_2018_nano_uhh_v11/top.py).
 It is recommended to return this as `set`, to prevent double counting.
-In the following example all datasets given by the {ref}`external config <init_of_ml_model>` are taken, but also an additional is given.
+In the following example all datasets given by the {ref}`external config <init_of_ml_model>` are taken, but also an additional dataset is given.
 Note how the name of each dataset is used to get a `dataset instance` from your `config instance`.
 This ensures that you properly use the correct dataset.
 ```{literalinclude} ./examples/ml_code.py
