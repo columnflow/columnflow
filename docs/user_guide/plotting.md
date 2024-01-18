@@ -91,7 +91,7 @@ and all processes included in the stack and can be disabled via the ```--skip_ra
 To change the text next to the label, you can add the ```--cms-label``` parameter.
 :::{dropdown} What are the ```cms-label``` options?
 In general, this parameter accepts all types of strings, but there is a set of shortcuts for commonly
-usedabels that will automatically be resolved:
+used labels that will automatically be resolved:
 ```{literalinclude} ../../columnflow/plotting/plot_all.py
 :language: python
 :start-at: label_options
@@ -124,8 +124,17 @@ to produce the following plot:
 :::
 ::::
 
-
 Parameters that only contain a single value can also be passed via the ```--general-settings```.
+:::{dropdown} What is the advantage of setting parameters via the ```--general-settings``` parameter?
+While there is no direct advantage of setting parameters via the ```--general-settings```, this
+parameter provides some convenience by allowing you to define defaults and groups in the config
+(will be discussed later in the guide).
+
+Additionally, this parameter allows you to set parameters on the command line that are not directly
+implemented as task parameters. This is especially helpful when you want to parametrize
+{ref}`custom plotting functions <custom_plot_function>`.
+:::
+
 We can also change the y-scale of the plot to a log scale by adding ```--yscale log``` and change some
 properties of specific variables via the ```variable-settings``` parameter. For example, we might
 want to create the plots of our two obserables in one call, but would like to try out a
@@ -362,7 +371,7 @@ law run cf.PlotVariables1D --version v1 \
     --processes tt,st --variables n_jet --view-cmd evince-previewer
 ```
 
-
+(custom_plot_function)=
 ## Using your own plotting function
 
 While all plotting tasks provide default plotting functions which implement many parameters to
