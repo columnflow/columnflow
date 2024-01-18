@@ -85,7 +85,7 @@ In the following, a few exemplary task calls are given to present the usage of o
 using the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
 
 Per default, the ```PlotVariables1D``` task creates one plot
-per variable with all Monte Carlo backgrounds being included
+per variable with all Monte Carlo processes being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
 and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
 To change the text next to the label, you can add the ```--cms-label``` parameter.
@@ -124,7 +124,10 @@ to produce the following plot:
 :::
 ::::
 
-Parameters that only contain a single value can also be passed via the ```--general-settings```.
+Parameters that only contain a single value can also be passed via the ```--general-settings```, which
+is a single comma-separated list of parameters, where the name and the value are separated via a `=`.
+The value of each parameter is automatically resolved to either a float, bool, or a string. When no `=`
+is present, the parameter is automatically set to True.
 :::{dropdown} What is the advantage of setting parameters via the ```--general-settings``` parameter?
 While there is no direct advantage of setting parameters via the ```--general-settings```, this
 parameter provides some convenience by allowing you to define defaults and groups in the config
