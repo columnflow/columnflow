@@ -15,7 +15,7 @@ An overview and further details about possible variations of k-fold cross valida
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
 This inheritance ensures the availability of functions to manage and access config and model instances, as well as the necessary producers.
 The name of your custom ML class can be arbitrary, since `law` accesses your machine learning model using a `cls_name` in {py:meth}`~columnflow.util.DerivableMeta.derive`, e.g.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: test_model
 :end-at: test_model
@@ -28,7 +28,7 @@ The configuration with `derive` has two main advantages:
 - **flexibility**, multiple settings require only different configuration files
 
 A possible configuration and model initialization for such a model could look like this:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: hyperparameters =
 :end-at: test_model = TestModel.derive(
@@ -36,7 +36,7 @@ A possible configuration and model initialization for such a model could look li
 One can also simply define class variables within the model.
 This is can be useful for attributes that don't change often, for example to define the datasets your model uses.
 Since these are also class attributes, they are accessible by using `self` and are also shared between all instances of this model.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: class TestModel(
 :end-at: your instance variables
@@ -61,7 +61,7 @@ In the following we will go through several abstract functions that you must ove
 ## sandbox:
 In {py:meth}`~columnflow.ml.MLModel.sandbox`, you specify which sandbox setup file should be sourced to setup the environment for ML usage.
 The return value of {py:meth}`~columnflow.ml.MLModel.sandbox` is the path to your shell (sh) file, e.g:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def sandbox
 :end-at: return "bash::$HBT_BASE/sandboxes/venv_columnar_tf.sh"
@@ -77,7 +77,7 @@ It is recommended to return this as `set`, to prevent double counting.
 In the following example all datasets given by the {ref}`external config <init_of_ml_model>` are taken, but also an additional is given.
 Note how the name of each dataset is used to get a `dataset instance` from your `config instance`.
 This ensures that you properly use the correct dataset.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def datasets
 :end-at: return set(dataset_inst)
@@ -93,7 +93,7 @@ More information can be found in the official documentation about [producers](bu
 In the following example, I want tell columnflow to preserve the output of the neural network, but also the fold indices, that are used to create the trainings and test fold.
 I do not store the input and target columns of that fold to save disk space, since they are already stored in the training set parquet file.
 To avoid confusion, we are not producing the columns in this function, we only tell columnflow to not throwing them away.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def produces
 :end-at: return preserved_columns
@@ -103,7 +103,7 @@ Thus, the choice to include these columns is your choice.
 ## uses:
 In `uses` you define the columns that are needed by your machine learning model, and are forwarded to the ML model during the execution of the various tasks
 In this case we want to request the input and target features, as well as some weights:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def uses(
 :end-at: return columns
@@ -115,7 +115,7 @@ In the {py:meth}`~columnflow.ml.MLModel.output` function, you define your local 
 Since machine learning in columnflow uses k-fold cross validation by default, it is a good idea to have a separate directory for each fold, and this should be reflected in the {py:meth}`~columnflow.ml.MLModel.output` path.
 It is of good practice to store your "machine-learning-instance" files within the directory of the models instance. To get the path to this directory use `task.target`.
 In this example we want to save each fold separately e.g:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def output
 :end-at: return target
@@ -128,7 +128,7 @@ This does not define how the model is build for {py:meth}`~columnflow.ml.MLModel
 
 The `target` parameter represents the local path to the models directory.
 In the the following example a TensorFlow model saved with Keras API is loaded and returned, and no further configuration happens:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def open_model
 :end-at: return loaded_model
@@ -146,7 +146,7 @@ Using `self`, you have also access to the entire `analysis_inst`ance the `config
 With this information, you can call and prepare the columns to be used by the model for training.
 In the following example a very simple dummy training loop is performed using the Keras fit function.
 Within this function some helper functions are used that are further explained in the following chapter about good practices.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def train
 :end-at: return
@@ -157,7 +157,7 @@ The reasoning behind this design decision is that in {py:meth}`~columnflow.ml.ML
 Another reason is that especially the preparation of events can take a large amount of code lines, making it messy to debug.
 In the following example it is shown how to define these helper functions.
 First of all one needs a function to handle the opening and combination of all parquet files.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def open_input_files
 :end-at: return all_events
@@ -166,13 +166,13 @@ First of all one needs a function to handle the opening and combination of all p
 In `prepare_events` we use the combined awkward array and filter out all columns we are not interested in during the training, to stay lightweight.
 Next we split the remaining columns into input and target column and bring these columns into the correct shape, data type, and also use certain preprocessing transformation.
 At the end we transform the awkward array into a Tensorflow tensor, something that our machine learning model can handle.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def prepare_events
 :end-at: return tf.convert_to_tensor
 ```
 The actual building of the model is also handled by a separate function.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def build_model
 :end-at: return model
@@ -197,7 +197,7 @@ In the following example, the models prediction as well as the number of muons a
 Don't confuse this behavior with the parameter `events_used_in_training`.
 This flag determines if a certain `dataset` and shift combination can be used by the task.
 
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def evaluate
 :end-at: return events
@@ -245,17 +245,17 @@ the calibrator for the evaluation is provided by the used command.
 Take special note on the numerus of the functions name and of course of the type hint.
 The selector expects only a string, since we typically apply only 1 selection, while the calibrator or producers expect a sequence of strings.
 In this special case we use an own defined calibrator called "skip_jecunc", which is of course defined within the law.cfg.
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def training_selector
 :end-at: return "default"
 ```
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def training_producers
 :end-at: return ["default"]
 ```
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def training_calibrators
 :end-at: return ["skip_jecunc"]
@@ -265,7 +265,7 @@ Setup is called at the end of `__init__` of your ML model.
 Within this function you can prepare operations that should stay open during the whole life time of your instance.
 A typical example for this would be the opening of a file or dynamically appending variables that are only relevant to your ML model, and no where else.
 In the following example definitions needed to plot variables that are created in ML model are added to the `config_inst`:
-```{literalinclude} ./ml_code.py
+```{literalinclude} ./examples/ml_code.py
 :language: python
 :start-at: def setup
 :end-at: return
