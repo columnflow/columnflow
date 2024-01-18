@@ -83,6 +83,8 @@ There are many different parameters implemented that allow customizing the style
 overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
 In the following, a few exemplary task calls are given to present the usage of our plotting parameters,
 using the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
+Most paramaters are shared between the different plotting tasks. The most important changes regarding
+the task parameters are discussed in separate sections for each type of plotting task.
 
 Per default, the ```PlotVariables1D``` task creates one plot
 per variable with all Monte Carlo processes being included
