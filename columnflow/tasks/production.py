@@ -7,18 +7,14 @@ Tasks related to producing new columns.
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
-)
+from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ProvideReducedEvents, MergeReducedEventsUser
 from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
     ProducerMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     ChunkedIOMixin,
     MergeReducedEventsUser,
     law.LocalWorkflow,
@@ -31,7 +27,7 @@ class ProduceColumns(
     reqs = Requirements(
         MergeReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
+        ProvideReducedEvents=ProvideReducedEvents,
     )
 
     # register shifts found in the chosen producer to this task
@@ -44,7 +40,7 @@ class ProduceColumns(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
         reqs["producer"] = self.producer_inst.run_requires()
@@ -53,11 +49,13 @@ class ProduceColumns(
 
     def requires(self):
         return {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.ProvideReducedEvents.req(self),
             "producer": self.producer_inst.run_requires(),
         }
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
         outputs = {}
 
@@ -104,7 +102,7 @@ class ProduceColumns(
 
         # prepare inputs for localization
         with law.localize_file_targets(
-            [inputs["events"]["collection"][0]["events"], *reader_targets.values()],
+            [inputs["events"]["events"], *reader_targets.values()],
             mode="r",
         ) as inps:
             # iterate over chunks of events and diffs

@@ -4,6 +4,8 @@
 Tasks related to reducing events for use on further tasks.
 """
 
+from __future__ import annotations
+
 import math
 import functools
 from collections import OrderedDict, defaultdict
@@ -259,7 +261,8 @@ class MergeReductionStats(
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; default: config "
+        description="the maximum file size of merged files; default unit is MB; when 0, the merging factor is not "
+        "actually calculated from input files, but it is assumed to be 1 (= no merging); default: config "
         "value 'reduced_file_size' or 512MB'",
     )
 
@@ -273,15 +276,20 @@ class MergeReductionStats(
         params = super().resolve_param_values(params)
 
         # check for the default merged size
-        if "merged_size" in params and params["merged_size"] in (None, law.NO_FLOAT):
-            merged_size = 512.0
-            if "config_inst" in params:
-                merged_size = params["config_inst"].x("reduced_file_size", merged_size)
-            params["merged_size"] = float(merged_size)
+        if "merged_size" in params:
+            if params["merged_size"] in (None, law.NO_FLOAT):
+                merged_size = 512.0
+                if "config_inst" in params:
+                    merged_size = params["config_inst"].x("reduced_file_size", merged_size)
+                params["merged_size"] = float(merged_size)
+            elif params["merged_size"] == 0:
+                params["n_inputs"] = 0
 
         return params
 
     def requires(self):
+        if self.merged_size == 0:
+            return []
         return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
 
     def output(self):
@@ -289,6 +297,21 @@ class MergeReductionStats(
 
     @law.decorator.safe_output
     def run(self):
+        # structure for statistics to save
+        stats = OrderedDict([
+            ("n_test_files", 0),
+            ("tot_size", 0),
+            ("avg_size", 0),
+            ("std_size", 0),
+            ("max_size_merged", 0),
+            ("merge_factor", 1),
+        ])
+
+        # assume a merging factor of 1 when the merged size is 0
+        if self.merged_size == 0:
+            self.output()["stats"].dump(stats, indent=4, formatter="json")
+            return
+
         # get all file sizes in bytes
         coll = self.input()["collection"]
         n = len(coll)
@@ -309,33 +332,26 @@ class MergeReductionStats(
             return avg, std
 
         # compute some stats
-        tot_size = sum(sizes)
-        avg_size, std_size = get_avg_std(sizes)
-        std_size = (sum((s - avg_size)**2 for s in sizes) / n)**0.5
-        max_size_merged = self.merged_size * 1024**2
-        merge_factor = int(round(max_size_merged / avg_size))
-        merge_factor = min(max(1, merge_factor), self.dataset_info_inst.n_files)
-        n_merged = int(math.ceil(self.dataset_info_inst.n_files / merge_factor))
+        stats["n_test_files"] = n
+        stats["tot_size"] = sum(sizes)
+        stats["avg_size"], stats["std_size"] = get_avg_std(sizes)
+        stats["std_size"] = (sum((s - stats["avg_size"])**2 for s in sizes) / n)**0.5
+        stats["max_size_merged"] = self.merged_size * 1024**2
+        stats["merge_factor"] = int(round(stats["max_size_merged"] / stats["avg_size"]))
+        stats["merge_factor"] = min(max(1, stats["merge_factor"]), self.dataset_info_inst.n_files)
+        n_merged = int(math.ceil(self.dataset_info_inst.n_files / stats["merge_factor"]))
 
         # save them
-        stats = OrderedDict([
-            ("n_test_files", n),
-            ("tot_size", tot_size),
-            ("avg_size", avg_size),
-            ("std_size", std_size),
-            ("max_size_merged", max_size_merged),
-            ("merge_factor", merge_factor),
-        ])
         self.output()["stats"].dump(stats, indent=4, formatter="json")
 
         # print them
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
-        self.publish_message(f"tot. size: {law.util.human_bytes(tot_size, fmt=True)}")
-        self.publish_message(f"avg. size: {law.util.human_bytes(avg_size, fmt=True)}")
-        self.publish_message(f"std. size: {law.util.human_bytes(std_size, fmt=True)}")
+        self.publish_message(f"tot. size: {law.util.human_bytes(stats['tot_size'], fmt=True)}")
+        self.publish_message(f"avg. size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
+        self.publish_message(f"std. size: {law.util.human_bytes(stats['std_size'], fmt=True)}")
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
-        self.publish_message(f"merging     : {merge_factor} into 1")
+        self.publish_message(f"merging     : {stats['merge_factor']} into 1")
         self.publish_message(f"files before: {self.dataset_info_inst.n_files}")
         self.publish_message(f"files after : {n_merged}")
         self.publish_message(40 * "-")
@@ -348,69 +364,10 @@ MergeReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEventsUser(DatasetTask):
-
-    # recursively merge 20 files into one
-    merge_factor = 20
-
-    # the initial default value of the cache_branch_map attribute
-    cache_branch_map_default = False
-
-    # upstream requirements
-    reqs = Requirements(
-        MergeReductionStats=MergeReductionStats,
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # cached value of the file_merging until it's positive
-        self._cached_file_merging = -1
-
-    @property
-    def file_merging(self):
-        """
-        Needed by DatasetTask to define the default branch map.
-        """
-        if self._cached_file_merging < 0:
-            # check of the merging stats is present and of so, set the cached file merging value
-            output = self.reqs.MergeReductionStats.req(self).output()
-            if output["stats"].exists():
-                self._cached_file_merging = output["stats"].load(formatter="json")["merge_factor"]
-
-                # as soon as the status file exists, cache the branch map
-                self.cache_branch_map = True
-
-        return self._cached_file_merging
-
-    @property
-    def merging_stats_exist(self):
-        return self.file_merging >= 1
-
-    def reduced_dummy_output(self):
-        # dummy output to be returned in case the merging stats are not present yet
-        return self.target("DUMMY_UNTIL_REDUCED_MERGING_STATS_EXIST")
-
-    @classmethod
-    def maybe_dummy(cls, func):
-        # meant to wrap output methods of tasks depending on merging stats
-        # to inject a dummy output in case the stats are not there yet
-        @functools.wraps(func)
-        def wrapper(self):
-            # when the merging stats do not exist yet, return a dummy target
-            if not self.merging_stats_exist:
-                return self.reduced_dummy_output()
-
-            # otherwise, bind the wrapped function and call it
-            return func.__get__(self, self.__class__)()
-
-        return wrapper
-
-
 class MergeReducedEvents(
     SelectorStepsMixin,
     CalibratorsMixin,
-    MergeReducedEventsUser,
+    DatasetTask,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -418,8 +375,8 @@ class MergeReducedEvents(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
+        MergeReductionStats=MergeReductionStats,
         ReduceEvents=ReduceEvents,
     )
 
@@ -430,6 +387,18 @@ class MergeReducedEvents(
 
         return super().is_sandboxed()
 
+    @law.workflow_property(setter=True, cache=True, empty_value=0)
+    def file_merging(self):
+        # check if the merging stats are present
+        stats = self.reqs.MergeReductionStats.req(self).output()["stats"]
+        return stats.load(formatter="json")["merge_factor"] if stats.exists() else 0
+
+    @law.dynamic_workflow_condition
+    def workflow_condition(self):
+        # the workflow shape can be constructed as soon as a file_merging is known
+        return self.file_merging > 0
+
+    @workflow_condition.create_branch_map
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
         return law.tasks.ForestMerge.create_branch_map(self)
@@ -463,7 +432,10 @@ class MergeReducedEvents(
         self._mark_merge_output_placeholder(dummy)
         return dummy
 
-    @MergeReducedEventsUser.maybe_dummy
+    @workflow_condition.output
+    def output(self):
+        return super().output()
+
     def merge_output(self):
         # use the branch_map defined in DatasetTask to compute the number of files after merging
         n_merged = len(DatasetTask.create_branch_map(self))
@@ -484,3 +456,131 @@ MergeReducedEventsWrapper = wrapper_factory(
     require_cls=MergeReducedEvents,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
+
+
+class ProvideReducedEvents(
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+    law.LocalWorkflow,
+):
+
+    skip_merging = luigi.BoolParameter(
+        default=False,
+        description="bypass MergedReducedEvents and directly require ReduceEvents with same workflow branching; "
+        "default: False",
+    )
+
+    force_merging = luigi.BoolParameter(
+        default=False,
+        description="force requiring MergedReducedEvents, regardless of the merging factor obtained by "
+        "MergeReductionStats; default: False",
+    )
+
+    # upstream requirements
+    reqs = Requirements(
+        ReduceEvents=ReduceEvents,
+        MergeReductionStats=MergeReductionStats,
+        MergeReducedEvents=MergeReducedEvents,
+    )
+
+    @law.workflow_property(setter=True, cache=True, empty_value=0)
+    def file_merging(self):
+        if self.skip_merging:
+            return 1
+
+        # check if the merging stats are present
+        stats = self.reqs.MergeReductionStats.req(self).output()["stats"]
+        return stats.load(formatter="json")["merge_factor"] if stats.exists() else 0
+
+    @law.dynamic_workflow_condition
+    def workflow_condition(self):
+        # the workflow shape can be constructed as soon as a file_merging is known
+        return self.file_merging > 0
+
+    def _req_reduced_events(self, **params) -> law.Task:
+        return self.reqs.ReduceEvents.req(self, **params)
+
+    def _req_merged_reduced_events(self, **params) -> law.Task:
+        if self.is_workflow():
+            params["tree_index"] = -1
+            params["branch"] = 0
+        else:
+            _exclude = params.pop("_exclude", None)
+            _exclude = set() if _exclude is None else law.util.make_set(_exclude)
+            _exclude |= {"branch"}
+            params["tree_index"] = self.branch
+            params["workflow"] = "local"
+
+        return self.reqs.MergeReducedEvents.req(self, **params)
+
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        # when skipping merging, require the reduced events directly
+        # when forcing merging, require the merged events
+        # otherwise, do not register workflow requirements but yield them dynamically in local_workflow_pre_run()
+        if self.skip_merging:
+            if not self.pilot:
+                reqs["events"] = self._req_reduced_events()
+        elif self.force_merging:
+            reqs["events"] = self._req_merged_reduced_events()
+
+        return reqs
+
+    def requires(self):
+        # same as for workflow requirements, declare static requirements when a decision is pre-set, and
+        # otherwise let run() yield dynamic ones
+        if self.skip_merging:
+            return self._req_reduced_events()
+        if self.force_merging:
+            return self._req_merged_reduced_events()
+        return []
+
+    @workflow_condition.output
+    def output(self):
+        if self.skip_merging or self.force_merging:
+            return self.requires().output()
+
+        # declare the output to be the one of the upstream task
+        return (self._req_reduced_events() if self.file_merging == 1 else self._req_merged_reduced_events()).output()
+
+    def _yield_dynamic_deps(self):
+        # do nothing if a decision was pre-set
+        if self.skip_merging or self.force_merging:
+            return
+
+        if self.file_merging == 0:
+            yield self.reqs.MergeReductionStats.req(self)
+
+        yield self._req_reduced_events() if self.file_merging == 1 else self._req_merged_reduced_events()
+
+    def local_workflow_pre_run(self):
+        return self._yield_dynamic_deps()
+
+    def run(self):
+        return self._yield_dynamic_deps()
+
+
+class MergeReducedEventsUser(
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+    law.BaseWorkflow,
+):
+    # upstream requirements
+    reqs = Requirements(
+        ProvideReducedEvents=ProvideReducedEvents,
+    )
+
+    @law.workflow_property(setter=True, cache=True, empty_value=0)
+    def file_merging(self):
+        return self.reqs.ProvideReducedEvents.req(self).file_merging
+
+    @law.dynamic_workflow_condition
+    def workflow_condition(self):
+        return self.reqs.ProvideReducedEvents.req(self).workflow_condition()
+
+    @workflow_condition.create_branch_map
+    def create_branch_map(self):
+        return super().create_branch_map()

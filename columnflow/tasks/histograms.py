@@ -15,7 +15,7 @@ from columnflow.tasks.framework.mixins import (
     ShiftSourcesMixin, EventWeightMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ProvideReducedEvents, MergeReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
@@ -25,8 +25,6 @@ class CreateHistograms(
     VariablesMixin,
     MLModelsMixin,
     ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     EventWeightMixin,
     ChunkedIOMixin,
     MergeReducedEventsUser,
@@ -39,7 +37,7 @@ class CreateHistograms(
     reqs = Requirements(
         MergeReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
+        ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
     )
@@ -59,7 +57,7 @@ class CreateHistograms(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         if not self.pilot:
             if self.producer_insts:
@@ -77,9 +75,7 @@ class CreateHistograms(
         return reqs
 
     def requires(self):
-        reqs = {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-        }
+        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -95,11 +91,11 @@ class CreateHistograms(
 
         return reqs
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
-        return {
-            "hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle"),
-        }
+        return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -147,7 +143,7 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0]["events"].path]
+        files = [inputs["events"]["events"].path]
         if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_model_insts:
