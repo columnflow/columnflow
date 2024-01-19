@@ -562,7 +562,7 @@ class ProvideReducedEvents(
         return self._yield_dynamic_deps()
 
 
-class MergeReducedEventsUser(
+class ReducedEventsUser(
     SelectorStepsMixin,
     CalibratorsMixin,
     DatasetTask,

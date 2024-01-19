@@ -9,14 +9,14 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import ProvideReducedEvents, MergeReducedEventsUser
+from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
 from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
     ProducerMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -25,7 +25,7 @@ class ProduceColumns(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProvideReducedEvents=ProvideReducedEvents,
     )
@@ -53,7 +53,7 @@ class ProduceColumns(
             "producer": self.producer_inst.run_requires(),
         }
 
-    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
 
     @workflow_condition.output
     def output(self):

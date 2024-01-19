@@ -26,7 +26,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
-from columnflow.tasks.reduction import ProvideReducedEvents, MergeReducedEventsUser
+from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
 
@@ -38,7 +38,7 @@ class PrepareMLEvents(
     MLModelDataMixin,
     ProducersMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -48,7 +48,7 @@ class PrepareMLEvents(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
@@ -132,7 +132,7 @@ class PrepareMLEvents(
 
         return reqs
 
-    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
 
     @workflow_condition.output
     def output(self):
@@ -594,7 +594,7 @@ class MLEvaluation(
     MLModelMixin,
     ProducersMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -607,7 +607,7 @@ class MLEvaluation(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         MLTraining=MLTraining,
         ProvideReducedEvents=ProvideReducedEvents,
@@ -703,7 +703,7 @@ class MLEvaluation(
 
         return reqs
 
-    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
 
     @workflow_condition.output
     def output(self):

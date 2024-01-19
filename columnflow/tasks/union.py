@@ -10,7 +10,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import ProvideReducedEvents, MergeReducedEventsUser
+from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
@@ -20,7 +20,7 @@ class UniteColumns(
     MLModelsMixin,
     ProducersMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -34,7 +34,7 @@ class UniteColumns(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
@@ -79,7 +79,7 @@ class UniteColumns(
 
         return reqs
 
-    workflow_condition = MergeReducedEventsUser.workflow_condition.copy()
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
 
     @workflow_condition.output
     def output(self):
