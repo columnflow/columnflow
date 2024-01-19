@@ -2,78 +2,80 @@
 
 ## Generalities
 
-The [order](https://github.com/riga/order) package defines several classes to implement the
-metavariables of an Analysis. The order documentation and its {external+order:doc}`quickstart` section
-provide an introduction to these different classes. In this section we will concentrate on the use
-of the order classes to define your analysis.
+The [order](https://github.com/riga/order) package defines several classes to implement the metavariables of an Analysis.
+The order documentation and its {external+order:doc}`quickstart` section provide an introduction to these different classes.
+In this section we will concentrate on the use of the order classes to define your analysis.
 
-The three main classes needed to define your analysis are
-{external+order:py:class}`order.analysis.Analysis`, {external+order:py:class}`order.config.Campaign`
-and {external+order:py:class}`order.config.Config`. Their purpose and definition can be found in
-[the Analysis, Campaign and Config section](https://python-order.readthedocs.io/en/latest/quickstart.html#analysis-campaign-and-config)
-of the Quickstart section of the order documentation.
+The three main classes needed to define your analysis are {external+order:py:class}`order.analysis.Analysis`, {external+order:py:class}`order.config.Campaign` and {external+order:py:class}`order.config.Config`.
+Their purpose and definition can be found in [the Analysis, Campaign and Config section](https://python-order.readthedocs.io/en/latest/quickstart.html#analysis-campaign-and-config) of the Quickstart section of the order documentation.
 
 After defining your Analysis object and your Campaign object(s), you can use the command
 ```python
 cfg = analysis.add_config(campaign, name=your_config_name, id=your_config_id)
 ```
-to create the
-new Config object `cfg`, which will be
-associated to both the Analysis object and the Campaign object needed for its creation. As the
-Config object should contain the analysis-dependent information related to a certain campaign, it
-should contain most of the information needed for running your analysis. Therefore, in this section,
-the Config parameters required by Columnflow and some convenience parameters will be presented.
+to create the new Config object `cfg`, which will be associated to both the Analysis object and the Campaign object needed for its creation.
+As the Config object should contain the analysis-dependent information related to a certain campaign, it should contain most of the information needed for running your analysis.
+Therefore, in this section, the Config parameters required by Columnflow and some convenience parameters will be presented.
 
 To start your analysis, do not forget to use the already existing analysis template in the
 `analysis_templates/cms_minimal` Git directory and its
 [config](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py).
 
 
-The Config saves informations under two general formats: the objects
-from the order package, which are necessary for your analysis to run in columnflow, and the
-additional parameters, which are saved under the auxiliary key, accessible through the "x" key.
-Unlike the general order package objects and while several names for parameters in the auxiliary
-field do already have a meaning in columnflow and should respect the format used in columnflow,
-the auxiliary field can contain any kind of
-parameter the user wants to save and reuse for parts of the analysis. These two general formats are
-presented below.
+The Config saves information under two general formats: the objects from the order package, which are necessary for your analysis to run in columnflow, and the additional parameters, which are saved under the auxiliary key, accessible through the "x" key.
+In principle, the auxiliary field can contain any parameter the user wants to save and reuse for parts of the analysis.
+However, several names in the auxiliary field do already have a meaning in columnflow and their values should respect the format used in columnflow.
+These two general formats are presented below.
 
-It is generally advised to create functions to separate the different parts of the filling of the Config object, especially as some parts will not change very often once the analysis is set up (e.g. luminosity), while others will be changed quite often, e.g. each time new variables are created. An example of such a separation can be found in the existing [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau).
+Additionally, please note that some columnflow objects, like some Calibrators and Producers, require specific information that is needed to be accessible with predefined keywords.
+As explained in the {ref}`object-specific variables section <object_specific_variables_section>`, please check the documentation of these objects before using them.
+
+
+It is generally advised to use functions to set up Config objects.
+This enables easy and reliable reusage of parts of your analysis that are the same or similar between Campaigns (e.g. parts of the uncertainty model).
+Additionally, other parts of the analysis that might be changed quite often, e.g. the definition of variables, can be defined separately, thus improving the overall organization and readability of your code.
+An example of such a separation can be found in the existing [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau).
 
 
 ## Parameters from the order package (required)
 
 ### Processes
 
-The physical processes to be investigated in the analysis. These should be saved as objects of the
-{external+order:py:class}`order.process.Process` class and added to the Config object using its
-{external+order:py:meth}`order.config.Config.add_process()` method. The processes added to the
-Config must correspond to the
-processes defined for the datasets and added to the Campaign object associated to the Config.
-It is possible to get all root processes from a specific campaign using the
-{py:func}`~columnflow.config_util.get_root_processes_from_campaign()` function from columnflow.
-Examples of information carried by a process could be the cross section of the process, registered
-under the {external+order:py:attr}`order.process.Process.xsecs` attribute and further used for normalization_weights in columnflow, and a color for the plotting scripts, which can be set using
-the {external+order:py:attr}`order.mixins.ColorMixin.color1` attribute of the process.
+The physical processes to be included in the analysis.
+These should be saved as objects of the {external+order:py:class}`order.process.Process` class and added to the Config object using its {external+order:py:meth}`order.config.Config.add_process()` method.
+An example is given in the columnflow analysis template:
+
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: process_names = [
+:end-at: proc = cfg.add_process(procs.get(process_name))
+```
+
+Additionally, these processes must have corresponding datasets that are to be added to the Config as well (see [next section](#datasets)).
+It is possible to get all root processes from a specific campaign using the {py:func}`~columnflow.config_util.get_root_processes_from_campaign()` function from columnflow.
+Examples of information carried by a process could be the cross section of the process, registered under the {external+order:py:attr}`order.process.Process.xsecs` attribute and further used for {py:class}`~columnflow.production.normalization.normalization_weights` in columnflow, and a color for the plotting scripts, which can be set using the {external+order:py:attr}`order.mixins.ColorMixin.color1` attribute of the process.
 An example of a Process definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
-More informations about processes can be found in the
-{external+order:py:class}`order.process.Process` and the
-{external+order:doc}`quickstart` sections of the order documentation.
+More information about processes can be found in the {external+order:py:class}`order.process.Process` and the {external+order:doc}`quickstart` sections of the order documentation.
 
 
 ### Datasets
 
-The actual datasets to be processed in the analysis. These should be saved as objects of the
-{external+order:py:class}`order.dataset.Dataset` class and added to the Config object using its
-{external+order:py:meth}`order.config.Config.add_dataset()` method. The datasets added to the
-Config object must correspond to the
-datasets added to the Campaign object associated to the Config object. They are accessible through
-the {external+order:py:meth}`order.config.Campaign.get_dataset()` method of the Campaign class. The
-Dataset objects should contain for example informations on the number of files and number of events
-present in a Dataset as well as its key and if it is data or a Monte-Carlo dataset. It is also
-possible to change informations of a dataset in the config script. An example would be reducing the
-number of files to process for test purposes in a specific test config. This could be done with the
-following lines of code:
+The actual datasets to be processed in the analysis.
+These should be saved as objects of the {external+order:py:class}`order.dataset.Dataset` class and added to the Config object using its {external+order:py:meth}`order.config.Config.add_dataset()` method.
+The datasets added to the Config object must correspond to the datasets added to the Campaign object associated to the Config object.
+They are accessible through the {external+order:py:meth}`order.config.Campaign.get_dataset()` method of the Campaign class.
+An example is given in the columnflow analysis template:
+
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: dataset_names = [
+:end-at: dataset = cfg.add_dataset(campaign.get_dataset(dataset_name))
+```
+The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in [the section on custom retrieval of datasets](#custom-retrieval-of-dataset-files)) and wether it contains observed or simulated data.
+
+It is also possible to change information of a dataset in the config script.
+An example would be reducing the number of files to process for test purposes in a specific test config.
+This could be done with the following lines of code:
 e.g.
 ```python
 n_files_max = 5
@@ -81,20 +83,16 @@ for info in dataset.info.values():
     info.n_files = min(info.n_files, n_files_max)
 ```
 
-Once the processes and datasets have both been added to the config, one can check that the root
-process of all datasets is part of any of the registered processes, using the columnflow function
-{py:func}`~columnflow.config_util.verify_config_processes()`.
+Once the processes and datasets have both been added to the config, one can check that the root process of all datasets is part of any of the registered processes, using the columnflow function {py:func}`~columnflow.config_util.verify_config_processes`.
 
 An example of a Dataset definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 
 
 ### Variables
 
-In order to create histograms out of the processed datasets, columnflow uses
-{external+order:py:class}`order.variable.Variable`s. These
-Variables need to be added to the config using the
-function {external+order:py:meth}`order.config.Config.add_variable`. The standard syntax is as
-follows for `cfg` the Config object:
+In order to create histograms out of the processed datasets, columnflow uses {external+order:py:class}`order.variable.Variable`s.
+These Variables need to be added to the config using the function {external+order:py:meth}`order.config.Config.add_variable`.
+The standard syntax is as follows for the Config object `cfg`:
 
 ```python
 cfg.add_variable(
@@ -119,66 +117,55 @@ cfg.add_variable(
 )
 ```
 
-In histogramming tasks such as
-{py:class}`~columnflow.tasks.histograms.CreateHistograms`, one histogram is created per Variable
-given via the ```--variables``` argument, accessing information from columns based on
-the `expression` of the Variable and storing them in histograms with binning defined
-via the `binning` argument of the Variable.
+It is worth mentioning, that you do not need to select a specific jet in the `expression` argument (here with `Jet.pt[:,0]`), you can get an flattened histogram for all jets in all events with `expression="Jet.pt"`.
 
-The list of possible keyword arguments can be found in the order documentation for the class
-{external+order:py:class}`order.variable.Variable`. The values in the ```expression``` argument can
-be either a one-dimensional or a more dimensional array. In this second case the information is
-flattened before plotting. It is to be mentioned that
-{py:attr}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value and
-corresponds to the value ```-9999.0```.
+In histogramming tasks such as {py:class}`~columnflow.tasks.histograms.CreateHistograms`, one histogram is created per Variable given via the ```--variables``` argument, accessing information from columns based on the `expression` of the Variable and storing them in histograms with binning defined via the `binning` argument of the Variable.
+
+The list of possible keyword arguments can be found in the order documentation for the class {external+order:py:class}`order.variable.Variable`.
+The values in the ```expression``` argument can be either a one-dimensional or a more dimensional array.
+In this second case the information is flattened before plotting.
+It is to be mentioned that {py:attr}`~columnflow.columnar_util.EMPTY_FLOAT` is a columnflow internal null value.
 
 ### Category
 
 Categories built to investigate specific parts of the phase-space, for example for plotting.
-These objects are described in [the Channel and Category](https://python-order.readthedocs.io/en/latest/quickstart.html#channel-and-category)
-part of the Quickstart section of the order documentation. A specificity of columnflow regarding
-this class is the fact that the `selection` argument of this object is expected to take the name of
-an object of the {py:class}`~columnflow.categorization.Categorizer` class instead of a boolean
-expression in a string format.
-Adding a category to the Config object is possible through the
-{py:func}`~columnflow.config_util.add_category()` method. An example for an inclusive category with
-the Categorizer `cat_incl` defined in the cms_minimal analysis template is given below:
+These objects are described in [the Channel and Category](https://python-order.readthedocs.io/en/latest/quickstart.html#channel-and-category) part of the Quickstart section of the order documentation.
+You can add such a category with the {py:func}`~columnflow.config_util.add_category()` method.
+When adding this object to your Config instance, the `selection` argument is expected to take the name of an object of the {py:class}`~columnflow.categorization.Categorizer` class instead of a boolean expression in a string format.
+An example for an inclusive category with the Categorizer `cat_incl` defined in the cms_minimal analysis template is given below:
 
-```python
-add_category(
-    cfg,
-    id=1,
-    name="incl",
-    selection="cat_incl",
-    label="inclusive",
-)
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: add_category(
+:end-before: )
 ```
 
-It is recommended to always add an inclusive category with id=1 or name="incl" which is used
-in various places, e.g. for the inclusive cutflow plots and the "empty" selector.
+It is recommended to always add an inclusive category with ``id=1`` or ``name="incl"`` which is used in various places, e.g. for the inclusive cutflow plots and the "empty" selector.
 
 A more detailed description of the usage of categories in columnflow is given in the {ref}`Categories <categories>` section of this documentation.
 
 ### Channel
 
-Similarly to categories, Channels are built to investigate specific parts of the phase space and are
-described in the [Channel and Category](https://python-order.readthedocs.io/en/latest/quickstart.html#channel-and-category)
-part of the Quickstart section of the order documentation. They can be added to the Config object using
-{external+order:py:meth}`order.config.Config.add_channel()`.
+Similarly to categories, Channels are built to investigate specific parts of the phase space and are described in the [Channel and Category](https://python-order.readthedocs.io/en/latest/quickstart.html#channel-and-category) part of the Quickstart section of the order documentation.
+They can be added to the Config object using {external+order:py:meth}`order.config.Config.add_channel()`.
 
 ### Shift
 
-In order to implement systematic variations in the Config object, the
-{external+order:py:class}`order.shift.Shift` class can be used. Implementing systematic variations
-using shifts can take different forms depending on the kind of systematic variation involved,
-therefore a complete section specialized in the description of these implementations is to be found
-in (TODO: add link Shift section). Adding a Shift object to the Config object happens through the
-{external+order:py:meth}`order.config.Config.add_shift()` function.
+In order to implement systematic variations in the Config object, the {external+order:py:class}`order.shift.Shift` class can be used.
+Implementing systematic variations using shifts can take different forms depending on the kind of systematic variation involved, therefore a complete section specialized in the description of these implementations is to be found in (TODO: add link Shift section).
+Adding a Shift object to the Config object happens through the {external+order:py:meth}`order.config.Config.add_shift()` function.
+An example is given in the columnflow analysis template:
 
-Often, shifts are related to auxiliary parameters of the Config, like the name of the scale
-factors involved, or in the case of corrections accessible through external files, the paths of
-these files.
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: cfg.add_shift(name="nominal", id=0)
+:end-at: cfg.add_shift(name="nominal", id=0)
+```
 
+
+Often, shifts are related to auxiliary parameters of the Config, like the name of the scale factors involved, or the paths of source files in case the shift requires external information.
+
+<!--
 
 Notes for the Shift section:
 
@@ -189,25 +176,24 @@ calibrations e.g. cfg.x.jec, or weights through producer e.g. scale factors
 
 -> mention external files
 
+-->
+
 ## Auxiliary Parameters (optional)
 
-In principle, the auxiliaries of the Config may contain any kind of variables, but there are
-several keys with a special meaning for columnflow, for which you would need to respect the expected
-format. These are presented below at first, followed by a few examples of the kind of information
-you might want to save in the auxiliary part of the config on top of these.
+In principle, the auxiliaries of the Config may contain any kind of variables.
+However, there are several keys with a special meaning for columnflow, for which you would need to respect the expected format.
+These are presented below at first, followed by a few examples of the kind of information you might want to save in the auxiliary part of the config on top of these.
+If you would like to use modules that ship with Columnflow, it is generally a good idea to first check their documentation to understand what kind of information you need to specify in the auxiliaries of your Config object for a successful run.
 
 ### Keep_columns
 
-During the Task {py:class}`~columnflow.tasks.reduction.ReduceEvents` new files in parquet format
-containing all remaining events and objects after the selections are created. If the auxiliary
-argument `keep_columns`, accessible through `cfg.x.keep_columns`, exists in the Config object, only
-the columns declared explicitely will be kept after the reduction. Actually, several tasks can make
-use of such an argument in the Config object for the reduction of their output. Therefore, the
-`keep_columns` argument expects a {py:class}`~columnflow.util.DotDict` containing the name of the
-tasks (with the `cf.` prefix) for which such a reduction should be applied as keys and the set of
-columns to be kept in the output of this task as values.
+During the Task {py:class}`~columnflow.tasks.reduction.ReduceEvents` new files containing all remaining events and objects after the selections are created in parquet format.
+If the auxiliary argument `keep_columns`, accessible through `cfg.x.keep_columns`, exists in the Config object, only the columns declared explicitely will be kept after the reduction.
+Actually, several tasks can make use of such an argument in the Config object for the reduction of their output.
+Therefore, the `keep_columns` argument expects a {py:class}`~columnflow.util.DotDict` containing the name of the tasks (with the `cf.` prefix) for which such a reduction should be applied as keys and the set of columns to be kept in the output of this task as values.
 
 An example is given below:
+
 ```python
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
@@ -234,6 +220,14 @@ For easier handling of the list of columns, the class {py:class}`~columnflow.col
 It defines several enumerations containing columns to be kept according to a certain category.
 For example, it is possible to keep all the columns created during the SelectEvents task with the enum `ALL_FROM_SELECTOR`.
 With the ColumnCollection class, the example above could become:
+
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: cfg.x.keep_columns = DotDict.wrap({
+:end-at: })
+```
+
+<!--
 ```python
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
@@ -255,27 +249,17 @@ cfg.x.keep_columns = DotDict.wrap({
     },
 })
 ```
-
+-->
 
 
 ### Custom retrieval of dataset files
 
-The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the
-logical file names of the datasets through the
-[CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
-However, this
-default behaviour can be changed using the auxiliary parameter `cfg.x.get_dataset_lfns`,
-which must be mapped to either None (triggering the default behaviour and obtaining the LFNs
-from DAS) or a custom function with three parameters (`dataset_inst`, the order {external+order:py:class}`order.dataset.Dataset`
-object, `shift_inst`, the order {external+order:py:class}`order.shift.Shift` object and
-`dataset_key`, the key given in the info dictionary of the dataset when defining it
-as shown in the {ref}`Analysis, Campaign and Config section <analysis_campaign_config>`. From these parameters, the custom function should implement
-a way to create the list of LFNs (= the paths to the root files starting from `/store`) corresponding to this dataset and
-return this list. Two other auxiliary parameters can be changed, these are called
-`cfg.x.get_dataset_lfns_sandbox` and `cfg.x.get_dataset_lfns_remote_fs`. `get_dataset_lfns_sandbox`
-provides the sandbox in which the task GetDatasetLFNS will be run and expects therefore a
-{external+law:py:class}`law.sandbox.base.Sandbox` object, which can be for example obtained through
-the {py:func}`~columnflow.util.dev_sandbox` function.
+The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets through the [CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
+However, this default behaviour can be changed using the auxiliary parameter `cfg.x.get_dataset_lfns`, which must be mapped to either None (triggering the default behaviour and obtaining the LFNs
+from DAS) or a custom function with three parameters (`dataset_inst`, the order {external+order:py:class}`order.dataset.Dataset` object, `shift_inst`, the order {external+order:py:class}`order.shift.Shift` object and `dataset_key`, the key given in the info dictionary of the dataset when defining it as shown in the {ref}`Analysis, Campaign and Config section <analysis_campaign_config>`.
+From these parameters, the custom function should implement a way to create the list of LFNs (= the paths to the root files starting from `/store`) corresponding to this dataset and return this list.
+Two other auxiliary parameters can be changed, these are called `cfg.x.get_dataset_lfns_sandbox` and `cfg.x.get_dataset_lfns_remote_fs`.
+`get_dataset_lfns_sandbox` provides the sandbox in which the task GetDatasetLFNS will be run and expects therefore a {external+law:py:class}`law.sandbox.base.Sandbox` object, which can be for example obtained through the {py:func}`~columnflow.util.dev_sandbox` function.
 `get_dataset_lfns_remote_fs` provides the remote file system on which the LFNs for the specific dataset can be found, it expects a function with the `dataset_inst` as a parameter and returning the name of the file system as defined in the law config file.
 
 An example of such a function and the definition of the corresponding config parameters for a campaign where all datasets have been custom processed and stored on a single remote file system is given below.
@@ -316,8 +300,7 @@ if cfg.campaign.x("custom", {}).get("creator") == "uhh":
 
 If some files from outside columnflow are needed for an analysis, be them local files or online ( and accessible through wget), these can be indicated in the `cfg.x.external_files` auxiliary parameter.
 These can then be copied to the columnflow outputs using the {py:class}`~columnflow.tasks.external.BundleExternalFiles` task and used by being required by the object needing them.
-The `cfg.x.external_files` parameter expects a {py:class}`~columnflow.util.DotDict` with a string
-explaining the role of the file to be downloaded/copied as key and the link/path as value.
+The `cfg.x.external_files` parameter expects a {py:class}`~columnflow.util.DotDict` with a string explaining the role of the file to be downloaded/copied as key and the link/path as value.
 It is also possible to give a tuple as value, with the link/path as the first entry of the tuple and a version as a second entry.
 As an example, the `cfg.x.external_files` parameter might look like this, for `json_mirror` the local path of the mirror directory to a specific commit of the [jsonPOG-integration Gitlab](https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/tree/master) (CMS-specific):
 ```python
@@ -467,7 +450,7 @@ The target size of the files in MB after the {py:class}`~columnflow.tasks.reduct
 cfg.x.reduced_file_size = 512.0
 ```
 
-
+(object_specific_variables_section=)
 ### Object-specific variables
 
 Other than the variables mentioned above, several might be needed for specific Producers for example, but these won't be discussed here as they are not general parameters.
