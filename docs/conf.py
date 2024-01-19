@@ -66,16 +66,21 @@ elif html_theme == "sphinx_book_theme":
     })
 
 extensions = [
+    "sphinx_design",
+    "sphinx_copybutton",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
     "sphinx_autodoc_typehints",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosectionlabel",
+    "sphinxcontrib.mermaid",
     "sphinx_lfs_content",
     "autodocsumm",
     "myst_parser",
     "pydomain_patch",
 ]
+
+myst_enable_extensions = ["colon_fence"]
 
 typehints_defaults = "comma"
 
@@ -105,6 +110,14 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
+import luigi
+
+
+def process_docstring(app, what, name, obj, options, lines):
+    if isinstance(obj, luigi.parameter.Parameter):
+        if obj.description:
+            lines.append(f"Description: {obj.description}")
+
 
 def add_intersphinx_aliases_to_inv(app):
     from sphinx.ext.intersphinx import InventoryAdapter
@@ -131,3 +144,5 @@ def setup(app):
     app.add_css_file("styles_common.css")
     if html_theme in ("sphinx_rtd_theme", "alabaster", "sphinx_book_theme"):
         app.add_css_file("styles_{}.css".format(html_theme))
+
+    app.connect("autodoc-process-docstring", process_docstring)
