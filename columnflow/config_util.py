@@ -100,7 +100,7 @@ def get_datasets_from_process(
     only_first: bool = True,
     check_deep: bool = False,
 ) -> list[od.Dataset]:
-    r"""
+    """
     Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
     contain matching processes. This is done by walking through *process* and its child processes
     and checking whether they are contained in known datasets. *strategy* controls how possible
@@ -117,38 +117,58 @@ def get_datasets_from_process(
 
     As an example, consider the process tree
 
-    .. code-block:: none
-               --- single_top ---
-              /        |         \
-             /         |          \
-        s_channel  t_channel  tw_channel
-           / \        / \         / \
-          /   \      /   \       /   \
-         t   tbar   t   tbar    t   tbar
+    .. mermaid::
+        :align: center
+        :zoom:
+        
+        flowchart BT
+            A[single top]
+            B{s channel}
+            C{t channel}
+            D{tw channel}
+            E(t)
+            F(tbar)
+            G(t)
+            H(tbar)
+            I(t)
+            J(tbar)
+
+            B --> A
+            C --> A
+            D --> A
+
+            E --> B
+            F --> B
+
+            G --> C
+            H --> C
+
+            I --> D
+            J --> D
 
     and datasets existing for
 
-    .. code-block:: none
-        1. single_top__s_channel_t
-        2. single_top__s_channel_tbar
-        3. single_top__t_channel
-        4. single_top__t_channel_t
-        5. single_top__tw_channel
-        6. single_top__tw_channel_t
-        7. single_top__tw_channel_tbar
 
-    in the *config*. Depending on *strategy*, the returned datasets for process ``single_top``are:
+    1. single top - s channel - t
+    2. single top - s channel - tbar
+    3. single top - t channel
+    4. single top - t channel - t
+    5. single top - tw channel
+    6. single top - tw channel - t
+    7. single top - tw channel - tbar
+
+    in the *config*. Depending on *strategy*, the returned datasets for process ``single top``are:
 
         - ``"all"``: ``[1, 2, 3, 4, 5, 6, 7]``. Simply all datasets matching any subprocess.
-        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``,
-            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more inclusive
-            datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
-        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and
-            ``single_top__tw_channel`` since more exclusive datasets (``single_top__t_channel_t``,
-            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
+        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single top - t channel - t``,
+            ``single top - tw channel - t``, and ``single top - tw channel - tbar``, since more inclusive
+            datasets (``single top - t channel`` and ``single top - tw channel``) exist.
+        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top - t_channel`` and
+            ``single top - tw channel`` since more exclusive datasets (``single top - t channel - t``,
+            ``single top - tw channel - t``, and ``single top - tw channel - tbar``) exist.
         - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping
-            ``single_top__t_channel`` since not all subprocesses of ``t_channel`` match a dataset
-            (there is no ``single_top__t_channel_tbar`` dataset).
+            ``single top - t channel`` since not all subprocesses of ``t channel`` match a dataset
+            (there is no ``single top - t channel - tbar`` dataset).
 
     In addition, two arguments configure how the check is performed whether a process is contained
     in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
