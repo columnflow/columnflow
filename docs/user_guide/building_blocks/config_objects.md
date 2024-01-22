@@ -28,7 +28,7 @@ However, several names in the auxiliary field do already have a meaning in colum
 These two general formats are presented below.
 
 Additionally, please note that some columnflow objects, like some Calibrators and Producers, require specific information that is needed to be accessible with predefined keywords.
-As explained in the {ref}`object-specific variables section <object_specific_variables_section>`, please check the documentation of these objects before using them.
+As explained in the {ref}`object-specific variables section <object-specific_variables_section>`, please check the documentation of these objects before using them.
 
 
 It is generally advised to use functions to set up Config objects.
@@ -51,13 +51,14 @@ An example is given in the columnflow analysis template:
 :end-at: proc = cfg.add_process(procs.get(process_name))
 ```
 
-Additionally, these processes must have corresponding datasets that are to be added to the Config as well (see [next section](#datasets)).
+Additionally, these processes must have corresponding datasets that are to be added to the Config as well (see {ref}`next section <datasets_docu_section>`).
 It is possible to get all root processes from a specific campaign using the {py:func}`~columnflow.config_util.get_root_processes_from_campaign()` function from columnflow.
 Examples of information carried by a process could be the cross section of the process, registered under the {external+order:py:attr}`order.process.Process.xsecs` attribute and further used for {py:class}`~columnflow.production.normalization.normalization_weights` in columnflow, and a color for the plotting scripts, which can be set using the {external+order:py:attr}`order.mixins.ColorMixin.color1` attribute of the process.
 An example of a Process definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 More information about processes can be found in the {external+order:py:class}`order.process.Process` and the {external+order:doc}`quickstart` sections of the order documentation.
 
 
+(datasets_docu_section=)
 ### Datasets
 
 The actual datasets to be processed in the analysis.
@@ -71,7 +72,7 @@ An example is given in the columnflow analysis template:
 :start-at: dataset_names = [
 :end-at: dataset = cfg.add_dataset(campaign.get_dataset(dataset_name))
 ```
-The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in [the section on custom retrieval of datasets](#custom-retrieval-of-dataset-files)) and wether it contains observed or simulated data.
+The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in {ref}`the section on custom retrieval of datasets <custom_retrieval_of_dataset_files_section>` and wether it contains observed or simulated data.
 
 It is also possible to change information of a dataset in the config script.
 An example would be reducing the number of files to process for test purposes in a specific test config.
@@ -117,7 +118,7 @@ cfg.add_variable(
 )
 ```
 
-It is worth mentioning, that you do not need to select a specific jet in the `expression` argument (here with `Jet.pt[:,0]`), you can get an flattened histogram for all jets in all events with `expression="Jet.pt"`.
+It is worth mentioning, that you do not need to select a specific jet per event in the `expression` argument (here with `Jet.pt[:,0]`), you can get a flattened histogram for all jets in all events with `expression="Jet.pt"`.
 
 In histogramming tasks such as {py:class}`~columnflow.tasks.histograms.CreateHistograms`, one histogram is created per Variable given via the ```--variables``` argument, accessing information from columns based on the `expression` of the Variable and storing them in histograms with binning defined via the `binning` argument of the Variable.
 
@@ -137,7 +138,7 @@ An example for an inclusive category with the Categorizer `cat_incl` defined in 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
 :start-at: add_category(
-:end-before: )
+:end-at: )
 ```
 
 It is recommended to always add an inclusive category with ``id=1`` or ``name="incl"`` which is used in various places, e.g. for the inclusive cutflow plots and the "empty" selector.
@@ -223,8 +224,8 @@ With the ColumnCollection class, the example above could become:
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
-:start-at: cfg.x.keep_columns = DotDict.wrap({
-:end-at: })
+:start-after: # columns to keep after certain steps
+:end-before: # event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
 ```
 
 <!--
@@ -251,16 +252,20 @@ cfg.x.keep_columns = DotDict.wrap({
 ```
 -->
 
-
+(custom_retrieval_of_dataset_files_section=)
 ### Custom retrieval of dataset files
 
 The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets through the [CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
-However, this default behaviour can be changed using the auxiliary parameter `cfg.x.get_dataset_lfns`, which must be mapped to either None (triggering the default behaviour and obtaining the LFNs
-from DAS) or a custom function with three parameters (`dataset_inst`, the order {external+order:py:class}`order.dataset.Dataset` object, `shift_inst`, the order {external+order:py:class}`order.shift.Shift` object and `dataset_key`, the key given in the info dictionary of the dataset when defining it as shown in the {ref}`Analysis, Campaign and Config section <analysis_campaign_config>`.
-From these parameters, the custom function should implement a way to create the list of LFNs (= the paths to the root files starting from `/store`) corresponding to this dataset and return this list.
-Two other auxiliary parameters can be changed, these are called `cfg.x.get_dataset_lfns_sandbox` and `cfg.x.get_dataset_lfns_remote_fs`.
-`get_dataset_lfns_sandbox` provides the sandbox in which the task GetDatasetLFNS will be run and expects therefore a {external+law:py:class}`law.sandbox.base.Sandbox` object, which can be for example obtained through the {py:func}`~columnflow.util.dev_sandbox` function.
-`get_dataset_lfns_remote_fs` provides the remote file system on which the LFNs for the specific dataset can be found, it expects a function with the `dataset_inst` as a parameter and returning the name of the file system as defined in the law config file.
+However, this default behaviour can be changed using the auxiliary parameter `cfg.x.get_dataset_lfns`.
+If it is not specified or set to `None`, the function :py:meth:`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient` is used.
+Alternatively, you can set it to a custom function with the same keyword arguments as the default.
+For more information, please consider the documentation of :py:meth:`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient`.
+Based on these parameters, the custom function should implement a way to create the list of paths corresponding to this dataset (the paths should not include the path to the remote file system) and return this list.
+Two other auxiliary parameters can be changed:
+
+- `get_dataset_lfns_sandbox` provides the sandbox in which the task GetDatasetLFNS will be run and expects therefore a {external+law:py:class}`law.sandbox.base.Sandbox` object, which can be for example obtained through the {py:func}`~columnflow.util.dev_sandbox` function.
+
+- `get_dataset_lfns_remote_fs` provides the remote file system on which the LFNs for the specific dataset can be found, it expects a function with the `dataset_inst` as a parameter and returning the name of the file system as defined in the law config file.
 
 An example of such a function and the definition of the corresponding config parameters for a campaign where all datasets have been custom processed and stored on a single remote file system is given below.
 
@@ -298,11 +303,11 @@ if cfg.campaign.x("custom", {}).get("creator") == "uhh":
 
 ### External_files
 
-If some files from outside columnflow are needed for an analysis, be them local files or online ( and accessible through wget), these can be indicated in the `cfg.x.external_files` auxiliary parameter.
+If some files from outside columnflow are needed for an analysis, be them local files or online (and accessible through wget), these can be indicated in the `cfg.x.external_files` auxiliary parameter.
 These can then be copied to the columnflow outputs using the {py:class}`~columnflow.tasks.external.BundleExternalFiles` task and used by being required by the object needing them.
-The `cfg.x.external_files` parameter expects a {py:class}`~columnflow.util.DotDict` with a string explaining the role of the file to be downloaded/copied as key and the link/path as value.
+The `cfg.x.external_files` parameter expects a (possibly nested) {py:class}`~columnflow.util.DotDict` with a user-defined key to retrieve the target in columnflow and the link/path as value.
 It is also possible to give a tuple as value, with the link/path as the first entry of the tuple and a version as a second entry.
-As an example, the `cfg.x.external_files` parameter might look like this, for `json_mirror` the local path of the mirror directory to a specific commit of the [jsonPOG-integration Gitlab](https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/tree/master) (CMS-specific):
+As an example, the `cfg.x.external_files` parameter might look like this, where `json_mirror` is a local path to a mirror directory of a specific commit of the [jsonPOG-integration Gitlab](https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/tree/master) (CMS-specific):
 ```python
 cfg.x.external_files = DotDict.wrap({
     # lumi files
@@ -319,11 +324,19 @@ cfg.x.external_files = DotDict.wrap({
 })
 ```
 
-An example of usage of the `muon_sf`, including the requirement of the BundleExternalFiles task is given in the {py:mod}`~columnflow.production.cms.muon` file, implementing the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer.
+An example of usage of the `muon_sf`, including the requirement of the BundleExternalFiles task is given in the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer.
 
 TODO: put the following in drop down menu
 
 Showing how to require the BundleExternalFiles task to have run in the example of the muon weights Producer linked above:
+
+```{literalinclude} ../../../columnflow/production/cms/muon.py
+:language: python
+:start-at: @muon_weights.requires
+:end-at: reqs["external_files"] = BundleExternalFiles.req(self.task)
+```
+
+<!--
 ```python
 @muon_weights.requires
 def muon_weights_requires(self: Producer, reqs: dict) -> None:
@@ -333,7 +346,7 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
     from columnflow.tasks.external import BundleExternalFiles
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 ```
-
+-->
 
 ### Luminosity
 
@@ -353,7 +366,11 @@ cfg.x.luminosity = Number(41480, {
 ### Defaults
 
 Default values can be given for several command line parameters in columnflow, using the `cfg.x.default_{parameter}` entry in the Config object.
-The expected format is a single string containing the name of the object to be used as default for parameters accepting only one argument and a tuple for parameters accepting several arguments.
+The expected format is either:
+
+- a single string containing the name of the object to be used as default for parameters accepting only one argument or
+- a tuple for parameters accepting several arguments.
+
 The command-line arguments supporting a default value from the Config object are given in the cms_minimal example of the analysis_templates and shown again below:
 
 ```python
@@ -376,6 +393,14 @@ The expected format of the group is a dictionary containing the custom name of t
 The name of the group can then be given as command-line argument instead of the single values.
 An example with a selector_steps group is given below.
 
+
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: # selector step groups for conveniently looping over certain steps
+:end-at: }
+```
+
+<!--
 ```python
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
@@ -383,6 +408,7 @@ cfg.x.selector_step_groups = {
     "default": ["muon", "jet"],
 }
 ```
+-->
 
 With this group defined in the Config object, running over the "muon" and "jet" selector_steps in this order in a cutflow task can done with the argument `--selector-steps default`.
 
@@ -450,15 +476,16 @@ The target size of the files in MB after the {py:class}`~columnflow.tasks.reduct
 cfg.x.reduced_file_size = 512.0
 ```
 
-(object_specific_variables_section=)
+(object-specific_variables_section=)
 ### Object-specific variables
 
-Other than the variables mentioned above, several might be needed for specific Producers for example, but these won't be discussed here as they are not general parameters.
+Other than the variables mentioned above, several might be needed for specific Producers for example.
+These won't be discussed here as they are not general parameters.
 Hence, we invite the users to check which Config entries are needed for each {py:class}`~columnflow.calibration.Calibrator`,
 {py:class}`~columnflow.selection.Selector` and {py:class}`~columnflow.production.Producer` and in general each CMS-specific object (=objects in the cms-subfolders) they want to use.
 Since the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer was already mentioned above, we will remind users here that the `cfg.x.muon_sf_names` Config entry is needed for this Producer to run, as indicated in the docstring of the Producer.
 
-As for the CMS-specific objects, an example could be the task {py:class}`~columnflow.tasks.cms.external.CreatePileupWeights`, which requires additional entries in the Config objects, for example the minimum bias cross sections `cfg.x.minbias_xs` and the `pu` entry to the external files.
+As for the CMS-specific objects, an example could be the task {py:class}`~columnflow.tasks.cms.external.CreatePileupWeights`, which requires for example the minimum bias cross sections `cfg.x.minbias_xs` and the `pu` entry in the external files.
 
 Examples of these entries in the Config objects can be found in already existing CMS-analyses working with columnflow, for example the [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau) or the [hh2bbww analysis](https://github.com/uhh-cms/hh2bbww) from UHH.
 
