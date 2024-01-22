@@ -224,8 +224,8 @@ With the ColumnCollection class, the example above could become:
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
-:start-after: # columns to keep after certain steps
-:end-before: # event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
+:start-after: "# columns to keep after certain steps"
+:end-before: "# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on"
 ```
 
 <!--
@@ -326,13 +326,13 @@ cfg.x.external_files = DotDict.wrap({
 
 An example of usage of the `muon_sf`, including the requirement of the BundleExternalFiles task is given in the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer.
 
-TODO: put the following in drop down menu
+:::{dropdown} How to require a task in a Producer?
 
 Showing how to require the BundleExternalFiles task to have run in the example of the muon weights Producer linked above:
 
 ```{literalinclude} ../../../columnflow/production/cms/muon.py
 :language: python
-:start-at: @muon_weights.requires
+:start-at: "@muon_weights.requires"
 :end-at: reqs["external_files"] = BundleExternalFiles.req(self.task)
 ```
 
@@ -347,6 +347,8 @@ def muon_weights_requires(self: Producer, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 ```
 -->
+
+:::
 
 ### Luminosity
 
@@ -396,8 +398,8 @@ An example with a selector_steps group is given below.
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
-:start-at: # selector step groups for conveniently looping over certain steps
-:end-at: }
+:start-at: "# selector step groups for conveniently looping over certain steps"
+:end-at: "}"
 ```
 
 <!--
