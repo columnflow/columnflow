@@ -58,7 +58,7 @@ An example of a Process definition is given in the {ref}`Analysis, Campaign and 
 More information about processes can be found in the {external+order:py:class}`order.process.Process` and the {external+order:doc}`quickstart` sections of the order documentation.
 
 
-(datasets_docu_section=)
+(datasets_docu_section)=
 ### Datasets
 
 The actual datasets to be processed in the analysis.
@@ -252,7 +252,7 @@ cfg.x.keep_columns = DotDict.wrap({
 ```
 -->
 
-(custom_retrieval_of_dataset_files_section=)
+(custom_retrieval_of_dataset_files_section)=
 ### Custom retrieval of dataset files
 
 The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets through the [CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
@@ -476,7 +476,7 @@ The target size of the files in MB after the {py:class}`~columnflow.tasks.reduct
 cfg.x.reduced_file_size = 512.0
 ```
 
-(object-specific_variables_section=)
+(object-specific_variables_section)=
 ### Object-specific variables
 
 Other than the variables mentioned above, several might be needed for specific Producers for example.
