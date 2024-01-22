@@ -9,7 +9,6 @@ For each training, k-1 parts are used for the actual training and the remaining 
 This process is repeated k-times, resulting in the training of k-model instances.
 In the end of the training columnflow will save all k-models, which are then usable for evaluation.
 An overview and further details about possible variations of k-fold cross validation can be found in the [sci-kit documentation](https://scikit-learn.org/stable/modules/cross_validation.html).
-)
 
 # Configure your custom machine learning class:
 To create a custom machine learning (ML) class in columnflow, it is imperative to inherit from the {py:class}`~columnflow.ml.MLModel` class.
