@@ -634,8 +634,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # JER scale factors and systematic variations
     jersf = {}
     for syst in ("nom", "up", "down"):
-        variable_map["systematic"] = syst
-        inputs = [variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
+        variable_map_syst = dict(variable_map, systematic=syst)
+        inputs = [variable_map_syst[inp.name] for inp in self.evaluators["sf"].inputs]
         jersf[syst] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # array with all JER scale factor variations as an additional axis
