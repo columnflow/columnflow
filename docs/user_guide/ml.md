@@ -2,7 +2,7 @@
 
 In this section, the users will learn how to implement machine learning in their analysis with columnflow.
 
-# How training happens in Columnflow: K-fold cross validation 
+# How training happens in Columnflow: K-fold cross validation
 Machine learning in columnflow is implemented in a way that k-fold cross validation is enabled by default.
 In k-fold cross validation the dataset is split in k-parts of equal size.
 For each training, k-1 parts are used for the actual training and the remaining part is used to test the model.
