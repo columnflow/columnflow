@@ -32,43 +32,6 @@ from columnflow.types import Callable, Any, Sequence
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
 
-def get_events_from_categories(
-    events: ak.Array,
-    categories: Sequence[str | od.Category],
-    config_inst: od.Config | None = None,
-) -> ak.Array:
-    """
-    Helper function that returns all events from an awkward array *events* that are categorized
-    into one of the leafs of one of the *categories*.
-
-    :param events: Awkward array. Requires the 'category_ids' field to be present.
-    :param categories: Sequence of category instances. Can also be a sequence of strings when passing a
-        *config_inst*.
-    :param config_inst: Optional config instance to load category instances.
-    :raises ValueError: If "category_ids" is not present in the *events* fields.
-    :return: Awkward array of all events that are categorized into one of the leafs of one of the
-        *categories*
-    """
-    if "category_ids" not in events.fields:
-        raise ValueError(
-            f"{get_events_from_categories.__name__} requires the 'category_ids' field to be present",
-        )
-
-    categories = law.util.make_list(categories)
-    if config_inst:
-        # get category insts
-        categories = [config_inst.get_category(cat) for cat in categories]
-
-    leaf_category_insts = set.union(*map(set, (cat.get_leaf_categories() or {cat} for cat in categories)))
-
-    # do the "or" of all leaf categories
-    mask = np.zeros(len(events), dtype=bool)
-    for cat in leaf_category_insts:
-        cat_mask = ak.any(events.category_ids == cat.id, axis=1)
-        mask = cat_mask | mask
-
-    return events[mask]
-
 
 def get_events_from_categories(
     events: ak.Array,
