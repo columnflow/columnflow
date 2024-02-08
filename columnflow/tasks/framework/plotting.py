@@ -163,6 +163,20 @@ class PlotBase(ConfigTask):
         for key, value in general_settings.items():
             kwargs.setdefault(key, value)
 
+        # resolve custom_style_config
+        custom_style_config = kwargs.get("custom_style_config", None)
+        if custom_style_config == RESOLVE_DEFAULT:
+            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+
+        groups = self.config_inst.x("custom_style_config_groups", {})
+        if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
+            custom_style_config = groups[custom_style_config]
+
+        # update style_config
+        style_config = kwargs.get("style_config", {})
+        if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
+            style_config = law.util.merge_dicts(custom_style_config, style_config)
+            kwargs["style_config"] = style_config
         # update defaults after application of `general_settings`
         kwargs.setdefault("cms_label", "pw")
 
