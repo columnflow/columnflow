@@ -9,7 +9,7 @@ action() {
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
 
     # get the os version
-    local os_version="$( cat /etc/os-release | grep VERSION_ID | sed -E 's/VERSION_ID="([0-9]+)"/\1/' )"
+    local os_version="$( cat /etc/os-release | grep VERSION_ID | sed -E 's/VERSION_ID="([0-9]+)(|\..*)"/\1/' )"
 
     # set variables and source the generic CMSSW setup
     export CF_SANDBOX_FILE="${CF_SANDBOX_FILE:-${this_file}}"

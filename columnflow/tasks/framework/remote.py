@@ -537,10 +537,10 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
-        choices=("naf", "cern", law.NO_STR),
+        choices=("naf", "cern", "cern_el7", "cern_el8", "cern_el9", law.NO_STR),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf,cern,NO_STR; default: '{_default_htcondor_flavor}'",
+        f"naf,cern,cern_el7,cern_el8,cern_el9,NO_STR; default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
         default=_default_htcondor_share_software,
@@ -621,10 +621,10 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # some htcondor setups require a "log" config, but we can safely use /dev/null by default
         config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
-        # use el9 at CERN
-        if self.htcondor_flavor == "cern":
-            # https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
-            config.custom_content.append(("MY.WantOS", "el9"))
+        # at CERN, select the correct env https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
+        if self.htcondor_flavor.startswith("cern"):
+            cern_os = {"cern_el7": "el7", "cern_el8": "el8"}.get(self.htcondor_flavor, "el9")
+            config.custom_content.append(("MY.WantOS", cern_os))
 
         # use cc7 on naf (https://confluence.desy.de/display/IS/BIRD)
         if self.htcondor_flavor == "naf":
