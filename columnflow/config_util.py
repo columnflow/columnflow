@@ -120,7 +120,7 @@ def get_datasets_from_process(
     .. mermaid::
         :align: center
         :zoom:
-        
+
         flowchart BT
             A[single top]
             B{s channel}
