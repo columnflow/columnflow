@@ -98,11 +98,15 @@ from scinum import Number
 from order import Process
 
 tt = Process(
-    name="tt",
-    id=1000,
-    label=r"$t\bar{t}$ + Jets",
-    color=(128, 76, 153),
-    xsecs={
+    name="tt",  # name of the process
+    id=1000,  # unique id for this process
+    label=r"$t\bar{t}$ + Jets",  # label to be used in e.g. plot legends
+    color=(128, 76, 153),  # color to be used in plots for this process (e.g. in RGB format)
+    xsecs={  # cross sections for this process
+        # format of these numbers is
+        # {
+        #    center of mass energy: Number object with nominal prediction + uncertainties
+        # }
         13: Number(831.76, {
             "scale": (19.77, 29.20),
             "pdf": 35.06,

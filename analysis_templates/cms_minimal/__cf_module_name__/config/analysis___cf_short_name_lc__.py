@@ -117,6 +117,7 @@ cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
+
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 cfg.x.process_groups = {}
@@ -137,11 +138,40 @@ cfg.x.variable_groups = {}
 # (used during plotting)
 cfg.x.shift_groups = {}
 
+# general_settings groups for conveniently looping over different values for the general-settings parameter
+# (used during plotting)
+cfg.x.general_settings_groups = {}
+
+# process_settings groups for conveniently looping over different values for the process-settings parameter
+# (used during plotting)
+cfg.x.process_settings_groups = {}
+
+# variable_settings groups for conveniently looping over different values for the variable-settings parameter
+# (used during plotting)
+cfg.x.variable_settings_groups = {}
+
+# custom_style_config groups for conveniently looping over certain style configs
+# (used during plotting)
+cfg.x.custom_style_config_groups = {}
+
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 cfg.x.selector_step_groups = {
     "default": ["muon", "jet"],
 }
+
+# calibrator groups for conveniently looping over certain calibrators
+# (used during calibration)
+cfg.x.calibrator_groups = {}
+
+# producer groups for conveniently looping over certain producers
+# (used during the ProduceColumns task)
+cfg.x.producer_groups = {}
+
+# ml_model groups for conveniently looping over certain ml_models
+# (used during the machine learning tasks)
+cfg.x.ml_model_groups = {}
+
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None

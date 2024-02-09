@@ -72,7 +72,7 @@ An example is given in the columnflow analysis template:
 :start-at: dataset_names = [
 :end-at: dataset = cfg.add_dataset(campaign.get_dataset(dataset_name))
 ```
-The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in {ref}`the section on custom retrieval of datasets <custom_retrieval_of_dataset_files_section>` and wether it contains observed or simulated data.
+The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in {ref}`the section on custom retrieval of datasets <custom_retrieval_of_dataset_files_section>`) and wether it contains observed or simulated data.
 
 It is also possible to change information of a dataset in the config script.
 An example would be reducing the number of files to process for test purposes in a specific test config.
@@ -193,34 +193,10 @@ If the auxiliary argument `keep_columns`, accessible through `cfg.x.keep_columns
 Actually, several tasks can make use of such an argument in the Config object for the reduction of their output.
 Therefore, the `keep_columns` argument expects a {py:class}`~columnflow.util.DotDict` containing the name of the tasks (with the `cf.` prefix) for which such a reduction should be applied as keys and the set of columns to be kept in the output of this task as values.
 
-An example is given below:
-
-```python
-cfg.x.keep_columns = DotDict.wrap({
-    "cf.ReduceEvents": {
-        # general event info
-        "run", "luminosityBlock", "event",
-        # object info
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
-        "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
-        "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
-        "PV.npvs",
-        # columns added during selection
-        "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
-    },
-    "cf.MergeSelectionMasks": {
-        "cutflow.*",
-    },
-    "cf.UniteColumns": {
-        "*",
-    },
-})
-```
-
 For easier handling of the list of columns, the class {py:class}`~columnflow.columnar_util.ColumnCollection` was created.
 It defines several enumerations containing columns to be kept according to a certain category.
 For example, it is possible to keep all the columns created during the SelectEvents task with the enum `ALL_FROM_SELECTOR`.
-With the ColumnCollection class, the example above could become:
+An example is given below:
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
@@ -228,44 +204,20 @@ With the ColumnCollection class, the example above could become:
 :end-before: "# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on"
 ```
 
-<!--
-```python
-cfg.x.keep_columns = DotDict.wrap({
-    "cf.ReduceEvents": {
-        # general event info, mandatory for reading files with coffea
-        ColumnCollection.MANDATORY_COFFEA
-        # object info
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
-        "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
-        "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
-        "PV.npvs",
-        # all columns added during selection using a ColumnCollection flag
-        ColumnCollection.ALL_FROM_SELECTOR,
-    },
-    "cf.MergeSelectionMasks": {
-        "cutflow.*",
-    },
-    "cf.UniteColumns": {
-        "*",
-    },
-})
-```
--->
-
 (custom_retrieval_of_dataset_files_section)=
 ### Custom retrieval of dataset files
 
-The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets through the [CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
+The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets based on the `keys` argument of the corresponding order Dataset.
+By default, the function {py:meth}`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient` is used, which obtains the information through the [CMS DAS](https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookLocatingDataSamples).
 However, this default behaviour can be changed using the auxiliary parameter `cfg.x.get_dataset_lfns`.
-If it is not specified or set to `None`, the function :py:meth:`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient` is used.
-Alternatively, you can set it to a custom function with the same keyword arguments as the default.
-For more information, please consider the documentation of :py:meth:`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient`.
+You can set this to a custom function with the same keyword arguments as the default.
+For more information, please consider the documentation of {py:meth}`~columnflow.external.GetDatasetLFNs.get_dataset_lfns_dasgoclient`.
 Based on these parameters, the custom function should implement a way to create the list of paths corresponding to this dataset (the paths should not include the path to the remote file system) and return this list.
 Two other auxiliary parameters can be changed:
 
 - `get_dataset_lfns_sandbox` provides the sandbox in which the task GetDatasetLFNS will be run and expects therefore a {external+law:py:class}`law.sandbox.base.Sandbox` object, which can be for example obtained through the {py:func}`~columnflow.util.dev_sandbox` function.
 
-- `get_dataset_lfns_remote_fs` provides the remote file system on which the LFNs for the specific dataset can be found, it expects a function with the `dataset_inst` as a parameter and returning the name of the file system as defined in the law config file.
+- `get_dataset_lfns_remote_fs` provides the remote file system on which the LFNs for the specific dataset can be found. It expects a function with the `dataset_inst` as a parameter and returning the name of the file system as defined in the law config file.
 
 An example of such a function and the definition of the corresponding config parameters for a campaign where all datasets have been custom processed and stored on a single remote file system is given below.
 
@@ -308,20 +260,11 @@ These can then be copied to the columnflow outputs using the {py:class}`~columnf
 The `cfg.x.external_files` parameter expects a (possibly nested) {py:class}`~columnflow.util.DotDict` with a user-defined key to retrieve the target in columnflow and the link/path as value.
 It is also possible to give a tuple as value, with the link/path as the first entry of the tuple and a version as a second entry.
 As an example, the `cfg.x.external_files` parameter might look like this, where `json_mirror` is a local path to a mirror directory of a specific commit of the [jsonPOG-integration Gitlab](https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/tree/master) (CMS-specific):
-```python
-cfg.x.external_files = DotDict.wrap({
-    # lumi files
-    "lumi": {
-        "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt", "v1"),  # noqa
-        "normtag": ("/afs/cern.ch/user/l/lumipro/public/Normtags/normtag_PHYSICS.json", "v1"),
-    },
 
-    # muon scale factors
-    "muon_sf": (f"{json_mirror}/POG/MUO/2017_UL/muon_Z.json.gz", "v1"),
-
-    # some example of a ML training dataset to show an example with URL
-    "vehicules_dataset_fastai": ("https://github.com/arunoda/fastai-courses/releases/download/fastai-vehicles-dataset/fastai-vehicles.tgz", "v1"),  # noqa
-})
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: "cfg.x.external_files = DotDict.wrap({"
+:end-at: "})"
 ```
 
 An example of usage of the `muon_sf`, including the requirement of the BundleExternalFiles task is given in the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer.
@@ -335,19 +278,6 @@ Showing how to require the BundleExternalFiles task to have run in the example o
 :start-at: "@muon_weights.requires"
 :end-at: reqs["external_files"] = BundleExternalFiles.req(self.task)
 ```
-
-<!--
-```python
-@muon_weights.requires
-def muon_weights_requires(self: Producer, reqs: dict) -> None:
-    if "external_files" in reqs:
-        return
-
-    from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
-```
--->
-
 :::
 
 ### Luminosity
@@ -375,17 +305,11 @@ The expected format is either:
 
 The command-line arguments supporting a default value from the Config object are given in the cms_minimal example of the analysis_templates and shown again below:
 
-```python
-cfg.x.default_calibrator = "example"
-cfg.x.default_selector = "example"
-cfg.x.default_producer = "example"
-cfg.x.default_ml_model = None
-cfg.x.default_inference_model = "example"
-cfg.x.default_categories = ("incl",)
-cfg.x.default_variables = ("n_jet", "jet1_pt")
-cfg.x.default_weight_producer = "example"
+```{literalinclude} ../../../columnflow/production/cms/muon.py
+:language: python
+:start-at: cfg.x.default_calibrator = "example"
+:end-at: cfg.x.default_variables = ("n_jet", "jet1_pt")
 ```
-
 
 ### Groups
 
@@ -415,63 +339,20 @@ cfg.x.selector_step_groups = {
 With this group defined in the Config object, running over the "muon" and "jet" selector_steps in this order in a cutflow task can done with the argument `--selector-steps default`.
 
 All parameters for which groups are possible are given below:
-```python
-# selector step groups for conveniently looping over certain steps
-# (used in cutflow tasks)
-cfg.x.selector_step_groups = {}
 
-# process groups for conveniently looping over certain processs
-# (used in wrapper_factory and during plotting)
-cfg.x.process_groups = {}
-
-# dataset groups for conveniently looping over certain datasets
-# (used in wrapper_factory and during plotting)
-cfg.x.dataset_groups = {}
-
-# category groups for conveniently looping over certain categories
-# (used during plotting)
-cfg.x.category_groups = {}
-
-# variable groups for conveniently looping over certain variables
-# (used during plotting)
-cfg.x.variable_groups = {}
-
-# shift groups for conveniently looping over certain shifts
-# (used during plotting)
-cfg.x.shift_groups = {}
-
-# general_settings groups for conveniently looping over different values for the general-settings parameter
-# (used during plotting)
-cfg.x.general_settings_groups = {}
-
-# process_settings groups for conveniently looping over different values for the process-settings parameter
-# (used during plotting)
-cfg.x.process_settings_groups = {}
-
-# variable_settings groups for conveniently looping over different values for the variable-settings parameter
-# (used during plotting)
-cfg.x.variable_settings_groups = {}
-
-# custom_style_config groups for conveniently looping over certain style configs
-# (used during plotting)
-cfg.x.custom_style_config_groups = {}
-
-# calibrator groups for conveniently looping over certain calibrators
-# (used during calibration)
-cfg.x.calibrator_groups = {}
-
-# producer groups for conveniently looping over certain producers
-# (used during the ProduceColumns task)
-cfg.x.producer_groups = {}
-
-# ml_model groups for conveniently looping over certain ml_models
-# (used during the machine learning tasks)
-cfg.x.ml_model_groups = {}
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: "# process groups for conveniently looping over certain processs"
+:end-at: "cfg.x.ml_model_groups = {}"
 ```
 
-### Reduced Files size
+### Reduced File size
 
-The target size of the files in MB after the {py:class}`~columnflow.tasks.reduction.MergeReducedEvents` task can be set in the Config object with the `cfg.x.reduced_file_size` argument. A float number corresponding to the size in MB is expected. If nothing is set, the default value implemented in columnflow will be used (512MB at the time of writing). An example is given below.
+The target size of the files in MB after the {py:class}`~columnflow.tasks.reduction.MergeReducedEvents` task can be set in the Config object with the `cfg.x.reduced_file_size` argument.
+A float number corresponding to the size in MB is expected.
+This value can also be changed with the `merged_size` argument when running the task.
+If nothing is set, the default value implemented in columnflow will be used (defined in the {py:meth}`~columnflow.tasks.reduction.MergeReducedEvents.resolve_param_values` method).
+An example is given below.
 
 ```python
 # target file size after MergeReducedEvents in MB
