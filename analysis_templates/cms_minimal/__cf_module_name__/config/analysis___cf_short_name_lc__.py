@@ -241,7 +241,7 @@ cfg.x.reduced_file_size = 512.0
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
         # general event info, mandatory for reading files with coffea
-        ColumnCollection.MANDATORY_COFFEA,
+        ColumnCollection.MANDATORY_COFFEA,  # additional columns can be added as strings, similar to object info
         # object info
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
@@ -326,6 +326,7 @@ cfg.add_variable(
     x_title="Number of jets",
     discrete_x=True,
 )
+# pt of all jets in every event
 cfg.add_variable(
     name="jets_pt",
     expression="Jet.pt",
@@ -333,6 +334,7 @@ cfg.add_variable(
     unit="GeV",
     x_title=r"$p_{T} of all jets$",
 )
+# pt of the first jet in every event
 cfg.add_variable(
     name="jet1_pt",
     expression="Jet.pt[:,0]",
@@ -341,6 +343,7 @@ cfg.add_variable(
     unit="GeV",
     x_title=r"Jet 1 $p_{T}$",
 )
+# eta of the first jet in every event
 cfg.add_variable(
     name="jet1_eta",
     expression="Jet.eta[:,0]",

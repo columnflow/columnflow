@@ -107,15 +107,11 @@ cfg.add_variable(
 ```
 
 An example with the transverse momentum of the first jet would be:
-```python
-cfg.add_variable(
-    name="jet1_pt",
-    expression="Jet.pt[:,0]",
-    null_value=EMPTY_FLOAT,
-    binning=(40, 0.0, 400.0),
-    unit="GeV",
-    x_title=r"Jet 1 $p_{T}$",
-)
+
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:language: python
+:start-at: "# pt of the first jet in every event"
+:end-at: ")"
 ```
 
 It is worth mentioning, that you do not need to select a specific jet per event in the `expression` argument (here with `Jet.pt[:,0]`), you can get a flattened histogram for all jets in all events with `expression="Jet.pt"`.
@@ -305,7 +301,7 @@ The expected format is either:
 
 The command-line arguments supporting a default value from the Config object are given in the cms_minimal example of the analysis_templates and shown again below:
 
-```{literalinclude} ../../../columnflow/production/cms/muon.py
+```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
 :start-at: cfg.x.default_calibrator = "example"
 :end-at: cfg.x.default_variables = ("n_jet", "jet1_pt")
