@@ -322,14 +322,17 @@ def jec(
         events = set_ak_column_f32(events, "MET.pt", met_pt)
         events = set_ak_column_f32(events, "MET.phi", met_phi)
 
+    # variable naming conventions
+    variable_map = {
+        "JetEta": events.Jet.eta,
+        "JetPt": events.Jet.pt_raw,
+    }
+
     # jet energy uncertainty components
     for name, evaluator in self.evaluators["junc"].items():
         # get uncertainty
-        jec_uncertainty = ak_evaluate(
-            evaluator,
-            events.Jet.eta,
-            events.Jet.pt_raw,
-        )
+        inputs = [variable_map[inp.name] for inp in evaluator.inputs]
+        jec_uncertainty = ak_evaluate(evaluator, *inputs)
 
         # apply jet uncertainty shifts
         events = set_ak_column_f32(events, f"Jet.pt_jec_{name}_up", events.Jet.pt * (1.0 + jec_uncertainty))
@@ -617,23 +620,23 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events.Rho.fixedGridRhoFastjetAll
     )
 
+    # variable naming convention
+    variable_map = {
+        "JetEta": events.Jet.eta,
+        "JetPt": events.Jet.pt,
+        "Rho": rho,
+    }
+
     # pt resolution
-    jer = ak_evaluate(
-        self.evaluators["jer"],
-        events.Jet.eta,
-        events.Jet.pt,
-        rho,
-    )
+    inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+    jer = ak_evaluate(self.evaluators["jer"], *inputs)
 
     # JER scale factors and systematic variations
-    jersf = {
-        syst: ak_evaluate(
-            self.evaluators["sf"],
-            events.Jet.eta,
-            syst,
-        )
-        for syst in ("nom", "up", "down")
-    }
+    jersf = {}
+    for syst in ("nom", "up", "down"):
+        variable_map_syst = dict(variable_map, systematic=syst)
+        inputs = [variable_map_syst[inp.name] for inp in self.evaluators["sf"].inputs]
+        jersf[syst] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
