@@ -48,7 +48,18 @@ Keep in mind that the module in which your define your Categorizer needs to be i
 the ```category_ids``` column. This is directly included via the ```--producers category_ids```,
 but you could also run the ```category_ids``` Producer as part of another Selector or Producer.
 ```python
-events = self[category_ids](events, **kwargs)
+@producer(
+    uses={category_ids},
+    produces={category_ids},
+)
+def my_producer(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    # produce your category ids
+    events = self[category_ids](events, **kwargs)
+
+    # do whatever else your producer needs to do
+    ...
+
+    return events
 ```
 
 :::{dropdown} But how does this actually work?
@@ -61,7 +72,7 @@ loaded (stored) when running the `category_ids` Producer.
 During the event processing, the `Categorizer` of each leaf category is evaluated to generate
 a mask, which defines, whether the event is part of this category or not.
 The mask is then transformed to an array of ids (either the `category_inst.id` if True, and
-`None` for False entries).
+`None` for False entries).t
 
 In the end, we return a jagged array of category ids, which allows us to categorize one event
 into multiple different types of categories.
