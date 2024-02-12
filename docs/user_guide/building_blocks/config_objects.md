@@ -93,25 +93,12 @@ An example of a Dataset definition is given in the {ref}`Analysis, Campaign and 
 
 In order to create histograms out of the processed datasets, columnflow uses {external+order:py:class}`order.variable.Variable`s.
 These Variables need to be added to the config using the function {external+order:py:meth}`order.config.Config.add_variable`.
-The standard syntax is as follows for the Config object `cfg`:
-
-```python
-cfg.add_variable(
-    name=variable_name,  # this is to be given to the "--variables" argument for the plotting task
-    expression=content_of_the_variable,
-    null_value=value_to_be_given_if_content_not_available_for_event,
-    binning=(bins, lower_edge, upper_edge),
-    unit=unit_of_the_variable_if_any,
-    x_title=x_title_of_histogram_when_plotted,
-)
-```
-
-An example with the transverse momentum of the first jet would be:
+An example of the standard syntax for the Config object `cfg` would be as follows for the transverse momentum of the first jet:
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
 :start-at: "# pt of the first jet in every event"
-:end-at: ")"
+:end-before: "# eta of the first jet in every event"
 ```
 
 It is worth mentioning, that you do not need to select a specific jet per event in the `expression` argument (here with `Jet.pt[:,0]`), you can get a flattened histogram for all jets in all events with `expression="Jet.pt"`.

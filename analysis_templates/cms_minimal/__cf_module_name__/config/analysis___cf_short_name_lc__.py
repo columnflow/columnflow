@@ -336,12 +336,12 @@ cfg.add_variable(
 )
 # pt of the first jet in every event
 cfg.add_variable(
-    name="jet1_pt",
-    expression="Jet.pt[:,0]",
-    null_value=EMPTY_FLOAT,
-    binning=(40, 0.0, 400.0),
-    unit="GeV",
-    x_title=r"Jet 1 $p_{T}$",
+    name="jet1_pt",  # variable name, to be given to the "--variables" argument for the plotting task
+    expression="Jet.pt[:,0]",  # content of the variable
+    null_value=EMPTY_FLOAT,  # value to be given if content not available for event
+    binning=(40, 0.0, 400.0),  # (bins, lower edge, upper edge)
+    unit="GeV",  # unit of the variable, if any
+    x_title=r"Jet 1 $p_{T}$",  # x title of histogram when plotted
 )
 # eta of the first jet in every event
 cfg.add_variable(
