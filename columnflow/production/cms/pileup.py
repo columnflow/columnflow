@@ -6,6 +6,8 @@ Column production methods related to pileup weights.
 
 import functools
 
+import law
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
@@ -18,50 +20,7 @@ ak = maybe_import("awkward")
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-@producer(
-    uses={"Pileup.nTrueInt"},
-    produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
-    # only run on mc
-    mc_only=True,
-)
-def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-    """
-    Based on the number of primary vertices, assigns each event pileup weights using the profile
-    of pileup ratios at the py:attr:`pu_weights` attribute provided by the requires and setup
-    functions below.
-    """
-    # compute the indices for looking up weights
-    indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
-    max_bin = len(self.pu_weights) - 1
-    indices[indices > max_bin] = max_bin
-
-    # save the weights
-    events = set_ak_column_f32(events, "pu_weight", self.pu_weights.nominal[indices])
-    events = set_ak_column_f32(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
-    events = set_ak_column_f32(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
-
-    return events
-
-
-@pu_weight.requires
-def pu_weight_requires(self: Producer, reqs: dict) -> None:
-    """
-    Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
-    """
-    if "pu_weights" in reqs:
-        return
-
-    from columnflow.tasks.cms.external import CreatePileupWeights
-    reqs["pu_weights"] = CreatePileupWeights.req(self.task)
-
-
-@pu_weight.setup
-def pu_weight_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    """
-    Loads the pileup weights added through the requirements and saves them in the
-    py:attr:`pu_weights` attribute for simpler access in the actual callable.
-    """
-    self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))
+logger = law.logger.get_logger(__name__)
 
 
 @producer(
@@ -72,7 +31,7 @@ def pu_weight_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: In
     # function to determine the correction file
     get_pileup_file=(lambda self, external_files: external_files.pu_sf),
 )
-def pu_weight_from_correctionlib(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Based on the number of primary vertices, assigns each event pileup weights using correctionlib.
     """
@@ -100,8 +59,8 @@ def pu_weight_from_correctionlib(self: Producer, events: ak.Array, **kwargs) -> 
     return events
 
 
-@pu_weight_from_correctionlib.requires
-def pu_weight_from_correctionlib_requires(self: Producer, reqs: dict) -> None:
+@pu_weight.requires
+def pu_weight_requires(self: Producer, reqs: dict) -> None:
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
@@ -112,17 +71,23 @@ def pu_weight_from_correctionlib_requires(self: Producer, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@pu_weight_from_correctionlib.setup
-def pu_weight_from_correctionlib_setup(
+@pu_weight.setup
+def pu_weight_setup(
     self: Producer,
     reqs: dict,
     inputs: dict,
     reader_targets: InsertableDict,
 ) -> None:
     """
-    Loads the pileup weights added through the requirements and saves them in the
-    py:attr:`pu_weights` attribute for simpler access in the actual callable.
+    Loads the pileup calculator from the external files bundle and saves them in the
+    py:attr:`pileup_corrector` attribute for simpler access in the actual callable.
     """
+    logger.warning(
+        "As of 12.02.2024, The pu_weight producer has been changed, using the correctionlib instead "
+        "of producing pileup weights ourselves. The previously used pu_weight producer is now named "
+        "`pu_weights_from_columnflow`",
+    )
+
     bundle = reqs["external_files"]
 
     # create the corrector
@@ -142,3 +107,49 @@ def pu_weight_from_correctionlib_setup(
     # check versions
     if self.pileup_corrector.version not in (0,):
         raise Exception(f"unsuppprted pileup corrector version {self.pileup_corrector.version}")
+
+
+@producer(
+    uses={"Pileup.nTrueInt"},
+    produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
+    # only run on mc
+    mc_only=True,
+)
+def pu_weights_from_columnflow(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Based on the number of primary vertices, assigns each event pileup weights using the profile
+    of pileup ratios at the py:attr:`pu_weights` attribute provided by the requires and setup
+    functions below.
+    """
+    # compute the indices for looking up weights
+    indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
+    max_bin = len(self.pu_weights) - 1
+    indices[indices > max_bin] = max_bin
+
+    # save the weights
+    events = set_ak_column_f32(events, "pu_weight", self.pu_weights.nominal[indices])
+    events = set_ak_column_f32(events, "pu_weight_minbias_xs_up", self.pu_weights.minbias_xs_up[indices])
+    events = set_ak_column_f32(events, "pu_weight_minbias_xs_down", self.pu_weights.minbias_xs_down[indices])
+
+    return events
+
+
+@pu_weights_from_columnflow.requires
+def pu_weights_from_columnflow_requires(self: Producer, reqs: dict) -> None:
+    """
+    Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
+    """
+    if "pu_weights" in reqs:
+        return
+
+    from columnflow.tasks.cms.external import CreatePileupWeights
+    reqs["pu_weights"] = CreatePileupWeights.req(self.task)
+
+
+@pu_weights_from_columnflow.setup
+def pu_weights_from_columnflow_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+    """
+    Loads the pileup weights added through the requirements and saves them in the
+    py:attr:`pu_weights` attribute for simpler access in the actual callable.
+    """
+    self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))
