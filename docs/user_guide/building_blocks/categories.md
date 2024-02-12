@@ -8,13 +8,14 @@ In Columnflow, there are many tools to create a complex and flexible categorizat
 In columnflow, there are many tools to create a complex and flexible categorization of all analysed
 events.
 Generally, this categorization can be layered.
-We refer to the smallest building block of these layers as **leaf categories**, which can subsequently be either run individually or combined into more complex categories.
-This guide presents how to implement a set of categories in columnflow and presents an
-shows how to use the resulting categories via the {py:class}`~columnflow.tasks.yields.CreateYieldTable` task.
+We refer to the smallest building block of these layers as **leaf categories**, which can subsequently
+be either run individually or combined into more complex categories.
+This guide presents how to implement a set of categories in columnflow and shows how to use the
+resulting categories via the {py:class}`~columnflow.tasks.yields.CreateYieldTable` task.
 
 
 
-## How to use categories?
+## Create a category
 
 If you used the analysis template to setup your analysis, there are already two categories
 included, named ```incl``` and ```2j```.
@@ -52,7 +53,7 @@ events = self[category_ids](events, **kwargs)
 
 :::{dropdown} But how does this actually work?
 The `category_ids` Producer loads all category instances from your config. For each leaf category inst
-(which is the "smallest unit" of categories, more to that later),
+(which is the "smallest unit" of categories),
 it maps the `category_inst.selection` string to a `Categorizer` and adds it the to the `uses` and
 `produces`, meaning that columns required (produced) by the `Categorizer` will automatically be
 loaded (stored) when running the `category_ids` Producer.
@@ -86,6 +87,12 @@ but contains categories itself, the ids of all its leaf categories combined are 
 
 
 ## Creation of nested categories
+
+:::{note}
+The following section is mostly included for didactic purposes. To implement a set of nested
+categories, it is recommended to follow the section
+{ref}`Categorization with multiple layers <categorization_multiple_layers>`.
+:::
 
 Often times, there are multiple layers of categorization. For example, we might want to categorize
 based on the number of leptons and the number of jets.
@@ -152,7 +159,9 @@ snippet shows how to combine the "2jet" and the "1lep" category:
 
 ```python
 cat_2jet = config.get_category("2jet")
-cat_1lep = config.get_category("1lep")
+cat_3jet = config.get_category("3jet")
+cat_1e = config.get_category("1e")
+cat_1mu = config.get_category("1mu")
 
 # add combined category as child to the existing categories
 cat_1e__2jet = cat_2jet.add_category(
@@ -214,11 +223,12 @@ We should see that the yield of the `2jet` category is the same as the `1e__2jet
 categories combined. This is to be expected, since the `2jet` category will be built by combining
 histograms from all of their leaf categories.
 
-:::{dropdown} Note! Take care to define your categories orthogonal!
+:::{note} Take care to define your categories orthogonal!
+
 There is no mechanism that automatically prevents double counting. It is therefore essential to define
 categories such that there is no overlap between leaf categories of any defined category.
 
-Example:
+:::::{dropdown} Example of what NOT to do
 We might have two categories selecting either exactly two or at least two jets.
 
 ```python
@@ -258,8 +268,10 @@ non_orthogonal_cat = config.add_category(
 non_orthogonal_cat.add_category(cat_2jet)
 non_orthogonal_cat.add_category(cat_geq2jet)
 ```
+:::::
 :::
 
+(categorization_multiple_layers)=
 ## Categorization with multiple layers
 
 But what should you do when the number of category combinations is getting large? For example, you might
@@ -488,7 +500,7 @@ This function automatically consideres category ids of all leaf categories from 
 categories. This is especially helpful when your category contains multiple leaf categories.
 
 
-## Key points (TL;DR)
+## Key points (TL; DR)
 
 - Categories are {external+order:py:class}`order.category.Category` instances defined in the config.
 - We can add categories to each other; the "smallest unit" of category is referred to as "leaf category".
@@ -499,4 +511,5 @@ which is a function that defines whether or not an event belongs in this categor
 {py:class}`~columnflow.production.categories.category_ids` Producer.
 - Make sure that for each category, all of its leaf categories are defined orthogonal to prevent double counting.
 - Groups of categories can be combined via {py:func}`~columnflow.config_util.create_category_combinations`.
-- Make sure that each group of categories is inclusive; otherwise, all combined categories will not be inclusive aswell.
+- Combining of categories can impact your parent categories; this can be prevented by defining
+your categories such that each group of categories is inclusive.
