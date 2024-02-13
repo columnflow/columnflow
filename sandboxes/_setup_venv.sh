@@ -2,7 +2,7 @@
 
 # Script that installs and sources a virtual environment. Distinctions are made depending on whether
 # the venv is already present, and whether the script is called as part of a remote (law) job
-# (CF_REMOTE_JOB=1).
+# (CF_REMOTE_ENV=1).
 #
 # Four environment variables are expected to be set before this script is called:
 #   CF_SANDBOX_FILE
@@ -41,7 +41,7 @@
 #      but the exit code remains unchanged.
 #
 # Note on remote jobs:
-# When the CF_REMOTE_JOB variable is found to be "1" (usually set by a remote job bootstrap script),
+# When the CF_REMOTE_ENV variable is found to be "1" (usually set by a remote job bootstrap script),
 # no mode is supported and an error is printed when it is set to a non-empty value. In any case, no
 # installation will happen but the setup is reused from a pre-compiled software bundle that is
 # fetched from a local or remote location and unpacked.
@@ -83,7 +83,7 @@ setup_venv() {
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
     fi
-    if [ "${CF_REMOTE_JOB}" = "1" ] && [ "${mode}" != "install" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ] && [ "${mode}" != "install" ]; then
         >&2 echo "the venv setup mode must be 'install' or empty in remote jobs, but got '${mode}'"
         return "2"
     fi
@@ -169,7 +169,7 @@ setup_venv() {
     local ret="0"
 
     # handle local environments
-    if [ "${CF_REMOTE_JOB}" != "1" ]; then
+    if [ "${CF_REMOTE_ENV}" != "1" ]; then
         # optionally remove the current installation
         if [ "${mode}" = "reinstall" ]; then
             echo "removing current installation at ${install_path_repr} (mode '${mode}')"
@@ -301,7 +301,7 @@ setup_venv() {
     fi
 
     # handle remote job environments
-    if [ "${CF_REMOTE_JOB}" = "1" ]; then
+    if [ "${CF_REMOTE_ENV}" = "1" ]; then
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
@@ -317,21 +317,20 @@ setup_venv() {
             local sandbox_patterns=( ${CF_JOB_BASH_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
-                if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
-                    echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
-                    (
-                        source "${CF_WLCG_TOOLS}" "" &&
-                        mkdir -p "${install_path}" &&
-                        cd "${install_path}" &&
-                        law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
-                        tar -xzf "bundle.tgz"
-                    ) || return "$?"
-                    found_sandbox="true"
-                    break
-                fi
+                [ "${sandbox_names[i]}" != "${CF_VENV_NAME}" ] && continue
+                echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
+                (
+                    source "${CF_WLCG_TOOLS}" "" &&
+                    mkdir -p "${install_path}" &&
+                    cd "${install_path}" &&
+                    law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
+                    tar -xzf "bundle.tgz"
+                ) || return "$?"
+                found_sandbox="true"
+                break
             done
             if ! ${found_sandbox}; then
-                >&2 echo "bash sandbox ${CF_VENV_BASE} not found in job configuration, stopping"
+                >&2 echo "bash sandbox '${CF_VENV_NAME}' not found in job configuration, stopping"
                 return "31"
             fi
         fi

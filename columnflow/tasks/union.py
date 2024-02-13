@@ -94,8 +94,8 @@ class UniteColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
-            sorted_ak_to_root,
+            ColumnCollection, Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
+            sorted_ak_to_parquet, sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -108,7 +108,12 @@ class UniteColumns(
         tmp_dir.touch()
 
         # define columns that will be written
-        write_columns = set(self.config_inst.x.keep_columns.get(self.task_family, ["*"]))
+        write_columns = set()
+        for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
+            if isinstance(c, ColumnCollection):
+                write_columns |= self.find_keep_columns(c)
+            else:
+                write_columns.add(Route(c))
         route_filter = RouteFilter(write_columns)
 
         # define columns that need to be read

@@ -18,7 +18,7 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms
-from columnflow.util import dev_sandbox, test_int
+from columnflow.util import dev_sandbox, try_int
 
 
 class CreateYieldTable(
@@ -98,7 +98,7 @@ class CreateYieldTable(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "number_format" in params and test_int(params["number_format"]):
+        if "number_format" in params and try_int(params["number_format"]):
             # convert 'number_format' in integer if possible
             params["number_format"] = int(params["number_format"])
 

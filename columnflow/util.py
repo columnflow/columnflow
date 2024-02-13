@@ -7,10 +7,10 @@ Collection of general helpers and utilities.
 from __future__ import annotations
 
 __all__ = [
-    "UNSET", "env_is_remote", "env_is_dev", "primes",
+    "UNSET",
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
     "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
-    "safe_div", "test_float", "test_int", "is_pattern", "is_regex", "pattern_matcher",
+    "safe_div", "try_float", "try_int", "is_pattern", "is_regex", "pattern_matcher",
     "dict_add_strict", "get_source_code",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
@@ -35,20 +35,12 @@ import law
 from law.util import InsertableDict  # noqa
 import luigi
 
+from columnflow import env_is_dev, env_is_remote
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
 #: Placeholder for an unset value.
 UNSET = object()
-
-#: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_JOB``).
-env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_JOB", "0"))
-
-#: Boolean denoting whether the environment is in a remote job on the WLCG (based on ``CF_ON_GRID``).
-env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "0"))
-
-#: Boolean denoting whether the environment is used for development (based on ``CF_DEV``).
-env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "0"))
 
 #: List of the first 100 primes.
 primes = [
@@ -409,7 +401,7 @@ def safe_div(a: int | float, b: int | float) -> float:
     return (a / b) if b else 0.0
 
 
-def test_float(f: Any) -> bool:
+def try_float(f: Any) -> bool:
     """
     Tests whether a value *f* can be converted to a float.
     """
@@ -420,7 +412,7 @@ def test_float(f: Any) -> bool:
         return False
 
 
-def test_int(i: Any) -> bool:
+def try_int(i: Any) -> bool:
     """
     Tests whether a value *i* can be converted to an integer.
     """
@@ -485,14 +477,14 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
     if pattern in ["*", "^.*$"]:
         return lambda s: True
 
-    # identify fnmatch patterns
-    if is_pattern(pattern):
-        return lambda s: fnmatch.fnmatch(s, pattern)
-
     # identify regular expressions
     if is_regex(pattern):
         cre = re.compile(pattern)
         return lambda s: cre.match(s) is not None
+
+    # identify fnmatch patterns
+    if is_pattern(pattern):
+        return lambda s: fnmatch.fnmatch(s, pattern)
 
     # fallback to string comparison
     return lambda s: s == pattern
@@ -602,9 +594,10 @@ class MockModule(object):
     or b) to provide type hints for documentation purposes.
 
     .. py:attribute:: _name
-       type: str
 
-       The name of the mock module.
+        type: str
+
+        The name of the mock module.
     """
 
     def __init__(self, name: str):
@@ -634,7 +627,7 @@ class MockModule(object):
 
 class FunctionArgs(object):
     """
-    Leight-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
+    Light-weight utility class that wraps all passed *args* and *kwargs* and allows to invoke
     different functions with them.
     """
 
@@ -702,8 +695,9 @@ class DerivableMeta(abc.ABCMeta):
         """
         Class creation.
         """
-        # default attributes, irrespective of inheritance
-        cls_dict.setdefault("_subclasses", {})
+        # defensive cls_dict copy and overwrite attributes
+        cls_dict = cls_dict.copy()
+        cls_dict["_subclasses"] = {}
 
         # create the class
         cls = super().__new__(metacls, cls_name, bases, cls_dict)
