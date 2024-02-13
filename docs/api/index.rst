@@ -5,6 +5,7 @@ API Reference
    :maxdepth: 3
 
    calibration/index
+   categorization/index
    production/index
    selection/index
    categorization/index
