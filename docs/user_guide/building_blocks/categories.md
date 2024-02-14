@@ -20,7 +20,7 @@ resulting categories via the {py:class}`~columnflow.tasks.yields.CreateYieldTabl
 If you used the analysis template to setup your analysis, there are already two categories
 included, named ```incl``` and ```2j```.
 To test that the categories are properly implemented,
-we can use the CreateYieldsTable task:
+we can use the CreateYieldTable task:
 ```shell
 law run cf.CreateYieldTable --version v1 \
     --calibrators example --selector example --producers category_ids \
@@ -158,8 +158,8 @@ This code snippet produces 4 new categories, which (after rerunning the ```categ
 producer and recreating all necessary histograms) can already be used:
 
 ```shell
-law run cf.CreateYieldsTable --version v1 \
-    --calibrators example --selector example --producer category_ids \
+law run cf.CreateYieldTable --version v1 \
+    --calibrators example --selector example --producers example \
     --processes tt,st --categories "*"
 ```
 
@@ -226,7 +226,7 @@ Let's test if our leaf categories are working as intended:
 
 ```shell
 law run cf.CreateYieldTable --version v1 \
-    --calibrators example --selector example --producer category_ids \
+    --calibrators example --selector example --producers example \
     --processes tt,st --categories 1e,2jet,1e__2jet,1e__3jet,1mu__2jet,1mu__3jet
 ```
 
@@ -404,7 +404,7 @@ To test our final set of categories, we can call our `CreateYieldTable` task aga
 
 ```shell
 law run cf.CreateYieldTable --version v1 \
-    --calibrators example --selector example --producer category_ids \
+    --calibrators example --selector example --producers example \
     --processes tt,st --categories "*"
 ```
 
@@ -522,5 +522,5 @@ which is a function that defines whether or not an event belongs in this categor
 {py:class}`~columnflow.production.categories.category_ids` Producer.
 - Make sure that for each category, all of its leaf categories are defined orthogonal to prevent double counting.
 - Groups of categories can be combined via {py:func}`~columnflow.config_util.create_category_combinations`.
-- Combining of categories can impact your parent categories; this can be prevented by defining
+- Combining categories can impact your parent categories; this can be prevented by defining
 your categories such that each group of categories is inclusive.
