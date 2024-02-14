@@ -28,7 +28,7 @@ Summary
    ensure_proxy
    dev_sandbox
    safe_div
-   test_float
+   try_float
    is_pattern
    is_regex
    pattern_matcher
@@ -139,10 +139,10 @@ Functions
 
 .. autofunction:: safe_div
 
-``test_float``
+``try_float``
 ++++++++++++++
 
-.. autofunction:: test_float
+.. autofunction:: try_float
 
 ``is_pattern``
 ++++++++++++++

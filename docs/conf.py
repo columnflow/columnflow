@@ -108,6 +108,7 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
     "uproot": ("https://uproot.readthedocs.io/en/latest/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "scinum": ("https://scinum.readthedocs.io/en/stable/", None),
 }
 
 import luigi

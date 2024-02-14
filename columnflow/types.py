@@ -22,8 +22,8 @@ NOTE: you are running a python interpreter inside the columnflow source director
 from collections.abc import KeysView, ValuesView  # noqa
 from types import ModuleType, GeneratorType, GenericAlias  # noqa
 from typing import (  # noqa
-    Any, Union, TypeVar, ClassVar, List, Tuple, Sequence, Set, Dict, Callable, Generator, TextIO,
-    Iterable,
+    Any, Union, TypeVar, ClassVar, Sequence, Callable, Generator, TextIO, Iterable,
+    Dict, Tuple, List,
 )
 
 from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType  # noqa

@@ -303,7 +303,7 @@ setup_venv() {
     # handle remote job environments
     if [ "${CF_REMOTE_ENV}" = "1" ]; then
         # in this case, the environment is inside a remote job, i.e., these variables are present:
-        # CF_ENV_BASH_SANDBOX_URIS, CF_ENV_BASH_SANDBOX_PATTERNS and CF_ENV_BASH_SANDBOX_NAMES
+        # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
             if [ -z "${CF_WLCG_TOOLS}" ] || [ ! -f "${CF_WLCG_TOOLS}" ]; then
                 >&2 echo "CF_WLCG_TOOLS (${CF_WLCG_TOOLS}) files is empty or does not exist"
@@ -312,26 +312,25 @@ setup_venv() {
 
             # fetch the bundle and unpack it
             echo "looking for bash sandbox bundle for venv ${CF_VENV_NAME}"
-            local sandbox_names=( ${CF_ENV_BASH_SANDBOX_NAMES} )
-            local sandbox_uris=( ${CF_ENV_BASH_SANDBOX_URIS} )
-            local sandbox_patterns=( ${CF_ENV_BASH_SANDBOX_PATTERNS} )
+            local sandbox_names=( ${CF_JOB_BASH_SANDBOX_NAMES} )
+            local sandbox_uris=( ${CF_JOB_BASH_SANDBOX_URIS} )
+            local sandbox_patterns=( ${CF_JOB_BASH_SANDBOX_PATTERNS} )
             local found_sandbox="false"
             for (( i=0; i<${#sandbox_names[@]}; i+=1 )); do
-                if [ "${sandbox_names[i]}" = "${CF_VENV_NAME}" ]; then
-                    echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
-                    (
-                        source "${CF_WLCG_TOOLS}" "" &&
-                        mkdir -p "${install_path}" &&
-                        cd "${install_path}" &&
-                        law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
-                        tar -xzf "bundle.tgz"
-                    ) || return "$?"
-                    found_sandbox="true"
-                    break
-                fi
+                [ "${sandbox_names[i]}" != "${CF_VENV_NAME}" ] && continue
+                echo "found bundle ${CF_VENV_NAME}, index ${i}, pattern ${sandbox_patterns[i]}, uri ${sandbox_uris[i]}"
+                (
+                    source "${CF_WLCG_TOOLS}" "" &&
+                    mkdir -p "${install_path}" &&
+                    cd "${install_path}" &&
+                    law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
+                    tar -xzf "bundle.tgz"
+                ) || return "$?"
+                found_sandbox="true"
+                break
             done
             if ! ${found_sandbox}; then
-                >&2 echo "bash sandbox ${CF_VENV_BASE} not found in job configuration, stopping"
+                >&2 echo "bash sandbox '${CF_VENV_NAME}' not found in job configuration, stopping"
                 return "31"
             fi
         fi

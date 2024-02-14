@@ -2,6 +2,7 @@ Work in Progess! This guide has not been finalized and the presented code has no
 
 TODO: make the code testable
 
+(categories)=
 # Categories
 
 In columnflow, there are many tools to create a complex and flexible categorization of all analysed

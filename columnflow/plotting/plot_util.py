@@ -14,13 +14,45 @@ from collections import OrderedDict
 
 import order as od
 
-from columnflow.util import maybe_import, test_int
+from columnflow.util import maybe_import, try_int
 
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
+
+label_options = {
+    "wip": "Work in progress",
+    "pre": "Preliminary",
+    "pw": "Private work",
+    "sim": "Simulation",
+    "simwip": "Simulation work in progress",
+    "simpre": "Simulation preliminary",
+    "simpw": "Simulation private work",
+    "od": "OpenData",
+    "odwip": "OpenData work in progress",
+    "odpw": "OpenData private work",
+    "public": "",
+}
+
+
+def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
+    """
+    Helper function to get the CMS label configuration.
+
+    :param ax: The axis to plot the CMS label on.
+    :param llabel: The left label of the CMS label.
+    :return: A dictionary with the CMS label configuration.
+    """
+    cms_label_kwargs = {
+        "ax": ax,
+        "llabel": label_options.get(llabel, llabel),
+        "fontsize": 22,
+        "data": False,
+    }
+
+    return cms_label_kwargs
 
 
 def apply_settings(containers: Iterable[od.AuxDataMixin], settings: dict[dict, Any] | None):
@@ -60,7 +92,7 @@ def apply_process_settings(
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
-        if test_int(scale_factor):
+        if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
             # TODO: there might be a prettier way for the label
@@ -84,7 +116,7 @@ def apply_variable_settings(
     # apply rebinning setting directly to histograms
     for var_inst in variable_insts:
         rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
-        if test_int(rebin_factor):
+        if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
@@ -164,6 +196,7 @@ def prepare_style_config(
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "com": config_inst.campaign.ecm,
         },
     }
 
