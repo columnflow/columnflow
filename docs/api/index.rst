@@ -8,10 +8,12 @@ API Reference
    categorization/index
    production/index
    selection/index
-   ml/index
+   categorization/index
    inference/index
+   ml/index
    plotting/index
    tasks/index
    util
    columnar_util
    config_util
+   types

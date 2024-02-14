@@ -1,6 +1,9 @@
-``columnflow.tasks.selection``
-==============================
+``selection``
+=============
 
+.. currentmodule:: columnflow.tasks.selection
 .. automodule:: columnflow.tasks.selection
-   :autosummary:
-   :members:
+    :autosummary:
+    :members:
+    :undoc-members:
+
