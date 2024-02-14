@@ -4,7 +4,6 @@ TODO: make the code testable
 
 # Categories
 
-In Columnflow, there are many tools to create a complex and flexible categorization of all analysed
 In columnflow, there are many tools to create a complex and flexible categorization of all analysed
 events.
 Generally, this categorization can be layered.
