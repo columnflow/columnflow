@@ -66,6 +66,8 @@ elif html_theme == "sphinx_book_theme":
     })
 
 extensions = [
+    "sphinx_design",
+    "sphinx_copybutton",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
     "sphinx_autodoc_typehints",
@@ -77,6 +79,8 @@ extensions = [
     "myst_parser",
     "pydomain_patch",
 ]
+
+myst_enable_extensions = ["colon_fence"]
 
 typehints_defaults = "comma"
 
@@ -104,6 +108,7 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
     "uproot": ("https://uproot.readthedocs.io/en/latest/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "scinum": ("https://scinum.readthedocs.io/en/stable/", None),
 }
 
 import luigi

@@ -33,7 +33,7 @@ label_options = {
     "od": "OpenData",
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
-            "public": "",
+    "public": "",
 }
 
 
@@ -196,6 +196,7 @@ def prepare_style_config(
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "com": config_inst.campaign.ecm,
         },
     }
 

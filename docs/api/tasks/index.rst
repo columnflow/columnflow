@@ -13,6 +13,8 @@
 
    selection
    calibration
+   plotting
+   cutflow
    external
    reduction
    framework/index
