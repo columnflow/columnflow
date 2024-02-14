@@ -22,7 +22,7 @@ To test that the categories are properly implemented,
 we can use the CreateYieldTable task:
 ```shell
 law run cf.CreateYieldTable --version v1 \
-    --calibrators example --selector example --producers category_ids \
+    --calibrators example --selector example --producers example \
     --processes tt,st --categories incl,2j
 ```
 
