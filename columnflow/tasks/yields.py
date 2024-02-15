@@ -57,7 +57,7 @@ class CreateYieldTable(
         description="string parameter to define the normalization of the yields; "
         "choices: '', per_process, per_category, all; empty default",
     )
-    suffix = luigi.Parameter(
+    output_suffix = luigi.Parameter(
         default=law.NO_STR,
         description="Adds a suffix to the output name of the yields table; empty default",
     )
@@ -110,8 +110,8 @@ class CreateYieldTable(
 
     def output(self):
         suffix = ""
-        if self.suffix and self.suffix != law.NO_STR:
-            suffix = f"__{self.suffix}"
+        if self.output_suffix and self.output_suffix != law.NO_STR:
+            suffix = f"__{self.output_suffix}"
 
         return {
             "table": self.target(f"table__proc_{self.processes_repr}__cat_{self.categories_repr}{suffix}.txt"),
