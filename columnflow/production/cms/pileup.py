@@ -49,7 +49,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         ("pu_weight_minbias_xs_down", "down"),
     ):
         # get the inputs for this type of variation
-        variable_map_syst = dict(variable_map, systematic=syst)
+        variable_map_syst = {**variable_map, "systematic": syst}
         inputs = [variable_map_syst[inp.name] for inp in self.pileup_corrector.inputs]
 
         # evaluate and store the produced column
@@ -83,9 +83,9 @@ def pu_weight_setup(
     py:attr:`pileup_corrector` attribute for simpler access in the actual callable.
     """
     logger.warning(
-        "As of 12.02.2024, The pu_weight producer has been changed, using the correctionlib instead "
+        "As of 15.02.2024, The pu_weight producer has been changed, using the correctionlib instead "
         "of producing pileup weights ourselves. The previously used pu_weight producer is now named "
-        "`pu_weights_from_columnflow`",
+        "`pu_weights_from_columnflow`, but using this one is recommended",
     )
 
     bundle = reqs["external_files"]
@@ -143,7 +143,12 @@ def pu_weights_from_columnflow_requires(self: Producer, reqs: dict) -> None:
 
 
 @pu_weights_from_columnflow.setup
-def pu_weights_from_columnflow_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def pu_weights_from_columnflow_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
     """
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
