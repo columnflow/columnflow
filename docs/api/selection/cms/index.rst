@@ -1,8 +1,7 @@
 ``cms``
 =======
-
-.. automodule:: columnflow.selection.cms
 .. currentmodule:: columnflow.selection.cms
+.. automodule:: columnflow.selection.cms
 
 .. toctree::
     :maxdepth: 1

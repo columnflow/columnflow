@@ -613,7 +613,7 @@ done in the {py:class}`~columnflow.tasks.production.ProduceColumns` task, using 
 created in this task if needed.
 
 - Other useful functions (e.g. for easier handling of columns) can be found in the
-{doc}`best_practices` section of this documentation.
+{doc}`../best_practices` section of this documentation.
 
 
 
