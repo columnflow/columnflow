@@ -2468,7 +2468,9 @@ class DaskArrayReader(object):
         self: DaskArrayReader,
         path: str,
         open_options: dict | None = None,
-        materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
+        # TODO: we want to go back to SLICES as soon as possible, but currently there is an issue
+        #       that we load all events into memory for each chunk when using SLICES
+        materialization_strategy: MaterializationStrategy = MaterializationStrategy.PARTITIONS,
     ):
         super().__init__()
 
