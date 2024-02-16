@@ -1,0 +1,130 @@
+[project]
+dynamic = [
+    "version",
+    "authors",
+    "license",
+    "dependencies",
+    "optional-dependencies"
+]
+name = "columnflow"
+description = "columnflow"
+requires-python = ">=3.7, <=3.11"
+readme = "README.md"
+keywords = [
+    "physics",
+    "analysis",
+    "experiment",
+    "columnar",
+    "vectorized",
+    "law",
+    "order",
+    "luigi",
+    "workflow",
+    "automation",
+    "lhc",
+    "cern"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+
+
+[tool.setuptools.dynamic]
+dependencies={file = ["sandboxes/cf.txt"]}
+optional-dependencies={"dev" = {file = ["sandboxes/dev.txt"]}, "columnar"= {file = ["sandboxes/columnar.txt"]}, "ml_tf"= {file = ["sandboxes/ml_tf.txt", "sandboxes/columnar.txt"]}}
+# optional-dependencies.columnar= {file = ["sandboxes/columnar.txt"]}
+# optional-dependencies.ml-tf= {file = ["sandboxes/ml-tf.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["columnflow"]  # list of folders that contain the packages (["."] by default)
+
+[project.urls]
+Repository = "https://github.com/columnflow/columnflow"
+Documentation = "https://columnflow.readthedocs.io"
+
+[tool.micromamba.environment]
+name = "columnflow"
+target = "${CF_SOFTWARE}/columnflow"
+channels=[
+    "conda-forge",
+    "defaults",
+]
+dependencies = [
+    "libgcc",
+    "bash",
+    "zsh",
+    "python=3.9",
+    "git",
+    "git-lfs",
+    "gfal2",
+    "gfal2-util",
+    "python-gfal2",
+    "myproxy",
+    "conda-pack"
+]
+[build-system]
+requires = ["setuptools>=66"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pdm]
+distribution = true
+
+[tool.ruff]
+ignore = [
+    "E402",
+    "E722",
+    "E731",
+    "Q003",
+]
+line-length = 120
+select = [
+    "E",
+    "F",
+    "Q",
+    "W",
+]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+target-version = "py39"
+
+[tool.ruff.flake8-quotes]
+inline-quotes = "double"
+
+[tool.ruff.pydocstyle]
+convention = "numpy"
