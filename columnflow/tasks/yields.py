@@ -57,6 +57,10 @@ class CreateYieldTable(
         description="string parameter to define the normalization of the yields; "
         "choices: '', per_process, per_category, all; empty default",
     )
+    output_suffix = luigi.Parameter(
+        default=law.NO_STR,
+        description="Adds a suffix to the output name of the yields table; empty default",
+    )
 
     # upstream requirements
     reqs = Requirements(
@@ -105,9 +109,13 @@ class CreateYieldTable(
         return params
 
     def output(self):
-        # TODO: add a "yield" output that gives the raw numbers, e.g. as a csv
+        suffix = ""
+        if self.output_suffix and self.output_suffix != law.NO_STR:
+            suffix = f"__{self.output_suffix}"
+
         return {
-            "table": self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}.txt"),
+            "table": self.target(f"table__proc_{self.processes_repr}__cat_{self.categories_repr}{suffix}.txt"),
+            "yields": self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}{suffix}.json"),
         }
 
     @law.decorator.log
@@ -176,7 +184,7 @@ class CreateYieldTable(
 
             # read out yields per category and per process
             for process_inst, h in hists.items():
-                processes.append(process_inst.label)
+                processes.append(process_inst)
 
                 for category_inst in category_insts:
                     leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
@@ -195,7 +203,7 @@ class CreateYieldTable(
                             f"mcstat_{process_inst.name}_{category_inst.name}",
                             math.sqrt(h_cat.variance),
                         )
-                    yields[category_inst.label].append(value)
+                    yields[category_inst].append(value)
 
             # obtain normalizaton factors
             norm_factors = 1
@@ -207,7 +215,7 @@ class CreateYieldTable(
             elif self.normalize_yields == "per_process":
                 norm_factors = [
                     sum(yields[category][i] for category in yields.keys())
-                    for i in range(len(yields[category_insts[0].label]))
+                    for i in range(len(yields[category_insts[0]]))
                 ]
             elif self.normalize_yields == "per_category":
                 norm_factors = {
@@ -215,7 +223,9 @@ class CreateYieldTable(
                     for category, category_yields in yields.items()
                 }
 
-            yields_str = defaultdict(list, {"Process": processes})
+            # initialize dicts
+            yields_str = defaultdict(list, {"Process": [proc.label for proc in processes]})
+            raw_yields = defaultdict(dict, {})
 
             # apply normalization and format
             for category, category_yields in yields.items():
@@ -228,15 +238,22 @@ class CreateYieldTable(
                     else:
                         norm_factor = norm_factors
 
+                    raw_yield = (value / norm_factor).nominal
+                    raw_yields[category.name][processes[i].name] = raw_yield
+
                     # format yields into strings
-                    yields_str[category].append((value / norm_factor).str(
+                    yield_str = (value / norm_factor).str(
                         combine_uncs="all",
                         format=self.number_format,
                         style="latex" if "latex" in self.table_format else "plain",
-                    ))
+                    )
+                    if "latex" in self.table_format:
+                        yield_str = f"${yield_str}$"
+                    yields_str[category.label].append(yield_str)
 
             # create, print and save the yield table
             yield_table = tabulate(yields_str, headers="keys", tablefmt=self.table_format)
             self.publish_message(yield_table)
 
             outputs["table"].dump(yield_table, formatter="text")
+            outputs["yields"].dump(raw_yields, formatter="json")
