@@ -1,0 +1,13 @@
+on:
+  push:
+
+
+jobs:
+  container-test:
+    runs-on: ubuntu-latest
+    container:
+      image: gitlab-registry.cern.ch/pkeicher/docker-tutorial:0cdb43d4
+    steps:
+      - name: Test Docker
+        run: |
+          python3 /analysis/script.py
