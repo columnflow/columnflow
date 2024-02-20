@@ -1,15 +1,15 @@
 [project]
 dynamic = [
     "version",
+    "readme",
     "authors",
     "license",
     "dependencies",
-    "optional-dependencies"
+    "optional-dependencies",
 ]
 name = "columnflow"
 description = "columnflow"
 requires-python = ">=3.7, <=3.11"
-readme = "README.md"
 keywords = [
     "physics",
     "analysis",
@@ -43,6 +43,7 @@ classifiers = [
 
 [tool.setuptools.dynamic]
 dependencies={file = ["sandboxes/cf.txt"]}
+readme = {file = ["README.md"]}
 optional-dependencies={"dev" = {file = ["sandboxes/dev.txt"]}, "columnar"= {file = ["sandboxes/columnar.txt"]}, "ml_tf"= {file = ["sandboxes/ml_tf.txt", "sandboxes/columnar.txt"]}}
 # optional-dependencies.columnar= {file = ["sandboxes/columnar.txt"]}
 # optional-dependencies.ml-tf= {file = ["sandboxes/ml-tf.txt"]}
@@ -54,7 +55,7 @@ where = ["columnflow"]  # list of folders that contain the packages (["."] by de
 Repository = "https://github.com/columnflow/columnflow"
 Documentation = "https://columnflow.readthedocs.io"
 
-[tool.micromamba.environment]
+[tool.unidep]
 name = "columnflow"
 target = "${CF_SOFTWARE}/columnflow"
 channels=[
@@ -74,6 +75,8 @@ dependencies = [
     "myproxy",
     "conda-pack"
 ]
+changeps1 = false
+always_yes = true
 [build-system]
 requires = ["setuptools>=66"]
 build-backend = "setuptools.build_meta"
