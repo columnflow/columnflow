@@ -7,7 +7,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: gitlab-registry.cern.ch/pkeicher/docker-tutorial:0cdb43d4
+      volumes:
+        - /cvmfs:/cvmfs
+        - /afs:/afs
     steps:
       - name: Test Docker
         run: |
           python3 /analysis/script.py
+          (ls /cvfms && echo Found /cvfms) || (echo No /cvfms)
+          (ls /afs && echo Found /afs) || (echo No /afs)
