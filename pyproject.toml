@@ -40,7 +40,6 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
 ]
 
-
 [tool.setuptools.dynamic]
 dependencies={file = ["sandboxes/cf.txt"]}
 readme = {file = ["README.md"]}
@@ -63,22 +62,27 @@ channels=[
     "defaults",
 ]
 dependencies = [
-    "libgcc",
-    "bash",
-    "zsh",
-    "python=3.9",
-    "git",
-    "git-lfs",
-    "gfal2",
-    "gfal2-util",
-    "python-gfal2",
-    "myproxy",
-    "conda-pack"
+    {conda = "libgcc"},
+    {conda = "bash"},
+    {conda = "zsh"},
+    {conda = "python"},
+    {conda = "git"},
+    {conda = "git-lfs"},
+    {conda = "gfal2"},
+    {conda = "gfal2-util"},
+    {conda = "python-gfal2"},
+    {conda = "myproxy"},
+    {conda = "conda-pack"},
+]
+platforms = [
+    "linux-64",
+    "linux-ppc64le",
+    "linux-aarch64",
 ]
 changeps1 = false
 always_yes = true
 [build-system]
-requires = ["setuptools>=66"]
+requires = ["setuptools>=66", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
