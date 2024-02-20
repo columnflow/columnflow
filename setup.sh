@@ -516,7 +516,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="3.9"
+    local pyv="${PYVERSION:-3.9}"
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -601,19 +601,17 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                micromamba install \
-                    libgcc \
-                    bash \
-                    zsh \
-                    "python=${pyv}" \
-                    git \
-                    git-lfs \
-                    gfal2 \
-                    gfal2-util \
-                    python-gfal2 \
-                    myproxy \
-                    conda-pack \
-                    || return "$?"
+                
+                cf_color cyan "install unidep"
+                python3 -m pip install unidep || return "$?"
+                cf_color cyan "building micromamba command"
+                # compile micromamba environment.yaml file from pyproject.toml
+                unidep merge --platform linux-64 \
+                    --overwrite-pin "python=${pyv}" || return "$?"
+                # resulting environment.yaml file contains environment name
+                # which we do not use, so delete the name
+                sed -i '/^name:/d' environment.yaml || return "$?"
+                micromamba install -f environment.yaml || return "$?"
                 micromamba clean --yes --all
 
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
