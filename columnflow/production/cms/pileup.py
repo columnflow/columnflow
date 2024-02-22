@@ -49,7 +49,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         ("pu_weight_minbias_xs_down", "down"),
     ):
         # get the inputs for this type of variation
-        variable_map_syst = {**variable_map, "systematic": syst}
+        variable_map_syst = {**variable_map, "weights": syst}
         inputs = [variable_map_syst[inp.name] for inp in self.pileup_corrector.inputs]
 
         # evaluate and store the produced column
