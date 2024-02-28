@@ -140,7 +140,7 @@ setup_venv() {
     local venv_name_hashed="${CF_VENV_NAME}_${install_hash}"
     local install_path="${CF_VENV_BASE}/${venv_name_hashed}"
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
-    local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
+    local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K.*" )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
     local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
 
@@ -272,9 +272,9 @@ setup_venv() {
             add_requirements pip setuptools
 
             # basic cf requirements
-            if ! ${requirement_files_contains_cf}; then
-                add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
-            fi
+            # if ! ${requirement_files_contains_cf}; then
+            #     add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
+            # fi
 
             # requirement files
             local f
@@ -283,10 +283,13 @@ setup_venv() {
             done
 
             # actual installation
-            eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
+            # eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
+            eval "python -m pip install --force wheel"
+            echo "CURRENT PATH: ${PATH}"
+            eval "python -m pip install -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
-
+            echo "CURRENT PATH: ${PATH}"
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
             [ "$?" != "0" ] && clear_pending && return "28"
