@@ -73,7 +73,12 @@ dependencies = [
     {conda = "python-gfal2"},
     {conda = "myproxy"},
     {conda = "conda-pack"},
+    {conda = "unidep[all]"},
+    {conda = "pip-tools[toml]"}
 ]
+local-dependencies = {file = ["sandboxes/cf.txt"]}
+optional-dependencies={"dev" = {file = ["sandboxes/dev.txt"]}, "columnar"= {file = ["sandboxes/columnar.txt"]}, "ml_tf"= {file = ["sandboxes/ml_tf.txt", "sandboxes/columnar.txt"]}}
+
 platforms = [
     "linux-64",
     "linux-ppc64le",
@@ -81,8 +86,10 @@ platforms = [
 ]
 changeps1 = false
 always_yes = true
+
+
 [build-system]
-requires = ["setuptools>=66", "wheel"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
