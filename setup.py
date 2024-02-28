@@ -2,7 +2,7 @@
 
 
 import os
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages  # type: ignore
 
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -36,9 +36,9 @@ with open(os.path.join(this_dir, "README.md"), "r") as f:
     long_description = f.read()
 
 
-# load installation requirements
-with open(os.path.join(this_dir, "sandboxes", "cf.txt"), "r") as f:
-    install_requires = [line.strip() for line in f.readlines() if line.strip()]
+# # load installation requirements
+# with open(os.path.join(this_dir, "sandboxes", "cf.txt"), "r") as f:
+#     install_requires = [line.strip() for line in f.readlines() if line.strip()]
 
 
 # load package infos
@@ -59,7 +59,7 @@ setup(
     classifiers=classifiers,
     long_description=long_description,
     long_description_content_type="text/markdown",
-    install_requires=install_requires,
+    # install_requires=install_requires,
     python_requires=">=3.7, <=3.11",
     zip_safe=False,
     packages=find_packages(exclude=["tests"]),
