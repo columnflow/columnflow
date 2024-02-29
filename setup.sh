@@ -287,6 +287,7 @@ cf_setup_common_variables() {
         export LANG="${READTHEDOCS_LANGUAGE:-en}"
         export LC_ALL="${READTHEDOCS_LANGUAGE:-en}"
     else
+        # change to legacy definition C?
         export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
         export LANG="${LANG:-en_US.UTF-8}"
         export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -534,6 +535,8 @@ cf_setup_software_stack() {
 
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+    cf_color yellow "updated PATH: ${PATH}"
+
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
@@ -613,7 +616,7 @@ EOF
                 sed -i '/^name:/d' environment.yaml || return "$?"
                 micromamba install -f environment.yaml || return "$?"
                 micromamba clean --yes --all
-
+                cf_color yellow "updated PATH: ${PATH}"
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
@@ -643,6 +646,7 @@ EOF
 
         # source the production sandbox, potentially skipped in CI and RTD jobs
         local ret
+        cf_color yellow "PATH before '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
@@ -652,9 +656,16 @@ EOF
                 return "${ret}"
             fi
         fi
-
+        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
+        if [ "$?" != "0" ]; then
+            return "$?"
+        fi
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
+        if [ "$?" != "0" ]; then
+            return "$?"
+        fi
+        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf_dev.sh': ${PATH}"
         ret="$?"
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"
