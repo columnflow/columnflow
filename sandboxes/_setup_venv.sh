@@ -112,9 +112,30 @@ setup_venv() {
         return "12"
     fi
 
+    local SOURCE="."
+    # build requirements if needed
+    if [ ! -f $CF_VENV_REQUIREMENTS ]; then
+        local TMP_REQS="${this_dir}/requirements_tmp.txt"
+        # compile pip dependencies and clear all caches before evaluating dependencies
+        local EXTRAS=""
+        if [ ! -z "${CF_VENV_EXTRAS}" ]; then
+            EXTRAS="--extra ${CF_VENV_EXTRAS}"
+            SOURCE="'.[${CF_VENV_EXTRAS}]'"
+        fi
+        pip-compile -r \
+            --output-file ${TMP_REQS} \
+            --no-annotate --strip-extras --no-header --unsafe-package '' \
+            ${EXTRAS} ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}
+        # generate unique hash based on current state of software packages
+        local this_hash="$(sha256sum $TMP_REQS | sed s/[[:blank:]].*//)"
+        cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
+        echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
+        cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
+        cf_color magenta "Cleanup ${TMP_REQS}"
+        rm $TMP_REQS
+    fi
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
-    local requirement_files_contains_cf="false"
     if ${shell_is_zsh}; then
         requirement_files=(${(@s:,:)CF_VENV_REQUIREMENTS})
     else
@@ -124,9 +145,6 @@ setup_venv() {
         if [ ! -f "${f}" ]; then
             >&2 echo "requirement file '${f}' does not exist"
             return "13"
-        fi
-        if [ "${f}" = "${CF_BASE}/sandboxes/cf.txt" ]; then
-            requirement_files_contains_cf="true"
         fi
     done
     local first_requirement_file="${requirement_files[0]}"
@@ -271,20 +289,9 @@ setup_venv() {
             # update packaging tools
             add_requirements pip setuptools
 
-            # basic cf requirements
-            # if ! ${requirement_files_contains_cf}; then
-            #     add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
-            # fi
-
-            # requirement files
-            local f
-            for f in ${requirement_files[@]}; do
-                add_requirements -r "${f}"
-            done
-
             # actual installation
-            # eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
             eval "python -m pip install --force wheel"
+            eval "python -m pip install -U --no-cache-dir -e ${SOURCE}"
             echo "CURRENT PATH: ${PATH}"
             eval "python -m pip install -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
