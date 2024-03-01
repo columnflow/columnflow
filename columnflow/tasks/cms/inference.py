@@ -57,27 +57,47 @@ class CreateDatacards(
         reqs = super().workflow_requires()
 
         # initialize defaultdict, mapping datasets to variables + shift_sources
-        dataset_params = defaultdict(lambda: {"variables": set(), "shift_sources": set()})
+        mc_dataset_params = defaultdict(lambda: {"variables": set(), "shift_sources": set()})
+        data_dataset_params = defaultdict(lambda: {"variables": set()})
 
         for cat_obj in self.branch_map.values():
             for proc_obj in cat_obj.processes:
                 for dataset in self.get_mc_datasets(proc_obj):
                     # add all required variables and shifts per dataset
-                    dataset_params[dataset]["variables"].add(cat_obj.config_variable)
-                    dataset_params[dataset]["shift_sources"].update(
+                    mc_dataset_params[dataset]["variables"].add(cat_obj.config_variable)
+                    mc_dataset_params[dataset]["shift_sources"].update(
                         param_obj.config_shift_source
                         for param_obj in proc_obj.parameters
                         if self.inference_model_inst.require_shapes_for_parameter(param_obj)
                     )
 
-        # set workflow requirements per dataset
-        reqs["merged_hists"] = set(self.reqs.MergeShiftedHistograms.req(
-            self,
-            dataset=dataset,
-            shift_sources=tuple(params["shift_sources"]),
-            variables=tuple(params["variables"]),
-            _exclude={"branches"},
-        ) for dataset, params in dataset_params.items())
+            if cat_obj.config_data_datasets:
+                for dataset in cat_obj.config_data_datasets:
+                    data_dataset_params[dataset].add(cat_obj.config_variable)
+
+        # set workflow requirements per mc dataset
+        reqs["merged_hists"] = set(
+            self.reqs.MergeShiftedHistograms.req(
+                self,
+                dataset=dataset,
+                shift_sources=tuple(params["shift_sources"]),
+                variables=tuple(params["variables"]),
+                _exclude={"branches"},
+            )
+            for dataset, params in mc_dataset_params.items()
+        )
+
+        # add workflow requirements per data dataset
+        for dataset, params in data_dataset_params.items():
+            reqs["merged_hists"].add(
+                self.reqs.MergeHistograms.req(
+                    self,
+                    dataset=dataset,
+                    variables=tuple(params["variables"]),
+                    _exclude={"branches"},
+                ),
+            )
+
         return reqs
 
     def requires(self):
