@@ -1178,7 +1178,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         cls,
         ml_model_inst: MLModel,
         params: dict[str, Any],
-    ) -> tuple[Tuple[str]]:
+    ) -> tuple[tuple[str]]:
         """Resolve the calibrators for the given ML model instance.
 
         This method retrieves the calibrators from the parameters *params* and
@@ -1195,7 +1195,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of calibrator sequences does not match
             the number of configs used by the ML model.
         """
-        calibrators: Union[Tuple[str], tuple[Tuple[str]]] = params.get("calibrators") or ((),)
+        calibrators: Union[tuple[str], tuple[tuple[str]]] = params.get("calibrators") or ((),)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
@@ -1301,7 +1301,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         cls,
         ml_model_inst: MLModel,
         params: dict[str, Any],
-    ) -> tuple[Tuple[str]]:
+    ) -> tuple[tuple[str]]:
         """Resolve the producers for the given ML model instance.
 
         This method retrieves the producers from the parameters *params* and
