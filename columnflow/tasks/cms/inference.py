@@ -4,7 +4,7 @@
 Tasks related to the creation of datacards for inference purposes.
 """
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 
@@ -39,15 +39,45 @@ class CreateDatacards(
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
+    def get_mc_datasets(self, proc_obj: dict) -> list[str]:
+        """
+        Helper to find automatic datasets
+        """
+        # when datasets are defined on the process object itself, return them
+        if proc_obj.config_mc_datasets:
+            return proc_obj.config_mc_datasets
+
+        # if not, check the config
+        return [
+            dataset_inst.name
+            for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
+        ]
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # simply require the requirements of all branch tasks right now
-        reqs["merged_hists"] = set(sum((
-            law.util.flatten(t.requires())
-            for t in self.get_branch_tasks().values()
-        ), []))
+        # initialize defaultdict, mapping datasets to variables + shift_sources
+        dataset_params = defaultdict(lambda: {"variables": set(), "shift_sources": set()})
 
+        for cat_obj in self.branch_map.values():
+            for proc_obj in cat_obj.processes:
+                for dataset in self.get_mc_datasets(proc_obj):
+                    # add all required variables and shifts per dataset
+                    dataset_params[dataset]["variables"].add(cat_obj.config_variable)
+                    dataset_params[dataset]["shift_sources"].update(
+                        param_obj.config_shift_source
+                        for param_obj in proc_obj.parameters
+                        if self.inference_model_inst.require_shapes_for_parameter(param_obj)
+                    )
+
+        # set workflow requirements per dataset
+        reqs["merged_hists"] = set(self.reqs.MergeShiftedHistograms.req(
+            self,
+            dataset=dataset,
+            shift_sources=tuple(params["shift_sources"]),
+            variables=tuple(params["variables"]),
+            _exclude={"branches"},
+        ) for dataset, params in dataset_params.items())
         return reqs
 
     def requires(self):
@@ -78,7 +108,7 @@ class CreateDatacards(
                     branch=-1,
                     _exclude={"branches"},
                 )
-                for dataset in get_mc_datasets(proc_obj)
+                for dataset in self.get_mc_datasets(proc_obj)
             }
             for proc_obj in cat_obj.processes
         }
