@@ -3,7 +3,7 @@ Custom law task method decorators.
 """
 
 import law
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable
 
 
 @law.decorator.factory(accept_generator=True)
@@ -13,7 +13,7 @@ def view_output_plots(
     task: law.Task,
     *args: Any,
     **kwargs: Any,
-) -> Tuple[Callable, Callable, Callable]:
+) -> tuple[Callable, Callable, Callable]:
     """
     Decorator to view output plots.
 
@@ -61,8 +61,8 @@ def view_output_plots(
             view_cmd += " {}"
 
         # collect all paths to view
-        view_paths: List[str] = []
-        outputs: List[Any] = law.util.flatten(task.output())
+        view_paths: list[str] = []
+        outputs: list[Any] = law.util.flatten(task.output())
         while outputs:
             output = outputs.pop(0)
             if isinstance(output, law.TargetCollection):
