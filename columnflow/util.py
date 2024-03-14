@@ -695,8 +695,9 @@ class DerivableMeta(abc.ABCMeta):
         """
         Class creation.
         """
-        # default attributes, irrespective of inheritance
-        cls_dict.setdefault("_subclasses", {})
+        # defensive cls_dict copy and overwrite attributes
+        cls_dict = cls_dict.copy()
+        cls_dict["_subclasses"] = {}
 
         # create the class
         cls = super().__new__(metacls, cls_name, bases, cls_dict)
