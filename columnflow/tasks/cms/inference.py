@@ -105,7 +105,7 @@ class CreateDatacards(
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
-                dataset: self.reqs.MergeShiftedHistograms.req(
+                dataset: self.reqs.MergeShiftedHistograms.req_different_branching(
                     self,
                     dataset=dataset,
                     shift_sources=tuple(
@@ -115,7 +115,7 @@ class CreateDatacards(
                     ),
                     variables=(cat_obj.config_variable,),
                     branch=-1,
-                    _exclude={"branches"},
+                    workflow="local",
                 )
                 for dataset in self.get_mc_datasets(proc_obj)
             }
@@ -123,12 +123,12 @@ class CreateDatacards(
         }
         if cat_obj.config_data_datasets:
             reqs["data"] = {
-                dataset: self.reqs.MergeHistograms.req(
+                dataset: self.reqs.MergeHistograms.req_different_branching(
                     self,
                     dataset=dataset,
                     variables=(cat_obj.config_variable,),
                     branch=-1,
-                    _exclude={"branches"},
+                    workflow="local",
                 )
                 for dataset in cat_obj.config_data_datasets
             }
