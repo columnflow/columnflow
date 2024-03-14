@@ -80,12 +80,11 @@ class CreateDatacards(
 
         # set workflow requirements per mc dataset
         reqs["merged_hists"] = set(
-            self.reqs.MergeShiftedHistograms.req(
+            self.reqs.MergeShiftedHistograms.req_different_branching(
                 self,
                 dataset=dataset,
                 shift_sources=tuple(params["shift_sources"]),
                 variables=tuple(params["variables"]),
-                _exclude={"branches"},
             )
             for dataset, params in mc_dataset_params.items()
         )
@@ -93,11 +92,10 @@ class CreateDatacards(
         # add workflow requirements per data dataset
         for dataset, params in data_dataset_params.items():
             reqs["merged_hists"].add(
-                self.reqs.MergeHistograms.req(
+                self.reqs.MergeHistograms.req_different_branching(
                     self,
                     dataset=dataset,
                     variables=tuple(params["variables"]),
-                    _exclude={"branches"},
                 ),
             )
 
