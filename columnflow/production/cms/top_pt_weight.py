@@ -31,6 +31,10 @@ def gen_parton_top(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     *produced_top_columns* can be adapted to change the columns that will be produced
     for the GenPartonTop collection.
+
+    The function is skipped when the dataset is data or when it does not have the tag *has_top*.
+
+    :param events: awkward array containing events to process
     """
     # find parton-level top quarks
     abs_id = abs(events.GenPart.pdgId)
@@ -77,8 +81,29 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Compute SF to be used for top pt reweighting.
 
-    The SF should *only be applied in ttbar MC* as an event weight computed
+    The *GenPartonTop.pt* column can be produced with the :py:class:`gen_parton_top` Producer.
+
+    The SF should *only be applied in ttbar MC* as an event weight and is computed
     based on the gen-level top quark transverse momenta.
+
+    The function is skipped when the dataset is data or when it does not have the tag *is_ttbar*.
+
+    The top pt reweighting parameters should be given as an auxiliary entry in the config:
+
+    .. code-block:: python
+
+        cfg.x.top_pt_reweighting_params = {
+            "a": 0.0615,
+            "a_up": 0.0615 * 1.5,
+            "a_down": 0.0615 * 0.5,
+            "b": -0.0005,
+            "b_up": -0.0005 * 1.5,
+            "b_down": -0.0005 * 0.5,
+        }
+
+    *get_top_pt_config* can be adapted in a subclass in case it is stored differently in the config.
+
+    :param events: awkward array containing events to process
     """
 
     # get SF function parameters from config
