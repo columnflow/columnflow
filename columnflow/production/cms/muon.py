@@ -63,13 +63,27 @@ def muon_weights(
     abs_eta = flat_np_view(abs(events.Muon.eta[muon_mask]), axis=1)
     pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
 
+    variable_map = {
+        "year": self.year,
+        "abseta": abs_eta,
+        "pt": pt,
+    }
+
     # loop over systematics
     for syst, postfix in [
         ("sf", ""),
         ("systup", "_up"),
         ("systdown", "_down"),
     ]:
-        sf_flat = self.muon_sf_corrector(self.year, abs_eta, pt, syst)
+        # get the inputs for this type of variation
+        variable_map_syst = {
+            **variable_map,
+            "scale_factors": "nominal" if syst == "sf" else syst,  # syst key in 2022
+            "ValType": syst,  # syst key in 2017
+        }
+        inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
+
+        sf_flat = self.muon_sf_corrector(*inputs)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
