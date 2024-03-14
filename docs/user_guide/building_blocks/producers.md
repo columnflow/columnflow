@@ -136,7 +136,7 @@ can be found in the {ref}`Law config section <law_config_section>`.
 columns only after the reduction, using the ProduceColumns task.
 
 - Other useful functions (e.g. for easier handling of columns) can be found in the
-{doc}`best_practices` section of this documentation.
+{doc}`../best_practices` section of this documentation.
 
 
 ## ProduceColumns task

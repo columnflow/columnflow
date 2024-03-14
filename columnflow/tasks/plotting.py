@@ -36,6 +36,9 @@ class PlotVariablesBase(
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    """sandbox to use for this task. Defaults to *default_columnar_sandbox* from
+    analysis config.
+    """
 
     exclude_index = True
 
@@ -44,6 +47,8 @@ class PlotVariablesBase(
         RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
+    """Set upstream requirements, in this case :py:class:`~columnflow.tasks.histograms.MergeHistograms`
+    """
 
     def store_parts(self):
         parts = super().store_parts()
@@ -250,6 +255,8 @@ class PlotVariablesBaseMultiShifts(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+    """
+    """
 
     exclude_index = True
 

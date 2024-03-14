@@ -1,6 +1,9 @@
-``columnflow.tasks.reduction``
-==============================
+``reduction``
+=============
 
+.. currentmodule:: columnflow.tasks.reduction
 .. automodule:: columnflow.tasks.reduction
-   :autosummary:
-   :members:
+    :autosummary:
+    :members:
+    :undoc-members:
+
