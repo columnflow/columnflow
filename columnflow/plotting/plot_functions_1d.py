@@ -11,7 +11,7 @@ from collections import OrderedDict
 import law
 
 from columnflow.types import Iterable
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, DotDict
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
     prepare_plot_config,
@@ -298,3 +298,63 @@ def plot_cutflow(
     ax.set_xticklabels(xticklabels, rotation=45, ha="right")
 
     return fig, (ax,)
+
+
+def plot_profile(
+    hists: OrderedDict[od.Process, hist.Hist],
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
+    style_config: dict | None = None,
+    density: bool | None = False,
+    yscale: str | None = "",
+    hide_errors: bool | None = None,
+    process_settings: dict | None = None,
+    variable_settings: dict | None = None,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Takes 2-dimensional histograms as an input and profiles over the second axis.
+
+    Exemplary task call:
+
+    .. code-block:: bash
+        law run cf.PlotVariables1D --version prod1 --processes st_tchannel_t \
+            --variables jet1_pt-jet2_pt \
+            --plot-function columnflow.plotting.plot_functions_1d.plot_profile
+    """
+    if len(variable_insts) != 2:
+        raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
+
+    # remove shift axis from histograms
+    remove_residual_axis(hists, "shift")
+
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    hists = apply_process_settings(hists, process_settings)
+    hists = apply_density_to_hists(hists, density)
+
+    # rewrite histograms to 1d with average over
+    hists_out = DotDict()
+    for process_inst, h_in in hists.items():
+        # always set "unstack" to True since we cannot stack profiled histograms
+        # NOTE: we could add multiple processes into one profile, but then just define a new process
+        process_inst.unstack = True
+        hists_out[process_inst] = h_in.profile(1)
+
+    plot_config = prepare_plot_config(
+        hists_out,
+        hide_errors=hide_errors,
+    )
+
+    for key in plot_config.keys():
+        # all histograms are profiled and therefore need a different plot method
+        plot_config[key]["method"] = "draw_profile"
+
+    default_style_config = prepare_style_config(
+        config_inst, category_inst, variable_insts[0], density=density, yscale=yscale,
+    )
+
+    default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
+    return plot_all(plot_config, style_config, **kwargs)
