@@ -29,6 +29,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
+from columnflow.columnar_util import set_ak_column
 
 
 ak = maybe_import("awkward")
@@ -226,15 +227,18 @@ class PrepareMLEvents(
                 )
 
                 # generate fold indices
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
                         stats=stats,
-                        fold_indices=fold_indices,
+                        fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
                     )
+
+                # read fold_indices from events array to allow masking training events
+                fold_indices = events.fold_indices
 
                 # remove columns
                 events = route_filter(events)
