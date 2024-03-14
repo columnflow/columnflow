@@ -42,6 +42,9 @@ class CreateDatacards(
     def get_mc_datasets(self, proc_obj: dict) -> list[str]:
         """
         Helper to find automatic datasets
+
+        :param proc_obj: process object from an InferenceModel
+        :return: List of dataset names corresponding to the process *proc_obj*
         """
         # when datasets are defined on the process object itself, return them
         if proc_obj.config_mc_datasets:
@@ -101,18 +104,6 @@ class CreateDatacards(
         return reqs
 
     def requires(self):
-        # helper to find automatic datasets
-        def get_mc_datasets(proc_obj: dict) -> list[str]:
-            # when datasets are defined on the process object itself, return them
-            if proc_obj.config_mc_datasets:
-                return proc_obj.config_mc_datasets
-
-            # if not, check the config
-            return [
-                dataset_inst.name
-                for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
-            ]
-
         cat_obj = self.branch_data
         reqs = {
             proc_obj.name: {
