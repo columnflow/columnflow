@@ -60,11 +60,11 @@ class PlotBase(ConfigTask):
         description="when True, no legend is drawn; default: None",
     )
     cms_label = luigi.Parameter(
-        default="pw",
+        default=law.NO_STR,
         significant=False,
         description="postfix to add behind the CMS logo; when 'skip', no CMS logo is shown at all; "
         "the following special values are expanded into the usual postfixes: wip, pre, pw, sim, "
-        "simwip, simpre, simpw, od, odwip, public; default: 'pw'",
+        "simwip, simpre, simpw, od, odwip, public; no default",
     )
 
     @classmethod
@@ -99,7 +99,7 @@ class PlotBase(ConfigTask):
         # convert parameters to usable values during plotting
         params = DotDict()
         dict_add_strict(params, "skip_legend", self.skip_legend)
-        dict_add_strict(params, "cms_label", self.cms_label)
+        dict_add_strict(params, "cms_label", None if self.cms_label == law.NO_STR else self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
         return params
@@ -177,6 +177,8 @@ class PlotBase(ConfigTask):
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
             style_config = law.util.merge_dicts(custom_style_config, style_config)
             kwargs["style_config"] = style_config
+        # update defaults after application of `general_settings`
+        kwargs.setdefault("cms_label", "pw")
 
         return kwargs
 

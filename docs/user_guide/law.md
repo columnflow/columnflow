@@ -3,7 +3,7 @@
 This analysis tool uses [law](https://github.com/riga/law) for the workflow orchestration.
 Therefore, a short introduction to the most essential functions of law you should be
 aware of when using this tool are provided here. More informations are available for example in the
-"[Examples]((https://github.com/riga/law#examples))" section of this
+"[Examples](https://github.com/riga/law#examples)" section of this
 [Github repository](https://github.com/riga/law). This section can be ignored if you are already
 familiar with law.
 
