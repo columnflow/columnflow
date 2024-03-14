@@ -909,8 +909,8 @@ class DatasetTask(ShiftTask):
         # store dataset info for the global shift
         key = (
             self.global_shift_inst.name
-            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info else
-            "nominal"
+            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info
+            else "nominal"
         )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
@@ -932,8 +932,10 @@ class DatasetTask(ShiftTask):
 
         if isinstance(self.file_merging, int):
             # interpret the file_merging attribute as the merging factor itself
-            # non-positive numbers mean "merge all in one"
-            n_merge = self.file_merging if self.file_merging > 0 else n_files
+            # zero means "merge all in one"
+            if self.file_merging < 0:
+                raise ValueError(f"invalid file_merging value {self.file_merging}")
+            n_merge = n_files if self.file_merging == 0 else self.file_merging
         else:
             # no merging at all
             n_merge = 1
