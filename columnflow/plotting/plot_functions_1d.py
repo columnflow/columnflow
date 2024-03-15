@@ -11,7 +11,7 @@ from collections import OrderedDict
 import law
 
 from columnflow.types import Iterable
-from columnflow.util import maybe_import, DotDict
+from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
     prepare_plot_config,
@@ -20,6 +20,7 @@ from columnflow.plotting.plot_util import (
     apply_variable_settings,
     apply_process_settings,
     apply_density_to_hists,
+    get_position,
 )
 
 hist = maybe_import("hist")
@@ -311,10 +312,15 @@ def plot_profile(
     hide_errors: bool | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
+    skip_base_distribution: bool = False,
+    base_distribution_yscale: str = "linear",
     **kwargs,
 ) -> plt.Figure:
     """
     Takes 2-dimensional histograms as an input and profiles over the second axis.
+
+    This task adds two custom parameters, *skip_base_distribution* and *base_distribution_yscale*,
+    that can be selected on command-line via the --general-settings parameter
 
     Exemplary task call:
 
@@ -322,6 +328,9 @@ def plot_profile(
         law run cf.PlotVariables1D --version prod1 --processes st_tchannel_t \
             --variables jet1_pt-jet2_pt \
             --plot-function columnflow.plotting.plot_functions_1d.plot_profile
+
+    :param skip_base_distribution: whether to skip adding distributions of the non-profiled histogram to the plot
+    :param base_distribution_yscale: yscale of the base distributions
     """
     if len(variable_insts) != 2:
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
@@ -333,22 +342,40 @@ def plot_profile(
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
 
-    # rewrite histograms to 1d with average over
-    hists_out = DotDict()
+    # process histograms to profiled and reduced histograms
+    profiled_hists, reduced_hists = OrderedDict(), OrderedDict()
     for process_inst, h_in in hists.items():
         # always set "unstack" to True since we cannot stack profiled histograms
         # NOTE: we could add multiple processes into one profile, but then just define a new process
         process_inst.unstack = True
-        hists_out[process_inst] = h_in.profile(1)
+        profiled_hists[process_inst] = h_in.profile(axis=1)
+        reduced_hists[process_inst] = h_in[{h_in.axes[1].name: sum}]
 
-    plot_config = prepare_plot_config(
-        hists_out,
-        hide_errors=hide_errors,
-    )
+    # setup plot config
+    plot_config = OrderedDict()
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
-    for key in plot_config.keys():
-        # all histograms are profiled and therefore need a different plot method
-        plot_config[key]["method"] = "draw_profile"
+    # add hists
+    # max_value = max([np.nanmax(h.values()) for h in profiled_hists.values()])
+
+    for proc_inst, h in profiled_hists.items():
+        # set the default process color via the default matplotlib colors for consistency
+        proc_inst.color = proc_inst.color or default_colors.pop(0)
+
+        # add profiles to plot config
+        plot_config[f"profile_{proc_inst.name}"] = plot_cfg = {
+            "method": "draw_profile",
+            "hist": h,
+            "kwargs": {
+                "label": proc_inst.label,
+                "color": proc_inst.color,
+                "histtype": "step",
+            },
+        }
+        if hide_errors:
+            for key in ("kwargs", "ratio_kwargs"):
+                if key in plot_cfg:
+                    plot_cfg[key]["yerr"] = None
 
     default_style_config = prepare_style_config(
         config_inst, category_inst, variable_insts[0], density=density, yscale=yscale,
@@ -357,4 +384,42 @@ def plot_profile(
     default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
 
-    return plot_all(plot_config, style_config, **kwargs)
+    # ratio plot not used here; set `skip_ratio` to True
+    kwargs["skip_ratio"] = True
+
+    # create the default plot
+    fig, (ax,) = plot_all(plot_config, style_config, **kwargs)
+
+    if skip_base_distribution:
+        return fig, (ax,)
+
+    # add secondary axis for the background distribution
+    ax1 = ax.twinx()
+
+    for proc_inst, h in reduced_hists.items():
+        h = h / sum(h.values())
+        plot_kwargs = {
+            "ax": ax1,
+            "color": proc_inst.color,
+            "histtype": "fill",
+            "alpha": 0.25,
+        }
+        h.plot1d(**plot_kwargs)
+
+    log_y = base_distribution_yscale == "log"
+    ax1_ymin = ax1.get_ylim()[1] / 10**kwargs.get("magnitudes", 4) if log_y else 0.0000001
+    ax1_ymax = get_position(
+        ax1_ymin,
+        ax1.get_ylim()[1],
+        factor=1 / (1 - kwargs.get("whitespace_fraction", 0.3)),
+        logscale=log_y,
+    )
+    ax1.set(
+        ylim=(ax1_ymin, ax1_ymax),
+        ylabel=r"$\Delta N/N$",
+        yscale=base_distribution_yscale,
+    )
+
+    plt.tight_layout()
+
+    return fig, (ax, ax1)
