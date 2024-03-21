@@ -53,7 +53,7 @@ where = ["columnflow"]  # list of folders that contain the packages (["."] by de
 
 [project.urls]
 Repository = "https://github.com/columnflow/columnflow"
-Documentation = "https://columnflow.readthedocs.io"
+Documentation = "https://columnflow.readthedocs.io/latest"
 
 [tool.unidep]
 name = "columnflow"
