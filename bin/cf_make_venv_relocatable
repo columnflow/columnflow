@@ -61,6 +61,11 @@ cf_make_venv_relocatable() {
         fi
     done
 
+    # in case any of the installed sitepackages contains an absolute path, change it to the environment variable
+    grep -rl --binary-files without-match "$CF_BASE" ${CF_VENV_BASE}/${name}/lib | while read -r f ; do
+        sed -i "s#$CF_BASE#\${CF_BASE}#g" $f
+    done
+
     # replace all symlinked files pointing outside of the venv with copies
     for f in $( find "${CF_VENV_BASE}/${name}" -type l ); do
         local real_dir
