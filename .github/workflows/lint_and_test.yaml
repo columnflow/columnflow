@@ -22,7 +22,7 @@ jobs:
   
   setup_all_venvs:
     uses: ./.github/workflows/setup_venvs.yaml
-    needs: Setup_software_basis_py39_latest
+    needs: Setup_software_basis_py310_latest
     with:
       os: ubuntu-latest
   full_matrix:
