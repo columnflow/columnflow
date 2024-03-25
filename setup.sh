@@ -201,6 +201,8 @@ setup_columnflow() {
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+    # flag to recompile dependencies or not
+    export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
 
 
     #
@@ -355,6 +357,8 @@ cf_setup_interactive_common_variables() {
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
+
+    query CF_FORCE_COMPILE_ENV "Force recompilation of conda dependencies" "False"
 
     query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
     if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
@@ -604,14 +608,30 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
+                # identify platform
+                local system=""
+                case "$OSTYPE" in
+                    linux*) case `uname -m` in
+                        x86_64*) system="linux-64" ;;
+                        aarch64*) system="linux-aarch64" ;;
+                    esac ;;
+                    darwin*) system="osx-$(uname -m)" ;;
+                    *) cf_color red "unknown platform"; return 1 ;;
+                esac
                 
-                cf_color cyan "install unidep"
-                python3 -m pip install unidep || return "$?"
+                
                 cf_color cyan "building micromamba command"
-                # compile micromamba environment.yaml file from pyproject.toml
-                export CONDA_ENV_FILE="${CF_BASE}/environment.yaml"
-                unidep merge -o $CONDA_ENV_FILE \
-                    --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
+                export CONDA_ENV_FILE="${CF_BASE}/environment_${system}_py${pyv}.yaml"
+                #
+                if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
+                    # compile micromamba environment.yaml file from pyproject.toml
+                    # if it doesn't exist
+                    cf_color cyan "install unidep"
+                    python3 -m pip install unidep || return "$?"
+
+                    unidep merge -o $CONDA_ENV_FILE \
+                        --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
+                fi
                 # resulting environment.yaml file contains environment name
                 # which we do not use, so delete the name
                 sed -i '/^name:/d' $CONDA_ENV_FILE || return "$?"
