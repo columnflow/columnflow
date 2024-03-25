@@ -112,7 +112,7 @@ setup_venv() {
         return "12"
     fi
 
-    local SOURCE="."
+    local SOURCE="$CF_BASE"
     # build requirements if needed
     if [ ! -f $CF_VENV_REQUIREMENTS ]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
@@ -120,7 +120,7 @@ setup_venv() {
         local EXTRAS=""
         if [ ! -z "${CF_VENV_EXTRAS}" ]; then
             EXTRAS="--extra ${CF_VENV_EXTRAS}"
-            SOURCE="'.[${CF_VENV_EXTRAS}]'"
+            SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
         fi
         pip-compile -r \
             --output-file ${TMP_REQS} \
@@ -291,7 +291,9 @@ setup_venv() {
 
             # actual installation
             eval "python -m pip install --force wheel"
-            eval "python -m pip install -U --no-cache-dir -e ${SOURCE}"
+            cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
+            cf_color magenta "evaluating $cmd"
+            eval "$cmd"
             echo "CURRENT PATH: ${PATH}"
             eval "python -m pip install -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"

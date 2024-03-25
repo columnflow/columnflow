@@ -609,12 +609,13 @@ EOF
                 python3 -m pip install unidep || return "$?"
                 cf_color cyan "building micromamba command"
                 # compile micromamba environment.yaml file from pyproject.toml
-                unidep merge --platform linux-64 \
-                    --overwrite-pin "python=${pyv}" || return "$?"
+                export CONDA_ENV_FILE="${CF_BASE}/environment.yaml"
+                unidep merge -o $CONDA_ENV_FILE \
+                    --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
                 # resulting environment.yaml file contains environment name
                 # which we do not use, so delete the name
-                sed -i '/^name:/d' environment.yaml || return "$?"
-                micromamba install -f environment.yaml || return "$?"
+                sed -i '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                micromamba install -f $CONDA_ENV_FILE || return "$?"
                 micromamba clean --yes --all
                 cf_color yellow "updated PATH: ${PATH}"
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
