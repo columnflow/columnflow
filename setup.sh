@@ -201,6 +201,8 @@ setup_columnflow() {
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+    # flag to recompile dependencies or not
+    export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
 
 
     #
@@ -287,6 +289,7 @@ cf_setup_common_variables() {
         export LANG="${READTHEDOCS_LANGUAGE:-en}"
         export LC_ALL="${READTHEDOCS_LANGUAGE:-en}"
     else
+        # change to legacy definition C?
         export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
         export LANG="${LANG:-en_US.UTF-8}"
         export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -354,6 +357,8 @@ cf_setup_interactive_common_variables() {
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
+
+    query CF_FORCE_COMPILE_ENV "Force recompilation of conda dependencies" "False"
 
     query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
     if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
@@ -516,7 +521,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="3.9"
+    local pyv="${PYVERSION:-3.9}"
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -534,6 +539,8 @@ cf_setup_software_stack() {
 
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+    cf_color yellow "updated PATH: ${PATH}"
+
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
@@ -569,6 +576,16 @@ cf_setup_software_stack() {
         #
         # conda / micromamba setup
         #
+        # identify platform
+        local system=""
+        case "$OSTYPE" in
+            linux*) case `uname -m` in
+                x86_64*) system="linux-64" ;;
+                aarch64*) system="linux-aarch64" ;;
+            esac ;;
+            darwin*) system="osx-$(uname -m)" ;;
+            *) cf_color red "unknown platform"; return 1 ;;
+         esac
 
         # not needed in CI or RTD jobs
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
@@ -579,10 +596,10 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                curl -Ls https://micro.mamba.pm/api/micromamba/${system}/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 # make the setup file relocatable
-                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                sed -i.bak -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -601,21 +618,27 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                micromamba install \
-                    libgcc \
-                    bash \
-                    zsh \
-                    "python=${pyv}" \
-                    git \
-                    git-lfs \
-                    gfal2 \
-                    gfal2-util \
-                    python-gfal2 \
-                    myproxy \
-                    conda-pack \
-                    || return "$?"
-                micromamba clean --yes --all
+                
+                
+                cf_color cyan "building micromamba command"
+                export CONDA_ENV_FILE="${CF_BASE}/environment_${system}_py${pyv}.yaml"
+                #
+                if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
+                    # compile micromamba environment.yaml file from pyproject.toml
+                    # if it doesn't exist
+                    cf_color cyan "install unidep"
+                    python3 -m pip install unidep[toml] || return "$?"
 
+                    unidep merge -o $CONDA_ENV_FILE \
+                        --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
+                fi
+                # resulting environment.yaml file contains environment name
+                # which we do not use, so delete the name
+                sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                cat $CONDA_ENV_FILE
+                micromamba install -f $CONDA_ENV_FILE || return "$?"
+                micromamba clean --yes --all
+                cf_color yellow "updated PATH: ${PATH}"
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
@@ -645,6 +668,7 @@ EOF
 
         # source the production sandbox, potentially skipped in CI and RTD jobs
         local ret
+        cf_color yellow "PATH before '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
@@ -654,9 +678,16 @@ EOF
                 return "${ret}"
             fi
         fi
-
+        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
+        if [ "$?" != "0" ]; then
+            return "$?"
+        fi
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
+        if [ "$?" != "0" ]; then
+            return "$?"
+        fi
+        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf_dev.sh': ${PATH}"
         ret="$?"
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"

@@ -4,56 +4,94 @@ on:
   workflow_dispatch:
   push:
   pull_request:
+    types: [review_requested, ready_for_review]
 
 jobs:
-  lint:
+
+  Setup_software_basis_py310_latest:
     runs-on: ubuntu-latest
+    environment: Build Software
     steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
+      - uses: actions/checkout@v3
         with:
+          clean: false
+      - id: "setup_basic_software"
+        uses: ./.github/actions/setup_software
+        with:
+          cache-name: "cache-software-basis"
+  
+  setup_all_venvs:
+    uses: ./.github/workflows/setup_venvs.yaml
+    needs: Setup_software_basis_py310_latest
+    with:
+      os: ubuntu-latest
+  full_matrix:
+    runs-on: ubuntu-latest
+    needs: setup_all_venvs
+    environment: Tests
+    strategy:
+      matrix:
+        include:
+          - test: "./tests/run_linting"
+            name: "Lint 🔍"
+
+          - test: "./tests/run_tests"
+            name: Test 🎢
+            venv: columnar
+            hashFiles: |
+              **/sandboxes/venv_columnar*.sh
+              **/sandboxes/columnar.txt
+              **/sandboxes/_setup_venv.sh
+
+          - test: "./tests/run_coverage"
+            name: Run coverage 🎢
+            venv: columnar
+            hashFiles: |
+              **/sandboxes/venv_columnar*.sh
+              **/sandboxes/columnar.txt
+              **/sandboxes/_setup_venv.sh
+            do-ls: true
+            upload-files: true
+            ns-version: 16
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
           persist-credentials: false
           submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
+      - id: "setup_basic_software"
+        uses: ./.github/actions/setup_software
         with:
-          python-version: "3.9"
+          cache-name: "cache-software-basis"
+      - if: ${{ matrix.venv }}
+        name: setup venv ${{ matrix.venv }}
+        uses: ./.github/actions/setup_software
 
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Lint 🔍
-        run: |
-          source setup.sh ""
-          ./tests/run_linting
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
         with:
-          persist-credentials: false
-          submodules: recursive
+          cache-name: "cache-${{ matrix.venv }}"
+          run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
+          cache_paths: |
+            data/software/venvs/venv_${{ matrix.venv }}*
+          filesForHash: |
+            ${{ matrix.hashFiles }}
+            setup.sh
+      - name: ${{ matrix.name }}
 
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
+        # continue-on-error: true
+        run: |
+          source setup.sh ""
+          ${{ matrix.test }}
+      - if: ${{ matrix.upload-files }}
+        name: Upload report 🔝
+        uses: codecov/codecov-action@v3
         with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_tests
+          flags: unittests
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
+          verbose: true
 
   pypi:
     runs-on: ubuntu-latest
+    environment: Pypi tests
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
@@ -76,36 +114,3 @@ jobs:
 
       - name: Check setup 🚦
         run: twine check "dist/$( python setup.py --fullname ).tar.gz"
-
-  coverage:
-    runs-on: ubuntu-latest
-    env:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Run coverage test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_coverage
-          ls -al
-
-      - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
-        with:
-          flags: unittests
-          files: coverage_test_util.xml,coverage_test_columnar_util.xml
-          verbose: true
