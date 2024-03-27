@@ -21,6 +21,7 @@ from columnflow.plotting.plot_util import (
     apply_process_settings,
     apply_density_to_hists,
     get_position,
+    get_profile_variations,
 )
 
 hist = maybe_import("hist")
@@ -314,6 +315,7 @@ def plot_profile(
     variable_settings: dict | None = None,
     skip_base_distribution: bool = False,
     base_distribution_yscale: str = "linear",
+    skip_variations: bool = False,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -331,6 +333,7 @@ def plot_profile(
 
     :param skip_base_distribution: whether to skip adding distributions of the non-profiled histogram to the plot
     :param base_distribution_yscale: yscale of the base distributions
+    :param skip_variations: whether to skip adding the up and down variation of the profile plot
     """
     if len(variable_insts) != 2:
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
@@ -346,17 +349,15 @@ def plot_profile(
     profiled_hists, reduced_hists = OrderedDict(), OrderedDict()
     for process_inst, h_in in hists.items():
         # always set "unstack" to True since we cannot stack profiled histograms
-        # NOTE: we could add multiple processes into one profile, but then just define a new process
+        # NOTE: to add multiple processes into one profile, you can define a new process
         process_inst.unstack = True
-        profiled_hists[process_inst] = h_in.profile(axis=1)
+
+        profiled_hists[process_inst] = get_profile_variations(h_in, axis=1)
         reduced_hists[process_inst] = h_in[{h_in.axes[1].name: sum}]
 
     # setup plot config
     plot_config = OrderedDict()
     default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
-    # add hists
-    # max_value = max([np.nanmax(h.values()) for h in profiled_hists.values()])
 
     for proc_inst, h in profiled_hists.items():
         # set the default process color via the default matplotlib colors for consistency
@@ -365,13 +366,27 @@ def plot_profile(
         # add profiles to plot config
         plot_config[f"profile_{proc_inst.name}"] = plot_cfg = {
             "method": "draw_profile",
-            "hist": h,
+            "hist": h["nominal"],
             "kwargs": {
                 "label": proc_inst.label,
                 "color": proc_inst.color,
                 "histtype": "step",
             },
         }
+
+        if not skip_variations:
+            for variation in ("up", "down"):
+                plot_config[f"profile_{proc_inst.name}_{variation}"] = {
+                    "method": "draw_profile",
+                    "hist": h[variation],
+                    "kwargs": {
+                        "color": proc_inst.color,
+                        "histtype": "step",
+                        "linestyle": "dashed",
+                        "yerr": None,  # always disable yerr
+                    },
+                }
+
         if hide_errors:
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
@@ -390,6 +405,7 @@ def plot_profile(
     # create the default plot
     fig, (ax,) = plot_all(plot_config, style_config, **kwargs)
 
+    # add base distributions only if requested
     if skip_base_distribution:
         return fig, (ax,)
 
