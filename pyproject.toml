@@ -63,16 +63,16 @@ channels=[
     "defaults",
 ]
 dependencies = [
-    {conda = "libgcc"},
+    {conda = 'libgcc-ng'},
     {conda = "bash"},
-    {conda = "zsh"},
+    {conda = 'zsh:linux'},
     {conda = "python"},
     {conda = "git"},
     {conda = "git-lfs"},
     {conda = "gfal2"},
     {conda = "gfal2-util"},
     {conda = "python-gfal2"},
-    {conda = "myproxy"},
+    {conda = 'myproxy:linux'},
     {conda = "conda-pack"},
     {conda = "unidep[all]"},
     {conda = "pip-tools[toml]"}
@@ -84,6 +84,8 @@ platforms = [
     "linux-64",
     "linux-ppc64le",
     "linux-aarch64",
+    "osx-64",
+    "osx-arm64"
 ]
 changeps1 = false
 always_yes = true
