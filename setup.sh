@@ -576,6 +576,16 @@ cf_setup_software_stack() {
         #
         # conda / micromamba setup
         #
+        # identify platform
+        local system=""
+        case "$OSTYPE" in
+            linux*) case `uname -m` in
+                x86_64*) system="linux-64" ;;
+                aarch64*) system="linux-aarch64" ;;
+            esac ;;
+            darwin*) system="osx-$(uname -m)" ;;
+            *) cf_color red "unknown platform"; return 1 ;;
+         esac
 
         # not needed in CI or RTD jobs
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
@@ -586,10 +596,10 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                curl -Ls https://micro.mamba.pm/api/micromamba/${system}/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 # make the setup file relocatable
-                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                sed -i.bak -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -608,16 +618,6 @@ EOF
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                # identify platform
-                local system=""
-                case "$OSTYPE" in
-                    linux*) case `uname -m` in
-                        x86_64*) system="linux-64" ;;
-                        aarch64*) system="linux-aarch64" ;;
-                    esac ;;
-                    darwin*) system="osx-$(uname -m)" ;;
-                    *) cf_color red "unknown platform"; return 1 ;;
-                esac
                 
                 
                 cf_color cyan "building micromamba command"
@@ -627,14 +627,15 @@ EOF
                     # compile micromamba environment.yaml file from pyproject.toml
                     # if it doesn't exist
                     cf_color cyan "install unidep"
-                    python3 -m pip install unidep || return "$?"
+                    python3 -m pip install unidep[toml] || return "$?"
 
                     unidep merge -o $CONDA_ENV_FILE \
                         --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
                 fi
                 # resulting environment.yaml file contains environment name
                 # which we do not use, so delete the name
-                sed -i '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                cat $CONDA_ENV_FILE
                 micromamba install -f $CONDA_ENV_FILE || return "$?"
                 micromamba clean --yes --all
                 cf_color yellow "updated PATH: ${PATH}"
