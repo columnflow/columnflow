@@ -918,6 +918,89 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
 
+class MultiConfigTask(AnalysisTask):
+
+    configs = law.CSVParameter(
+        default=(),
+        description="comma-separated names of analysis config to use; empty default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store a reference to the config instances
+        self.config_insts = tuple(self.analysis_inst.get_config(config) for config in self.configs)
+
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """Resolve the parameter values for the given parameters.
+
+        This method retrieves the parameters and resolves the ML model instance, configs,
+        calibrators, selector, and producers. It also calls the model's setup hook.
+
+        :param params: A dictionary of parameters that may contain the analysis instance and ML model.
+        :return: A dictionary containing the resolved parameters.
+        :raises Exception: If the ML model instance received configs to define training configs,
+            but did not define any.
+        """
+        params = super().resolve_param_values(params)
+
+        # if not params.get("configs"):
+        #     raise Exception("No configs have been requested.")
+
+        # store a reference to the config inst
+        if "config_insts" not in params and "analysis_inst" in params and "configs" in params:
+            params["config_insts"] = tuple([
+                params["analysis_inst"].get_config(config)
+                for config in params["configs"]
+            ])
+
+        return params
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+
+        if task:
+            kwargs["config_insts"] = task.config_insts
+        elif "config_insts" in params:
+            kwargs["config_insts"] = params["config_insts"]
+        elif "configs" in params and "analysis_inst" in kwargs:
+            kwargs["config_insts"] = tuple([
+                kwargs["analysis_inst"].get_config(config)
+                for config in params["configs"]
+            ])
+
+        if not kwargs.get("config_insts"):
+            raise Exception(f"Did not manage to resolve config instances from task {task.cls_family}")
+
+        if "config_insts" in kwargs:
+            # for simplicity, we assign the first config as config_inst, but this might be stupid to do...
+            kwargs["config_inst"] = kwargs["config_insts"][0]
+
+        return kwargs
+
+    def store_parts(self) -> law.util.InsertableDict[str, str]:
+        """Generate a dictionary of store parts for the current instance.
+
+        This method extends the base method to include the configs parameter.
+
+        :return: An InsertableDict containing the store parts.
+        """
+        parts = super().store_parts()
+
+        configs_repr = "__".join(self.configs[:5])
+
+        if len(self.configs) > 5:
+            configs_repr += f"_{law.util.create_hash(self.configs[5:])}"
+
+        parts.insert_after("task_family", "configs", configs_repr)
+
+        return parts
+
+
 class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
