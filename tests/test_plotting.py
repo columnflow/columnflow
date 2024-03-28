@@ -2,7 +2,7 @@
 Test the plot_ml_evaluation module.
 """
 
-__all__ = ["TestPlotCM", "TestPlotROC"]
+__all__ = ["TestPlotUtil", "TestPlotCM", "TestPlotROC"]
 
 import io
 import unittest
@@ -15,6 +15,84 @@ from columnflow.util import maybe_import
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 plt = maybe_import("matplotlib.pyplot")
+hist = maybe_import("hist")
+
+
+class TestPlotUtil(unittest.TestCase):
+    def setUp(self):
+        # create dummy histogram similar to default columnflow histograms
+        self.hist = (
+            hist.Hist.new
+            .IntCat([], name="category", growth=True)
+            .IntCat([], name="process", growth=True)
+            .IntCat([], name="shift", growth=True)
+            .Var(np.arange(0, 1.01, 1 / 40), name="var1", label="var1")
+            .Var(np.arange(0, 100.1, 10), name="var2", label="var2")
+            .Weight()
+        )
+
+        # fill histogram with dummy values such that variable axis typically contain entries in flow bins
+        self.hist.fill(
+            category=np.random.choice([1, 2], size=1000),
+            process=np.random.choice([1, 2], size=1000),
+            shift=np.random.choice([0], size=1000),
+            var1=np.random.normal(loc=0, scale=1, size=1000),
+            var2=np.random.normal(loc=50, scale=100, size=1000),
+            weight=np.random.normal(loc=1, scale=0.1, size=1000),
+        )
+
+    def test_use_flow_bins(self):
+        from columnflow.plotting.plot_util import use_flow_bins
+        input_hist_copy = self.hist.copy()
+        flow_hist = use_flow_bins(self.hist, "var1")
+
+        # input hist should be unaffected
+        self.assertEqual(self.hist, input_hist_copy)
+
+        # moving flow bins should not affect the overall sum
+        self.assertAlmostEqual(self.hist.sum(flow=True).value, flow_hist.sum(flow=True).value)
+        self.assertAlmostEqual(self.hist.sum(flow=True).variance, flow_hist.sum(flow=True).variance)
+
+        # hists reduced to axis "var1"
+        reduced_pre = self.hist[::sum, ::sum, ::sum, :, ::sum].view(flow=True)
+        reduced_post = flow_hist[::sum, ::sum, ::sum, :, ::sum].view(flow=True)
+
+        # check that underflow values have been moved correctly
+        self.assertEqual(reduced_post[0].value, 0)
+        self.assertEqual(reduced_post[0].variance, 0)
+        self.assertAlmostEqual(reduced_post[1].value, reduced_pre[0].value + reduced_pre[1].value)
+        self.assertAlmostEqual(reduced_post[1].variance, reduced_pre[0].variance + reduced_pre[1].variance)
+
+        # check that overflow values have been moved correctly
+        self.assertEqual(reduced_post[-1].value, 0)
+        self.assertEqual(reduced_post[-1].variance, 0)
+        self.assertAlmostEqual(reduced_post[-2].value, reduced_pre[-1].value + reduced_pre[-2].value)
+        self.assertAlmostEqual(reduced_post[-2].variance, reduced_pre[-1].variance + reduced_pre[-2].variance)
+
+        # when using flow bins from all axes, all flow bins should be empty
+        flow_hist_both_axes = use_flow_bins(flow_hist, "var2")
+        self.assertAlmostEqual(self.hist.sum(flow=True).value, flow_hist_both_axes.sum(flow=False).value)
+        self.assertAlmostEqual(self.hist.sum(flow=True).variance, flow_hist_both_axes.sum(flow=False).variance)
+
+        # nothing is done when both overflow and underflow are False
+        self.assertEqual(self.hist, use_flow_bins(self.hist, "var1", underflow=False, overflow=False))
+
+        # setting overflow to False leaves everything except the underflow + first bin unaffected
+        self.assertEqual(
+            self.hist[:, :, :, 1:, :],
+            use_flow_bins(self.hist, "var1", overflow=False)[:, :, :, 1:, :],
+        )
+
+        # setting underflow to False leaves everything except the overflow + last bin unaffected
+        self.assertEqual(
+            self.hist[:, :, :, :(self.hist.shape[3] - 1), :],
+            use_flow_bins(self.hist, "var1", underflow=False)[:, :, :, :(self.hist.shape[3] - 1), :],
+        )
+
+        # raises Expection when hist does not contain flow bins
+        hist_without_flow = hist.Hist.new.Var(range(10), name="var", flow=False).Weight()
+        with self.assertRaises(Exception):
+            use_flow_bins(hist_without_flow, "var")
 
 
 class TestPlotCM(unittest.TestCase):
