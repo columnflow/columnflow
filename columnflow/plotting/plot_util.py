@@ -107,8 +107,8 @@ def apply_variable_settings(
         variable_settings: dict | None = None,
 ) -> dict:
     """
-    applies settings from `variable_settings` dictionary to the `variable_insts`;
-    the `rebin` setting is directly applied to the histograms
+    applies settings from *variable_settings* dictionary to the *variable_insts*;
+    the *rebin*, *overflow*, and *underflow* settings are directly applied to the histograms
     """
     # apply all settings on variable insts
     apply_settings(variable_insts, variable_settings)
@@ -122,7 +122,65 @@ def apply_variable_settings(
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
 
+        overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
+        underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
+
+        if overflow or underflow:
+            for proc_inst, h in list(hists.items()):
+                h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
+                hists[proc_inst] = h
+
     return hists
+
+
+def use_flow_bins(
+    h_in: hist.Hist,
+    axis_name: str | int,
+    underflow: bool = True,
+    overflow: bool = True,
+) -> hist.Hist:
+    """
+    Adds content of the flow bins of axis *axis_name* of histogram *h_in* to the first/last bin.
+
+    :param h_in: Input histogram
+    :param axis_name: Name or index of the axis of interest.
+    :param underflow: Whether to add the content of the underflow bin to the first bin of axis *axis_name.
+    :param overflow: Whether to add the content of the overflow bin to the last bin of axis *axis_name*.
+    :return: Histogram with underflow and/or overflow content added to the first/last bin of the histogram.
+    """
+    if not overflow and not underflow:
+        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
+        return h_in
+
+    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
+
+    # work on a copy of the histogram
+    h_out = h_in.copy()
+    h_view = h_out.view(flow=True)
+
+    if h_out.view().shape[axis_idx] + 2 != h_view.shape[axis_idx]:
+        raise Exception(f"We expect axis {axis_name} to have assigned an underflow and overflow bin")
+
+    # function to get slice of index *idx* from axis *axis_idx*
+    slice_func = lambda idx: tuple(
+        [slice(None)] * axis_idx + [idx] + [slice(None)] * (len(h_out.shape) - axis_idx - 1),
+    )
+
+    if overflow:
+        # replace last bin with last bin + overflow
+        h_view.value[slice_func(-2)] = h_view.value[slice_func(-2)] + h_view.value[slice_func(-1)]
+        h_view.value[slice_func(-1)] = 0
+        h_view.variance[slice_func(-2)] = h_view.variance[slice_func(-2)] + h_view.variance[slice_func(-1)]
+        h_view.variance[slice_func(-1)] = 0
+
+    if underflow:
+        # replace last bin with last bin + overflow
+        h_view.value[slice_func(1)] = h_view.value[slice_func(0)] + h_view.value[slice_func(1)]
+        h_view.value[slice_func(0)] = 0
+        h_view.variance[slice_func(1)] = h_view.variance[slice_func(0)] + h_view.variance[slice_func(1)]
+        h_view.variance[slice_func(0)] = 0
+
+    return h_out
 
 
 def apply_density_to_hists(hists: dict, density: bool | None = False) -> dict:
