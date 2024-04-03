@@ -260,7 +260,7 @@ create_analysis() {
 
 
     $( str_lc "${cf_use_ssh}" ) && gh_prefix_github="git@github.com:"
-    $( str_lc "${cf_use_ssh}" ) && gh_prefix_gitlab="ssh://git@gitlab.cern.ch:"
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix_gitlab="ssh://git@gitlab.cern.ch:7999/"
 
 
     mkdir -p modules
@@ -270,7 +270,11 @@ create_analysis() {
         git submodule add -b "${fetch_cf_branch}" "${gh_prefix_github}GhentAnalysis/columnflow.git" modules/columnflow
     fi
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}7999/ghentanalysis/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
+    fi
+    if [ "${cf_analysis_flavor}" = "ghent_template" ]; then
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}cms-nanoAOD/jsonpog-integration.git" modules/jsonpog-integration
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
 
     git submodule update --init --recursive
