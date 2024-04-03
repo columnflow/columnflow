@@ -263,7 +263,7 @@ create_analysis() {
     if ${debug}; then
         ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}7999/ghentanalysis/columnflowanalysis/columnflow/columnflow.git" modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}7999/ghentanalysis/columnflowanalysis/columnflow.git" modules/columnflow
     fi
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
         git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}7999/ghentanalysis/cmsdb.git" modules/cmsdb
