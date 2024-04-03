@@ -161,7 +161,7 @@ create_analysis() {
     echo
     query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "${cf_module_name}"
     echo
-    query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "cms_minimal" "cms_minimal"
+    query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "ghent_template" "cms_minimal,ghent_template"
     echo
     query_input "cf_use_ssh" "Use ssh for git submodules" "True" "True,False"
     echo
