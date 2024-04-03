@@ -257,16 +257,16 @@ create_analysis() {
 
     local gh_prefix="https://github.com/"
 
-    $( str_lc "${cf_use_ssh}" ) && gh_prefix="git@github.com:"
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix="ssh://git@gitlab.cern.ch:"
 
     mkdir -p modules
     if ${debug}; then
         ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}columnflow/columnflow.git" modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}7999/ghentanalysis/columnflowanalysis/columnflow/columnflow.git" modules/columnflow
     fi
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}uhh-cms/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}7999/ghentanalysis/cmsdb.git" modules/cmsdb
     fi
 
     git submodule update --init --recursive
