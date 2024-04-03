@@ -63,7 +63,7 @@ To create an analysis using columnflow, it is recommended to start from a predef
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
 
 ```shell
-bash -c "$(curl -Ls https://gitlab.cern.ch/ghentanalysis/columnflowanalysis/-/raw/columnflow/columnflow/master/create_analysis.sh)"
+bash -c "$(curl -Ls https://raw.githubusercontent.com/GhentAnalysis/columnflow/main/create_analysis.sh)"
 ```
 
 At the end of the setup, you will see further instructions and suggestions to run your first analysis tasks (example below).
