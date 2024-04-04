@@ -100,7 +100,7 @@ def __cf_short_name_lc___increment_stats(
     return events
 
 
-@__cf_short_name_lc__increment_stats.init
+@__cf_short_name_lc___increment_stats.init
 def __cf_short_name_lc___increment_stats_init(self: Selector) -> None:
     if not getattr(self, "dataset_inst", None):
         return

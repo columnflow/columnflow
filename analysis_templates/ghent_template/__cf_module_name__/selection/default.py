@@ -24,7 +24,7 @@ from __cf_short_name_lc__.production.weights import event_weights_to_normalize
 from __cf_short_name_lc__.production.cutflow_features import cutflow_features
 
 from __cf_short_name_lc__.selection.objects import electron_object, muon_object, jet_object
-from __cf_short_name_lc__.selection.stats import ttz_increment_stats
+from __cf_short_name_lc__.selection.stats import __cf_short_name_lc___increment_stats
 from __cf_short_name_lc__.selection.trigger import trigger_selection
 
 np = maybe_import("numpy")
@@ -173,10 +173,10 @@ def jet_selection(
 
 @selector(
     uses={
-        category_ids, ttz_increment_stats
+        category_ids, __cf_short_name_lc___increment_stats
     },
     produces={
-        category_ids, ttz_increment_stats
+        category_ids, __cf_short_name_lc___increment_stats
     },
     exposed=False,
 )
@@ -198,7 +198,7 @@ def post_selection(
         events = self[event_weights_to_normalize](events, results=results, **kwargs)
 
     # increment stats
-    self[ttz_increment_stats](events, results, stats, **kwargs)
+    self[__cf_short_name_lc___increment_stats](events, results, stats, **kwargs)
 
     return events, results
 
