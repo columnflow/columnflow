@@ -9,11 +9,13 @@ from typing import Tuple
 
 import law
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import set_ak_column
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.util import masked_sorted_indices
+
+ak = maybe_import("awkward")
 
 
 def masked_sorted_indices(mask: ak.Array, sort_var: ak.Array, ascending: bool = False) -> ak.Array:

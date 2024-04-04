@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Selection modules for ttz.
+Selection modules for __cf_short_name_lc__.
 """
 
 from collections import defaultdict
@@ -21,8 +21,9 @@ from columnflow.production.categories import category_ids
 from columnflow.production.processes import process_ids
 
 from __cf_short_name_lc__.production.weights import event_weights_to_normalize
+from __cf_short_name_lc__.production.cutflow_features import cutflow_features
+
 from __cf_short_name_lc__.selection.objects import electron_object, muon_object, jet_object
-from __cf_short_name_lc__.selection.cutflow_features import cutflow_features
 from __cf_short_name_lc__.selection.stats import ttz_increment_stats
 from __cf_short_name_lc__.selection.trigger import trigger_selection
 
@@ -241,22 +242,27 @@ def default(
     events, trigger_results = self[trigger_selection](events, **kwargs)
     results += trigger_results
 
+    # apply muon object selection
     events, muon_results = self[muon_object](events, stats, **kwargs)
     results += muon_object_results
 
+    # apply electron object selection
     events, electron_results = self[electron_object](events, results, stats, **kwargs)
     results += electron_object_results
 
+    # apply jet object selection
     events, jet_results = self[jet_object](events, results, stats, **kwargs)
     results += jet_object_results
 
+    # apply lepton event selection
     events, lepton_selection_results = self[lepton_selection](events, results, stats, **kwargs)
     results += lepton_selection_results
 
+    # apply jet event selection
     events, jet_selection_results = self[jet_selection](events, results, stats, **kwargs)
     results += jet_selection_results
 
-    # combined event selection after all steps
+    # combine event selection after all steps
     results.event = results.steps.Trigger & results.steps.Lepton & results.steps.Jet
 
     # add cutflow features, passing per-object masks

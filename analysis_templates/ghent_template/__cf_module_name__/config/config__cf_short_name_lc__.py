@@ -356,7 +356,7 @@ def add_config(
 
     cfg.x.default_calibrator = "skip_jecunc"  # skip jet energy correction up and down variation to save time in running
     cfg.x.default_selector = "default"
-    cfg.x.default_producer = "features"
+    cfg.x.default_producer = "default"
     cfg.x.default_ml_model = None
     cfg.x.default_inference_model = "example"
     cfg.x.default_variables = ("n_jet",)
