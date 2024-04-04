@@ -228,11 +228,15 @@ add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 json_mirror = "modules/jsonpog-integration"
 lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year2}/{ecm}TeV/"
 pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
-runs = {2016: "271036-284044", 2017: "294927-306462", 2018: "314472-325175"}
+goldenjsons = {
+    2016: f"Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt",
+    2017: f"Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",
+    2018: f"Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt",
+}
 cfg.x.external_files = DotDict.wrap({
     # lumi files (golden run 2 only!!)
     "lumi": {
-        "golden": (f"{lumi_cert_site}/Legacy_{year}/Cert_{runs[year]}_{ecm}TeV_UL{year}_Collisions{year2}_GoldenJSON.txt", "v1"),  # noqa
+        "golden": (f"{lumi_cert_site}/Legacy_{year}/{goldenjsons[year]}", "v1"),
         "normtag": ("modules/Normtags/normtag_PHYSICS.json", "v1"),
     },
 
