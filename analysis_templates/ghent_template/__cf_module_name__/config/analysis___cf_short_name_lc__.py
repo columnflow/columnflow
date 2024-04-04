@@ -59,11 +59,11 @@ ana.x.config_groups = {}
 # ttbar and single top MCs, plus single muon data
 # update this config or add additional ones to accomodate the needs of your analysis
 
-from cmsdb.campaigns.run2_2017_nano_v9 import campaign_run2_2017_nano_v9
+from cmsdb.campaigns.run2_2018_nano_v9 import campaign_run2_2018_nano_v9
 
 # copy the campaign
 # (creates copies of all linked datasets, processes, etc. to allow for encapsulated customization)
-campaign = campaign_run2_2017_nano_v9.copy()
+campaign = campaign_run2_2018_nano_v9.copy()
 
 # get all root processes
 procs = get_root_processes_from_campaign(campaign)
