@@ -73,6 +73,7 @@ cfg = ana.add_config(campaign)
 
 # gather campaign data
 year = campaign.x.year
+ecm = campaign.ecm
 
 # add processes we are interested in
 process_names = [
@@ -222,16 +223,53 @@ cfg.add_shift(name="mu_down", id=11, type="shape")
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
-json_mirror = "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c"
+json_mirror = "${MODULE_BASE}/jsonpog-integration"
+year_short = str(year)[2:]  # 20XX > XX
+lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm}TeV/"
+pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
+runs = {2016: "271036-284044", 2017: "294927-306462", 2018: "314472-325175"}
 cfg.x.external_files = DotDict.wrap({
-    # lumi files
+    # lumi files (golden run 2 only!!)
     "lumi": {
-        "golden": ("/afs/cern.ch/cms/CAF/CMSCOMM/COMM_DQM/certification/Collisions17/13TeV/Legacy_2017/Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt", "v1"),  # noqa
-        "normtag": ("/afs/cern.ch/user/l/lumipro/public/Normtags/normtag_PHYSICS.json", "v1"),
+        "golden": (f"{lumi_cert_site}/Legacy_{year}/Cert_{runs[year]}_{ecm}TeV_UL{year}_Collisions{year_short}_GoldenJSON.txt", "v1"),  # noqa
+        "normtag": ("${MODULE_BASE}/Normtags/normtag_PHYSICS.json", "v1"),
     },
 
+    # jet energy correction
+    "jet_jerc": (f"{json_mirror}/POG/JME/{year}{corr_postfix}_UL/jet_jerc.json.gz", "v1"),
+
+    # electron scale factors
+    "electron_sf": (f"{json_mirror}/POG/EGM/{year}{corr_postfix}_UL/electron.json.gz", "v1"),
+
     # muon scale factors
-    "muon_sf": (f"{json_mirror}/POG/MUO/{year}_UL/muon_Z.json.gz", "v1"),
+    "muon_sf": (f"{json_mirror}/POG/MUO/{year}{corr_postfix}_UL/muon_Z.json.gz", "v1"),
+
+    # btag scale factor
+    "btag_sf_corr": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
+
+    # fake rates
+    "muon_fakerate": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
+    "electron_fakerate": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
+
+    # run 2 only!!
+    # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II # noqa
+    "pu": {
+        "json": (f"{pu_reweightin_website}/pileup_latest.txt", "v1"),  # noqa
+        "mc_profile": (
+        "https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py", # noqa
+        "v1"),  # noqa
+        "data_profile": {
+            "nominal": (
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-69200ub-99bins.root", "v1"),
+            # noqa
+            "minbias_xs_up": (
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-72400ub-99bins.root", "v1"),
+            # noqa
+            "minbias_xs_down": (
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-66000ub-99bins.root", "v1"),
+            # noqa
+        },
+    },
 })
 
 # target file size after MergeReducedEvents in MB

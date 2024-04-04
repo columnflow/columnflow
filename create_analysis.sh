@@ -273,6 +273,7 @@ create_analysis() {
         git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
     if [ "${cf_analysis_flavor}" = "ghent_template" ]; then
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_github}CMS-LUMI-POG/Normtags.git" modules/Normtags
         git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}cms-nanoAOD/jsonpog-integration.git" modules/jsonpog-integration
         git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
