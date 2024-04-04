@@ -35,5 +35,17 @@ def patch_bundle_repo_exclude_files():
 
 
 @memoize
+def patch_htcondor_workflow():
+    from columnflow.tasks.framework.remote import HTCondorWorkflow
+
+    # change the max_runtime parameter default
+    HTCondorWorkflow.max_runtime._default = 0
+    logger.debug("patched max_runtime of cf.HTCondorWorkflow")
+
+    HTCondorWorkflow.htcondor_flavor._default = 'NO_STR'
+    logger.debug("patched flavor of cf.HTCondorWorkflow")
+
+
+@memoize
 def patch_all():
     patch_bundle_repo_exclude_files()
