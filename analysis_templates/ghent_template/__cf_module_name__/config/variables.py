@@ -1,11 +1,11 @@
 import order as od
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, call_once_on_config
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
-from columnflow.columnar_util import EMPTY_FLOAT, call_once_on_config
+from columnflow.columnar_util import EMPTY_FLOAT
 
 
 @call_once_on_config()

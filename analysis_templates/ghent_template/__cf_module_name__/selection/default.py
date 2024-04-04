@@ -219,11 +219,11 @@ def post_selection_init(self: Selector) -> None:
 @selector(
     uses={
         pre_selection, post_selection, trigger_selection,
-        lepton_selection, jet_selection, lepton_gen_features
+        lepton_selection, jet_selection,
     },
     produces={
         pre_selection, post_selection, trigger_selection,
-        lepton_selection, jet_selection, lepton_gen_features
+        lepton_selection, jet_selection,
     },
     exposed=True,
 )

@@ -24,6 +24,7 @@ def add_categories_selection(config: od.Config) -> None:
 
     config.x.regions = ("incl", "CR_WZ")
     config.x.lepton_channels = ("2e", "1e1mu", "2mu")
+    config.x.lepton_channel_labels = {"2e": "$ee$", "1e1mu": "$e\mu$", "2mu": "$\mu\mu$"}
 
     config.add_category(
         name="incl",
@@ -36,9 +37,9 @@ def add_categories_selection(config: od.Config) -> None:
     for lepton_channel in config.x.lepton_channels:
 
         config.add_category(
-            name="{}_{}".format(region, lepton_channel),
+            name=lepton_channel,
             selection=["catid_selection_{}".format(lepton_channel)],
-            label="{}, {}".format(region, config.x.lepton_channel_labels[lepton_channel]),
+            label=config.x.lepton_channel_labels[lepton_channel],
         )
 
 
@@ -54,5 +55,5 @@ def add_categories_production(config: od.Config) -> None:
 
     for lepton_channel in config.x.lepton_channels:
 
-        cat_lepton = config.get_category("{}_{}".format(region, lepton_channel))
+        cat_lepton = config.get_category(lepton_channel)
         cat_lepton.selection = ["catid_{}".format(lepton_channel)]

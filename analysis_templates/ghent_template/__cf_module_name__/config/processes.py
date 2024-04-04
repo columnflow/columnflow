@@ -23,7 +23,7 @@ def add_processes(config: od.Config, campaign: od.Campaign):
 
     bg = config.add_process(
         name="background",
-        id=1,
+        id=9999,
         label="Background",
 
     )

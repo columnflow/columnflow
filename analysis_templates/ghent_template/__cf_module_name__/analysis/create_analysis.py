@@ -54,7 +54,7 @@ def create_analysis(
     # import campaigns and load configs
     #
 
-    from ___cf_short_name_lc__.config.config____cf_short_name_lc__ import add_config
+    from __cf_short_name_lc__.config.config___cf_short_name_lc__ import add_config
     from cmsdb.campaigns.run2_2018_nano_v9 import campaign_run2_2018_nano_v9
 
     # default config

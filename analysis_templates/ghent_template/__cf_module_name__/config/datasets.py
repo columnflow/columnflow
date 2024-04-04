@@ -17,11 +17,6 @@ logger = law.logger.get_logger(__name__)
 
 
 def add_datasets(config: od.Config, campaign: od.Campaign):
-    # load custom produced datasets into campaign
-    get_custom_datasets(campaign)
-
-    # use custom get_dataset_lfns function
-    config.x.get_dataset_lfns = get_dataset_lfns
 
     # add datasets we need to study
     dataset_names = {
@@ -59,7 +54,8 @@ def add_datasets(config: od.Config, campaign: od.Campaign):
 
             # ttbar
 
-            "tt_dl",
+            "tt_dl_powheg",
+            "tt_sl_powheg"
         ]}[f"{config.x.year}{config.x.corr_postfix}"]
 
     # loop over all dataset names and add them to the config
