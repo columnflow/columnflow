@@ -74,6 +74,8 @@ cfg = ana.add_config(campaign)
 # gather campaign data
 year = campaign.x.year
 ecm = campaign.ecm
+year2 = year % 100
+corr_postfix = f"{campaign.x.vfp}VFP" if year == 2016 else ""
 
 # add processes we are interested in
 process_names = [
@@ -223,16 +225,15 @@ cfg.add_shift(name="mu_down", id=11, type="shape")
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
-json_mirror = "${MODULE_BASE}/jsonpog-integration"
-year_short = str(year)[2:]  # 20XX > XX
-lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm}TeV/"
+json_mirror = "modules/jsonpog-integration"
+lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year2}/{ecm}TeV/"
 pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
 runs = {2016: "271036-284044", 2017: "294927-306462", 2018: "314472-325175"}
 cfg.x.external_files = DotDict.wrap({
     # lumi files (golden run 2 only!!)
     "lumi": {
-        "golden": (f"{lumi_cert_site}/Legacy_{year}/Cert_{runs[year]}_{ecm}TeV_UL{year}_Collisions{year_short}_GoldenJSON.txt", "v1"),  # noqa
-        "normtag": ("${MODULE_BASE}/Normtags/normtag_PHYSICS.json", "v1"),
+        "golden": (f"{lumi_cert_site}/Legacy_{year}/Cert_{runs[year]}_{ecm}TeV_UL{year}_Collisions{year2}_GoldenJSON.txt", "v1"),  # noqa
+        "normtag": ("modules/Normtags/normtag_PHYSICS.json", "v1"),
     },
 
     # jet energy correction
@@ -254,7 +255,7 @@ cfg.x.external_files = DotDict.wrap({
     # run 2 only!!
     # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II # noqa
     "pu": {
-        "json": (f"{pu_reweightin_website}/pileup_latest.txt", "v1"),  # noqa
+        "json": (f"{pu_reweighting_site}/pileup_latest.txt", "v1"),  # noqa
         "mc_profile": (
         "https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py", # noqa
         "v1"),  # noqa

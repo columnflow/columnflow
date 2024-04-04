@@ -61,7 +61,6 @@ setup___cf_short_name_lc__() {
 
     # start exporting variables
     export __cf_short_name_uc___BASE="${this_dir}"
-    export MODULE_BASE="${this_dir}/modules"
     export CF_BASE="${this_dir}/modules/columnflow"
     export CF_REPO_BASE="${__cf_short_name_uc___BASE}"
     export CF_REPO_BASE_ALIAS="__cf_short_name_uc___BASE"
