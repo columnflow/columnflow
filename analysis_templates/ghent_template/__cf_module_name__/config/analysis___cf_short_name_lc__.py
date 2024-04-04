@@ -226,7 +226,7 @@ add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
 json_mirror = "modules/jsonpog-integration"
-lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year2}/{ecm}TeV/"
+lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year2}/{ecm:g}TeV/"
 pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
 goldenjsons = {
     2016: f"Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt",
@@ -265,13 +265,13 @@ cfg.x.external_files = DotDict.wrap({
         "v1"),  # noqa
         "data_profile": {
             "nominal": (
-            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-69200ub-99bins.root", "v1"),
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-69200ub-99bins.root", "v1"),
             # noqa
             "minbias_xs_up": (
-            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-72400ub-99bins.root", "v1"),
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-72400ub-99bins.root", "v1"),
             # noqa
             "minbias_xs_down": (
-            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-66000ub-99bins.root", "v1"),
+            f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-66000ub-99bins.root", "v1"),
             # noqa
         },
     },
