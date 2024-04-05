@@ -8,11 +8,11 @@ Defined in [selection/objects.py:electron_object](__cf_module_name__/selection/o
 
 - $|eta| < 2.5$ 
 - $p_T > 15$
-- $\texttt{miniPFRelIso_all} < 0.4$
+- $\texttt{miniPFRelIso\_all} < 0.4$
 - $\texttt{sip3d} < 8$
 - $d_{xy} < 0.05$ 
 - $d_z < 0.1$
-- $lostHits} < 2$
+- $\texttt{lostHits} < 2$
 - is a PF candidate
 - with conversion veto applied 
 - $\texttt{tightCharge} > 1$
