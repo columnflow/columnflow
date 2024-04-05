@@ -49,3 +49,4 @@ def patch_htcondor_workflow():
 @memoize
 def patch_all():
     patch_bundle_repo_exclude_files()
+    patch_htcondor_workflow()

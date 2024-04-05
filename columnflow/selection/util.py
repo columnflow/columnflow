@@ -80,3 +80,11 @@ def create_collections_from_masks(
             events = set_ak_column(events, dst_name, dst_collection)
 
     return events
+
+
+def masked_sorted_indices(mask: ak.Array, sort_var: ak.Array, ascending: bool = False) -> ak.Array:
+    """
+    Helper function to obtain the correct indices of an object mask
+    """
+    indices = ak.argsort(sort_var, axis=-1, ascending=ascending)
+    return indices[mask[indices]]
