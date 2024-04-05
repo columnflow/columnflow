@@ -228,16 +228,20 @@ def add_config(
     cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}{corr_postfix}_UL")
 
     # external files
-    json_mirror = "${MODULE_BASE}/jsonpog-integration"
+    json_mirror = "modules/jsonpog-integration"
     year_short = str(year)[2:]  # 20XX > XX
-    lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm}TeV/"
+    lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm:g}TeV"
     pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
-    runs = {2016: "271036-284044", 2017: "294927-306462", 2018: "314472-325175"}
+    goldenjsons = {
+        2016: f"Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt",
+        2017: f"Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",
+        2018: f"Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt",
+    }
     cfg.x.external_files = DotDict.wrap({
         # lumi files (golden run 2 only!!)
         "lumi": {
-            "golden": (f"{lumi_cert_site}/Legacy_{year}/Cert_{runs[year]}_{ecm}TeV_UL{year}_Collisions{year_short}_GoldenJSON.txt", "v1"),  # noqa
-            "normtag": ("${MODULE_BASE}/Normtags/normtag_PHYSICS.json", "v1"),
+            "golden": (f"{lumi_cert_site}/Legacy_{year}/{goldenjsons[year]}", "v1"),
+            "normtag": ("modules/Normtags/normtag_PHYSICS.json", "v1"),
         },
 
         # jet energy correction
@@ -252,10 +256,6 @@ def add_config(
         # btag scale factor
         "btag_sf_corr": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
 
-        # fake rates
-        "muon_fakerate": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
-        "electron_fakerate": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
-
         # run 2 only!!
         # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II # noqa
         "pu": {
@@ -265,13 +265,13 @@ def add_config(
             "v1"),  # noqa
             "data_profile": {
                 "nominal": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-69200ub-99bins.root", "v1"),
+                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-69200ub-99bins.root", "v1"),
                 # noqa
                 "minbias_xs_up": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-72400ub-99bins.root", "v1"),
+                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-72400ub-99bins.root", "v1"),
                 # noqa
                 "minbias_xs_down": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm}tev-{year}-66000ub-99bins.root", "v1"),
+                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-66000ub-99bins.root", "v1"),
                 # noqa
             },
         },
