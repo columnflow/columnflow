@@ -30,8 +30,7 @@ def masked_sorted_indices(mask: ak.Array, sort_var: ak.Array, ascending: bool = 
     uses=four_vec(
         ("Muon"),
         ("sip3d", "dxy", "dz", "miniPFRelIso_all", "tightId")
-    ),
-    produces={"Muon.tight"},
+    ) | {"event"},
     triggers=None
 )
 def muon_object(
@@ -62,7 +61,7 @@ def muon_object(
     events = set_ak_column(events, "Muon.tight", mu_mask_tight, value_type=bool)
 
     return events, SelectionResult(
-        steps={},
+        steps={ak.ones_like(events.event, value_type=bool)},
         objects={
             "Muon": {
                 "Muon": masked_sorted_indices(mu_mask, muon.pt)
@@ -79,7 +78,6 @@ def muon_object(
     ) | four_vec(
         ("Muon"),
     ),
-    produces={"Electron.tight"},
     triggers=None
 )
 def electron_object(
@@ -165,3 +163,27 @@ def jet_object(
             },
         },
     )
+
+
+@selector(
+    uses=(muon_object, electron_object, jet_object),
+    exposed=False,
+)
+def object_selection(
+    self: Selector,
+    events: ak.Array,
+    stats: defaultdict,
+    **kwargs,
+) -> Tuple[ak.Array, SelectionResult]:
+    # apply muon object selection
+    events, results = self[muon_object](events, stats, **kwargs)
+
+    # apply electron object selection
+    events, electron_results = self[electron_object](events, results, stats, **kwargs)
+    results += electron_results
+
+    # apply jet object selection
+    events, jet_results = self[jet_object](events, results, stats, **kwargs)
+    results += jet_results
+
+    return events, results

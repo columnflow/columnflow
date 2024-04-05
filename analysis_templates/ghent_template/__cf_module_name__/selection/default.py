@@ -23,7 +23,7 @@ from columnflow.production.processes import process_ids
 from __cf_short_name_lc__.production.weights import event_weights_to_normalize
 from __cf_short_name_lc__.production.cutflow_features import cutflow_features
 
-from __cf_short_name_lc__.selection.objects import electron_object, muon_object, jet_object
+from __cf_short_name_lc__.selection.objects import object_selection
 from __cf_short_name_lc__.selection.stats import __cf_short_name_lc___increment_stats
 from __cf_short_name_lc__.selection.trigger import trigger_selection
 
@@ -218,12 +218,12 @@ def post_selection_init(self: Selector) -> None:
 
 @selector(
     uses={
-        pre_selection, post_selection, trigger_selection,
-        lepton_selection, jet_selection,
+        pre_selection, post_selection,
+        object_selection, trigger_selection, lepton_selection, jet_selection,
     },
     produces={
-        pre_selection, post_selection, trigger_selection,
-        lepton_selection, jet_selection,
+        pre_selection, post_selection,
+        object_selection, trigger_selection, lepton_selection, jet_selection,
     },
     exposed=True,
 )
@@ -243,16 +243,8 @@ def default(
     results += trigger_results
 
     # apply muon object selection
-    events, muon_results = self[muon_object](events, stats, **kwargs)
-    results += muon_object_results
-
-    # apply electron object selection
-    events, electron_results = self[electron_object](events, results, stats, **kwargs)
-    results += electron_object_results
-
-    # apply jet object selection
-    events, jet_results = self[jet_object](events, results, stats, **kwargs)
-    results += jet_object_results
+    events, object_results = self[object_selection](events, stats, **kwargs)
+    results += object_results
 
     # apply lepton event selection
     events, lepton_selection_results = self[lepton_selection](events, results, stats, **kwargs)
