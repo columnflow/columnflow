@@ -6,8 +6,16 @@
 
 Defined in [selection/objects.py:electron_object](__cf_module_name__/selection/objects.py).
 
-$\sqrt{3x-1}+(1+x)^2$
-
+- $\abs{eta} < 2.5$ 
+- $p_T > 15$
+- $miniPFRelIso_all < 0.4$
+- $sip3d < 8$
+- &dxy < 0.05$ 
+- $lostHits < 2$
+- isPFcand
+- convVeto
+- $tightCharge > 1$
+- without a tight muon closeby ($\\Delta R < 0.05$)
 
 # Calibration
 
