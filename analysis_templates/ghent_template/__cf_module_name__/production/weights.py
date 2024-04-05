@@ -74,8 +74,9 @@ def event_weights_to_normalize(self: Producer, events: ak.Array, results: Select
 
     events = self[pu_weight](events, **kwargs)
 
-    # compute btag SF weights (for renormalization tasks)
-    events = self[btag_weights](events, jet_mask=results.aux["jet_mask"], **kwargs)
+    # TODO: compute btag SF weights (for renormalization tasks)
+    # btag_weights works for btagging shape corrections. Not for wp.
+    # events = self[btag_weights](events, jet_mask=results.aux["jet_mask"], **kwargs)
 
     # skip scale/pdf weights for some datasets (missing columns)
     if not self.dataset_inst.has_tag("skip_scale"):
