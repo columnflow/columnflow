@@ -154,6 +154,7 @@ def jet_object(
     )
 
     jet_indices = masked_sorted_indices(jet_mask, events.Jet.pt)
+    n_jets = ak.sum(jet_mask, axis=-1)
 
     return events, SelectionResult(
         steps={},
@@ -164,6 +165,7 @@ def jet_object(
         },
         aux={
             "jet_mask": jet_mask,
+            "n_jets": n_jets,
         },
     )
 
