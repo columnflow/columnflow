@@ -256,25 +256,8 @@ def add_config(
         # btag scale factor
         "btag_sf_corr": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
 
-        # run 2 only!!
-        # files from https://twiki.cern.ch/twiki/bin/viewauth/CMS/PileupJSONFileforData?rev=44#Pileup_JSON_Files_For_Run_II # noqa
-        "pu": {
-            "json": (f"{pu_reweighting_site}/pileup_latest.txt", "v1"),  # noqa
-            "mc_profile": (
-            "https://raw.githubusercontent.com/cms-sw/cmssw/435f0b04c0e318c1036a6b95eb169181bbbe8344/SimGeneral/MixingModule/python/mix_2018_25ns_UltraLegacy_PoissonOOTPU_cfi.py",  # noqa
-            "v1"),  # noqa
-            "data_profile": {
-                "nominal": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-69200ub-99bins.root", "v1"),
-                # noqa
-                "minbias_xs_up": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-72400ub-99bins.root", "v1"),
-                # noqa
-                "minbias_xs_down": (
-                f"{pu_reweighting_site}/PileupHistogram-goldenJSON-{ecm:g}tev-{year}-66000ub-99bins.root", "v1"),
-                # noqa
-            },
-        },
+         # Pile up scale factor
+        "pu_sf": (f"{json_mirror}/POG/LUM/{year}{corr_postfix}_UL/puWeights.json.gz", "v1")
     })
 
     # process groups for conveniently looping over certain processs
