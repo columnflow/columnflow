@@ -12,7 +12,7 @@ Defined in [selection/objects.py:electron_object](__cf_module_name__/selection/o
 - $\texttt{sip3d} < 8$
 - $d_{xy} < 0.05$ 
 - $d_z < 0.1$
-- $\texttt{lostHits} < 2$
+- at most one lost hit 
 - is a PF candidate
 - with conversion veto applied 
 - $\texttt{tightCharge} > 1$
