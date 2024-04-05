@@ -43,7 +43,7 @@ def muon_object(
     muon = (events.Muon)
 
     # loose object electron mask
-    mu_mask_loose = (
+    mu_mask = (
         (abs(muon.eta) < 2.4) &
         (muon.pt > 10.) &
         (muon.miniPFRelIso_all < 0.4) &
@@ -54,7 +54,7 @@ def muon_object(
 
     # tight object muon mask (tight cutbased ID)
     mu_mask_tight = (
-        (mu_mask) &
+        (mu_mask_loose) &
         (muon.tightId)
     )
 
@@ -100,7 +100,7 @@ def electron_object(
         (electron.sip3d < 8) &
         (abs(electron.dxy) < 0.05) &
         (abs(electron.dz) < 0.1) &
-        (electron.losthist < 2) &
+        (electron.lostHits < 2) &
         (electron.isPFcand) &
         (electron.convVeto) &
         (electron.tightCharge > 1) &
@@ -161,6 +161,9 @@ def jet_object(
             "Jet": {
                 "Jet": jet_indices,
             },
+        },
+        aux={
+            "jet_mask": jet_mask,
         },
     )
 

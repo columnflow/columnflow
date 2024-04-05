@@ -74,7 +74,7 @@ def pre_selection(
 
 @selector(
     uses=four_vec(
-        ("Electron", "Muon"),
+        ("Electron", "Muon"), ("charge", "pdgId", "tight"),
     ),
     triggers=None
 )
@@ -91,43 +91,30 @@ def lepton_selection(
     muon = (events.Muon[results.objects.Muon.Muon])
 
     # create new object: leptons
-    leptons = ak.concatenate([muon, electron], axis=-1)
-    leptons = leptons[ak.argsort(leptons.pt, axis=-1, ascending=False)]
+    lepton = ak.concatenate([muon, electron], axis=-1)
+    lepton = lepton[ak.argsort(lepton.pt, axis=-1, ascending=False)]
 
     # required for pt cuts and Z-cuts on masks
     fill_with = {
         "pt": -999, "eta": -999, "phi": -999, "charge": -999,
-        "pdgId": -999, "mass": -999, "e_idx": -999, "mu_idx": -999,
-        "sip3d": -999
+        "pdgId": -999, "mass": -999,  "sip3d": -999, 'tight': False,
     }
-    leptons = ak.fill_none(ak.pad_none(leptons, 2, axis=-1), fill_with)
+    lepton = ak.fill_none(ak.pad_none(lepton, 2, axis=-1), fill_with)
 
     # construct the Z-boson candidate mask
-    mll = (TetraVec(leptons[:, 0]) + TetraVec(leptons[:, 1])).mass
+    mll = (TetraVec(lepton[:, 0]) + TetraVec(lepton[:, 1])).mass
     z_mask = (
-        (leptons[:, 0].charge != leptons[:, 1].charge) &
-        (abs(leptons[:, 0].pdgId) == abs(leptons[:, 1].pdgId)) &
+        (lepton[:, 0].charge != lepton[:, 1].charge) &
+        (abs(lepton[:, 0].pdgId) == abs(lepton[:, 1].pdgId)) &
         (abs(mll - 91) < 15)
     )
 
     lepton_mask = (
-        (leptons.pt[:, 0] > 30) &
-        (leptons.pt[:, 1] > 20) &
+        (lepton.pt[:, 0] > 30) &
+        (lepton.pt[:, 1] > 20) &
         (~z_mask) &                     # no Z-boson peak leptons
         (ak.all(lepton.tight, axis=-1))  # all loose leptons in the event must be tight
     )
-
-    # Electron and Muon indices corresponding to lepton selection
-    empty_events = ak.zeros_like(1 * events.event, dtype=np.uint16)
-    empty_indices = empty_events[..., None][..., :0]
-    e_indices = ak.where(lepton_mask, leptons.e_idx, empty_indices)
-    mu_indices = ak.where(lepton_mask, leptons.mu_idx, empty_indices)
-    e_indices_l = ak.drop_none(e_indices)
-    mu_indices_l = ak.drop_none(mu_indices)
-
-    # loose indices on electron and muon
-    e_indices = masked_sorted_indices(e_mask_tight, electron.pt)
-    mu_indices = masked_sorted_indices(mu_mask_tight, muon.pt)
 
     return events, SelectionResult(
         steps={
@@ -137,7 +124,7 @@ def lepton_selection(
         aux={
             # save the selected lepton for the duration of the selection
             # multiplication of a coffea particle with 1 yields the lorentz vector
-            "lepton": leptons,
+            "lepton": lepton,
         },
     )
 
@@ -155,19 +142,15 @@ def jet_selection(
 ) -> Tuple[ak.Array, SelectionResult]:
 
     jet = (events.Jet[results.objects.Jet.Jet])
-    lepton = results.aux.lepton
 
-    bjet_mask_medium = -(jet.btagDeepFlavB >= self.config_inst.x.btag_working_points.deepjet.medium)
+    bjet_mask_medium = (jet.btagDeepFlavB >= self.config_inst.x.btag_working_points.deepjet.medium)
 
-    jet_mask = (
-        (ak.sum(bjet_mask_medium) >= 1)
-    )
+    jet_event_mask = (ak.sum(bjet_mask_medium, axis=-1) >= 1)
 
     return events, SelectionResult(
         steps={
-            "Jet": jet_mask,
+            "Jet": jet_event_mask,
         },
-        objects={},
     )
 
 
@@ -242,7 +225,7 @@ def default(
     events, trigger_results = self[trigger_selection](events, **kwargs)
     results += trigger_results
 
-    # apply muon object selection
+    # apply object selection
     events, object_results = self[object_selection](events, stats, **kwargs)
     results += object_results
 
