@@ -21,7 +21,10 @@ ak = maybe_import("awkward")
 
 
 @selector(
-    uses={increment_stats, btag_weights, event_weights_to_normalize},
+    uses={
+        increment_stats,
+        event_weights_to_normalize
+        },
 )
 def __cf_short_name_lc___increment_stats(
     self: Selector,
@@ -32,7 +35,6 @@ def __cf_short_name_lc___increment_stats(
 ) -> ak.Array:
     # collect important information from the results
     event_mask = results.event
-    event_mask_no_bjet = results.event  # currently no b-jet selection, will change to a result without b jet selection
     n_jets = results.x.n_jets
 
     # weight map definition
@@ -40,7 +42,6 @@ def __cf_short_name_lc___increment_stats(
         # "num" operations
         "num_events": Ellipsis,  # all events
         "num_events_selected": event_mask,  # selected events only
-        "num_events_selected_no_bjet": event_mask_no_bjet,
     }
 
     if self.dataset_inst.is_mc:
@@ -48,12 +49,9 @@ def __cf_short_name_lc___increment_stats(
         # "sum" operations
         weight_map["sum_mc_weight"] = events.mc_weight  # weights of all events
         weight_map["sum_mc_weight_selected"] = (events.mc_weight, event_mask)  # weights of selected events
-        weight_map["sum_mc_weight_no_bjet"] = (events.mc_weight, event_mask_no_bjet)
-        weight_map["sum_mc_weight_selected_no_bjet"] = (events.mc_weight, event_mask_no_bjet)
 
         weight_columns = list(
-            set(self[event_weights_to_normalize].produced_columns) |
-            set(self[btag_weights].produced_columns),
+            set(self[event_weights_to_normalize].produced_columns)
         )
         weight_columns = sorted([col.string_nano_column for col in weight_columns])
 
@@ -67,12 +65,6 @@ def __cf_short_name_lc___increment_stats(
 
             # weights for selected events
             weight_map[f"sum_mc_weight_{name}_selected"] = (events.mc_weight * events[name], event_mask)
-
-            if name.startswith("btag_weight"):
-                # weights for selected events, excluding the bjet selection
-                weight_map[f"sum_mc_weight_{name}_selected_no_bjet"] = (
-                    (events.mc_weight * events[name], event_mask_no_bjet)
-                )
 
     group_map = {
         "process": {
