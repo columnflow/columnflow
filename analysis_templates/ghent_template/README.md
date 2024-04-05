@@ -6,7 +6,7 @@
 
 Defined in [selection/objects.py:electron_object](__cf_module_name__/selection/objects.py).
 
-- $|eta| < 2.5$ 
+- $|\eta| < 2.5$ 
 - $p_T > 15$
 - $\texttt{miniPFRelIso all} < 0.4$
 - $\texttt{sip3d} < 8$
