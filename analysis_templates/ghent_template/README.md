@@ -10,8 +10,9 @@ Defined in [selection/objects.py:electron_object](__cf_module_name__/selection/o
 - $p_T > 15$
 - $miniPFRelIso_all < 0.4$
 - $sip3d < 8$
-- &dxy < 0.05$ 
-- $lostHits < 2$
+- $d_{xy} < 0.05$ 
+- $d_z < 0.1$
+- $\texttt{lostHits} < 2$
 - isPFcand
 - convVeto
 - $tightCharge > 1$
