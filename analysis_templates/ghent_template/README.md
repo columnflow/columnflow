@@ -1,9 +1,19 @@
 # __cf_analysis_name__ Analysis
 
+# Object Definition
 
-### Resources
+## Electrons
+
+Defined in [selection/objects.py:electron_object](selection/objects.py).
+
+# Calibration
+
+# Event selection
+
+# Resources
 
 - [columnflow](https://github.com/uhh-cms/columnflow)
 - [law](https://github.com/riga/law)
 - [order](https://github.com/riga/order)
 - [luigi](https://github.com/spotify/luigi)
+
