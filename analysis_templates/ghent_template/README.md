@@ -4,7 +4,7 @@
 
 ## Electrons
 
-Defined in [selection/objects.py:electron_object](selection/objects.py).
+Defined in [selection/objects.py:electron_object](__cf_analysis_name__/selection/objects.py).
 
 # Calibration
 
