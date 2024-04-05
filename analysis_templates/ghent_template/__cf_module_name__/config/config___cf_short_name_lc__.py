@@ -228,7 +228,7 @@ def add_config(
     cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}{corr_postfix}_UL")
 
     # external files
-    json_mirror = "modules/jsonpog-integration"
+    json_mirror = "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration"
     year_short = str(year)[2:]  # 20XX > XX
     lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm:g}TeV"
     pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
