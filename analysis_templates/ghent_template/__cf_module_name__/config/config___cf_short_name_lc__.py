@@ -32,8 +32,9 @@ def add_config(
     limit_dataset_files: int | None = None,
 ) -> od.Config:
     # validations
-    assert campaign.x.year in [2016, 2017, 2018]  # only run 2 implemented
-    if campaign.x.year == 2016:
+    year = campaign.x.year
+    assert year in [2016, 2017, 2018]  # only run 2 implemented
+    if year == 2016:
         assert campaign.x.vfp in ["pre", "post"]
 
     # only 2018 fully implemented
@@ -42,7 +43,6 @@ def add_config(
 
     cfg = analysis.add_config(campaign, name=config_name, id=config_id, tags=analysis.tags)
 
-    year = campaign.x.year
     year2 = year % 100
     corr_postfix = f"{campaign.x.vfp}VFP" if year == 2016 else ""
     ecm = campaign.ecm
