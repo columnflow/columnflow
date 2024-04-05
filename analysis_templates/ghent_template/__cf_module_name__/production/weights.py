@@ -58,8 +58,13 @@ def event_weight_init(self: Producer) -> None:
 
 
 @producer(
-    uses={pu_weight, btag_weights
-          },
+    uses={
+        pu_weight,
+        # btag_weights, # TODO: compute btag SF weights (this one applies shape correction)
+        murmuf_envelope_weights,
+        murmuf_weights,
+        pdf_weights
+        },
     # don't save btag_weights to save storage space, since we can reproduce them in ProduceColumns
     produces={pu_weight},
     mc_only=True,
