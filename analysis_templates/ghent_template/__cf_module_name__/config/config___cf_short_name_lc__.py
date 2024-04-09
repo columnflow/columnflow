@@ -271,9 +271,9 @@ def add_config(
     # dataset groups for conveniently looping over certain datasets
     # (used in wrapper_factory and during plotting)
     cfg.x.dataset_groups = {
-        "test": ["tt_dl"],
-        "all": ["tt_dl", "dy*", "data*"],
-        "sim": ["tt_dl", "dy*"],
+        "test": ["tt_dl_powheg"],
+        "all": ["tt_dl_powheg", "dy*", "data*"],
+        "sim": ["tt_dl_powheg", "dy*"],
     }
 
     cfg.x.variable_groups = {
