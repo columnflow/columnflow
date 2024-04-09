@@ -30,8 +30,8 @@ def add_datasets(config: od.Config, campaign: od.Campaign):
             # backgrounds
 
             # ewk
-            *["dy_lept_m50_ht-100to200_madgraph" for htr in ['100to200', '200to400', '400to600',
-                                                             '600to800', '800to1200', '1200to2500']],
+            *[f"dy_lept_m50_ht-{htr}_madgraph" for htr in ['100to200', '200to400', '400to600',
+                                                           '600to800', '800to1200', '1200to2500']],
 
             # ttbar
             "tt_dl_powheg",
