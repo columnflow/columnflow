@@ -54,7 +54,7 @@ def muon_object(
 
     # tight object muon mask (tight cutbased ID)
     mu_mask_tight = (
-        (mu_mask_loose) &
+        (mu_mask) &
         (muon.tightId)
     )
 
