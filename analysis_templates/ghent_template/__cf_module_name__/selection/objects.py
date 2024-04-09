@@ -61,7 +61,7 @@ def muon_object(
     events = set_ak_column(events, "Muon.tight", mu_mask_tight, value_type=bool)
 
     return events, SelectionResult(
-        steps={ak.ones_like(events.event, value_type=bool)},
+        steps={},
         objects={
             "Muon": {
                 "Muon": masked_sorted_indices(mu_mask, muon.pt)
