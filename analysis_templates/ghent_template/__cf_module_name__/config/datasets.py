@@ -22,38 +22,18 @@ def add_datasets(config: od.Config, campaign: od.Campaign):
     dataset_names = {
         "2018": [
             # data
-            "data_mumu_a",
-            "data_mumu_b",
-            "data_mumu_c",
-            "data_mumu_d",
-
-            "data_egamma_a",
-            "data_egamma_b",
-            "data_egamma_c",
-            "data_egamma_d",
-
-            "data_muoneg_a",
-            "data_muoneg_b",
-            "data_muoneg_c",
-            "data_muoneg_d",
-
-            "data_mu_a",
-            "data_mu_b",
-            "data_mu_c",
-            "data_mu_d",
+            *[f"data_mumu_{era}" for era in ['a', 'b', 'c', 'd']],
+            *[f"data_egamma_{era}" for era in ['a', 'b', 'c', 'd']],
+            *[f"data_muoneg_{era}" for era in ['a', 'b', 'c', 'd']],
+            *[f"data_mu_{era}" for era in ['a', 'b', 'c', 'd']],
 
             # backgrounds
 
             # ewk
-            "dy_lept_m50_ht-100to200_madgraph",
-            "dy_lept_m50_ht-200to400_madgraph",
-            "dy_lept_m50_ht-400to600_madgraph",
-            "dy_lept_m50_ht-600to800_madgraph",
-            "dy_lept_m50_ht-800to1200_madgraph",
-            "dy_lept_m50_ht-1200to2500_madgraph",
+            *["dy_lept_m50_ht-100to200_madgraph" for htr in ['100to200', '200to400', '400to600',
+                                                             '600to800', '800to1200', '1200to2500']],
 
             # ttbar
-
             "tt_dl_powheg",
             "tt_sl_powheg"
         ]}[f"{config.x.year}{config.x.corr_postfix}"]
