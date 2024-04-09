@@ -16,7 +16,7 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-producer(
+@producer(
     uses={
         mc_weight, category_ids,
         # nano columns
@@ -28,8 +28,6 @@ producer(
         "cutflow.jet1_pt",
     },
 )
-
-
 def cutflow_features(
     self: Producer,
     events: ak.Array,
