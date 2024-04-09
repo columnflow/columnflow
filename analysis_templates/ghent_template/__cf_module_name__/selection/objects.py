@@ -104,7 +104,7 @@ def electron_object(
         (electron.isPFcand) &
         (electron.convVeto) &
         (electron.tightCharge > 1) &
-        # remove electrons that have tight muon close to it
+        # remove electrons that have muon close to it
         (ak.is_none(electron.nearest(muon, threshold=0.05), axis=-1))
     )
     # tight object electron mask (mvaFall17 WP90)

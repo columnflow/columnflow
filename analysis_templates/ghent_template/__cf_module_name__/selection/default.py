@@ -63,7 +63,7 @@ def pre_selection(
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
 
-    # create process ids together with custom ttz definition (and future wz 0b, 1b, >2b definition)
+    # create process ids
     events = self[process_ids](events, **kwargs)
     # ensure coffea behavior
     events = self[attach_coffea_behavior](events, **kwargs)

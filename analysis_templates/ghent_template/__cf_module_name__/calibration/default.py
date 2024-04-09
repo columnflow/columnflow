@@ -27,6 +27,10 @@ def default(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
+# NOTE:
+# the function together with its @default.init decorator allows to customise the initialization of the
+# calibration function as performed by the @calibrator decorator. Here, we extend the uses={...} and produces={...}
+# sets dynamically, because what is used and produced depends on whether we are processing MC or data.
 @default.init
 def default_init(self: Calibrator) -> None:
     if not getattr(self, "dataset_inst", None):
@@ -58,6 +62,7 @@ def skip_jecunc(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
+# NOTE: see default_init
 @skip_jecunc.init
 def skip_jecunc_init(self: Calibrator) -> None:
     if not getattr(self, "dataset_inst", None):
