@@ -12,6 +12,9 @@ The datasets (for ERA=a,b,c,d) are:
 - data_muoneg_ERA corresponding to MuonEG
 - data_egamma_ERA corresponding to EGamma
 
+The MC processes with corresponding datasets are
+- ttbar with corresponding datasets tt_sl_powheg and tt_dl_powheg
+- dy (Drell-Yan) with corresponding datasets dy_lept_m50_ht-RANGE_madgraph
 
 # Object Definition
 
