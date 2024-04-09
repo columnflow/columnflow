@@ -22,7 +22,7 @@ def add_categories_selection(config: od.Config) -> None:
     Adds categories to a *config*, that are typically produced in `SelectEvents`.
     """
 
-    config.x.regions = ("incl", "CR_WZ")
+    config.x.regions = ("incl")
     config.x.lepton_channels = ("2e", "1e1mu", "2mu")
     config.x.lepton_channel_labels = {"2e": "$ee$", "1e1mu": "$e\mu$", "2mu": "$\mu\mu$"}
 
