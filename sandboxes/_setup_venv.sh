@@ -114,7 +114,8 @@ setup_venv() {
 
     local SOURCE="$CF_BASE"
     # build requirements if needed
-    if [ ! -f $CF_VENV_REQUIREMENTS ] | [ "$CF_FORCE_COMPILE_ENV" = "1" ]; then
+    cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
+    if [ ! -f $CF_VENV_REQUIREMENTS ]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
         local EXTRAS=""
