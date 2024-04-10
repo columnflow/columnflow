@@ -1,5 +1,25 @@
 # __cf_analysis_name__ Analysis
 
+# Datasets and processes
+
+All processes and datasets are defined in the [cmsdb gitlab](https://gitlab.cern.ch/ghentanalysis/cmsdb/-/blob/master/cmsdb/).
+Processes are added to the analysis in the file [config/processes.py](__cf_module_name__/config/processes.py). 
+Data- and MC-sets are added to the analysis in the file [config/datasets.py](__cf_module_name__/config/datasets.py). 
+Note the difference between a process and a dataset. A process can correspond to multiple datasets. The other way around is currently not possible.
+
+The datasets (for ERA=a,b,c,d) are:
+- data_mu_ERA corresponding to SingleMuon 
+- data_mumu_ERA corresponding to DoubleMuon
+- data_muoneg_ERA corresponding to MuonEG
+- data_egamma_ERA corresponding to EGamma
+
+The MC processes with corresponding datasets are
+- ttbar with corresponding datasets tt_sl_powheg and tt_dl_powheg
+- dy (Drell-Yan) with corresponding datasets dy_lept_m50_ht-RANGE_madgraph
+
+The analysis can be run over only selected datasets using the --datasets argument. Groupings of datasets are defined in [config/datasets.py](__cf_module_name__/config/config___cf_short_name_lc__.py). A similar scheme exists for processes. 
+
+
 # Object Definition
 
 All objects collected in [selection/objects.py:object_selection](__cf_module_name__/selection/objects.py#L177).
