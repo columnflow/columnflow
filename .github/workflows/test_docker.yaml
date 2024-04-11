@@ -4,15 +4,16 @@ on:
 
 jobs:
   container-test:
-    runs-on: ubuntu-latest
-    container:
-      image: gitlab-registry.cern.ch/pkeicher/docker-tutorial:0cdb43d4
-      volumes:
-        - /cvmfs:/cvmfs
-        - /afs:/afs
-    steps:
-      - name: Test Docker
-        run: |
-          python3 /analysis/script.py
-          (ls /cvfms && echo Found /cvfms) || (echo No /cvfms)
-          (ls /afs && echo Found /afs) || (echo No /afs)
+    uses: ./.github/actions/build_docker
+    with:
+      IMAGE_NAME: "software-base"
+      PUSH_IMAGE: "true"
+      BUILD_ARGS: |
+        --build-arg pyversion='3.10'
+        --build-arg exe_file=setup.sh
+      HASHFILES: |
+        **/requirements*.txt
+        **/sandboxes/cf_*.sh
+        **/setup.sh
+        **/_setup*.sh
+        pyproject.toml
