@@ -5,22 +5,27 @@ on:
       DOCKER_FILE_NAME: 
         description: "Default Dockerfile used for build command"
         default: "Dockerfile"
+        type: string
         required: false
       GIT_SUBMODULE_STRATEGY: 
         description: "strategy to be used for git submodules"
         default: recursive
+        type: string
         required: false
       PUSH_IMAGE: 
         description: "push image to target registry"
-        default: "false"
+        default: false
+        type: boolean
         required: false
       BUILD_ARGS: 
         description: "build arguments to be passed to the build command"
         required: false
+        type: string
         default: ""
       HASHFILES: 
         description: "List of files to be used for cache hash generation"
         required: false
+        type: string
         default: |
           **/requirements*.txt
           **/sandboxes/cf_*.sh
@@ -29,11 +34,12 @@ on:
           pyproject.toml
       IMAGE_NAME: 
         description: "Name of the image to be built"
+        type: boolean
         required: true
     # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 
 
