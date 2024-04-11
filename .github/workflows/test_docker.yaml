@@ -2,7 +2,7 @@ on:
   push:
 jobs:
   container-test:
-    uses: ./.github/actions/build_docker
+    uses: ./.github/workflows/build_docker_container
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: "true"
