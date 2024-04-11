@@ -40,7 +40,11 @@ ENV CF_FORCE_COMPILE_ENV "True"
 COPY . /columnflow
 ENV CF_BASE /columnflow
 WORKDIR ${CF_BASE}
-RUN source ./setup.sh && [ "${exe_file}" != "setup.sh" ] && source ${exe_file}
+RUN source ./setup.sh 
+RUN if [ "${exe_file}" != "setup.sh" ]; then source ${exe_file}; fi
+RUN useradd -ms /bin/bash cf_user
+USER cf_user
+
 # RUN echo "executing file $exe_file"
 # RUN ls -l
 # SHELL ["/bin/bash", "-c", "source $exe_file"]
