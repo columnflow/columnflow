@@ -6,7 +6,7 @@ jobs:
     uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: "software-base"
-      PUSH_IMAGE: "true"
+      PUSH_IMAGE: true
       BUILD_ARGS: |
         --build-arg pyversion='3.10'
         --build-arg exe_file=setup.sh
