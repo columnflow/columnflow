@@ -4,6 +4,9 @@ on:
 
 jobs:
   container-test:
+  - name: Checkout repository
+      uses: actions/checkout@v4
+  - name: Build Docker image
     uses: ./.github/actions/build_docker
     with:
       IMAGE_NAME: "software-base"
