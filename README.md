@@ -79,7 +79,7 @@ Setup successfull! The next steps are:
 
    Suggestions for tasks to run:
 
-   a) Run the 'calibration -> selection -> reduction' pipeline for the first file of the
+   a) Run the 'calibration -> selection -> reduction' pipeline for the first file (--branch 0) of the
       default dataset using the default calibrator and default selector
       (enter the command below and 'tab-tab' to see all arguments or add --help for help)
       > law run cf.ReduceEvents --version dev1 --branch 0
