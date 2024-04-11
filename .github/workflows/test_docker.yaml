@@ -8,7 +8,7 @@ jobs:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
       BUILD_ARGS: |
-        pyversion='3.10'
+        pyversion=3.10
         exe_file=setup.sh
       HASHFILES: |
         **/requirements*.txt
