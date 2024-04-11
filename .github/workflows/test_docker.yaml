@@ -1,28 +1,18 @@
 on:
   push:
-
-
 jobs:
   container-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-          clean: false
-      - name: Build Docker image
-        uses: ./.github/actions/build_docker
-        with:
-          IMAGE_NAME: "software-base"
-          PUSH_IMAGE: "true"
-          BUILD_ARGS: |
-            --build-arg pyversion='3.10'
-            --build-arg exe_file=setup.sh
-          HASHFILES: |
-            **/requirements*.txt
-            **/sandboxes/cf_*.sh
-            **/setup.sh
-            **/_setup*.sh
-            pyproject.toml
+    uses: ./.github/actions/build_docker
+    with:
+      IMAGE_NAME: "software-base"
+      PUSH_IMAGE: "true"
+      BUILD_ARGS: |
+        --build-arg pyversion='3.10'
+        --build-arg exe_file=setup.sh
+      HASHFILES: |
+        **/requirements*.txt
+        **/sandboxes/cf_*.sh
+        **/setup.sh
+        **/_setup*.sh
+        pyproject.toml
+    secrets: inherit

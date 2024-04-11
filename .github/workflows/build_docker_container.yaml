@@ -1,55 +1,54 @@
-#
-name: Create and publish a Docker image
-
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
-  push:
-    # branches: ['release']
+  workflow_call:
+    inputs:
+      DOCKER_FILE_NAME: 
+        description: "Default Dockerfile used for build command"
+        default: "Dockerfile"
+        required: false
+      GIT_SUBMODULE_STRATEGY: 
+        description: "strategy to be used for git submodules"
+        default: recursive
+        required: false
+      PUSH_IMAGE: 
+        description: "push image to target registry"
+        default: "false"
+        required: false
+      BUILD_ARGS: 
+        description: "build arguments to be passed to the build command"
+        required: false
+        default: ""
+      HASHFILES: 
+        description: "List of files to be used for cache hash generation"
+        required: false
+        default: |
+          **/requirements*.txt
+          **/sandboxes/cf_*.sh
+          **/setup.sh
+          **/_setup*.sh
+          pyproject.toml
+      IMAGE_NAME: 
+        description: "Name of the image to be built"
+        required: true
+    # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
 
-# Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
-inputs:
-  DOCKER_FILE_NAME: 
-    description: "Default Dockerfile used for build command"
-    default: "Dockerfile"
-    required: false
-  GIT_SUBMODULE_STRATEGY: 
-    description: "strategy to be used for git submodules"
-    default: recursive
-    required: false
-  PUSH_IMAGE: 
-    description: "push image to target registry"
-    default: "false"
-    required: false
-  BUILD_ARGS: 
-    description: "build arguments to be passed to the build command"
-    required: false
-    default: ""
-  HASHFILES: 
-    description: "List of files to be used for cache hash generation"
-    required: false
-    default: |
-      **/requirements*.txt
-      **/sandboxes/cf_*.sh
-      **/setup.sh
-      **/_setup*.sh
-      pyproject.toml
-  IMAGE_NAME: 
-    description: "Name of the image to be built"
-    required: true
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
-runs:
-  using: 'composite'
-    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
-  permissions:
-    contents: read
-    packages: write
-    #       
+jobs:
+  runs-on: ubuntu-latest
+  # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
+  environment: build
   steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+        submodules: recursive
+        clean: false
     # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
     - name: Log in to the Container registry
       uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
