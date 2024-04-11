@@ -8,8 +8,8 @@ jobs:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
       BUILD_ARGS: |
-        --build-arg pyversion='3.10'
-        --build-arg exe_file=setup.sh
+        pyversion='3.10'
+        exe_file=setup.sh
       HASHFILES: |
         **/requirements*.txt
         **/sandboxes/cf_*.sh
