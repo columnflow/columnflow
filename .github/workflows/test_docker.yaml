@@ -5,11 +5,8 @@ jobs:
   container-test:
     uses: ./.github/workflows/build_docker_container.yaml
     permissions:
-      packages: write
-      actions: write
-      checks: write
       contents: read
-      deployments: write
+      packages: write
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
