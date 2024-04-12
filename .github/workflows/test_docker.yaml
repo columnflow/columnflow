@@ -4,6 +4,8 @@ on:
 jobs:
   container-test:
     uses: ./.github/workflows/build_docker_container.yaml
+    permissions:
+      packages: write
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
