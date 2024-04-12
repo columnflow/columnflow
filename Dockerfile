@@ -10,44 +10,56 @@ ARG pyversion=""
 ARG base="python:$pyversion"
 FROM $base
 
-ARG pyversion=""
+USER root
 
+ARG pyversion=""
+ARG CF_BASE="/columnflow"
+ARG CF_SOFTWARE_BASE="/software"
+
+# add python version to global environment
+# RUN echo "export PYVERSION=\"$(python -c 'import platform; print(platform.python_version())')\"" >> /root/.bashrc
+# copy current state of repository into docker image
+COPY . /columnflow
+ENV CF_BASE ${CF_BASE}
+# RUN ["chmod", "+x", "/columnflow/.docker_entrypoint.sh" ]
+
+
+ENV PYVERSION $pyversion
+RUN if [ -z $pyversion ]; then echo "export PYVERSION=\"$(python -c 'import platform; print(platform.python_version())')\"" >> /root/.bashrc ; fi
 # executable: Executable to run the container. This should be either the basic
 #             setup.sh script or a script to create a specific sandbox.
 #             All paths should be relative to the Columnflow base directory.
 ARG exe_file
 RUN apt-get update
-RUN apt-get install curl -y
+RUN apt-get install curl nano less vim locales -y
+RUN locale-gen en_US
+RUN locale-gen en_US.UTF-8
+RUN update-locale 
+
+# create simple user and setup group
+RUN getent group cf_user_base || (addgroup --gid 4200 cf_user_base && usermod -a -G cf_user_base root)
+RUN getent passwd cf_user || useradd -ms /bin/bash --gid 4200 cf_user
 
 ENV CF_SOFTWARE_BASE /software
 
-# add python version to global environment
-# RUN echo "export PYVERSION=\"$(python -c 'import platform; print(platform.python_version())')\"" >> /root/.bashrc
-ENV PYVERSION $pyversion
-RUN if [ -z $pyversion ]; then echo "export PYVERSION=\"$(python -c 'import platform; print(platform.python_version())')\"" >> /root/.bashrc ; fi
-SHELL ["/bin/bash", "-c"]
-RUN echo "Before extra ENV: '$PYVERSION'"
 # ENV PYVERSION $PYVERSION
 # RUN echo "After extra ENV: '$PYVERSION'"
+# SHELL ["/columnflow/.docker_entrypoint.sh", "-c"]
+SHELL ["/bin/bash", "-c"]
 
-# setup /afs mount
-# RUN --mount type=bind,source="/afs",target=/afs,readonly=true
 
-# ensure that dependencies are built for the current python version
-ENV CF_FORCE_COMPILE_ENV "True"
-
-# copy current state of repository into docker image
-COPY . /columnflow
-ENV CF_BASE /columnflow
 WORKDIR ${CF_BASE}
-RUN source ./setup.sh 
-RUN if [ "${exe_file}" != "setup.sh" ]; then source ${exe_file}; fi
-RUN useradd -ms /bin/bash cf_user
-USER cf_user
 
+
+RUN source ./setup.sh 
+
+RUN if [ "${exe_file}" != "setup.sh" ]; then source ./setup.sh && source ${exe_file}; fi
+
+RUN chown cf_user:cf_user_base ${CF_BASE} -R
+RUN chown cf_user:cf_user_base ${CF_SOFTWARE_BASE} -R
+USER cf_user
 # RUN echo "executing file $exe_file"
 # RUN ls -l
 # SHELL ["/bin/bash", "-c", "source $exe_file"]
 # RUN source "$exe_file"
-
 ENTRYPOINT [ "/bin/bash" ]
