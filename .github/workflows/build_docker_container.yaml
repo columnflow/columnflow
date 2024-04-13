@@ -17,6 +17,11 @@ on:
         default: false
         type: boolean
         required: false
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: string
+        default: "3.10"
       BUILD_ARGS: 
         description: "build arguments to be passed to the build command"
         required: false
@@ -80,5 +85,11 @@ jobs:
         with:
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
-          tags: ${{ inputs.IMAGE_NAME }}:${{ hashFiles(inputs.HASHFILES) }},${{ inputs.IMAGE_NAME }}:latest
-          build-args: ${{ inputs.BUILD_ARGS }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-${{ hashFiles(inputs.HASHFILES) }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-latest
+          build-args: |
+            ${{ inputs.BUILD_ARGS }}
+            pyversion=${{ inputs.PYVERSION }}
+          secrets: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}

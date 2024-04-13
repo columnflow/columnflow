@@ -4,14 +4,12 @@ on:
 jobs:
   container-test:
     uses: ./.github/workflows/build_docker_container.yaml
-    permissions:
-      contents: read
-      packages: write
+    
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
+      PYVERSION: "3.10"
       BUILD_ARGS: |
-        pyversion=3.10
         exe_file=setup.sh
       HASHFILES: |
         **/requirements*.txt
