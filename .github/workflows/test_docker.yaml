@@ -1,6 +1,14 @@
 name: Build Docker Container
 on:
   push:
+
+env:
+  base_hash_files: |
+    **/requirements*.txt
+    **/sandboxes/cf_*.sh
+    **/setup.sh
+    **/_setup*.sh
+    pyproject.toml
 jobs:    
   build_base_software:
     runs-on: ubuntu-latest
@@ -8,27 +16,16 @@ jobs:
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-          clean: false
-      - name: Build base software
-        uses: ./.github/workflows/build_docker_container.yaml
-        with:
-          IMAGE_NAME: "software-base"
-          PUSH_IMAGE: true
-          PYVERSION: "3.10"
-          BUILD_ARGS: |
-            exe_file=setup.sh
-          HASHFILES: |
-            **/requirements*.txt
-            **/sandboxes/cf_*.sh
-            **/setup.sh
-            **/_setup*.sh
-            pyproject.toml
+    secrets: inherit
+    name: Build base software
+    uses: ./.github/workflows/build_docker_container.yaml
+    with:
+      IMAGE_NAME: "software-base"
+      PUSH_IMAGE: true
+      PYVERSION: "3.10"
+      BUILD_ARGS: |
+        exe_file=setup.sh
+      HASHFILES: ${{ env.base_hash_files }}
   
   build_venvs:
     runs-on: ubuntu-latest
@@ -52,27 +49,15 @@ jobs:
               **/sandboxes/_setup_venv.sh
               **/sandboxes/venv_ml_tf*.sh
               **/sandboxes/ml_tf.txt
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-          clean: false
-      - name: ${{ matrix.name }}
-        uses: ./.github/workflows/build_docker_container.yaml
-        with:
-          IMAGE_NAME: venv_${{ matrix.name }}
-          PUSH_IMAGE: true
-          PYVERSION: "3.10"
-          BUILD_ARGS: |
-            exe_file=sandboxes/venv_${{ matrix.venv }}.sh
-            base=ghcr.io/${{ github.repository }}/software-base:latest
-          HASHFILES: |
-            **/requirements*.txt
-            **/sandboxes/cf_*.sh
-            **/setup.sh
-            **/_setup*.sh
-            pyproject.toml
-            ${{ matrix.hashFiles }}
-        # secrets: inherit
+    uses: ./.github/workflows/build_docker_container.yaml
+    with:
+      IMAGE_NAME: venv_${{ matrix.name }}
+      PUSH_IMAGE: true
+      PYVERSION: "3.10"
+      BUILD_ARGS: |
+        exe_file=sandboxes/venv_${{ matrix.venv }}.sh
+        base=ghcr.io/${{ github.repository }}/software-base:latest
+      HASHFILES: |
+        ${{ env.base_hash_files}}
+        ${{ matrix.hashFiles }}
+    secrets: inherit
