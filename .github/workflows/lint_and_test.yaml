@@ -17,20 +17,20 @@ jobs:
     strategy:
       matrix:
         include:
-          - CONTAINER: ""
+          - CONTAINER: "software-base:python3.10-latest"
             NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
             UPLOAD_FILES: false
-          - CONTAINER: "ghcr.io/${{ github.repository }}/venv_columnar:python3.10-latest"
+          - CONTAINER: "venv_columnar:python3.10-latest"
             NAME: Test 🎢
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
-          - CONTAINER: "ghcr.io/${{ github.repository }}/venv_columnar:python3.10-latest"
+          - CONTAINER: "venv_columnar:python3.10-latest"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
     with:
-      CONTAINER: ${{ matrix.CONTAINER }}
+      CONTAINER: "ghcr.io/${{ github.repository }}/${{ matrix.CONTAINER }}"
       EXECUTABLE: ${{ matrix.EXECUTABLE }}
       UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
       NAME: ${{ matrix.NAME }}
