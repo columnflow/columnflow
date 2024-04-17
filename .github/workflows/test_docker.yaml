@@ -5,7 +5,9 @@ jobs:
   build_base_software:
     runs-on: ubuntu-latest
     environment: Software Build
-    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -15,9 +17,6 @@ jobs:
           clean: false
       - name: Build base software
         uses: ./.github/workflows/build_docker_container.yaml
-        permissions:
-          contents: read
-          packages: write
         with:
           IMAGE_NAME: "software-base"
           PUSH_IMAGE: true
