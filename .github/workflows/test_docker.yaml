@@ -50,7 +50,6 @@ jobs:
           clean: false
       - name: ${{ matrix.name }}
         uses: ./.github/workflows/build_docker_container.yaml
-        secrets: inherit
         with:
           IMAGE_NAME: venv_${{ matrix.name }}
           PUSH_IMAGE: true
@@ -65,4 +64,4 @@ jobs:
             **/_setup*.sh
             pyproject.toml
             ${{ matrix.hashFiles }}
-
+        secrets: inherit
