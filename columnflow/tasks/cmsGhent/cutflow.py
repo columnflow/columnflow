@@ -78,8 +78,8 @@ def PlotCutflow_run(self):
         # there should be hists to plot
         if not hists:
             raise Exception("no histograms found to plot")
-
-        total = sum(hists.values()).values() if self.relative else np.ones(len(self.selector_steps))
+        
+        total = sum(hists.values()).values() if self.relative else np.ones((len(self.selector_steps) + 1, 1))
 
         # sort hists by process order
         hists = OrderedDict(
