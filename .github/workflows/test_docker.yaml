@@ -60,7 +60,7 @@ jobs:
       PYVERSION: "3.10"
       BUILD_ARGS: |
         exe_file=sandboxes/venv_${{ matrix.venv }}.sh
-        base=ghcr.io/${{ github.repository }}/software-base:latest
+        base=ghcr.io/${{ github.repository }}/software-base
       HASHFILES: |
         **/requirements*.txt
         **/sandboxes/cf_*.sh
