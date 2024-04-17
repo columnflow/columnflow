@@ -44,15 +44,20 @@ jobs:
               **/sandboxes/venv_ml_tf*.sh
               **/sandboxes/ml_tf.txt
     steps:
-      - uses: actions/checkout@v3
-      - id: "build_venv"
+      - id: "checkout_repository"
+        uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: ${{ matrix.name }}
         uses: ./.github/workflows/build_docker_container.yaml
+        secrets: inherit
         with:
           IMAGE_NAME: venv_${{ matrix.name }}
           PUSH_IMAGE: true
           PYVERSION: "3.10"
           BUILD_ARGS: |
             exe_file=sandboxes/venv_${{ matrix.venv }}.sh
+            base=ghcr.io/${{ github.repository }}/software-base:latest
           HASHFILES: |
             **/requirements*.txt
             **/sandboxes/cf_*.sh
@@ -60,5 +65,4 @@ jobs:
             **/_setup*.sh
             pyproject.toml
             ${{ matrix.hashFiles }}
-        secrets: inherit
 
