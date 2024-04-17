@@ -23,7 +23,7 @@ jobs:
   
   build_venvs:
     runs-on: ubuntu-latest
-    needs: Setup_software_basis_py310_latest
+    needs: build_base_software
     environment: Software Build
     permissions:
       contents: read
