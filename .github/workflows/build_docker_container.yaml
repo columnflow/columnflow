@@ -81,8 +81,8 @@ jobs:
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-${{ hashFiles(inputs.HASHFILES) }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-latest
+            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-${{ hashFiles(inputs.HASHFILES) }}
+            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}:${{ inputs.PYVERSION }}-latest
           build-args: |
             ${{ inputs.BUILD_ARGS }}
             pyversion=${{ inputs.PYVERSION }}
