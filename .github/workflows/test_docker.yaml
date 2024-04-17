@@ -44,10 +44,6 @@ jobs:
               **/sandboxes/venv_ml_tf*.sh
               **/sandboxes/ml_tf.txt
     steps:
-      - id: "checkout_repository"
-        uses: actions/checkout@v3
-        with:
-          clean: false
       - name: ${{ matrix.name }}
         uses: ./.github/workflows/build_docker_container.yaml
         with:
