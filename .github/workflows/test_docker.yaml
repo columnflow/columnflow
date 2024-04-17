@@ -9,16 +9,17 @@ env:
     **/setup.sh
     **/_setup*.sh
     pyproject.toml
+
+
 jobs:    
   build_base_software:
     runs-on: ubuntu-latest
     environment: Software Build
+    uses: ./.github/workflows/build_docker_container.yaml
     permissions:
       contents: read
       packages: write
-    secrets: inherit
     name: Build base software
-    uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
@@ -26,6 +27,8 @@ jobs:
       BUILD_ARGS: |
         exe_file=setup.sh
       HASHFILES: ${{ env.base_hash_files }}
+    secrets: inherit
+
   
   build_venvs:
     runs-on: ubuntu-latest
