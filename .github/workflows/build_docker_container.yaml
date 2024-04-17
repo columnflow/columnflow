@@ -1,6 +1,9 @@
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
   workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
     inputs:
       DOCKER_FILE_NAME: 
         description: "Default Dockerfile used for build command"
