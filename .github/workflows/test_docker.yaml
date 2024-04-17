@@ -5,6 +5,7 @@ jobs:
   build_base_software:
     runs-on: ubuntu-latest
     environment: Software Build
+    secrets: inherit
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,7 +30,6 @@ jobs:
             **/setup.sh
             **/_setup*.sh
             pyproject.toml
-        secrets: inherit
   
   build_venvs:
     runs-on: ubuntu-latest
