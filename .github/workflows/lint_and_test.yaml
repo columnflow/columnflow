@@ -17,8 +17,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - CONTAINER: ""
-            NAME: "Lint 🔍"
+          - NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
           - CONTAINER: "ghcr.io/${{ github.repository }}/venv_columnar:python3.10-latest"
             NAME: Test 🎢
