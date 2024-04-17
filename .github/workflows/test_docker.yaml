@@ -28,7 +28,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    secrets: inherit
     strategy:
       matrix:
         include:
@@ -61,3 +60,5 @@ jobs:
             **/_setup*.sh
             pyproject.toml
             ${{ matrix.hashFiles }}
+        secrets: inherit
+
