@@ -6,12 +6,12 @@ on:
         required: true
         type: string
         default: ubuntu-latest
-  workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Setup basic software environment
-    types:
-      - completed
+  # workflow_dispatch:
+  # workflow_run:
+  #   workflows:
+  #     - Setup basic software environment
+  #   types:
+  #     - completed
   # push:
   # pull_request:
   #   types: [review_requested, ready_for_review]
