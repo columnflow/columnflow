@@ -41,6 +41,8 @@ jobs:
           submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
       - name: ${{ inputs.NAME }}
         run: |
+          cd ${GITHUB_WORKSPACE}
+          export CF_BASE="${GITHUB_WORKSPACE}" 
           source setup.sh ""
           ${{ inputs.EXECUTABLE }}
       - if: ${{ inputs.UPLOAD_FILES }}
