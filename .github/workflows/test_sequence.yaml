@@ -1,0 +1,50 @@
+name: Test sequence
+on:
+  workflow_call:
+    inputs:
+      CONTAINER: 
+        description: "container to be used for the job"
+        default: ""
+        type: string
+        required: false
+      GIT_SUBMODULE_STRATEGY: 
+        description: "strategy to be used for git submodules"
+        default: recursive
+        type: string
+        required: false
+      EXECUTABLE: 
+        description: "Executable to be run in the container"
+        type: string
+        required: true
+      UPLOAD_FILES: 
+        description: "Upload files to codecov"
+        default: false
+        type: boolean
+        required: false
+      NAME: 
+        description: "Name of the job"
+        type: string
+        required: true
+
+jobs:
+  test_sequence:
+    runs-on: ubuntu-latest
+    environment: Tests
+    container: ${{ inputs.CONTAINER }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+          persist-credentials: false
+          submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
+      - name: ${{ inputs.NAME }}
+        run: |
+          source setup.sh ""
+          ${{ inputs.EXECUTABLE }}
+      - if: ${{ inputs.UPLOAD_FILES }}
+        name: Upload report
+        uses: codecov/codecov-action@v3
+        with:
+          flags: unittests
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
+          verbose: true

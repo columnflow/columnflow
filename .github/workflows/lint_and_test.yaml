@@ -2,95 +2,41 @@ name: Lint and test
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Build Docker Containers
+    types:
+      - completed
   push:
   pull_request:
     types: [review_requested, ready_for_review]
 
 jobs:
-
-  Setup_software_basis_py310_latest:
-    runs-on: ubuntu-latest
-    environment: Build Software
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          clean: false
-      - id: "setup_basic_software"
-        uses: ./.github/actions/setup_software
-        with:
-          cache-name: "cache-software-basis"
-  
-  setup_all_venvs:
-    uses: ./.github/workflows/setup_venvs.yaml
-    needs: Setup_software_basis_py310_latest
-    with:
-      os: ubuntu-latest
-  full_matrix:
-    runs-on: ubuntu-latest
-    needs: setup_all_venvs
-    environment: Tests
+  test_matrix:
+    uses: ./.github/workflows/test_sequence.yaml
     strategy:
       matrix:
         include:
-          - test: "./tests/run_linting"
-            name: "Lint 🔍"
-
-          - test: "./tests/run_tests"
-            name: Test 🎢
-            venv: columnar
-            hashFiles: |
-              **/sandboxes/venv_columnar*.sh
-              **/sandboxes/columnar.txt
-              **/sandboxes/_setup_venv.sh
-
-          - test: "./tests/run_coverage"
-            name: Run coverage 🎢
-            venv: columnar
-            hashFiles: |
-              **/sandboxes/venv_columnar*.sh
-              **/sandboxes/columnar.txt
-              **/sandboxes/_setup_venv.sh
-            do-ls: true
-            upload-files: true
-            ns-version: 16
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          clean: false
-          persist-credentials: false
-          submodules: recursive
-      - id: "setup_basic_software"
-        uses: ./.github/actions/setup_software
-        with:
-          cache-name: "cache-software-basis"
-      - if: ${{ matrix.venv }}
-        name: setup venv ${{ matrix.venv }}
-        uses: ./.github/actions/setup_software
-
-        with:
-          cache-name: "cache-${{ matrix.venv }}"
-          run_additional: "./sandboxes/venv_${{ matrix.venv }}_dev.sh"
-          cache_paths: |
-            data/software/venvs/venv_${{ matrix.venv }}*
-          filesForHash: |
-            ${{ matrix.hashFiles }}
-            setup.sh
-      - name: ${{ matrix.name }}
-
-        # continue-on-error: true
-        run: |
-          source setup.sh ""
-          ${{ matrix.test }}
-      - if: ${{ matrix.upload-files }}
-        name: Upload report 🔝
-        uses: codecov/codecov-action@v3
-        with:
-          flags: unittests
-          files: coverage_test_util.xml,coverage_test_columnar_util.xml
-          verbose: true
+          - CONTAINER: ""
+            NAME: "Lint 🔍"
+            EXECUTABLE: "./tests/run_linting"
+          - CONTAINER: "ghcr.io/${{ github.repository }}/venv_columnar:python3.10-latest"
+            NAME: Test 🎢
+            EXECUTABLE: "./tests/run_tests"
+          - CONTAINER: "ghcr.io/${{ github.repository }}/venv_columnar:python3.10-latest"
+            NAME: Run coverage 🎢
+            EXECUTABLE: "./tests/run_coverage"
+            UPLOAD_FILES: true
+    with:
+      CONTAINER: ${{ matrix.CONTAINER }}
+      EXECUTABLE: ${{ matrix.EXECUTABLE }}
+      UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
+      NAME: ${{ matrix.NAME }}
 
   pypi:
     runs-on: ubuntu-latest
+    # only upload to pypi if tests ran successfully
+    needs: test_matrix
     environment: Pypi tests
     steps:
       - name: Checkout ⬇️
