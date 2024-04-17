@@ -3,23 +3,30 @@ on:
   push:
 jobs:    
   build_base_software:
-    uses: ./.github/workflows/build_docker_container.yaml
-    permissions:
-      contents: read
-      packages: write
-    with:
-      IMAGE_NAME: "software-base"
-      PUSH_IMAGE: true
-      PYVERSION: "3.10"
-      BUILD_ARGS: |
-        exe_file=setup.sh
-      HASHFILES: |
-        **/requirements*.txt
-        **/sandboxes/cf_*.sh
-        **/setup.sh
-        **/_setup*.sh
-        pyproject.toml
-    secrets: inherit
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+        submodules: recursive
+        clean: false
+    - name: Build base software
+      uses: ./.github/workflows/build_docker_container.yaml
+      permissions:
+        contents: read
+        packages: write
+      with:
+        IMAGE_NAME: "software-base"
+        PUSH_IMAGE: true
+        PYVERSION: "3.10"
+        BUILD_ARGS: |
+          exe_file=setup.sh
+        HASHFILES: |
+          **/requirements*.txt
+          **/sandboxes/cf_*.sh
+          **/setup.sh
+          **/_setup*.sh
+          pyproject.toml
+      secrets: inherit
   
   build_venvs:
     runs-on: ubuntu-latest
@@ -44,6 +51,12 @@ jobs:
               **/sandboxes/venv_ml_tf*.sh
               **/sandboxes/ml_tf.txt
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+          clean: false
       - name: ${{ matrix.name }}
         uses: ./.github/workflows/build_docker_container.yaml
         with:
