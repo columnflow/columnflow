@@ -1,8 +1,8 @@
 name: Build Docker Container
 on:
   push:
-jobs:
-  container-test:
+jobs:    
+  build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml
     permissions:
       contents: read
@@ -20,3 +20,44 @@ jobs:
         **/_setup*.sh
         pyproject.toml
     secrets: inherit
+  
+  build_venvs:
+    runs-on: ubuntu-latest
+    needs: Setup_software_basis_py310_latest
+    environment: Software Build
+    strategy:
+      matrix:
+        include:
+          - venv: "columnar"
+            name: "columnar"
+            hashFiles: |
+              **/sandboxes/venv_columnar*.sh
+              **/sandboxes/columnar.txt
+              **/sandboxes/_setup_venv.sh
+          - venv: ml_tf
+            name: "ml_tf"
+            hashFiles: |
+              **/sandboxes/_setup_venv.sh
+              **/sandboxes/venv_ml_tf*.sh
+              **/sandboxes/ml_tf.txt
+    steps:
+      - uses: actions/checkout@v3
+      - id: "build_venv"
+        uses: ./.github/workflows/build_docker_container.yaml
+        permissions:
+          contents: read
+          packages: write
+        with:
+          IMAGE_NAME: venv_${{ matrix.name }}
+          PUSH_IMAGE: true
+          PYVERSION: "3.10"
+          BUILD_ARGS: |
+            exe_file=sandboxes/venv_${{ matrix.venv }}.sh
+          HASHFILES: |
+            **/requirements*.txt
+            **/sandboxes/cf_*.sh
+            **/setup.sh
+            **/_setup*.sh
+            pyproject.toml
+            ${{ matrix.hashFiles }}
+        secrets: inherit
