@@ -44,6 +44,8 @@ jobs:
           # update to current branch to be tested
           cd $CF_BASE
           source setup.sh ""
+          echo "$PATH"
+          which git-lfs
           git fetch
           git checkout $GITHUB_SHA
           git submodule checkout --recursive
