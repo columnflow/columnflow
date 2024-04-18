@@ -23,7 +23,7 @@ jobs:
       - name: Parse env vars
         id: parse_env_vars
         run: |
-          echo "BASE_FILE_HASH=${{ hashFiles(env.BASE_HASH_FILES) }}" >> $GITHUB_ENV
+          echo "::set-output name=BASE_FILE_HASH::${{ hashFiles(env.BASE_HASH_FILES) }}"
         shell: bash
   build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml
