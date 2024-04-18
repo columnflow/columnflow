@@ -2,6 +2,7 @@ name: Build Docker Containers
 on:
   # push:
   workflow_dispatch:
+  push:
 
 env:
   base_hash_files: |
