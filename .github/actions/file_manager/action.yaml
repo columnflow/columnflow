@@ -68,7 +68,7 @@ runs:
     id: parse_env_vars
     run: |
       echo "BASE_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-      echo "COLUMNAR_HASH_FILES=${{ hashFiles(inputs.COLUMNAR) }}" >> $GITHUB_OUTPUT
-      echo "ML_TF_HASH_FILES=${{ hashFiles(inputs.ML_TF) }}" >> $GITHUB_OUTPUT
-      echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS) }}" >> $GITHUB_OUTPUT
+      echo "COLUMNAR_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "ML_TF_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
     shell: bash
