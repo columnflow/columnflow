@@ -32,17 +32,20 @@ jobs:
     environment: Tests
     container: 
         image: ${{ inputs.CONTAINER }}
-        options: --user root
+        # options: --user root
     steps:
-      - uses: actions/checkout@v3
-        with:
-          clean: false
-          persist-credentials: false
-          submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
+    #   - uses: actions/checkout@v3
+    #     with:
+    #       clean: false
+    #       persist-credentials: false
+    #       submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
       - name: ${{ inputs.NAME }}
         run: |
-          cd ${GITHUB_WORKSPACE}
-          export CF_BASE="${GITHUB_WORKSPACE}" 
+          # update to current branch to be tested
+          git fetch
+          git checkout $GITHUB_SHA
+          git submodule checkout --recursive
+          # source the setup and execute the test
           source setup.sh ""
           ${{ inputs.EXECUTABLE }}
       - if: ${{ inputs.UPLOAD_FILES }}
