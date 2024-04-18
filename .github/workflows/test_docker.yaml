@@ -20,6 +20,8 @@ jobs:
       BASE_HASH_FILES: ${{ env.BASE_HASH_FILES }}
       BASE_FILE_HASH: ${{ steps.parse_env_vars.outputs.BASE_FILE_HASH }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
       - name: Parse env vars
         id: parse_env_vars
         run: echo "BASE_FILE_HASH=${{ hashFiles(env.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
