@@ -92,9 +92,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          registry: ${{ env.REGISTRY }}
           images: |
-            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
           tags: |
             type=raw,value=python${{ inputs.PYVERSION }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
             type=raw,value=python${{ inputs.PYVERSION }}-latest # might want to add a condition for master branch here
@@ -110,8 +109,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
         with:
-          registry: ${{ steps.meta.outputs.registry }}
-          cache_froms: ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }})
+          cache-from: ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }})
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
           tags: |
