@@ -45,6 +45,7 @@ jobs:
           cd $CF_BASE
           source setup.sh ""
           echo "$PATH"
+          which git
           git lfs install
           git fetch
           git checkout $GITHUB_SHA
