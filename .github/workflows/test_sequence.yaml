@@ -43,12 +43,11 @@ jobs:
         run: |
           # update to current branch to be tested
           cd $CF_BASE
-          ls -latr
+          source setup.sh ""
           git fetch
           git checkout $GITHUB_SHA
           git submodule checkout --recursive
           # source the setup and execute the test
-          source setup.sh ""
           ${{ inputs.EXECUTABLE }}
       - if: ${{ inputs.UPLOAD_FILES }}
         name: Upload report
