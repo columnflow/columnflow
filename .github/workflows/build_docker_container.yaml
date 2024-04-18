@@ -105,9 +105,13 @@ jobs:
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
       - name: Build and push Docker image
-        if: !(docker manifest inspect ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }}) && inputs.PUSH_IMAGE
+        if: inputs.PUSH_IMAGE
         uses: docker/build-push-action@v5
+        env:
+          DOCKER_BUILDKIT: 1
         with:
+          registry: ${{ steps.meta.outputs.registry }}
+          cache_froms: ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }})
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
           tags: |
@@ -119,5 +123,6 @@ jobs:
           build-args: |
             ${{ inputs.BUILD_ARGS }}
             pyversion=${{ inputs.PYVERSION }}
+            BUILDKIT_INLINE_CACHE=1
           secrets: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
