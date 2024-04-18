@@ -44,16 +44,9 @@ jobs:
           shopt -s expand_aliases
           cd $CF_BASE
           source setup.sh
-          echo "$PATH"
-          which git
-          alias git="${CF_CONDA_BASE}/bin/git"
-          alias git-lfs="${CF_CONDA_BASE}/bin/git-lfs"
-          echo "after update" 
-          which git
-          which git-lfs
           git fetch
-          ${CF_CONDA_BASE}/bin/git checkout $GITHUB_SHA
-          ${CF_CONDA_BASE}/bin/git submodule checkout --recursive
+          git checkout $GITHUB_SHA
+          git submodule update --recursive
           # source the setup and execute the test
           ${{ inputs.EXECUTABLE }}
         shell: bash
