@@ -45,7 +45,7 @@ jobs:
           cd $CF_BASE
           source setup.sh ""
           echo "$PATH"
-          which git-lfs
+          git lfs install
           git fetch
           git checkout $GITHUB_SHA
           git submodule checkout --recursive
