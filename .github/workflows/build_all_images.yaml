@@ -41,7 +41,7 @@ jobs:
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
-      PYVERSION: ${{ inputs.PYVERSION }}
+      PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
       BUILD_ARGS: |
         exe_file=setup.sh
       HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
@@ -74,10 +74,10 @@ jobs:
     with:
       IMAGE_NAME: venv_${{ matrix.name }}
       PUSH_IMAGE: true
-      PYVERSION: ${{ inputs.PYVERSION }}
+      PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
       BUILD_ARGS: |
         exe_file=sandboxes/venv_${{ matrix.venv }}.sh
-        base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+        base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
         ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
         ${{ matrix.hashFiles }}

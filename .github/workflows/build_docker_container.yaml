@@ -86,7 +86,7 @@ jobs:
           images: |
             ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
           tags: |
-            type=raw,value=python${{ inputs.PYVERSION }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
+            type=raw,value=python${{ inputs.PYVERSION || 3.10 }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
           labels: |
 
       - name: Extract metadata (tags, labels) for Docker
@@ -96,8 +96,8 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
           tags: |
-            type=raw,value=python${{ inputs.PYVERSION }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
-            type=raw,value=python${{ inputs.PYVERSION }}-latest # might want to add a condition for master branch here
+            type=raw,value=python${{ inputs.PYVERSION || 3.10 }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
+            type=raw,value=python${{ inputs.PYVERSION || 3.10 }}-latest # might want to add a condition for master branch here
             type=schedule,pattern=nightly # in case we want to build nightly images
           labels: |
 
@@ -121,7 +121,7 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
             ${{ inputs.BUILD_ARGS }}
-            pyversion=${{ inputs.PYVERSION }}
+            pyversion=${{ inputs.PYVERSION || 3.10 }}
             BUILDKIT_INLINE_CACHE=1
           secrets: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
