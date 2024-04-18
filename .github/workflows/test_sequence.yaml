@@ -32,7 +32,7 @@ jobs:
     environment: Tests
     container: 
         image: ${{ inputs.CONTAINER }}
-        options: --user root
+        # options: --user root
     steps:
     #   - uses: actions/checkout@v3
     #     with:
@@ -43,12 +43,13 @@ jobs:
         run: |
           # update to current branch to be tested
           cd $CF_BASE
-          /bin/bash source setup.sh ""
+          source setup.sh ""
           git fetch
           git checkout $GITHUB_SHA
           git submodule checkout --recursive
           # source the setup and execute the test
           ${{ inputs.EXECUTABLE }}
+        shell: bash
       - if: ${{ inputs.UPLOAD_FILES }}
         name: Upload report
         uses: codecov/codecov-action@v3
