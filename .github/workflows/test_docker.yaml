@@ -7,11 +7,22 @@ on:
 jobs:
   parse_env_vars:
     runs-on: ubuntu-latest
+    outputs:
+      BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
+      BASE_FILE_HASH: ${{ steps.file_manager.outputs.BASE_FILE_HASH }}
+      COLUMNAR_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_HASH_FILES }}
+      COLUMNAR_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_FILE_HASH }}
+      ML_TF_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_HASH_FILES }}
+      ML_TF_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_FILE_HASH }}
+      DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
+      DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
     - uses: ./.github/actions/file_manager
+      id: file_manager
       name: "initialize file manager"
+
   build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml
     needs: [parse_env_vars]
