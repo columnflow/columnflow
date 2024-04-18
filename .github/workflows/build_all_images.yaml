@@ -2,7 +2,13 @@ name: Build Docker Containers
 on:
   # push:
   workflow_dispatch:
-  push:
+  workflow_call:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: string
+        default: "3.10"
 
 jobs:
   parse_env_vars:
@@ -18,7 +24,7 @@ jobs:
       DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@master
     - uses: ./.github/actions/file_manager
       id: file_manager
       name: "initialize file manager"
@@ -33,7 +39,7 @@ jobs:
     with:
       IMAGE_NAME: "software-base"
       PUSH_IMAGE: true
-      PYVERSION: "3.10"
+      PYVERSION: ${{ inputs.PYVERSION }}
       BUILD_ARGS: |
         exe_file=setup.sh
       HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
@@ -66,10 +72,10 @@ jobs:
     with:
       IMAGE_NAME: venv_${{ matrix.name }}
       PUSH_IMAGE: true
-      PYVERSION: "3.10"
+      PYVERSION: ${{ inputs.PYVERSION }}
       BUILD_ARGS: |
         exe_file=sandboxes/venv_${{ matrix.venv }}.sh
-        base=ghcr.io/${{ github.repository }}/software-base:python3.10-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+        base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
         ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
         ${{ matrix.hashFiles }}

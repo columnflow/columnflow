@@ -1,0 +1,17 @@
+name: "Build images and test for multiple python versions"
+on:
+    push:
+
+jobs:
+    do_all:
+        strategy:
+            fail-fast: false
+            matrix: 
+                PYVERSION: ["3.9", "3.10"]
+        uses: ./.github/workflows/build_and_test_single.yaml
+        secrets: inherit
+        permissions:
+            contents: read
+            packages: write
+        with:
+            PYVERSION: ${{ matrix.PYVERSION }}
