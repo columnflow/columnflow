@@ -12,7 +12,7 @@ action() {
     export CF_SANDBOX_FILE="${CF_SANDBOX_FILE:-${this_file}}"
     export CF_VENV_NAME="$( basename "${this_file%.sh}" )"
     export CF_VENV_REQUIREMENTS="${this_dir}/requirements_docs.txt"
-    export CF_VENV_ADDITIONAL_REQUIREMENTS=""
+    export CF_VENV_ADDITIONAL_REQUIREMENTS="${this_dir}/../docs/requirements.txt"
     export CF_VENV_EXTRAS="all"
 
     source "${this_dir}/_setup_venv.sh" "$@"
