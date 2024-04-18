@@ -64,8 +64,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-  - name: Checkout repository
-    uses: actions/checkout@v3
   - name: Parse env vars
     id: parse_env_vars
     run: |
