@@ -15,6 +15,7 @@ jobs:
   test_matrix:
     uses: ./.github/workflows/test_sequence.yaml
     strategy:
+      fail-fast: false
       matrix:
         include:
           - CONTAINER: "software-base:python3.10-latest"
