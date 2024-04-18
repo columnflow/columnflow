@@ -46,6 +46,7 @@ jobs:
         exe_file=setup.sh
       HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
       HASH: ${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+      FORCE_PUSH_IMAGE: true
     secrets: inherit
 
   
