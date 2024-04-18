@@ -4,6 +4,7 @@ inputs:
   BASE_HASH_FILES:
     description: 'List of files to be used base software image'
     default: |
+      Dockerfile
       requirements*.txt
       sandboxes/requirements*.txt
       sandboxes/cf_*.sh
