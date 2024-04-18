@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: ""
+      HASH:
+        description: "Use this hash instead of generating it from HASHFILES"
+        type: string
+        default: ""
+        required: false
       HASHFILES: 
         description: "List of files to be used for cache hash generation"
         required: false
@@ -72,14 +77,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
+      - name: Extract metadata (tags, labels) for Docker based on hash alone
+        id: meta_slim
+        uses: docker/metadata-action@v5
+        with:
+          registry: ${{ env.REGISTRY }}
+          images: |
+            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
+          tags: |
+            type=raw,value=python${{ inputs.PYVERSION }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
+          labels: |
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
+          registry: ${{ env.REGISTRY }}
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
+            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
           tags: |
-            type=raw,value=python${{ inputs.PYVERSION }}-${{ hashFiles(inputs.HASHFILES) }}
+            type=raw,value=python${{ inputs.PYVERSION }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
             type=raw,value=python${{ inputs.PYVERSION }}-latest # might want to add a condition for master branch here
             type=schedule,pattern=nightly # in case we want to build nightly images
           labels: |
@@ -88,6 +105,7 @@ jobs:
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
       - name: Build and push Docker image
+        if: !(docker manifest inspect ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }}) && inputs.PUSH_IMAGE
         uses: docker/build-push-action@v5
         with:
           context: .
