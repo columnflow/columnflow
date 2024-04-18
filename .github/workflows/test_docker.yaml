@@ -37,6 +37,7 @@ jobs:
       BUILD_ARGS: |
         exe_file=setup.sh
       HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
+      HASH: ${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
     secrets: inherit
 
   
@@ -52,12 +53,15 @@ jobs:
           - venv: "columnar"
             name: "columnar"
             hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
           - venv: ml_tf
             name: "ml_tf"
             hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.ML_TF_FILE_HASH }}
           - venv: docs_dev
             name: "docs_dev"
             hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.DOCS_FILE_HASH }}
     uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: venv_${{ matrix.name }}
@@ -69,4 +73,5 @@ jobs:
       HASHFILES: |
         ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
         ${{ matrix.hashFiles }}
+      HASH: ${{ matrix.hash }}
     secrets: inherit

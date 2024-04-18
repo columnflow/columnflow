@@ -12,21 +12,39 @@ on:
   #   types: [review_requested, ready_for_review]
 
 jobs:
+  parse_env_vars:
+    runs-on: ubuntu-latest
+    outputs:
+      BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
+      BASE_FILE_HASH: ${{ steps.file_manager.outputs.BASE_FILE_HASH }}
+      COLUMNAR_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_HASH_FILES }}
+      COLUMNAR_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_FILE_HASH }}
+      ML_TF_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_HASH_FILES }}
+      ML_TF_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_FILE_HASH }}
+      DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
+      DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    - uses: ./.github/actions/file_manager
+      id: file_manager
+      name: "initialize file manager"
   test_matrix:
     uses: ./.github/workflows/test_sequence.yaml
+    needs: [parse_env_vars]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - CONTAINER: "software-base:python3.10-latest"
+          - CONTAINER: "software-base:python3.10-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
             NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
             UPLOAD_FILES: false
-          - CONTAINER: "venv_columnar:python3.10-latest"
+          - CONTAINER: "venv_columnar:python3.10-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
             NAME: Test 🎢
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
-          - CONTAINER: "venv_columnar:python3.10-latest"
+          - CONTAINER: "venv_columnar:python3.10-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
