@@ -43,13 +43,13 @@ jobs:
         run: |
           # update to current branch to be tested
           cd $CF_BASE
-          source setup.sh ""
+          source setup.sh
           echo "$PATH"
           which git
-          git lfs install
-          git fetch
-          git checkout $GITHUB_SHA
-          git submodule checkout --recursive
+          ${CF_CONDA_BASE}/bin/git lfs install
+          ${CF_CONDA_BASE}/bin/git fetch
+          ${CF_CONDA_BASE}/bin/git checkout $GITHUB_SHA
+          ${CF_CONDA_BASE}/bin/git submodule checkout --recursive
           # source the setup and execute the test
           ${{ inputs.EXECUTABLE }}
         shell: bash
