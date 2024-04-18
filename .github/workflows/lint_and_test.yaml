@@ -1,6 +1,7 @@
 name: Lint and test
 
 on:
+  push:
   workflow_dispatch:
   workflow_call:
     inputs:

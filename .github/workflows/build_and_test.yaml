@@ -1,6 +1,7 @@
 name: "Build images and test for multiple python versions"
 on:
-    push:
+    # push:
+    workflow_dispatch:
 
 jobs:
     do_all:

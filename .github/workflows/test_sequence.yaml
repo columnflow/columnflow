@@ -42,6 +42,8 @@ jobs:
       - name: ${{ inputs.NAME }}
         run: |
           # update to current branch to be tested
+          cd $CF_BASE
+          ls -latr
           git fetch
           git checkout $GITHUB_SHA
           git submodule checkout --recursive
