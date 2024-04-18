@@ -109,7 +109,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
         with:
-          cache-from: ${{ steps.meta_slim.outputs.registry }}/${{ steps.meta_slim.outputs.images[0] }}/${{ steps.meta_slim.outputs.tags[0] }})
+          cache-from: ${{ fromJson(steps.meta_slim.outputs.json).registry }}/${{ fromJson(steps.meta_slim.outputs.json).images[0] }}/${{ fromJson(steps.meta_slim.outputs.json).tags[0] }})
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
           tags: |
