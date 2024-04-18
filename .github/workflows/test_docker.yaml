@@ -5,7 +5,7 @@ on:
   push:
 
 env:
-  base_hash_files: |
+  BASE_HASH_FILES: |
     **/requirements*.txt
     **/sandboxes/cf_*.sh
     **/setup.sh
@@ -13,9 +13,21 @@ env:
     pyproject.toml
 
 
-jobs:    
+jobs:
+  parse_env_vars:
+    runs-on: ubuntu-latest
+    outputs:
+      BASE_HASH_FILES: ${{ env.BASE_HASH_FILES }}
+      BASE_FILE_HASH: ${{ steps.parse_env_vars.outputs.BASE_FILE_HASH }}
+    steps:
+      - name: Parse env vars
+        id: parse_env_vars
+        run: |
+          echo "BASE_FILE_HASH=${{ hashFiles(env.BASE_HASH_FILES) }}" >> $GITHUB_ENV
+        shell: bash
   build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml
+    needs: [parse_env_vars]
     permissions:
       contents: read
       packages: write
@@ -26,17 +38,12 @@ jobs:
       PYVERSION: "3.10"
       BUILD_ARGS: |
         exe_file=setup.sh
-      HASHFILES: |
-        **/requirements*.txt
-        **/sandboxes/cf_*.sh
-        **/setup.sh
-        **/_setup*.sh
-        pyproject.toml
+      HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
     secrets: inherit
 
   
   build_venvs:
-    needs: build_base_software
+    needs: [parse_env_vars,build_base_software]
     permissions:
       contents: read
       packages: write
@@ -62,12 +69,8 @@ jobs:
       PYVERSION: "3.10"
       BUILD_ARGS: |
         exe_file=sandboxes/venv_${{ matrix.venv }}.sh
-        base=ghcr.io/${{ github.repository }}/software-base:python3.10-latest
+        base=ghcr.io/${{ github.repository }}/software-base:python3.10-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
-        **/requirements*.txt
-        **/sandboxes/cf_*.sh
-        **/setup.sh
-        **/_setup*.sh
-        pyproject.toml
+        ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
         ${{ matrix.hashFiles }}
     secrets: inherit
