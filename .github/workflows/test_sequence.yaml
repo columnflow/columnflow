@@ -46,6 +46,7 @@ jobs:
           source setup.sh
           echo "$PATH"
           which git
+          ls -l ${CF_CONDA_BASE}/bin/git
           ${CF_CONDA_BASE}/bin/git lfs install
           ${CF_CONDA_BASE}/bin/git fetch
           ${CF_CONDA_BASE}/bin/git checkout $GITHUB_SHA
