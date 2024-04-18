@@ -18,6 +18,8 @@ on:
   # push:
   # pull_request:
   #   types: [review_requested, ready_for_review]
+env:
+  PYVERSION: "3.10"
 
 jobs:
   parse_env_vars:
@@ -44,15 +46,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - CONTAINER: "software-base:python${{ inputs.PYVERSION }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+          - CONTAINER: "software-base:python3.10-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
             NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
             UPLOAD_FILES: false
-          - CONTAINER: "venv_columnar:python${{ inputs.PYVERSION }}-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
+          - CONTAINER: "venv_columnar:python3.10-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
             NAME: Test 🎢
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
-          - CONTAINER: "venv_columnar:python${{ inputs.PYVERSION }}-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
+          - CONTAINER: "venv_columnar:python3.10-${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
