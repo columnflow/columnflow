@@ -2,14 +2,14 @@ name: Lint and test
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Build Docker Containers
-    types:
-      - completed
-  push:
-  pull_request:
-    types: [review_requested, ready_for_review]
+  # workflow_run:
+  #   workflows:
+  #     - Build Docker Containers
+  #   types:
+  #     - completed
+  # push:
+  # pull_request:
+  #   types: [review_requested, ready_for_review]
 
 jobs:
   test_matrix:
