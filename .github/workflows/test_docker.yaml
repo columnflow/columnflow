@@ -6,12 +6,13 @@ on:
 
 env:
   BASE_HASH_FILES: |
-    **/requirements*.txt
-    **/sandboxes/cf_*.sh
-    **/setup.sh
-    **/_setup*.sh
+    requirements*.txt
+    sandboxes/requirements*.txt
+    sandboxes/cf_*.sh
+    setup.sh
+    sandboxes/_setup*.sh
     pyproject.toml
-
+    setup.py
 
 jobs:
   parse_env_vars:
@@ -54,15 +55,22 @@ jobs:
           - venv: "columnar"
             name: "columnar"
             hashFiles: |
-              **/sandboxes/venv_columnar*.sh
-              **/sandboxes/columnar.txt
-              **/sandboxes/_setup_venv.sh
+              sandboxes/venv_columnar*.sh
+              sandboxes/columnar.txt
+              sandboxes/_setup_venv.sh
           - venv: ml_tf
             name: "ml_tf"
             hashFiles: |
-              **/sandboxes/_setup_venv.sh
-              **/sandboxes/venv_ml_tf*.sh
-              **/sandboxes/ml_tf.txt
+              sandboxes/_setup_venv.sh
+              sandboxes/venv_ml_tf*.sh
+              sandboxes/ml_tf.txt
+          - venv: docs_dev
+            name: "docs_dev"
+            hashFiles: |
+              sandboxes/_setup_venv.sh
+              sandboxes/venv_docs*.sh
+              sandboxes/ml_tf.txt
+              docs/requirements.txt
     uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: venv_${{ matrix.name }}
