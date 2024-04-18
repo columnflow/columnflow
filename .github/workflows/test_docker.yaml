@@ -4,29 +4,12 @@ on:
   workflow_dispatch:
   push:
 
-env:
-  BASE_HASH_FILES: |
-    requirements*.txt
-    sandboxes/requirements*.txt
-    sandboxes/cf_*.sh
-    setup.sh
-    sandboxes/_setup*.sh
-    pyproject.toml
-    setup.py
-
 jobs:
   parse_env_vars:
     runs-on: ubuntu-latest
-    outputs:
-      BASE_HASH_FILES: ${{ env.BASE_HASH_FILES }}
-      BASE_FILE_HASH: ${{ steps.parse_env_vars.outputs.BASE_FILE_HASH }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Parse env vars
-        id: parse_env_vars
-        run: echo "BASE_FILE_HASH=${{ hashFiles(env.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-        shell: bash
+    - uses: ./.github/actions/file_manager
+      name: "initialize file manager"
   build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml
     needs: [parse_env_vars]
@@ -50,27 +33,18 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - venv: "columnar"
             name: "columnar"
-            hashFiles: |
-              sandboxes/venv_columnar*.sh
-              sandboxes/columnar.txt
-              sandboxes/_setup_venv.sh
+            hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
           - venv: ml_tf
             name: "ml_tf"
-            hashFiles: |
-              sandboxes/_setup_venv.sh
-              sandboxes/venv_ml_tf*.sh
-              sandboxes/ml_tf.txt
+            hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
           - venv: docs_dev
             name: "docs_dev"
-            hashFiles: |
-              sandboxes/_setup_venv.sh
-              sandboxes/venv_docs*.sh
-              sandboxes/ml_tf.txt
-              docs/requirements.txt
+            hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
     uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: venv_${{ matrix.name }}

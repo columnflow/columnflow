@@ -1,0 +1,76 @@
+name: 'Define files for cache and hash generation'
+description: 'Defines files to be used for different images and generate their hashes'
+inputs:
+  BASE_HASH_FILES:
+    description: 'List of files to be used base software image'
+    default: |
+      requirements*.txt
+      sandboxes/requirements*.txt
+      sandboxes/cf_*.sh
+      setup.sh
+      sandboxes/_setup*.sh
+      pyproject.toml
+      setup.py
+    required: false
+  COLUMNAR:
+    description: 'List of files to be used for columnar venv'
+    default: |
+      sandboxes/venv_columnar*.sh
+      sandboxes/columnar.txt
+      sandboxes/_setup_venv.sh
+    required: false
+  ML_TF:
+    description: 'List of files to be used for ML (TensorFlow) venv'
+    default: |
+      sandboxes/_setup_venv.sh
+      sandboxes/venv_ml_tf*.sh
+      sandboxes/ml_tf.txt
+    required: false
+  DOCS:
+    description: 'List of files to be used for docs venv'
+    default: |
+      sandboxes/_setup_venv.sh
+      sandboxes/venv_docs*.sh
+      sandboxes/ml_tf.txt
+      docs/requirements.txt
+    required: false
+
+outputs:
+  BASE_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: ${{ inputs.BASE_HASH_FILES }}
+  BASE_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.BASE_FILE_HASH }}
+  COLUMNAR_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: ${{ inputs.COLUMNAR }}
+  COLUMNAR_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
+  ML_TF_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: ${{ inputs.ML_TF }}
+  ML_TF_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.ML_TF_HASH_FILES }}
+  DOCS_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: ${{ inputs.DOCS }}
+  DOCS_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.DOCS_HASH_FILES }}
+
+runs:
+  using: "composite"
+  steps:
+  - name: Checkout repository
+    uses: actions/checkout@v3
+  - name: Parse env vars
+    id: parse_env_vars
+    run: |
+      echo "BASE_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "COLUMNAR_HASH_FILES=${{ hashFiles(inputs.COLUMNAR) }}" >> $GITHUB_OUTPUT
+      echo "ML_TF_HASH_FILES=${{ hashFiles(inputs.ML_TF) }}" >> $GITHUB_OUTPUT
+      echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS) }}" >> $GITHUB_OUTPUT
+    shell: bash
