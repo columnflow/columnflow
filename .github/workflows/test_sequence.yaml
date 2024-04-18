@@ -41,7 +41,7 @@ jobs:
     #       submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
       - name: ${{ inputs.NAME }}
         run: |
-          # update to current branch to be tested
+          shopt -s expand_aliases
           cd $CF_BASE
           source setup.sh
           echo "$PATH"
