@@ -103,7 +103,7 @@ jobs:
           if [[ $foo == "" ]]; then
             echo "tag_missing=true" >> $GITHUB_OUTPUT
           else
-            echo "tag_missing=true" >> $GITHUB_OUTPUT
+            echo "tag_missing=false" >> $GITHUB_OUTPUT
           fi
       - name: Extract metadata (tags, labels) for Docker
         id: meta
