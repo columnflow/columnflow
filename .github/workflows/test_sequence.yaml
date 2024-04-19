@@ -32,7 +32,7 @@ jobs:
     environment: Tests
     container: 
         image: ${{ inputs.CONTAINER }}
-        options: --user root
+        options: --user cf_user
     steps:
     #   - uses: actions/checkout@v3
     #     with:

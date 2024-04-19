@@ -35,6 +35,11 @@ inputs:
       sandboxes/ml_tf.txt
       docs/requirements.txt
     required: false
+  dev_requires:
+    description: 'List of files to be used for dev environments'
+    default: |
+      sandboxes/dev.txt
+    required: false
 
 outputs:
   BASE_HASH_FILES:
@@ -43,24 +48,59 @@ outputs:
   BASE_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.BASE_FILE_HASH }}
+  BASE_DEV_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: |
+      ${{ inputs.BASE_HASH_FILES }}
+      ${{ inputs.dev_requires }}
+  BASE_DEV_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.BASE_DEV_FILE_HASH }}
+
   COLUMNAR_HASH_FILES:
     description: 'List of files to be used base software image'
     value: ${{ inputs.COLUMNAR }}
   COLUMNAR_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
+  COLUMNAR_DEV_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: |
+      ${{ inputs.COLUMNAR }}
+      ${{ inputs.dev_requires }}
+  COLUMNAR_DEV_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
+
   ML_TF_HASH_FILES:
     description: 'List of files to be used base software image'
     value: ${{ inputs.ML_TF }}
   ML_TF_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.ML_TF_HASH_FILES }}
+  ML_TF_DEV_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: |
+      ${{ inputs.ML_TF }}
+      ${{ inputs.dev_requires }}
+  ML_TF_DEV_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.ML_TF_DEV_HASH_FILES }}
+
   DOCS_HASH_FILES:
     description: 'List of files to be used base software image'
     value: ${{ inputs.DOCS }}
   DOCS_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.DOCS_HASH_FILES }}
+  DOCS_DEV_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: |
+      ${{ inputs.DOCS }}
+      ${{ inputs.dev_requires }}
+  DOCS_DEV_FILE_HASH:
+    description: 'Hash of files used for base software image'
+    value: ${{ steps.parse_env_vars.outputs.DOCS_DEV_HASH_FILES }}
 
 runs:
   using: "composite"
@@ -69,7 +109,12 @@ runs:
     id: parse_env_vars
     run: |
       echo "BASE_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "BASE_DEV_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+
       echo "COLUMNAR_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "COLUMNAR_DEV_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
       echo "ML_TF_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "ML_TF_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
       echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
+      echo "DOCS_DEV_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
     shell: bash

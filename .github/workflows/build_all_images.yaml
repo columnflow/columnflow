@@ -16,10 +16,16 @@ jobs:
     outputs:
       BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
       BASE_FILE_HASH: ${{ steps.file_manager.outputs.BASE_FILE_HASH }}
+      BASE_DEV_HASH_FILES: ${{ steps.file_manager.outputs.BASE_DEV_HASH_FILES }}
+      BASE_DEV_FILE_HASH: ${{ steps.file_manager.outputs.BASE_DEV_FILE_HASH }}
       COLUMNAR_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_HASH_FILES }}
       COLUMNAR_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_FILE_HASH }}
+      COLUMNAR_DEV_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_DEV_HASH_FILES }}
+      COLUMNAR_DEV_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_DEV_FILE_HASH }}
       ML_TF_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_HASH_FILES }}
       ML_TF_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_FILE_HASH }}
+      ML_TF_DEV_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_DEV_HASH_FILES }}
+      ML_TF_DEV_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_DEV_FILE_HASH }}
       DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
       DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
     steps:
@@ -48,6 +54,23 @@ jobs:
       HASH: ${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       FORCE_PUSH_IMAGE: false
     secrets: inherit
+  build_base_dev_software:
+      uses: ./.github/workflows/build_docker_container.yaml
+      needs: [parse_env_vars]
+      permissions:
+        contents: read
+        packages: write
+      name: Build base software
+      with:
+        IMAGE_NAME: "software-base"
+        PUSH_IMAGE: true
+        PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
+        BUILD_ARGS: |
+          exe_file=setup.sh
+        HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_DEV_HASH_FILES }}
+        HASH: ${{ needs.parse_env_vars.outputs.BASE_DEV_FILE_HASH }}
+        FORCE_PUSH_IMAGE: false
+      secrets: inherit
 
   
   build_venvs:
@@ -63,6 +86,10 @@ jobs:
             name: "columnar"
             hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
             hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
+          - venv: "columnar_dev"
+            name: "columnar_dev"
+            hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}
           - venv: ml_tf
             name: "ml_tf"
             hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
@@ -80,7 +107,6 @@ jobs:
         exe_file=sandboxes/venv_${{ matrix.venv }}.sh
         base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
-        ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
         ${{ matrix.hashFiles }}
       HASH: ${{ matrix.hash }}
     secrets: inherit
