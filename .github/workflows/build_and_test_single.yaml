@@ -14,13 +14,13 @@ jobs:
         uses: ./.github/workflows/build_all_images.yaml
         with:
             PYVERSION: ${{ inputs.PYVERSION }}
-            secrets: inherit
+        secrets: inherit
     test:
         needs: build
         name: Test all images
         uses: ./.github/workflows/lint_and_test.yaml
         with:
             PYVERSION: ${{ inputs.PYVERSION }}
-            secrets: inherit
+        secrets: inherit
         
     
