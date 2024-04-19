@@ -70,8 +70,8 @@ jobs:
       EXECUTABLE: ${{ matrix.EXECUTABLE }}
       UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
       NAME: ${{ matrix.NAME }}
-      secrets: inherit
-      
+    secrets: inherit
+
 
   pypi:
     runs-on: ubuntu-latest
