@@ -98,7 +98,7 @@ jobs:
         id: check_tag
         run: |
           # The container image registry
-          export foo='docker manifest inspect ${{ env.REGISTRY }}/${{ fromJson(steps.meta_slim.outputs.json).images[0] }}/${{ fromJson(steps.meta_slim.outputs.json).tags[0] }}`
+          export foo=$(docker manifest inspect ${{ env.REGISTRY }}/${{ fromJson(steps.meta_slim.outputs.json).images[0] }}/${{ fromJson(steps.meta_slim.outputs.json).tags[0] }})
       
           if [[ $foo == "" ]]; then
             echo "tag_missing=true" >> $GITHUB_OUTPUT
