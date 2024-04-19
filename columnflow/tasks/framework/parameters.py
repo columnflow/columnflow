@@ -31,13 +31,22 @@ class SettingsParameter(law.CSVParameter):
     def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
+        if ";" in value:
+            # split by semicolon and parse each value
+            value = tuple(cls.parse_value(v) for v in value.split(";"))
+        else:
+            value = cls.parse_value(value)
+        return (key, value)
+
+    @classmethod
+    def parse_value(cls, value):
         if try_float(value):
             value = float(value)
         elif value.lower() == "true":
             value = True
         elif value.lower() == "false":
             value = False
-        return (key, value)
+        return value
 
     @classmethod
     def serialize_setting(cls, name: str, value: str) -> str:

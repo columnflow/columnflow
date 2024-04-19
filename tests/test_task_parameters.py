@@ -24,6 +24,11 @@ class TaskParametersTest(unittest.TestCase):
             {"param1": 10.0, "param2": True, "param3": "text", "param4": False},
         )
         self.assertEqual(
+            # parsing of semicolon separated values
+            p.parse("param1=1;2;3;4,param2=a;b;true;false"),
+            {"param1": (1, 2, 3, 4), "param2": ("a", "b", True, False)},
+        )
+        self.assertEqual(
             # if a parameter is set multiple times, prioritize last one
             p.parse("A=1,B,A=2"),
             {"B": True, "A": 2.0},
@@ -45,6 +50,14 @@ class TaskParametersTest(unittest.TestCase):
         self.assertEqual(
             p.parse("obj1,k1=10,k2,k3=text:obj2,k4=false"),
             {"obj1": {"k1": 10.0, "k2": True, "k3": "text"}, "obj2": {"k4": False}},
+        )
+        self.assertEqual(
+            # parsing of semicolon separated values
+            p.parse("obj1,k1=1;2;3;4,k2=a;b;true;false:obj2,k3=5;6;x;y"),
+            {
+                "obj1": {"k1": (1, 2, 3, 4), "k2": ("a", "b", True, False)},
+                "obj2": {"k3": (5, 6, "x", "y")},
+            },
         )
         self.assertEqual(
             # providing the same key twice results in once combined dict
