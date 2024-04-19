@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import law
 
-from columnflow.util import try_float, DotDict
+from columnflow.util import try_float, try_complex, DotDict
 
 
 class SettingsParameter(law.CSVParameter):
@@ -42,6 +42,8 @@ class SettingsParameter(law.CSVParameter):
     def parse_value(cls, value):
         if try_float(value):
             value = float(value)
+        elif try_complex(value):
+            value = complex(value)
         elif value.lower() == "true":
             value = True
         elif value.lower() == "false":

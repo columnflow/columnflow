@@ -25,8 +25,8 @@ class TaskParametersTest(unittest.TestCase):
         )
         self.assertEqual(
             # parsing of semicolon separated values
-            p.parse("param1=1;2;3;4,param2=a;b;true;false"),
-            {"param1": (1, 2, 3, 4), "param2": ("a", "b", True, False)},
+            p.parse("param1=1;2;3j;4j,param2=a;b;true;false"),
+            {"param1": (1, 2, 3j, 4j), "param2": ("a", "b", True, False)},
         )
         self.assertEqual(
             # if a parameter is set multiple times, prioritize last one
@@ -53,9 +53,9 @@ class TaskParametersTest(unittest.TestCase):
         )
         self.assertEqual(
             # parsing of semicolon separated values
-            p.parse("obj1,k1=1;2;3;4,k2=a;b;true;false:obj2,k3=5;6;x;y"),
+            p.parse("obj1,k1=1;2;3j;4j,k2=a;b;true;false:obj2,k3=5;6;x;y"),
             {
-                "obj1": {"k1": (1, 2, 3, 4), "k2": ("a", "b", True, False)},
+                "obj1": {"k1": (1, 2, 3j, 4j), "k2": ("a", "b", True, False)},
                 "obj2": {"k3": (5, 6, "x", "y")},
             },
         )
