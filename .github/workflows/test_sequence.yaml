@@ -53,7 +53,10 @@ jobs:
       - if: ${{ inputs.UPLOAD_FILES }}
         name: Upload report
         uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} 
         with:
           flags: unittests
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
           verbose: true
+          
