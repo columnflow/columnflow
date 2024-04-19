@@ -9,6 +9,7 @@ from __future__ import annotations
 import law
 
 from columnflow.util import try_float, try_complex, DotDict
+from columnflow.types import Iterable
 
 
 class SettingsParameter(law.CSVParameter):
@@ -32,7 +33,7 @@ class SettingsParameter(law.CSVParameter):
         pair = setting.split("=", 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
         if ";" in value:
-            # split by semicolon and parse each value
+            # split by ";" and parse each value
             value = tuple(cls.parse_value(v) for v in value.split(";"))
         else:
             value = cls.parse_value(value)
@@ -51,7 +52,8 @@ class SettingsParameter(law.CSVParameter):
         return value
 
     @classmethod
-    def serialize_setting(cls, name: str, value: str) -> str:
+    def serialize_setting(cls, name: str, value: str | Iterable[str]) -> str:
+        value = ";".join(str(v) for v in law.util.make_tuple(value))
         return f"{name}={value}"
 
     def __init__(self, **kwargs):
@@ -114,7 +116,6 @@ class MultiSettingsParameter(law.MultiCSVParameter):
         )
         # next, merge dicts
         outputs = law.util.merge_dicts(*outputs, deep=True)
-
         return outputs
 
     def serialize(self, value):
