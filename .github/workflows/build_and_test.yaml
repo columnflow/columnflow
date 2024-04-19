@@ -17,3 +17,4 @@ jobs:
             packages: write
         with:
             PYVERSION: ${{ matrix.PYVERSION }}
+        name: "Build and test for Python ${{ matrix.PYVERSION }}"
