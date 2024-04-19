@@ -70,13 +70,15 @@ jobs:
       EXECUTABLE: ${{ matrix.EXECUTABLE }}
       UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
       NAME: ${{ matrix.NAME }}
+      secrets: inherit
+      
 
   pypi:
     runs-on: ubuntu-latest
     # only upload to pypi if tests ran successfully
     needs: test_matrix
     environment: Pypi tests
-    
+
     steps:
       - name: Checkout ⬇️
         uses: actions/checkout@master
