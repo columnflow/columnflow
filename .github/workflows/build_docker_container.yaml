@@ -98,13 +98,15 @@ jobs:
         id: check_tag
         run: |
           # The container image registry
-          export foo=$(docker manifest inspect ${{ env.REGISTRY }}/${{ fromJson(steps.meta_slim.outputs.json).images[0] }}/${{ fromJson(steps.meta_slim.outputs.json).tags[0] }})
+          export foo=$(docker manifest inspect ${{ env.REGISTRY }}/${{ env.DOCKER_METADATA_OUTPUT_TAGS }})
       
           if [[ $foo == "" ]]; then
             echo "tag_missing=true" >> $GITHUB_OUTPUT
           else
             echo "tag_missing=false" >> $GITHUB_OUTPUT
           fi
+        shell: bash
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         if: (steps.check_tag.outputs.tag_missing == 'true' && inputs.PUSH_IMAGE) || (inputs.FORCE_PUSH_IMAGE)
@@ -128,8 +130,6 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
         with:
-          # cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ fromJson(steps.meta_slim.outputs.json).images[0] }}/${{ fromJson(steps.meta_slim.outputs.json).tags[0] }})
-          # cache-to: type=inline
           context: .
           push: ${{ inputs.PUSH_IMAGE }}
           tags: |
