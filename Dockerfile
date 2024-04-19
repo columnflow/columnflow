@@ -21,7 +21,6 @@ ARG CF_SOFTWARE_BASE="/software"
 # copy current state of repository into docker image
 COPY . /columnflow
 ENV CF_BASE ${CF_BASE}
-# RUN ["chmod", "+x", "/columnflow/.docker_entrypoint.sh" ]
 
 
 ENV PYVERSION $pyversion
@@ -35,6 +34,9 @@ RUN apt-get install curl nano less vim locales git git-lfs -y
 RUN locale-gen en_US
 RUN locale-gen en_US.UTF-8
 RUN update-locale 
+
+# workaround for github action runner
+RUN mkdir -m 1777 /__w
 
 # create simple user and setup group
 RUN getent group cf_user_base || (addgroup --gid 4200 cf_user_base && usermod -a -G cf_user_base root)
@@ -55,11 +57,10 @@ RUN source ./setup.sh
 
 RUN if [ "${exe_file}" != "setup.sh" ]; then source ./setup.sh && source ${exe_file}; fi
 
+# setup ownership so user can also run things
 RUN chown cf_user:cf_user_base ${CF_BASE} -R
 RUN chown cf_user:cf_user_base ${CF_SOFTWARE_BASE} -R
+RUN chown cf_user:cf_user_base /__w -R
 USER cf_user
-# RUN echo "executing file $exe_file"
-# RUN ls -l
-# SHELL ["/bin/bash", "-c", "source $exe_file"]
-# RUN source "$exe_file"
+
 ENTRYPOINT [ "/bin/bash" ]
