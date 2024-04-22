@@ -22,6 +22,7 @@ on:
 
 jobs:
   parse_env_vars:
+    name: "Initialize file manager"
     runs-on: ubuntu-latest
     outputs:
       BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
