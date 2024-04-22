@@ -48,8 +48,12 @@ jobs:
         run: |
           shopt -s expand_aliases
           echo "I am $(whoami) and I am in $(pwd)"
-          echo "Setting /columnflow as safe repository"
-          git config --global --add safe.directory /columnflow
+          
+          if [[ $(whoami) == "root" ]]; then
+            echo "Setting /columnflow as safe repository"
+            git config --global --add safe.directory /columnflow
+          fi
+          
           cd $CF_BASE
           source setup.sh
           
