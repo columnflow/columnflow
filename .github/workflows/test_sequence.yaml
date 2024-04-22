@@ -25,6 +25,11 @@ on:
         description: "Name of the job"
         type: string
         required: true
+      USER: 
+        description: "User to be used in the container"
+        type: string
+        default: cf_user
+        required: false
 
 jobs:
   test_sequence:
@@ -32,7 +37,7 @@ jobs:
     environment: Tests
     container: 
         image: ${{ inputs.CONTAINER }}
-        options: --user cf_user
+        options: --user ${{ inputs.USER }}
     steps:
     #   - uses: actions/checkout@v3
     #     with:

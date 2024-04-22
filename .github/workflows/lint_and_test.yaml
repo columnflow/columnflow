@@ -58,19 +58,23 @@ jobs:
             NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
             UPLOAD_FILES: false
+            USER: cf_user
           - CONTAINER: "venv_columnar_dev:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}"
             NAME: Test 🎢
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
+            USER: cf_user
           - CONTAINER: "venv_columnar_dev:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
+            USER: root
     with:
       CONTAINER: "ghcr.io/${{ github.repository }}/${{ matrix.CONTAINER }}"
       EXECUTABLE: ${{ matrix.EXECUTABLE }}
       UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
       NAME: ${{ matrix.NAME }}
+      USER: ${{ matrix.USER }}
     secrets: inherit
 
 
