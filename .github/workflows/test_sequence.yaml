@@ -47,8 +47,12 @@ jobs:
       - name: ${{ inputs.NAME }}
         run: |
           shopt -s expand_aliases
+          echo "I am $(whoami) and I am in $(pwd)"
+          echo "Setting /columnflow as safe repository"
+          git config --global --add safe.directory /columnflow
           cd $CF_BASE
           source setup.sh
+          
           git fetch
           git checkout $GITHUB_SHA
           git submodule update --recursive
