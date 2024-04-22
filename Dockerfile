@@ -36,7 +36,7 @@ RUN locale-gen en_US.UTF-8
 RUN update-locale 
 
 # workaround for github action runner
-RUN mkdir -m 1777 /__w
+RUN mkdir -p /__w
 
 # create simple user and setup group
 RUN getent group cf_user_base || (addgroup --gid 4200 cf_user_base && usermod -a -G cf_user_base root)
