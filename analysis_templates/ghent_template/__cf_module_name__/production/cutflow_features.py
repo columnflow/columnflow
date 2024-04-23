@@ -4,7 +4,7 @@
 Column production methods for cutflow features.
 """
 
-
+from columnflow.selection import SelectionResult
 from columnflow.production import Producer, producer
 from columnflow.production.categories import category_ids
 from columnflow.production.cms.mc_weight import mc_weight
@@ -31,14 +31,14 @@ ak = maybe_import("awkward")
 def cutflow_features(
     self: Producer,
     events: ak.Array,
-    object_masks: dict[str, dict[str, ak.Array]],
+    results: SelectionResult,
     **kwargs,
 ) -> ak.Array:
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
 
     # apply object masks and create new collections
-    reduced_events = create_collections_from_masks(events, object_masks)
+    reduced_events = create_collections_from_masks(events, results.objects)
 
     # create category ids per event and add categories back to the
     events = self[category_ids](reduced_events, target_events=events, **kwargs)
