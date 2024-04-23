@@ -44,7 +44,7 @@ def default(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # (re)produce category i
     events = self[category_ids](events, **kwargs)
 
-    events = set_ak_column_f32(events, "ht", ak.sum(events.Jet.pt, axis=1))
+    events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1), value_type=np.float32)
     events = set_ak_column(events, "n_jet", ak.sum(events.Jet.pt > 0, axis=1))
     events = set_ak_column(events, "n_bjet", ak.sum(events.Jet.btagDeepFlavB >=
                            self.config_inst.x.btag_working_points.deepjet.medium, axis=1))
