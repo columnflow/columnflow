@@ -35,6 +35,7 @@ jobs:
   test_sequence:
     runs-on: ubuntu-latest
     environment: Tests
+    name: Perform test ${{ inputs.NAME }}
     container: 
         image: ${{ inputs.CONTAINER }}
         options: --user ${{ inputs.USER }}
