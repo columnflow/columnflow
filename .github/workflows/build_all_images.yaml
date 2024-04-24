@@ -12,6 +12,7 @@ on:
 
 jobs:
   parse_env_vars:
+    name: "Initialize file manager"
     runs-on: ubuntu-latest
     outputs:
       BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
@@ -35,7 +36,7 @@ jobs:
         lfs: true
     - uses: ./.github/actions/file_manager
       id: file_manager
-      name: "initialize file manager"
+      # name: "initialize file manager"
 
   build_base_software:
     uses: ./.github/workflows/build_docker_container.yaml

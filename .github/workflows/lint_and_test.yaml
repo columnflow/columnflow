@@ -84,7 +84,7 @@ jobs:
     needs: [parse_env_vars, test_matrix]
     environment: Pypi tests
     container: 
-      image: "software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+      image: "ghcr.io/${{ github.repository }}software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
       options: --user root
     steps:
       - name: Prepare session
