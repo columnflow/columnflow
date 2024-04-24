@@ -3,8 +3,9 @@
 """
 Tasks related to ML workflows.
 """
+from __future__ import annotations
 
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 import law
 import luigi
@@ -19,11 +20,19 @@ from columnflow.tasks.framework.mixins import (
     MLModelTrainingMixin,
     MLModelMixin,
     ChunkedIOMixin,
+    CategoriesMixin,
+    SelectorStepsMixin,
 )
+from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
 from columnflow.tasks.production import ProduceColumns
-from columnflow.util import dev_sandbox, safe_div
+from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
+from columnflow.columnar_util import set_ak_column
+
+
+ak = maybe_import("awkward")
 
 
 class PrepareMLEvents(
@@ -218,15 +227,18 @@ class PrepareMLEvents(
                 )
 
                 # generate fold indices
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
                         stats=stats,
-                        fold_indices=fold_indices,
+                        fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
                     )
+
+                # read fold_indices from events array to allow masking training events
+                fold_indices = events.fold_indices
 
                 # remove columns
                 events = route_filter(events)
@@ -793,14 +805,14 @@ class MLEvaluation(
                 )
 
                 # generate fold indices
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
 
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
                         stats=stats,
-                        fold_indices=fold_indices,
+                        fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
                     )
 
@@ -809,7 +821,7 @@ class MLEvaluation(
                     self,
                     events,
                     models,
-                    fold_indices,
+                    events.fold_indices,
                     events_used_in_training=events_used_in_training,
                 )
 
@@ -909,3 +921,246 @@ MergeMLEvaluationWrapper = wrapper_factory(
     :enables: ["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"]
     """,
 )
+
+
+class PlotMLResultsBase(
+    ProcessPlotSettingMixin,
+    CategoriesMixin,
+    MLModelMixin,
+    ProducersMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
+    """
+    A base class, used for the implementation of the ML plotting tasks. This class implements
+    a ``plot_function`` parameter for choosing a desired plotting function and a ``prepare_inputs`` method,
+    that returns a dict with the chosen events.
+    """
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_columnar.sh")
+
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_ml_evaluation.plot_ml_evaluation",
+        add_default_to_description=True,
+        description="the full path given using the dot notation of the desired plot function.",
+    )
+
+    skip_processes = law.CSVParameter(
+        default=(),
+        description="comma seperated list of process names to skip; these processes will not be included in the plots. "
+        "default: ()",
+        brace_expand=True,
+    )
+
+    plot_sub_processes = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, each process is divided into the different subprocesses; "
+        "this option requires a ``process_ids`` column to be stored in the events; "
+        "the ``process_ids`` column assignes a subprocess id number (predefined in the config) to each event; "
+        "default: False",
+    )
+
+    skip_uncertainties = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, count uncertainties (if available) are not included in the plot; default: False",
+    )
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeMLEvaluation=MergeMLEvaluation,
+    )
+
+    def store_parts(self: PlotMLResultsBase):
+        parts = super().store_parts()
+        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        return parts
+
+    def create_branch_map(self: PlotMLResultsBase):
+        return [
+            DotDict({"category": cat_name})
+            for cat_name in sorted(self.categories)
+        ]
+
+    def requires(self: PlotMLResultsBase):
+        return {
+            d: self.reqs.MergeMLEvaluation.req(
+                self,
+                dataset=d,
+                branch=-1,
+                _exclude={"branches"},
+            )
+            for d in self.datasets
+        }
+
+    def workflow_requires(self: PlotMLResultsBase, only_super: bool = False):
+        reqs = super().workflow_requires()
+        if only_super:
+            return reqs
+
+        reqs["merged_ml_evaluation"] = self.requires_from_branch()
+
+        return reqs
+
+    def output(self: PlotMLResultsBase) -> dict[str, list]:
+        b = self.branch_data
+        return {"plots": [
+            self.target(name)
+            for name in self.get_plot_names(f"plot__proc_{self.processes_repr}__cat_{b.category}")
+        ]}
+
+    def prepare_inputs(self: PlotMLResultsBase) -> dict[str, ak.Array]:
+        """
+        prepare the inputs for the plot function, based on the given configuration and category.
+
+        :raises NotImplementedError: This error is raised if a given dataset contains more than one process.
+        :raises ValueError: This error is raised if ``plot_sub_processes`` is used without providing the
+            ``process_ids`` column in the data
+
+        :return: dict[str, ak.Array]: A dictionary with the dataset names as keys and
+            the corresponding predictions as values.
+        """
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        all_events = OrderedDict()
+        for dataset, inp in self.input().items():
+            dataset_inst = self.config_inst.get_dataset(dataset)
+            if len(dataset_inst.processes) != 1:
+                raise NotImplementedError(
+                    f"dataset {dataset_inst.name} has {len(dataset_inst.processes)} assigned, "
+                    "which is not implemented yet.",
+                )
+
+            events = ak.from_parquet(inp["mlcolumns"].path)
+
+            # masking with leaf categories
+            category_mask = False
+            for leaf in leaf_category_insts:
+                category_mask = ak.where(ak.any(events.category_ids == leaf.id, axis=1), True, category_mask)
+
+            events = events[category_mask]
+            # loop per process
+            for process_inst in process_insts:
+                # skip when the dataset is already known to not contain any sub process
+                if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
+                    continue
+
+                if not self.plot_sub_processes:
+                    if process_inst.name in all_events.keys():
+                        all_events[process_inst.name] = ak.concatenate([
+                            all_events[process_inst.name], getattr(events, self.ml_model),
+                        ])
+                    else:
+                        all_events[process_inst.name] = getattr(events, self.ml_model)
+                else:
+                    if "process_ids" not in events.fields:
+                        raise ValueError(
+                            "No `process_ids` column stored in the events! "
+                            f"Process selection for {dataset} cannot not be applied!",
+                        )
+                    for sub_process in sub_process_insts[process_inst]:
+                        if sub_process.name in self.skip_processes:
+                            continue
+
+                        process_mask = ak.where(events.process_ids == sub_process.id, True, False)
+                        if sub_process.name in all_events.keys():
+                            all_events[sub_process.name] = ak.concatenate([
+                                all_events[sub_process.name],
+                                getattr(events[process_mask], self.ml_model),
+                            ])
+                        else:
+                            all_events[sub_process.name] = getattr(events[process_mask], self.ml_model)
+        return all_events
+
+
+class PlotMLResults(PlotMLResultsBase):
+    """
+    A task that generates plots for machine learning results.
+
+    This task generates plots for machine learning results based on the given
+    configuration and category. The plots can be either a confusion matrix (CM) or a
+    receiver operating characteristic (ROC) curve. This task uses the output of the
+    MergeMLEvaluation task as input and saves the plots with the corresponding array
+    used to create the plot.
+    """
+
+    # override the plot_function parameter to be able to only choose between CM and ROC
+    plot_function = luigi.ChoiceParameter(
+        default="plot_cm",
+        choices=["cm", "roc"],
+        description="The name of the plot function to use. Can be either 'cm' or 'roc'.",
+    )
+
+    def prepare_plot_parameters(self: PlotMLResults):
+        """
+        Helper function to prepare the plot parameters for the plot function.
+        Implemented to parse the axes labels from the general settings.
+        """
+        params = self.get_plot_parameters()
+
+        # parse x_label and y_label from general settings
+        for label in ["x_labels", "y_labels"]:
+            if label in params.general_settings.keys():
+                params.general_settings[label] = params.general_settings[label].split(";")
+
+    def output(self: PlotMLResults):
+        b = self.branch_data
+        return {
+            "plots": [
+                self.target(name)
+                for name in self.get_plot_names(
+                    f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/plot__0",
+                )
+            ],
+            "array": self.target(
+                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.parquet",
+            ),
+        }
+
+    @law.decorator.log
+    @view_output_plots
+    def run(self: PlotMLResults):
+        func_path = {
+            "cm": "columnflow.plotting.plot_ml_evaluation.plot_cm",
+            "roc": "columnflow.plotting.plot_ml_evaluation.plot_roc",
+        }
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        self.prepare_plot_parameters()
+
+        # call the plot function
+        with self.publish_step(f"plotting in {category_inst.name}"):
+            all_events = self.prepare_inputs()
+            figs, array = self.call_plot_func(
+                func_path.get(self.plot_function, self.plot_function),
+                events=all_events,
+                config_inst=self.config_inst,
+                category_inst=category_inst,
+                skip_uncertainties=self.skip_uncertainties,
+                cms_llabel=self.cms_label,
+                **self.get_plot_parameters(),
+            )
+
+            # save the outputs
+            self.output()["array"].dump(array, formatter="pickle")
+            for file_path in self.output()["plots"]:
+                if file_path.ext() == "pdf":
+                    from matplotlib.backends.backend_pdf import PdfPages
+                    with PdfPages(file_path.abspath) as pdf:
+                        for f in figs:
+                            f.savefig(pdf, format="pdf")
+                    continue
+
+                for index, f in enumerate(figs):
+                    f.savefig(
+                        file_path.abs_dirname + "/" + file_path.basename.replace("0", str(index)),
+                        format=file_path.ext(),
+                    )

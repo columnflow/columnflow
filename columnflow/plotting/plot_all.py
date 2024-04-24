@@ -7,8 +7,8 @@ Example plot function.
 from __future__ import annotations
 
 from columnflow.types import Sequence
-from columnflow.util import maybe_import, test_float
-from columnflow.plotting.plot_util import get_position
+from columnflow.util import maybe_import, try_float
+from columnflow.plotting.plot_util import get_position, get_cms_label
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -56,7 +56,7 @@ def draw_stack(
     **kwargs,
 ) -> None:
     # check if norm is a number
-    if test_float(norm):
+    if try_float(norm):
         h = hist.Stack(*[i / norm for i in h])
     else:
         if not isinstance(norm, Sequence) and not isinstance(norm, np.ndarray):
@@ -132,23 +132,39 @@ def plot_all(
     plot_config: dict,
     style_config: dict,
     skip_ratio: bool = False,
-    shape_norm: bool = False,
     skip_legend: bool = False,
     cms_label: str = "wip",
+    whitespace_fraction: float = 0.3,
+    magnitudes: float = 4,
     **kwargs,
-) -> plt.Figure:
+) -> tuple(plt.Figure, tuple(plt.Axes)):
     """
-    plot_config expects dictionaries with fields:
+    Function that calls multiple plotting methods based on two configuration dictionaries,
+    *plot_config* and *style_config*.
+
+    The *plot_config* expects dictionaries with fields:
     "method": str, identical to the name of a function defined above,
     "hist": hist.Hist or hist.Stack,
     "kwargs": dict (optional),
     "ratio_kwargs": dict (optional),
 
-    style_config expects fields (all optional):
+    The *style_config* expects fields (all optional):
     "ax_cfg": dict,
     "rax_cfg": dict,
     "legend_cfg": dict,
     "cms_label_cfg": dict,
+
+    :param plot_config: Dictionary that defines which plot methods will be called with which
+    key word arguments.
+    :param style_config: Dictionary that defines arguments on how to style the overall plot.
+    :param skip_ratio: Optional bool parameter to not display the ratio plot.
+    :param skip_legend: Optional bool parameter to not display the legend.
+    :param cms_label: Optional string parameter to set the CMS label text.
+    :param whitespace_fraction: Optional float parameter that defines the ratio of which
+    the plot will consist of whitespace for the legend and labels
+    :param magnitudes: Optional float parameter that defines the displayed ymin when plotting
+    with a logarithmic scale.
+    :return: tuple of plot figure and axes
     """
     # available plot methods mapped to their names
     plot_methods = {
@@ -192,8 +208,8 @@ def plot_all(
     # some default ylim settings based on yscale
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
 
-    ax_ymin = ax.get_ylim()[1] / 10**4 if log_y else 0.00001
-    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1.4, logscale=log_y)
+    ax_ymin = ax.get_ylim()[1] / 10**magnitudes if log_y else 0.0000001
+    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], factor=1 / (1 - whitespace_fraction), logscale=log_y)
     ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
     # prioritize style_config ax settings
@@ -273,25 +289,7 @@ def plot_all(
 
     # cms label
     if cms_label != "skip":
-        label_options = {
-            "wip": "Work in progress",
-            "pre": "Preliminary",
-            "pw": "Private work",
-            "sim": "Simulation",
-            "simwip": "Simulation work in progress",
-            "simpre": "Simulation preliminary",
-            "simpw": "Simulation private work",
-            "od": "OpenData",
-            "odwip": "OpenData work in progress",
-            "odpw": "OpenData private work",
-            "public": "",
-        }
-        cms_label_kwargs = {
-            "ax": ax,
-            "llabel": label_options.get(cms_label, cms_label),
-            "fontsize": 22,
-            "data": False,
-        }
+        cms_label_kwargs = get_cms_label(ax, cms_label)
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
