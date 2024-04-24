@@ -638,7 +638,6 @@ EOF
                 cat $CONDA_ENV_FILE
                 micromamba install -f $CONDA_ENV_FILE || return "$?"
                 micromamba clean --yes --all
-                cf_color yellow "updated PATH: ${PATH}"
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
@@ -668,7 +667,6 @@ EOF
 
         # source the production sandbox, potentially skipped in CI and RTD jobs
         local ret
-        cf_color yellow "PATH before '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
@@ -678,7 +676,6 @@ EOF
                 return "${ret}"
             fi
         fi
-        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf.sh': ${PATH}"
         if [ "$?" != "0" ]; then
             return "$?"
         fi
@@ -687,7 +684,6 @@ EOF
         if [ "$?" != "0" ]; then
             return "$?"
         fi
-        cf_color yellow "PATH after '${CF_BASE}/sandboxes/cf_dev.sh': ${PATH}"
         ret="$?"
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"

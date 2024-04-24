@@ -295,11 +295,9 @@ setup_venv() {
             cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
             cf_color magenta "evaluating $cmd"
             eval "$cmd"
-            echo "CURRENT PATH: ${PATH}"
             eval "python -m pip install -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
-            echo "CURRENT PATH: ${PATH}"
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
             [ "$?" != "0" ] && clear_pending && return "28"
