@@ -39,6 +39,8 @@ jobs:
     container: 
         image: ${{ inputs.CONTAINER }}
         options: --user ${{ inputs.USER }}
+        env:
+          CF_FORCE_COMPILE_ENV: True
     steps:
     #   - uses: actions/checkout@v3
     #     with:
