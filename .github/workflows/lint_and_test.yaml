@@ -81,23 +81,33 @@ jobs:
   pypi:
     runs-on: ubuntu-latest
     # only upload to pypi if tests ran successfully
-    needs: test_matrix
+    needs: [parse_env_vars, test_matrix]
     environment: Pypi tests
-
+    container: 
+      image: "software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+      options: --user root
     steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@master
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ inputs.PYVERSION || 3.10 }}
-
+      - name: Prepare session
+        run: |
+          shopt -s expand_aliases
+          echo "I am $(whoami) and I am in $(pwd)"
+          
+          if [[ $(whoami) == "root" ]]; then
+            echo "Setting /columnflow as safe repository"
+            git config --global --add safe.directory /columnflow
+          fi
+          
+          cd $CF_BASE
+          source setup.sh
+          
+          git fetch
+          git checkout $GITHUB_SHA
+          git submodule update --recursive
+          # source the setup and execute the test
+        shell: bash
       - name: Install dependencies ☕️
         run: |
+          source setup.sh
           pip install -U pip
           pip install twine
 
