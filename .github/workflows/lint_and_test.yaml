@@ -120,9 +120,15 @@ jobs:
         shell: bash
 
       - name: Check bundling 📦
-        run: python setup.py sdist
+        run: |
+          cd $CF_BASE
+          source setup.sh
+          python setup.py sdist
         shell: bash
 
       - name: Check setup 🚦
-        run: twine check "dist/$( python setup.py --fullname ).tar.gz"
+        run: |
+          cd $CF_BASE
+          source setup.sh
+          twine check "dist/$( python setup.py --fullname ).tar.gz"
         shell: bash
