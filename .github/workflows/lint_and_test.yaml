@@ -3,6 +3,12 @@ name: Lint and test
 on:
   # push:
   workflow_dispatch:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: string
+        default: "3.10"
   workflow_call:
     inputs:
       PYVERSION: 
@@ -84,7 +90,7 @@ jobs:
     needs: [parse_env_vars, test_matrix]
     environment: Pypi tests
     container: 
-      image: "ghcr.io/${{ github.repository }}software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+      image: "ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
       options: --user root
     steps:
       - name: Prepare session
