@@ -88,9 +88,8 @@ jobs:
         id: meta_slim
         uses: docker/metadata-action@v5
         with:
-          registry: ${{ env.REGISTRY }}
           images: |
-            ${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ inputs.IMAGE_NAME }}
           tags: |
             type=raw,value=python${{ inputs.PYVERSION || 3.10 }}-${{ inputs.HASH || hashFiles(inputs.HASHFILES) }}
           labels: |
