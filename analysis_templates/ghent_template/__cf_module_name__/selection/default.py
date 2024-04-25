@@ -10,7 +10,7 @@ from typing import Tuple
 import law
 
 from columnflow.util import maybe_import, four_vec
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, optional_column, has_ak_column
 from columnflow.production.util import attach_coffea_behavior
 
 from columnflow.selection import Selector, SelectionResult, selector
@@ -44,12 +44,10 @@ def TetraVec(arr: ak.Array) -> ak.Array:
 
 @selector(
     uses={
-        process_ids, attach_coffea_behavior,
-        mc_weight
+        process_ids, attach_coffea_behavior, mc_weight, optional_column("veto"),
     },
     produces={
-        process_ids, attach_coffea_behavior,
-        mc_weight
+        process_ids, attach_coffea_behavior, mc_weight
     },
     exposed=False,
 )
@@ -69,6 +67,7 @@ def pre_selection(
     events = self[attach_coffea_behavior](events, **kwargs)
 
     results = SelectionResult()
+    results.event = ~events.veto if has_ak_column(events, "veto") else ak.full_like(events.mc_weight, True, dtype=bool)
     return events, results
 
 
@@ -238,7 +237,11 @@ def default(
     results += jet_selection_results
 
     # combine event selection after all steps
-    results.event = results.steps.Trigger & results.steps.Lepton & results.steps.Jet
+    results.event = (results.event &
+                     results.steps.Trigger &
+                     results.steps.Lepton &
+                     results.steps.Jet &
+                     results.steps.Bjet)
 
     # add cutflow features, passing per-object masks
     events, results = self[post_selection](events, results, stats, **kwargs)
