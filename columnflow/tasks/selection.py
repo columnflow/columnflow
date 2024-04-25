@@ -44,6 +44,14 @@ class SelectEvents(
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store the normalization weight producer for MC
+        self.veto_producer: Producer = Producer.get_cls("veto_events")(
+            inst_dict=self.get_producer_kwargs(self),
+        )
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -63,6 +71,9 @@ class SelectEvents(
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
 
+        # add veto selector dependent requirements
+        reqs["veto"] = self.veto_producer.run_requires()
+
         return reqs
 
     def requires(self):
@@ -77,6 +88,9 @@ class SelectEvents(
 
         # add selector dependent requirements
         reqs["selector"] = self.selector_inst.run_requires()
+
+        # add veto selector dependent requirements
+        reqs["veto"] = self.veto_producer.run_requires()
 
         return reqs
 
@@ -132,9 +146,13 @@ class SelectEvents(
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
 
+        # setup the veto producer
+        self.veto_producer.run_setup(self.requires()["veto"], self.input()["veto"])
+
         # define columns that need to be read
         read_columns = set(map(Route, mandatory_coffea_columns))
         read_columns |= self.selector_inst.used_columns
+        read_columns |= self.veto_producer.used_columns
         read_columns |= set(map(Route, aliases.values()))
 
         # define columns that will be written
@@ -172,6 +190,9 @@ class SelectEvents(
                 # insert additional columns
                 events = update_ak_array(events, *cols)
 
+                # add veto
+                events = self.veto_producer(events, file=input_file)
+
                 # add aliases
                 events = add_ak_aliases(
                     events,
@@ -195,7 +216,8 @@ class SelectEvents(
 
                 # optional check for finite values
                 if self.check_finite_output:
-                    self.raise_if_not_finite(results_array)
+                    # ignore vetoed events when checking for finite values
+                    self.raise_if_not_finite(results_array[~events.veto])
 
                 # save results as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
@@ -204,11 +226,16 @@ class SelectEvents(
 
                 # remove columns
                 if write_columns:
+
+                    # store veto in variable before filtering
+                    veto = events.veto
+
                     events = route_filter(events)
 
                     # optional check for finite values
                     if self.check_finite_output:
-                        self.raise_if_not_finite(events)
+                        # ignore vetoed events when checking for finite values
+                        self.raise_if_not_finite(events[~veto])
 
                     # save additional columns as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
