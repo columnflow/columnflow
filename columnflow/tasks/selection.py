@@ -158,6 +158,7 @@ class SelectEvents(
         # define columns that will be written
         write_columns = set(map(Route, mandatory_coffea_columns))
         write_columns |= self.selector_inst.produced_columns
+        write_columns |= self.veto_producer.produced_columns
         route_filter = RouteFilter(write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)

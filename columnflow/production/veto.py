@@ -10,7 +10,8 @@ np = maybe_import("numpy")
 
 
 @producer(
-    uses=("event", "run", "luminosityBlock"),
+    uses={"event", "run", "luminosityBlock"},
+    produces={"veto"},
     exposed=False,
     get_veto_file=(lambda self, external_files: external_files.veto),
 )
