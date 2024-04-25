@@ -16,6 +16,7 @@ from columnflow.config_util import (
 from __cf_short_name_lc__.config.styling import stylize_processes
 from __cf_short_name_lc__.config.datasets import add_datasets, configure_datasets
 from __cf_short_name_lc__.config.processes import add_processes
+from __cf_short_name_lc__.config.veto import add_vetoes
 from __cf_short_name_lc__.config.categories import add_categories_selection
 from __cf_short_name_lc__.config.variables import add_variables
 from __cf_short_name_lc__.config.shifts import add_shifts
@@ -56,6 +57,7 @@ def add_config(
 
     add_triggers(cfg, campaign)
     add_datasets(cfg, campaign)
+    add_vetoes(cfg)
     configure_datasets(cfg, limit_dataset_files)
 
     # verify that the root process of all datasets is part of any of the registered processes

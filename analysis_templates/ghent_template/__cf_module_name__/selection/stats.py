@@ -14,6 +14,7 @@ from columnflow.production.cms.btag import btag_weights
 from __cf_short_name_lc__.production.weights import event_weights_to_normalize
 
 from columnflow.util import maybe_import
+from columnflow.columnar_util import optional_column, has_ak_column
 from columnflow.ml import MLModel
 
 np = maybe_import("numpy")
@@ -23,8 +24,9 @@ ak = maybe_import("awkward")
 @selector(
     uses={
         increment_stats,
-        event_weights_to_normalize
-        },
+        event_weights_to_normalize,
+        optional_column("veto"),
+    },
 )
 def __cf_short_name_lc___increment_stats(
     self: Selector,
@@ -34,6 +36,7 @@ def __cf_short_name_lc___increment_stats(
     **kwargs,
 ) -> ak.Array:
     # collect important information from the results
+    unvetoed_mask = ~events.veto if has_ak_column(events, "veto") else Ellipsis
     event_mask = results.event
     n_jets = results.x.n_jets
 
@@ -45,9 +48,10 @@ def __cf_short_name_lc___increment_stats(
     }
 
     if self.dataset_inst.is_mc:
-        weight_map["num_negative_weights"] = (events.mc_weight < 0)
+        weight_map["num_negative_weights"] = (events.mc_weight < 0) & \
+                                             (True if unvetoed_mask is Ellipsis else unvetoed_mask)
         # "sum" operations
-        weight_map["sum_mc_weight"] = events.mc_weight  # weights of all events
+        weight_map["sum_mc_weight"] = (events.mc_weight, unvetoed_mask)  # weights of all events
         weight_map["sum_mc_weight_selected"] = (events.mc_weight, event_mask)  # weights of selected events
 
         weight_columns = list(
@@ -61,7 +65,7 @@ def __cf_short_name_lc___increment_stats(
                 # skip non-weight columns here
                 continue
 
-            weight_map[f"sum_mc_weight_{name}"] = (events.mc_weight * events[name], Ellipsis)
+            weight_map[f"sum_mc_weight_{name}"] = (events.mc_weight * events[name], unvetoed_mask)
 
             # weights for selected events
             weight_map[f"sum_mc_weight_{name}_selected"] = (events.mc_weight * events[name], event_mask)
