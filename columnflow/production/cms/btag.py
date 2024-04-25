@@ -6,6 +6,8 @@ Producers for btag scale factor weights.
 
 from __future__ import annotations
 
+import law
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
@@ -13,10 +15,12 @@ from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_arra
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
+logger = law.logger.get_logger(__name__)
+
 
 @producer(
     uses={
-        "Jet.hadronFlavour", "Jet.eta", "Jet.pt", "Jet.btagDeepFlavB",
+        "Jet.hadronFlavour", "Jet.eta", "Jet.pt",
     },
     # only run on mc
     mc_only=True,
@@ -44,12 +48,13 @@ def btag_weights(
     *get_btag_file* can be adapted in a subclass in case it is stored differently in the external
     files.
 
-    The name of the correction set as well as a list of JEC uncertainty sources which should be
-    propagated through the weight calculation should be given as an auxiliary entry in the config:
+    The name of the correction set, a list of JEC uncertainty sources which should be
+    propagated through the weight calculation, and the column used for b-tagging should
+    be given as an auxiliary entry in the config:
 
     .. code-block:: python
 
-        cfg.x.btag_sf = ("deepJet_shape", ["Absolute", "FlavorQCD", ...])
+        cfg.x.btag_sf = ("deepJet_shape", ["Absolute", "FlavorQCD", ...], "btagDeepFlavB")
 
     *get_btag_config* can be adapted in a subclass in case it is stored differently in the config.
 
@@ -68,7 +73,7 @@ def btag_weights(
     flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
     abs_eta = flat_np_view(abs(events.Jet.eta[jet_mask]), axis=1)
     pt = flat_np_view(events.Jet.pt[jet_mask], axis=1)
-    b_discr = flat_np_view(events.Jet.btagDeepFlavB[jet_mask], axis=1)
+    b_discr = flat_np_view(events.Jet[self.b_score_column][jet_mask], axis=1)
 
     # helper to create and store the weight
     def add_weight(syst_name, syst_direction, column_name):
@@ -135,6 +140,35 @@ def btag_weights(
     return events
 
 
+def get_b_score_column(btag_config: tuple[str, list, str]) -> str:
+    """
+    Helper function to resolve the btag score column from the btag configuration.
+    """
+    corrector_name = btag_config[0]
+    if len(btag_config) >= 3:
+        b_score_column = btag_config[2]
+    else:
+        # resolve the column name from the corrector name
+        if "deepjet" in corrector_name.lower():
+            b_score_column = "btagDeepFlavB"
+        elif "particlenet" in corrector_name.lower():
+            b_score_column = "btagPNetB"
+        else:
+            raise NotImplementedError(f"Cannot automatically determine btag column for Corrector '{corrector_name}'")
+        logger.info(f"No btag column specified; defaulting to column '{b_score_column}'")
+
+    # warn about potentially wrong column usage
+    if (
+        "deepjet" in corrector_name.lower() and "pnet" in b_score_column or
+        "particlenet" in corrector_name.lower() and "deepflav" in b_score_column
+    ):
+        logger.warning(
+            f"Using btag column '{b_score_column}' for BTag Corrector '{corrector_name}' is highly discouraged",
+        )
+
+    return b_score_column
+
+
 @btag_weights.init
 def btag_weights_init(self: Producer) -> None:
     # depending on the requested shift_inst, there are three cases to handle:
@@ -143,6 +177,11 @@ def btag_weights_init(self: Producer) -> None:
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
+    btag_config = self.get_btag_config()
+    self.b_score_column = get_b_score_column(btag_config)
+
+    self.uses.add(f"Jet.{self.b_score_column}")
+
     shift_inst = getattr(self, "local_shift_inst", None)
     if not shift_inst:
         return
@@ -152,7 +191,7 @@ def btag_weights_init(self: Producer) -> None:
     btag_sf_jec_source = "" if self.jec_source == "Total" else self.jec_source
     self.shift_is_known_jec_source = (
         self.jec_source and
-        btag_sf_jec_source in self.get_btag_config()[1]
+        btag_sf_jec_source in btag_config[1]
     )
 
     # save names of method-intrinsic uncertainties
@@ -210,7 +249,3 @@ def btag_weights_setup(
     )
     corrector_name = self.get_btag_config()[0]
     self.btag_sf_corrector = correction_set[corrector_name]
-
-    # check versions
-    if self.btag_sf_corrector.version not in (3,):
-        raise Exception(f"unsuppprted btag sf corrector version {self.btag_sf_corrector.version}")
