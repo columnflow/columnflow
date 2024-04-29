@@ -43,7 +43,7 @@ classifiers = [
 
 [tool.setuptools.dynamic]
 dependencies={file = ["sandboxes/cf.txt"]}
-readme = {file = ["README.md"]}
+readme = {file = ["README.md"], content_type="text/markdown"}
 optional-dependencies={"dev" = {file = ["sandboxes/dev.txt"]}, "columnar"= {file = ["sandboxes/columnar.txt"]}, "ml_tf"= {file = ["sandboxes/ml_tf.txt", "sandboxes/columnar.txt"]}}
 # optional-dependencies.columnar= {file = ["sandboxes/columnar.txt"]}
 # optional-dependencies.ml-tf= {file = ["sandboxes/ml-tf.txt"]}
