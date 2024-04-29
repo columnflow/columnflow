@@ -33,6 +33,8 @@ def btag_weights(
     self: Producer,
     events: ak.Array,
     jet_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    negative_b_score_action: str = "ignore",
+    negative_b_score_log_mode: str = "warning",
     **kwargs,
 ) -> ak.Array:
     """
@@ -61,13 +63,67 @@ def btag_weights(
     Optionally, a *jet_mask* can be supplied to compute the scale factor weight based only on a
     subset of jets.
 
+    The *negative_b_score_action* defines the procedure of how to handle jets with a negative b-tag.
+    Supported modes are:
+
+        - "ignore": the *jet_mask* is extended to exclude jets with b_score < 0
+        - "remove": the btag_weight is set to 0 for jets with b_score < 0
+        - "raise": an exception is raised
+
+    The verbosity of the handling of jets with negative b-score can be
+    set via *negative_b_score_log_mode*, which offers the following options:
+
+        - ``"none"``: no message is given
+        - ``"info"``: a `logger.info` message is given
+        - ``"debug"``: a `logger.debug` message is given
+        - ``"warning"``: a `logger.warning` message is given
+
     Resources:
 
        - https://twiki.cern.ch/twiki/bin/view/CMS/BTagShapeCalibration?rev=26
        - https://indico.cern.ch/event/1096988/contributions/4615134/attachments/2346047/4000529/Nov21_btaggingSFjsons.pdf
     """
+    known_actions = ("ignore", "remove", "raise")
+    if negative_b_score_action not in known_actions:
+        raise ValueError(
+            f"unknown negative_b_score_action '{negative_b_score_action}', "
+            f"known values are {','.join(known_actions)}",
+        )
+
+    known_log_modes = ("none", "info", "debug", "warning")
+    if negative_b_score_log_mode not in known_log_modes:
+        raise ValueError(
+            f"unknown negative_b_score_log_mode '{negative_b_score_log_mode}', "
+            f"known values are {','.join(known_log_modes)}",
+        )
+
     # get the total number of jets in the chunk
     n_jets_all = ak.sum(ak.num(events.Jet, axis=1))
+
+    # check that the b-tag score is not negative for all jets considered in the SF calculation
+    jets_negative_b_score = events.Jet[self.b_score_column][jet_mask] < 0
+    if ak.any(jets_negative_b_score):
+        msg_func = {
+            "none": lambda msg: None,
+            "info": logger.info,
+            "warning": logger.warning,
+            "debug": logger.debug,
+        }[negative_b_score_log_mode]
+        msg = f"In dataset {self.dataset_inst.name}, {ak.sum(jets_negative_b_score)} jets have a negative b-tag score."
+
+        if negative_b_score_action == "ignore":
+            msg_func(
+                f"{msg} The *jet_mask* will be adjusted to exclude these jets, resulting in a "
+                "*btag_weight* of 1 for these jets.",
+            )
+            jet_mask = jet_mask & (events.Jet[self.b_score_column] >= 0)
+        elif negative_b_score_action == "remove":
+            msg_func(
+                f"{msg} The *btag_weight* will be set to 0 for these jets.",
+            )
+            jet_mask = jet_mask & (events.Jet[self.b_score_column] >= 0)
+        elif negative_b_score_action == "raise":
+            raise Exception(msg)
 
     # get flat inputs, evaluated at jet_mask
     flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
@@ -107,6 +163,11 @@ def btag_weights(
 
         # enforce the correct shape and create the product over all jets per event
         sf = layout_ak_array(sf_flat_all, events.Jet.pt)
+
+        if negative_b_score_log_mode == "remove":
+            # set the weight to 0 for jets with negative btag score
+            sf = ak.where(jets_negative_b_score, 0, sf)
+
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # save the new column
