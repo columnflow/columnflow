@@ -10,7 +10,7 @@ dynamic = [
 ]
 name = "columnflow"
 description = "columnflow"
-requires-python = ">=3.7, <=3.11"
+requires-python = ">=3.7, <3.12"
 keywords = [
     "physics",
     "analysis",
