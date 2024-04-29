@@ -140,9 +140,14 @@ def btag_weights(
     return events
 
 
-def get_b_score_column(btag_config: tuple[str, list, str]) -> str:
+def get_b_score_column(btag_config: tuple[str, list, str] | tuple[str, list]) -> str:
     """
     Helper function to resolve the btag score column from the btag configuration.
+
+    :param btag_config: Entry in auxiliary `config_inst.x.btag_sf`, see example
+    :py:meth:`~columflow.production.cms.btag.btag_weights`. If tuple has less
+    than 3 entries, the column name is derived from the name of the correction set.
+    :returns: Name of column that is required for the calculation of this set of corrections.
     """
     corrector_name = btag_config[0]
     if len(btag_config) >= 3:
