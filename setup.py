@@ -67,7 +67,7 @@ setup(
     # install shell commands
     scripts=scripts,
     # install_requires=install_requires,
-    python_requires=">=3.7, <=3.11",
+    # python_requires=">=3.7, <=3.11",
     zip_safe=False,
     packages=find_packages(exclude=["tests"]),
 )
