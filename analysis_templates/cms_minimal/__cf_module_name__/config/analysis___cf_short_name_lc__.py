@@ -9,7 +9,7 @@ import order as od
 from scinum import Number
 
 from columnflow.util import DotDict, maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT
+from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
 )
@@ -115,6 +115,7 @@ cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
+
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 cfg.x.process_groups = {}
@@ -135,11 +136,40 @@ cfg.x.variable_groups = {}
 # (used during plotting)
 cfg.x.shift_groups = {}
 
+# general_settings groups for conveniently looping over different values for the general-settings parameter
+# (used during plotting)
+cfg.x.general_settings_groups = {}
+
+# process_settings groups for conveniently looping over different values for the process-settings parameter
+# (used during plotting)
+cfg.x.process_settings_groups = {}
+
+# variable_settings groups for conveniently looping over different values for the variable-settings parameter
+# (used during plotting)
+cfg.x.variable_settings_groups = {}
+
+# custom_style_config groups for conveniently looping over certain style configs
+# (used during plotting)
+cfg.x.custom_style_config_groups = {}
+
 # selector step groups for conveniently looping over certain steps
 # (used in cutflow tasks)
 cfg.x.selector_step_groups = {
     "default": ["muon", "jet"],
 }
+
+# calibrator groups for conveniently looping over certain calibrators
+# (used during calibration)
+cfg.x.calibrator_groups = {}
+
+# producer groups for conveniently looping over certain producers
+# (used during the ProduceColumns task)
+cfg.x.producer_groups = {}
+
+# ml_model groups for conveniently looping over certain ml_models
+# (used during the machine learning tasks)
+cfg.x.ml_model_groups = {}
+
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None
@@ -208,15 +238,15 @@ cfg.x.reduced_file_size = 512.0
 # columns to keep after certain steps
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
-        # general event info
-        "run", "luminosityBlock", "event",
+        # general event info, mandatory for reading files with coffea
+        ColumnCollection.MANDATORY_COFFEA,  # additional columns can be added as strings, similar to object info
         # object info
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
         "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
         "PV.npvs",
-        # columns added during selection
-        "deterministic_seed", "process_id", "mc_weight", "cutflow.*",
+        # all columns added during selection using a ColumnCollection flag
+        ColumnCollection.ALL_FROM_SELECTOR,
     },
     "cf.MergeSelectionMasks": {
         "cutflow.*",
@@ -239,7 +269,7 @@ cfg.x.versions = {
 cfg.add_channel(name="mutau", id=1)
 
 # add categories using the "add_category" tool which adds auto-generated ids
-# the "selection" entries refer to names of selectors, e.g. in selection/example.py
+# the "selection" entries refer to names of categorizers, e.g. in categorization/example.py
 # note: it is recommended to always add an inclusive category with id=1 or name="incl" which is used
 #       in various places, e.g. for the inclusive cutflow plots and the "empty" selector
 add_category(
@@ -287,6 +317,7 @@ cfg.add_variable(
     x_title="Number of jets",
     discrete_x=True,
 )
+# pt of all jets in every event
 cfg.add_variable(
     name="jets_pt",
     expression="Jet.pt",
@@ -294,14 +325,16 @@ cfg.add_variable(
     unit="GeV",
     x_title=r"$p_{T} of all jets$",
 )
+# pt of the first jet in every event
 cfg.add_variable(
-    name="jet1_pt",
-    expression="Jet.pt[:,0]",
-    null_value=EMPTY_FLOAT,
-    binning=(40, 0.0, 400.0),
-    unit="GeV",
-    x_title=r"Jet 1 $p_{T}$",
+    name="jet1_pt",  # variable name, to be given to the "--variables" argument for the plotting task
+    expression="Jet.pt[:,0]",  # content of the variable
+    null_value=EMPTY_FLOAT,  # value to be given if content not available for event
+    binning=(40, 0.0, 400.0),  # (bins, lower edge, upper edge)
+    unit="GeV",  # unit of the variable, if any
+    x_title=r"Jet 1 $p_{T}$",  # x title of histogram when plotted
 )
+# eta of the first jet in every event
 cfg.add_variable(
     name="jet1_eta",
     expression="Jet.eta[:,0]",

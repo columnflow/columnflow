@@ -569,9 +569,15 @@ class PlotCutflowVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
-        add_default_to_description=True,
+        default=law.NO_STR,
+        description=(
+            PlotBase.plot_function.description + "; the default is resolved based on the --per-plot parameter."
+        ),
+        allow_empty=True,
     )
+    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_steps = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
+
     per_plot = luigi.ChoiceParameter(
         choices=("processes", "steps"),
         default="processes",
@@ -579,9 +585,6 @@ class PlotCutflowVariables1D(
         "processes in one plot); 'steps' (one plot per process, all selection steps in one plot); "
         "default: processes",
     )
-    # TODO: combine these hard-coded plot function name with law parameter
-    plot_function_per_process = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
-    plot_function_per_step = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     def output(self):
         b = self.branch_data
@@ -604,6 +607,12 @@ class PlotCutflowVariables1D(
             })}
 
     def run_postprocess(self, hists, category_inst, variable_insts):
+        # resolve plot function
+        if self.plot_function == law.NO_STR:
+            self.plot_function = (
+                self.plot_function_processes if self.per_plot == "processes" else self.plot_function_steps
+            )
+
         import hist
 
         if len(variable_insts) != 1:
@@ -619,7 +628,7 @@ class PlotCutflowVariables1D(
 
                 # call the plot function
                 fig, _ = self.call_plot_func(
-                    self.plot_function_per_process,
+                    self.plot_function,
                     hists=step_hists,
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),
@@ -641,7 +650,7 @@ class PlotCutflowVariables1D(
 
                 # call the plot function
                 fig, _ = self.call_plot_func(
-                    self.plot_function_per_step,
+                    self.plot_function,
                     hists=process_hists,
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),

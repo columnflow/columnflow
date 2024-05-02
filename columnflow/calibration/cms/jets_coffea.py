@@ -453,7 +453,7 @@ jec_coffea_nominal = jec_coffea.derive("jec_coffea_nominal", cls_dict={"uncertai
 )
 def jer_coffea(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Apply jet energy resolution smearing and calculate shifts for Jet Enery Resolution (JER) scale
+    Apply jet energy resolution smearing and calculate shifts for Jet Energy Resolution (JER) scale
     factor variations.
 
     Follows the recommendations given in https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.

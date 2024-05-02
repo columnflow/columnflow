@@ -6,19 +6,75 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+from columnflow.types import Iterable, Any
+
 import operator
 import functools
 from collections import OrderedDict
 
 import order as od
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, try_int
 
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
+
+label_options = {
+    "wip": "Work in progress",
+    "pre": "Preliminary",
+    "pw": "Private work",
+    "sim": "Simulation",
+    "simwip": "Simulation work in progress",
+    "simpre": "Simulation preliminary",
+    "simpw": "Simulation private work",
+    "od": "OpenData",
+    "odwip": "OpenData work in progress",
+    "odpw": "OpenData private work",
+    "public": "",
+}
+
+
+def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
+    """
+    Helper function to get the CMS label configuration.
+
+    :param ax: The axis to plot the CMS label on.
+    :param llabel: The left label of the CMS label.
+    :return: A dictionary with the CMS label configuration.
+    """
+    cms_label_kwargs = {
+        "ax": ax,
+        "llabel": label_options.get(llabel, llabel),
+        "fontsize": 22,
+        "data": False,
+    }
+
+    return cms_label_kwargs
+
+
+def apply_settings(containers: Iterable[od.AuxDataMixin], settings: dict[dict, Any] | None):
+    """
+    applies settings from `settings` dictionary to a list of order objects `containers`
+
+    :param containers: list of order objects
+    :param settings: dictionary of settings to apply on the *containers*. Each key should correspond
+        to the name of a container and each value should be a dictionary. The inner dictionary contains
+        keys and values that will be applied on the corresponding container either as an attribute
+        or alternatively as an auxiliary.
+    """
+    if not settings:
+        return
+
+    for inst in containers:
+        inst_settings = settings.get(inst.name, {})
+        for setting_key, setting_value in inst_settings.items():
+            try:
+                setattr(inst, setting_key, setting_value)
+            except AttributeError:
+                inst.set_aux(setting_key, setting_value)
 
 
 def apply_process_settings(
@@ -29,30 +85,18 @@ def apply_process_settings(
     applies settings from `process_settings` dictionary to the `process_insts`;
     the `scale` setting is directly applied to the histograms
     """
+    # apply all settings on process insts
+    process_insts = hists.keys()
+    apply_settings(process_insts, process_settings)
 
-    if not process_settings:
-        return hists
-
-    for proc_inst, h in list(hists.items()):
-        # check if there are process settings to apply for this variable
-        if proc_inst.name not in process_settings.keys():
-            continue
-
-        proc_settings = process_settings[proc_inst.name]
-
-        # apply "scale" setting if given
-        if "scale" in proc_settings.keys():
-            scale_factor = proc_settings.pop("scale")
+    # apply "scale" setting directly to the hists
+    for proc_inst, h in hists.items():
+        scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        if try_int(scale_factor):
+            scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
             # TODO: there might be a prettier way for the label
             proc_inst.label = f"{proc_inst.label} x{scale_factor}"
-
-        # apply all other process settings to the process_inst
-        for setting_key, setting_value in proc_settings.items():
-            try:
-                setattr(proc_inst, setting_key, setting_value)
-            except AttributeError:
-                proc_inst.set_aux(setting_key, setting_value)
 
     return hists
 
@@ -66,32 +110,17 @@ def apply_variable_settings(
     applies settings from `variable_settings` dictionary to the `variable_insts`;
     the `rebin` setting is directly applied to the histograms
     """
-    # check if there are variable settings to apply
-    if not variable_settings:
-        return hists
+    # apply all settings on variable insts
+    apply_settings(variable_insts, variable_settings)
 
-    # apply all settings
+    # apply rebinning setting directly to histograms
     for var_inst in variable_insts:
-        # check if there are variable settings to apply for this variable
-        if var_inst.name not in variable_settings.keys():
-            continue
-
-        var_settings = variable_settings[var_inst.name]
-
-        for proc_inst, h in list(hists.items()):
-            # apply rebinning setting
-            rebin_factor = int(var_settings.pop("rebin", 1))
-            h = h[{var_inst.name: hist.rebin(rebin_factor)}]
-
-            # override the histogram
-            hists[proc_inst] = h
-
-        # apply all other variable settings to the variable_inst
-        for setting_key, setting_value in var_settings.items():
-            try:
-                setattr(var_inst, setting_key, setting_value)
-            except AttributeError:
-                var_inst.set_aux(setting_key, setting_value)
+        rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
+        if try_int(rebin_factor):
+            for proc_inst, h in list(hists.items()):
+                rebin_factor = int(rebin_factor)
+                h = h[{var_inst.name: hist.rebin(rebin_factor)}]
+                hists[proc_inst] = h
 
     return hists
 
@@ -167,6 +196,7 @@ def prepare_style_config(
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
             "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "com": config_inst.campaign.ecm,
         },
     }
 

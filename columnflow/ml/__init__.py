@@ -42,7 +42,8 @@ class MLModel(Derivable):
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
     :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`).
+    declarations (:py:meth:`parameter_pairs`). The optional py:meth:`preparation_producer` allows
+    setting a producer that is run during the initial preparation of ML columns.
 
     .. py:classattribute:: single_config
 
@@ -115,9 +116,12 @@ class MLModel(Derivable):
     # falls back to cls_name if None
     store_name: str | None = None
 
+    # flag denoting whether the preparation_producer is invoked before evaluate()
+    preparation_producer_in_ml_evaluation: bool = True
+
     # names of attributes that are automatically extracted from init kwargs and
     # fall back to classmembers in case they are missing
-    init_attributes: list[str] = ["single_config", "folds", "store_name"]
+    init_attributes: list[str] = ["single_config", "folds", "store_name", "preparation_producer_in_ml_evaluation"]
 
     def __init__(
         self: MLModel,
@@ -260,15 +264,20 @@ class MLModel(Derivable):
     def used_columns(self: MLModel) -> dict[od.Config, set[Route]]:
         self._assert_configs("cannot determined used columns")
         return {
-            config_inst: set(self.uses(config_inst))
+            config_inst: set(map(Route, self.uses(config_inst)))
             for config_inst in self.config_insts
         }
 
     @property
     def produced_columns(self: MLModel) -> dict[od.Config, set[Route]]:
+        """
+        Helper function to resolve column names of produced with this MLModel instance.
+
+        :returns: Set of column names
+        """
         self._assert_configs("cannot determined produced columns")
         return {
-            config_inst: set(self.produces(config_inst))
+            config_inst: set(map(Route, self.produces(config_inst)))
             for config_inst in self.config_insts
         }
 
@@ -316,6 +325,15 @@ class MLModel(Derivable):
         and/or replace them to define a different set of calibrators for the preprocessing and
         training pipeline. This can be helpful in cases where training and evaluation phase spaces,
         as well as the required input columns are intended to diverge.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.training_calibrators
+
+        :param config_inst: Config instance to extract the *requested_calibrators* from
+        :returns: Set with str of the *requested_calibrators*
         """
         return list(requested_calibrators)
 
@@ -329,6 +347,15 @@ class MLModel(Derivable):
         different selector for the preprocessing and training pipeline. This can be helpful in cases
         where training and evaluation phase spaces, as well as the required input columns are
         intended to diverge.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.training_selector
+
+        :param config_inst: Config instance to extract the *requested_selector* from
+        :returns: Set with str of the *requested_selector*
         """
         return requested_selector
 
@@ -342,14 +369,46 @@ class MLModel(Derivable):
         replace them to define a different set of producers for the preprocessing and training
         pipeline. This can be helpful in cases where training and evaluation phase spaces, as well
         as the required input columns are intended to diverge.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.training_producers
+
+        :param config_inst: Config instance to extract the *requested_producers* from
+        :returns: Set with str of the *requested_producers*
         """
         return list(requested_producers)
+
+    def preparation_producer(
+        self: MLModel,
+        config_inst: od.Config,
+    ) -> str | None:
+        """
+        This method allows setting a producer that can be called as part of the preparation
+        of the ML input columns given a *config_inst*.
+
+        :param config_inst: :py:class:`~order.Config` object for which the producer should run.
+        :return: Name of a :py:class:`Producer` class or *None*.
+        """
+        return None
 
     @abc.abstractmethod
     def sandbox(self: MLModel, task: law.Task) -> str:
         """
         Given a *task*, returns the name of a sandbox that is needed to perform model training and
         evaluation.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.sandbox
+
+        :param task: Task instance to extract the datasets from
+        :returns: path to the requested sandbox, optinally prefixed by the executing shell command
+            with trailing :: as separator
         """
         return
 
@@ -358,6 +417,15 @@ class MLModel(Derivable):
         """
         Returns a set of all required datasets for a certain *config_inst*. To be implemented in
         subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.datasets
+
+        :param config_inst: Config instance to extract the datasets from
+        :returns: Set with :py:class:`~order.dataset.Dataset` instances
         """
         return
 
@@ -366,6 +434,15 @@ class MLModel(Derivable):
         """
         Returns a set of all required columns for a certain *config_inst*. To be implemented in
         subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.uses
+
+        :param config_inst: Config instance to extract the datasets from
+        :returns: Set with str of required columns
         """
         return
 
@@ -374,6 +451,15 @@ class MLModel(Derivable):
         """
         Returns a set of all produced columns for a certain *config_inst*. To be implemented in
         subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.produces
+
+        :param config_inst: Config instance to extract the datasets from
+        :returns: Set with str of produced columns
         """
         return
 
@@ -381,6 +467,15 @@ class MLModel(Derivable):
     def output(self: MLModel, task: law.Task) -> Any:
         """
         Returns a structure of output targets. To be implemented in subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.output
+
+        :param task: Task instance used extract task related information
+        :returns: Instance of :py:class:`~law.DirectoryTarget`, containing the path to directory.
         """
         return
 
@@ -389,6 +484,16 @@ class MLModel(Derivable):
         """
         Implemenents the opening of a trained model from *target* (corresponding to the structure
         returned by :py:meth:`output`). To be implemented in subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.open_model
+
+        :param target: Instance of :py:class:`~law.DirectoryTarget`,
+            contains path to directory holding the machine learning model.
+        :returns: Machine learning model instance
         """
         return
 
@@ -402,6 +507,19 @@ class MLModel(Derivable):
         """
         Performs the creation and training of a model, being passed a *task* and its *input* and
         *output*. To be implemented in subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.train
+
+        :param task: Task instance used extract task related information
+        :param input: List of instances of :py:class:`~law.DirectoryTarget`, containing the paths
+            of all required *input* files
+        :param output: Instance of :py:class:`~law.DirectoryTarget`, contain path to *target*
+            directory of the task
+        :returns: None
         """
         return
 
@@ -419,5 +537,18 @@ class MLModel(Derivable):
         of *models* corresponds to the number of folds generated by this model, and the already
         evaluated *fold_indices* for this event chunk that might used depending on
         *events_used_in_training*. To be implemented in subclasses.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.evaluate
+
+        :param task: Task instance used to extract task related information
+        :param events: Awkward Array containing the events to evaluate
+        :param models: List containing trained models
+        :param fold_indices: Awkward Array containing the indices of the folds used for training
+        :param events_used_in_training: Boolean flag to indicate if events were used during training
+        :returns: Awkward array containing events with additional columns
         """
         return

@@ -23,21 +23,68 @@ import itertools
 from collections import OrderedDict
 
 import law
-import order as od
+import order
+od = order
 
+from columnflow.util import maybe_import
 from columnflow.types import Callable, Any, Sequence
 
+ak = maybe_import("awkward")
+np = maybe_import("numpy")
 
-def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIndex:
+
+def get_events_from_categories(
+    events: ak.Array,
+    categories: Sequence[str | od.Category],
+    config_inst: od.Config | None = None,
+) -> ak.Array:
     """
-    Extracts all root process objects from datasets contained in an order *campaign* and returns
+    Helper function that returns all events from an awkward array *events* that are categorized
+    into one of the leafs of one of the *categories*.
+
+    :param events: Awkward array. Requires the 'category_ids' field to be present.
+    :param categories: Sequence of category instances. Can also be a sequence of strings when passing a
+        *config_inst*.
+    :param config_inst: Optional config instance to load category instances.
+    :raises ValueError: If "category_ids" is not present in the *events* fields.
+    :return: Awkward array of all events that are categorized into one of the leafs of one of the
+        *categories*
+    """
+    if "category_ids" not in events.fields:
+        raise ValueError(
+            f"{get_events_from_categories.__name__} requires the 'category_ids' field to be present",
+        )
+
+    categories = law.util.make_list(categories)
+    if config_inst:
+        # get category insts
+        categories = [config_inst.get_category(cat) for cat in categories]
+
+    leaf_category_insts = set.union(*map(set, (cat.get_leaf_categories() or {cat} for cat in categories)))
+
+    # do the "or" of all leaf categories
+    mask = np.zeros(len(events), dtype=bool)
+    for cat in leaf_category_insts:
+        cat_mask = ak.any(events.category_ids == cat.id, axis=1)
+        mask = cat_mask | mask
+
+    return events[mask]
+
+
+def get_root_processes_from_campaign(campaign: order.config.Campaign) -> order.unique.UniqueObjectIndex:
+    """Extracts all root process objects from datasets contained in an order *campaign* and returns
     them in a unique object index.
+
+    :param campaign: :py:class:`~order.config.Campaign` object containing information
+        about relevant datasets
+    :return: Unique indices for :py:class:`~order.process.Process` instances of
+        root processes associated with these datasets
     """
     # get all dataset processes
-    processes = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
+    processes: set[od.Process] = set.union(*map(set, (dataset.processes for dataset in campaign.datasets)))
 
     # get their root processes
-    root_processes = set.union(*map(set, (
+    root_processes: set[od.Process] = set.union(*map(set, (
         (process.get_root_processes() or [process])
         for process in processes
     )))
@@ -52,20 +99,19 @@ def get_root_processes_from_campaign(campaign: od.Campaign) -> od.UniqueObjectIn
 
 
 def get_datasets_from_process(
-    config: od.Config,
-    process: str | od.Process,
+    config: order.config.Config,
+    process: str | order.process.Process,
     strategy: str = "inclusive",
     only_first: bool = True,
     check_deep: bool = False,
-) -> list[od.Dataset]:
-    r"""
-    Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
+) -> list[order.dataset.Dataset]:
+    r"""Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
     contain matching processes. This is done by walking through *process* and its child processes
     and checking whether they are contained in known datasets. *strategy* controls how possible
     ambiguities are resolved:
 
         - ``"all"``: The full process tree is traversed and all matching datasets are considered.
-            Note that this might lead to a potential overrepresentation of the phase space.
+            Note that this might lead to a potential over-representation of the phase space.
         - ``"inclusive"``: If a dataset is found to match a process, its child processes are not
             checked further.
         - ``"exclusive"``: If **any** (deep) subprocess of *process* is found to be contained in a
@@ -75,43 +121,74 @@ def get_datasets_from_process(
 
     As an example, consider the process tree
 
-    .. code-block:: none
-               --- single_top ---
-              /        |         \
-             /         |          \
-        s_channel  t_channel  tw_channel
-           / \        / \         / \
-          /   \      /   \       /   \
-         t   tbar   t   tbar    t   tbar
+    .. mermaid::
+        :align: center
+        :zoom:
+
+        flowchart BT
+            A[single top]
+            B{s channel}
+            C{t channel}
+            D{tw channel}
+            E(t)
+            F(tbar)
+            G(t)
+            H(tbar)
+            I(t)
+            J(tbar)
+
+            B --> A
+            C --> A
+            D --> A
+
+            E --> B
+            F --> B
+
+            G --> C
+            H --> C
+
+            I --> D
+            J --> D
 
     and datasets existing for
 
-    .. code-block:: none
-        1. single_top__s_channel_t
-        2. single_top__s_channel_tbar
-        3. single_top__t_channel
-        4. single_top__t_channel_t
-        5. single_top__tw_channel
-        6. single_top__tw_channel_t
-        7. single_top__tw_channel_tbar
 
-    in the *config*. Depending on *strategy*, the returned datasets for process ``single_top``are:
+    1. single top - s channel - t
+    2. single top - s channel - tbar
+    3. single top - t channel
+    4. single top - t channel - t
+    5. single top - tw channel
+    6. single top - tw channel - t
+    7. single top - tw channel - tbar
+
+    in the *config*. Depending on *strategy*, the returned datasets for process ``single top``are:
 
         - ``"all"``: ``[1, 2, 3, 4, 5, 6, 7]``. Simply all datasets matching any subprocess.
-        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single_top__t_channel_t``,
-            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``, since more inclusive
-            datasets (``single_top__t_channel`` and ``single_top__tw_channel``) exist.
-        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top__t_channel`` and
-            ``single_top__tw_channel`` since more exclusive datasets (``single_top__t_channel_t``,
-            ``single_top__tw_channel_t``, and ``single_top__tw_channel_tbar``) exist.
+        - ``"inclusive"``: ``[1, 2, 3, 5]``. Skipping ``single top - t channel - t``,
+            ``single top - tw channel - t``, and ``single top - tw channel - tbar``, since more inclusive
+            datasets (``single top - t channel`` and ``single top - tw channel``) exist.
+        - ``"exclusive"``: ``[1, 2, 4, 6, 7]``. Skipping ``single_top - t_channel`` and
+            ``single top - tw channel`` since more exclusive datasets (``single top - t channel - t``,
+            ``single top - tw channel - t``, and ``single top - tw channel - tbar``) exist.
         - ``"exclusive_strict"``: ``[1, 2, 3, 6, 7]``. Like ``"exclusive"``, but not skipping
-            ``single_top__t_channel`` since not all subprocesses of ``t_channel`` match a dataset
-            (there is no ``single_top__t_channel_tbar`` dataset).
+            ``single top - t channel`` since not all subprocesses of ``t channel`` match a dataset
+            (there is no ``single top - t channel - tbar`` dataset).
 
     In addition, two arguments configure how the check is performed whether a process is contained
     in a dataset. If *only_first* is *True*, only the first matching dataset is considered.
     Otherwise, all datasets matching a specific process are returned. For the check itself,
     *check_deep* is forwarded to :py:meth:`order.Dataset.has_process`.
+
+    :param config: Config instance containing the information about known datasets.
+    :param process: Process instance or process name for which you want to obtain
+        list of datasets.
+    :param strategy: controls how possible ambiguities are resolved. Choices:
+        [``"all"``, ``"inclusive"``, ``"exclusive"``, ``"exclusive_strict"``]
+    :param only_first: If *True*, only the first matching dataset is considered.
+    :param check_deep: Forwarded to :py:meth:`order.Dataset.has_process`
+    :raises ValueError: If *strategy* is not in list of allowed choices
+    :return: List of datasets that correspond to *process*, depending on the
+        specifics of the query
     """
     # check the strategy
     known_strategies = ["all", "inclusive", "exclusive", "exclusive_strict"]
@@ -124,7 +201,7 @@ def get_datasets_from_process(
 
     # the tree traversal differs depending on the strategy, so distinguish cases
     if strategy in ["all", "inclusive"]:
-        dataset_insts = []
+        dataset_insts: list[od.Dataset] = []
         for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="bfs"):
             found_dataset = False
 
@@ -145,36 +222,36 @@ def get_datasets_from_process(
         return law.util.make_unique(dataset_insts)
 
     # at this point, strategy is exclusive or exclusive_strict
-    dataset_insts = OrderedDict()
+    dataset_insts_dict: OrderedDict[str, od.Dataset] = OrderedDict()
     for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
         # check if child processes have matched datasets already
         if child_insts:
-            n_found = sum(int(child_inst in dataset_insts) for child_inst in child_insts)
+            n_found = sum(int(child_inst in dataset_insts_dict) for child_inst in child_insts)
             # potentially skip the current process
             if strategy == "exclusive" and n_found:
                 continue
             if strategy == "exclusive_strict" and n_found == len(child_insts):
                 # add a empty list to mark this is done
-                dataset_insts[process_inst] = []
+                dataset_insts_dict[process_inst] = []
                 continue
             # at this point, the process itself must be checked,
             # so remove potentially found datasets of children
-            dataset_insts = {
+            dataset_insts_dict = OrderedDict({
                 child_inst: _dataset_insts
-                for child_inst, _dataset_insts in dataset_insts.items()
+                for child_inst, _dataset_insts in dataset_insts_dict.items()
                 if child_inst not in child_insts
-            }
+            })
 
         # check datasets
         for dataset_inst in config.datasets:
             if dataset_inst.has_process(process_inst, deep=check_deep):
-                dataset_insts.setdefault(process_inst, []).append(dataset_inst)
+                dataset_insts_dict.setdefault(process_inst, []).append(dataset_inst)
 
                 # stop checking more datasets when only the first matters
                 if only_first:
                     break
 
-    return sum(dataset_insts.values(), [])
+    return sum(dataset_insts_dict.values(), [])
 
 
 def add_shift_aliases(
@@ -208,7 +285,7 @@ def add_shift_aliases(
         shift.x.column_aliases = _aliases
 
 
-def get_shifts_from_sources(config: od.Config, *shift_sources: str) -> list[od.Shift]:
+def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
     Takes a *config* object and returns a list of shift instances for both directions given a
     sequence *shift_sources*.

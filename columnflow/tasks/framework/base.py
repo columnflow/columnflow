@@ -18,6 +18,7 @@ import law
 import order as od
 
 from columnflow.types import Sequence, Callable, Any
+from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
 from columnflow.util import DotDict
 
 
@@ -31,8 +32,14 @@ RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
+    """General class for requirements of different tasks.
 
+        Can be initialized with other :py:class:`~columnflow.util.DotDict`
+        instances and additional keyword arguments ``kwargs``, which are
+        added.
+        """
     def __init__(self, *others, **kwargs):
+
         super().__init__()
 
         # add others and kwargs
@@ -346,6 +353,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         .. code-block:: python
 
+
             def resolve_param_values(params):
                 params["ml_model"] = AnalysisTask.resolve_config_default(
                     params,
@@ -513,11 +521,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # store the analysis instance
         self.analysis_inst = self.get_analysis_inst(self.analysis)
 
-    def store_parts(self):
-        """
-        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
+    def store_parts(self) -> law.util.InsertableDict:
+        """Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
+
+        :return: Dictionary with parts to create a path to store intermediary results.
         """
         parts = law.util.InsertableDict()
 
@@ -714,6 +723,21 @@ class ConfigTask(AnalysisTask):
         parts.insert_after("task_family", "config", self.config_inst.name)
 
         return parts
+
+    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+        """
+        Returns a set of :py:class:`Route` objects describing columns that should be kept given a
+        type of column *collection*.
+
+        :param collection: The collection to return.
+        :return: A set of :py:class:`Route` objects.
+        """
+        columns = set()
+
+        if collection == ColumnCollection.MANDATORY_COFFEA:
+            columns |= set(Route(c) for c in mandatory_coffea_columns)
+
+        return columns
 
 
 class ShiftTask(ConfigTask):
@@ -1063,16 +1087,15 @@ class CommandTask(AnalysisTask):
 
 
 def wrapper_factory(
-    base_cls: law.Task,
+    base_cls: law.task.base.Task,
     require_cls: AnalysisTask,
     enable: Sequence[str],
     cls_name: str | None = None,
     attributes: dict | None = None,
     docs: str | None = None,
 ) -> law.task.base.Register:
-    """
-    Factory function creating wrapper task classes, inheriting from *base_cls* and
-    :py:class:`~law.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
+    """Factory function creating wrapper task classes, inheriting from *base_cls* and
+    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
     Unless *cls_name* is defined, the name of the created class defaults to the name of
     *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
     given.
@@ -1109,6 +1132,32 @@ def wrapper_factory(
     list of config instances known to an analysis), *require_cls* must be at least a
     :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
     explicitly not.
+
+    :param base_cls: Base class for this wrapper
+    :param require_cls: :py:class:`~law.task.base.Task` class to be wrapped
+    :param enable: Enable these parameters to control the wrapped
+        :py:class:`~law.task.base.Task` class instance.
+        Currently allowed parameters are: "configs", "skip_configs",
+        "shifts", "skip_shifts", "datasets", "skip_datasets"
+    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the
+        name of the :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
+    :param attributes: Add these attributes as class-level members of the
+        new :py:class:`~law.task.base.WrapperTask` class
+    :param docs: Manually set the documentation string `__doc__` of the new
+        :py:class:`~law.task.base.WrapperTask` class instance
+    :raises ValueError: If a parameter provided with `enable` is not in the list
+        of known parameters
+    :raises TypeError: If any parameter in `enable` is incompatible with the
+        :py:class:`~law.task.base.WrapperTask` class instance or the inheritance
+        structure of corresponding classes
+    :raises ValueError: when `configs` are enabled but not found in the analysis
+        config instance
+    :raises ValueError: when `shifts` are enabled but not found in the analysis
+        config instance
+    :raises ValueError: when `datasets` are enabled but not found in the analysis
+        config instance
+    :return: The new :py:class:`~law.task.base.WrapperTask` for the
+        :py:class:`~law.task.base.Task` class `required_cls`
     """
     # check known features
     known_features = [
@@ -1338,7 +1387,14 @@ def wrapper_factory(
 
             return params
 
-        def requires(self):
+        def requires(self) -> Requirements:
+            """Collect requirements defined by the underlying ``require_cls``
+            of the :py:class:`~law.task.base.WrapperTask` depending on optional
+            additional parameters.
+
+            :return: Requirements for the :py:class:`~law.task.base.WrapperTask`
+                instance.
+            """
             # build all requirements based on the parameter space
             reqs = {}
 
