@@ -14,7 +14,7 @@ np = maybe_import("numpy")
 
 
 @weight_producer(
-    # both produced columns and dependent shifts are defined in init below
+    # both used columns and dependent shifts are defined in init below
     # only run on mc
     mc_only=True,
 )
