@@ -116,14 +116,18 @@ def btag_weights(
                 f"{msg} The *jet_mask* will be adjusted to exclude these jets, resulting in a "
                 "*btag_weight* of 1 for these jets.",
             )
-            jet_mask = jet_mask & (events.Jet[self.b_score_column] >= 0)
         elif negative_b_score_action == "remove":
             msg_func(
                 f"{msg} The *btag_weight* will be set to 0 for these jets.",
             )
-            jet_mask = jet_mask & (events.Jet[self.b_score_column] >= 0)
         elif negative_b_score_action == "raise":
             raise Exception(msg)
+
+        # set jet mask to False when b_score is negative
+        if jet_mask is Ellipsis:
+            jet_mask = (events.Jet[self.b_score_column] >= 0)
+        else:
+            jet_mask = jet_mask & (events.Jet[self.b_score_column] >= 0)
 
     # get flat inputs, evaluated at jet_mask
     flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
