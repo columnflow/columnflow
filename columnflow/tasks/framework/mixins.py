@@ -2070,6 +2070,17 @@ class WeightProducerMixin(ConfigTask):
                 default_str="default_weight_producer",
                 multiple=False,
             )
+            if params["weight_producer"] is None:
+                raise Exception(
+                    f"no weight producer configured for task. {cls.task_family}. "
+                    "As of 02.05.2024, it is required to pass a weight_producer for tasks creating "
+                    "histograms. You can add a 'default_weight_producer' to your config or directly "
+                    "add the weight_producer on command line via the '--weight_producer' parameter. "
+                    "To reproduce results from before this date, you can use the "
+                    "'example' weight_producer defined in columnflow.weight.example, e.g. by adding "
+                    "The following line to your config: \n"
+                    "config.x.default_weight_producer = \"example\""
+                )
             params["weight_producer_inst"] = cls.get_weight_producer_inst(
                 params["weight_producer"],
                 params,
