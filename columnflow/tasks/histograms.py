@@ -77,6 +77,9 @@ class CreateHistograms(
                     for ml_model_inst in self.ml_model_insts
                 ]
 
+            # add weight_producer dependent requirements
+            reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+
         return reqs
 
     def requires(self):
@@ -96,6 +99,9 @@ class CreateHistograms(
                 for ml_model_inst in self.ml_model_insts
             ]
 
+        # add weight_producer dependent requirements
+        reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+
         return reqs
 
     @MergeReducedEventsUser.maybe_dummy
@@ -114,10 +120,14 @@ class CreateHistograms(
         from columnflow.columnar_util import Route, update_ak_array, add_ak_aliases, has_ak_column
 
         # prepare inputs and outputs
+        reqs = self.requires()
         inputs = self.input()
 
         # declare output: dict of histograms
         histograms = {}
+
+        # run the weight_producer setup
+        reader_targets = self.weight_producer_inst.run_setup(reqs["weight_producer"], inputs["weight_producer"])
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -149,89 +159,95 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0]["events"].path]
+        files = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"].path for inp in inputs["producers"]])
+            files.extend([inp["columns"] for inp in inputs["producers"]])
         if self.ml_model_insts:
-            files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
-        for (events, *columns), pos in self.iter_chunked_io(
-            files,
-            source_type=len(files) * ["awkward_parquet"],
-            read_columns=len(files) * [read_columns],
-        ):
-            # optional check for overlapping inputs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping([events] + list(columns))
+            files.extend([inp["mlcolumns"] for inp in inputs["ml"]])
 
-            # add additional columns
-            events = update_ak_array(events, *columns)
+        # prepare inputs for localization
+        with law.localize_file_targets(
+            [*files, *reader_targets.values()],
+            mode="r",
+        ) as inps:
+            for (events, *columns), pos in self.iter_chunked_io(
+                [inp.path for inp in inps],
+                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+            ):
+                # optional check for overlapping inputs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping([events] + list(columns))
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
+                # add additional columns
+                events = update_ak_array(events, *columns)
 
-            # build the full event weight
-            weight = (
-                ak.Array(np.ones(len(events), dtype=np.float32))
-                if self.weight_producer_inst.skip_func()
-                else self.weight_producer_inst(events)
-            )
-
-            # define and fill histograms, taking into account multiple axes
-            for var_key, var_names in self.variable_tuples.items():
-                # get variable instances
-                variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
-
-                # create the histogram if not present yet
-                if var_key not in histograms:
-                    h = (
-                        hist.Hist.new
-                        .IntCat([], name="category", growth=True)
-                        .IntCat([], name="process", growth=True)
-                        .IntCat([], name="shift", growth=True)
-                    )
-                    # add variable axes
-                    for variable_inst in variable_insts:
-                        h = h.Var(
-                            variable_inst.bin_edges,
-                            name=variable_inst.name,
-                            label=variable_inst.get_full_x_title(),
-                        )
-                    # enable weights and store it
-                    histograms[var_key] = h.Weight()
-
-                # merge category ids
-                category_ids = ak.concatenate(
-                    [Route(c).apply(events) for c in self.category_id_columns],
-                    axis=-1,
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
                 )
 
-                # broadcast arrays so that each event can be filled for all its categories
-                fill_kwargs = {
-                    "category": category_ids,
-                    "process": events.process_id,
-                    "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
-                    "weight": weight,
-                }
-                for variable_inst in variable_insts:
-                    # prepare the expression
-                    expr = variable_inst.expression
-                    if isinstance(expr, str):
-                        route = Route(expr)
-                        def expr(events, *args, **kwargs):
-                            if len(events) == 0 and not has_ak_column(events, route):
-                                return empty_f32
-                            return route.apply(events, null_value=variable_inst.null_value)
-                    # apply it
-                    fill_kwargs[variable_inst.name] = expr(events)
+                # build the full event weight
+                weight = (
+                    ak.Array(np.ones(len(events), dtype=np.float32))
+                    if self.weight_producer_inst.skip_func()
+                    else self.weight_producer_inst(events)
+                )
 
-                # broadcast and fill
-                arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                histograms[var_key].fill(**{field: arrays[field] for field in arrays.fields})
+                # define and fill histograms, taking into account multiple axes
+                for var_key, var_names in self.variable_tuples.items():
+                    # get variable instances
+                    variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+
+                    # create the histogram if not present yet
+                    if var_key not in histograms:
+                        h = (
+                            hist.Hist.new
+                            .IntCat([], name="category", growth=True)
+                            .IntCat([], name="process", growth=True)
+                            .IntCat([], name="shift", growth=True)
+                        )
+                        # add variable axes
+                        for variable_inst in variable_insts:
+                            h = h.Var(
+                                variable_inst.bin_edges,
+                                name=variable_inst.name,
+                                label=variable_inst.get_full_x_title(),
+                            )
+                        # enable weights and store it
+                        histograms[var_key] = h.Weight()
+
+                    # merge category ids
+                    category_ids = ak.concatenate(
+                        [Route(c).apply(events) for c in self.category_id_columns],
+                        axis=-1,
+                    )
+
+                    # broadcast arrays so that each event can be filled for all its categories
+                    fill_kwargs = {
+                        "category": category_ids,
+                        "process": events.process_id,
+                        "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
+                        "weight": weight,
+                    }
+                    for variable_inst in variable_insts:
+                        # prepare the expression
+                        expr = variable_inst.expression
+                        if isinstance(expr, str):
+                            route = Route(expr)
+                            def expr(events, *args, **kwargs):
+                                if len(events) == 0 and not has_ak_column(events, route):
+                                    return empty_f32
+                                return route.apply(events, null_value=variable_inst.null_value)
+                        # apply it
+                        fill_kwargs[variable_inst.name] = expr(events)
+
+                    # broadcast and fill
+                    arrays = ak.flatten(ak.cartesian(fill_kwargs))
+                    histograms[var_key].fill(**{field: arrays[field] for field in arrays.fields})
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
