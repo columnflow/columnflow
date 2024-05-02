@@ -197,8 +197,6 @@ class PrepareMLEvents(
         files = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
             files.extend([inp["columns"] for inp in inputs["producers"]])
-        if reader_targets:
-            files.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(
