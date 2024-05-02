@@ -2079,7 +2079,7 @@ class WeightProducerMixin(ConfigTask):
                     "To reproduce results from before this date, you can use the "
                     "'example' weight_producer defined in columnflow.weight.example, e.g. by adding "
                     "The following line to your config: \n"
-                    "config.x.default_weight_producer = \"example\""
+                    "config.x.default_weight_producer = \"example\"",
                 )
             params["weight_producer_inst"] = cls.get_weight_producer_inst(
                 params["weight_producer"],
