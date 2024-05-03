@@ -30,14 +30,14 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
 @example.init
 def example_init(self: WeightProducer) -> None:
     # store column names referring to weights to multiply
-    self.weight_columns = [
+    self.weight_columns = {
         "normalization_weight",
         "muon_weight",
-    ]
-    self.uses |= set(self.weight_columns)
+    }
+    self.uses |= self.weight_columns
 
     # declare shifts that the produced event weight depends on
-    shift_sources = [
+    shift_sources = {
         "mu",
-    ]
+    }
     self.shifts |= set(get_shifts_from_sources(self.config_inst, *shift_sources))
