@@ -20,8 +20,11 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
     # build the full event weight
     weight = ak.Array(np.ones(len(events)))
     if self.dataset_inst.is_mc and len(events):
+        # multiply weights from global config `event_weights` aux entry
         for column in self.config_inst.x.event_weights:
             weight = weight * Route(column).apply(events)
+
+        # multiply weights from dataset-specific `event_weights` aux entry
         for column in self.dataset_inst.x("event_weights", []):
             if has_ak_column(events, column):
                 weight = weight * Route(column).apply(events)
@@ -30,7 +33,6 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
                     f"missing_dataset_weight_{column}",
                     f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                 )
-
     return weight
 
 

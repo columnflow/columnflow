@@ -159,21 +159,21 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"] for inp in inputs["producers"]])
+            file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if self.ml_model_insts:
-            files.extend([inp["mlcolumns"] for inp in inputs["ml"]])
+            file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
 
         # prepare inputs for localization
         with law.localize_file_targets(
-            [*files, *reader_targets.values()],
+            [*file_targets, *reader_targets.values()],
             mode="r",
         ) as inps:
             for (events, *columns), pos in self.iter_chunked_io(
                 [inp.path for inp in inps],
-                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
-                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+                source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
