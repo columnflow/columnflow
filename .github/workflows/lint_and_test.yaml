@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: "3.10"
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: string
+        default: "True"
+        required: false
   # workflow_run:
   #   workflows:
   #     - Build Docker Containers
@@ -81,6 +86,7 @@ jobs:
       UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
       NAME: ${{ matrix.NAME }}
       USER: ${{ matrix.USER }}
+      FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
     secrets: inherit
 
 

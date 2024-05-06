@@ -30,6 +30,11 @@ on:
         type: string
         default: cf_user
         required: false
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: string
+        default: "True"
+        required: false
 
 jobs:
   test_sequence:
@@ -40,7 +45,7 @@ jobs:
         image: ${{ inputs.CONTAINER }}
         options: --user ${{ inputs.USER }}
         env:
-          CF_FORCE_COMPILE_ENV: True
+          CF_FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
     steps:
     #   - uses: actions/checkout@v3
     #     with:

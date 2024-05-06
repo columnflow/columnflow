@@ -1,0 +1,27 @@
+# This file is created and managed by `unidep` 0.57.0.
+# For details see https://github.com/basnijholt/unidep
+# File generated with: `unidep merge -o /columnflow/environment_linux-64_py3.10.yaml --overwrite-pin python=3.7 -d /columnflow`
+
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - libgcc-ng
+  - bash
+  - sel(linux): zsh
+  - python =3.7
+  - git
+  - git-lfs
+  - gfal2
+  - gfal2-util
+  - python-gfal2
+  - sel(linux): myproxy
+  - conda-pack
+  - unidep[all]
+  - pip-tools[toml]
+platforms:
+  - linux-64
+  - linux-aarch64
+  - linux-ppc64le
+  - osx-64
+  - osx-arm64

@@ -7,6 +7,11 @@ on:
                 required: false
                 type: string
                 default: "3.10"
+            FORCE_COMPILE_ENV:
+                description: "Force compile environment"
+                type: string
+                default: "True"
+                required: false
 
 jobs:
     build:
@@ -21,6 +26,7 @@ jobs:
         uses: ./.github/workflows/lint_and_test.yaml
         with:
             PYVERSION: ${{ inputs.PYVERSION }}
+            FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
         secrets: inherit
         
     
