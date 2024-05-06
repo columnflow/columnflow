@@ -805,14 +805,14 @@ class MLEvaluation(
                 )
 
                 # generate fold indices
-                fold_indices = events.deterministic_seed % self.ml_model_inst.folds
+                events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
 
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
                         stats=stats,
-                        fold_indices=fold_indices,
+                        fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
                     )
 
@@ -821,7 +821,7 @@ class MLEvaluation(
                     self,
                     events,
                     models,
-                    fold_indices,
+                    events.fold_indices,
                     events_used_in_training=events_used_in_training,
                 )
 
