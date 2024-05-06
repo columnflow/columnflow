@@ -191,7 +191,7 @@ class CreateHistograms(
                 )
 
                 # build the full event weight
-                weight = (
+                events, weight = (
                     ak.Array(np.ones(len(events), dtype=np.float32))
                     if self.weight_producer_inst.skip_func()
                     else self.weight_producer_inst(events)

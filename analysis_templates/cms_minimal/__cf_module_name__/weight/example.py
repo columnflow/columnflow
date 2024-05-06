@@ -24,7 +24,7 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
     for column in self.weight_columns:
         weight = weight * Route(column).apply(events)
 
-    return weight
+    return events, weight
 
 
 @example.init

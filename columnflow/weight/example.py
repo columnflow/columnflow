@@ -16,7 +16,7 @@ ak = maybe_import("awkward")
     # only run on mc
     mc_only=True,
 )
-def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
+def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
     # build the full event weight
     weight = ak.Array(np.ones(len(events)))
     if self.dataset_inst.is_mc and len(events):
@@ -33,11 +33,11 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
                     f"missing_dataset_weight_{column}",
                     f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                 )
-    return weight
+    return events, weight
 
 
-@example.init
-def example_init(self: WeightProducer) -> None:
+@all_weights.init
+def all_weights_init(self: WeightProducer) -> None:
     weight_columns = set()
 
     # add used weight columns and declare shifts that the produced event weight depends on

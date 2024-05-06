@@ -2077,9 +2077,9 @@ class WeightProducerMixin(ConfigTask):
                     "histograms. You can add a 'default_weight_producer' to your config or directly "
                     "add the weight_producer on command line via the '--weight_producer' parameter. "
                     "To reproduce results from before this date, you can use the "
-                    "'example' weight_producer defined in columnflow.weight.example, e.g. by adding "
+                    "'all_weights' weight_producer defined in columnflow.weight.example, e.g. by adding "
                     "The following line to your config: \n"
-                    "config.x.default_weight_producer = \"example\"",
+                    "config.x.default_weight_producer = \"all_weights\"",
                 )
             params["weight_producer_inst"] = cls.get_weight_producer_inst(
                 params["weight_producer"],
