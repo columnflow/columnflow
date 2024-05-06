@@ -191,6 +191,14 @@ def btag_weights(
                     direction,
                     f"btag_weight_{name}_{direction}",
                 )
+                if syst_name in ["cferr1", "cferr2"]:
+                    # for c flavor uncertainties, multiply the uncertainty with the nominal btag weight
+                    events = set_ak_column(
+                        events,
+                        f"btag_weight_{name}_{direction}",
+                        events.btag_weight * events[f"btag_weight_{name}_{direction}"],
+                        value_type=np.float32,
+                    )
     elif self.shift_is_known_jec_source:
         # TODO: year dependent jec variations fully covered?
         events = add_weight(
