@@ -621,7 +621,7 @@ EOF
                 
                 
                 cf_color cyan "building micromamba command"
-                export CONDA_ENV_FILE="${CF_BASE}/environment_${system}_py${pyv}.yaml"
+                export CONDA_ENV_FILE="${CF_BASE}/sandboxes/environment_${system}_py${pyv}.yaml"
                 #
                 if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
                     # compile micromamba environment.yaml file from pyproject.toml
