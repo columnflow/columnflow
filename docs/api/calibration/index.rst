@@ -1,20 +1,15 @@
 ``columnflow.calibration``
 ==========================
 
+.. currentmodule:: columnflow.calibration
 .. automodule:: columnflow.calibration
    :autosummary:
    :members:
+   :undoc-members:
 
-.. currentmodule:: columnflow.calibration
-
-Summary
--------
-.. :autoclass:: Calibrator
-   :members:
-   :inherited-members:
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    util
-   cms
+   cms/index

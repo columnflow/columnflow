@@ -1,5 +1,5 @@
-``columnflow.calibration.cms``
-===============================
+``cms``
+=======
 .. automodule:: columnflow.calibration.cms
 .. currentmodule:: columnflow.calibration.cms
    

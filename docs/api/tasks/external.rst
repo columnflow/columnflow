@@ -1,6 +1,9 @@
-``columnflow.tasks.external``
-==============================
+``external``
+============
 
+.. currentmodule:: columnflow.tasks.external
 .. automodule:: columnflow.tasks.external
-   :autosummary:
-   :members:
+    :autosummary:
+    :members:
+    :undoc-members:
+
