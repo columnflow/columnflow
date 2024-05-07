@@ -113,16 +113,17 @@ setup_venv() {
     fi
 
     local SOURCE="$CF_BASE"
+    local EXTRAS=""
+    if [ ! -z "${CF_VENV_EXTRAS}" ]; then
+        EXTRAS="--extra ${CF_VENV_EXTRAS}"
+        SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
+    fi
     # build requirements if needed
     cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
     if [ ! -f $CF_VENV_REQUIREMENTS ]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
-        local EXTRAS=""
-        if [ ! -z "${CF_VENV_EXTRAS}" ]; then
-            EXTRAS="--extra ${CF_VENV_EXTRAS}"
-            SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
-        fi
+        
         cmd="pip-compile -r \
             --output-file ${TMP_REQS} \
             --no-annotate --strip-extras --no-header --unsafe-package '' \
@@ -288,7 +289,7 @@ setup_venv() {
             }
 
             # update packaging tools
-            add_requirements pip setuptools
+            add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
             eval "python -m pip install --force wheel"

@@ -14,5 +14,7 @@ action() {
     export CF_VENV_REQUIREMENTS="${this_dir}/requirements_columnar.txt"
     export CF_VENV_ADDITIONAL_REQUIREMENTS=""
     export CF_VENV_EXTRAS="columnar"
+
+    source "${this_dir}/_setup_venv.sh" "$@"
 }
 action "$@"
