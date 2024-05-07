@@ -61,6 +61,9 @@ def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
 
 @all_weights.init
 def all_weights_init(self: WeightProducer) -> None:
+    if not getattr(self, "dataset_inst", None):
+        return
+
     weight_columns = set()
 
     # add used weight columns and declare shifts that the produced event weight depends on
