@@ -1,6 +1,6 @@
-# This file is created and managed by `unidep` 0.57.0.
+# This file is created and managed by `unidep` 0.54.1.
 # For details see https://github.com/basnijholt/unidep
-# File generated with: `unidep merge -o /columnflow/environment_linux-64_py3.10.yaml --overwrite-pin python=3.7 -d /columnflow`
+# File generated with: `unidep merge -o /nfs/dust/cms/user/pkeicher/uhh/u4h/hh2bbtautau/modules/columnflow/sandboxes/environment_linux-64_py3.9.yaml --overwrite-pin python=3.9 -d /nfs/dust/cms/user/pkeicher/uhh/u4h/hh2bbtautau/modules/columnflow`
 
 channels:
   - conda-forge
@@ -9,7 +9,7 @@ dependencies:
   - libgcc-ng
   - bash
   - sel(linux): zsh
-  - python =3.7
+  - python =3.9
   - git
   - git-lfs
   - gfal2
