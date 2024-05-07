@@ -17,6 +17,29 @@ ak = maybe_import("awkward")
     mc_only=True,
 )
 def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    WeightProducer that combines all event weights from the *event_weights* aux entry from either
+    the config or the dataset. The weights are multiplied together to form the full event weight.
+
+    The expected structure of the *event_weights* aux entry is a dictionary with the weight column
+    name as key and a list of shift sources as value. The shift sources are used to declare the
+    shifts that the produced event weight depends on. Example:
+
+    .. code-block:: python
+
+        from columnflow.config_util import get_shifts_from_sources
+        # add weights and their corresponding shifts for all datasets
+        cfg.x.event_weights = {
+            "normalization_weight": [],
+            "muon_weight": get_shifts_from_sources(config, "mu_sf"),
+            "btag_weight": get_shifts_from_sources(config, f"btag_hf", "btag_lf"),
+        }
+        for dataset_inst in cfg.datasets:
+            # add dataset-specific weights and their corresponding shifts
+            dataset.x.event_weights = {}
+            if not dataset_inst.has_tag("skip_pdf"):
+                dataset_inst.event_weights["pdf_weight"] = get_shifts_from_sources(config, "pdf")
+    """
     # build the full event weight
     weight = ak.Array(np.ones(len(events)))
     if self.dataset_inst.is_mc and len(events):
