@@ -66,6 +66,7 @@ def muon_weights(
     variable_map = {
         "year": self.year,
         "abseta": abs_eta,
+        "eta": abs_eta,
         "pt": pt,
     }
 
