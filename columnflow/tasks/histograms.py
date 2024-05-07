@@ -191,11 +191,10 @@ class CreateHistograms(
                 )
 
                 # build the full event weight
-                events, weight = (
-                    ak.Array(np.ones(len(events), dtype=np.float32))
-                    if self.weight_producer_inst.skip_func()
-                    else self.weight_producer_inst(events)
-                )
+                if not self.weight_producer_inst.skip_func():
+                    events, weight = self.weight_producer_inst(events)
+                else:
+                    weight = ak.Array(np.ones(len(events), dtype=np.float32))
 
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
