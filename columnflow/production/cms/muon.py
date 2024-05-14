@@ -26,6 +26,7 @@ ak = maybe_import("awkward")
     # function to determine the muon weight config
     get_muon_config=(lambda self: self.config_inst.x.muon_sf_names),
     weight_name=(lambda self: "muon_weight"),
+    supported_versions=(1, 2),
 )
 def muon_weights(
     self: Producer,
@@ -124,7 +125,7 @@ def muon_weights_setup(
     self.muon_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    if self.muon_sf_corrector.version not in (1,):
+    if self.supported_versions and self.muon_sf_corrector.version not in self.supported_versions:
         raise Exception(f"unsuppprted muon sf corrector version {self.muon_sf_corrector.version}")
 
 
