@@ -15,99 +15,6 @@ from columnflow.util import maybe_import, DotDict, dev_sandbox, try_int
 
 np = maybe_import("numpy")
 
-PlotCutflow.relative = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="name of the variable to use for obtaining event counts; default: 'False'",
-    )
-
-@law.decorator.log
-@view_output_plots
-def PlotCutflow_run(self):
-    import hist
-
-    # prepare config objects
-    category_inst = self.config_inst.get_category(self.branch_data)
-    leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
-    process_insts = list(map(self.config_inst.get_process, self.processes))
-    sub_process_insts = {
-        proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
-        for proc in process_insts
-    }
-
-    # histogram data per process
-    hists = {}
-
-    with self.publish_step(f"plotting cutflow in {category_inst.name}"):
-        for dataset, inp in self.input().items():
-            dataset_inst = self.config_inst.get_dataset(dataset)
-            h_in = inp[self.variable].load(formatter="pickle")
-
-            # sanity checks
-            n_shifts = len(h_in.axes["shift"])
-            if n_shifts != 1:
-                raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
-
-            # loop and extract one histogram per process
-            for process_inst in process_insts:
-                # skip when the dataset is already known to not contain any sub process
-                if not any(map(dataset_inst.has_process, sub_process_insts[process_inst])):
-                    continue
-
-                # work on a copy
-                h = h_in.copy()
-
-                # axis selections
-                h = h[{
-                    "process": [
-                        hist.loc(p.id)
-                        for p in sub_process_insts[process_inst]
-                        if p.id in h.axes["process"]
-                    ],
-                    "category": [
-                        hist.loc(c.id)
-                        for c in leaf_category_insts
-                        if c.id in h.axes["category"]
-                    ],
-                }]
-
-                # axis reductions
-                h = h[{"process": sum, "category": sum, self.variable: sum}]
-
-                # add the histogram
-                if process_inst in hists:
-                    hists[process_inst] += h
-                else:
-                    hists[process_inst] = h
-
-        # there should be hists to plot
-        if not hists:
-            raise Exception("no histograms found to plot")
-
-        total = sum(hists.values()).values() if self.relative else np.ones((len(self.selector_steps) + 1, 1))
-
-        # sort hists by process order
-        hists = OrderedDict(
-            (process_inst.copy_shallow(), hists[process_inst] / total)
-            for process_inst in sorted(hists, key=process_insts.index)
-        )
-
-        # call the plot function
-        fig, _ = self.call_plot_func(
-            self.plot_function,
-            hists=hists,
-            config_inst=self.config_inst,
-            category_inst=category_inst.copy_shallow(),
-            **self.get_plot_parameters(),
-        )
-
-        # save the plot
-        for outp in self.output()["plots"]:
-            outp.dump(fig, formatter="mpl")
-
-
-PlotCutflow.run = PlotCutflow_run
-
 
 class CreateCutflowTable(
     DatasetsProcessesMixin,
@@ -138,11 +45,11 @@ class CreateCutflowTable(
         description="when True, uncertainties are not displayed in the table; default: False",
     )
     normalize_yields = luigi.ChoiceParameter(
-        choices=(law.NO_STR, "per_process", "per_step", "all"),
+        choices=(law.NO_STR, "per_process", "per_step", "per_process_100", "per_step_100", "all_100"),
         default=law.NO_STR,
         significant=False,
         description="string parameter to define the normalization of the yields; "
-        "choices: '', per_process, per_category, all; empty default",
+        "choices: '', per_process, per_category, all; Append 100 to express as percentage; empty default",
     )
     output_suffix = luigi.Parameter(
         default=law.NO_STR,
@@ -154,7 +61,7 @@ class CreateCutflowTable(
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
-        CreateCutflowHistograms=CreateCutflowHistograms,
+        MergeCutflowHistograms=MergeCutflowHistograms,
     )
 
     def create_branch_map(self):
@@ -171,7 +78,7 @@ class CreateCutflowTable(
         reqs = super().workflow_requires()
 
         reqs["hists"] = [
-            self.reqs.CreateCutflowHistograms.req(
+            self.reqs.MergeCutflowHistograms.req(
                 self,
                 dataset=d,
                 variables=("event",),
@@ -183,7 +90,7 @@ class CreateCutflowTable(
 
     def requires(self):
         return {
-            d: self.reqs.CreateCutflowHistograms.req(
+            d: self.reqs.MergeCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
@@ -236,7 +143,7 @@ class CreateCutflowTable(
                 dataset_inst = self.config_inst.get_dataset(dataset)
 
                 # load the histogram of the variable named "event"
-                h_in = inp["event"].load(formatter="pickle")
+                h_in = inp["hists"]["event"].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -304,20 +211,20 @@ class CreateCutflowTable(
                     yields[step].append(value)
 
             # obtain normalizaton factors
-            norm_factors = 1
+            norm_factors = 0.01 if '100' in self.normalize_yields else 1
             if self.normalize_yields == "all":
-                norm_factors = sum(
+                norm_factors *= sum(
                     sum(step_yields)
                     for step_yields in yields.values()
                 )
-            elif self.normalize_yields == "per_process":
+            elif self.normalize_yields.startswith("per_process"):
                 norm_factors = [
-                    sum(yields[step][i] for step in yields.keys())
+                    norm_factors * sum(yields[step][i] for step in yields.keys())
                     for i in range(len(yields[self.selector_steps[0]]))
                 ]
-            elif self.normalize_yields == "per_step":
+            elif self.normalize_yields.startswith("per_step"):
                 norm_factors = {
-                    step: sum(step_yields)
+                    step: norm_factors * sum(step_yields)
                     for step, step_yields in yields.items()
                 }
 
@@ -329,9 +236,9 @@ class CreateCutflowTable(
             for step, step_yields in yields.items():
                 for i, value in enumerate(step_yields):
                     # get correct norm factor per category and process
-                    if self.normalize_yields == "per_process":
+                    if self.normalize_yields.startswith("per_process"):
                         norm_factor = norm_factors[i]
-                    elif self.normalize_yields == "per_step":
+                    elif self.normalize_yields.startswith("per_step"):
                         norm_factor = norm_factors[step]
                     else:
                         norm_factor = norm_factors

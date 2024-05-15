@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -268,27 +268,15 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    VariablesMixin,
+    MergeHistogramMixin,
     WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    only_missing = luigi.BoolParameter(
-        default=False,
-        description="when True, identify missing variables first and only require histograms of "
-        "missing ones; default: False",
-    )
-    remove_previous = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="when True, remove particlar input histograms after merging; default: False",
-    )
-
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -296,68 +284,6 @@ class MergeHistograms(
         RemoteWorkflow.reqs,
         CreateHistograms=CreateHistograms,
     )
-
-    def create_branch_map(self):
-        # create a dummy branch map so that this task could be submitted as a job
-        return {0: None}
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-
-        reqs["hists"] = self.as_branch().requires()
-
-        return reqs
-
-    def requires(self):
-        # optional dynamic behavior: determine not yet created variables and require only those
-        prefer_cli = {"variables"}
-        variables = self.variables
-        if self.only_missing:
-            prefer_cli.clear()
-            missing = self.output().count(existing=False, keys=True)[1]
-            variables = tuple(sorted(missing, key=variables.index))
-
-        if not variables:
-            return []
-
-        return self.reqs.CreateHistograms.req(
-            self,
-            branch=-1,
-            variables=tuple(variables),
-            _exclude={"branches"},
-            _prefer_cli=prefer_cli,
-        )
-
-    def output(self):
-        return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"hist__{variable_name}.pickle")
-            for variable_name in self.variables
-        })}
-
-    @law.decorator.log
-    def run(self):
-        # preare inputs and outputs
-        inputs = self.input()["collection"]
-        outputs = self.output()
-
-        # load input histograms
-        hists = [
-            inp["hists"].load(formatter="pickle")
-            for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
-        ]
-
-        # create a separate file per output variable
-        variable_names = list(hists[0].keys())
-        for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
-            self.publish_message(f"merging histograms for '{variable_name}'")
-
-            variable_hists = [h[variable_name] for h in hists]
-            merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outputs["hists"][variable_name].dump(merged, formatter="pickle")
-
-        # optionally remove inputs
-        if self.remove_previous:
-            inputs.remove()
 
 
 MergeHistogramsWrapper = wrapper_factory(
