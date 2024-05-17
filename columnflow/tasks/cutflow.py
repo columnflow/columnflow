@@ -368,6 +368,12 @@ class PlotCutflow(
         description="plot cutflow as fraction of total at each step",
     )
 
+    skip_initial = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="do not plot the event selection before applying any steps",
+    )
+
     # upstream requirements
     reqs = Requirements(
         PlotCutflowBase.reqs,
@@ -467,6 +473,9 @@ class PlotCutflow(
 
                     # axis reductions
                     h = h[{"process": sum, "category": sum, self.variable: sum}]
+
+                    if self.skip_initial:
+                        h = h[{"step": self.selector_steps}]
 
                     # add the histogram
                     if process_inst in hists:
