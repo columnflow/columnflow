@@ -118,7 +118,16 @@ setup_venv() {
         EXTRAS="--extra ${CF_VENV_EXTRAS}"
         SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
     fi
-    # build requirements if needed
+
+    if [[ "${CF_VENV_REQUIREMENTS}" != *"python_${pyv}"* ]]; then
+        local req_dir=`dirname ${CF_VENV_REQUIREMENTS}`
+        local req_file=`basename ${CF_VENV_REQUIREMENTS}`
+        local new_env_reqs="${req_dir}/python_${pyv}_${req_file}"
+        # build requirements if needed
+        cf_color magenta "updating requirements file '${CF_VENV_REQUIREMENTS}' to '${new_env_reqs}"
+        export CF_VENV_REQUIREMENTS="${new_env_reqs}"
+    fi
+    
     cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
     if [ ! -f $CF_VENV_REQUIREMENTS ]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
