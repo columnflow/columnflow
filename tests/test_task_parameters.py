@@ -14,6 +14,11 @@ class TaskParametersTest(unittest.TestCase):
         super().__init__(*args, **kwargs)
 
     def test_settings_parameter(self):
+        # check that the default delimiters have not been changed
+        self.assertEqual(SettingsParameter.settings_delimiter, "=")
+        self.assertEqual(SettingsParameter.tuple_delimiter, ";")
+
+        # initialize a SettingParameter
         p = SettingsParameter()
 
         # parsing
@@ -46,6 +51,7 @@ class TaskParametersTest(unittest.TestCase):
         )
 
     def test_multi_settings_parameter(self):
+        # initialize a MultiSettingsParameter
         p = MultiSettingsParameter()
 
         # parsing
