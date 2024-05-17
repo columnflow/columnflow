@@ -25,7 +25,7 @@ ak = maybe_import("awkward")
     get_muon_file=(lambda self, external_files: external_files.muon_sf),
     # function to determine the muon weight config
     get_muon_config=(lambda self: self.config_inst.x.muon_sf_names),
-    weight_name=(lambda self: "muon_weight"),
+    weight_name="muon_weight",
     supported_versions=(1, 2),
 )
 def muon_weights(
@@ -92,7 +92,7 @@ def muon_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"{self.weight_name()}{postfix}", weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", weight, value_type=np.float32)
 
     return events
 
@@ -131,5 +131,5 @@ def muon_weights_setup(
 
 @muon_weights.init
 def muon_weights_init(self: Producer, **kwargs) -> None:
-    weight_name = self.weight_name()
+    weight_name = self.weight_name
     self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
