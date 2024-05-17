@@ -197,8 +197,6 @@ class PrepareMLEvents(
         files = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
             files.extend([inp["columns"] for inp in inputs["producers"]])
-        if reader_targets:
-            files.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(
@@ -773,21 +771,21 @@ class MLEvaluation(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"] for inp in inputs["producers"]])
+            file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if reader_targets:
-            files.extend(reader_targets.values())
+            file_targets.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(
-            [*files, *reader_targets.values()],
+            [*file_targets, *reader_targets.values()],
             mode="r",
         ) as inps:
             for (events, *columns), pos in self.iter_chunked_io(
                 [inp.path for inp in inps],
-                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
-                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+                source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
