@@ -7,8 +7,20 @@ on:
       PYVERSION: 
         description: "Python version to be used for build"
         required: false
-        type: string
+        type: choice
         default: "3.10"
+        options:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: choice
+        default: "True"
+        required: false
+        options:
+          - "True"
+          - "False"
   workflow_call:
     inputs:
       PYVERSION: 

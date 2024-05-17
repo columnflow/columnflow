@@ -2,6 +2,16 @@ name: "Build images and test for multiple python versions"
 on:
     push:
     workflow_dispatch:
+        inputs:
+            PYVERSION: 
+              description: "Python version to be used for build"
+              required: false
+              type: choice
+              default: "3.10"
+              options:
+                - "3.9"
+                - "3.10"
+                - "3.11"
 
 jobs:
     do_all:
