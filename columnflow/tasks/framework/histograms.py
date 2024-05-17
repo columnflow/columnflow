@@ -4,8 +4,10 @@
 Base tasks for working with multiple merged histograms.
 """
 
+from __future__ import annotations
 
 import law
+import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
@@ -17,6 +19,7 @@ from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
 
 ak = maybe_import("awkward")
+hist = maybe_import("hist")
 
 
 class HistogramsUserBase(
@@ -36,11 +39,46 @@ class HistogramsUserBase(
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
 
-    def load_histogram(self, dataset, variable):
+    def load_histogram(
+        self,
+        dataset: str | od.Dataset,
+        variable: str | od.Variable,
+    ) -> hist.Hist:
+        """
+        Helper function to load the histogram from the input for a given dataset and variable.
+
+        :param dataset: The dataset name or instance.
+        :param variable: The variable name or instance.
+        :return: The loaded histogram.
+        """
+        if isinstance(dataset, od.Dataset):
+            dataset = dataset.name
+        if isinstance(variable, od.Variable):
+            variable = variable.name
         histogram = self.input()[dataset]["collection"][0]["hists"].targets[variable].load(formatter="pickle")
         return histogram
 
-    def slice_histogram(self, histogram, processes, categories, shifts, reduce_axes: bool = False):
+    def slice_histogram(
+        self,
+        histogram: hist.Hist,
+        processes: str | list[str],
+        categories: str | list[str],
+        shifts: str | list[str],
+        reduce_axes: bool = False,
+    ) -> hist.Hist:
+        """
+        Slice a histogram by processes, categories, and shifts.
+
+        This function takes a histogram and slices it based on the specified processes, categories, and shifts.
+        It returns the sliced histogram.
+
+        :param histogram: The histogram to slice. It must have the axes "process", "category", and "shift".
+        :param processes: The process name(s) to slice by. Can be a single process name or a list of process names.
+        :param categories: The category name(s) to slice by. Can be a single category name or a list of category names.
+        :param shifts: The shift name(s) to slice by. Can be a single shift name or a list of shift names.
+        :param reduce_axes: Whether to sum over the process, category, and shift axes after slicing.
+        :return: The sliced histogram.
+        """
         import hist
 
         def flatten_nested_list(nested_list):
