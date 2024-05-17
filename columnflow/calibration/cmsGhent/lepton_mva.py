@@ -101,6 +101,14 @@ def lepton_mva_producer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
                     "Electron": f"YOURDIRECTORY/weights/el_TOPUL18_XGB.weights.bin",
                 },
         })
+
+    Requires adding the environment venv_lepton_mva which included xgboost to the analysis or config. E.g.
+
+    analysis_inst.x.bash_sandboxes = [
+        "$CF_BASE/sandboxes/cf.sh",
+        "$CF_BASE/sandboxes/venv_lepton_mva.sh",
+    ]
+
     """
     events = self[lepton_mva_inputs_producer](events)
     for lepton in ["Muon", "Electron"]:
