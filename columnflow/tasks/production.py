@@ -3,12 +3,13 @@
 """
 Tasks related to producing new columns.
 """
+import itertools
 
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin, ProducersMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
@@ -165,8 +166,25 @@ ProduceColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_input
 )
 
 
-ProduceColumnsWrapper = wrapper_factory(
+ProduceColumnsWrapperBase = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=ProduceColumns,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
+ProduceColumnsWrapperBase.exclude_index = True
+
+
+class ProduceColumnsWrapper(
+    ProduceColumnsWrapperBase,
+    ProducersMixin,
+
+):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # add the producers parameter
+        self.wrapper_fields.extend(["producer"])
+
+        combined_parameters = itertools.product(self.wrapper_parameters, self.producers)
+        combined_parameters = [params_tuple + (producer,) for params_tuple, producer in combined_parameters]
+        self.wrapper_parameters = combined_parameters
