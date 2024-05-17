@@ -2,6 +2,16 @@ name: Build Docker Containers
 on:
   # push:
   workflow_dispatch:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: choice
+        default: "3.10"
+        options:
+          - "3.9"
+          - "3.10"
+          - "3.11"
   workflow_call:
     inputs:
       PYVERSION: 
@@ -63,7 +73,7 @@ jobs:
         packages: write
       name: Build base software
       with:
-        IMAGE_NAME: "software-base"
+        IMAGE_NAME: "software-base-dev"
         PUSH_IMAGE: true
         PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
         BUILD_ARGS: |
