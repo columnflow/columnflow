@@ -202,8 +202,9 @@ def prepare_style_config(
 
     # disable minor ticks based on variable_inst
     if variable_inst.discrete_x:
-        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
-        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
+        # TODO: options for very large ranges, or non-uniform discrete x
+        tx = range(int(xlim[0]), int(xlim[1]+1))
+        style_config["ax_cfg"]["xticks"] = tx
         style_config["ax_cfg"]["minorxticks"] = []
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
