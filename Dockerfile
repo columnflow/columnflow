@@ -28,7 +28,7 @@ RUN if [ -z $pyversion ]; then echo "export PYVERSION=\"$(python -c 'import plat
 # executable: Executable to run the container. This should be either the basic
 #             setup.sh script or a script to create a specific sandbox.
 #             All paths should be relative to the Columnflow base directory.
-ARG exe_file
+ARG exe_files
 RUN apt-get update
 RUN apt-get install curl nano less vim locales git git-lfs -y
 RUN locale-gen en_US
@@ -55,7 +55,7 @@ WORKDIR ${CF_BASE}
 
 RUN source ./setup.sh 
 
-RUN if [ "${exe_file}" != "setup.sh" ]; then source ./setup.sh && source ${exe_file}; fi
+RUN for exe_file in ${foo//,/ }; do if [ "${exe_file}" != "setup.sh" ]; then source ./setup.sh && source ${exe_file}; fi ; done
 
 # setup ownership so user can also run things
 RUN chown cf_user:cf_user_base ${CF_BASE} -R
