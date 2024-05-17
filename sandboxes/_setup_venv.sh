@@ -68,6 +68,8 @@ setup_venv() {
 
     local mode="${1:-}"
     local versioncheck="${2:-warn}"
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
+
 
     # default mode
     if [ -z "${mode}" ]; then
@@ -171,7 +173,6 @@ setup_venv() {
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
     local venv_version="$( cat "${first_requirement_file}" | awk '/# version /{print $3}' )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
-    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
 
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
