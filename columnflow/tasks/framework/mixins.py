@@ -668,7 +668,7 @@ class SelectorStepsMixin(SelectorMixin):
         parts = super().store_parts()
 
         steps = self.selector_steps
-        if not self.selector_steps_order_sensitive:
+        if not self.selector_steps_order_sensitive and steps is not None:
             steps = sorted(steps)
         if steps is not None:
             parts["selector"] += ("__steps_" + "_".join(steps) if steps else "__inclusive")
