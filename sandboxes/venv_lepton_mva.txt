@@ -1,5 +1,5 @@
 # version 1
 
--r ../modules/columnflow/sandboxes/columnar.txt
+-r columnar.txt
 
 xgboost==2.0.2
