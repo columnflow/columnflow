@@ -1403,7 +1403,11 @@ class MLModelTrainingMixin(MLModelMixinBase):
             analysis_inst = params["analysis_inst"]
 
             # NOTE: we could try to implement resolving the default ml_model here
-            ml_model_inst = cls.get_ml_model_inst(params["ml_model"], analysis_inst, **params["ml_model_settings"])
+            ml_model_inst = cls.get_ml_model_inst(
+                params["ml_model"],
+                analysis_inst,
+                parameters=params["ml_model_settings"],
+            )
             params["ml_model_inst"] = ml_model_inst
 
             # resolve configs
@@ -1437,7 +1441,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
             self.ml_model,
             self.analysis_inst,
             configs=list(self.configs),
-            **self.ml_model_settings,
+            parameters=self.ml_model_settings,
         )
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
@@ -1531,6 +1535,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
                     params["ml_model"],
                     analysis_inst,
                     requested_configs=[config_inst],
+                    parameters=params["ml_model_settings"],
                 )
             elif not cls.allow_empty_ml_model:
                 raise Exception(f"no ml_model configured for {cls.task_family}")
@@ -1547,6 +1552,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
                 self.ml_model,
                 self.analysis_inst,
                 requested_configs=[self.config_inst],
+                parameters=self.ml_model_settings,
             )
 
     def store_parts(self) -> law.util.InsertableDict:
