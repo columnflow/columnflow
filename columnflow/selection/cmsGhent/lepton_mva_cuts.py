@@ -83,6 +83,6 @@ def lepton_mva_object(
         objects={
             lep:
                 {lep: masked_sorted_indices(events[lep][working_point[lep]], events[lep].pt)}
-            for lep in ["Muon", "Electrion"]
+            for lep in ["Muon", "Electron"]
         },
     )
