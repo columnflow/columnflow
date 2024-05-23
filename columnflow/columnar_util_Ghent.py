@@ -7,7 +7,7 @@ Helpers and utilities for working with columnar libraries (Ghent cms group)
 from __future__ import annotations
 
 __all__ = [
-    "TetraVec"
+    "TetraVec", "safe_concatenate",
 ]
 
 from columnflow.util import maybe_import
@@ -26,3 +26,12 @@ def TetraVec(arr: ak.Array) -> ak.Array:
     with_name="PtEtaPhiMLorentzVector",
     behavior=coffea.nanoevents.methods.vector.behavior)
     return TetraVec
+
+
+def safe_concatenate(arrays, *args, **kwargs):
+    n = len(arrays)
+    if n > 2 ** 7:
+        c1 = safe_concatenate(arrays[:n // 2], *args, **kwargs)
+        c2 = safe_concatenate(arrays[n // 2:], *args, **kwargs)
+        return ak.concatenate([c1, c2], *args, **kwargs)
+    return ak.concatenate(arrays, *args, **kwargs)
