@@ -122,7 +122,7 @@ class ReduceEvents(
         # define columns to read for the differently structured selection masks
         read_sel_columns = set()
         # open either selector steps of the full event selection mask
-        read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
+        read_sel_columns.add(Route("steps.*" if self.selector_steps and self.selector_steps != self.selector_steps_default  else "event"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
         sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
@@ -183,7 +183,7 @@ class ReduceEvents(
             )
 
             # build the event mask
-            if self.selector_steps:
+            if self.selector_steps and self.selector_steps != self.selector_steps_default:
                 # check if all steps are present
                 missing_steps = set(self.selector_steps) - set(sel.steps.fields)
                 if missing_steps:
