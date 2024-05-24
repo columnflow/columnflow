@@ -152,6 +152,13 @@ class MLModel(Derivable):
         if "configs" in kwargs:
             self._setup(kwargs["configs"])
 
+    def __str__(self):
+        """
+        Returns a string representation of this model instance. The string is composed of the class
+        name and the string representation of all parameters.
+        """
+        return f"{self.cls_name}__{self.parameters_repr}"
+
     @property
     def config_inst(self: MLModel) -> od.Config:
         if self.single_config and len(self.config_insts) != 1:
@@ -184,6 +191,24 @@ class MLModel(Derivable):
 
         # any other case
         return str(value)
+
+    @property
+    def parameters_repr(self: MLModel) -> str:
+        """
+        Returns a hash of string representation of all parameters. This is used to uniquely identify
+        a model instance based on its parameters.
+
+        :raises: Exception in case the parameters_repr changed after it was set.
+        :returns: String representation of all parameters.
+        """
+        parameters_repr = law.util.create_hash(self._join_parameter_pairs(only_significant=True))
+        if hasattr(self, "_parameters_repr") and self._parameters_repr != parameters_repr:
+            raise Exception(
+                f"parameters_repr changed from {self._parameters_repr} to {parameters_repr};"
+                "this should not happen",
+            )
+        self._parameters_repr = parameters_repr
+        return self._parameters_repr
 
     def _join_parameter_pairs(self: MLModel, only_significant: bool = True) -> str:
         """

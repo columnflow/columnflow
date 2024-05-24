@@ -1070,20 +1070,8 @@ class MLModelMixinBase(AnalysisTask):
 
     @property
     def ml_model_repr(self):
-        """Returns a string representation of the ML model and it's settings."""
-        if hasattr(self, "_ml_model_repr"):
-            # if existing, return the cached value
-            return self._ml_model_repr
-
-        repr = self.ml_model_inst.cls_name
-
-        if hasattr(self.ml_model_inst, "parameters_repr"):
-            # if existing, return the parameters_repr of the ml_model_inst
-            repr += f"__{self.ml_model_inst.parameters_repr}"
-
-        # cache the value and return it
-        self._ml_model_repr = repr
-        return self._ml_model_repr
+        """Returns a string representation of the ML model instance."""
+        return str(self.ml_model_inst)
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
@@ -1600,6 +1588,12 @@ class MLModelsMixin(ConfigTask):
 
     exclude_params_repr_empty = {"ml_models"}
 
+    @property
+    def ml_models_repr(self):
+        """Returns a string representation of the ML models."""
+        ml_models_repr = "__".join([str(model_inst) for model_inst in self.ml_model_insts])
+        return ml_models_repr
+
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
@@ -1655,8 +1649,7 @@ class MLModelsMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            part = "__".join(model_inst.cls_name for model_inst in self.ml_model_insts)
-            parts.insert_before("version", "ml_models", f"ml__{part}")
+            parts.insert_before("version", "ml_models", f"ml__{self.ml_models_repr}")
 
         return parts
 
