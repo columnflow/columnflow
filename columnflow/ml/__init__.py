@@ -157,7 +157,10 @@ class MLModel(Derivable):
         Returns a string representation of this model instance. The string is composed of the class
         name and the string representation of all parameters.
         """
-        return f"{self.cls_name}__{self.parameters_repr}"
+        model_str = f"{self.cls_name}"
+        if self.parameters_repr:
+            model_str += f"__{self.parameters_repr}"
+        return model_str
 
     @property
     def config_inst(self: MLModel) -> od.Config:
@@ -201,6 +204,8 @@ class MLModel(Derivable):
         :raises: Exception in case the parameters_repr changed after it was set.
         :returns: String representation of all parameters.
         """
+        if not self.parameters:
+            return ""
         parameters_repr = law.util.create_hash(self._join_parameter_pairs(only_significant=True))
         if hasattr(self, "_parameters_repr") and self._parameters_repr != parameters_repr:
             raise Exception(
