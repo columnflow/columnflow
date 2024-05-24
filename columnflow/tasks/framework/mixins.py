@@ -180,6 +180,9 @@ class CalibratorMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._calibrator_inst.sandbox:
                 self.sandbox = self._calibrator_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._calibrator_inst
 
@@ -552,6 +555,9 @@ class SelectorMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._selector_inst.sandbox:
                 self.sandbox = self._selector_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._selector_inst
 
@@ -822,6 +828,9 @@ class ProducerMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._producer_inst.sandbox:
                 self.sandbox = self._producer_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._producer_inst
 
