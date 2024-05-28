@@ -39,6 +39,8 @@ jobs:
       ML_TF_DEV_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_DEV_FILE_HASH }}
       DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
       DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
+      TEST_DEV_HASH_FILES: ${{ steps.file_manager.outputs.TEST_DEV_HASH_FILES }}
+      TEST_DEV_FILE_HASH: ${{ steps.file_manager.outputs.TEST_DEV_FILE_HASH }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@master
@@ -93,29 +95,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - venv: "columnar"
+          - exe_files: sandboxes/venv_columnar.sh
             name: "columnar"
             hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
             hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
-          - venv: "columnar_dev"
+          - exe_files: sandboxes/venv_columnar_dev.sh
             name: "columnar_dev"
             hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
             hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}
-          - venv: ml_tf
+          - exe_files: sandboxes/venv_ml_tf.sh
             name: "ml_tf"
             hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
             hash: ${{ needs.parse_env_vars.outputs.ML_TF_FILE_HASH }}
-          - venv: docs_dev
+          - exe_files: sandboxes/venv_docs_dev.sh
             name: "docs_dev"
             hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
             hash: ${{ needs.parse_env_vars.outputs.DOCS_FILE_HASH }}
+          - exe_files: sandboxes/venv_ml_tf.sh,sandboxes/venv_columnar_dev.sh
+            name: "testing_base"
+            hashFiles: ${{ needs.parse_env_vars.outputs.TEST_DEV_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}
     uses: ./.github/workflows/build_docker_container.yaml
     with:
       IMAGE_NAME: venv_${{ matrix.name }}
       PUSH_IMAGE: true
       PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
       BUILD_ARGS: |
-        exe_file=sandboxes/venv_${{ matrix.venv }}.sh
+        exe_files=${{ matrix.exe_files }}
         base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
         ${{ matrix.hashFiles }}

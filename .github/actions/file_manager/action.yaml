@@ -59,7 +59,10 @@ outputs:
 
   COLUMNAR_HASH_FILES:
     description: 'List of files to be used base software image'
-    value: ${{ inputs.COLUMNAR }}
+    value: |
+      ${{ inputs.COLUMNAR }}
+      ${{ inputs.BASE_HASH_FILES }}
+
   COLUMNAR_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
@@ -67,6 +70,7 @@ outputs:
     description: 'List of files to be used base software image'
     value: |
       ${{ inputs.COLUMNAR }}
+      ${{ inputs.BASE_HASH_FILES }}
       ${{ inputs.dev_requires }}
   COLUMNAR_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
@@ -74,7 +78,10 @@ outputs:
 
   ML_TF_HASH_FILES:
     description: 'List of files to be used base software image'
-    value: ${{ inputs.ML_TF }}
+    value: |
+      ${{ inputs.ML_TF }}
+      ${{ inputs.BASE_HASH_FILES }}
+
   ML_TF_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.ML_TF_HASH_FILES }}
@@ -82,6 +89,7 @@ outputs:
     description: 'List of files to be used base software image'
     value: |
       ${{ inputs.ML_TF }}
+      ${{ inputs.BASE_HASH_FILES }}
       ${{ inputs.dev_requires }}
   ML_TF_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
@@ -89,7 +97,10 @@ outputs:
 
   DOCS_HASH_FILES:
     description: 'List of files to be used base software image'
-    value: ${{ inputs.DOCS }}
+    value: |
+      ${{ inputs.DOCS }}
+      ${{ inputs.BASE_HASH_FILES }}
+
   DOCS_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.DOCS_HASH_FILES }}
@@ -97,10 +108,21 @@ outputs:
     description: 'List of files to be used base software image'
     value: |
       ${{ inputs.DOCS }}
+      ${{ inputs.BASE_HASH_FILES }}
       ${{ inputs.dev_requires }}
   DOCS_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.DOCS_DEV_HASH_FILES }}
+  TEST_DEV_HASH_FILES:
+    description: 'List of files to be used base software image'
+    value: |
+      ${{ inputs.ML_TF }}
+      ${{ inputs.COLUMNAR }}
+      ${{ inputs.BASE_HASH_FILES }}
+      ${{ inputs.dev_requires }}
+  TEST_DEV_FILE_HASH:
+    description: 'Hash of files used for base software image for testing'
+    value: ${{ steps.parse_env_vars.outputs.TEST_DEV_HASH_FILES }}
 
 runs:
   using: "composite"
@@ -117,4 +139,6 @@ runs:
       echo "ML_TF_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
       echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
       echo "DOCS_DEV_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+      echo "TEST_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+
     shell: bash
