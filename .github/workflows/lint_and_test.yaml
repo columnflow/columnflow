@@ -87,10 +87,12 @@ jobs:
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
             USER: cf_user
+            FORCE_COMPILE_ENV: "False"
           - CONTAINER: "venv_columnar_dev:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
+            FORCE_COMPILE_ENV: "False"
             USER: root
     with:
       CONTAINER: "ghcr.io/${{ github.repository }}/${{ matrix.CONTAINER }}"
