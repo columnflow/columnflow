@@ -228,11 +228,11 @@ class MLModel(Derivable):
 
     def parameter_pairs(self: MLModel, only_significant: bool = False) -> list[tuple[str, Any]]:
         """
-        Returns a list of all parameter name-value tuples. In this context, significant parameters
+        Returns a sorted list of all parameter name-value tuples. In this context, significant parameters
         are those that potentially lead to different results (e.g. network architecture parameters
         as opposed to some log level).
         """
-        return list(self.parameters.items())
+        return sorted(self.parameters.items())
 
     @property
     def accepts_scheduler_messages(self: MLModel) -> bool:
