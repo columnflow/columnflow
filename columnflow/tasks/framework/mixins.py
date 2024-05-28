@@ -17,6 +17,7 @@ import order as od
 
 from columnflow.types import Sequence, Any, Iterable, Union
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DEFAULT
+from columnflow.tasks.framework.parameters import SettingsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.production import Producer
@@ -24,7 +25,7 @@ from columnflow.weight import WeightProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, DotDict
 
 ak = maybe_import("awkward")
 
@@ -1069,7 +1070,17 @@ class MLModelMixinBase(AnalysisTask):
         description="the name of the ML model to be applied",
     )
 
+    ml_model_settings = SettingsParameter(
+        default=DotDict(),
+        description="settings passed to the init function of the ML model",
+    )
+
     exclude_params_repr_empty = {"ml_model"}
+
+    @property
+    def ml_model_repr(self):
+        """Returns a string representation of the ML model instance."""
+        return str(self.ml_model_inst)
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
@@ -1389,7 +1400,11 @@ class MLModelTrainingMixin(MLModelMixinBase):
             analysis_inst = params["analysis_inst"]
 
             # NOTE: we could try to implement resolving the default ml_model here
-            ml_model_inst = cls.get_ml_model_inst(params["ml_model"], analysis_inst)
+            ml_model_inst = cls.get_ml_model_inst(
+                params["ml_model"],
+                analysis_inst,
+                parameters=params["ml_model_settings"],
+            )
             params["ml_model_inst"] = ml_model_inst
 
             # resolve configs
@@ -1418,12 +1433,12 @@ class MLModelTrainingMixin(MLModelMixinBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         # get the ML model instance
         self.ml_model_inst = self.get_ml_model_inst(
             self.ml_model,
             self.analysis_inst,
             configs=list(self.configs),
+            parameters=self.ml_model_settings,
         )
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
@@ -1476,7 +1491,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
             parts.insert_before("version", label, f"{label}__{part}")
 
         if self.ml_model_inst:
-            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1517,6 +1532,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
                     params["ml_model"],
                     analysis_inst,
                     requested_configs=[config_inst],
+                    parameters=params["ml_model_settings"],
                 )
             elif not cls.allow_empty_ml_model:
                 raise Exception(f"no ml_model configured for {cls.task_family}")
@@ -1533,13 +1549,14 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
                 self.ml_model,
                 self.analysis_inst,
                 requested_configs=[self.config_inst],
+                parameters=self.ml_model_settings,
             )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         if self.ml_model_inst:
-            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_inst.cls_name}")
+            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1560,7 +1577,7 @@ class MLModelDataMixin(MLModelMixin):
         parts = super().store_parts()
 
         # replace the ml_model entry
-        store_name = self.ml_model_inst.store_name or self.ml_model_inst.cls_name
+        store_name = self.ml_model_inst.store_name or self.ml_model_repr
         parts.insert_before("ml_model", "ml_data", f"ml__{store_name}")
         parts.pop("ml_model")
 
@@ -1579,6 +1596,12 @@ class MLModelsMixin(ConfigTask):
     allow_empty_ml_models = True
 
     exclude_params_repr_empty = {"ml_models"}
+
+    @property
+    def ml_models_repr(self):
+        """Returns a string representation of the ML models."""
+        ml_models_repr = "__".join([str(model_inst) for model_inst in self.ml_model_insts])
+        return ml_models_repr
 
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -1635,8 +1658,7 @@ class MLModelsMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            part = "__".join(model_inst.cls_name for model_inst in self.ml_model_insts)
-            parts.insert_before("version", "ml_models", f"ml__{part}")
+            parts.insert_before("version", "ml_models", f"ml__{self.ml_models_repr}")
 
         return parts
 
