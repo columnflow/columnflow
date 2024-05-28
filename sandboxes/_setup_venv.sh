@@ -131,7 +131,7 @@ setup_venv() {
     fi
     
     cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
-    if [ ! -f $CF_VENV_REQUIREMENTS ]; then
+    if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
         
