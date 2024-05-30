@@ -179,7 +179,7 @@ class ReduceEvents(
                 events,
                 aliases,
                 remove_src=True,
-                missing_steps=self.missing_column_alias_strategy,
+                missing_strategy=self.missing_column_alias_strategy,
             )
 
             # build the event mask
