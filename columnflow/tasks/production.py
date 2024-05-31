@@ -8,7 +8,7 @@ import itertools
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import ProducerMixin, ProducersMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
 from columnflow.util import dev_sandbox
@@ -175,7 +175,6 @@ ProduceColumnsWrapperBase.exclude_index = True
 class ProduceColumnsWrapper(
     ProduceColumnsWrapperBase,
     ProducersMixin,
-
 ):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
