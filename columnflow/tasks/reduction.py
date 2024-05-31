@@ -522,12 +522,15 @@ class ProvideReducedEvents(
 
         # when skipping merging, require the reduced events directly
         # when forcing merging, require the merged events
+        # (also, when merged events are complete, require them anyway to reflect the dependence for interactive outputs)
         # otherwise, do not register workflow requirements but yield them dynamically in local_workflow_pre_run()
         if self.skip_merging:
             if not self.pilot:
                 reqs["events"] = self._req_reduced_events()
-        elif self.force_merging:
-            reqs["events"] = self._req_merged_reduced_events()
+        else:
+            req_merged = self._req_merged_reduced_events()
+            if self.force_merging or req_merged.complete():
+                reqs["events"] = req_merged
 
         return reqs
 
@@ -536,8 +539,9 @@ class ProvideReducedEvents(
         # otherwise let run() yield dynamic ones
         if self.skip_merging:
             return self._req_reduced_events()
-        if self.force_merging:
-            return self._req_merged_reduced_events()
+        req_merged = self._req_merged_reduced_events()
+        if self.force_merging or req_merged.complete():
+            return req_merged
         return []
 
     @workflow_condition.output
