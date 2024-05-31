@@ -10,7 +10,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import ProducerMixin, ProducersMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
 
 
@@ -28,7 +28,6 @@ class ProduceColumns(
     reqs = Requirements(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        ProvideReducedEvents=ProvideReducedEvents,
     )
 
     # register shifts found in the chosen producer to this task

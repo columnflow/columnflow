@@ -15,7 +15,7 @@ from columnflow.tasks.framework.mixins import (
     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
@@ -37,7 +37,6 @@ class CreateHistograms(
     reqs = Requirements(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
     )

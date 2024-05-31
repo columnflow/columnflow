@@ -928,10 +928,13 @@ class DatasetTask(ShiftTask):
         return parts
 
     @property
-    def file_merging_factor(self):
+    def file_merging_factor(self) -> int:
         """
-        Returns the number of files that are handled in one branch. Consecutive merging steps are
-        not handled yet.
+        Returns the number of files that are handled in one branch. When the :py:attr:`file_merging`
+        attribute is set to a positive integer, this value is returned. Otherwise, if the value is
+        zero, the original number of files is used instead.
+
+        Consecutive merging steps are not handled yet.
         """
         n_files = self.dataset_info_inst.n_files
 

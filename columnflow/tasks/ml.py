@@ -26,7 +26,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
-from columnflow.tasks.reduction import ProvideReducedEvents, ReducedEventsUser
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
 from columnflow.columnar_util import set_ak_column
@@ -51,7 +51,6 @@ class PrepareMLEvents(
     reqs = Requirements(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
     )
 
@@ -612,7 +611,6 @@ class MLEvaluation(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         MLTraining=MLTraining,
-        ProvideReducedEvents=ProvideReducedEvents,
         ProduceColumns=ProduceColumns,
     )
 
@@ -666,7 +664,7 @@ class MLEvaluation(
             producers=(self.producers,),
         )
 
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
         if self.preparation_producer_inst:

@@ -338,7 +338,6 @@ class MergeReductionStats(
         stats["n_test_files"] = n
         stats["tot_size"] = sum(sizes)
         stats["avg_size"], stats["std_size"] = get_avg_std(sizes)
-        stats["std_size"] = (sum((s - stats["avg_size"])**2 for s in sizes) / n)**0.5
         stats["max_size_merged"] = self.merged_size * 1024**2
         stats["merge_factor"] = int(round(stats["max_size_merged"] / stats["avg_size"]))
         stats["merge_factor"] = min(max(1, stats["merge_factor"]), self.dataset_info_inst.n_files)
@@ -470,14 +469,14 @@ class ProvideReducedEvents(
 
     skip_merging = luigi.BoolParameter(
         default=False,
-        description="bypass MergedReducedEvents and directly require ReduceEvents with same workflow branching; "
-        "default: False",
+        description="bypass MergedReducedEvents and directly require ReduceEvents with same "
+        "workflow branching; default: False",
     )
 
     force_merging = luigi.BoolParameter(
         default=False,
-        description="force requiring MergedReducedEvents, regardless of the merging factor obtained by "
-        "MergeReductionStats; default: False",
+        description="force requiring MergedReducedEvents, regardless of the merging factor "
+        "obtained by MergeReductionStats; default: False",
     )
 
     # upstream requirements
@@ -522,8 +521,8 @@ class ProvideReducedEvents(
 
         # when skipping merging, require the reduced events directly
         # when forcing merging, require the merged events
-        # (also, when merged events are complete, require them anyway to reflect the dependence for interactive outputs)
-        # otherwise, do not register workflow requirements but yield them dynamically in local_workflow_pre_run()
+        # (also, when merged events are complete, require them to show the dependence in the cli)
+        # otherwise, do not register reqs but yield them dynamically in local_workflow_pre_run()
         if self.skip_merging:
             if not self.pilot:
                 reqs["events"] = self._req_reduced_events()
@@ -535,8 +534,8 @@ class ProvideReducedEvents(
         return reqs
 
     def requires(self):
-        # same as for workflow requirements, declare static requirements when a decision is pre-set, and
-        # otherwise let run() yield dynamic ones
+        # same as for workflow requirements, declare static requirements when a decision is pre-set,
+        # and otherwise let run() yield dynamic ones
         if self.skip_merging:
             return self._req_reduced_events()
         req_merged = self._req_merged_reduced_events()
@@ -550,7 +549,11 @@ class ProvideReducedEvents(
             return self.requires().output()
 
         # declare the output to be the one of the upstream task
-        return (self._req_reduced_events() if self.file_merging == 1 else self._req_merged_reduced_events()).output()
+        return (
+            self._req_reduced_events()
+            if self.file_merging == 1
+            else self._req_merged_reduced_events()
+        ).output()
 
     def _yield_dynamic_deps(self):
         # do nothing if a decision was pre-set
@@ -560,7 +563,11 @@ class ProvideReducedEvents(
         if self.file_merging == 0:
             yield self.reqs.MergeReductionStats.req(self)
 
-        yield self._req_reduced_events() if self.file_merging == 1 else self._req_merged_reduced_events()
+        yield (
+            self._req_reduced_events()
+            if self.file_merging == 1
+            else self._req_merged_reduced_events()
+        )
 
     def local_workflow_pre_run(self):
         return self._yield_dynamic_deps()
