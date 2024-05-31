@@ -403,3 +403,96 @@ reduce_with.funcs = {
     "maxabs": lambda v: max(abs(np.nanmax(v)), abs(np.nanmin(v))),
     "minabs": lambda v: min(abs(np.nanmax(v)), abs(np.nanmin(v))),
 }
+
+
+def broadcast_1d_to_nd(x: np.array, final_shape: list, axis: int = 1) -> np.array:
+    """
+    Helper function to broadcast a 1d array *x* to an nd array with shape *final_shape*.
+    The length of *x* should be the same as *final_shape[axis]*.
+    """
+    if len(x.shape) != 1:
+        raise Exception("Only 1d arrays allowed")
+    if final_shape[axis] != x.shape[0]:
+        raise Exception(f"Initial shape should match with final shape in requested axis {axis}")
+    initial_shape = [1] * len(final_shape)
+    initial_shape[axis] = x.shape[0]
+    x = np.reshape(x, initial_shape)
+    x = np.broadcast_to(x, final_shape)
+    return x
+
+
+def broadcast_nminus1d_to_nd(x: np.array, final_shape: list, axis: int = 1) -> np.array:
+    """
+    Helper function to broadcast a (n-1)d array *x* to an nd array with shape *final_shape*.
+    *final_shape* should be the same as *x.shape* except that the axis *axis* is missing.
+    """
+    if len(final_shape) - len(x.shape) != 1:
+        raise Exception("Only (n-1)d arrays allowed")
+
+    # shape comparison between x and final_shape
+    _init_shape = list(final_shape)
+    _init_shape.pop(axis)
+    if _init_shape != list(x.shape):
+        raise Exception(
+            f"input shape ({x.shape}) should agree with final_shape {final_shape} "
+            f"after inserting new axis at {axis}",
+        )
+
+    initial_shape = list(x.shape)
+    initial_shape.insert(axis, 1)
+
+    x = np.reshape(x, initial_shape)
+    x = np.broadcast_to(x, final_shape)
+
+    return x
+
+
+def get_profile_width(h_in: hist.Hist, axis: int = 1) -> tuple[np.array, np.array]:
+    """
+    Function that takes a histogram *h_in* and returns the mean and width
+    when profiling over the axis *axis*.
+    """
+    values = h_in.values()
+    centers = h_in.axes[axis].centers
+    centers = broadcast_1d_to_nd(centers, values.shape, axis)
+
+    num = np.sum(values * centers, axis=axis)
+    den = np.sum(values, axis=axis)
+
+    print(num.shape)
+
+    with np.errstate(invalid="ignore"):
+        mean = num / den
+        _mean = broadcast_nminus1d_to_nd(mean, values.shape, axis)
+        width = np.sum(values * (centers - _mean) ** 2, axis=axis) / den
+
+    return mean, width
+
+
+def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.Hist]:
+    """
+    Returns a profile histogram plus the up and down variations of the profile
+    from a normal histogram with N-1 axes.
+    The axis given is profiled over and removed from the final histograms.
+    """
+    # start with profile such that we only have to replace the mean
+    # NOTE: how do the variances change for the up/down variations?
+    h_profile = h_in.profile(axis)
+
+    mean, variance = get_profile_width(h_in, axis=axis)
+
+    h_nom = h_profile.copy()
+    h_up = h_profile.copy()
+    h_down = h_profile.copy()
+
+    # we modify the view of h_profile -> do not use h_profile anymore!
+    h_view = h_profile.view()
+
+    h_view.value = mean
+    h_nom[...] = h_view
+    h_view.value = mean + np.sqrt(variance)
+    h_up[...] = h_view
+    h_view.value = mean - np.sqrt(variance)
+    h_down[...] = h_view
+
+    return {"nominal": h_nom, "up": h_up, "down": h_down}
