@@ -436,7 +436,7 @@ def broadcast_nminus1d_to_nd(x: np.array, final_shape: list, axis: int = 1) -> n
     return x
 
 
-def get_profile_width(h_in: hist.Hist, axis: int = 1) -> (np.array, np.array):
+def get_profile_width(h_in: hist.Hist, axis: int = 1) -> tuple[np.array, np.array]:
     """
     Function that takes a histogram *h_in* and returns the mean and width
     when profiling over the axis *axis*.
@@ -458,7 +458,7 @@ def get_profile_width(h_in: hist.Hist, axis: int = 1) -> (np.array, np.array):
     return mean, width
 
 
-def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict(str, hist.Hist):
+def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.Hist]:
     """
     Returns a profile histogram plus the up and down variations of the profile
     from a normal histogram with N-1 axes.

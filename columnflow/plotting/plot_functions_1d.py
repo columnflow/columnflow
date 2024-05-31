@@ -327,6 +327,7 @@ def plot_profile(
     Exemplary task call:
 
     .. code-block:: bash
+
         law run cf.PlotVariables1D --version prod1 --processes st_tchannel_t \
             --variables jet1_pt-jet2_pt \
             --plot-function columnflow.plotting.plot_functions_1d.plot_profile
