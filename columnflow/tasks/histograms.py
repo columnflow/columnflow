@@ -26,10 +26,8 @@ class CreateHistograms(
     WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
