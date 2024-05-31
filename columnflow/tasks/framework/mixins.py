@@ -20,12 +20,16 @@ from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, RESOLVE_DE
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.production import Producer
+from columnflow.weight import WeightProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
+
+
+logger = law.logger.get_logger(__name__)
 
 
 class CalibratorMixin(ConfigTask):
@@ -176,6 +180,9 @@ class CalibratorMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._calibrator_inst.sandbox:
                 self.sandbox = self._calibrator_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._calibrator_inst
 
@@ -548,6 +555,9 @@ class SelectorMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._selector_inst.sandbox:
                 self.sandbox = self._selector_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._selector_inst
 
@@ -818,6 +828,9 @@ class ProducerMixin(ConfigTask):
             # overwrite the sandbox when set
             if self._producer_inst.sandbox:
                 self.sandbox = self._producer_inst.sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
 
         return self._producer_inst
 
@@ -2026,27 +2039,102 @@ class ShiftSourcesMixin(ConfigTask):
         return f"{len(self.shift_sources)}_{law.util.create_hash(sorted(self.shift_sources))}"
 
 
-class EventWeightMixin(ConfigTask):
+class WeightProducerMixin(ConfigTask):
+
+    weight_producer = luigi.Parameter(
+        default=RESOLVE_DEFAULT,
+        description="the name of the weight producer to be used; default: value of the "
+        "'default_weight_producer' config",
+    )
+
+    # decides whether the task itself runs the weight producer and implements its shifts
+    register_weight_producer_shifts = False
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict[str, Any]) -> tuple[set[str], set[str]]:
+    def get_weight_producer_inst(
+        cls,
+        weight_producer: str,
+        kwargs: dict | None = None,
+    ) -> WeightProducer:
+        weight_producer_cls = WeightProducer.get_cls(weight_producer)
+        if not weight_producer_cls.exposed:
+            raise RuntimeError(
+                f"cannot use unexposed weight producer '{weight_producer}' in {cls.__name__}",
+            )
+
+        inst_dict = cls.get_weight_producer_kwargs(**kwargs) if kwargs else None
+        return weight_producer_cls(inst_dict=inst_dict)
+
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        config_inst = params.get("config_inst")
+        if config_inst:
+            # add the default weight producer when empty
+            params["weight_producer"] = cls.resolve_config_default(
+                params,
+                params.get("weight_producer"),
+                container=config_inst,
+                default_str="default_weight_producer",
+                multiple=False,
+            )
+            if params["weight_producer"] is None:
+                raise Exception(
+                    f"no weight producer configured for task. {cls.task_family}. "
+                    "As of 02.05.2024, it is required to pass a weight_producer for tasks creating "
+                    "histograms. You can add a 'default_weight_producer' to your config or directly "
+                    "add the weight_producer on command line via the '--weight_producer' parameter. "
+                    "To reproduce results from before this date, you can use the "
+                    "'all_weights' weight_producer defined in columnflow.weight.all_weights, e.g. by adding "
+                    "The following line to your config: \n"
+                    "config.x.default_weight_producer = \"all_weights\"",
+                )
+            params["weight_producer_inst"] = cls.get_weight_producer_inst(
+                params["weight_producer"],
+                params,
+            )
+
+        return params
+
+    @classmethod
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict[str, Any],
+    ) -> tuple[set[str], set[str]]:
         shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
 
-        # add shifts introduced by event weights
-        if config_inst.has_aux("event_weights"):
-            for shift_insts in config_inst.x.event_weights.values():
-                shifts |= {shift_inst.name for shift_inst in shift_insts}
-
-        # optionally also for weights defined by a dataset
-        if "dataset" in params:
-            requested_dataset = params.get("dataset")
-            if requested_dataset not in (None, law.NO_STR):
-                dataset_inst = config_inst.get_dataset(requested_dataset)
-                if dataset_inst.has_aux("event_weights"):
-                    for shift_insts in dataset_inst.x.event_weights.values():
-                        shifts |= {shift_inst.name for shift_inst in shift_insts}
+        # get the weight producer, update it and add its shifts
+        weight_producer_inst = params.get("weight_producer_inst")
+        if weight_producer_inst:
+            if cls.register_weight_producer_shifts:
+                shifts |= weight_producer_inst.all_shifts
+            else:
+                upstream_shifts |= weight_producer_inst.all_shifts
 
         return shifts, upstream_shifts
+
+    def __init__(self: WeightProducerMixin, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # cache for weight producer inst
+        self._weight_producer_inst = None
+
+    @property
+    def weight_producer_inst(self: WeightProducerMixin) -> WeightProducer:
+        if self._weight_producer_inst is None:
+            self._weight_producer_inst = self.get_weight_producer_inst(
+                self.weight_producer,
+                {"task": self},
+            )
+
+        return self._weight_producer_inst
+
+    def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
+        parts = super().store_parts()
+        parts.insert_before("version", "weightprod", f"weight__{self.weight_producer}")
+        return parts
 
 
 class ChunkedIOMixin(AnalysisTask):
