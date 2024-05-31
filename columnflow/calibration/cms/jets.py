@@ -299,7 +299,8 @@ def jec(
     # apply full jet correction
     events = set_ak_column_f32(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
     events = set_ak_column_f32(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
-    events = set_ak_column_f32(events, "Jet.rawFactor", (1 - events.Jet.pt_raw / events.Jet.pt))
+    rawFactor = ak.nan_to_num(1 - events.Jet.pt_raw / events.Jet.pt, nan=0.0)
+    events = set_ak_column_f32(events, "Jet.rawFactor", rawFactor)
     events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
 
     # nominal met propagation

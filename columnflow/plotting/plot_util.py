@@ -14,7 +14,7 @@ from collections import OrderedDict
 
 import order as od
 
-from columnflow.util import maybe_import, try_int
+from columnflow.util import maybe_import, try_int, try_complex
 
 math = maybe_import("math")
 hist = maybe_import("hist")
@@ -120,6 +120,17 @@ def apply_variable_settings(
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
+                hists[proc_inst] = h
+
+        slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
+        if (
+            slices and isinstance(slices, Iterable) and len(slices) >= 2 and
+            try_complex(slices[0]) and try_complex(slices[1])
+        ):
+            slice_0 = int(slices[0]) if try_int(slices[0]) else complex(slices[0])
+            slice_1 = int(slices[1]) if try_int(slices[1]) else complex(slices[1])
+            for proc_inst, h in list(hists.items()):
+                h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
 
     return hists

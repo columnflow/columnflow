@@ -44,6 +44,9 @@ class ReduceEvents(
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
 
+    # register shifts found in the chosen selector upstream
+    register_selector_shifts = True
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
@@ -179,7 +182,7 @@ class ReduceEvents(
                 events,
                 aliases,
                 remove_src=True,
-                missing_steps=self.missing_column_alias_strategy,
+                missing_strategy=self.missing_column_alias_strategy,
             )
 
             # build the event mask

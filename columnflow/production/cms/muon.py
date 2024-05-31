@@ -18,15 +18,15 @@ ak = maybe_import("awkward")
     uses={
         "Muon.pt", "Muon.eta",
     },
-    produces={
-        "muon_weight", "muon_weight_up", "muon_weight_down",
-    },
+    # produces in the init
     # only run on mc
     mc_only=True,
     # function to determine the correction file
     get_muon_file=(lambda self, external_files: external_files.muon_sf),
     # function to determine the muon weight config
     get_muon_config=(lambda self: self.config_inst.x.muon_sf_names),
+    weight_name="muon_weight",
+    supported_versions=(1, 2),
 )
 def muon_weights(
     self: Producer,
@@ -66,6 +66,7 @@ def muon_weights(
     variable_map = {
         "year": self.year,
         "abseta": abs_eta,
+        "eta": abs_eta,
         "pt": pt,
     }
 
@@ -82,7 +83,6 @@ def muon_weights(
             "ValType": syst,  # syst key in 2017
         }
         inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
-
         sf_flat = self.muon_sf_corrector(*inputs)
 
         # add the correct layout to it
@@ -92,7 +92,7 @@ def muon_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"muon_weight{postfix}", weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", weight, value_type=np.float32)
 
     return events
 
@@ -125,5 +125,11 @@ def muon_weights_setup(
     self.muon_sf_corrector = correction_set[corrector_name]
 
     # check versions
-    if self.muon_sf_corrector.version not in (1,):
+    if self.supported_versions and self.muon_sf_corrector.version not in self.supported_versions:
         raise Exception(f"unsuppprted muon sf corrector version {self.muon_sf_corrector.version}")
+
+
+@muon_weights.init
+def muon_weights_init(self: Producer, **kwargs) -> None:
+    weight_name = self.weight_name
+    self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
