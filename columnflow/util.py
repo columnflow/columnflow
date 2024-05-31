@@ -10,7 +10,7 @@ __all__ = [
     "UNSET",
     "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
     "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
-    "safe_div", "try_float", "try_int", "is_pattern", "is_regex", "pattern_matcher",
+    "safe_div", "try_float", "try_complex", "try_int", "is_pattern", "is_regex", "pattern_matcher",
     "dict_add_strict", "get_source_code",
     "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
     "DerivableMeta", "Derivable",
@@ -407,6 +407,17 @@ def try_float(f: Any) -> bool:
     """
     try:
         float(f)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def try_complex(f: Any) -> bool:
+    """
+    Tests whether a value *f* can be converted to a complex number.
+    """
+    try:
+        complex(f)
         return True
     except (ValueError, TypeError):
         return False
