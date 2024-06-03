@@ -154,7 +154,7 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        file_targets = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if self.ml_model_insts:
