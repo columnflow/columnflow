@@ -224,6 +224,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return cls.get_array_function_kwargs(*args, **kwargs)
 
     @classmethod
+    def get_weight_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
+        # implemented here only for simplified mro control
+        return cls.get_array_function_kwargs(*args, **kwargs)
+
+    @classmethod
     def find_config_objects(
         cls,
         names: str | Sequence[str] | set[str],
@@ -909,8 +914,8 @@ class DatasetTask(ShiftTask):
         # store dataset info for the global shift
         key = (
             self.global_shift_inst.name
-            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info else
-            "nominal"
+            if self.global_shift_inst and self.global_shift_inst.name in self.dataset_inst.info
+            else "nominal"
         )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
@@ -923,17 +928,22 @@ class DatasetTask(ShiftTask):
         return parts
 
     @property
-    def file_merging_factor(self):
+    def file_merging_factor(self) -> int:
         """
-        Returns the number of files that are handled in one branch. Consecutive merging steps are
-        not handled yet.
+        Returns the number of files that are handled in one branch. When the :py:attr:`file_merging`
+        attribute is set to a positive integer, this value is returned. Otherwise, if the value is
+        zero, the original number of files is used instead.
+
+        Consecutive merging steps are not handled yet.
         """
         n_files = self.dataset_info_inst.n_files
 
         if isinstance(self.file_merging, int):
             # interpret the file_merging attribute as the merging factor itself
-            # non-positive numbers mean "merge all in one"
-            n_merge = self.file_merging if self.file_merging > 0 else n_files
+            # zero means "merge all in one"
+            if self.file_merging < 0:
+                raise ValueError(f"invalid file_merging value {self.file_merging}")
+            n_merge = n_files if self.file_merging == 0 else self.file_merging
         else:
             # no merging at all
             n_merge = 1

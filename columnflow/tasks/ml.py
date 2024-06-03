@@ -26,7 +26,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
 from columnflow.columnar_util import set_ak_column
@@ -38,10 +38,8 @@ ak = maybe_import("awkward")
 class PrepareMLEvents(
     MLModelDataMixin,
     ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -51,9 +49,8 @@ class PrepareMLEvents(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
     )
 
@@ -104,7 +101,7 @@ class PrepareMLEvents(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
         if self.preparation_producer_inst:
@@ -121,9 +118,8 @@ class PrepareMLEvents(
         return reqs
 
     def requires(self):
-        reqs = {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-        }
+        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
+
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
 
@@ -136,7 +132,9 @@ class PrepareMLEvents(
 
         return reqs
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
         k = self.ml_model_inst.folds
         outputs = {
@@ -194,11 +192,9 @@ class PrepareMLEvents(
         num_fold_events = {f: 0 for f in range(self.ml_model_inst.folds)}
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0]["events"]]
+        files = [inputs["events"]["events"]]
         if self.producer_insts:
             files.extend([inp["columns"] for inp in inputs["producers"]])
-        if reader_targets:
-            files.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(
@@ -598,10 +594,8 @@ class MLTraining(
 class MLEvaluation(
     MLModelMixin,
     ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -614,10 +608,9 @@ class MLEvaluation(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         MLTraining=MLTraining,
-        MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
     )
 
@@ -671,7 +664,7 @@ class MLEvaluation(
             producers=(self.producers,),
         )
 
-        reqs["events"] = self.reqs.MergeReducedEvents.req_different_branching(self)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
         if self.preparation_producer_inst:
@@ -696,11 +689,7 @@ class MLEvaluation(
                 producers=(self.producers,),
                 branch=-1,
             ),
-            "events": self.reqs.MergeReducedEvents.req_different_branching(
-                self,
-                tree_index=self.branch,
-                branch=-1,
-            ),
+            "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
         }
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
@@ -714,7 +703,9 @@ class MLEvaluation(
 
         return reqs
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
         return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.parquet")}
 
@@ -773,21 +764,21 @@ class MLEvaluation(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and columns
-        files = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["collection"][0]["events"]]
         if self.producer_insts:
-            files.extend([inp["columns"] for inp in inputs["producers"]])
+            file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if reader_targets:
-            files.extend(reader_targets.values())
+            file_targets.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(
-            [*files, *reader_targets.values()],
+            [*file_targets, *reader_targets.values()],
             mode="r",
         ) as inps:
             for (events, *columns), pos in self.iter_chunked_io(
                 [inp.path for inp in inps],
-                source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
-                read_columns=(len(files) + len(reader_targets)) * [read_columns],
+                source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
+                read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:

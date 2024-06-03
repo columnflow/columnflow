@@ -152,6 +152,16 @@ class MLModel(Derivable):
         if "configs" in kwargs:
             self._setup(kwargs["configs"])
 
+    def __str__(self):
+        """
+        Returns a string representation of this model instance. The string is composed of the class
+        name and the string representation of all parameters.
+        """
+        model_str = f"{self.cls_name}"
+        if self.parameters_repr:
+            model_str += f"__{self.parameters_repr}"
+        return model_str
+
     @property
     def config_inst(self: MLModel) -> od.Config:
         if self.single_config and len(self.config_insts) != 1:
@@ -185,6 +195,26 @@ class MLModel(Derivable):
         # any other case
         return str(value)
 
+    @property
+    def parameters_repr(self: MLModel) -> str:
+        """
+        Returns a hash of string representation of all parameters. This is used to uniquely identify
+        a model instance based on its parameters.
+
+        :raises: Exception in case the parameters_repr changed after it was set.
+        :returns: String representation of all parameters.
+        """
+        if not self.parameters:
+            return ""
+        parameters_repr = law.util.create_hash(self._join_parameter_pairs(only_significant=True))
+        if hasattr(self, "_parameters_repr") and self._parameters_repr != parameters_repr:
+            raise Exception(
+                f"parameters_repr changed from {self._parameters_repr} to {parameters_repr};"
+                "this should not happen",
+            )
+        self._parameters_repr = parameters_repr
+        return self._parameters_repr
+
     def _join_parameter_pairs(self: MLModel, only_significant: bool = True) -> str:
         """
         Returns a joined string representation of all significant parameters. In this context,
@@ -198,11 +228,11 @@ class MLModel(Derivable):
 
     def parameter_pairs(self: MLModel, only_significant: bool = False) -> list[tuple[str, Any]]:
         """
-        Returns a list of all parameter name-value tuples. In this context, significant parameters
+        Returns a sorted list of all parameter name-value tuples. In this context, significant parameters
         are those that potentially lead to different results (e.g. network architecture parameters
         as opposed to some log level).
         """
-        return list(self.parameters.items())
+        return sorted(self.parameters.items())
 
     @property
     def accepts_scheduler_messages(self: MLModel) -> bool:

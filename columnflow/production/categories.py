@@ -89,3 +89,6 @@ def category_ids_init(self: Producer) -> None:
             self.produces.add(categorizer)
 
             self.categorizer_map[cat_inst].append(categorizer)
+
+    # cast to normal dict to prevent silent failures on KeyError
+    self.categorizer_map = dict(self.categorizer_map)
