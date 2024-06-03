@@ -8,20 +8,16 @@ import itertools
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin, ProducersMixin,
-)
+from columnflow.tasks.framework.mixins import ProducerMixin, ProducersMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
     ProducerMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -30,9 +26,8 @@ class ProduceColumns(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
     )
 
     # register shifts found in the chosen producer to this task
@@ -45,7 +40,7 @@ class ProduceColumns(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
         reqs["producer"] = self.producer_inst.run_requires()
@@ -54,11 +49,13 @@ class ProduceColumns(
 
     def requires(self):
         return {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
+            "events": self.reqs.ProvideReducedEvents.req(self),
             "producer": self.producer_inst.run_requires(),
         }
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
         outputs = {}
 
@@ -105,7 +102,7 @@ class ProduceColumns(
 
         # prepare inputs for localization
         with law.localize_file_targets(
-            [inputs["events"]["collection"][0]["events"], *reader_targets.values()],
+            [inputs["events"]["events"], *reader_targets.values()],
             mode="r",
         ) as inps:
             # iterate over chunks of events and diffs
@@ -177,7 +174,6 @@ ProduceColumnsWrapperBase.exclude_index = True
 class ProduceColumnsWrapper(
     ProduceColumnsWrapperBase,
     ProducersMixin,
-
 ):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
