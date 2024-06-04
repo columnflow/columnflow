@@ -15,7 +15,7 @@ from columnflow.tasks.framework.base import (
     Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
 )
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin, MergeHistogramMixin
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -309,6 +309,7 @@ class MergeCutflowHistograms(
     )
 
     selector_steps_order_sensitive = True
+
 
 MergeCutflowHistogramsWrapper = wrapper_factory(
     base_cls=AnalysisTask,

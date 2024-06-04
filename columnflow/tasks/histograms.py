@@ -6,13 +6,13 @@ Task to produce and merge histograms.
 
 from __future__ import annotations
 
-import luigi
+#import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents

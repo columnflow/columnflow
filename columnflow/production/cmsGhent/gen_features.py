@@ -1,12 +1,12 @@
-from collections import defaultdict
-from typing import Tuple
+#from collections import defaultdict
+#from typing import Tuple
 
-import law
+#import law
 
 from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import set_ak_column
 from columnflow.production import Producer, producer
-from columnflow.columnar_util_Ghent import TetraVec
+#from columnflow.columnar_util_Ghent import TetraVec
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -29,22 +29,22 @@ def _geometric_matching(particles1: ak.Array, particles2: ak.Array) -> (ak.Array
 
 # map of the status flag name to the corresponding bit in statusFlags
 _statusmap = ({
-        "isPrompt": 0,
-        "isDecayedLeptonHadron": 1,
-        "isTauDecayProduct": 2,
-        "isPromptTauDecayProduct": 3,
-        "isDirectTauDecayProduct": 4,
-        "isDirectPromptTauDecayProduct": 5,
-        "isDirectHadronDecayProduct": 6,
-        "isHardProcess": 7,
-        "fromHardProcess": 8,
-        "isHardProcessTauDecayProduct": 9,
-        "isDirectHardProcessTauDecayProduct": 10,
-        "fromHardProcessBeforeFSR": 11,
-        "isFirstCopy": 12,
-        "isLastCopy": 13,
-        "isLastCopyBeforeFSR": 14,
-    })
+    "isPrompt": 0,
+    "isDecayedLeptonHadron": 1,
+    "isTauDecayProduct": 2,
+    "isPromptTauDecayProduct": 3,
+    "isDirectTauDecayProduct": 4,
+    "isDirectPromptTauDecayProduct": 5,
+    "isDirectHadronDecayProduct": 6,
+    "isHardProcess": 7,
+    "fromHardProcess": 8,
+    "isHardProcessTauDecayProduct": 9,
+    "isDirectHardProcessTauDecayProduct": 10,
+    "fromHardProcessBeforeFSR": 11,
+    "isFirstCopy": 12,
+    "isLastCopy": 13,
+    "isLastCopyBeforeFSR": 14,
+})
 
 # status flags that should be present for a prompt genparticle
 _prompt_status = ["isPrompt", "isDirectPromptTauDecayProduct", "isHardProcess",
@@ -57,11 +57,11 @@ _prompt_status = ["isPrompt", "isDirectPromptTauDecayProduct", "isHardProcess",
         ("pdgId", "genPartIdx")) |
     four_vec(
         ("GenPart"),
-        ("pdgId", "status", "statusFlags")
+        ("pdgId", "status", "statusFlags", )
     ),
     produces=four_vec(
-        {"Electron", "Muon"},
-        {"isPrompt", "matchPdgId", "isChargeFlip"}
+        {"Electron", "Muon", },
+        {"isPrompt", "matchPdgId", "isChargeFlip", }
     ),
     mc_only=True,
     exposed=False,
