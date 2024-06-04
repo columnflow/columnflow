@@ -76,7 +76,7 @@ def lepton_mva_object(
             for wp in wps:
                 events = set_ak_column(
                     events, f"{lepton_name}.{wp}",
-                    events[lepton_name]["veto"] & (lepton.mvaTOP > wps[wp])
+                    events[lepton_name]["veto"] & (lepton.mvaTOP > wps[wp]),
                 )
 
     return events, SelectionResult(
