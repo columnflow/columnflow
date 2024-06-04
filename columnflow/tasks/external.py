@@ -10,7 +10,7 @@ import os
 import time
 import shutil
 import subprocess
-
+import glob
 import luigi
 import law
 import order as od
@@ -103,7 +103,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info(f"get lfns for dataset key {key} {msg}")
-            lfns.extend(get_dataset_lfns(self.dataset_inst, self.global_shift_inst, key))
+            if msg=='via dasgoclient':
+                lfns.extend(get_dataset_lfns(self.dataset_inst, self.global_shift_inst, key))
+            else:    
+                lfns.extend(get_dataset_lfns(self,key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -116,6 +119,19 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
         self.transfer(tmp)
+
+    def custom_get_dataset_lfns(
+        self,
+        dataset_key: str,
+    ) -> list[str]:
+        """
+        Function to get the LFN information for custom datasets
+        The path of custom files have to be given in law.cfg file as [custom_pnfs_fs]
+        """
+        base = law.config.get_expanded('custom_pnfs_fs', "base")
+        out = glob.glob(f"{base}{dataset_key}/*/*/*.root")
+        return out
+    
 
     def get_dataset_lfns_dasgoclient(
         self,
