@@ -2,13 +2,13 @@
 Code to add lepton MVA to NanoAOD
 """
 
-#from collections import OrderedDict
+# from collections import OrderedDict
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.production import producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, InsertableDict
-#from columnflow.columnar_util_Ghent import TetraVec
+# from columnflow.columnar_util_Ghent import TetraVec
 from columnflow.tasks.external import BundleExternalFiles
 
 np = maybe_import("numpy")
@@ -52,7 +52,7 @@ def lepton_mva_inputs_producer(self: Calibrator, events: ak.Array, **kwargs) -> 
             events = set_ak_column(events, f"{lepton_name}.log_abs" + impact, np.log(np.abs(lepton[impact])))
 
         # Relative mini-isolation with neutral PF objects
-        events = set_ak_column(events, f"{lepton_name}.miniPFRelIso_neutral", 
+        events = set_ak_column(events, f"{lepton_name}.miniPFRelIso_neutral",
                     lepton.miniPFRelIso_all - lepton.miniPFRelIso_chg)
 
         # absolute eta

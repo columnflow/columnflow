@@ -1,12 +1,12 @@
-#from collections import defaultdict
-#from typing import Tuple
+# from collections import defaultdict
+# from typing import Tuple
 
-#import law
+# import law
 
 from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import set_ak_column
 from columnflow.production import Producer, producer
-#from columnflow.columnar_util_Ghent import TetraVec
+# from columnflow.columnar_util_Ghent import TetraVec
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -57,11 +57,11 @@ _prompt_status = ["isPrompt", "isDirectPromptTauDecayProduct", "isHardProcess",
         ("pdgId", "genPartIdx")) |
     four_vec(
         ("GenPart"),
-        ("pdgId", "status", "statusFlags", )
+        ("pdgId", "status", "statusFlags"),
     ),
     produces=four_vec(
-        {"Electron", "Muon", },
-        {"isPrompt", "matchPdgId", "isChargeFlip", }
+        {"Electron", "Muon"},
+        {"isPrompt", "matchPdgId", "isChargeFlip"},
     ),
     mc_only=True,
     exposed=False,
