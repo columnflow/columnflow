@@ -226,10 +226,20 @@ class SelectionResult(od.AuxDataMixin):
     """
 
     @classmethod
+    def check_nones_and_convert(cls, name, mask):
+        mask_type = str(mask.type)
+        if '?' in mask_type or 'Option' in mask_type:
+            assert not ak.any(ak.is_none(mask)), f"mask {name} contains None values"
+            logger.info(f"mask {name} is of mixed type, but does not contain Nones: converting to pure type.")
+            mask = ak.fill_none(mask, 0)
+        return mask
+
+    @classmethod
     def check_valid_event_mask(cls, name, event_mask):
         assert isinstance(event_mask, (np.ndarray, ak.Array)), f"{name} should be numpy or awkward array but is {type(event)}"
         assert event_mask.ndim == 1, f"{name} array has illegal dimension {event.ndim}"
         assert np.array(event_mask).dtype == bool, f"{name} is {np.array(event_mask).dtype} array, not boolean array"
+        return cls.check_nones_and_convert(name, mask)
 
     def __init__(
         self: SelectionResult,
@@ -243,21 +253,20 @@ class SelectionResult(od.AuxDataMixin):
 
         # store fields
         if event is not None:
-            self.check_valid_event_mask("event", event)
+            event = self.check_valid_event_mask("event", event)
         self.event = event
         if steps is not None:
-            for step in steps.items():
-                self.check_valid_event_mask(*step)
+            for step, step_mask in steps.items():
+                steps[step] = self.check_valid_event_mask(step, step_mask)
         self.steps = DotDict.wrap(steps or {})
         if objects is not None:
             for src_object, dst_objects in objects.items():
                 assert isinstance(dst_objects, (DotDict, dict)), "objects should be a (dot)dict of (dot)dicts"
                 for dst_obj, dst_obj_mask in dst_objects.items():
+
+                    dst_obj_mask = self.check_nones_and_convert(dst_obj, dst_obj_mask)
+
                     dst_obj_mask_type = str(dst_obj_mask.type)
-                    if '?' in dst_obj_mask_type or 'Option' in dst_obj_mask_type:
-                        assert not ak.any(ak.is_none(dst_obj_mask)), f"object mask {dst_obj} contains None values"
-                        logger.info(f"object mask {dst_obj} is of mixed type, but does not contain Nones: converting to pure type.")
-                        dst_obj_mask = ak.fill_none(dst_obj_mask, 0)
                     if 'bool' in dst_obj_mask_type:
                         assert dst_obj_mask.ndim == 2, f"boolean object mask {dst_obj} has illegal dimension {dst_obj_mask.ndim}"
                     elif 'int' in dst_obj_mask_type:
