@@ -8,11 +8,9 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, ChunkedIOMixin,
-)
+from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
@@ -21,10 +19,8 @@ from columnflow.util import dev_sandbox
 class UniteColumns(
     MLModelsMixin,
     ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -38,9 +34,8 @@ class UniteColumns(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEvents.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
     )
@@ -49,7 +44,7 @@ class UniteColumns(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         if not self.pilot:
             if self.producer_insts:
@@ -67,9 +62,7 @@ class UniteColumns(
         return reqs
 
     def requires(self):
-        reqs = {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-        }
+        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -85,7 +78,9 @@ class UniteColumns(
 
         return reqs
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
         return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
@@ -121,7 +116,7 @@ class UniteColumns(
         read_columns = {Route(c) for c in read_columns}
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["collection"][0]["events"].path]
+        files = [inputs["events"]["events"].path]
         if self.producer_insts:
             files.extend([inp["columns"].path for inp in inputs["producers"]])
         if self.ml_model_insts:

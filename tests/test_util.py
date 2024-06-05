@@ -7,7 +7,7 @@ import unittest
 
 from columnflow.util import (
     create_random_name, maybe_import, MockModule, DotDict, Derivable,
-    safe_div, try_float, try_int, is_regex, is_pattern, pattern_matcher,
+    safe_div, try_float, try_int, try_complex, is_regex, is_pattern, pattern_matcher,
 )
 
 
@@ -43,6 +43,13 @@ class UtilTest(unittest.TestCase):
             self.assertFalse(try_number("some_string"))
             self.assertFalse(try_number(1j))
             self.assertFalse(try_number([1, 2]))
+
+    def test_try_complex(self):
+        self.assertTrue(try_complex("1.2+2.5j"))
+        self.assertFalse(try_complex("some_string"))
+        self.assertFalse(try_complex([1, 2]))
+        # real numbers are also complex number
+        self.assertTrue(try_complex("5.0"))
 
     def test_is_regex(self):
         self.assertTrue(is_regex(r"^foo\d+.*$"))

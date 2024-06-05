@@ -4,8 +4,6 @@
 Configuration of the __cf_analysis_name__ analysis.
 """
 
-import functools
-
 import law
 import order as od
 from scinum import Number
@@ -13,8 +11,7 @@ from scinum import Number
 from columnflow.util import DotDict, maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
-    get_root_processes_from_campaign, add_shift_aliases, get_shifts_from_sources, add_category,
-    verify_config_processes,
+    get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
 )
 
 ak = maybe_import("awkward")
@@ -112,6 +109,7 @@ verify_config_processes(cfg, warn=True)
 cfg.x.default_calibrator = "example"
 cfg.x.default_selector = "example"
 cfg.x.default_producer = "example"
+cfg.x.default_weight_producer = "example"
 cfg.x.default_ml_model = None
 cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
@@ -256,13 +254,6 @@ cfg.x.keep_columns = DotDict.wrap({
     "cf.UniteColumns": {
         "*",
     },
-})
-
-# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on
-get_shifts = functools.partial(get_shifts_from_sources, cfg)
-cfg.x.event_weights = DotDict({
-    "normalization_weight": [],
-    "muon_weight": get_shifts("mu"),
 })
 
 # versions per task family, either referring to strings or to callables receving the invoking
