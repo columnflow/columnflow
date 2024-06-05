@@ -103,10 +103,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
             self.logger.info(f"get lfns for dataset key {key} {msg}")
-            if msg=='via dasgoclient':
+            if msg == "via dasgoclient":
                 lfns.extend(get_dataset_lfns(self.dataset_inst, self.global_shift_inst, key))
-            else:    
-                lfns.extend(get_dataset_lfns(self,key))
+            else:
+                lfns.extend(get_dataset_lfns(self, key))
 
         if self.validate and len(lfns) != self.dataset_info_inst.n_files:
             raise ValueError(
@@ -128,10 +128,9 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         Function to get the LFN information for custom datasets
         The path of custom files have to be given in law.cfg file as [custom_pnfs_fs]
         """
-        base = law.config.get_expanded('custom_pnfs_fs', "base")
+        base = law.config.get_expanded("custom_pnfs_fs", "base")
         out = glob.glob(f"{base}{dataset_key}/*/*/*.root")
         return out
-    
 
     def get_dataset_lfns_dasgoclient(
         self,
