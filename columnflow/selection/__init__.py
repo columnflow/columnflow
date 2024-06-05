@@ -236,10 +236,10 @@ class SelectionResult(od.AuxDataMixin):
 
     @classmethod
     def check_valid_event_mask(cls, name, event_mask):
-        assert isinstance(event_mask, (np.ndarray, ak.Array)), f"{name} should be numpy or awkward array but is {type(event)}"
-        assert event_mask.ndim == 1, f"{name} array has illegal dimension {event.ndim}"
+        assert isinstance(event_mask, (np.ndarray, ak.Array)), f"{name} should be numpy or awkward array but is {type(event_mask)}"
+        assert event_mask.ndim == 1, f"{name} array has illegal dimension {event_mask.ndim}"
         assert np.array(event_mask).dtype == bool, f"{name} is {np.array(event_mask).dtype} array, not boolean array"
-        return cls.check_nones_and_convert(name, mask)
+        return cls.check_nones_and_convert(name, event_mask)
 
     def __init__(
         self: SelectionResult,
@@ -274,7 +274,7 @@ class SelectionResult(od.AuxDataMixin):
                         if dst_obj_mask.ndim == 1:
                             logger.info(f"converting 1d object mask {dst_obj} to 2d")
                             dst_obj_mask = dst_obj_mask[:, None]
-                        dst_object_mask = ak.from_regular(dst_obj_mask)  # make sure object masks are jagged to avoid numpy index
+                        dst_obj_mask = ak.from_regular(dst_obj_mask)  # make sure object masks are jagged to avoid numpy index
                     dst_objects[dst_obj] = dst_obj_mask
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
