@@ -254,6 +254,10 @@ class SelectionResult(od.AuxDataMixin):
                 assert isinstance(dst_objects, (DotDict, dict)), "objects should be a (dot)dict of (dot)dicts"
                 for dst_obj, dst_obj_mask in dst_objects.items():
                     dst_obj_mask_type = str(dst_obj_mask.type)
+                    if '?' in dst_obj_mask_type or 'Option' in dst_obj_mask_type:
+                        assert not ak.any(ak.is_none(dst_obj_mask)), f"object mask {dst_obj} contains None values"
+                        logger.info(f"object mask {dst_obj} is of mixed type, but does not contain Nones: converting to pure type.")
+                        dst_obj_mask = ak.fill_none(dst_obj_mask, 0)
                     if 'bool' in dst_obj_mask_type:
                         assert dst_obj_mask.ndim == 2, f"boolean object mask {dst_obj} has illegal dimension {dst_obj_mask.ndim}"
                     elif 'int' in dst_obj_mask_type:
@@ -261,11 +265,8 @@ class SelectionResult(od.AuxDataMixin):
                         if dst_obj_mask.ndim == 1:
                             logger.info(f"converting 1d object mask {dst_obj} to 2d")
                             dst_obj_mask = dst_obj_mask[:, None]
-                        if '?' in str(dst_obj_mask.type) or 'Option' in str(dst_obj_mask.type):
-                            assert not ak.any(ak.is_none(dst_obj_mask)), f"object mask {dst_obj} contains None values"
-                            logger.info(f"object mask {dst_obj} is of mixed type, but does not contain Nones: converting to pure type.")
-                            dst_obj_mask = ak.fill_none(dst_obj_mask, 0)
-                        dst_objects[dst_obj] = ak.from_regular(dst_obj_mask)  # make sure object masks are jagged to avoid numpy index
+                        dst_object_mask = ak.from_regular(dst_obj_mask)  # make sure object masks are jagged to avoid numpy index
+                    dst_objects[dst_obj] = dst_obj_mask
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
 
