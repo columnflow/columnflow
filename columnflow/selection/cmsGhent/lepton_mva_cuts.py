@@ -4,14 +4,14 @@
 Selection modules for object selection of Muon, Electron, and Jet.
 """
 
-from collections import defaultdict
+# from collections import defaultdict
 from typing import Tuple, Literal, Dict
 
-import law
+# import law
 
 from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import set_ak_column, optional_column
-from columnflow.production.util import attach_coffea_behavior
+# from columnflow.production.util import attach_coffea_behavior
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.util import masked_sorted_indices
 
@@ -20,15 +20,15 @@ ak = maybe_import("awkward")
 
 @selector(
     uses=(
-            four_vec({"Electron", "Muon"}, {"dxy", "dz", "sip3d", "miniPFRelIso_all"}) |
-            {"Electron.lostHits", "Electron.deltaEtaSC", "Muon.mediumId"} |
-            optional_column("Electron.mvaTOP", "Muon.mvaTOP")
+        four_vec({"Electron", "Muon"}, {"dxy", "dz", "sip3d", "miniPFRelIso_all"}) |
+        {"Electron.lostHits", "Electron.deltaEtaSC", "Muon.mediumId"} |
+        optional_column("Electron.mvaTOP", "Muon.mvaTOP")
     ),
 )
 def lepton_mva_object(
         self: Selector,
         events: ak.Array,
-        working_point: 'Dict[Listeral["Muon", "Electron"], str] | str'="veto",
+        working_point: 'Dict[Literal["Muon", "Electron"], str] | str' = "veto",
         **kwargs,
 ) -> Tuple[ak.Array, SelectionResult]:
     """
@@ -46,7 +46,7 @@ def lepton_mva_object(
 
     """
     if isinstance(working_point, str):
-        working_point = {l: working_point for l in ["Muon", "Electron"]}
+        working_point = {lepton: working_point for lepton in ["Muon", "Electron"]}
     if set(working_point.values()) != {"veto"}:
         assert working_point in self.config_inst.x.top_mva_wps
         assert "mvaTOP" in events.Electron.fields
@@ -57,27 +57,28 @@ def lepton_mva_object(
     ele_absetaSC = abs(ele.eta + ele.deltaEtaSC)
     masks = {
         "Electron": (abs(ele.eta) < 2.5) & (ele.lostHits < 2) & ((ele_absetaSC > 1.5560) | (ele_absetaSC < 1.4442)),
-        "Muon": (abs(events.Muon.eta) < 2.4) & events.Muon.mediumId,
+        "Muon": (abs(mu.eta) < 2.4) & mu.mediumId,
     }
 
     # conditions shared for muons and leptons
     for lepton_name in masks:
         lepton = events[lepton_name]
         veto_mask = masks[lepton_name] & (
-                (lepton.pt > 10) &
-                (lepton.miniPFRelIso_all < 0.4) &
-                (lepton.sip3d < 8) &
-                (lepton.dz < 0.1) &
-                (lepton.dxy < 0.05)
+            (lepton.pt > 10) &
+            (lepton.miniPFRelIso_all < 0.4) &
+            (lepton.sip3d < 8) &
+            (lepton.dz < 0.1) &
+            (lepton.dxy < 0.05)
         )
         events = set_ak_column(events, f"{lepton_name}.veto", veto_mask)
         if "mvaTOP" in lepton.fields:
             wps = self.config_inst.x.top_mva_wps
             for wp in wps:
-                events = set_ak_column(events, f"{lepton_name}.{wp}",
-                                       events[lepton_name]["veto"] &
-                                       (lepton.mvaTOP > wps[wp])
-                                       )
+                events = set_ak_column(
+                    events, f"{lepton_name}.{wp}",
+                    events[lepton_name]["veto"] & (lepton.mvaTOP > wps[wp]),
+                )
+
     return events, SelectionResult(
         steps={},
         objects={

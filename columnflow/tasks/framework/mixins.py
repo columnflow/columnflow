@@ -586,7 +586,7 @@ class SelectorStepsMixin(SelectorMixin):
     parameter for this task.
     """
 
-    selector_steps_default = ('_DEFAULT',)
+    selector_steps_default = ("_DEFAULT",)
 
     selector_steps = law.CSVParameter(
         default=selector_steps_default,
@@ -2233,7 +2233,7 @@ class ChunkedIOMixin(AnalysisTask):
 class MergeHistogramMixin(
         VariablesMixin,
         law.LocalWorkflow,
-    ):
+):
     only_missing = luigi.BoolParameter(
         default=False,
         description="when True, identify missing variables first and only require histograms of "

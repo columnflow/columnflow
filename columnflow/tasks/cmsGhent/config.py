@@ -3,7 +3,7 @@ import luigi
 from columnflow.tasks.framework.base import ConfigTask
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
 
-import json
+# import json
 
 
 class ReadDataSets(DatasetsProcessesMixin, ConfigTask):
@@ -36,7 +36,7 @@ class ReadDataSets(DatasetsProcessesMixin, ConfigTask):
                 if p_inst.has_process(process) or p_inst == process:
                     datasets = process_dataset_map[p]
             datasets_loc: dict = dt.info.copy()
-            nominal = datasets_loc.pop('nominal')
+            nominal = datasets_loc.pop("nominal")
             if self.shifts:
                 for shift in datasets_loc.values():
                     datasets.extend(shift.keys)
