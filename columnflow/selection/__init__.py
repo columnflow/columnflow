@@ -18,7 +18,9 @@ from columnflow.columnar_util import TaskArrayFunction
 from columnflow.config_util import expand_shift_sources
 
 ak = maybe_import("awkward")
+np = maybe_import("numpy")
 
+logger = law.logger.get_logger(__name__)
 
 class Selector(TaskArrayFunction):
     """
@@ -223,6 +225,12 @@ class SelectionResult(od.AuxDataMixin):
         res.to_ak()
     """
 
+    @classmethod
+    def check_valid_event_mask(cls, name, event_mask):
+        assert isinstance(event_mask, (np.ndarray, ak.Array)), f"{name} should be numpy or awkward array but is {type(event)}"
+        assert event_mask.ndim == 1, f"{name} array has illegal dimension {event.ndim}"
+        assert np.array(event_mask).dtype == bool, f"{name} is {np.array(event_mask).dtype} array, not boolean array"
+
     def __init__(
         self: SelectionResult,
         event: ak.Array | None = None,
@@ -234,8 +242,30 @@ class SelectionResult(od.AuxDataMixin):
         super().__init__(aux=aux)
 
         # store fields
+        if event is not None:
+            self.check_valid_event_mask("event", event)
         self.event = event
+        if steps is not None:
+            for step in steps.items():
+                self.check_valid_event_mask(*step)
         self.steps = DotDict.wrap(steps or {})
+        if objects is not None:
+            for src_object, dst_objects in objects.items():
+                assert isinstance(dst_objects, (DotDict, dict)), "objects should be a (dot)dict of (dot)dicts"
+                for dst_obj, dst_obj_mask in dst_objects.items():
+                    dst_obj_mask_type = str(dst_obj_mask.type)
+                    if 'bool' in dst_obj_mask_type:
+                        assert dst_obj_mask.ndim == 2, f"boolean object mask {dst_obj} has illegal dimension {dst_obj_mask.ndim}"
+                    elif 'int' in dst_obj_mask_type:
+                        assert dst_obj_mask.ndim in [1, 2], f"integer object mask {dst_obj} has illegal dimension {dst_obj_mask.ndim}"
+                        if dst_obj_mask.ndim == 1:
+                            logger.info(f"converting 1d object mask {dst_obj} to 2d")
+                            dst_obj_mask = dst_obj_mask[:, None]
+                        if '?' in str(dst_obj_mask.type) or 'Option' in str(dst_obj_mask.type):
+                            assert not ak.any(ak.is_none(dst_obj_mask)), f"object mask {dst_obj} contains None values"
+                            logger.info(f"object mask {dst_obj} is of mixed type, but does not contain Nones: converting to pure type.")
+                            dst_obj_mask = ak.fill_none(dst_obj_mask, 0)
+                        dst_objects[dst_obj] = ak.from_regular(dst_obj_mask)  # make sure object masks are jagged to avoid numpy index
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
 
