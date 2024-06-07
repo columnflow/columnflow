@@ -710,6 +710,24 @@ class DerivableMeta(abc.ABCMeta):
         cls_dict = cls_dict.copy()
         cls_dict["_subclasses"] = {}
 
+        # helper to find an attribute among the bases
+        def get_base_attr(attr, default=None):
+            no_value = object()
+            for base in bases:
+                value = getattr(base, attr, no_value)
+                if value != no_value:
+                    return value
+            return default
+
+        # trigger the hook that updates the cls_dict
+        update_cls_dict = cls_dict.get("update_cls_dict")
+        if update_cls_dict is None:
+            update_cls_dict = get_base_attr("update_cls_dict")
+        else:
+            cls_dict["update_cls_dict"] = staticmethod(update_cls_dict)
+        if update_cls_dict is not None:
+            update_cls_dict(cls_name, cls_dict, get_base_attr)
+
         # create the class
         cls = super().__new__(metacls, cls_name, bases, cls_dict)
 
@@ -719,7 +737,6 @@ class DerivableMeta(abc.ABCMeta):
         # save the class in the class cache of all subclassable base classes
         for base in bases:
             if isinstance(base, metacls):
-                # TODO: is it safe to overwrite here? probably yes
                 base._subclasses[cls_name] = cls
 
         return cls
@@ -786,8 +803,8 @@ class DerivableMeta(abc.ABCMeta):
         cls,
         cls_name: str,
         bases: tuple = (),
-        cls_dict: Union[dict, None] = None,
-        module: Union[str, None] = None,
+        cls_dict: dict[str, Any] | None = None,
+        module: str | None = None,
     ) -> DerivableMeta:
         """Creates a subclass named *cls_name* inheriting from *this* class an
         additional, optional *bases*.
