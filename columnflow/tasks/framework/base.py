@@ -89,6 +89,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_wlcg_fs = law.config.get_expanded("target", "default_wlcg_fs", "wlcg_fs")
     default_output_location = "config"
 
+    exclude_params_index = {"user"}
+    exclude_params_req = {"user"}
+    exclude_params_repr = {"user"}
+
     # cached and parsed sections of the law config for faster lookup
     _cfg_outputs_dict = None
     _cfg_versions_dict = None
