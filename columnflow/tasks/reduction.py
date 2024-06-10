@@ -25,6 +25,10 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 ak = maybe_import("awkward")
 
 
+# default parameters
+default_keep_reduced_events = law.config.get_expanded("analysis", "default_keep_reduced_events")
+
+
 class ReduceEvents(
     SelectorStepsMixin,
     CalibratorsMixin,
@@ -373,6 +377,14 @@ class MergeReducedEvents(
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+
+    keep_reduced_events = luigi.BoolParameter(
+        default=default_keep_reduced_events,
+        significant=False,
+        description="whether to keep reduced input files after merging; when False, they are "
+        f"removed after successful merging; default: {default_keep_reduced_events}",
+    )
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -451,6 +463,12 @@ class MergeReducedEvents(
         law.pyarrow.merge_parquet_task(
             self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
         )
+
+        # optionally remove inputs
+        if not self.keep_reduced_events:
+            with self.publish_step("removing reduced inputs ..."):
+                for inp in inputs:
+                    inp.remove()
 
 
 MergeReducedEventsWrapper = wrapper_factory(
