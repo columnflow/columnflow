@@ -560,7 +560,7 @@ class DotDict(OrderedDict):
         # => 123
 
         # use wrap() to convert a nested dict
-        d = DotDict({"foo": {"bar": 1}})
+        d = DotDict.wrap({"foo": {"bar": 1}})
         print(d.foo.bar)
         # => 1
     """

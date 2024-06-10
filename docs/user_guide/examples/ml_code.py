@@ -15,7 +15,6 @@ from columnflow.ml import MLModel
 from columnflow.util import maybe_import
 from columnflow.columnar_util import Route, set_ak_column, remove_ak_column
 
-
 ak = maybe_import("awkward")
 tf = maybe_import("tensorflow")
 np = maybe_import("numpy")
@@ -34,11 +33,11 @@ class TestModel(MLModel):
     }
 
     def __init__(
-            self,
-            *args,
-            folds: int | None = None,
-            **kwargs,
-    ):
+        self,
+        *args,
+        folds: int | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         # your instance variables
         # these are exclusive to your model instance
@@ -58,7 +57,6 @@ class TestModel(MLModel):
                 binning=(4, -1.5, 2.5),
                 x_title="Predicted number of electrons",
             )
-        return
 
     def sandbox(self, task: law.Task) -> str:
         return "bash::$HBT_BASE/sandboxes/venv_columnar_tf.sh"
@@ -202,7 +200,6 @@ class TestModel(MLModel):
 
         # save your model and everything you want to keep
         output.dump(model, formatter="tf_keras_model")
-        return
 
     def evaluate(
         self,
