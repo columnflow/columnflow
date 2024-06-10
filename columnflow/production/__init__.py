@@ -79,17 +79,7 @@ class Producer(TaskArrayFunction):
             cls_name = cls_dict.pop("cls_name", func.__name__)
 
             # hook to update the class dict during class derivation
-            def update_cls_dict(cls_name, cls_dict, get_base_attr):
-                # helper to get in attr from either the cls_dict or a base class
-                def get_attr(attr):
-                    no_value = object()
-                    if attr in cls_dict:
-                        return cls_dict[attr]
-                    value = get_base_attr(attr, no_value)
-                    if value == no_value:
-                        raise AttributeError(f"attribute {attr} not found in {cls_name}")
-                    return value
-
+            def update_cls_dict(cls_name, cls_dict, get_attr):
                 mc_only = get_attr("mc_only")
                 data_only = get_attr("data_only")
                 nominal_only = get_attr("nominal_only")

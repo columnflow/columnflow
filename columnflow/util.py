@@ -710,22 +710,27 @@ class DerivableMeta(abc.ABCMeta):
         cls_dict = cls_dict.copy()
         cls_dict["_subclasses"] = {}
 
-        # helper to find an attribute among the bases
-        def get_base_attr(attr, default=None):
-            no_value = object()
+        # helper to find an attribute in the cls_dict, and falling back to the bases
+        no_value = object()
+
+        def get_base_attr(attr, default=no_value, /):
+            # prefer the cls_dict of the class to be created
+            if attr in cls_dict:
+                return cls_dict[attr]
+            # fallback to base classes
             for base in bases:
                 value = getattr(base, attr, no_value)
                 if value != no_value:
                     return value
-            return default
+            if default != no_value:
+                return default
+            raise AttributeError(f"attribute {attr} not found in {cls_name}")
 
         # trigger the hook that updates the cls_dict
-        update_cls_dict = cls_dict.get("update_cls_dict")
-        if update_cls_dict is None:
-            update_cls_dict = get_base_attr("update_cls_dict")
-        else:
-            cls_dict["update_cls_dict"] = staticmethod(update_cls_dict)
+        update_cls_dict = get_base_attr("update_cls_dict", None)
         if update_cls_dict is not None:
+            if "update_cls_dict" in cls_dict:
+                cls_dict["update_cls_dict"] = staticmethod(update_cls_dict)
             update_cls_dict(cls_name, cls_dict, get_base_attr)
 
         # create the class
