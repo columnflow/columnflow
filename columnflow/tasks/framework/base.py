@@ -688,8 +688,23 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         return parts
 
-    def local_path(self, *path, **kwargs):
-        """ local_path(*path, store=None, fs=None)
+    def _get_store_parts_modifier(
+        self,
+        modifier: str | Callable[[AnalysisTask, dict], dict],
+    ) -> Callable[[AnalysisTask, dict], dict] | None:
+        if isinstance(modifier, str):
+            # interpret it as a name of an entry in the store_parts_modifiers aux entry
+            modifier = self.analysis_inst.x("store_parts_modifiers", {}).get(modifier)
+
+        return modifier if callable(modifier) else None
+
+    def local_path(
+        self,
+        *path,
+        store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
+        **kwargs,
+    ):
+        """ local_path(*path, store=None, fs=None, store_parts_modifier=None)
         Joins path fragments from *store* (defaulting to :py:attr:`default_store`),
         :py:meth:`store_parts` and *path* and returns the joined path. In case a *fs* is defined,
         it should refer to the config section of a local file system, and consequently, *store* is
@@ -702,14 +717,25 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             store = kwargs.get("store") or self.default_store
             parts += (store,)
 
+        # get and optional modify the store parts
+        store_parts = self.store_parts()
+        store_parts_modifier = self._get_store_parts_modifier(store_parts_modifier)
+        if callable(store_parts_modifier):
+            store_parts = store_parts_modifier(self, store_parts)
+
         # concatenate all parts that make up the path and join them
-        parts += tuple(self.store_parts().values()) + path
+        parts += tuple(store_parts.values()) + path
         path = os.path.join(*map(str, parts))
 
         return path
 
-    def local_target(self, *path, **kwargs):
-        """ local_target(*path, dir=False, store=None, fs=None, **kwargs)
+    def local_target(
+        self,
+        *path,
+        store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
+        **kwargs,
+    ):
+        """ local_target(*path, dir=False, store=None, fs=None, store_parts_modifier=None, **kwargs)
         Creates either a local file or directory target, depending on *dir*, forwarding all *path*
         fragments, *store* and *fs* to :py:meth:`local_path` and all *kwargs* the respective target
         class.
@@ -722,26 +748,41 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         cls = law.LocalDirectoryTarget if _dir else law.LocalFileTarget
 
         # create the local path
-        path = self.local_path(*path, store=store, fs=fs)
+        path = self.local_path(*path, store=store, fs=fs, store_parts_modifier=store_parts_modifier)
 
         # create the target instance and return it
         return cls(path, **kwargs)
 
-    def wlcg_path(self, *path):
+    def wlcg_path(
+        self,
+        *path,
+        store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
+    ) -> str:
         """
         Joins path fragments from *store_parts()* and *path* and returns the joined path.
 
         The full URI to the target is not considered as it is usually defined in ``[wlcg_fs]``
         sections in the law config and hence subject to :py:func:`wlcg_target`.
         """
+        # get and optional modify the store parts
+        store_parts = self.store_parts()
+        store_parts_modifier = self._get_store_parts_modifier(store_parts_modifier)
+        if callable(store_parts_modifier):
+            store_parts = store_parts_modifier(self, store_parts)
+
         # concatenate all parts that make up the path and join them
-        parts = tuple(self.store_parts().values()) + path
+        parts = tuple(store_parts.values()) + path
         path = os.path.join(*map(str, parts))
 
         return path
 
-    def wlcg_target(self, *path, **kwargs):
-        """ wlcg_target(*path, dir=False, fs=default_wlcg_fs, **kwargs)
+    def wlcg_target(
+        self,
+        *path,
+        store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
+        **kwargs,
+    ):
+        """ wlcg_target(*path, dir=False, fs=default_wlcg_fs, store_parts_modifier=None, **kwargs)
         Creates either a remote WLCG file or directory target, depending on *dir*, forwarding all
         *path* fragments to :py:meth:`wlcg_path` and all *kwargs* the respective target class. When
         *None*, *fs* defaults to the *default_wlcg_fs* class level attribute.
@@ -754,7 +795,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         cls = law.wlcg.WLCGDirectoryTarget if _dir else law.wlcg.WLCGFileTarget
 
         # create the local path
-        path = self.wlcg_path(*path)
+        path = self.wlcg_path(*path, store_parts_modifier=store_parts_modifier)
 
         # create the target instance and return it
         return cls(path, **kwargs)
@@ -784,15 +825,17 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # forward to correct function
         if location[0] == OutputLocation.local:
             # get other options
-            (loc,) = (location[1:] + [None])[:1]
+            loc, store_parts_modifier = (location[1:] + [None, None])[:2]
             loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
             kwargs.setdefault(loc_key, loc)
+            kwargs.setdefault("store_parts_modifier", store_parts_modifier)
             return self.local_target(*path, **kwargs)
 
         if location[0] == OutputLocation.wlcg:
             # get other options
-            (fs,) = (location[1:] + [None])[:1]
+            fs, store_parts_modifier = (location[1:] + [None, None])[:2]
             kwargs.setdefault("fs", fs)
+            kwargs.setdefault("store_parts_modifier", store_parts_modifier)
             return self.wlcg_target(*path, **kwargs)
 
         raise Exception(f"cannot determine output location based on '{location}'")
