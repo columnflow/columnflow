@@ -1188,7 +1188,7 @@ def fill_hist(
     correct_last_bin_axes = []
     for ax in h.axes:
         axis_names.append(ax.name)
-        if shift_last_bin and ax.widths and not ax._ax.traits_growth:
+        if shift_last_bin and len(ax.widths) and not ax._ax.traits_growth:
             correct_last_bin_axes.append(ax)
 
     # check data
