@@ -13,6 +13,7 @@ import law
 
 from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
+from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.util import real_path
 
 
@@ -22,6 +23,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    user = user_parameter_inst
     version = None
 
     exclude_files = ["docs", "tests", "data", "assets", ".law", ".setups", ".data", ".github"]
@@ -61,6 +63,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    user = user_parameter_inst
     version = None
 
     def single_output(self):
@@ -98,6 +101,7 @@ class SandboxFileTask(AnalysisTask):
     sandbox_file = luigi.Parameter(
         description="the sandbox file to install",
     )
+    user = user_parameter_inst
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -162,6 +166,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    user = user_parameter_inst
     version = None
 
     # upstream requirements
