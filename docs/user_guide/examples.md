@@ -4,10 +4,10 @@ In this section, additional examples on the usage of columnflow are presented.
 
 ## Writing new tasks
 
-Despite columnflow already implementing many tasks that satisfy most needs of the basic user, more complex workflows may require creating a new task, specifically designed for the new job.
-This section will help you create your first columnflow task and contains some tips that may come in handy for the new task.
+Despite columnflow already implementing many tasks that satisfy many analysis needs, more complex workflows may require creating a new task, specifically designed to accomplish a new task.
+This section helps you create your first analysis specific columnflow task and contains some tips that may come in handy.
 
-Tasks in columnflow are based on {external+law:py:class}`~law.task.base.BaseTask` from the [law package](https://law.readthedocs.io/en/latest/index.html) by Marcel Rieger, which in turn is based on the [luigi package](https://luigi.readthedocs.io/en/stable/tasks.html) by Spotify.
+Tasks in columnflow are based on {external+law:py:class}`~law.task.base.BaseTask` from the [law package](https://law.readthedocs.io/en/latest/index.html), which in turn is based on the [luigi package](https://luigi.readthedocs.io/en/stable/tasks.html) by Spotify.
 Refer to the documentation of these packages for more information on the task class and a detailed description of the implemented methods.
 
 (example_task_class_section)=
@@ -21,7 +21,9 @@ from columnflow.tasks.framework.base import AnalysisTask, SomeOtherTask, Require
 from columnflow.util import dev_sandbox
 
 class MyTask(AnalysisTask):
-"""My new task"""
+    """
+    My new task.
+    """
     
     # specify sandbox for the task
     sandbox = dev_sandbox(law.config.get("analysis", "my_columnar_sandbox"))
@@ -33,16 +35,16 @@ class MyTask(AnalysisTask):
     # class parameters
     param1 = luigi.Parameter(
         default="default_value",
-        description="String parameter with default value",
+        description="string parameter with default value; default: default_value",
     )
     param2 = law.CSVParameter(
-        default=("*",), # parsed similar to wildcard imports
-        description="Parameter accepting comma-seperated values."
-            "Default is a tuple with all knows values connected to this attribute."
+        default=("*",),  # parsed similar to wildcard imports
+        description="parameter accepting comma-seperated values; "
+        "default is a tuple with all knows values connected to this attribute",
     )
     param_bool = luigi.BoolParameter(
         default=False,
-        description="Boolean parameter with default value `False`",
+        description="boolean parameter; default:  False",
     )
     
     # container for upstream requirements for convenience
@@ -51,6 +53,7 @@ class MyTask(AnalysisTask):
     def requires(self):
         # If needed get the requirements from super class (usually defined as dict)
         req = super().requires()
+
         # Add branch Dependencies on other tasks
         req["SomeOtherTask"] = SomeOtherTask
  
@@ -74,9 +77,11 @@ class MyTask(AnalysisTask):
 ```
 
 ### The "super" class
+
 Every task is defined by a Python class, which inherits from a task base or another fully functional task.
 The most basic base in the framework is {py:class}`~columnflow.tasks.framework.base.BaseTask`.
 However, for tasks implemented in an analysis, it is highly recommended to inherit from one of the following derived subclasses:
+
 - {py:class}`~columnflow.tasks.framework.base.AnalysisTask`
 - {py:class}`~columnflow.tasks.framework.base.ConfigTask`
 - {py:class}`~columnflow.tasks.framework.base.ShiftTask`
@@ -104,7 +109,6 @@ The sandbox can be defined in the task class itself using the syntax shown above
 
 More details on using and setting up the sandboxed are givin in the {doc}`sandbox section <sandbox>`.
 
-
 ### The parameters
 
 Like the arguments of a function, the parameters of a task are the variables that are passed to the task when it is run from the command line (``law run MyTask --param1 foo``), making the task very flexible.
@@ -121,8 +125,6 @@ However, it is important to inherit the parameter class from the package used fo
 Otherwise, the parameter will not work correctly.
 
 ### The requirements
-
-<!-- #TODO explain branches if not explained in law -->
 
 As noticed in the {ref}`code snipped <example_task_class_section>`, a task can define three different requirement keywords, which have different functionality in the framework.
 
@@ -142,11 +144,12 @@ Finally, the class attribute ```reqs```, that is a {py:class}`~columnflow.tasks.
 Strictly speaking, it is not needed for the task to run.
 However it offers a container for the requirements, which becomes very convenient when for example a required task should be replaced by a customized subclass of the same task.
 Instead of having to edit the requirements in all the class methods that depends on this requirement, the ```reqs``` attribute can be simply modified with:
+
 ```python
 MyTask.reqs.RequiredTask = ModifiedRequiredTask
 ```
-Therefore, using the class attribute ```reqs```, when working with the requirements within the class is convenient.
 
+Therefore, using the class attribute ```reqs```, when working with the requirements within the class is convenient.
 
 :::{figure} ../plots/user_guide/cf_plot.pdf
 :width: 100%
@@ -202,9 +205,11 @@ hbt.MyNewTask: wlcg
 ### Executing the Task
 
 After new sourcing the law environment or by running `law index` in a setup enviroment, the task can be executed using the command:
+
 ```bash
 law run cf.MyTask --param1 foo
 ```
+
 The parameters can be given using the syntax ```--param1 foo```, where ```param1``` is the name of the parameter and ```foo``` is the value of the parameter.
 If the parameter's name include an underscore, the underscore is replaced by a hyphen (```--param_1 foo``` -> ```--param-1 foo```).
 If the parameter is a boolean, the parameter can be set to ```True``` by only typing ```--param-bool```.
@@ -219,6 +224,7 @@ It is recommended to apply modifications on the config file in a new custom law 
 The custom config should inherit from the default config (as shown below) and can be modify as needed by adding or overloading fields.
 
 The costum config file should contain the following sections:
+
 ```ini
 [core]
 # inherit from the analysis configuration file
