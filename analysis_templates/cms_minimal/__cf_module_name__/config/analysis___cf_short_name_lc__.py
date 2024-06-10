@@ -47,7 +47,7 @@ ana.x.cmssw_sandboxes = [
 # (used in wrapper_factory)
 ana.x.config_groups = {}
 
-# name hooks of functions that can modify store_parts of task outputs if needed
+# named function hooks that can modify store_parts of task outputs if needed
 ana.x.store_parts_modifiers = {}
 
 

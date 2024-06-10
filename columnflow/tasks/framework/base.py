@@ -703,7 +703,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         *path,
         store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
         **kwargs,
-    ):
+    ) -> str:
         """ local_path(*path, store=None, fs=None, store_parts_modifier=None)
         Joins path fragments from *store* (defaulting to :py:attr:`default_store`),
         :py:meth:`store_parts` and *path* and returns the joined path. In case a *fs* is defined,
