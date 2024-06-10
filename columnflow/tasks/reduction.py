@@ -268,9 +268,9 @@ class MergeReductionStats(
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; when 0, the merging factor is not "
-        "actually calculated from input files, but it is assumed to be 1 (= no merging); default: config "
-        "value 'reduced_file_size' or 512MB'",
+        description="the maximum file size of merged files; default unit is MB; when 0, the "
+        "merging factor is not actually calculated from input files, but it is assumed to be 1 "
+        "(= no merging); default: config value 'reduced_file_size' or 512MB'",
     )
 
     # upstream requirements
@@ -342,24 +342,28 @@ class MergeReductionStats(
         stats["n_test_files"] = n
         stats["tot_size"] = sum(sizes)
         stats["avg_size"], stats["std_size"] = get_avg_std(sizes)
-        stats["max_size_merged"] = self.merged_size * 1024**2
-        stats["merge_factor"] = int(round(stats["max_size_merged"] / stats["avg_size"]))
-        stats["merge_factor"] = min(max(1, stats["merge_factor"]), self.dataset_info_inst.n_files)
-        n_merged = int(math.ceil(self.dataset_info_inst.n_files / stats["merge_factor"]))
+        stats["max_size_merged"] = self.merged_size * 1024**2  # MB to bytes
+
+        # determine the number of files after merging, allowing a possible ~15% increase per file
+        extrapolation = self.dataset_info_inst.n_files / n
+        n_merged_files = extrapolation * stats["tot_size"] / stats["max_size_merged"]
+        rnd = math.ceil if n_merged_files % 1.0 > 0.15 else math.floor
+        n_merged_files = max(int(rnd(n_merged_files)), 1)
+        stats["merge_factor"] = max(math.ceil(self.dataset_info_inst.n_files / n_merged_files), 1)
 
         # save them
         self.output()["stats"].dump(stats, indent=4, formatter="json")
 
         # print them
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
-        self.publish_message(f"tot. size: {law.util.human_bytes(stats['tot_size'], fmt=True)}")
-        self.publish_message(f"avg. size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
-        self.publish_message(f"std. size: {law.util.human_bytes(stats['std_size'], fmt=True)}")
+        self.publish_message(f"average size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
+        deviation = stats["std_size"] / stats["avg_size"]
+        self.publish_message(f"deviation   : {deviation * 100:.2f} % (std / avg)")
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
         self.publish_message(f"files before: {self.dataset_info_inst.n_files}")
-        self.publish_message(f"files after : {n_merged}")
+        self.publish_message(f"files after : {n_merged_files}")
         self.publish_message(40 * "-")
 
 
@@ -393,6 +397,15 @@ class MergeReducedEvents(
         MergeReductionStats=MergeReductionStats,
         ReduceEvents=ReduceEvents,
     )
+
+    @property
+    def merge_factor(self) -> int:
+        """
+        Defines the number of inputs to be merged per output at any point in the merging forest.
+        Required by law.tasks.ForestMerge.
+        """
+        # return as many inputs as leafs are present to create the output of this tree, capped at 50
+        return min(self.file_merging, 50)
 
     def is_sandboxed(self):
         # when the task is a merge forest, consider it sandboxed
