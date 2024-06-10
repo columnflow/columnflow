@@ -464,8 +464,8 @@ class MergeReducedEvents(
             self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
         )
 
-        # optionally remove inputs
-        if not self.keep_reduced_events:
+        # optionally remove initial inputs
+        if not self.keep_reduced_events and self.is_leaf():
             with self.publish_step("removing reduced inputs ..."):
                 for inp in inputs:
                     inp.remove()
