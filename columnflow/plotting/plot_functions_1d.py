@@ -286,7 +286,7 @@ def plot_cutflow(
         },
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
     }

@@ -78,8 +78,8 @@ def apply_settings(containers: Iterable[od.AuxDataMixin], settings: dict[dict, A
 
 
 def apply_process_settings(
-        hists: dict,
-        process_settings: dict | None = None,
+    hists: dict,
+    process_settings: dict | None = None,
 ) -> dict:
     """
     applies settings from `process_settings` dictionary to the `process_insts`;
@@ -266,7 +266,7 @@ def prepare_style_config(
         "legend_cfg": {},
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
     }
@@ -330,7 +330,7 @@ def prepare_plot_config(
     # setup plotting configs
     plot_config = OrderedDict()
 
-    # draw stack + error bands
+    # draw stack
     if h_mc_stack is not None:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
         plot_config["mc_stack"] = {
@@ -344,13 +344,6 @@ def prepare_plot_config(
                 "linewidth": [(0 if c is None else 1) for c in mc_colors[::-1]],
             },
         }
-        if not hide_errors:
-            plot_config["mc_uncert"] = {
-                "method": "draw_error_bands",
-                "hist": h_mc,
-                "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-                "ratio_kwargs": {"norm": h_mc.values()},
-            }
 
     # draw lines
     for i, h in enumerate(line_hists):
@@ -374,6 +367,16 @@ def prepare_plot_config(
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = False
+
+    # draw stack error
+    if h_mc_stack is not None and not hide_errors:
+        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        plot_config["mc_uncert"] = {
+            "method": "draw_error_bands",
+            "hist": h_mc,
+            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+            "ratio_kwargs": {"norm": h_mc.values()},
+        }
 
     # draw data
     if data_hists:
