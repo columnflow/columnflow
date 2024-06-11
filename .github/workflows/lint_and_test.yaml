@@ -10,13 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
 
       - name: Setup python 🐍
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
@@ -29,17 +29,40 @@ jobs:
           source setup.sh ""
           ./tests/run_linting
 
-  test:
+  lint_docs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
 
       - name: Setup python 🐍
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies ☕️
+        run: |
+          source setup.sh ""
+
+      - name: Lint 🔍
+        run: |
+          source setup.sh ""
+          ./tests/run_docs lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ⬇️
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Setup python 🐍
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
@@ -56,13 +79,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ⬇️
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
 
       - name: Setup python 🐍
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
@@ -83,13 +106,13 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Checkout ⬇️
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
 
       - name: Setup python 🐍
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
@@ -104,7 +127,7 @@ jobs:
           ls -al
 
       - name: Upload report 🔝
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v4
         with:
           flags: unittests
           files: coverage_test_util.xml,coverage_test_columnar_util.xml
