@@ -256,13 +256,9 @@ cfg.x.keep_columns = DotDict.wrap({
     },
 })
 
-# versions per task family, either referring to strings or to callables receving the invoking
-# task instance and parameters to be passed to the task family
-cfg.x.versions = {
-    # "cf.CalibrateEvents": "prod1",
-    # "cf.SelectEvents": (lambda cls, inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
-    # ...
-}
+# pinned versions
+# (see [versions] in law.cfg for more info)
+cfg.x.versions = {}
 
 # channels
 # (just one for now)

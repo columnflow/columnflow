@@ -15,7 +15,7 @@ from columnflow.tasks.framework.mixins import (
     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.reduction import MergeReducedEventsUser, MergeReducedEvents
+from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
@@ -26,10 +26,8 @@ class CreateHistograms(
     WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
+    ReducedEventsUser,
     ChunkedIOMixin,
-    MergeReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -37,9 +35,8 @@ class CreateHistograms(
 
     # upstream requirements
     reqs = Requirements(
-        MergeReducedEventsUser.reqs,
+        ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
-        MergeReducedEvents=MergeReducedEvents,
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
     )
@@ -62,7 +59,7 @@ class CreateHistograms(
         reqs = super().workflow_requires()
 
         # require the full merge forest
-        reqs["events"] = self.reqs.MergeReducedEvents.req(self, tree_index=-1)
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         if not self.pilot:
             if self.producer_insts:
@@ -83,9 +80,7 @@ class CreateHistograms(
         return reqs
 
     def requires(self):
-        reqs = {
-            "events": self.reqs.MergeReducedEvents.req(self, tree_index=self.branch, _exclude={"branch"}),
-        }
+        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -104,11 +99,11 @@ class CreateHistograms(
 
         return reqs
 
-    @MergeReducedEventsUser.maybe_dummy
+    workflow_condition = ReducedEventsUser.workflow_condition.copy()
+
+    @workflow_condition.output
     def output(self):
-        return {
-            "hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle"),
-        }
+        return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
 
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
@@ -117,7 +112,9 @@ class CreateHistograms(
         import hist
         import numpy as np
         import awkward as ak
-        from columnflow.columnar_util import Route, update_ak_array, add_ak_aliases, has_ak_column
+        from columnflow.columnar_util import (
+            Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
+        )
 
         # prepare inputs and outputs
         reqs = self.requires()
@@ -159,7 +156,7 @@ class CreateHistograms(
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
-        file_targets = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if self.ml_model_insts:
@@ -226,7 +223,7 @@ class CreateHistograms(
                     )
 
                     # broadcast arrays so that each event can be filled for all its categories
-                    fill_kwargs = {
+                    fill_data = {
                         "category": category_ids,
                         "process": events.process_id,
                         "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
@@ -242,11 +239,10 @@ class CreateHistograms(
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
                         # apply it
-                        fill_kwargs[variable_inst.name] = expr(events)
+                        fill_data[variable_inst.name] = expr(events)
 
-                    # broadcast and fill
-                    arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                    histograms[var_key].fill(**{field: arrays[field] for field in arrays.fields})
+                    # fill it
+                    fill_hist(histograms[var_key], fill_data)
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")

@@ -118,7 +118,7 @@ class CreateCutflowHistograms(
         import hist
         import numpy as np
         import awkward as ak
-        from columnflow.columnar_util import Route, add_ak_aliases, mandatory_coffea_columns, update_ak_array
+        from columnflow.columnar_util import Route, add_ak_aliases, fill_hist, mandatory_coffea_columns, update_ak_array
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -259,12 +259,8 @@ class CreateCutflowHistograms(
                     return point
 
                 # fill the raw point
-                fill_kwargs = get_point()
-                arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                histograms[var_key].fill(
-                    step=self.initial_step,
-                    **{field: arrays[field] for field in arrays.fields},
-                )
+                fill_data = get_point()
+                fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": self.initial_step})
 
                 # fill all other steps
                 mask = True
@@ -274,13 +270,10 @@ class CreateCutflowHistograms(
                             f"step '{step}' is not defined by selector {self.selector}",
                         )
                     # incrementally update the mask and fill the point
+
                     mask = mask & sel.steps[step]
-                    fill_kwargs = get_point(mask)
-                    arrays = ak.flatten(ak.cartesian(fill_kwargs))
-                    histograms[var_key].fill(
-                        step=step,
-                        **{field: arrays[field] for field in arrays.fields},
-                    )
+                    fill_data = get_point(mask)
+                    fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": step})
 
         # dump the histograms
         self.output()["hists"].dump(histograms, formatter="pickle")

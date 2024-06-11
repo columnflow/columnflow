@@ -4,6 +4,7 @@
 Tasks related to selecting events and performing post-selection bookkeeping.
 """
 
+import copy
 from collections import defaultdict
 
 import law
@@ -300,8 +301,8 @@ class MergeSelectionStats(
     DatasetTask,
     law.tasks.ForestMerge,
 ):
-    # recursively merge 20 files into one
-    merge_factor = 20
+    # merge 25 stats files into 1 at every step of the merging cascade
+    merge_factor = 25
 
     # skip receiving some parameters via req
     exclude_params_req_get = {"workflow"}
@@ -353,11 +354,11 @@ class MergeSelectionStats(
         *dst* is updated in-place and also returned.
         """
         for key, obj in src.items():
-            if isinstance(obj, dict):
-                cls.merge_counts(dst.setdefault(key, {}), obj)
+            if key not in dst:
+                dst[key] = copy.deepcopy(obj)
+            elif isinstance(obj, dict):
+                cls.merge_counts(dst[key], obj)
             else:
-                if key not in dst:
-                    dst[key] = 0.0
                 dst[key] += obj
         return dst
 
