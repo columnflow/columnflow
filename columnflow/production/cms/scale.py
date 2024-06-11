@@ -117,6 +117,13 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             "8 instead of the expected 9. It is assumed, that the missing entry is the " +
             "nominal one and all other entries are in correct order",
         )
+    elif not ak.any(n_weights):
+        logger.warning("No valid `LHEScaleWeight` found. For the `murmuf_weights`, a ones array is returned.")
+        for shift in ["", "_up", "_down"]:
+            events = set_ak_column_f32(events, f"murmuf_weight{shift}", ak.ones_like(events.event))
+            events = set_ak_column_f32(events, f"mur_weight{shift}", ak.ones_like(events.event))
+            events = set_ak_column_f32(events, f"muf_weight{shift}", ak.ones_like(events.event))
+        return events
     else:
         bad_values = set(n_weights[any(n_weights != x for x in [8, 9])])
         raise Exception(

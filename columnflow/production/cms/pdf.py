@@ -80,7 +80,16 @@ def pdf_weights(
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
     bad_mask = (n_weights != 101) & (n_weights != 103)
-    if ak.any(bad_mask):
+    if ak.all(bad_mask):
+        logger.warning("No valid `LHEPdfWeight` found. For the `pdf_weights`, a ones array is returned.")
+        pseudo_pdf_weights = ak.ones_like(events.event)
+        events = set_ak_column_f32(events, "pdf_weight", pseudo_pdf_weights)
+        events = set_ak_column_f32(events, "pdf_weight_up", pseudo_pdf_weights)
+        events = set_ak_column_f32(events, "pdf_weight_down", pseudo_pdf_weights)
+
+        return events
+
+    elif ak.any(bad_mask):
         bad_values = set(n_weights[bad_mask])
         raise Exception(
             "the number of LHEPdfWeights is expected to be 101 or 103, but also found values "
