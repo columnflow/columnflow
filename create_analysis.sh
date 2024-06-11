@@ -17,7 +17,7 @@ create_analysis() {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local exec_dir="$( pwd )"
-    local fetch_cf_branch="master"
+    local fetch_cf_branch="main"
     local fetch_cmsdb_branch="master"
     local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
 
@@ -161,7 +161,7 @@ create_analysis() {
     echo
     query_input "cf_short_name" "Short name for environment variables, pre- and suffixes" "${cf_module_name}"
     echo
-    query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "cms_minimal" "cms_minimal"
+    query_input "cf_analysis_flavor" "The flavor of the analysis to setup" "ghent_template" "cms_minimal,ghent_template"
     echo
     query_input "cf_use_ssh" "Use ssh for git submodules" "True" "True,False"
     echo
@@ -203,8 +203,8 @@ create_analysis() {
         rm -rf "${exec_dir}/.cf_analysis_setup"
         mkdir -p "${exec_dir}/.cf_analysis_setup" || return "$?"
         cd "${exec_dir}/.cf_analysis_setup"
-        curl -L -s -k "https://github.com/columnflow/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
-        mv columnflow-columnflow-*/"analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}" || return "$?"
+        curl -L -s -k "https://github.com/GhentAnalysis/columnflow/tarball/${fetch_cf_branch}" | tar -xz || return "$?"
+        mv GhentAnalysis-columnflow-*/"analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}" || return "$?"
         cd "${cf_analysis_base}" || return "$?"
         rm -rf "${exec_dir}/.cf_analysis_setup"
     fi
@@ -255,18 +255,26 @@ create_analysis() {
 
     echo_color cyan "setup submodules"
 
-    local gh_prefix="https://github.com/"
+    local gh_prefix_github="https://github.com/"
+    local gh_prefix_gitlab="https://gitlab.cern.ch/"
 
-    $( str_lc "${cf_use_ssh}" ) && gh_prefix="git@github.com:"
+
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix_github="git@github.com:"
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix_gitlab="ssh://git@gitlab.cern.ch:7999/"
+
 
     mkdir -p modules
     if ${debug}; then
         ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}columnflow/columnflow.git" modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix_github}GhentAnalysis/columnflow.git" modules/columnflow
     fi
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}uhh-cms/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
+    fi
+    if [ "${cf_analysis_flavor}" = "ghent_template" ]; then
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_github}CMS-LUMI-POG/Normtags.git" modules/Normtags
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
 
     git submodule update --init --recursive

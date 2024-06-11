@@ -583,6 +583,7 @@ cf_setup_software_stack() {
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 # make the setup file relocatable
                 sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                sed -i -r "6 s|/ada_mnt/ada||" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
