@@ -764,7 +764,7 @@ class MLEvaluation(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and columns
-        file_targets = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if reader_targets:
