@@ -1,0 +1,4 @@
+plugins:
+  # disable max line length
+  md013:
+    enabled: False
