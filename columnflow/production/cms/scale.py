@@ -88,6 +88,16 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     n_weights = ak.num(events.LHEScaleWeight, axis=1)
 
+    # write ones in case there are no weights at all
+    if not ak.any(n_weights):
+        logger.warning(r"no valid 'LHEScaleWeight' found, saving ones for '{murmuf,mur,muf}_weights'")
+        ones = np.ones(len(events), dtype=np.float32)
+        for postfix in ["", "_up", "_down"]:
+            events = set_ak_column_f32(events, f"murmuf_weight{postfix}", ones)
+            events = set_ak_column_f32(events, f"mur_weight{postfix}", ones)
+            events = set_ak_column_f32(events, f"muf_weight{postfix}", ones)
+        return events
+
     if ak.all(n_weights == 9):
         # if we have 9 weights, the indices above are correct, just need
         # to load the nominal weights
@@ -98,9 +108,9 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         if ak.any(murf_nominal != 1):
             bad_values = set(murf_nominal[murf_nominal != 1])
             logger.debug(
-                "The nominal LHEScaleWeight is expected to be 1, but also found values " +
-                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
+                "The nominal LHEScaleWeight is expected to be 1, but also found values "
+                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be "
+                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal "
                 "weight is already included in the LHEWeight.",
             )
     elif ak.all(n_weights == 8):
@@ -113,21 +123,14 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
         # additional debug log
         logger.debug(
-            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always " +
-            "8 instead of the expected 9. It is assumed, that the missing entry is the " +
+            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always "
+            "8 instead of the expected 9. It is assumed, that the missing entry is the "
             "nominal one and all other entries are in correct order",
         )
-    elif not ak.any(n_weights):
-        logger.warning("No valid `LHEScaleWeight` found. For the `murmuf_weights`, a ones array is returned.")
-        for shift in ["", "_up", "_down"]:
-            events = set_ak_column_f32(events, f"murmuf_weight{shift}", ak.ones_like(events.event))
-            events = set_ak_column_f32(events, f"mur_weight{shift}", ak.ones_like(events.event))
-            events = set_ak_column_f32(events, f"muf_weight{shift}", ak.ones_like(events.event))
-        return events
     else:
         bad_values = set(n_weights[any(n_weights != x for x in [8, 9])])
         raise Exception(
-            "the number of LHEScaleWeights is expected to be 9, but also found values " +
+            "the number of LHEScaleWeights is expected to be 9, but also found values "
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
@@ -200,9 +203,9 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
         if ak.any(murf_nominal != 1):
             bad_values = set(murf_nominal[murf_nominal != 1])
             logger.debug(
-                "The nominal LHEScaleWeight is expected to be 1, but also found values " +
-                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be " +
-                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal " +
+                "The nominal LHEScaleWeight is expected to be 1, but also found values "
+                f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be "
+                "normalized to the nominal LHEScaleWeight and it is assumed that the nominal "
                 "weight is already included in the LHEWeight.",
             )
     elif ak.all(n_weights == 8):
@@ -211,14 +214,14 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
         # additional debug log
         logger.debug(
-            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always " +
-            "8 instead of the expected 9. It is assumed, that the missing entry is the " +
+            f"In dataset {self.dataset_inst.name}: number of LHEScaleWeights is always "
+            "8 instead of the expected 9. It is assumed, that the missing entry is the "
             "nominal one and all other entries are in correct order",
         )
     else:
         bad_values = set(n_weights[n_weights != 9])
         raise Exception(
-            "the number of LHEScaleWeights is expected to be 9, but also found values " +
+            "the number of LHEScaleWeights is expected to be 9, but also found values "
             f"{bad_values} in dataset {self.dataset_inst.name}",
         )
 
