@@ -110,12 +110,18 @@ class ReduceEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will be written
-        write_columns = set()
+        write_columns: set[Route] = set()
+        skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
-            if isinstance(c, ColumnCollection):
-                write_columns |= self.find_keep_columns(c)
-            else:
-                write_columns.add(Route(c))
+            for r in (self.find_keep_columns(c) if isinstance(c, ColumnCollection) else {Route(c)}):
+                if r.has_tag("skip"):
+                    skip_columns.add(r.column)
+                else:
+                    write_columns.add(r)
+        write_columns = {
+            r for r in write_columns
+            if not law.util.multi_match(r.column, skip_columns, mode=any)
+        }
         route_filter = RouteFilter(write_columns)
 
         # map routes to write to their top level column
