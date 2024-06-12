@@ -68,6 +68,8 @@ setup_venv() {
 
     local mode="${1:-}"
     local versioncheck="${2:-warn}"
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
+
 
     # default mode
     if [ -z "${mode}" ]; then
@@ -112,9 +114,42 @@ setup_venv() {
         return "12"
     fi
 
+    local SOURCE="$CF_BASE"
+    local EXTRAS=""
+    if [ ! -z "${CF_VENV_EXTRAS}" ]; then
+        EXTRAS="--extra ${CF_VENV_EXTRAS}"
+        SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
+    fi
+
+    if [[ "${CF_VENV_REQUIREMENTS}" != *"python_${pyv}"* ]]; then
+        local req_dir=`dirname ${CF_VENV_REQUIREMENTS}`
+        local req_file=`basename ${CF_VENV_REQUIREMENTS}`
+        local new_env_reqs="${req_dir}/python_${pyv}_${req_file}"
+        # build requirements if needed
+        cf_color magenta "updating requirements file '${CF_VENV_REQUIREMENTS}' to '${new_env_reqs}"
+        export CF_VENV_REQUIREMENTS="${new_env_reqs}"
+    fi
+    
+    cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
+    if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
+        local TMP_REQS="${this_dir}/requirements_tmp.txt"
+        # compile pip dependencies and clear all caches before evaluating dependencies
+        
+        cmd="pip-compile -r \
+            --output-file ${TMP_REQS} \
+            --no-annotate --strip-extras --no-header --unsafe-package '' \
+            ${EXTRAS} ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
+        eval "$cmd"
+        # generate unique hash based on current state of software packages
+        local this_hash="$( openssl sha256 "$TMP_REQS" | awk '{print $2}' | sed s/[[:blank:]].*//)"
+        cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
+        echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
+        cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
+        cf_color magenta "Cleanup ${TMP_REQS}"
+        rm $TMP_REQS
+    fi
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
-    local requirement_files_contains_cf="false"
     if ${shell_is_zsh}; then
         requirement_files=(${(@s:,:)CF_VENV_REQUIREMENTS})
     else
@@ -125,9 +160,6 @@ setup_venv() {
             >&2 echo "requirement file '${f}' does not exist"
             return "13"
         fi
-        if [ "${f}" = "${CF_BASE}/sandboxes/cf.txt" ]; then
-            requirement_files_contains_cf="true"
-        fi
     done
     local first_requirement_file="${requirement_files[0]}"
 
@@ -135,14 +167,12 @@ setup_venv() {
     #
     # define variables
     #
-
     local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
     local venv_name_hashed="${CF_VENV_NAME}_${install_hash}"
     local install_path="${CF_VENV_BASE}/${venv_name_hashed}"
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
-    local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
+    local venv_version="$( cat "${first_requirement_file}" | awk '/# version /{print $3}' )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
-    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
 
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
@@ -211,7 +241,7 @@ setup_venv() {
         # checks to be performed if the venv already exists
         if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
             # get the current version
-            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | awk '/version /{print $2}' )"
             if [ -z "${current_version}" ]; then
                 >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
                 return "23"
@@ -269,24 +299,16 @@ setup_venv() {
             }
 
             # update packaging tools
-            add_requirements pip setuptools
-
-            # basic cf requirements
-            if ! ${requirement_files_contains_cf}; then
-                add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
-            fi
-
-            # requirement files
-            local f
-            for f in ${requirement_files[@]}; do
-                add_requirements -r "${f}"
-            done
+            add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
-            eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
+            eval "python -m pip install --force wheel"
+            cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
+            cf_color magenta "evaluating $cmd"
+            eval "$cmd"
+            eval "python -m pip install -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
-
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
             [ "$?" != "0" ] && clear_pending && return "28"
