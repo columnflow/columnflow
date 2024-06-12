@@ -1201,8 +1201,6 @@ def fill_hist(
             if name not in data:
                 raise ValueError(f"missing data for histogram axis '{name}'")
 
-    # create awkward views for all data arrays
-    data = {name: ak.Array(data[name]) for name in data}
 
     # correct last bin values
     for ax in correct_last_bin_axes:
