@@ -1084,13 +1084,16 @@ class PlotMLResults(PlotMLResultsBase):
     used to create the plot.
 
     For the function to run correctly, the following input structure is required:
-    - The `category_ids` column must be kept in the Evaluation and passed with the network outputs.
-    (must be accessible via `events.category_id` and can be set by adding `category_ids` to the
-    {py:meth}`~columnflow.ml.MLModel.uses()` and {py:meth}`~columnflow.ml.MLModel.produces()`
+    * The ``category_ids`` column must be kept in the Evaluation and passed with the network outputs.
+    (must be accessible via ``events.category_id`` and can be set by adding ``category_ids`` to the
+    :py:meth:`~columnflow.ml.MLModel.uses` and :py:meth:`~columnflow.ml.MLModel.produces`
     methode of the ML-Model)
-    - The outputs of the ML model must be stored under a column with the name of the model itself
-    (This can be set via `events = set_ak_column(events, f"{self.cls_name}.{output_i}", output_i)`
-    in the {py:meth}`~columnflow.ml.MLModel.evaluate()` methode of the model).
+    * The outputs of the ML model must be stored under a column with the name of the model itself
+    (This can be set in the :py:meth:`~columnflow.ml.MLModel.evaluate` methode of the model via:
+
+    ``events = set_ak_column(events, f"{self.cls_name}.{output_i}", output_i)``
+
+    ).
     """
 
     # override the plot_function parameter to be able to only choose between CM and ROC
@@ -1113,6 +1116,9 @@ class PlotMLResults(PlotMLResultsBase):
                 params.general_settings[label] = params.general_settings[label].split(";")
 
     def output(self: PlotMLResults):
+        """
+        override the output method to return the plots and the array used for plotting.
+        """
         b = self.branch_data
         return {
             "plots": [
