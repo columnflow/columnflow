@@ -8,11 +8,11 @@ import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict, maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
 )
+from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection, skip_column
+from columnflow.util import DotDict, maybe_import
 
 ak = maybe_import("awkward")
 

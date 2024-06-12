@@ -222,15 +222,16 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
                 # measure the time required to perform the stat query
                 logger.debug(f"checking fs {selected_fs} for lfn {lfn}")
-                input_file = target_cls(lfn, fs=selected_fs)
+                input_file = target_cls(lfn.lstrip(os.sep) if is_local else lfn, fs=selected_fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
                 logger.info(f"file {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
 
-                # when the stat query took longer than 2 seconds, eagerly try the next fs
+                # when the stat query took longer than some duration, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
+                latency = 4.0  # s
                 if input_stat and eager_lookup:
                     if (
                         isinstance(eager_lookup, int) and
@@ -239,9 +240,11 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                     ):
                         logger.debug(f"eager fs lookup skipped for fs {selected_fs} at index {i}")
                     else:
-                        if input_stat and not last_working and duration > 2.0 and i < len(fs):
+                        if input_stat and not last_working and duration > latency and i < len(fs):
                             last_working = selected_fs, input_file, input_stat, duration
-                            logger.debug("duration exceeded 2s, checking next fs for comparison")
+                            logger.debug(
+                                f"duration exceeded {latency}s, checking next fs for comparison",
+                            )
                             continue
                         if last_working and (not input_stat or last_working[3] < duration):
                             logger.debug("previously checked fs responded faster")
