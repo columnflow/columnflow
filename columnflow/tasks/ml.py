@@ -422,8 +422,8 @@ class MergeMLEvents(
     def merge_workflow_requires(self):
         req = self.reqs.PrepareMLEvents.req(self, _exclude={"branches"})
 
-        # if the merging stats exist, allow the forest to be cached
-        self._cache_forest = req.merging_stats_exist
+        # if the workflow shape is known, allow the forest to be cached
+        self._cache_forest = req.workflow_condition()
 
         return req
 
