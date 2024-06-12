@@ -1082,6 +1082,15 @@ class PlotMLResults(PlotMLResultsBase):
     receiver operating characteristic (ROC) curve. This task uses the output of the
     MergeMLEvaluation task as input and saves the plots with the corresponding array
     used to create the plot.
+
+    For the function to run correctly, the following input structure is required:
+    - The `category_ids` column must be kept in the Evaluation and passed with the network outputs.
+    (must be accessible via `events.category_id` and can be set by adding `category_ids` to the
+    {py:meth}`~columnflow.ml.MLModel.uses()` and {py:meth}`~columnflow.ml.MLModel.produces()`
+    methode of the ML-Model)
+    - The outputs of the ML model must be stored under a column with the name of the model itself
+    (This can be set via `events = set_ak_column(events, f"{self.cls_name}.{output_i}", output_i)`
+    in the {py:meth}`~columnflow.ml.MLModel.evaluate()` methode of the model).
     """
 
     # override the plot_function parameter to be able to only choose between CM and ROC
@@ -1113,7 +1122,7 @@ class PlotMLResults(PlotMLResultsBase):
                 )
             ],
             "array": self.target(
-                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.parquet",
+                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.pickle",
             ),
         }
 
