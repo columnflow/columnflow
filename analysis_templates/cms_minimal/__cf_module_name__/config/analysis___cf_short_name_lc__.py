@@ -242,14 +242,16 @@ cfg.x.reduced_file_size = 512.0
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
         # general event info, mandatory for reading files with coffea
-        ColumnCollection.MANDATORY_COFFEA,  # additional columns can be added as strings, similar to object info
+        # additional columns can be added as strings, similar to object info
+        ColumnCollection.MANDATORY_COFFEA,
         # object info
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
         "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
         "PV.npvs",
-        # all columns added during selection using a ColumnCollection flag
+        # all columns added during selection using a ColumnCollection flag, but skip cutflow ones
         ColumnCollection.ALL_FROM_SELECTOR,
+        skip_column("cutflow.*"),
     },
     "cf.MergeSelectionMasks": {
         "cutflow.*",
