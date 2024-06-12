@@ -1135,22 +1135,11 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
     return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
-def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
+def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
     """
     Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
     *axis*. See *ak.flatten* for more info.
-
-    .. note::
-        Changes applied in-place to that view are transferred to the original *ak_array*, but
-        **only** when the axis is not *None* but an integer value. For this reason, passing
-        ``axis=None`` will cause an exception to be thrown.
     """
-    if axis is None:
-        raise ValueError(
-            "axis must not be None as changes applied the returned view will not propagate to the ",
-            "original awkward array",
-        )
-
     return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
