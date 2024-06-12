@@ -1946,7 +1946,7 @@ def tagged_column(
     """
     Takes one or several objects *routes* whose type can be anything that is accepted by the
     :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
-    *tag*, which can be a single tag, a sequence of a set of tags.
+    *tag*, which can be a single tag, a sequence, or a set of tags.
     """
     if not routes:
         raise Exception("at least one route argument must be given")

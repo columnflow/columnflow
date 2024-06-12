@@ -435,7 +435,7 @@ class MergeSelectionMasks(
             )
 
         # define columns that will be written
-        write_columns: set[Route] = set(map(Route, mandatory_coffea_columns))
+        write_columns: set[Route] = set()
         skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, []):
             for r in (self.find_keep_columns(c) if isinstance(c, ColumnCollection) else {Route(c)}):
@@ -447,6 +447,8 @@ class MergeSelectionMasks(
             r for r in write_columns
             if not law.util.multi_match(r.column, skip_columns, mode=any)
         }
+        # add some mandatory columns
+        write_columns |= set(map(Route, mandatory_coffea_columns))
         write_columns |= set(map(Route, {"category_ids", "process_id", "normalization_weight"}))
         route_filter = RouteFilter(write_columns)
 
