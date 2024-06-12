@@ -80,6 +80,16 @@ def pdf_weights(
     # check for the correct amount of weights
     n_weights = ak.num(events.LHEPdfWeight, axis=1)
     bad_mask = (n_weights != 101) & (n_weights != 103)
+
+    # write ones in case there are no weights at all
+    if ak.all(bad_mask):
+        logger.warning("no valid 'LHEPdfWeight' found, saving ones for 'pdf_weights'")
+        ones = np.ones(len(events), dtype=np.float32)
+        for postfix in ["", "_up", "_down"]:
+            events = set_ak_column_f32(events, f"pdf_weight{postfix}", ones)
+        return events
+
+    # complain when the number of weights is unexpected
     if ak.any(bad_mask):
         bad_values = set(n_weights[bad_mask])
         raise Exception(
