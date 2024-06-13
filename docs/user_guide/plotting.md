@@ -89,7 +89,7 @@ the task parameters are discussed in separate sections for each type of plotting
 Per default, the ```PlotVariables1D``` task creates one plot
 per variable with all Monte Carlo processes being included
 in a stack and data being shown as separate points. The bottom subplot shows the ratio between signal
-and all processes included in the stack and can be disabled via the ```--skip_ratio``` parameter.
+and all processes included in the stack and can be disabled via the ```--skip-ratio``` parameter.
 To change the text next to the label, you can add the ```--cms-label``` parameter.
 :::{dropdown} What are the ```cms-label``` options?
 In general, this parameter accepts all types of strings, but there is a set of shortcuts for commonly
@@ -300,9 +300,9 @@ law run cf.PlotCutflowVariables1D --version v1 \
 :::
 ::::
 
-The ```per-plot``` parameter defines whether to produce one plot per selector step
-(```per-plot processes```) or one plot per process (```per-plot steps```).
-For the ```per-plot steps``` option, try the following task call:
+The ```--per-plot``` parameter defines whether to produce one plot per selector step
+(```--per-plot processes```) or one plot per process (```--per-plot steps```).
+For the ```--per-plot steps``` option, try the following task call:
 
 ```shell
 law run cf.PlotCutflowVariables1D --version v1 \
@@ -325,7 +325,7 @@ law run cf.PlotCutflowVariables1D --version v1 \
 ## Creating plots for different shifts
 
 Like most tasks, our plotting tasks also contain the ```--shift``` parameter that allows requesting
-the outputs for a certain type of systematic variation. Per default, the ```shift``` parameter is set
+the outputs for a certain type of systematic variation. Per default, the ```--shift``` parameter is set
 to "nominal", but you could also produce your plot with a certain systematic uncertainty varied
 up or down, e.g. via running
 ```shell
