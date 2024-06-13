@@ -1204,7 +1204,7 @@ def fill_hist(
 
     # correct last bin values
     for ax in correct_last_bin_axes:
-        right_egde_mask = data[ax.name] == ax.edges[-1]
+        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
         if np.any(right_egde_mask):
             data[ax.name] = data[ax.name].copy()
             flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
