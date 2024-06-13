@@ -63,12 +63,11 @@ def apply_settings(
     """
     applies settings from `settings` dictionary to a list of order objects `containers`
 
-    :param containers: list of order objects
-    :param settings: dictionary of settings to apply on the *containers*. Each key should correspond
-        to the name of a container and each value should be a dictionary. The inner dictionary contains
-        keys and values that will be applied on the corresponding container either as an attribute
-        or alternatively as an auxiliary.
-    :param parent_check: optional function that checks if a container has a parent with a given name
+    :param instances: List of order instances to apply settings to.
+    :param settings: Dictionary of settings to apply on the instances. Each key should correspond
+        to the name of an instance and each value should be a dictionary with attributes that will
+        be set on the instance either as a attribute or as an auxiliary.
+    :param parent_check: Function that checks if an instance has a parent with a given name.
     """
     if not settings:
         return
@@ -78,9 +77,10 @@ def apply_settings(
             if inst != name and not (callable(parent_check) and parent_check(inst, name)):
                 continue
             for key, value in inst_settings.items():
+                # try attribute first, otherwise auxiliary entry
                 try:
                     setattr(inst, key, value)
-                except AttributeError:
+                except (AttributeError, ValueError):
                     inst.set_aux(key, value)
 
 
