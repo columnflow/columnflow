@@ -1183,14 +1183,12 @@ def fill_hist(
             if name not in data:
                 raise ValueError(f"missing data for histogram axis '{name}'")
 
-    # create awkward views for all data arrays
-    data = {name: ak.Array(data[name]) for name in data}
-
     # correct last bin values
     for ax in correct_last_bin_axes:
-        right_egde_mask = data[ax.name] == ax.edges[-1]
+        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
         if np.any(right_egde_mask):
-            data[ax.name] = data[ax.name] - ax.widths[-1] * 1e-5
+            data[ax.name] = data[ax.name].copy()
+            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
 
     # fill
     arrays = ak.flatten(ak.cartesian(data))
