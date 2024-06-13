@@ -57,7 +57,7 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
 
 def apply_settings(
     instances: Iterable[od.AuxDataMixin],
-    settings: dict[dict, Any] | None,
+    settings: dict[str, Any] | None,
     parent_check: Callable[[od.AuxDataMixin, str], bool] | None = None,
 ) -> None:
     """
@@ -111,9 +111,9 @@ def apply_process_settings(
 
 
 def apply_variable_settings(
-        hists: dict,
-        variable_insts: list[od.Variable],
-        variable_settings: dict | None = None,
+    hists: dict,
+    variable_insts: list[od.Variable],
+    variable_settings: dict | None = None,
 ) -> dict:
     """
     applies settings from *variable_settings* dictionary to the *variable_insts*;
