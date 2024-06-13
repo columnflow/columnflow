@@ -3,7 +3,8 @@
 # Script that builds and checks the documentation.
 #
 # Arguments:
-#   1. The mode. When "clean", previously created docs are removed first. No default.
+#   1. The mode. When "clean", previously created docs are removed first. When "lint", only the
+#      markdown linting checks are performed. No default.
 
 action() {
     local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
@@ -14,16 +15,32 @@ action() {
     # get arguments
     local mode="${1}"
 
-    # clean first if requested
+    # keep track of immediate and global return values
+    local gret="0"
+    local ret
+
+    # markdown linting
+    pymarkdown --config "${cf_dir}/.markdownlint" scan --recurse "${cf_dir/README.md}" "${cf_dir/docs}"
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
+    # stop here when only linting
+    [ "${mode}" = "lint" ] && return "${gret}"
+
+    # clean built docs first if requested
     if [ "${mode}" = "clean" ]; then
         ( cd "${cf_dir}/docs" && make clean ) || return "$?"
     fi
 
-    # build
+    # build docs
     (
         source "${cf_dir}/sandboxes/venv_docs_dev.sh" "" && \
         cd "${cf_dir}/docs" && \
         make html
-    ) || return "$?"
+    )
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
+    return "${gret}"
 }
 action "$@"

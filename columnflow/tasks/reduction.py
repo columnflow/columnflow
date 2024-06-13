@@ -110,12 +110,18 @@ class ReduceEvents(
         aliases = self.local_shift_inst.x("column_aliases", {})
 
         # define columns that will be written
-        write_columns = set()
+        write_columns: set[Route] = set()
+        skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
-            if isinstance(c, ColumnCollection):
-                write_columns |= self.find_keep_columns(c)
-            else:
-                write_columns.add(Route(c))
+            for r in (self.find_keep_columns(c) if isinstance(c, ColumnCollection) else {Route(c)}):
+                if r.has_tag("skip"):
+                    skip_columns.add(r.column)
+                else:
+                    write_columns.add(r)
+        write_columns = {
+            r for r in write_columns
+            if not law.util.multi_match(r.column, skip_columns, mode=any)
+        }
         route_filter = RouteFilter(write_columns)
 
         # map routes to write to their top level column
@@ -345,11 +351,17 @@ class MergeReductionStats(
         stats["max_size_merged"] = self.merged_size * 1024**2  # MB to bytes
 
         # determine the number of files after merging, allowing a possible ~15% increase per file
-        extrapolation = self.dataset_info_inst.n_files / n
-        n_merged_files = extrapolation * stats["tot_size"] / stats["max_size_merged"]
-        rnd = math.ceil if n_merged_files % 1.0 > 0.15 else math.floor
-        n_merged_files = max(int(rnd(n_merged_files)), 1)
-        stats["merge_factor"] = max(math.ceil(self.dataset_info_inst.n_files / n_merged_files), 1)
+        n_total = self.dataset_info_inst.n_files
+        if n_total > 1:
+            extrapolation = n_total / n
+            n_merged_files = extrapolation * stats["tot_size"] / stats["max_size_merged"]
+            rnd = math.ceil if n_merged_files % 1.0 > 0.15 else math.floor
+            n_merged_files = max(int(rnd(n_merged_files)), 1)
+            stats["merge_factor"] = max(math.ceil(n_total / n_merged_files), 1)
+        else:
+            # trivial case, no merging needed
+            n_merged_files = 1
+            stats["merge_factor"] = 1
 
         # save them
         self.output()["stats"].dump(stats, indent=4, formatter="json")
@@ -362,7 +374,7 @@ class MergeReductionStats(
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
-        self.publish_message(f"files before: {self.dataset_info_inst.n_files}")
+        self.publish_message(f"files before: {n_total}")
         self.publish_message(f"files after : {n_merged_files}")
         self.publish_message(40 * "-")
 
