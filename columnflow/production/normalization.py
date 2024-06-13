@@ -20,7 +20,10 @@ ak = maybe_import("awkward")
 
 @producer(
     uses={"process_id", "mc_weight"},
-    produces={"normalization_weight"},
+    # name of the output column
+    weight_name="normalization_weight",
+    # whether to allow stitching datasets
+    allow_stitching=True,
     # only run on mc
     mc_only=True,
 )
@@ -42,7 +45,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
 
     # compute the weight and store it
     norm_weight = events.mc_weight * lumi * xs / sum_weights
-    events = set_ak_column(events, "normalization_weight", norm_weight, value_type=np.float32)
+    events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
 
     return events
 
@@ -57,7 +60,9 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     #       rather the one merged for either all datasets, or the "stitching group"
     #       (i.e. all datasets that might contain any of the sub processes found in a dataset)
 
-    if self.dataset_inst.x("stitching_datasets", None):
+    self.selection_stats_key = f"{'stitched_' if self.allow_stitching else 'norm_'}selection_stats"
+
+    if self.allow_stitching and self.dataset_inst.x("stitching_datasets", None):
         stats_datasets = law.util.make_list(self.dataset_inst.x.stitching_datasets)
     else:
         stats_datasets = [self.dataset_inst.name]
@@ -70,7 +75,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
             )
 
     from columnflow.tasks.selection import MergeSelectionStats
-    reqs["normalization_selection_stats"] = {
+    reqs[self.selection_stats_key] = {
         dataset: MergeSelectionStats.req(
             self.task,
             dataset=dataset,
@@ -103,7 +108,7 @@ def normalization_weights_setup(
     # load the selection stats
     normalization_selection_stats = [
         inp["collection"][0]["stats"].load(formatter="json")
-        for inp in inputs["normalization_selection_stats"].values()
+        for inp in inputs[self.selection_stats_key].values()
     ]
 
     if len(normalization_selection_stats) > 1:
@@ -148,3 +153,19 @@ def normalization_weights_setup(
             continue
         xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
     self.xs_table = xs_table
+
+
+@normalization_weights.init
+def normalization_weights_init(self: Producer) -> None:
+    """
+    Initializes the normalization weights producer by setting up the normalization weight column.
+    """
+    self.produces.add(self.weight_name)
+
+
+unstitched_normalization_weights = normalization_weights.derive(
+    "unstitched_normalization_weights", cls_dict={
+        "weight_name": "unstitched_normalization_weight",
+        "allow_stitching": False,
+    },
+)
