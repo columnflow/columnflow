@@ -6,14 +6,7 @@ Helpers and utilities for working with columnar libraries.
 
 from __future__ import annotations
 
-__all__ = [
-    "mandatory_coffea_columns", "ColumnCollection", "EMPTY_INT", "EMPTY_FLOAT",
-    "Route", "RouteFilter", "ArrayFunction", "TaskArrayFunction", "ChunkedIOHandler",
-    "eval_item", "get_ak_routes", "has_ak_column", "set_ak_column", "remove_ak_column",
-    "add_ak_alias", "add_ak_aliases", "update_ak_array", "flatten_ak_array", "sort_ak_fields",
-    "sorted_ak_to_parquet", "sorted_ak_to_root", "attach_behavior", "layout_ak_array",
-    "flat_np_view", "ak_copy", "fill_hist", "deferred_column", "optional_column",
-]
+__all__ = []
 
 import os
 import gc
@@ -1142,22 +1135,11 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
     return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
-def flat_np_view(ak_array: ak.Array, axis: int = 1) -> np.array:
+def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
     """
     Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
     *axis*. See *ak.flatten* for more info.
-
-    .. note::
-        Changes applied in-place to that view are transferred to the original *ak_array*, but
-        **only** when the axis is not *None* but an integer value. For this reason, passing
-        ``axis=None`` will cause an exception to be thrown.
     """
-    if axis is None:
-        raise ValueError(
-            "axis must not be None as changes applied the returned view will not propagate to the ",
-            "original awkward array",
-        )
-
     return np.asarray(ak.flatten(ak_array, axis=axis))
 
 
@@ -1944,20 +1926,21 @@ class ArrayFunction(Derivable):
 deferred_column = ArrayFunction.DeferredColumn.deferred_column
 
 
-def optional_column(
+def tagged_column(
+    tag: str | Sequence[str] | set[str],
     *routes: Route | Any | set[Route | Any],
 ) -> Route | set[Route]:
     """
     Takes one or several objects *routes* whose type can be anything that is accepted by the
     :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
-    ``"optional"``.
+    *tag*, which can be a single tag, a sequence, or a set of tags.
     """
     if not routes:
         raise Exception("at least one route argument must be given")
 
-    def opt_route(r):
+    def tagged_route(r):
         route = Route(r)
-        route.add_tag("optional")
+        route.add_tag(tag)
         return route
 
     # determine if multple objects are given and handle the case where a single set is given
@@ -1969,7 +1952,29 @@ def optional_column(
         multiple = True
 
     # create multiple or a single tagged route
-    return set(map(opt_route, routes)) if multiple else opt_route(list(routes)[0])
+    return set(map(tagged_route, routes)) if multiple else tagged_route(list(routes)[0])
+
+
+def optional_column(
+    *routes: Route | Any | set[Route | Any],
+) -> Route | set[Route]:
+    """
+    Takes one or several objects *routes* whose type can be anything that is accepted by the
+    :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
+    ``"optional"``.
+    """
+    return tagged_column("optional", *routes)
+
+
+def skip_column(
+    *routes: Route | Any | set[Route | Any],
+) -> Route | set[Route]:
+    """
+    Takes one or several objects *routes* whose type can be anything that is accepted by the
+    :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
+    ``"skip"``.
+    """
+    return tagged_column("skip", *routes)
 
 
 class TaskArrayFunction(ArrayFunction):

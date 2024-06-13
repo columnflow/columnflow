@@ -9,6 +9,7 @@ from abc import abstractmethod
 
 import law
 import luigi
+import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
@@ -91,7 +92,21 @@ class PlotVariablesBase(
             for proc in process_insts
         }
 
-        # histogram data per process
+        # copy process instances once so that their auxiliary data fields can be used as a storage
+        # for process-specific plot parameters later on in plot scripts without affecting the
+        # original instances
+        fake_root = od.Process(
+            name=f"{hex(id(object()))[2:]}",
+            id="+",
+            processes=process_insts,
+        ).copy()
+        process_inst_copies = {
+            process_inst.name: process_inst
+            for process_inst in fake_root.processes
+        }
+        fake_root.processes.clear()
+
+        # histogram data per process copy
         hists = {}
 
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
@@ -130,24 +145,26 @@ class PlotVariablesBase(
                     # axis reductions
                     h = h[{"process": sum, "category": sum}]
 
-                    # add the histogram
-                    if process_inst in hists:
-                        hists[process_inst] += h
+                    # add the histogram, stored using process instance copies as keys
+                    process_inst_copy = process_inst_copies[process_inst.name]
+                    if process_inst_copy in hists:
+                        hists[process_inst_copy] += h
                     else:
-                        hists[process_inst] = h
+                        hists[process_inst_copy] = h
 
             # there should be hists to plot
             if not hists:
                 raise Exception(
-                    "no histograms found to plot; possible reasons:\n" +
-                    "  - requested variable requires columns that were missing during histogramming\n" +
+                    "no histograms found to plot; possible reasons:\n"
+                    "  - requested variable requires columns that were missing during histogramming\n"
                     "  - selected --processes did not match any value on the process axis of the input histogram",
                 )
 
             # sort hists by process order
+            process_order = list(process_inst_copies.values())
             hists = OrderedDict(
-                (process_inst.copy_shallow(), hists[process_inst])
-                for process_inst in sorted(hists, key=process_insts.index)
+                (process_inst, hists[process_inst])
+                for process_inst in sorted(hists, key=process_order.index)
             )
 
             # call the plot function
