@@ -8,7 +8,9 @@ import itertools
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import ProducerMixin, ProducersMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import (
+    CalibratorsMixin, SelectorStepsMixin, ProducerMixin, ChunkedIOMixin, ProducersMixin, ProducerMixin
+)
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox

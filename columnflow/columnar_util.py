@@ -1183,7 +1183,6 @@ def fill_hist(
             if name not in data:
                 raise ValueError(f"missing data for histogram axis '{name}'")
 
-
     # correct last bin values
     for ax in correct_last_bin_axes:
         right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]

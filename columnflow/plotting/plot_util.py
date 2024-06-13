@@ -132,6 +132,7 @@ def apply_variable_settings(
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
 
+
         # overflow and underflow bins
         overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
         underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
@@ -282,9 +283,16 @@ def prepare_style_config(
 
     # disable minor ticks based on variable_inst
     if variable_inst.discrete_x:
-        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
-        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
+        # TODO: options for very large ranges, or non-uniform discrete x
+        tx = range(int(xlim[0]), int(xlim[1] + 1))
+        style_config["ax_cfg"]["xticks"] = tx
         style_config["ax_cfg"]["minorxticks"] = []
+
+        # add custom bin labels if specified and same amount of x ticks
+        if x_labels := variable_inst.x_labels:
+            if len(x_labels) == len(tx):
+                style_config["ax_cfg"]["xticklabels"] = x_labels
+
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
 
