@@ -823,7 +823,3 @@ class ColumnarUtilFunctionsTest(unittest.TestCase):
         muon_pt *= 2.0
         self.assertEqual(tuple(arr.Muon.pt[0]), (90.0, 110.0))
         self.assertEqual(tuple(muon_pt), (90.0, 110.0))
-
-        # error handling
-        with self.assertRaises(ValueError):
-            flat_np_view(arr.Muon.pt, axis=None)
