@@ -6,8 +6,6 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
-from columnflow.types import Iterable, Any
-
 import operator
 import functools
 from collections import OrderedDict
@@ -15,12 +13,14 @@ from collections import OrderedDict
 import order as od
 
 from columnflow.util import maybe_import, try_int, try_complex
+from columnflow.types import Iterable, Any, Callable
 
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
+
 
 label_options = {
     "wip": "Work in progress",
@@ -55,26 +55,33 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     return cms_label_kwargs
 
 
-def apply_settings(containers: Iterable[od.AuxDataMixin], settings: dict[dict, Any] | None):
+def apply_settings(
+    instances: Iterable[od.AuxDataMixin],
+    settings: dict[str, Any] | None,
+    parent_check: Callable[[od.AuxDataMixin, str], bool] | None = None,
+) -> None:
     """
     applies settings from `settings` dictionary to a list of order objects `containers`
 
-    :param containers: list of order objects
-    :param settings: dictionary of settings to apply on the *containers*. Each key should correspond
-        to the name of a container and each value should be a dictionary. The inner dictionary contains
-        keys and values that will be applied on the corresponding container either as an attribute
-        or alternatively as an auxiliary.
+    :param instances: List of order instances to apply settings to.
+    :param settings: Dictionary of settings to apply on the instances. Each key should correspond
+        to the name of an instance and each value should be a dictionary with attributes that will
+        be set on the instance either as a attribute or as an auxiliary.
+    :param parent_check: Function that checks if an instance has a parent with a given name.
     """
     if not settings:
         return
 
-    for inst in containers:
-        inst_settings = settings.get(inst.name, {})
-        for setting_key, setting_value in inst_settings.items():
-            try:
-                setattr(inst, setting_key, setting_value)
-            except AttributeError:
-                inst.set_aux(setting_key, setting_value)
+    for inst in instances:
+        for name, inst_settings in (settings or {}).items():
+            if inst != name and not (callable(parent_check) and parent_check(inst, name)):
+                continue
+            for key, value in inst_settings.items():
+                # try attribute first, otherwise auxiliary entry
+                try:
+                    setattr(inst, key, value)
+                except (AttributeError, ValueError):
+                    inst.set_aux(key, value)
 
 
 def apply_process_settings(
@@ -86,8 +93,11 @@ def apply_process_settings(
     the `scale` setting is directly applied to the histograms
     """
     # apply all settings on process insts
-    process_insts = hists.keys()
-    apply_settings(process_insts, process_settings)
+    apply_settings(
+        hists.keys(),
+        process_settings,
+        parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
+    )
 
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
@@ -95,16 +105,15 @@ def apply_process_settings(
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
-            # TODO: there might be a prettier way for the label
-            proc_inst.label = f"{proc_inst.label} x{scale_factor}"
+            proc_inst.label += f" x{scale_factor}"
 
     return hists
 
 
 def apply_variable_settings(
-        hists: dict,
-        variable_insts: list[od.Variable],
-        variable_settings: dict | None = None,
+    hists: dict,
+    variable_insts: list[od.Variable],
+    variable_settings: dict | None = None,
 ) -> dict:
     """
     applies settings from *variable_settings* dictionary to the *variable_insts*;

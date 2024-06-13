@@ -8,11 +8,11 @@ import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict, maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
 )
+from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection, skip_column
+from columnflow.util import DotDict, maybe_import
 
 ak = maybe_import("awkward")
 
@@ -46,6 +46,9 @@ ana.x.cmssw_sandboxes = [
 # config groups for conveniently looping over certain configs
 # (used in wrapper_factory)
 ana.x.config_groups = {}
+
+# named function hooks that can modify store_parts of task outputs if needed
+ana.x.store_parts_modifiers = {}
 
 
 #
@@ -239,14 +242,16 @@ cfg.x.reduced_file_size = 512.0
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
         # general event info, mandatory for reading files with coffea
-        ColumnCollection.MANDATORY_COFFEA,  # additional columns can be added as strings, similar to object info
+        # additional columns can be added as strings, similar to object info
+        ColumnCollection.MANDATORY_COFFEA,
         # object info
         "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
         "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
         "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
         "PV.npvs",
-        # all columns added during selection using a ColumnCollection flag
+        # all columns added during selection using a ColumnCollection flag, but skip cutflow ones
         ColumnCollection.ALL_FROM_SELECTOR,
+        skip_column("cutflow.*"),
     },
     "cf.MergeSelectionMasks": {
         "cutflow.*",

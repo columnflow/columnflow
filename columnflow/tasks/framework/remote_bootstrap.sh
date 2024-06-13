@@ -19,7 +19,13 @@ bootstrap_htcondor_standalone() {
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
-    [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
+    if [ ! -z "{{vomsproxy_file}}" ]; then
+        export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
+        # also move it to the /tmp/x509up_u<uid> location as some packages expect
+        # the file to be at this path and do not respect the X509_USER_PROXY env var
+        local tmp_x509="/tmp/x509up_u$( id -u )"
+        [ ! -f "${tmp_x509}" ] && cp "${X509_USER_PROXY}" "${tmp_x509}"
+    fi
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
