@@ -37,10 +37,11 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     Produces deterministic event seeds and stores them in *events* which is also returned.
 
     Strategy:
-      1. gather a selection of unambiguous integer features
-      2. multiply them with a vector of primes
-      3. use the resulting integer as an input to sha256 and hex-digest the result
-      4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
+
+        1. gather a selection of unambiguous integer features
+        2. multiply them with a vector of primes
+        3. use the resulting integer as an input to sha256 and hex-digest the result
+        4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
     """
     # start with a seed of the event number itself as the most sensitive integer
     # and define the offset of the first prime to use
