@@ -32,6 +32,38 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     Uses luminosity information of internal py:attr:`config_inst`, the cross section of a process
     obtained through :py:class:`category_ids` and the sum of event weights from the
     py:attr:`normalization_selection_stats` attribute to assign each event a normalization weight.
+    The normalization weight is stored in a new column named after the py:attr:`weight_name` attribute.
+    When py:attr`allow_stitching` is set to True, the sum of event weights is computed for all
+    datasets in the py:attr:`stitching_datasets` attribute of the internal py:attr:`dataset_inst`.
+    If datasets contain multiple processes considered in the stitching procedure, the py:attr:`dataset_inst`
+    must contain all considered processes and the py:attr:`process_id` column must be reconstructed
+    on a per-event basis. Example:
+
+    .. code-block:: python
+
+        procs = get_root_processes_from_campaign(campaign)
+        stitching_groups = {
+            "dy_lep_m50": [
+                "dy_lep_m50_amcatnlo",
+                "dy_lep_m50_0j_amcatnlo",
+                "dy_lep_m50_1j_amcatnlo",
+                "dy_lep_m50_2j_amcatnlo",
+            ],
+        }
+        replace_processes_map = {
+            "dy_lep_m50": ["dy_lep_m50_0j", "dy_lep_m50_1j", "dy_lep_m50_2j"],
+        }
+        for dataset in stitching_groups["dy_lep_m50"]:
+            dataset_inst = config.get_dataset(dataset)
+            # assign the stitching datasets to the datasets
+            dataset_inst.x.stitching_datasets = stitching_groups["dy_lep_m50"]
+
+            for proc in dataset.processes:
+                # replace the processes with the binned ones
+                if proc.name in replace_processes_map:
+                    dataset.remove_process(proc)
+                    for binned_proc in replace_processes_map[proc.name]:
+                        dataset.add_process(procs.n(binned_proc))
     """
     # get the lumi
     lumi = self.config_inst.x.luminosity.nominal
@@ -99,13 +131,13 @@ def normalization_weights_setup(
     Sets up objects required by the computation of normalization weights and stores them as instance
     attributes:
 
-        - py:attr:`normalization_selection_stats`: The stats dict loaded from the output of MergeSelectionsStats.
         - py:attr:`sum_weights_table`: A sparse array serving as a lookup table for the sum of event
           weights per process id.
         - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
           processes known to the config of the task, with keys being process ids.
     """
     # load the selection stats
+    print(self.cls_name, self.selection_stats_key, inputs[self.selection_stats_key])
     normalization_selection_stats = [
         inp["collection"][0]["stats"].load(formatter="json")
         for inp in inputs[self.selection_stats_key].values()
