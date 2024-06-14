@@ -17,6 +17,45 @@ sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 ak = maybe_import("awkward")
 
+logger = law.logger.get_logger(__name__)
+
+
+def get_stitching_datasets(config_inst, dataset_inst) -> set[str]:
+    """
+    Helper function to obtain all datasets that are required to stitch this *dataset_inst*.
+    """
+
+    dataset_process_map = {d.name: d.get_leaf_processes() for d in config_inst.datasets}
+
+    # find the datasets that contain at least one of the processes
+    stitching_datasets = set()
+    for dataset_name, processes in dataset_process_map.items():
+        if any(proc in dataset_inst.get_leaf_processes() for proc in processes):
+            stitching_datasets.add(dataset_name)
+
+    return stitching_datasets
+
+
+def get_br_from_inclusive_dataset(stats: dict) -> dict:
+    """
+    Helper function to compute the branching ratios from the inclusive sample.
+    """
+    # get the sum of weights inclusive and per process
+    sum_mc_weight = stats["sum_mc_weight"]
+    sum_mc_weight_per_process = stats["sum_mc_weight_per_process"]
+
+    if not sum_mc_weight == sum(sum_mc_weight_per_process.values()):
+        raise Exception(
+            "sum of event weights does not match the sum of event weights per process",
+        )
+
+    # compute the branching ratios
+    branching_ratios = {
+        int(process_id): sum_weights / sum_mc_weight
+        for process_id, sum_weights in sum_mc_weight_per_process.items()
+    }
+    return branching_ratios
+
 
 @producer(
     uses={"process_id", "mc_weight"},
@@ -24,6 +63,7 @@ ak = maybe_import("awkward")
     weight_name="normalization_weight",
     # whether to allow stitching datasets
     allow_stitching=True,
+    get_xsecs_from_inclusive_dataset=True,
     # only run on mc
     mc_only=True,
 )
@@ -34,42 +74,24 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     py:attr:`normalization_selection_stats` attribute to assign each event a normalization weight.
     The normalization weight is stored in a new column named after the py:attr:`weight_name` attribute.
     When py:attr`allow_stitching` is set to True, the sum of event weights is computed for all
-    datasets in the py:attr:`stitching_datasets` attribute of the internal py:attr:`dataset_inst`.
-    If datasets contain multiple processes considered in the stitching procedure, the py:attr:`dataset_inst`
-    must contain all considered processes and the py:attr:`process_id` column must be reconstructed
-    on a per-event basis. Example:
-
-    .. code-block:: python
-
-        procs = get_root_processes_from_campaign(campaign)
-        stitching_groups = {
-            "dy_lep_m50": [
-                "dy_lep_m50_amcatnlo",
-                "dy_lep_m50_0j_amcatnlo",
-                "dy_lep_m50_1j_amcatnlo",
-                "dy_lep_m50_2j_amcatnlo",
-            ],
-        }
-        replace_processes_map = {
-            "dy_lep_m50": ["dy_lep_m50_0j", "dy_lep_m50_1j", "dy_lep_m50_2j"],
-        }
-        for dataset in stitching_groups["dy_lep_m50"]:
-            dataset_inst = config.get_dataset(dataset)
-            # assign the stitching datasets to the datasets
-            dataset_inst.x.stitching_datasets = stitching_groups["dy_lep_m50"]
-
-            for proc in dataset.processes:
-                # replace the processes with the binned ones
-                if proc.name in replace_processes_map:
-                    dataset.remove_process(proc)
-                    for binned_proc in replace_processes_map[proc.name]:
-                        dataset.add_process(procs.n(binned_proc))
+    datasets with a leaf process contained in the leaf processes of the py:attr:`dataset_inst`.
+    For stitching, the process_id needs to be reconstructed for each leaf process on a per event basis.
     """
     # get the lumi
     lumi = self.config_inst.x.luminosity.nominal
 
     # read the cross section per process from the lookup table
     process_id = np.asarray(events.process_id)
+
+    unique_process_ids = set(process_id)
+    leaf_ids = {p.id for p in self.dataset_inst.get_leaf_processes()}
+    if self.allow_stitching and any([p not in leaf_ids for p in unique_process_ids]):
+        non_leaf_ids = unique_process_ids - leaf_ids
+        logger.warning(
+            f"process_id field contains process ids {non_leaf_ids} that are not leaf processes "
+            f"of the dataset {self.dataset_inst.name}",
+        )
+
     xs = np.array(self.xs_table[0, process_id].todense())[0]
 
     # read the sum of event weights per process from the lookup table
@@ -94,13 +116,13 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 
     self.selection_stats_key = f"{'stitched_' if self.allow_stitching else 'norm_'}selection_stats"
 
-    if self.allow_stitching and self.dataset_inst.x("stitching_datasets", None):
-        stats_datasets = law.util.make_list(self.dataset_inst.x.stitching_datasets)
+    if self.allow_stitching:
+        self.stitching_datasets = get_stitching_datasets(self.config_inst, self.dataset_inst)
     else:
-        stats_datasets = [self.dataset_inst.name]
+        self.stitching_datasets = [self.dataset_inst.name]
 
     # check that all datasets are known
-    for dataset in stats_datasets:
+    for dataset in self.stitching_datasets:
         if not self.config_inst.has_dataset(dataset):
             raise Exception(
                 f"unknown dataset '{dataset}' required for normalization weights computation",
@@ -115,7 +137,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
             branch=-1,
             _exclude=MergeSelectionStats.exclude_params_forest_merge,
         )
-        for dataset in stats_datasets
+        for dataset in self.stitching_datasets
     }
     return reqs
 
@@ -137,30 +159,31 @@ def normalization_weights_setup(
           processes known to the config of the task, with keys being process ids.
     """
     # load the selection stats
-    print(self.cls_name, self.selection_stats_key, inputs[self.selection_stats_key])
-    normalization_selection_stats = [
-        inp["collection"][0]["stats"].load(formatter="json")
-        for inp in inputs[self.selection_stats_key].values()
-    ]
+    normalization_selection_stats = {
+        dataset: inp["collection"][0]["stats"].load(formatter="json")
+        for dataset, inp in inputs[self.selection_stats_key].items()
+    }
 
+    # if necessary, merge the selection stats
     if len(normalization_selection_stats) > 1:
-        # if necessary, merge the selection stats
         from columnflow.tasks.selection import MergeSelectionStats
         merged_selection_stats = defaultdict(float)
-        for stats in normalization_selection_stats:
+        for stats in normalization_selection_stats.values():
             MergeSelectionStats.merge_counts(merged_selection_stats, stats)
     else:
-        merged_selection_stats = normalization_selection_stats[0]
+        merged_selection_stats = normalization_selection_stats[self.dataset_inst.name]
 
     # for the lookup tables below, determine the maximum process id
-    process_insts = [
+    process_insts = {
         process_inst
-        for process_inst, _, _ in self.config_inst.walk_processes()
+        for dataset in self.stitching_datasets
+        for process_inst, _, _ in self.config_inst.get_dataset(dataset).walk_processes()
         if process_inst.is_mc
-    ]
+    }
     max_id = max(process_inst.id for process_inst in process_insts)
 
     # ensure that the selection stats do not contain any process that was not previously registered
+    # NOTE: we could also check each individual ID instead of only the max_id
     unregistered_process_ids = [
         int(process_id) for process_id in merged_selection_stats["sum_mc_weight_per_process"]
         if int(process_id) > max_id
@@ -180,10 +203,39 @@ def normalization_weights_setup(
 
     # create a cross section lookup table with all known processes with a cross section
     xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
-    for process_inst in process_insts:
-        if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
-            continue
-        xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
+    if self.allow_stitching and self.get_xsecs_from_inclusive_dataset:
+        inclusive_dataset = [
+            self.config_inst.get_dataset(dataset)
+            for dataset in self.stitching_datasets
+            for process_inst in self.config_inst.get_dataset(dataset).processes
+            if not any([
+                p in process_insts
+                for process_inst in self.config_inst.get_dataset(dataset).processes
+                for p in process_inst.parent_processes
+            ])
+        ]
+        if len(inclusive_dataset) != 1:
+            raise Exception(
+                f"expected exactly one inclusive dataset in the stitching group, got {len(inclusive_dataset)}",
+            )
+        inclusive_dataset = inclusive_dataset[0]
+        logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
+
+        # get the branching ratios from the inclusive sample
+        branching_ratios = get_br_from_inclusive_dataset(normalization_selection_stats[inclusive_dataset.name])
+        inclusive_xsec = inclusive_dataset.processes.get_first().get_xsec(self.config_inst.campaign.ecm).nominal
+        for process_inst in process_insts:
+            if process_inst.id not in branching_ratios.keys():
+                # raise Exception(f"branching ratio for {process_inst.name} not found from inclusive dataset")
+                continue
+            xs_table[0, process_inst.id] = inclusive_xsec * branching_ratios[process_inst.id]
+    else:
+        for process_inst in process_insts:
+            if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
+                # raise Exception(f"cross section for {process_inst.name} at {self.config_inst.campaign.ecm} not found")
+                continue
+            xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
+
     self.xs_table = xs_table
 
 
@@ -195,9 +247,19 @@ def normalization_weights_init(self: Producer) -> None:
     self.produces.add(self.weight_name)
 
 
+normalization_weights_brs_from_cmsdb = normalization_weights.derive(
+    "normalization_weights_brs_from_cmsdb", cls_dict={
+        "weight_name": "normalization_weight_brs_from_cmsdb",
+        "get_xsecs_from_inclusive_dataset": False,
+        "allow_stitching": True,
+    },
+)
+
+
 unstitched_normalization_weights = normalization_weights.derive(
     "unstitched_normalization_weights", cls_dict={
         "weight_name": "unstitched_normalization_weight",
+        "get_xsecs_from_inclusive_dataset": False,
         "allow_stitching": False,
     },
 )
