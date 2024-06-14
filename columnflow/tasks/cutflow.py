@@ -21,8 +21,9 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
 )
-from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import view_output_plots
+from columnflow.tasks.framework.parameters import shift_last_bin_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
 
@@ -36,6 +37,8 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    shift_last_bin = shift_last_bin_inst
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     selector_steps_order_sensitive = True
@@ -195,7 +198,12 @@ class CreateCutflowHistograms(
 
                 # fill the raw point
                 fill_data = get_point()
-                fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": self.initial_step})
+                fill_hist(
+                    histograms[var_key],
+                    fill_data,
+                    fill_kwargs={"step": self.initial_step},
+                    shift_last_bin=self.shift_last_bin,
+                )
 
                 # fill all other steps
                 mask = True
@@ -207,7 +215,12 @@ class CreateCutflowHistograms(
                     # incrementally update the mask and fill the point
                     mask = mask & arr.steps[step]
                     fill_data = get_point(mask)
-                    fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": step})
+                    fill_hist(
+                        histograms[var_key],
+                        fill_data,
+                        fill_kwargs={"step": step},
+                        shift_last_bin=self.shift_last_bin,
+                    )
 
         # dump the histograms
         for var_key in histograms.keys():

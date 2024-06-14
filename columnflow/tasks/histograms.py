@@ -15,6 +15,7 @@ from columnflow.tasks.framework.mixins import (
     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.parameters import shift_last_bin_inst
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
@@ -31,6 +32,8 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    shift_last_bin = shift_last_bin_inst
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -242,7 +245,7 @@ class CreateHistograms(
                         fill_data[variable_inst.name] = expr(events)
 
                     # fill it
-                    fill_hist(histograms[var_key], fill_data)
+                    fill_hist(histograms[var_key], fill_data, shift_last_bin=self.shift_last_bin)
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
