@@ -62,8 +62,8 @@ def get_br_from_inclusive_dataset(stats: dict) -> dict:
     # name of the output column
     weight_name="normalization_weight",
     # whether to allow stitching datasets
-    allow_stitching=True,
-    get_xsecs_from_inclusive_dataset=True,
+    allow_stitching=False,
+    get_xsecs_from_inclusive_dataset=False,
     # only run on mc
     mc_only=True,
 )
@@ -247,19 +247,19 @@ def normalization_weights_init(self: Producer) -> None:
     self.produces.add(self.weight_name)
 
 
-normalization_weights_brs_from_cmsdb = normalization_weights.derive(
-    "normalization_weights_brs_from_cmsdb", cls_dict={
-        "weight_name": "normalization_weight_brs_from_cmsdb",
+stitched_normalization_weights_brs_from_cmsdb = normalization_weights.derive(
+    "stitched_normalization_weights_brs_from_cmsdb", cls_dict={
+        "weight_name": "stitched_normalization_weight_brs_from_cmsdb",
         "get_xsecs_from_inclusive_dataset": False,
         "allow_stitching": True,
     },
 )
 
 
-unstitched_normalization_weights = normalization_weights.derive(
-    "unstitched_normalization_weights", cls_dict={
-        "weight_name": "unstitched_normalization_weight",
-        "get_xsecs_from_inclusive_dataset": False,
-        "allow_stitching": False,
+stitched_normalization_weights = normalization_weights.derive(
+    "stitched_normalization_weights", cls_dict={
+        "weight_name": "stitched_normalization_weight",
+        "get_xsecs_from_inclusive_dataset": True,
+        "allow_stitching": True,
     },
 )
