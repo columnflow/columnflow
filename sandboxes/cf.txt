@@ -1,5 +1,6 @@
 # version 11
 
+tenacity==8.3.0
 luigi~=3.5.1
 scinum~=2.1.1
 six~=1.16.0
