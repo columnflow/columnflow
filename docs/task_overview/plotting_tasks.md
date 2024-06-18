@@ -1,8 +1,6 @@
 # Plotting tasks
 
 ```{mermaid}
-:name: plotting-tasks
-:theme: forest
 :zoom:
 :align: center
 :caption: Class diagram of all plotting tasks
@@ -71,7 +69,7 @@ classDiagram
 The following tasks are dedicated to plotting.
 For more information, check out the [plotting user guide](../user_guide/plotting.md)
 
- {doc}`Plotting <plotting documentation>`. #TODO should probably be a link to the user guide
+ {doc}`Plotting <../user_guide/plotting>`. #TODO should probably be a link to the user guide
 
 (PlotVariablesTasks)=
 
