@@ -69,8 +69,6 @@ classDiagram
 The following tasks are dedicated to plotting.
 For more information, check out the [plotting user guide](../user_guide/plotting.md)
 
- {doc}`Plotting <../user_guide/plotting>`. #TODO should probably be a link to the user guide
-
 (PlotVariablesTasks)=
 
 - ```PlotVariables*```, ```PlotShiftedVariables*``` (e.g.
@@ -94,7 +92,7 @@ variables in the analysis config.
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`): Tasks to plot the histograms created
 by {py:class}`~columnflow.tasks.cutflow.CreateCutflowHistograms`. The
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D` are plotted in a similar way to the
-["PlotVariables*"](PlotVariablesTasks) tasks. The difference is that these plots show the selection
+[PlotVariables*](PlotVariablesTasks) tasks. The difference is that these plots show the selection
 yields of the different selection steps defined in
 {py:class}`~columnflow.tasks.selection.SelectEvents` instead of only after the
 {py:class}`~columnflow.tasks.reduction.ReduceEvents` procedure. The selection steps to be shown
