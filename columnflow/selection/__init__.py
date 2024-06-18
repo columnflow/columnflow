@@ -243,20 +243,82 @@ class SelectionResult(od.AuxDataMixin):
     """
 
     @classmethod
-    def check_nones_and_convert(cls, name, mask):
-        mask_type = str(mask.type)
-        if "?" in mask_type or "Option" in mask_type:
-            assert not ak.any(ak.is_none(mask)), f"mask {name} contains None values"
-            logger.info(f"mask {name} is of mixed type, but does not contain Nones: converting to pure type.")
-            mask = ak.fill_none(mask, 0)
+    def _check_nones_and_convert(cls, name, mask, optiontype):
+        assert not ak.any(ak.is_none(mask, axis=-1)), f"mask {name} contains None values"
+        logger.info(f"mask {name} is of mixed type, but does not contain Nones: converting to pure type.")
+        mask = ak.fill_none(mask, False if optiontype.content == ak.types.NumpyType("bool") else 0)
+        return mask
+
+    @classmethod
+    def _to_bool(cls, name, mask):
+        bool_mask = ak.values_astype(mask, bool)
+        is_one = mask[ak.fill_none(bool_mask, False)] == 1
+        assert ak.all(is_one), f"mask {name} contains booleans and non-binary values {mask[~is_one]}"
+        return bool_mask
+
+    @classmethod
+    def _nonecheck_and_uniontobool(cls, name, mask, dim=1):
+        get_content = lambda a: a.type.content.content if dim == 2 else a.type.content
+        c = get_content(mask)
+        if is_union := isinstance(c, ak.types.UnionType):
+            # this might come because 0 or 1 was used instead of True or False: try converting to booleans
+            mask = cls._to_bool(name, mask)
+            # type is now still Union[...] but of only bool or only ?bool if everything is fine
+            contents = get_content(mask).contents
+            assert all([ut == contents[0] for ut in contents]), \
+                f"mask contains values not convertible to boolean: {c.contents}"
+        if isinstance(c, ak.types.OptionType):
+            mask = cls._check_nones_and_convert(name, mask, c)
+        if is_union:
+            # at this point, can still be Union[bool, bool, ...] > convert to bool with fill_none
+            mask = ak.fill_none(mask, False)
         return mask
 
     @classmethod
     def check_valid_event_mask(cls, name, event_mask):
         assert isinstance(event_mask, (np.ndarray, ak.Array)), f"{name} should be array, not {type(event_mask)}"
         assert event_mask.ndim == 1, f"{name} array has illegal dimension {event_mask.ndim}"
-        assert np.array(event_mask).dtype == bool, f"{name} is {np.array(event_mask).dtype} array, not boolean array"
-        return cls.check_nones_and_convert(name, event_mask)
+        boolean_error = f"{name} contains %s, not booleans"
+        if isinstance(event_mask, np.ndarray):
+            event_mask = ak.Array(event_mask)
+        event_mask = cls._nonecheck_and_uniontobool(name, event_mask, 1)
+        # final check we get a boolean array
+        c_prim = event_mask.type.content.primitive
+        if "int" in c_prim:
+            assert ak.all((event_mask == 0) | (event_mask == 1)), "event mask {name} contains non-binary integers"
+            return ak.values_astype(event_mask, bool)
+        assert c_prim == "bool", boolean_error % event_mask.type.content
+        return event_mask
+
+    @classmethod
+    def check_valid_object_mask(cls, name, obj_mask):
+        assert isinstance(obj_mask, (np.ndarray, ak.Array)), f"{name} should be array, not {type(obj_mask)}"
+        assert obj_mask.ndim in {1, 2}, f"{name} array has illegal dimension {obj_mask.ndim}"
+        if isinstance(obj_mask, np.ndarray):
+            obj_mask = ak.Array(obj_mask)
+        t = obj_mask.type
+        c = t.content
+        assert not isinstance(c, (ak.types.RecordType, ak.types.ScalarType)), f"{name} cannot contain illegal type"
+        if obj_mask.ndim == 1:
+            if isinstance(c, ak.types.OptionType):
+                obj_mask = cls._check_nones_and_convert(name, obj_mask, c)
+                c = obj_mask.type.content
+            assert isinstance(c, ak.types.NumpyType), f"1d object mask {name} has not integers, but {c}"
+            assert "int" in c.primitive, f"1d mask {name} does not contain integers but {c.primitive}"
+            logger.info(f"converting 1d object mask {name} to 2d")
+            return ak.from_regular(obj_mask[:, None])
+
+        assert isinstance(c, (ak.types.ListType, ak.types.RegularType)), \
+            f"{name} contains {c}. Some rows might be None"
+
+        obj_mask = cls._nonecheck_and_uniontobool(name, obj_mask, 2)
+        c = obj_mask.type.content.content
+        assert isinstance(c, ak.types.NumpyType), f"{name} has illegal content {c}"
+        prim = c.primitive
+        assert "int" in prim or prim == "bool", f"2d mask {name} does not contain integers or booleans, but {prim}"
+        if "int" in prim:
+            return ak.from_regular(obj_mask)
+        return obj_mask
 
     def __init__(
         self: SelectionResult,
@@ -280,20 +342,7 @@ class SelectionResult(od.AuxDataMixin):
             for src_object, dst_objects in objects.items():
                 assert isinstance(dst_objects, (DotDict, dict)), "objects should be a (dot)dict of (dot)dicts"
                 for dst_obj, dst_obj_mask in dst_objects.items():
-
-                    dst_obj_mask = self.check_nones_and_convert(dst_obj, dst_obj_mask)
-
-                    dst_obj_mask_type = str(dst_obj_mask.type)
-                    if "bool" in dst_obj_mask_type:
-                        assert dst_obj_mask.ndim == 2, f"boolean mask {dst_obj} has illegal dim {dst_obj_mask.ndim}"
-                    elif "int" in dst_obj_mask_type:
-                        assert dst_obj_mask.ndim in [1, 2], f"int mask {dst_obj} has illegal dim {dst_obj_mask.ndim}"
-                        if dst_obj_mask.ndim == 1:
-                            logger.info(f"converting 1d object mask {dst_obj} to 2d")
-                            dst_obj_mask = dst_obj_mask[:, None]
-                        # make sure object masks are jagged to avoid numpy index
-                        dst_obj_mask = ak.from_regular(dst_obj_mask)
-                    dst_objects[dst_obj] = dst_obj_mask
+                    dst_objects[dst_obj] = self.check_valid_object_mask(dst_obj, dst_obj_mask)
         self.objects = DotDict.wrap(objects or {})
         self.other = DotDict.wrap(other)
 
