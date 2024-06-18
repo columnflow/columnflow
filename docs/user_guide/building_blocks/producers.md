@@ -73,11 +73,13 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 To call a Producer in an other
 Producer/Calibrator/
 Selector, the following expression might be used:
+
 ```python
 events = self[producer_name](arguments_of_the_producer, **kwargs)
 ```
 
 Hence, a complete example would be:
+
 ```python
 # import the Producer class and the producer method
 from columnflow.production import Producer, producer
@@ -127,6 +129,7 @@ The ```all_features``` producer creates therefore two new columns, the ```HT``` 
 level, and the ```pt_squared``` column for each object of the ```Jet``` collection.
 
 Notes:
+
 - If you want to use an exposed Producer in a task call, and if
 this new Producer is created in a new file, you need to include this file in the ```law.cfg``` file
 under the ```production_modules``` argument. A more detailed explanation of the law config file
@@ -137,7 +140,6 @@ columns only after the reduction, using the ProduceColumns task.
 
 - Other useful functions (e.g. for easier handling of columns) can be found in the
 {doc}`../best_practices` section of this documentation.
-
 
 ## ProduceColumns task
 
@@ -164,4 +166,3 @@ It is to be mentioned that this task is run after the
 {py:class}`~columnflow.tasks.calibration.CalibrateEvents`
 tasks and therefore uses the default arguments for the ```--calibrators``` and the ```--selector```
 if not specified otherwise.
-

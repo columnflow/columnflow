@@ -64,12 +64,13 @@ available from the command line, it should be declared with the ```exposed=True`
 To call a fully functional Selector (in the following referred
 as Selector_int) from an other Selector (in the following referred
 to as Selector_ext), several steps are required:
+
 - If defined in an other file, Selector_int should be imported in the Selector_ext script,
 - The columns needed for Selector_int should be declared in the ```uses``` argument of Selector_ext
-(it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of
-the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
+    (it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of
+    the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
 - Selector_int must be run in Selector_ext, e.g. with the
-```self[Selector_int](events, **kwargs)``` call.
+    ```self[Selector_int](events, **kwargs)``` call.
 
 An example of an exposed Selector_ext with the ```jet_selection```
 Selector defined above as Selector_int, assuming the
@@ -128,17 +129,18 @@ The result of a {py:class}`~columnflow.selection.Selector` is propagated through
 {py:class}`~columnflow.selection.SelectionResult` class. The
 SelectionResult object is instantiated using a dictionary for each
 argument. There are four arguments that may be set, which contain:
+
 - Boolean masks to select the events to be kept in the analysis, which is saved under the
-```steps``` argument. Several selection steps may be defined in a single Selector, each with a unique
-name being the key of the dictionary for the corresponding mask.
+    ```steps``` argument. Several selection steps may be defined in a single Selector, each with a unique
+    name being the key of the dictionary for the corresponding mask.
 - Several index masks for specific objects in a double dictionary structure, saved under the
-```objects``` argument. The double dictionary structure in the ```objects``` defines the source
-column/field from which the indices are to be taken (first dimension of the dictionary) and the name of
-the new column/field to be created with only these objects (second dimension of the dictionary). If the
-name of the column/field to be created is the same as the name of an already existing column/field, the original
-column/field will be overwritten by the new one!
+    ```objects``` argument. The double dictionary structure in the ```objects``` defines the source
+    column/field from which the indices are to be taken (first dimension of the dictionary) and the name of
+    the new column/field to be created with only these objects (second dimension of the dictionary). If the
+    name of the column/field to be created is the same as the name of an already existing column/field, the original
+    column/field will be overwritten by the new one!
 - Additional informations to be used by other Selectors, saved
-under the ```aux``` argument.
+    under the ```aux``` argument.
 - A combined boolean mask of all steps used, which is saved under the ```event``` argument. An
 example with this argument will be shown in the section
 {ref}`"Complete Example" <complete_example>`. The final
@@ -229,8 +231,6 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     )
 ```
 
-
-
 ### Selection using several selection steps
 
 In order for the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task to apply the final event
@@ -243,7 +243,9 @@ of the SelectionResult and for it to be applied to the events.
 This can be achieved in two steps:
 
 - Combining the results from the different selections to a single
+
 SelectionResult object:
+
 ```python
 results = SelectionResult()
 results += jet_results
@@ -252,6 +254,7 @@ results += fatjet_results
 
 - Reducing the different steps to a single boolean array and give it to the ```event``` argument of
 the SelectionResult object.
+
 ```python
 # import the functions to combine the selection masks
 from operator import and_
@@ -263,7 +266,6 @@ results.event = event_sel
 ```
 
 ### Selection stats
-
 
 In order to use the correct values for the weights to be applied to the Monte Carlo samples while
 plotting, it is necessary to save some information which would be lost after the
@@ -289,7 +291,6 @@ was saved in the ```stats``` dictionary. In this example, the keys to be printed
 SelectEvents task and the sum of the Monte Carlo weights
 per process (needed for correct normalization of the number of Monte Carlo events in the plots)
 are saved.
-
 
 ```python
 from columnflow.selection import Selector, selector
@@ -376,10 +377,12 @@ columnflow was imported (using `from columnflow.selection.stats import increment
 ```
 
 (complete_example)=
+
 ### Complete example
 
 Overall, creating an exposed {py:class}`~columnflow.selection.Selector` with several selections steps
 might look like this:
+
 ```python
 # coding: utf-8
 
@@ -614,8 +617,6 @@ created in this task if needed.
 
 - Other useful functions (e.g. for easier handling of columns) can be found in the
 {doc}`../best_practices` section of this documentation.
-
-
 
 ## Running the SelectEvents task
 

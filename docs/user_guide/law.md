@@ -32,7 +32,6 @@ used to decide if a task further down the task tree should run or not, the versi
 for bookkeeping and storage of several intermediate results, where all other parameters would be
 equivalent.
 
-
 Tasks in law are organized as a graph with dependencies. Therefore a "depth" for the different
 required tasks exists, depending on which task required which other task. In order to see the
 different required tasks for a single task, you might use the argument ```--print-status -1```,
@@ -43,6 +42,7 @@ followed by the depth of the task. If you want a finished task to be run anew wi
 the version (e.g. do a new histogram with different binning), you might remove the previous
 outputs with the ```--remove-output``` argument, followed by the depth up to which to remove the
 outputs. There are three removal modes:
+
 - ```a``` (all: remove all outputs of the different tasks up to the given depth),
 - ```i``` (interactive: prompt a selection of the tasks to remove up to the given depth. For each
 task which output you decide to remove, you will be asked how you want to remove the potentially
@@ -72,6 +72,7 @@ law run cf.PlotVariables1D --version test_plot --print-output 0
 ```
 
 (law_config_section)=
+
 ## Law Config
 
 TODO

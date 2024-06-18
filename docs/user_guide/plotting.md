@@ -10,14 +10,15 @@ An overview of all plotting tasks is given in the [Plotting tasks](../task_overv
 ## Creating your first plot
 
 Assuming you used the analysis template to setup your analysis, you can create a first plot by running
+
 ```shell
 law run cf.PlotVariables1D --version v1 \
     --calibrators example --selector example --producer example \
     --processes data,tt,st --variables n_jet --categories incl,2j
 ```
+
 This will run the full analysis chain for the given processes (data, tt, st) and should create
 plots looking like this:
-
 
 ::::{grid} 1 1 2 2
 :::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_incl__var_n_jet.pdf
@@ -29,7 +30,6 @@ plots looking like this:
 :::
 ::::
 
-
 :::{dropdown} Where do I find that plot?
 You can add ```--print-output 0``` to every task call, which will print the full filename of all
 outputs of the requested task. Alternatively, you can add ```--fetch-output 0,a``` to directly
@@ -37,7 +37,6 @@ copy all outputs of this task into the directory you are currently in.
 Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during
 the runtime of the task, e.g. via ```--view-cmd evince-previewer```.
 :::
-
 
 The ```PlotVariables1D``` task is located at the bottom of our
 [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that
@@ -76,7 +75,6 @@ the events corresponding to the dataset ```tt_sl_powheg``` will be displayed twi
 plot.
 :::
 
-
 ## Customization of plots
 
 There are many different parameters implemented that allow customizing the style of a plot. A short
@@ -94,11 +92,13 @@ To change the text next to the label, you can add the ```--cms-label``` paramete
 :::{dropdown} What are the ```cms-label``` options?
 In general, this parameter accepts all types of strings, but there is a set of shortcuts for commonly
 used labels that will automatically be resolved:
+
 ```{literalinclude} ../../columnflow/plotting/plot_all.py
 :language: python
 :start-at: label_options
 :end-at: "}"
 ```
+
 :::
 
 To compare shapes of multiple processes, you might want to plot each process separately as one line.
@@ -162,7 +162,6 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 :::
 ::::
 
-
 :::{dropdown} Limitations of the ```variable_settings```
 While in theory we can change anything inside the variable and process instances via the
 ```variable_settings``` parameter, there are certain attributes that are already used during the creation
@@ -170,7 +169,6 @@ of the histograms (e.g. the ```expression``` and the ```binning```). Since our `
 parameter only modifies these attributes during the runtime of our plotting task, this will not
 impact our final results.
 :::
-
 
 For the ```general_settings```, ```process_settings```, and ```variable_settings``` you can define
 defaults and groups in the config, e.g. via
@@ -184,6 +182,7 @@ config_inst.x.general_settings_groups = {
     "compare_shapes": {"skip_ratio": True, "shape_norm": True, "yscale": "log", "cms_label": "simpw"},
 }
 ```
+
 The default is automatically used when no parameter is given in the task call, and the groups can
 be used directly on the command line and will be resolved automatically. Our previously defined
 defaults and groups will be used e.g. by the following task call:
@@ -203,13 +202,13 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 :::
 ::::
 
-
 ## Creating 2D plots
 
 Columnflow also provides the {py:class}`~columnflow.tasks.plotting.PlotVariables2D` task to create
 two-dimensional plots. Two-dimensional histograms are created by passing two variables to the
 ```--variables``` parameter, separated by a ```-```. Here is an exemplary task call and their
 outputs.
+
 ```shell
 law run cf.PlotVariables2D --version v1 \
     --processes tt,st --variables n_jet-jet1_pt,jet1_pt-n_jet
@@ -238,6 +237,7 @@ tasks that can produce plots after each individual selection step.
 
 To create a simple cutflow plot, displaying event yields after each individual selection step,
 you can use the {py:class}`~columnflow.tasks.cutflow.PlotCutflow` task, e.g. via calling
+
 ```shell
 law run cf.PlotCutflow --version v1 \
     --calibrators example --selector example --categories incl,2j \
@@ -266,14 +266,15 @@ A detailed guide on how to implement your own selector can be found in the
 
 Per default, the name of the selector step is used on the x-axis, but you can also provide custom
 step labels via the config:
+
 ```python
 config_inst.x.selector_step_labels = {
     "muon": r"$N_{muon} = 1$",
     "jet": r"$N_{jets}^{AK4} \geq 1$",
 }
 ```
-:::
 
+:::
 
 To create plots of variables as part of the cutflow, we also provide the
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`, which mostly behaves the same as the
@@ -321,13 +322,13 @@ law run cf.PlotCutflowVariables1D --version v1 \
 :::
 ::::
 
-
 ## Creating plots for different shifts
 
 Like most tasks, our plotting tasks also contain the ```--shift``` parameter that allows requesting
 the outputs for a certain type of systematic variation. Per default, the ```--shift``` parameter is set
 to "nominal", but you could also produce your plot with a certain systematic uncertainty varied
 up or down, e.g. via running
+
 ```shell
 law run cf.PlotVariables1D --version v1 \
     --processes tt,st --variables n_jet --shift mu_up
@@ -346,10 +347,12 @@ For directly comparing differences introduced by one shift source, we provide th
 parameter, this task implements the ```--shift-sources``` option and creates one plot per shift source
 displaying the nominal distribution (black) compared to the shift source varied up (red) and down (blue).
 The task can be called e.g. via
+
 ```shell
 law run cf.PlotShiftedVariables1D --version v1 \
     --processes tt,st --variables jet1_pt,n_jet --shift-sources mu
 ```
+
 and produces the following plot:
 
 ::::{grid} 1 1 2 2
@@ -366,17 +369,18 @@ This produces per default only one plot containing the sum of all processes. To 
 per process, you can use the {py:class}`~columnflow.tasks.plotting.PlotShiftedVariablesPerProcess1D`
 task
 
-
 ## Directly displaying plots in the terminal
 
 All plotting tasks also include a ```--view-cmd``` parameter that allows directly printing the plot
 during the runtime of the task:
+
 ```shell
 law run cf.PlotVariables1D --version v1 \
     --processes tt,st --variables n_jet --view-cmd evince-previewer
 ```
 
 (custom_plot_function)=
+
 ## Using your own plotting function
 
 While all plotting tasks provide default plotting functions which implement many parameters to
@@ -386,7 +390,6 @@ of all other plotting functions and call a plotting task with this function usin
 `--plot-function` parameter.
 
 An example on how to implement such a plotting function is shown in the following:
-
 
 ```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/plotting/example.py
 :language: python

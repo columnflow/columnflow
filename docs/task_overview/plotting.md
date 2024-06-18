@@ -1,3 +1,5 @@
+# Plotting tasks
+
 ```{mermaid}
 :name: plotting-tasks
 :theme: forest
@@ -66,14 +68,13 @@ classDiagram
     }
 ```
 
-# Plotting tasks
-
 The following tasks are dedicated to plotting.
 For more information, check out the [plotting user guide](../user_guide/plotting.md)
 
- {doc}`Plotting <plotting documentation>`.
+ {doc}`Plotting <plotting documentation>`. #TODO should probably be a link to the user guide
 
 (PlotVariablesTasks)=
+
 - ```PlotVariables*```, ```PlotShiftedVariables*``` (e.g.
 {py:class}`~columnflow.tasks.plotting.PlotVariables1D`,
 {py:class}`~columnflow.tasks.plotting.PlotVariables2D`,
@@ -90,7 +91,6 @@ be plotted, as defined in the analysis config. For the ```PlotShiftedVariables*`
 argument ```shift-sources``` is needed and replaces the argument ```shift```. The output format for
 these plots can be given with the ```--file-types``` argument. It is possible to set a default for the
 variables in the analysis config.
-
 
 - ```PlotCutflow*``` (e.g. {py:class}`~columnflow.tasks.cutflow.PlotCutflow`,
 {py:class}`~columnflow.tasks.cutflow.PlotCutflowVariables1D`): Tasks to plot the histograms created

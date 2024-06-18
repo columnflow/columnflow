@@ -4,17 +4,16 @@
 
 If you get an error while using columnflow and look at the error stack, you will probably see
 two errors:
+
 1) the actual error and where it happened in the code (standard python error), this is probably
 the error you are interested in.
 2) a sandbox error that you can ignore in most of the cases, as
 it does not correspond to your problem, it only says in which sandbox it happened.
 
-
 In this section, debugging tools already implemented in columnflow to inspect the intermediate
 results of tasks will be presented.
 
 TODO
-
 
 Add a FAQ here? Oder in a new file? first questions:
 - troubleshooting:

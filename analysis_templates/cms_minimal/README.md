@@ -1,6 +1,5 @@
 # __cf_analysis_name__ Analysis
 
-
 ### Resources
 
 - [columnflow](https://github.com/uhh-cms/columnflow)
