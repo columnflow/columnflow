@@ -43,6 +43,21 @@ action() {
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 
+    echo
+    run_coverage test_config_util "venv_columnar_dev.sh"
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
+    echo
+    run_coverage test_task_parameters
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
+    echo
+    run_coverage test_plotting "venv_columnar_dev.sh"
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
     return "${gret}"
 }
 action "$@"
