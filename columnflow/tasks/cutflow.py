@@ -616,8 +616,8 @@ class PlotCutflowVariables1D(
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
-        parts["category"] = self.branch_data.category
-        parts["variable"] = self.branch_data.variable
+        parts["category"] = f"cat_{self.branch_data.category}"
+        parts["variable"] = f"var_{self.branch_data.variable}"
         return parts
 
     def output(self):
