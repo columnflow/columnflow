@@ -309,7 +309,7 @@ class PlotCutflow(
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
-        parts["category"] = self.branch_data
+        parts["category"] = f"cat_{self.branch_data}"
         return parts
 
     def output(self):
