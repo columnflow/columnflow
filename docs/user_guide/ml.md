@@ -135,7 +135,8 @@ In this case we want to request the input and target features, as well as some w
 In the {py:meth}`~columnflow.ml.MLModel.output` function, you define your local target directory that your current model instance will have access to.
 
 Since machine learning in columnflow uses k-fold cross validation by default, it is a good idea to have a separate directory for each fold, and this should be reflected in the {py:meth}`~columnflow.ml.MLModel.output` path.
-It is of good practice to store your "machine-learning-instance" files within the directory of the models instance. To get the path to this directory use `task.target`.
+It is of good practice to store your "machine-learning-instance" files within the directory of the models instance.
+To get the path to this directory use `task.target`.
 In this example we want to save each fold separately e.g:
 
 ```{literalinclude} ./examples/ml_code.py
@@ -265,7 +266,8 @@ law run cf.MLEvaluation \
 
 Most of these settings should sound familiar, if not look into the corresponding tutorial.
 `version` defines a setup configuration of your ML task, think more of a label than of an actual `version`.
-If you change the version label, columnflow will rerun all dependencies that are unique for this label, this typically just means you will retrain a new model. You can then switch freely between both models version.
+If you change the version label, columnflow will rerun all dependencies that are unique for this label, this typically just means you will retrain a new model.
+You can then switch freely between both models version.
 
 ## Optional useful functions
 
