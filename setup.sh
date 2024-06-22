@@ -343,11 +343,11 @@ cf_show_banner() {
 
     if ${no_utf8}; then
         cat << EOF
-     ___        $( cf_color green '_' )
-    / __\ ___  $( cf_color green '| |' ) _   _  _ __ ___   _ __
-   / /   / _ \ $( cf_color green '| |' )| | | || '_ \` _ \ | '_ \\
-  / /___| (_) |$( cf_color green '| |' )| |_| || | | | | || | | |
-  \____/ \___/ $( cf_color green '| |' ) \__,_||_| |_| |_||_| |_|
+                $( cf_color green '_' )
+    ___   ___  $( cf_color green '| |' ) _   _  _ __ ___   _ __
+   / __| / _ \ $( cf_color green '| |' )| | | || '_ \` _ \ | '_ \\
+  | (__ | (_) |$( cf_color green '| |' )| |_| || | | | | || | | |
+   \___| \___/ $( cf_color green '| |' ) \__,_||_| |_| |_||_| |_|
             __ $( cf_color green '| |' )
            / _|$( cf_color green '| |' )  ___ __      __
           | |_ $( cf_color green '| |' ) / _ \\ \ /\ / /
@@ -359,12 +359,12 @@ EOF
     else
         cat << EOF
 
-  ┏┓  $( cf_color green '┓' )
-  ┃ ┏┓$( cf_color green '┃' )┓┏┏┳┓┏┓
-  ┗┛┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
-     ┏$( cf_color green '┃' )
-     ╋$( cf_color green '┃' )┏┓┓┏┏
-     ┛$( cf_color green '┃' )┗┛┗┻┛
+     $( cf_color green '┓' )
+  ┏┏┓$( cf_color green '┃' )╻┏┏┳┓┏┓
+  ┗┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
+    ┏$( cf_color green '┃' )
+    ╋$( cf_color green '┃' )┏┓┓┏┏
+    ┛$( cf_color green '┃' )┗┛┗┻┛
 
 EOF
     fi
