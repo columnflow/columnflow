@@ -138,18 +138,14 @@ events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
 
 ## General advices
 
-- When storage space is a limiting factor, it is good practice to produce and store (if possible)
-columns only after the reduction, using the {py:class}`~columnflow.tasks.production.ProduceColumns`
-task.
+- When storage space is a limiting factor, it is good practice to produce and store (if possible) columns only after the reduction, using the {py:class}`~columnflow.tasks.production.ProduceColumns` task.
 
 ## Using python scripts removed from the standard workflow
 
-- Use a particular cf_sandbox for a python script not implemented in the columnflow workflow: Write
-`cf_sandbox venv_columnar_dev bash` on the command line.
+- Use a particular cf_sandbox for a python script not implemented in the columnflow workflow: Write `cf_sandbox venv_columnar_dev bash` on the command line.
 
-- Call tasks objects in a python script removed from the standard workflow: An imported task can
-be run through the `law_run()` command, its output can be accessed through the "output"
-function of the task. An example is given in the following code snippet.
+- Call tasks objects in a python script removed from the standard workflow: An imported task can be run through the `law_run()` command, its output can be accessed through the "output" function of the task.
+An example is given in the following code snippet.
 
 ```python
 from columnflow.tasks.selection import SelectEvents

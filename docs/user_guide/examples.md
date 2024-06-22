@@ -11,6 +11,7 @@ Tasks in columnflow are based on {external+law:py:class}`~law.task.base.BaseTask
 Refer to the documentation of these packages for more information on the task class and a detailed description of the implemented methods.
 
 (example_task_class_section)=
+
 ### Example: Task Class
 
 ```python showLineNumbers
@@ -202,6 +203,7 @@ lfn_sources: wlcg_fs_desy_store
 hbt.MyNewTask: wlcg
 ...
 ```
+
 ### Executing the Task
 
 After new sourcing the law environment or by running `law index` in a setup enviroment, the task can be executed using the command:
