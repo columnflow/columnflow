@@ -19,7 +19,7 @@ create_analysis() {
     local exec_dir="$( pwd )"
     local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
-    local verbose="${CF_CREATE_ANALYSIS_VERBOSE:-true}"
+    local verbose="${CF_CREATE_ANALYSIS_VERBOSE:-false}"
     local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
     ${debug} && verbose="true"
 
@@ -35,11 +35,11 @@ create_analysis() {
     #
 
     str_lc() {
-        ${shell_is_zsh} && echo "${(L)1}" || echo "${1,,}"
+        echo "$1" | tr '[:upper:]' '[:lower:]'
     }
 
     str_uc() {
-        ${shell_is_zsh} && echo "${(U)1}" || echo "${1^^}"
+        echo "$1" | tr '[:lower:]' '[:upper:]'
     }
 
     export_var() {
@@ -175,6 +175,8 @@ create_analysis() {
 
     # verbose output
     if ${verbose}; then
+        echo
+        echo_color cyan "received input values"
         echo "analysis name  : ${cf_analysis_name}"
         echo "module name    : ${cf_module_name}"
         echo "short name lc  : ${cf_short_name_lc}"
