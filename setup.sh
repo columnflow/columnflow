@@ -334,6 +334,42 @@ cf_setup_common_variables() {
     fi
 }
 
+cf_show_banner() {
+    local no_utf8="$( [ "$1" = "1" ] && echo "true" || echo "false" )"
+    if ! ${no_utf8}; then
+        local charmap="$( locale charmap | tr '[:upper:]' '[:lower:]' )"
+        no_utf8="$( [ "${charmap}" = "utf-8" ] && echo "false" || echo "true" )"
+    fi
+
+    if ${no_utf8}; then
+        cat << EOF
+                $( cf_color green '_' )
+    ___   ___  $( cf_color green '| |' ) _   _  _ __ ___   _ __
+   / __| / _ \ $( cf_color green '| |' )| | | || '_ \` _ \ | '_ \\
+  | (__ | (_) |$( cf_color green '| |' )| |_| || | | | | || | | |
+   \___| \___/ $( cf_color green '| |' ) \__,_||_| |_| |_||_| |_|
+            __ $( cf_color green '| |' )
+           / _|$( cf_color green '| |' )  ___ __      __
+          | |_ $( cf_color green '| |' ) / _ \\ \ /\ / /
+          |  _|$( cf_color green '| |' )| (_) |\ V  V /
+          |_|  $( cf_color green '| |' ) \___/  \_/\_/
+               $( cf_color green '|_|' )
+
+EOF
+    else
+        cat << EOF
+
+     $( cf_color green '┓' )
+  ┏┏┓$( cf_color green '┃' )╻┏┏┳┓┏┓
+  ┗┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
+    ┏$( cf_color green '┃' )
+    ╋$( cf_color green '┃' )┏┓┓┏┏
+    ┛$( cf_color green '┃' )┗┛┗┻┛
+
+EOF
+    fi
+}
+
 cf_setup_interactive_common_variables() {
     # Queries for common variables which should be called from called inside custom
     # cf_setup_interactive_body funtions, which in turn is called by cf_setup_interactive.
@@ -385,12 +421,19 @@ cf_setup_interactive() {
     #   1. The name of the setup. "default" triggers a setup with good defaults, avoiding all
     #      queries to the user and the writing of a custom setup file.
     #   2. The location of the setup file when a custom, named setup was triggered.
+    #
+    # Optionally preconfigured environment variables:
+    #   CF_SKIP_BANNER
+    #       When "1", the "columnflow" banner is not shown.
 
     local setup_name="${1}"
     local env_file="${2}"
     local env_file_tmp="${env_file}.tmp"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
+
+    # optionally show the banner
+    [ "${CF_SKIP_BANNER}" != "1" ] && cf_show_banner
 
     # when the setup already exists and it's not the default one,
     # source the corresponding env file and stop

@@ -2257,3 +2257,28 @@ class ChunkedIOMixin(AnalysisTask):
         # eager, overly cautious gc
         del handler
         gc.collect()
+
+
+class HistHookMixin(ConfigTask):
+
+    hist_hook = luigi.Parameter(
+        default=law.NO_STR,
+        description="name of a function in the config's auxiliary dictionary 'hist_hooks' that is "
+        "invoked before plotting to update a potentially nested dictionary of histograms; "
+        "default: empty",
+    )
+
+    def invoke_hist_hook(self, hists: dict) -> dict:
+        """
+        Hook to update histograms before plotting.
+        """
+        if self.hist_hook in (None, "", law.NO_STR):
+            return hists
+
+        # check if the hook is defined on the config instance and call it
+        func = self.config_inst.x("hist_hooks", {}).get(self.hist_hook)
+        if callable(func):
+            self.publish_message(f"invoking hist hook '{self.hist_hook}'")
+            hists = func(self, hists)
+
+        return hists
