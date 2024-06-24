@@ -1165,12 +1165,15 @@ def fill_hist(
     is *True*, values that would land exactly on the upper-most bin edge of an axis are shifted into
     the last bin.
     """
+    if fill_kwargs is None:
+        fill_kwargs = {}
+
     # determine the axis names, figure out which which axes the last bin correction should be done
     axis_names = []
     correct_last_bin_axes = []
     for ax in h.axes:
         axis_names.append(ax.name)
-        if shift_last_bin and len(ax.widths) and not ax._ax.traits_growth:
+        if shift_last_bin and len(ax.widths) and isinstance(ax, hist.axis.Variable):
             correct_last_bin_axes.append(ax)
 
     # check data
@@ -1180,21 +1183,19 @@ def fill_hist(
         data = {axis_names[0]: data}
     else:
         for name in axis_names:
-            if name not in data:
+            if name not in data and name not in fill_kwargs:
                 raise ValueError(f"missing data for histogram axis '{name}'")
-
-    # create awkward views for all data arrays
-    data = {name: ak.Array(data[name]) for name in data}
 
     # correct last bin values
     for ax in correct_last_bin_axes:
-        right_egde_mask = data[ax.name] == ax.edges[-1]
+        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
         if np.any(right_egde_mask):
-            data[ax.name] = data[ax.name] - ax.widths[-1] * 1e-5
+            data[ax.name] = ak.copy(data[ax.name])
+            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
 
     # fill
     arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**(fill_kwargs or {}), **{field: arrays[field] for field in arrays.fields})
+    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
 
 
 class RouteFilter(object):
