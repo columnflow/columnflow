@@ -3,7 +3,7 @@ import luigi
 from collections import OrderedDict
 
 from columnflow.tasks.plotting import PlotVariablesBaseSingleShift
-from columnflow.tasks.framework.plotting import PlotBase1D, PlotBase
+from columnflow.tasks.framework.plotting import PlotBase1D, PlotBase, PlotBase2D
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.util import DotDict
 
@@ -137,3 +137,25 @@ class PlotVariables1DCatsPerProcess(
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_variable_variants",
     )
+
+
+class PlotVariables2DMigration(
+    PlotVariablesCatsPerProcessBase,
+    PlotBase2D,
+):
+    plot_function = PlotBase.plot_function.copy(
+        default="singletop.plotting.plot_migration_matrices",
+    )
+
+    def create_branch_map(self):
+        return [
+            DotDict({
+                "categories": [self.initial, cat_name],
+                "process": proc_name,
+                "variable": var_name,
+            })
+            for cat_name in sorted(self.categories)
+            for proc_name in sorted(self.processes)
+            for var_name in sorted(self.variables)
+        ]
+
