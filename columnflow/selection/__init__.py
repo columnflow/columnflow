@@ -250,23 +250,19 @@ class SelectionResult(od.AuxDataMixin):
         return mask
 
     @classmethod
-    def _to_bool(cls, name, mask):
-        bool_mask = ak.values_astype(mask, bool)
-        is_one = mask[ak.fill_none(bool_mask, False)] == 1
-        assert ak.all(is_one), f"mask {name} contains booleans and non-binary values {mask[~is_one]}"
-        return bool_mask
-
-    @classmethod
     def _nonecheck_and_uniontobool(cls, name, mask, dim=1):
         get_content = lambda a: a.type.content.content if dim == 2 else a.type.content
         c = get_content(mask)
         if is_union := isinstance(c, ak.types.UnionType):
             # this might come because 0 or 1 was used instead of True or False: try converting to booleans
-            mask = cls._to_bool(name, mask)
+            is_valid = (mask == 1) | (mask == 0) | (mask == False) | (mask == True) # noqa
+            assert ak.all(is_valid), f"mask {name} contains booleans and non-binary values {mask[~is_valid]}"
+            mask = ak.values_astype(mask, bool)
             # type is now still Union[...] but of only bool or only ?bool if everything is fine
             contents = get_content(mask).contents
             assert all([ut == contents[0] for ut in contents]), \
                 f"mask contains values not convertible to boolean: {c.contents}"
+            logger.info(f"mask {name} contains both numeric binaries and booleans. Converted to boolean.")
         if isinstance(c, ak.types.OptionType):
             mask = cls._check_nones_and_convert(name, mask, c)
         if is_union:
