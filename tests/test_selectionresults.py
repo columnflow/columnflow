@@ -25,6 +25,7 @@ masks = [
     np.array([[True, False]]),
     np.array([[2, 3]]),
     ak.Array([[2, 3], [1, None]])[:, 0],
+    ak.Array([[1, 0], [1, 1]])
 ]
 s = SelectionResult(objects={"Muon": {f"m{i}": m for i, m in enumerate(masks)}})
 
@@ -51,7 +52,22 @@ for i, wr in enumerate(wrong):
         print(wr, "\033[92m", "no error?")
     except AssertionError as e:
         print(wr, "\033[91m", e)
-print(end="")
+
+print("\n\033[95mpotentially problematic object mask tests:")
+masks = [
+    (
+        ak.Array([[1, 0], [1, 1, True]])[:, :2],
+       "mask is of union type but in fact only contains integer 0's and 1's. " \
+       "This will lead to conversion to True and False. But seems unlikely to happen."
+    )
+]
+s = SelectionResult(objects={"Muon": {f"m{i}": m for i, (m, _) in enumerate(masks)}})
+
+for i, (m, discussion) in enumerate(masks):
+    new_m = s.objects["Muon"][f"m{i}"]
+    print(m, "\033[92m", new_m)
+    print("\033[94m", ak.Array(m).type, "\033[92m", new_m.type)
+    print(discussion)
 
 print("\n\033[95mcorrect event mask tests:")
 masks = [
