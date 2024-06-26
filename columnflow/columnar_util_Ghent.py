@@ -5,25 +5,32 @@ Helpers and utilities for working with columnar libraries (Ghent cms group)
 """
 
 from __future__ import annotations
+from typing import Literal
 
 __all__ = [
     "TetraVec", "safe_concatenate",
 ]
 
 from columnflow.util import maybe_import
+from columnflow.types import Sequence
 
 ak = maybe_import("awkward")
 coffea = maybe_import("coffea")
 
 
-def TetraVec(arr: ak.Array, keep=tuple()) -> ak.Array:
+def TetraVec(arr: ak.Array, keep: Sequence | str | Literal[-1] = -1) -> ak.Array:
     """
     create a Lorentz for fector from an awkward array with pt, eta, phi, and mass fields
     """
     mandatory_fields = ("pt", "eta", "phi", "mass")
     for field in mandatory_fields:
         assert hasattr(arr, field), f"Provided array is missing {field} field"
-    keep += mandatory_fields
+    if isinstance(keep, str):
+        keep = [keep, *mandatory_fields]
+    elif keep == -1:
+        keep = arr.fields
+    else:
+        keep = [*keep, *mandatory_fields]
     return ak.zip(
         {p: getattr(arr, p) for p in keep},
         with_name="PtEtaPhiMLorentzVector",
