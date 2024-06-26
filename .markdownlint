@@ -2,3 +2,9 @@ plugins:
   # disable max line length
   md013:
     enabled: False
+  md033:
+    allowed_elements: "!--,![CDATA[,!DOCTYPE,table,h1,p,img"
+  md026:
+    punctuation: ".,;!。，；！"
+  md001:
+    enabled: False
