@@ -1156,15 +1156,16 @@ def fill_hist(
     h: hist.Hist,
     data: ak.Array | np.array | dict[str, ak.Array | np.array],
     *,
-    shift_last_bin: bool | None = None,
+    last_edge_inclusive: bool | None = None,
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
     Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If *shift_last_bin*
-    is *True*, values that would land exactly on the upper-most bin edge of an axis are shifted into
-    the last bin. If it is *None*, the behavior is determined automatically and depends on the
-    variable axis type. In this case, shifting is applied to all continuous, non-circular axes.
+    The data is assumed to be structured in the same way as the histogram axes. If
+    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
+    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
+    and depends on the variable axis type. In this case, shifting is applied to all continuous,
+    non-circular axes.
     """
     if fill_kwargs is None:
         fill_kwargs = {}
@@ -1178,10 +1179,10 @@ def fill_hist(
     correct_last_bin_axes = []
     for ax in h.axes:
         axis_names.append(ax.name)
-        # shift last bin?
+        # include values hitting last edge?
         if not len(ax.widths) or not isinstance(ax, hist.axis.Variable):
             continue
-        if (shift_last_bin is None and allows_shift(ax)) or shift_last_bin:
+        if (last_edge_inclusive is None and allows_shift(ax)) or last_edge_inclusive:
             correct_last_bin_axes.append(ax)
 
     # check data

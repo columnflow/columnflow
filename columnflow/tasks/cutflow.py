@@ -23,7 +23,7 @@ from columnflow.tasks.framework.plotting import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
-from columnflow.tasks.framework.parameters import shift_last_bin_inst
+from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
 
@@ -37,7 +37,7 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    shift_last_bin = shift_last_bin_inst
+    last_edge_inclusive = last_edge_inclusive_inst
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -202,7 +202,7 @@ class CreateCutflowHistograms(
                     histograms[var_key],
                     fill_data,
                     fill_kwargs={"step": self.initial_step},
-                    shift_last_bin=self.shift_last_bin,
+                    last_edge_inclusive=self.last_edge_inclusive,
                 )
 
                 # fill all other steps
@@ -219,7 +219,7 @@ class CreateCutflowHistograms(
                         histograms[var_key],
                         fill_data,
                         fill_kwargs={"step": step},
-                        shift_last_bin=self.shift_last_bin,
+                        last_edge_inclusive=self.last_edge_inclusive,
                     )
 
         # dump the histograms
