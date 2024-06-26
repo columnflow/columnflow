@@ -16,16 +16,19 @@ ak = maybe_import("awkward")
 coffea = maybe_import("coffea")
 
 
-def TetraVec(arr: ak.Array) -> ak.Array:
+def TetraVec(arr: ak.Array, keep=tuple()) -> ak.Array:
     """
     create a Lorentz for fector from an awkward array with pt, eta, phi, and mass fields
     """
-    for field in ["pt", "eta", "phi", "mass"]:
+    mandatory_fields = ("pt", "eta", "phi", "mass")
+    for field in mandatory_fields:
         assert hasattr(arr, field), f"Provided array is missing {field} field"
-    TetraVec = ak.zip({"pt": arr.pt, "eta": arr.eta, "phi": arr.phi, "mass": arr.mass},
-    with_name="PtEtaPhiMLorentzVector",
-    behavior=coffea.nanoevents.methods.vector.behavior)
-    return TetraVec
+    keep += mandatory_fields
+    return ak.zip(
+        {p: getattr(arr, p) for p in keep},
+        with_name="PtEtaPhiMLorentzVector",
+        behavior=coffea.nanoevents.methods.vector.behavior
+    )
 
 
 def safe_concatenate(arrays, *args, **kwargs):
