@@ -104,19 +104,29 @@ class PlotBase(ConfigTask):
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
         return params
 
+    def plot_parts(self) -> law.util.InsertableDict:
+        """
+        Returns a sorted, insertable dictionary containing all parts that make up the name of a
+        plot file.
+        """
+        return law.util.InsertableDict()
+
     def get_plot_names(self, name: str) -> list[str]:
         """
         Returns a list of basenames for created plots given a file *name* for all configured file
         types, plus the additional plot suffix.
         """
-        suffix = ""
-        if self.plot_suffix and self.plot_suffix != law.NO_STR:
-            suffix = f"__{self.plot_suffix}"
+        # get plot parts
+        parts = self.plot_parts()
 
-        return [
-            f"{name}{suffix}.{ft}"
-            for ft in self.file_types
-        ]
+        # add the plot_suffix if not already present
+        if "suffix" not in parts and self.plot_suffix not in ("", law.NO_STR, None):
+            parts["suffix"] = self.plot_suffix
+
+        # build the full name
+        full_name = "__".join(map(str, [name] + list(parts.values())))
+
+        return [f"{full_name}.{ft}" for ft in self.file_types]
 
     def get_plot_func(self, func_name: str) -> Callable:
         """

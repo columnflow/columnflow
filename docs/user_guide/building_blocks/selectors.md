@@ -59,7 +59,7 @@ To make a Selector available from the command line, it should be declared with t
 - Selector_int must be run in Selector_ext, e.g. with the ```self[Selector_int](events, **kwargs)``` call.
 
 An example of an exposed Selector_ext with the ```jet_selection``` Selector defined above as Selector_int, assuming the ```jet_selection``` exists in ```analysis/selection/jet.py``` is given below.
-It should be mentioned that a few details must be changed for this selector to work within the worklow, the full version can be found in the {ref}`"Complete Example" <complete_example>` section.
+It should be mentioned that a few details must be changed for this selector to work within the workflow, the full version can be found in the {ref}`"Complete Example" <complete_example>` section.
 
 ```python
 

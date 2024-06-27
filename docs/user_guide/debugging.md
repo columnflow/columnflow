@@ -42,6 +42,6 @@ It may lead to two problems:
 
 1) if what is not available is an external package that you try to import, the issue may come from the fact that the package you try to import is only available in a specific cf_sandbox (which is not the default sandbox).
 For these, simply use the "maybe_import" function from columnflow.util, in a similar way to {doc}`building_blocks/producers`.
-1) If what is not available is a local script in columnflow, you might need to declare it in the law.cfg BEFORE the script causing the error.
+2) If what is not available is a local script in columnflow, you might need to declare it in the law.cfg BEFORE the script causing the error.
 For example, if the error is in some calibrator in "calibration/cms/new_calibrator.py" which is using some calibrator in "calibration/cms/jets.py", you might want to declare them in the law.cfg in the following way:
 "calibration_modules: columnflow.calibration.cms.{jets,new_calibrator}" (and NOT "calibration_modules: columnflow.calibration.cms.{new_calibrator,jets}").

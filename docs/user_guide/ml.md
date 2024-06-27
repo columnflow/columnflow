@@ -262,7 +262,7 @@ law run cf.MLEvaluation \
     --calibrators calibrator_name
 ```
 
-Most of these settings should sound familiar, and if not, look into the corresponding tutorial.
+Most of these settings should sound familiar, and if not, please look into the corresponding tutorial.
 `version` defines a setup configuration of your ML task, think more of a label than of an actual `version`.
 If you change the version label, columnflow will rerun all dependencies that are unique for this label, this typically just means you will retrain a new model.
 You can then switch freely between both models version with the `--cf.MLTraining-version`.

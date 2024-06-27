@@ -118,7 +118,6 @@ cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
-
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
 cfg.x.process_groups = {}
@@ -172,7 +171,6 @@ cfg.x.producer_groups = {}
 # ml_model groups for conveniently looping over certain ml_models
 # (used during the machine learning tasks)
 cfg.x.ml_model_groups = {}
-
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None
@@ -268,6 +266,9 @@ cfg.x.versions = {}
 # channels
 # (just one for now)
 cfg.add_channel(name="mutau", id=1)
+
+# histogramming hooks, invoked before creating plots when --hist-hook parameter set
+cfg.x.hist_hooks = {}
 
 # add categories using the "add_category" tool which adds auto-generated ids
 # the "selection" entries refer to names of categorizers, e.g. in categorization/example.py
