@@ -57,8 +57,44 @@ law run cf.PlotVariables1D --version test_plot --print-output 0
 
 ## Law Config
 
-TODO
+The law config file (`law.cfg`) is a file that is used to define the general parameters needed for law to run the created workflow. In the case of columnflow, the workflow corresponds to the different tasks of the analysis. Examples of the required parameters are the location of the data, the location of the output, the files to be recognized by columnflow as part of the analysis, some default values etc.
+
+The full documentation of the law config file can be found in [the law documentation](https://law.readthedocs.io/en/latest/config.html).
+
+To start your analysis, do not forget to use the already existing analysis template in the `analysis_templates/cms_minimal` Git directory and [its law.cfg file](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/law.cfg).
+The analysis template describes the usage of the different parameters in the `law.cfg` file.
+
+As an important reminder for new users, adding new files to the analysis should be accompanied by a new entry in the `law.cfg` file, more specifically the `[analysis]` part of the law config, according to the role of this file (define a Selector, or a Producer, etc.).
+For example, adding a new file called `jet.py` in your analysis in the `selection` directory containing a Selector for the Jets would require to change the law.cfg file from the analysis template from
+
+```python
+selection_modules: columnflow.selection.{empty}, columnflow.selection.cms.{json_filter,met_filters}, __cf_module_name__.selection.example
+```
+
+to
+
+```python
+selection_modules: columnflow.selection.{empty}, columnflow.selection.cms.{json_filter,met_filters}, __cf_module_name__.selection.{example,jet}
+```
+
+Note: Do NOT add whitespaces after the commas between the curly brackets, as your file will not be recognized by columnflow in this case.
+
+You can also check other examples of law configs with additional parameters in the different analyses using columnflow, like the [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau).
+
+A more thorough explanation of the selection of the storage locations and of specific versioning examples can be found in the [best practices section](best_practices.md).
+
+An example of a law.cfg file for users without grid certificate can be found in {ref}` the custom law.cfg section <custom_law_config>` of this documentation.
+
 
 ## Running remote
 
-TODO
+Law defines several possibilities to run the tasks on remote machines, e.g. htcondor or slurm. Several parameters for these remote machines can be defined in the law config file.
+The `--workflow` argument of the `law run` command can be used to define the remote machine to run the task on.
+
+An example of such a submission to a remote machine would be:
+
+```shell
+law run cf.PlotVariables1D --version test_plot --processes tt --variables n_jet --workflow htcondor
+```
+
+This command would submit the task `cf.PlotVariables1D` for the variable `n_jet` and with the version `test_plot` for the datasets corresponding to the process `tt` to the htcondor remote machine.

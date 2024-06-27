@@ -11,7 +11,7 @@ In the original columnflow setup, Selectors are being run in the {py:class}`~col
 ## Create an instance of the Selector class
 
 Similar to {py:class}`~columnflow.production.Producer`s, {py:class}`~columnflow.selection.Selector`s need to declare which columns are to be used (produced) by the Selector instance in order for them to be taken out of the parquet files (saved in the new parquet files).
-An example for this structure is given below (Similar to the Selector documentation.):
+An example for this structure is given below (Similar to the Producer documentation.):
 
 ```python
 
@@ -52,7 +52,7 @@ The structure of the arguments for the returned {py:class}`~columnflow.selection
 ### Exposed and internal Selectors
 
 {py:class}`~columnflow.selection.Selector`s can be either available directly from the command line or only internally, through other selectors.
-To make a Selector available from the command line, it should be declared with the ```exposed=True``` argument. To call a fully functional Selector (in the following referred as Selector_int) from an other Selector (in the following referred to as Selector_ext), several steps are required:
+To make a Selector available from the command line, it should be declared with the ```exposed=True``` argument. To call a fully functional Selector (in the following referred to as Selector_int) from an other Selector (in the following referred to as Selector_ext), several steps are required:
 
 - If defined in an other file, Selector_int should be imported in the Selector_ext script,
 - The columns needed for Selector_int should be declared in the ```uses``` argument of Selector_ext (it is possible to simply write the name of the Selector_int in the ```uses``` set, the content of the ```uses``` set from Selector_int will be added to the ```uses``` set of Selector_ext, see below)
@@ -162,7 +162,7 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
 
     # require an object of the Jet collection to have at least 50 GeV pt and at most 2.4 eta
-    jet_50pt_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
+    jet_pt50_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
 
     # require an event to have at least two jets to be selected
     jet_sel = (ak.sum(jet_mask, axis=1) >= 2)
@@ -171,9 +171,9 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     # new Jet field containing only the selected Jet objects
     jet_indices = ak.local_index(events.Jet.pt)[jet_mask]
 
-    # create the list of indices to be kept from the Jet collection using the jet_50pt_mask to create the
-    # new Jet_50pt field containing only the selected Jet_50pt objects
-    jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
+    # create the list of indices to be kept from the Jet collection using the jet_pt50_mask to create the
+    # new Jet_pt50 field containing only the selected Jet_pt50 objects
+    jet_pt50_indices = ak.local_index(events.Jet.pt)[jet_pt50_mask]
 
     return events, SelectionResult(
         steps={
@@ -183,15 +183,15 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
         },
         objects={
             # in ReduceEvents, the Jet field will be replaced by the new Jet field containing only
-            # selected jets, and a new field called Jet_50pt containing the jets with pt higher than
+            # selected jets, and a new field called Jet_pt50 containing the jets with pt higher than
             # 50 GeV will be created
             "Jet": {
                 "Jet": jet_indices,
-                "Jet_50pt": jet_50pt_indices,
+                "Jet_pt50": jet_pt50_indices,
             },
         },
         aux={
-            # jet mask that lead to the jet_indices
+            # jet mask that leads to the jet_indices
             "jet_mask": jet_mask,
         },
     )
@@ -365,7 +365,7 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     jet_mask = ((events.Jet.pt > 20.0) & (abs(events.Jet.eta) < 2.4))
 
     # require an object of the Jet collection to have at least 50 GeV pt and at most 2.4 eta
-    jet_50pt_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
+    jet_pt50_mask = ((events.Jet.pt > 50.0) & (abs(events.Jet.eta) < 2.4))
 
     # require an event to have at least two jets to be selected
     jet_sel = (ak.sum(jet_mask, axis=1) >= 2)
@@ -374,9 +374,9 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
     # new Jet field containing only the selected Jet objects
     jet_indices = ak.local_index(events.Jet.pt)[jet_mask]
 
-    # create the list of indices to be kept from the Jet collection using the jet_50pt_mask to create the
-    # new Jet_50pt field containing only the selected Jet_50pt objects
-    jet_50pt_indices = ak.local_index(events.Jet.pt)[jet_50pt_mask]
+    # create the list of indices to be kept from the Jet collection using the jet_pt50_mask to create the
+    # new Jet_pt50 field containing only the selected Jet_pt50 objects
+    jet_pt50_indices = ak.local_index(events.Jet.pt)[jet_pt50_mask]
 
     return events, SelectionResult(
         steps={
@@ -386,11 +386,11 @@ def jet_selection_with_result(self: Selector, events: ak.Array, **kwargs) -> tup
         },
         objects={
             # in ReduceEvents, the Jet field will be replaced by the new Jet field containing only
-            # selected jets, and a new field called Jet_50pt containing the jets with pt higher than
+            # selected jets, and a new field called Jet_pt50 containing the jets with pt higher than
             # 50 GeV will be created
             "Jet": {
                 "Jet": jet_indices,
-                "Jet_50pt": jet_50pt_indices,
+                "Jet_pt50": jet_pt50_indices,
             },
         },
         aux={

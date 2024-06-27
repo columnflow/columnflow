@@ -25,10 +25,10 @@ class MyTask(AnalysisTask):
     """
     My new task.
     """
-    
+
     # specify sandbox for the task
     sandbox = dev_sandbox(law.config.get("analysis", "my_columnar_sandbox"))
-    
+
     # Define a custom name space with which the task is called
     # If not defined cf is usually used as default
     task_namespace = "hbt"
@@ -40,14 +40,14 @@ class MyTask(AnalysisTask):
     )
     param2 = law.CSVParameter(
         default=("*",),  # parsed similar to wildcard imports
-        description="parameter accepting comma-seperated values; "
-        "default is a tuple with all knows values connected to this attribute",
+        description="parameter accepting comma-separated values; "
+        "default is a tuple with all known values connected to this attribute",
     )
     param_bool = luigi.BoolParameter(
         default=False,
         description="boolean parameter; default:  False",
     )
-    
+
     # container for upstream requirements for convenience
     reqs = Requirements()
 
@@ -57,7 +57,7 @@ class MyTask(AnalysisTask):
 
         # Add branch Dependencies on other tasks
         req["SomeOtherTask"] = SomeOtherTask
- 
+
         return req
 
     def workflow_requires(self):
@@ -71,7 +71,7 @@ class MyTask(AnalysisTask):
     def output(self):
         # Path to the output file if needed
         return self.target("my_output.txt")
-    
+
     def run(self):
         # Do something here
         pass
@@ -108,7 +108,7 @@ Should your task require a special software enviroment (special packages, or oth
 For the task to use the sandbox, it is to be specified using the class attribute ```sandbox```, which is inherited from {external+law:py:class}`~law.sandbox.base.Sandbox`.
 The sandbox can be defined in the task class itself using the syntax shown above, elsewise the default sandbox defined in the analysis config file is used.
 
-More details on using and setting up the sandboxed are givin in the {doc}`sandbox section <sandbox>`.
+More details on using and setting up the sandbox are given in the {doc}`sandbox section <sandbox>`.
 
 ### The parameters
 
@@ -127,7 +127,7 @@ Otherwise, the parameter will not work correctly.
 
 ### The requirements
 
-As noticed in the {ref}`code snipped <example_task_class_section>`, a task can define three different requirement keywords, which have different functionality in the framework.
+As noticed in the {ref}`code snippet <example_task_class_section>`, a task can define three different requirement keywords, which have different functionality in the framework.
 
 The ```requires()``` method in a task, which is inherited from {external+law:py:class}`law.task.base.Task`, defines all required outputs for a task to run on a branch level.
 If an output does not exist, the task responsible for this output will be scheduled and executed before the desired task is run.
@@ -152,7 +152,7 @@ MyTask.reqs.RequiredTask = ModifiedRequiredTask
 
 Therefore, using the class attribute ```reqs```, when working with the requirements within the class is convenient.
 
-:::{figure} ../plots/user_guide/cf_plot.pdf
+:::{figure} ../plots/user_guide/cf_plot.svg
 :width: 100%
 :::
 
@@ -217,15 +217,17 @@ If the parameter's name include an underscore, the underscore is replaced by a h
 If the parameter is a boolean, the parameter can be set to ```True``` by only typing ```--param-bool```.
 If the parameter is a list, the values can be given as a comma-separated list (```--param2 foo,bar,baz```).
 
+(custom_law_config)=
+
 ## Custom law.cfg file for users without grid certificate (CMS specific)
 
 Users, who do not have a grid certificate, are not able to run jobs on the grid or store and fetch data from it.
 However, they can still run jobs locally.
 For this purpose, a custom law config file should be created in the analysis folder, which specifies a local dcache and the path to the nanoAODs for every required campaign, and set the output locations for the tasks to local.
 It is recommended to apply modifications on the config file in a new custom law config file and not directly in the default one.
-The custom config should inherit from the default config (as shown below) and can be modify as needed by adding or overloading fields.
+The custom config should inherit from the default config (as shown below) and can be modified as needed by adding or overloading fields.
 
-The costum config file should contain the following sections:
+The custom config file should contain the following sections:
 
 ```ini
 [core]
@@ -233,7 +235,7 @@ The costum config file should contain the following sections:
 inherit: $HBT_BASE/law.cfg
 
 [local_dcache]
-# define path to the local dcache used later for the lfn (Local File Name) sources 
+# define path to the local dcache used later for the lfn (Local File Name) sources
 base: path/to/different/file/system
 
 [local_campaigns_name]
@@ -242,7 +244,7 @@ base: path/to/local/campaigns/nanoAOD/directory
 [wlcg_campaigns_name]
 base: path/to/local/campaigns/nanoAOD/directory
 
-# define additional settings related to caching when working with this campaign 
+# define additional settings related to caching when working with this campaign
 use_cache: $CF_WLCG_USE_CACHE
 cache_root: $CF_WLCG_CACHE_ROOT
 cache_cleanup: $CF_WLCG_CACHE_CLEANUP
