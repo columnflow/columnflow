@@ -83,8 +83,7 @@ You can also check other examples of law configs with additional parameters in t
 
 A more thorough explanation of the selection of the storage locations and of specific versioning examples can be found in the [best practices section](best_practices.md).
 
-An example of a law.cfg file for users without grid certificate can be found in {ref}` the custom law.cfg section <custom_law_config>` of this documentation.
-
+An example of a law.cfg file for users without grid certificate can be found in {ref}`the custom law.cfg section <custom_law_config>` of this documentation.
 
 ## Running remote
 
