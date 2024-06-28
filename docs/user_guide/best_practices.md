@@ -67,7 +67,7 @@ Their order of priority is:
 
 ### Task family specific parameters
 
-On the command line, versions of upstream tasks can be controlled by `--cf.UPSTREAMTASK-version OTHER_VAUE` if desired.
+On the command line, versions of upstream tasks can be controlled by `--cf.UPSTREAMTASK-version OTHER_VALUE` if desired.
 For example, if a task `B` that depends on task `A` is started from the command line via
 
 ```bash

@@ -39,7 +39,7 @@ To create new categories, we essentially need three ingredients:
     :language: python
     ```
 
-    Keep in mind that the module in which your define your Categorizer needs to be included in the law config
+    Keep in mind that the module in which you define your Categorizer needs to be included in the law config
 
 3. We need to run the {py:class}`~columnflow.production.categories.category_ids` Producer to create the ```category_ids``` column.
     This is directly included via the ```--producers category_ids```, but you could also run the ```category_ids``` Producer as part of another Selector or Producer.
@@ -63,7 +63,7 @@ def my_producer(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 The `category_ids` Producer loads all category instances from your config.
 For each leaf category inst (which is the "smallest unit" of categories), it maps the `category_inst.selection` string to a `Categorizer` and adds it the to the `uses` and `produces`, meaning that columns required (produced) by the `Categorizer` will automatically be loaded (stored) when running the `category_ids` Producer.
 
-During the event processing, the `Categorizer` of each leaf category is evaluated to generate a mask, which defines, whether the event is part of this category or not.
+During the event processing, the `Categorizer` of each leaf category is evaluated to generate a mask, which defines whether the event is part of this category or not.
 The mask is then transformed to an array of ids (either the `category_inst.id` if True, and `None` for False entries).
 
 In the end, we return a jagged array of category ids, which allows us to categorize one event into multiple different types of categories.
@@ -76,7 +76,7 @@ The `category_ids` column is primarily used when creating our histograms (e.g. i
 The created histograms always contain one axis for categories, using the values from the `category_ids` column.
 Since this column is a jagged array, it is possible to fill events either never or multiple times in a histogram.
 
-Other tasks such as {py:class}`~columnflow.tasks.plotting.PlotVariables1D` are then using this axis with categories to obtain all entries from the histogram corresponding to the category that is requested via the `--categories` parameter.
+Other tasks, such as {py:class}`~columnflow.tasks.plotting.PlotVariables1D`, are then using this axis with categories to obtain all entries from the histogram corresponding to the category that is requested via the `--categories` parameter.
 When the given category is not a leaf category but contains categories itself, the ids of all its leaf categories combined are used for the category.
 :::
 
@@ -455,7 +455,7 @@ def my_categorization_producer_init(self: Producer) -> None:
 
 ### get_events_from_categories
 
-To obtain the events of a certain category (or categories) of an akward array `events` that contains the `category_ids` column, you can use the  {py:func}`~columnflow.util.get_events_from_categories` function.
+To obtain the events of a certain category (or categories) of an awkward array `events` that contains the `category_ids` column, you can use the  {py:func}`~columnflow.util.get_events_from_categories` function.
 
 ```python
 from columnflow.util import get_events_from_cateogries
@@ -471,7 +471,7 @@ selected_events = get_events_from_cateogries(events, config_inst.get_category("m
 selected_events = get_events_from_cateogries(events, ["cat1", "cat2"], config_inst)
 ```
 
-This function automatically consideres category ids of all leaf categories from the requested categories.
+This function automatically considers category ids of all leaf categories from the requested categories.
 This is especially helpful when your category contains multiple leaf categories.
 
 ## Key points (TL; DR)
