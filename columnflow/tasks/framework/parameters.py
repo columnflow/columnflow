@@ -32,7 +32,7 @@ last_edge_inclusive_inst = law.OptionalBoolParameter(
     significant=False,
     description="whether to shift entries that have the exact value of the right-most bin edge "
     "slightly to the left such that they end up in the last instead of the overflow bin; when "
-    "'None', shifting is performed for all variable axis that are continuous and non-circular; "
+    "'None', shifting is performed for all variable axes that are continuous and non-circular; "
     f"default: {_default_last_bin_edge_inclusive}",
 )
 
