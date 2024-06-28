@@ -1170,7 +1170,7 @@ def fill_hist(
     if fill_kwargs is None:
         fill_kwargs = {}
 
-    # helper do decide whether the variable axis qualifies for shifting the last bin
+    # helper to decide whether the variable axis qualifies for shifting the last bin
     def allows_shift(ax) -> bool:
         return ax.traits.continuous and not ax.traits.circular
 
