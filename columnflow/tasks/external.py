@@ -187,7 +187,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             # use an optional hook in the config
             get_fs = self.config_inst.x("get_dataset_lfns_remote_fs", None)
             if callable(get_fs):
-                fs = get_fs(task.dataset_inst)
+                fs = get_fs(self.dataset_inst)
         if not fs:
             # use the law config
             fs = law.config.get_expanded("outputs", "lfn_sources", [], split_csv=True)
