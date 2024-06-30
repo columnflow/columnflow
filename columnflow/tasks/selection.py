@@ -15,7 +15,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.production import Producer
-from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -85,6 +85,7 @@ class SelectEvents(
         outputs = {
             "results": self.target(f"results_{self.branch}.parquet"),
             "stats": self.target(f"stats_{self.branch}.json"),
+            "hists": self.target(f"hists_{self.branch}.pickle"),
         }
 
         # add additional columns in case the selector produces some
@@ -112,6 +113,7 @@ class SelectEvents(
         result_chunks = {}
         column_chunks = {}
         stats = defaultdict(float)
+        hists = DotDict()
 
         # run the selector setup
         reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
@@ -182,7 +184,7 @@ class SelectEvents(
                 )
 
                 # invoke the selection function
-                events, results = self.selector_inst(events, stats)
+                events, results = self.selector_inst(events, stats, hists=hists)
 
                 # complain when there is no event mask
                 if results.event is None:
@@ -232,6 +234,7 @@ class SelectEvents(
 
         # save stats
         outputs["stats"].dump(stats, indent=4, formatter="json")
+        outputs["hists"].dump(hists, formatter="pickle")
 
         # print some stats
         eff = safe_div(stats["num_events_selected"], stats["num_events"])
@@ -273,6 +276,9 @@ class MergeSelectionStats(
     DatasetTask,
     law.tasks.ForestMerge,
 ):
+    # default sandbox, might be overwritten by selector function (needed to load hist objects)
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
     # merge 25 stats files into 1 at every step of the merging cascade
     merge_factor = 25
 
@@ -300,7 +306,10 @@ class MergeSelectionStats(
         )
 
     def merge_output(self):
-        return {"stats": self.target("stats.json")}
+        return {
+            "stats": self.target("stats.json"),
+            "hists": self.target("hists.pickle"),
+        }
 
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs(inputs["collection"].targets.values())
@@ -312,12 +321,17 @@ class MergeSelectionStats(
     def merge(self, inputs, output):
         # merge input stats
         merged_stats = defaultdict(float)
+        merged_hists = {}
         for inp in inputs:
             stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
+            hists = inp["hists"].load(formatter="pickle", cache=False)
+            self.merge_counts(merged_hists, hists)
+
         # write the output
         output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
+        output["hists"].dump(merged_hists, formatter="pickle", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
