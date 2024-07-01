@@ -181,7 +181,7 @@ def normalization_weights_setup(
     # load the selection stats
     normalization_selection_stats = {
         dataset: self.task.cached_value(
-            key=f"selection_stats_{dataset.name}",
+            key=f"selection_stats_{dataset}",
             func=lambda: inp["collection"][0]["stats"].load(formatter="json"),
         )
         for dataset, inp in inputs[self.selection_stats_key].items()
