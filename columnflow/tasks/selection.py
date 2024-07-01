@@ -21,6 +21,9 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
+logger = law.logger.get_logger(__name__)
+
+
 class SelectEvents(
     SelectorMixin,
     CalibratorsMixin,
@@ -29,6 +32,13 @@ class SelectEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    # flag that sets the *hists* output to optional if True
+    selection_hists_optional = law.config.get_expanded_bool(
+        "analysis",
+        "selection_hists_optional",
+        True,
+    )
+
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -85,7 +95,7 @@ class SelectEvents(
         outputs = {
             "results": self.target(f"results_{self.branch}.parquet"),
             "stats": self.target(f"stats_{self.branch}.json"),
-            "hists": self.target(f"hists_{self.branch}.pickle"),
+            "hists": self.target(f"hists_{self.branch}.pickle", optional=self.selection_hists_optional),
         }
 
         # add additional columns in case the selector produces some
@@ -276,6 +286,13 @@ class MergeSelectionStats(
     DatasetTask,
     law.tasks.ForestMerge,
 ):
+    # flag that sets the *hists* output to optional if True
+    selection_hists_optional = law.config.get_expanded_bool(
+        "analysis",
+        "selection_hists_optional",
+        True,
+    )
+
     # default sandbox, might be overwritten by selector function (needed to load hist objects)
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -308,7 +325,7 @@ class MergeSelectionStats(
     def merge_output(self):
         return {
             "stats": self.target("stats.json"),
-            "hists": self.target("hists.pickle"),
+            "hists": self.target("hists.pickle", optional=self.selection_hists_optional),
         }
 
     def trace_merge_inputs(self, inputs):
@@ -322,12 +339,24 @@ class MergeSelectionStats(
         # merge input stats
         merged_stats = defaultdict(float)
         merged_hists = {}
+
+        # check that hists are present for all inputs
+        hist_inputs_exist = [inp["hists"].exists() for inp in inputs]
+        if any(hist_inputs_exist) and not all(hist_inputs_exist):
+            logger.warning(
+                f"For dataset {self.dataset_inst.name}, cf.SelectEvents has produced hists for "
+                "some but not all files. Histograms will not be merged and an empty pickle file will be stored.",
+            )
+
         for inp in inputs:
             stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
-            hists = inp["hists"].load(formatter="pickle", cache=False)
-            self.merge_counts(merged_hists, hists)
+        # merge hists only if all hists are present
+        if all(hist_inputs_exist):
+            for inp in inputs:
+                hists = inp["hists"].load(formatter="pickle", cache=False)
+                self.merge_counts(merged_hists, hists)
 
         # write the output
         output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
