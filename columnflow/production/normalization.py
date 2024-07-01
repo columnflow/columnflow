@@ -45,7 +45,7 @@ def get_inclusive_dataset(dataset_inst: od.Dataset, stitching_datasets: list[od.
     return incl_dataset
 
 
-def get_stitching_datasets(config_inst: od.Config, dataset_inst: od.Dataset) -> set[od.Dataset]:
+def get_stitching_datasets(config_inst: od.Config, dataset_inst: od.Dataset) -> list[od.Dataset]:
     """
     Helper function to obtain all datasets that are required to stitch this *dataset_inst*.
     """
@@ -56,7 +56,7 @@ def get_stitching_datasets(config_inst: od.Config, dataset_inst: od.Dataset) -> 
             dataset_inst.has_process(d.processes.get_first(), deep=True)
         )
     }
-    return stitching_datasets
+    return list(stitching_datasets)
 
 
 def get_br_from_inclusive_dataset(stats: dict) -> dict:
@@ -77,7 +77,6 @@ def get_br_from_inclusive_dataset(stats: dict) -> dict:
         int(process_id): sum_weights / sum_mc_weight
         for process_id, sum_weights in sum_mc_weight_per_process.items()
     }
-    # TODO: use keys of BRs to check if all processes are covered
     return branching_ratios
 
 
@@ -110,7 +109,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     process_id = np.asarray(events.process_id)
 
     unique_process_ids = set(process_id)
-    invalid_ids = unique_process_ids.difference(self.xs_table.rows[0])
+    invalid_ids = unique_process_ids - set(self.xs_table.rows[0])
     if invalid_ids:
         logger.warning(
             f"process_id field contains process ids {invalid_ids} that were not assigned a cross section",
@@ -137,7 +136,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     self.selection_stats_key = f"{'stitched_' if self.allow_stitching else 'norm_'}selection_stats"
 
     if self.allow_stitching:
-        self.stitching_datasets = get_stitching_datasets(self.config_inst, self.dataset_inst)
+        self.stitching_datasets = self.get_stitching_datasets(self.config_inst, self.dataset_inst)
     else:
         self.stitching_datasets = [self.dataset_inst]
 
@@ -186,7 +185,7 @@ def normalization_weights_setup(
         )
         for dataset, inp in inputs[self.selection_stats_key].items()
     }
-    # if necessary, merge the selection stats
+    # if necessary, merge the selection stats across datasets
     if len(normalization_selection_stats) > 1:
         from columnflow.tasks.selection import MergeSelectionStats
         merged_selection_stats = defaultdict(float)
@@ -207,7 +206,7 @@ def normalization_weights_setup(
     # ensure that the selection stats do not contain any process that was not previously registered
     allowed_ids = set(int(process_id) for process_id in merged_selection_stats["sum_mc_weight_per_process"])
 
-    unregistered_process_ids = allowed_ids.difference({p.id for p in process_insts})
+    unregistered_process_ids = allowed_ids - {p.id for p in process_insts}
     if unregistered_process_ids:
         id_str = ",".join(map(str, unregistered_process_ids))
         raise Exception(
