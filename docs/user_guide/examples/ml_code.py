@@ -24,13 +24,12 @@ law.contrib.load("tensorflow")
 
 
 class TestModel(MLModel):
+
     # shared between all model instances
-    datasets: dict = {
-        "datasets_name": [
-            "hh_ggf_bbtautau_madgraph",
-            "tt_sl_powheg",
-        ],
-    }
+    dataset_names = [
+        "hh_ggf_bbtautau_madgraph",
+        "tt_sl_powheg",
+    ]
 
     def __init__(
         self,
@@ -63,10 +62,10 @@ class TestModel(MLModel):
 
     def datasets(self, config_inst: od.Config) -> set[od.Dataset]:
         # normally you would pass this to the model via config and loop through these names ...
-        all_datasets_names = self.datasets_name
+        all_dataset_names = self.dataset_names
 
         dataset_inst = []
-        for dataset_name in all_datasets_names:
+        for dataset_name in all_dataset_names:
             dataset_inst.append(config_inst.get_dataset(dataset_name))
 
         # ... but you can also add one dataset by using its name

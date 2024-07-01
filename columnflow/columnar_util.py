@@ -2529,9 +2529,7 @@ class DaskArrayReader(object):
         self: DaskArrayReader,
         path: str,
         open_options: dict | None = None,
-        # TODO: we want to go back to SLICES as soon as possible, but currently there is an issue
-        #       that we load all events into memory for each chunk when using SLICES
-        materialization_strategy: MaterializationStrategy = MaterializationStrategy.PARTITIONS,
+        materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
     ):
         super().__init__()
 
@@ -2562,6 +2560,8 @@ class DaskArrayReader(object):
         self.close()
 
     def __len__(self: DaskArrayReader) -> int:
+        if not self.dak_array.known_divisions:
+            self.dak_array.eager_compute_divisions()
         return len(self.dak_array)
 
     @property
@@ -2631,7 +2631,9 @@ class DaskArrayReader(object):
         # fill the chunk -> partitions mapping once
         with self.chunk_to_partitions_lock:
             if not self.chunk_to_partitions:
-                divs = self.dak_array.divisions
+                if not self.dak_array.known_divisions:
+                    self.dak_array.eager_compute_divisions()
+                divs = tuple(map(int, self.dak_array.divisions))
                 # note: a hare-and-tortoise algorithm could be possible to get the mapping with less
                 # than n^2 complexity, but for our case with ~30 chunks this should be ok (for now)
                 n_chunks = int(math.ceil(len(self) / max_chunk_size))
@@ -3022,13 +3024,13 @@ class ChunkedIOHandler(object):
         ),
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> tuple[uproot.ReadOnlyDirectory, int]:
+    ) -> tuple[tuple[uproot.ReadOnlyDirectory, str], int]:
         """
         Opens an uproot file at *source* for subsequent processing with coffea and returns a 2-tuple
-        *(uproot file, tree entries)*. *source* can be the path of the file, an already opened,
-        readable uproot file (assuming the tree is called "Events"), or a 2-tuple whose second item
-        defines the name of the tree to be loaded. *open_options* are forwarded to ``uproot.open``
-        if a new file is opened. Passing *read_columns* has no effect.
+        *((uproot file, tree name), tree entries)*. *source* can be the path of the file, an already
+        opened, readable uproot file (assuming the tree is called "Events"), or a 2-tuple whose
+        second item defines the name of the tree to be loaded. *open_options* are forwarded to
+        ``uproot.open`` if a new file is opened. Passing *read_columns* has no effect.
         """
         tree_name = "Events"
         if isinstance(source, tuple) and len(source) == 2:
@@ -3045,38 +3047,39 @@ class ChunkedIOHandler(object):
         else:
             raise Exception(f"'{source}' cannot be opened as coffea_root")
 
-        return (source, tree.num_entries)
+        return ((source, tree_name), tree.num_entries)
 
     @classmethod
     def close_coffea_root(
         cls,
-        source_object: str | uproot.ReadOnlyDirectory,
+        source_object: tuple[str | uproot.ReadOnlyDirectory, str],
     ) -> None:
         """
-        Closes a ROOT file referred to by *source_object* if it is a ``ReadOnlyDirectory``. In case
-        a string is passed, this method does nothing.
+        Closes a ROOT file referred to by the first item in a 2-tuple *source_object* if it is a
+        ``ReadOnlyDirectory``. In case a string is passed, this method does nothing.
         """
-        close = None if isinstance(source_object, str) else getattr(source_object, "close", None)
+        close = getattr(source_object[0], "close", None)
         if callable(close):
             close()
 
     @classmethod
     def read_coffea_root(
         cls,
-        source_object: str | uproot.ReadOnlyDirectory,
+        source_object: tuple[str | uproot.ReadOnlyDirectory, str],
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
     ) -> coffea.nanoevents.methods.base.NanoEventsArray:
         """
-        Given a file location or opened uproot file *source_object*, returns an awkward array chunk
-        referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
-        ``coffea.nanoevents.NanoEventsFactory.from_root``. *read_columns* are converted to strings
-        and, if not already present, added as nested field ``iteritems_options.filter_name`` to
-        *read_options*.
+        Given a file location or opened uproot file, and a tree name in a 2-tuple *source_object*,
+        returns an awkward array chunk referred to by *chunk_pos*, assuming nanoAOD structure.
+        *read_options* are passed to ``coffea.nanoevents.NanoEventsFactory.from_root``.
+        *read_columns* are converted to strings and, if not already present, added as nested fields
+        ``iteritems_options.filter_name`` to *read_options*.
         """
         # default read options
         read_options = read_options or {}
+        read_options["delayed"] = False
         read_options["runtime_cache"] = None
         read_options["persistent_cache"] = None
 
@@ -3099,8 +3102,10 @@ class ChunkedIOHandler(object):
             read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
 
         # read the events chunk into memory
+        _source_object, tree_name = source_object
         chunk = coffea.nanoevents.NanoEventsFactory.from_root(
-            source_object,
+            _source_object,
+            treepath=tree_name,
             entry_start=chunk_pos.entry_start,
             entry_stop=chunk_pos.entry_stop,
             **read_options,
