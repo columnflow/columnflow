@@ -23,6 +23,12 @@ ak = maybe_import("awkward")
 
 logger = law.logger.get_logger(__name__)
 
+default_selection_hists_optional = law.config.get_expanded_bool(
+    "analysis",
+    "default_selection_hists_optional",
+    True,
+)
+
 
 class SelectEvents(
     SelectorMixin,
@@ -33,11 +39,7 @@ class SelectEvents(
     RemoteWorkflow,
 ):
     # flag that sets the *hists* output to optional if True
-    selection_hists_optional = law.config.get_expanded_bool(
-        "analysis",
-        "selection_hists_optional",
-        True,
-    )
+    selection_hists_optional = default_selection_hists_optional
 
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -287,11 +289,7 @@ class MergeSelectionStats(
     law.tasks.ForestMerge,
 ):
     # flag that sets the *hists* output to optional if True
-    selection_hists_optional = law.config.get_expanded_bool(
-        "analysis",
-        "selection_hists_optional",
-        True,
-    )
+    selection_hists_optional = default_selection_hists_optional
 
     # default sandbox, might be overwritten by selector function (needed to load hist objects)
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
