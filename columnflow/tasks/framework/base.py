@@ -19,9 +19,9 @@ import luigi
 import law
 import order as od
 
-from columnflow.types import Sequence, Callable, Any
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
 from columnflow.util import is_regex, DotDict
+from columnflow.types import Sequence, Callable, Any, T
 
 
 # default analysis and config related objects
@@ -671,8 +671,26 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # store the analysis instance
         self.analysis_inst = self.get_analysis_inst(self.analysis)
 
+        # cached values added and accessed by cached_value()
+        self._cached_values = {}
+
+    def cached_value(self, key: str, func: Callable[[], T]) -> T:
+        """
+        Upon first invocation, the function *func* is called and its return value is stored under
+        *key* in :py:attr:`_cached_values`. Subsequent calls with the same *key* return the cached
+        value.
+
+        :param key: The key under which the value is stored.
+        :param func: The function that is called to generate the value.
+        :return: The cached value.
+        """
+        if key not in self._cached_values:
+            self._cached_values[key] = func()
+        return self._cached_values[key]
+
     def store_parts(self) -> law.util.InsertableDict:
-        """Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
+        """
+        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
 
