@@ -2560,11 +2560,9 @@ class DaskArrayReader(object):
         self.close()
 
     def __len__(self: DaskArrayReader) -> int:
-        return (
-            len(self.dak_array)
-            if self.dak_array.known_divisions
-            else dak.num(self.dak_array, axis=0).compute()
-        )
+        if not self.dak_array.known_divisions:
+            self.dak_array.eager_compute_divisions()
+        return len(self.dak_array)
 
     @property
     def closed(self: DaskArrayReader) -> bool:
