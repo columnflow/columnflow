@@ -9,10 +9,9 @@ If you get an error while using columnflow and look at the error stack, you will
 
 In this section, debugging tools already implemented in columnflow to inspect the intermediate results of tasks will be presented.
 
-TODO
+## FAQ
 
-Add a FAQ here? Oder in a new file? first questions:
-- troubleshooting:
+### Troubleshooting:
 
 - "I have changed something in the code and called the corresponding ```law run``` bash command, but the task isn't starting/the task started is further down the task tree."
 
