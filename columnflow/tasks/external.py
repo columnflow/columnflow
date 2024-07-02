@@ -17,6 +17,7 @@ import order as od
 
 from columnflow.types import Sequence
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.util import wget, DotDict
 
 
@@ -317,6 +318,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    user = user_parameter_inst
     version = None
 
     def __init__(self, *args, **kwargs):
