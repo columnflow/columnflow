@@ -321,15 +321,15 @@ class RemoteWorkflowMixin(object):
         """
         # add the repository bundle and trigger the checksum calculation
         if getattr(self, "bundle_repo_req", None) is not None:
-            reqs["repo"] = self.bundle_repo_req
+            reqs["repo_bundle"] = self.bundle_repo_req
         elif "BundleRepo" in self.reqs:
-            reqs["repo"] = self.reqs.BundleRepo.req(self)
-        if "repo" in reqs:
+            reqs["repo_bundle"] = self.reqs.BundleRepo.req(self)
+        if "repo_bundle" in reqs:
             self.bundle_repo_req.checksum
 
         # main software stack
         if not share_software and "BundleSoftware" in self.reqs:
-            reqs["software"] = self.reqs.BundleSoftware.req(self)
+            reqs["software_bundle"] = self.reqs.BundleSoftware.req(self)
 
         # get names of bash and cmssw sandboxes
         bash_sandboxes = set()
@@ -349,23 +349,23 @@ class RemoteWorkflowMixin(object):
         if share_software:
             if "BuildBashSandbox" in self.reqs:
                 if bash_sandboxes:
-                    reqs["bash_sandboxes"] = [
+                    reqs["bash_sandbox_builds"] = [
                         self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
                         for sandbox_file in sorted(bash_sandboxes)
                     ]
                 if cmssw_sandboxes:
-                    reqs["cmssw_sandboxes"] = [
+                    reqs["cmssw_sandbox_builds"] = [
                         self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
                         for sandbox_file in sorted(cmssw_sandboxes)
                     ]
         else:
             if "BundleBashSandbox" in self.reqs and bash_sandboxes:
-                reqs["bash_sandboxes"] = [
+                reqs["bash_sandbox_bundles"] = [
                     self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
                     for sandbox_file in sorted(bash_sandboxes)
                 ]
             if "BundleCMSSWSandbox" in self.reqs and cmssw_sandboxes:
-                reqs["cmssw_sandboxes"] = [
+                reqs["cmssw_sandbox_bundles"] = [
                     self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
                     for sandbox_file in sorted(cmssw_sandboxes)
                 ]
@@ -391,34 +391,34 @@ class RemoteWorkflowMixin(object):
             return ",".join(uris), pattern
 
         # add repo variables
-        if "repo" in reqs:
-            uris, pattern = get_bundle_info(reqs["repo"])
+        if "repo_bundle" in reqs:
+            uris, pattern = get_bundle_info(reqs["repo_bundle"])
             config.render_variables["cf_repo_uris"] = uris
             config.render_variables["cf_repo_pattern"] = pattern
 
         # add software variables
-        if "software" in reqs:
-            uris, pattern = get_bundle_info(reqs["software"])
+        if "software_bundle" in reqs:
+            uris, pattern = get_bundle_info(reqs["software_bundle"])
             config.render_variables["cf_software_uris"] = uris
             config.render_variables["cf_software_pattern"] = pattern
 
         # add bash sandbox variables
-        if "bash_sandboxes" in reqs:
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
+        if "bash_sandbox_bundles" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandbox_bundles"]])
             names = [
                 os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["bash_sandboxes"]
+                for t in reqs["bash_sandbox_bundles"]
             ]
             config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
             config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
             config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
 
         # add cmssw sandbox variables
-        if "cmssw_sandboxes" in reqs:
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
+        if "cmssw_sandbox_bundles" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandbox_bundles"]])
             names = [
                 os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["cmssw_sandboxes"]
+                for t in reqs["cmssw_sandbox_bundles"]
             ]
             config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
             config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
@@ -689,6 +689,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault("cf_remote_lcg_setup", remote_lcg_setup)
+        if self.htcondor_share_software:
+            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
