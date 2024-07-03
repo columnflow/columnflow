@@ -28,7 +28,7 @@ bootstrap_htcondor_standalone() {
     fi
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"
-    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
