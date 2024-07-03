@@ -555,10 +555,13 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
-        choices=("naf", "cern", "cern_el7", "cern_el8", "cern_el9", law.NO_STR),
+        choices=(
+            "naf", "naf_el7", "naf_el9", "cern", "cern_el7", "cern_el8", "cern_el9", law.NO_STR,
+        ),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf,cern,cern_el7,cern_el8,cern_el9,NO_STR; default: '{_default_htcondor_flavor}'",
+        "naf,naf_el7,naf_el9,cern,cern_el7,cern_el8,cern_el9,NO_STR; "
+        f"default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
         default=_default_htcondor_share_software,
@@ -639,14 +642,25 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # some htcondor setups require a "log" config, but we can safely use /dev/null by default
         config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
-        # at CERN, select the correct env https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
+        # default lcg setup file
+        remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
+
+        # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
-            cern_os = {"cern_el7": "el7", "cern_el8": "el8"}.get(self.htcondor_flavor, "el9")
+            cern_os = "el9"
+            if self.htcondor_flavor == "cern_el7":
+                cern_os = "el7"
+                remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el7")
+            elif self.htcondor_flavor == "cern_el8":
+                cern_os = "el8"
             config.custom_content.append(("MY.WantOS", cern_os))
 
-        # use cc7 on naf (https://confluence.desy.de/display/IS/BIRD)
-        if self.htcondor_flavor == "naf":
-            config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
+        # NAF settings (https://confluence.desy.de/display/IS/BIRD)
+        if self.htcondor_flavor.startswith("naf"):
+            if self.htcondor_flavor == "naf_el7":
+                config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
+            else:
+                config.custom_content.append(("Request_OpSysAndVer", "\"RedHat9\""))
 
         # maximum runtime, compatible with multiple batch systems
         if self.max_runtime is not None and self.max_runtime > 0:
@@ -674,7 +688,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
             config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
-        config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
+        config.render_variables.setdefault("cf_remote_lcg_setup", remote_lcg_setup)
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
