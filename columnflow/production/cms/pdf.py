@@ -91,19 +91,19 @@ def pdf_weights(
 
     # complain when the number of weights is unexpected
     if ak.any(bad_mask):
-        bad_values = set(n_weights[bad_mask])
+        bad_values = ",".join(map(str, set(n_weights[bad_mask])))
         raise Exception(
             "the number of LHEPdfWeights is expected to be 101 or 103, but also found values "
-            f"{bad_values} in dataset {self.dataset_inst.name}",
+            f"'{bad_values}' in dataset {self.dataset_inst.name}",
         )
 
     # log a message if nominal != 1
     pdf_weight_nominal = events.LHEPdfWeight[:, 0]
     if ak.any(pdf_weight_nominal != 1):
-        bad_values = set(pdf_weight_nominal[pdf_weight_nominal != 1])
+        bad_values = ",".join(map(str, set(pdf_weight_nominal[pdf_weight_nominal != 1])))
         logger.debug(
             "The nominal LHEPdfWeight is expected to be 1 but also found values "
-            f"{bad_values} in dataset {self.dataset_inst.name}. All variations will be "
+            f"'{bad_values}' in dataset {self.dataset_inst.name}. All variations will be "
             "normalized to the nominal LHEPdfWeight and it is assumed that the nominal "
             "weight is already included in the LHEWeight.",
         )

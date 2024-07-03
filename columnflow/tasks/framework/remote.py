@@ -675,6 +675,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
+        if self.htcondor_share_software:
+            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
