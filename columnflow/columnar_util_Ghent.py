@@ -23,18 +23,18 @@ def TetraVec(arr: ak.Array, keep: Sequence | str | Literal[-1] = -1) -> ak.Array
     create a Lorentz for fector from an awkward array with pt, eta, phi, and mass fields
     """
     mandatory_fields = ("pt", "eta", "phi", "mass")
+    exclude_fields = ("x", "y", "z", "t")
     for field in mandatory_fields:
         assert hasattr(arr, field), f"Provided array is missing {field} field"
     if isinstance(keep, str):
-        keep = [keep, *mandatory_fields]
+        keep = [keep]
     elif keep == -1:
         keep = arr.fields
-    else:
-        keep = [*keep, *mandatory_fields]
+    keep = [*keep, *mandatory_fields]
     return ak.zip(
-        {p: getattr(arr, p) for p in keep},
+        {p: getattr(arr, p) for p in keep if p not in exclude_fields},
         with_name="PtEtaPhiMLorentzVector",
-        behavior=coffea.nanoevents.methods.vector.behavior
+        behavior=coffea.nanoevents.methods.vector.behavior,
     )
 
 
