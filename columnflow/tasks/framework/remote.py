@@ -310,6 +310,8 @@ class RemoteWorkflowMixin(object):
     def add_bundle_requirements(
         self,
         reqs: dict[str, AnalysisTask],
+        *,
+        share_software: bool,
     ) -> None:
         """
         Adds requirements related to bundles of the repository, conda environment, bash and cmssw
@@ -326,7 +328,7 @@ class RemoteWorkflowMixin(object):
             self.bundle_repo_req.checksum
 
         # main software stack
-        if "BundleSoftware" in self.reqs:
+        if not share_software and "BundleSoftware" in self.reqs:
             reqs["software"] = self.reqs.BundleSoftware.req(self)
 
         # get names of bash and cmssw sandboxes
@@ -343,19 +345,30 @@ class RemoteWorkflowMixin(object):
         bash_sandboxes = {law.Sandbox.remove_type(s) for s in bash_sandboxes}
         cmssw_sandboxes = {law.Sandbox.remove_type(s) for s in cmssw_sandboxes}
 
-        # bash-based sandboxes
-        if bash_sandboxes and "BundleBashSandbox" in self.reqs:
-            reqs["bash_sandboxes"] = [
-                self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in sorted(bash_sandboxes)
-            ]
-
-        # optional cmssw sandboxes
-        if cmssw_sandboxes and "BundleCMSSWSandbox" in self.reqs:
-            reqs["cmssw_sandboxes"] = [
-                self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in sorted(cmssw_sandboxes)
-            ]
+        # build sandboxes when sharing software, otherwise require bundles
+        if share_software:
+            if "BuildBashSandbox" in self.reqs:
+                if bash_sandboxes:
+                    reqs["bash_sandboxes"] = [
+                        self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                        for sandbox_file in sorted(bash_sandboxes)
+                    ]
+                if cmssw_sandboxes:
+                    reqs["cmssw_sandboxes"] = [
+                        self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                        for sandbox_file in sorted(cmssw_sandboxes)
+                    ]
+        else:
+            if "BundleBashSandbox" in self.reqs and bash_sandboxes:
+                reqs["bash_sandboxes"] = [
+                    self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+                    for sandbox_file in sorted(bash_sandboxes)
+                ]
+            if "BundleCMSSWSandbox" in self.reqs and cmssw_sandboxes:
+                reqs["cmssw_sandboxes"] = [
+                    self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                    for sandbox_file in sorted(cmssw_sandboxes)
+                ]
 
     def add_bundle_render_variables(
         self,
@@ -588,8 +601,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
-        # add requirements dealing with software bundling
-        self.add_bundle_requirements(reqs)
+        # add requirements dealing with sandbox/software building and bundling
+        self.add_bundle_requirements(reqs, share_software=self.htcondor_share_software)
 
         return reqs
 
@@ -729,28 +742,8 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
 
-        # get names of pure bash and cmssw sandboxes
-        bash_sandboxes = None
-        cmssw_sandboxes = None
-        if getattr(self, "analysis_inst", None):
-            bash_sandboxes = self.analysis_inst.x("bash_sandboxes", [])
-            cmssw_sandboxes = self.analysis_inst.x("cmssw_sandboxes", [])
-        if getattr(self, "config_inst", None):
-            bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
-            cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
-
-        # bash-based sandboxes
-        reqs["bash_sandboxes"] = [
-            self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
-            for sandbox_file in bash_sandboxes
-        ]
-
-        # optional cmssw sandboxes
-        if cmssw_sandboxes:
-            reqs["cmssw_sandboxes"] = [
-                self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in cmssw_sandboxes
-            ]
+        # add requirements dealing with sandbox/software building and bundling
+        self.add_bundle_requirements(reqs, share_software=True)
 
         return reqs
 
