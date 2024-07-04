@@ -89,8 +89,8 @@ class UniteColumns(
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            ColumnCollection, Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
-            sorted_ak_to_parquet, sorted_ak_to_root,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
+            sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -106,15 +106,7 @@ class UniteColumns(
         write_columns: set[Route] = set()
         skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
-            # expand collections and braces in strings
-            if isinstance(c, ColumnCollection):
-                routes = self.find_keep_columns(c)
-            elif isinstance(c, str):
-                routes = set(map(Route, law.util.brace_expand(c)))
-            else:
-                routes = {Route(c)}
-            # loop
-            for r in routes:
+            for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
                     skip_columns.add(r.column)
                 else:
