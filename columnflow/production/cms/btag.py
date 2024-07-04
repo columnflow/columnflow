@@ -193,7 +193,7 @@ def btag_weights(
             flavor_mask = flavor != 4
 
         # prepare arguments
-        args = {
+        variable_map = {
             "systematic": syst_name if syst_name == "central" else f"{syst_direction}_{syst_name}",
             "flavor": flavor[flavor_mask],
             "abseta": abs_eta[flavor_mask],
@@ -203,7 +203,10 @@ def btag_weights(
         }
 
         # get the flat scale factors
-        sf_flat = self.btag_sf_corrector(*(args[inp.name] for inp in self.btag_sf_corrector.inputs))
+        sf_flat = self.btag_sf_corrector(*(
+            variable_map[inp.name]
+            for inp in self.btag_sf_corrector.inputs
+        ))
 
         # insert them into an array of ones whose length corresponds to the total number of jets
         sf_flat_all = np.ones(n_jets_all, dtype=np.float32)
