@@ -21,14 +21,14 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-def get_inclusive_dataset(dataset_inst: od.Dataset, stitching_datasets: list[od.Dataset]) -> od.Dataset:
+def get_inclusive_dataset(self: Producer) -> od.Dataset:
     """
     Helper function to obtain the inclusive dataset from a list of datasets that are required to
     stitch this *dataset_inst*.
     """
-    process_map = {d.processes.get_first(): d for d in stitching_datasets}
+    process_map = {d.processes.get_first(): d for d in self.stitching_datasets}
 
-    process_inst = dataset_inst.processes.get_first()
+    process_inst = self.dataset_inst.processes.get_first()
     incl_dataset = None
     while process_inst:
         if process_inst in process_map:
@@ -45,15 +45,15 @@ def get_inclusive_dataset(dataset_inst: od.Dataset, stitching_datasets: list[od.
     return incl_dataset
 
 
-def get_stitching_datasets(config_inst: od.Config, dataset_inst: od.Dataset) -> list[od.Dataset]:
+def get_stitching_datasets(self: Producer) -> list[od.Dataset]:
     """
     Helper function to obtain all datasets that are required to stitch this *dataset_inst*.
     """
     stitching_datasets = {
-        d for d in config_inst.datasets
+        d for d in self.config_inst.datasets
         if (
-            d.has_process(dataset_inst.processes.get_first(), deep=True) or
-            dataset_inst.has_process(d.processes.get_first(), deep=True)
+            d.has_process(self.dataset_inst.processes.get_first(), deep=True) or
+            self.dataset_inst.has_process(d.processes.get_first(), deep=True)
         )
     }
     return list(stitching_datasets)
@@ -136,7 +136,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     self.selection_stats_key = f"{'stitched_' if self.allow_stitching else 'norm_'}selection_stats"
 
     if self.allow_stitching:
-        self.stitching_datasets = self.get_stitching_datasets(self.config_inst, self.dataset_inst)
+        self.stitching_datasets = self.get_stitching_datasets()
     else:
         self.stitching_datasets = [self.dataset_inst]
 
@@ -223,7 +223,7 @@ def normalization_weights_setup(
     # create a cross section lookup table with all known processes with a cross section
     xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
     if self.allow_stitching and self.get_xsecs_from_inclusive_dataset:
-        inclusive_dataset = get_inclusive_dataset(self.dataset_inst, self.stitching_datasets)
+        inclusive_dataset = self.get_inclusive_dataset()
         logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # get the branching ratios from the inclusive sample
