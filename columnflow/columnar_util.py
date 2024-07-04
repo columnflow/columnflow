@@ -1334,7 +1334,7 @@ class ArrayFunction(Derivable):
     .. code-block:: python
 
         @my_other_func.init
-        def my_other_func_init(self: ArrayFunction):
+        def my_other_func_init(self):
             self.uses.add(my_func)
 
         # the above adds an initialization function to the already created class my_other_func,
@@ -1588,7 +1588,7 @@ class ArrayFunction(Derivable):
         cls.skip_func = func
 
     def __init__(
-        self: ArrayFunction,
+        self,
         call_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
@@ -1659,13 +1659,22 @@ class ArrayFunction(Derivable):
         if deferred_init:
             self.deferred_init(instance_cache=instance_cache)
 
-    def __getitem__(self: ArrayFunction, dep_cls: DerivableMeta) -> ArrayFunction:
+    def __getitem__(self, dep_cls: DerivableMeta) -> ArrayFunction:
         """
         Item access to dependencies.
         """
         return self.deps[dep_cls]
 
-    def deferred_init(self: ArrayFunction, instance_cache: dict | None = None) -> dict:
+    def has_dep(self, dep_cls: DerivableMeta) -> bool:
+        """
+        Returns whether a dependency of class *dep_cls* is present.
+
+        :param dep_cls: The class of the potential dependency.
+        :return bool: Whether the dependency is present.
+        """
+        return dep_cls in self.deps
+
+    def deferred_init(self, instance_cache: dict | None = None) -> dict:
         """
         Controls the deferred part of the initialization process.
         """
@@ -1683,7 +1692,7 @@ class ArrayFunction(Derivable):
         return instance_cache
 
     def create_dependencies(
-        self: ArrayFunction,
+        self,
         instance_cache: dict,
         only_update: bool = False,
     ) -> None:
@@ -1776,7 +1785,7 @@ class ArrayFunction(Derivable):
                     del self.deps[cls]
 
     def instantiate_dependency(
-        self: ArrayFunction,
+        self,
         cls: DerivableMeta,
         **kwargs: Any,
     ) -> ArrayFunction:
@@ -1792,7 +1801,7 @@ class ArrayFunction(Derivable):
 
         return cls(**kwargs)
 
-    def get_dependencies(self: ArrayFunction) -> set[ArrayFunction | Any]:
+    def get_dependencies(self) -> set[ArrayFunction | Any]:
         """
         Returns a set of instances of all dependencies.
         """
@@ -1809,7 +1818,7 @@ class ArrayFunction(Derivable):
         return deps
 
     def _get_columns(
-        self: ArrayFunction,
+        self,
         io_flag: IOFlag,
         dependencies: bool = True,
         _cache: set | None = None,
@@ -1855,21 +1864,21 @@ class ArrayFunction(Derivable):
 
         return columns
 
-    def _get_used_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
+    def _get_used_columns(self, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.USES, _cache=_cache)
 
     @property
-    def used_columns(self: ArrayFunction) -> set[Route]:
+    def used_columns(self) -> set[Route]:
         return self._get_used_columns()
 
-    def _get_produced_columns(self: ArrayFunction, _cache: set | None = None) -> set[Route]:
+    def _get_produced_columns(self, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
-    def produced_columns(self: ArrayFunction) -> set[Route]:
+    def produced_columns(self) -> set[Route]:
         return self._get_produced_columns()
 
-    def _check_columns(self: ArrayFunction, ak_array: ak.Array, io_flag: IOFlag) -> None:
+    def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
         """
         Check if awkward array contains at least one column matching each
         entry in 'uses' or 'produces' and raise Exception if none were found.
@@ -1901,7 +1910,7 @@ class ArrayFunction(Derivable):
         missing = ", ".join(sorted(map(str, missing)))
         raise Exception(f"'{self.cls_name}' did not {action} any columns matching: {missing}")
 
-    def __call__(self: ArrayFunction, *args, **kwargs) -> Any:
+    def __call__(self, *args, **kwargs) -> Any:
         """
         Forwards the call to :py:attr:`call_func` with all *args* and *kwargs*. An exception is
         raised if :py:attr:`call_func` is not callable.
@@ -2549,7 +2558,7 @@ class DaskArrayReader(object):
         PARTITIONS = enum.auto()
 
     def __init__(
-        self: DaskArrayReader,
+        self,
         path: str,
         open_options: dict | None = None,
         materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
@@ -2579,26 +2588,26 @@ class DaskArrayReader(object):
             self.chunk_to_partitions_lock = threading.Lock()
             self.partition_locks = {p: threading.Lock() for p in range(self.dak_array.npartitions)}
 
-    def __del__(self: DaskArrayReader) -> None:
+    def __del__(self) -> None:
         self.close()
 
-    def __len__(self: DaskArrayReader) -> int:
+    def __len__(self) -> int:
         if not self.dak_array.known_divisions:
             self.dak_array.eager_compute_divisions()
         return len(self.dak_array)
 
     @property
-    def closed(self: DaskArrayReader) -> bool:
+    def closed(self) -> bool:
         return self.dak_array is None
 
-    def close(self: DaskArrayReader) -> None:
+    def close(self) -> None:
         # free memory and perform an eager, overly cautious gc round
         self.dak_array = None
         if getattr(self, "partition_cache", None):
             self.partition_cache.clear()
         gc.collect()
 
-    def materialize(self: DaskArrayReader, *args, **kwargs) -> ak.Array:
+    def materialize(self, *args, **kwargs) -> ak.Array:
         """
         Materializes (reads from disk) a slice of the array using the configured
         :py:attr:`materialization_strategy`. All *args* and *kwargs* are forwarded to the internal
@@ -2617,7 +2626,7 @@ class DaskArrayReader(object):
         )
 
     def _materialize_via_slices(
-        self: DaskArrayReader,
+        self,
         *,
         chunk_index: int,
         entry_start: int,

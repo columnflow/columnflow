@@ -234,7 +234,7 @@ def normalization_weights_setup(
     else:
         for process_inst in process_insts:
             if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
-                logger.info(f"cross section for {process_inst.name} at {self.config_inst.campaign.ecm} not found")
+                logger.warning(f"cross section for {process_inst.name} at {self.config_inst.campaign.ecm} not found")
                 continue
             xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
 
