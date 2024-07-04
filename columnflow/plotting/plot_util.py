@@ -102,6 +102,12 @@ def apply_process_settings(
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        if scale_factor == "stack":
+            # calculate the integral of stacked proccesses only once
+            if "int_stack" not in locals():
+                int_stack = sum([proc_h.sum().value for proc, proc_h in hists.items() if not hasattr(proc, "unstack")])
+            # round to nearest 10
+            scale_factor = max(round(int_stack / h.sum().value, -1), 1)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
