@@ -99,15 +99,26 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
+    # helper to compute the stack integral
+    stack_integral = None
+
+    def get_stack_integral() -> float:
+        nonlocal stack_integral
+        if stack_integral is None:
+            stack_integral = sum(
+                proc_h.sum().value
+                for proc_h in hists.values()
+                if not hasattr(proc_h, "unstack")
+            )
+        return stack_integral
+
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
         if scale_factor == "stack":
-            # calculate the integral of stacked proccesses only once
-            if "int_stack" not in locals():
-                int_stack = sum([proc_h.sum().value for proc, proc_h in hists.items() if not hasattr(proc, "unstack")])
-            # round to nearest 10
-            scale_factor = max(round(int_stack / h.sum().value, -1), 1)
+            # compute the scale factor and round to nearest 10
+            scale_factor = get_stack_integral() / h.sum().value
+            scale_factor = max(round(scale_factor, -1), 1)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
