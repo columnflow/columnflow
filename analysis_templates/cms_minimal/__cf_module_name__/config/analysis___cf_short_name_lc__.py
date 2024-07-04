@@ -243,9 +243,9 @@ cfg.x.keep_columns = DotDict.wrap({
         # additional columns can be added as strings, similar to object info
         ColumnCollection.MANDATORY_COFFEA,
         # object info
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
-        "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
-        "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
+        "Jet.{pt,eta,phi,mass,btagDeepFlavB,hadronFlavour}",
+        "Muon.{pt,eta,phi,mass,pfRelIso04_all}",
+        "MET.{pt,phi,significance,covXX,covXY,covYY}",
         "PV.npvs",
         # all columns added during selection using a ColumnCollection flag, but skip cutflow ones
         ColumnCollection.ALL_FROM_SELECTOR,

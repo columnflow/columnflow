@@ -981,6 +981,31 @@ class ConfigTask(AnalysisTask):
 
         return columns
 
+    def _expand_keep_column(
+        self: ConfigTask,
+        column:
+            ColumnCollection | Route | str |
+            Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+    ) -> set[Route]:
+        """
+        Expands a *column* into a set of :py:class:`Route` objects. *column* can be a
+        :py:class:`ColumnCollection`, a string, or any type that is accepted by :py:class:`Route`.
+        Collections are expanded through :py:meth:`find_keep_columns`.
+
+        :param column: The column to expand.
+        :return: A set of :py:class:`Route` objects.
+        """
+        # expand collections
+        if isinstance(column, ColumnCollection):
+            return self.find_keep_columns(column)
+
+        # brace expand strings
+        if isinstance(column, str):
+            return set(map(Route, law.util.brace_expand(column)))
+
+        # let Route handle it
+        return {Route(column)}
+
 
 class ShiftTask(ConfigTask):
 

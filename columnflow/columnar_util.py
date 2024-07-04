@@ -366,6 +366,15 @@ class Route(od.TagMixin):
             return self.column == other
         return False
 
+    def __lt__(self, other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list]) -> bool:
+        if isinstance(other, Route):
+            return self.fields < other.fields
+        if isinstance(other, (list, tuple)):
+            return self.fields < tuple(other)
+        if isinstance(other, str):
+            return self.column < other
+        return False
+
     def __bool__(self) -> bool:
         return len(self._fields) > 0
 
@@ -1837,7 +1846,11 @@ class ArrayFunction(Derivable):
 
                 # add the columns
                 columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
+            elif isinstance(obj, str):
+                # expand braces in strings
+                columns |= set(map(Route, law.util.brace_expand(obj)))
             else:
+                # let Route handle it
                 columns.add(Route(obj))
 
         return columns
@@ -1943,7 +1956,8 @@ def tagged_column(
     """
     Takes one or several objects *routes* whose type can be anything that is accepted by the
     :py:class:`~.Route` constructor, and returns a single or a set of route objects being tagged
-    *tag*, which can be a single tag, a sequence, or a set of tags.
+    *tag*, which can be a single tag, a sequence, or a set of tags. Brace expansion is supported
+    in strings.
     """
     if not routes:
         raise Exception("at least one route argument must be given")
@@ -1961,8 +1975,17 @@ def tagged_column(
     elif len(routes) > 1:
         multiple = True
 
-    # create multiple or a single tagged route
-    return set(map(tagged_route, routes)) if multiple else tagged_route(list(routes)[0])
+    # create tagged routes
+    tagged_routes = set()
+    for r in routes:
+        # brace expansions for strings
+        if isinstance(r, str):
+            tagged_routes |= set(map(tagged_route, law.util.brace_expand(r)))
+        else:
+            tagged_routes.add(tagged_route(r))
+
+    multiple |= len(tagged_routes) > 1
+    return tagged_routes if multiple else tagged_routes.pop()
 
 
 def optional_column(
