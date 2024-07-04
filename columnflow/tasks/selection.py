@@ -479,7 +479,15 @@ class MergeSelectionMasks(
         write_columns: set[Route] = set()
         skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, []):
-            for r in (self.find_keep_columns(c) if isinstance(c, ColumnCollection) else {Route(c)}):
+            # expand collections and braces in strings
+            if isinstance(c, ColumnCollection):
+                routes = self.find_keep_columns(c)
+            elif isinstance(c, str):
+                routes = set(map(Route, law.util.brace_expand(c)))
+            else:
+                routes = {Route(c)}
+            # loop
+            for r in routes:
                 if r.has_tag("skip"):
                     skip_columns.add(r.column)
                 else:

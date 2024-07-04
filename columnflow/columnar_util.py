@@ -366,6 +366,15 @@ class Route(od.TagMixin):
             return self.column == other
         return False
 
+    def __lt__(self, other: Route | str | Sequence[str | int | slice | type(Ellipsis) | list]) -> bool:
+        if isinstance(other, Route):
+            return self.fields < other.fields
+        if isinstance(other, (list, tuple)):
+            return self.fields < tuple(other)
+        if isinstance(other, str):
+            return self.column < other
+        return False
+
     def __bool__(self) -> bool:
         return len(self._fields) > 0
 
@@ -1837,7 +1846,11 @@ class ArrayFunction(Derivable):
 
                 # add the columns
                 columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
+            elif isinstance(obj, str):
+                # expand braces in strings
+                columns |= set(map(Route, law.util.brace_expand(obj)))
             else:
+                # let Route handle it
                 columns.add(Route(obj))
 
         return columns
