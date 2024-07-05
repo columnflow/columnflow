@@ -107,8 +107,8 @@ def apply_process_settings(
         if stack_integral is None:
             stack_integral = sum(
                 proc_h.sum().value
-                for proc_h in hists.values()
-                if not hasattr(proc_h, "unstack")
+                for proc, proc_h in hists.items()
+                if not hasattr(proc, "unstack") and not proc.is_data
             )
         return stack_integral
 
