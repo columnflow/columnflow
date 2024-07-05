@@ -8,7 +8,7 @@ import itertools
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import ProducerMixin, ProducersMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
@@ -163,24 +163,30 @@ ProduceColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_input
 )
 
 
-ProduceColumnsWrapperBase = wrapper_factory(
+_ProduceColumnsWrapperBase = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=ProduceColumns,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
-ProduceColumnsWrapperBase.exclude_index = True
+_ProduceColumnsWrapperBase.exclude_index = True
 
 
-class ProduceColumnsWrapper(
-    ProduceColumnsWrapperBase,
-    ProducersMixin,
-):
+class ProduceColumnsWrapper(_ProduceColumnsWrapperBase):
+
+    producers = law.CSVParameter(
+        default=(),
+        description="names of producers to use; if empty, the default producer is used",
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # add the producers parameter
-        self.wrapper_fields.extend(["producer"])
+        if self.producers:
+            # add the producers parameter
+            self.wrapper_fields.append("producer")
 
-        combined_parameters = itertools.product(self.wrapper_parameters, self.producers)
-        combined_parameters = [params_tuple + (producer,) for params_tuple, producer in combined_parameters]
-        self.wrapper_parameters = combined_parameters
+            # extend the parameter combinations with producers
+            self.wrapper_parameters = [
+                params + (producer,)
+                for params, producer in itertools.product(self.wrapper_parameters, self.producers)
+            ]
