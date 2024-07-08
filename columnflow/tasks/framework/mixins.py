@@ -2175,6 +2175,7 @@ class ChunkedIOMixin(AnalysisTask):
 
     exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
 
+    # define default chunk and pool sizes that can be adjusted per inheriting task
     default_chunk_size = ChunkedIOHandler.default_chunk_size
     default_pool_size = ChunkedIOHandler.default_pool_size
 
