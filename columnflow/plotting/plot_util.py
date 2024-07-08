@@ -209,6 +209,7 @@ def apply_process_settings(
                 proc_inst.label,
                 rf"$\times${scale_factor}",
                 placeholder="SCALE",
+                before_parentheses=True,
             )
 
         # remove remaining placeholders
