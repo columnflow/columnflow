@@ -110,7 +110,7 @@ def inject_label(
     inject: str | int | float,
     *,
     placeholder: str | None = None,
-    before_parentheses: bool = True,
+    before_parentheses: bool = False,
 ) -> str:
     """
     Injects a string *inject* into a *label* at a specific position, determined by different
