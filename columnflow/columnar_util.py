@@ -2797,12 +2797,16 @@ class ChunkedIOHandler(object):
         ["chunk", "chunk_pos"],
     )
 
+    default_chunk_size = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000)
+    default_pool_size = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 2)
+
     def __init__(
         self,
         source: Any,
+        *,
         source_type: str | Sequence[str] | None = None,
-        chunk_size: int = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000),
-        pool_size: int = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 4),
+        chunk_size: int = default_chunk_size,
+        pool_size: int = default_pool_size,
         open_options: dict | Sequence[dict] | None = None,
         read_options: dict | Sequence[dict] | None = None,
         read_columns: set | Sequence[set] | None = None,
