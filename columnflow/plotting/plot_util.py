@@ -65,7 +65,7 @@ def round_dynamic(value: int | float) -> int | float:
         - 0 -> 0 (int)
         - (0, 1) -> round to 1 significant digit (float)
         - [1, 10) -> round to 1 significant digit (int)
-        - [10, inf): round to 2 significant digits (float)
+        - [10, inf): round to 2 significant digits (int)
 
     :param value: The value to round.
     :return: The rounded value.
