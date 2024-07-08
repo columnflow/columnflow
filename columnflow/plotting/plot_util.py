@@ -62,38 +62,25 @@ def round_dynamic(value: int | float) -> int | float:
     """
     Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
 
-        - 0 -> 0
-        - (0, 1) -> round to 1 significant digit
-        - [1, 20]: round to 1
-        - (20, 100]: round to 5
-        - (100, 500]: round to 10
-        - (500, 1000]: round to 50
-        - (1000, 5000]: round to 100
-        - (5000, 10000]: round to 500
-        - ...
+        - 0 -> 0 (int)
+        - (0, 1) -> round to 1 significant digit (float)
+        - [1, 10) -> round to 1 significant digit (int)
+        - [10, inf): round to 2 significant digits (float)
 
     :param value: The value to round.
     :return: The rounded value.
     """
-    # separate sign
-    sign, value = (-1 if value < 0 else 1), abs(value)
+    # determine significant digits
+    digits = 1 if abs(value) < 10 else 2
 
-    # special cases
-    if not value:
-        # plain 0 int
-        return 0
-    if value < 1:
-        # one significant digit
-        v_str, _, mag = sn.round_value(value, method=1)
-        return float(v_str) * 10**mag
+    # split into value and magnitude
+    v_str, _, mag = sn.round_value(value, method=digits)
 
-    # determine the reference scale
-    mag_over_100 = int(math.ceil(math.log10(value) - 2)) if value > 100 else 0
-    value /= 10**mag_over_100
-    ref = 1 if value <= 20 else 5
+    # recombine
+    value = float(v_str) * 10**mag
 
-    # round and return
-    return sign * int(round(value / ref) * ref * 10**mag_over_100)
+    # return with proper type
+    return int(value) if value >= 1 else value
 
 
 def inject_label(
