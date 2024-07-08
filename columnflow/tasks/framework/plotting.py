@@ -198,7 +198,7 @@ class PlotBase(ConfigTask):
         def show(cmd=default_cmd, ext=pdf):
             if ext not in tmp_plots:
                 tmp_plots[ext] = law.LocalFileTarget(is_tmp=ext)
-            fig.savefig(tmp_plots[ext].abspath)
+            tmp_plots[ext].dump(fig, formatter="mpl")
             if cmd:
                 law.util.interruptable_popen([cmd, tmp_plots[ext].abspath])
             else:

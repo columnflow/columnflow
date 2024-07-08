@@ -144,7 +144,7 @@ def inject_label(
             if not in_parentheses:
                 return f"{label[:i]}{inject} {label[i:]}"
 
-    # otherwise, just append the scale
+    # otherwise, just append
     return f"{label} {inject}"
 
 
