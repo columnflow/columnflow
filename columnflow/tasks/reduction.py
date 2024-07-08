@@ -548,12 +548,14 @@ class ProvideReducedEvents(
 
     def _req_merged_reduced_events(self, **params) -> law.Task:
         if self.is_workflow():
+            # require the full merging forest
             params["tree_index"] = -1
             params["branch"] = 0
         else:
-            _exclude = params.pop("_exclude", None)
-            _exclude = set() if _exclude is None else law.util.make_set(_exclude)
+            # require a single merging tree identified by the tree_index via a local workflow
+            _exclude = law.util.make_set(params.pop("_exclude", None) or set())
             _exclude |= {"branch"}
+            params["_exclude"] = _exclude
             params["tree_index"] = self.branch
             params["workflow"] = "local"
 
@@ -589,14 +591,18 @@ class ProvideReducedEvents(
     @workflow_condition.output
     def output(self):
         if self.skip_merging or self.force_merging:
-            return self.requires().output()
+            req = self.requires()
+        else:
+            # declare the output to be the one of the upstream task
+            req = (
+                self._req_reduced_events()
+                if self.file_merging == 1
+                else self._req_merged_reduced_events()
+            )
 
-        # declare the output to be the one of the upstream task
-        return (
-            self._req_reduced_events()
-            if self.file_merging == 1
-            else self._req_merged_reduced_events()
-        ).output()
+        # to simplify the handling for downstream tasks, extract the single output from workflows
+        output = req.output()
+        return list(output.collection.targets.values())[0] if req.is_workflow() else output
 
     def _yield_dynamic_deps(self):
         # do nothing if a decision was pre-set

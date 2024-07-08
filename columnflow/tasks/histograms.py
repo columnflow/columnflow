@@ -300,6 +300,12 @@ class MergeHistograms(
         CreateHistograms=CreateHistograms,
     )
 
+    @classmethod
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
+        _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"variables"}
+        kwargs["_prefer_cli"] = _prefer_cli
+        return super().req_params(inst, **kwargs)
+
     def create_branch_map(self):
         # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
@@ -313,10 +319,8 @@ class MergeHistograms(
 
     def requires(self):
         # optional dynamic behavior: determine not yet created variables and require only those
-        prefer_cli = {"variables"}
         variables = self.variables
         if self.only_missing:
-            prefer_cli.clear()
             missing = self.output().count(existing=False, keys=True)[1]
             variables = tuple(sorted(missing, key=variables.index))
 
@@ -328,7 +332,6 @@ class MergeHistograms(
             branch=-1,
             variables=tuple(variables),
             _exclude={"branches"},
-            _prefer_cli=prefer_cli,
         )
 
     def output(self):

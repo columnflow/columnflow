@@ -72,7 +72,8 @@ def get_events_from_categories(
 
 
 def get_root_processes_from_campaign(campaign: order.config.Campaign) -> order.unique.UniqueObjectIndex:
-    """Extracts all root process objects from datasets contained in an order *campaign* and returns
+    """
+    Extracts all root process objects from datasets contained in an order *campaign* and returns
     them in a unique object index.
 
     :param campaign: :py:class:`~order.config.Campaign` object containing information

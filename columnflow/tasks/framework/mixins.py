@@ -2275,10 +2275,18 @@ class HistHookMixin(ConfigTask):
         if self.hist_hook in (None, "", law.NO_STR):
             return hists
 
-        # check if the hook is defined on the config instance and call it
-        func = self.config_inst.x("hist_hooks", {}).get(self.hist_hook)
-        if callable(func):
-            self.publish_message(f"invoking hist hook '{self.hist_hook}'")
-            hists = func(self, hists)
+        # get the hook from the config instance
+        hooks = self.config_inst.x("hist_hooks", {})
+        if self.hist_hook not in hooks:
+            raise ValueError(
+                f"hist hook '{self.hist_hook}' not found in 'hist_hooks' auxiliary entry of config",
+            )
+        func = hooks[self.hist_hook]
+        if not callable(func):
+            raise ValueError(f"hist hook '{self.hist_hook}' is not callable: {func}")
+
+        # invoke it
+        self.publish_message(f"invoking hist hook '{self.hist_hook}'")
+        hists = func(self, hists)
 
         return hists
