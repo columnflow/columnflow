@@ -65,11 +65,9 @@ def round_dynamic(value: int | float) -> int | float:
         - (0, 1) -> round to 0.1
         - [1, 20]: round to 1
         - (20, 100]: round to 5
-        - (100, 200]: round to 10
-        - (200, 500]: round to 20
+        - (100, 500]: round to 10
         - (500, 1000]: round to 50
-        - (1000, 2000]: round to 100
-        - (2000, 5000]: round to 200
+        - (1000, 5000]: round to 100
         - (5000, 10000]: round to 500
         - ...
 
@@ -88,21 +86,12 @@ def round_dynamic(value: int | float) -> int | float:
         return sign * round(value, 1)
 
     # determine the reference scale
-    mag_over_1k = int(math.ceil(math.log10(value) - 3)) if value > 1000 else 0
-    value /= 10**mag_over_1k
-    if value <= 20:
-        ref = 1
-    elif value <= 100:
-        ref = 5
-    elif value <= 200:
-        ref = 10
-    elif value <= 500:
-        ref = 20
-    else:
-        ref = 50
+    mag_over_100 = int(math.ceil(math.log10(value) - 2)) if value > 100 else 0
+    value /= 10**mag_over_100
+    ref = 1 if value <= 20 else 5
 
     # round and return
-    return sign * int(round(value / ref) * ref * 10**mag_over_1k)
+    return sign * int(round(value / ref) * ref * 10**mag_over_100)
 
 
 def inject_label(
