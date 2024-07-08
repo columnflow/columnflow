@@ -6,6 +6,7 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+import re
 import operator
 import functools
 from collections import OrderedDict
@@ -26,6 +27,7 @@ label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
     "pw": "Private work",
+    "pwip": "Private work in progress",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
@@ -53,6 +55,97 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     }
 
     return cms_label_kwargs
+
+
+def round_dynamic(value: int | float) -> int | float:
+    """
+    Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
+
+        - 0 -> 0
+        - (0, 1) -> round to 0.1
+        - [1, 20]: round to 1
+        - (20, 100]: round to 5
+        - (100, 200]: round to 10
+        - (200, 500]: round to 20
+        - (500, 1000]: round to 50
+        - (1000, 2000]: round to 100
+        - (2000, 5000]: round to 200
+        - (5000, 10000]: round to 500
+        - ...
+
+    :param value: The value to round.
+    :return: The rounded value.
+    """
+    # separate sign
+    sign, value = (-1 if value < 0 else 1), abs(value)
+
+    # special cases
+    if not value:
+        # plain 0 int
+        return 0
+    if value < 1:
+        # round to float with 0.1 precision
+        return sign * round(value, 1)
+
+    # determine the reference scale
+    mag_over_1k = int(math.ceil(math.log10(value) - 3)) if value > 1000 else 0
+    value /= 10**mag_over_1k
+    if value <= 20:
+        ref = 1
+    elif value <= 100:
+        ref = 5
+    elif value <= 200:
+        ref = 10
+    elif value <= 500:
+        ref = 20
+    else:
+        ref = 50
+
+    # round and return
+    return sign * int(round(value / ref) * ref * 10**mag_over_1k)
+
+
+def inject_label(
+    label: str,
+    inject: str | int | float,
+    *,
+    placeholder: str | None = None,
+    before_parentheses: bool = True,
+) -> str:
+    """
+    Injects a string *inject* into a *label* at a specific position, determined by different
+    strategies in the following order:
+
+        - If *placeholder* is defined, *label* should contain a substring ``"__PLACEHOLDER__"``
+        which is replaced.
+        - Otherwise, if *before_parentheses* is set to True, the string is inserted before the last
+        pair of parentheses.
+        - Otherwise, the string is appended to the label.
+
+    :param label: The label to inject the string *inject* into.
+    :param inject: The string to inject.
+    :param placeholder: The placeholder to replace in the label.
+    :param before_parentheses: Whether to insert the string before the parentheses in the label.
+    :return: The updated label.
+    """
+    # replace the placeholder
+    if placeholder and f"__{placeholder}__" in label:
+        return label.replace(f"__{placeholder}__", inject)
+
+    # when the label contains trailing parentheses, insert the string before them
+    if before_parentheses and label.endswith(")"):
+        in_parentheses = 1
+        for i in range(len(label) - 2, -1, -1):
+            c = label[i]
+            if c == ")":
+                in_parentheses += 1
+            elif c == "(":
+                in_parentheses -= 1
+            if not in_parentheses:
+                return f"{label[:i]}{inject} {label[i:]}"
+
+    # otherwise, just append the scale
+    return f"{label} {inject}"
 
 
 def apply_settings(
@@ -112,17 +205,23 @@ def apply_process_settings(
             )
         return stack_integral
 
-    # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
+        # apply "scale" setting directly to the hists
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
         if scale_factor == "stack":
-            # compute the scale factor and round to nearest 10
-            scale_factor = get_stack_integral() / h.sum().value
-            scale_factor = max(round(scale_factor, -1), 1)
+            # compute the scale factor and round
+            scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
-            proc_inst.label += f" x{scale_factor}"
+            proc_inst.label = inject_label(
+                proc_inst.label,
+                rf"$\times${scale_factor}",
+                placeholder="SCALE",
+            )
+
+        # remove remaining placeholders
+        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
 
     return hists
 
