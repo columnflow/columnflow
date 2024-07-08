@@ -12,6 +12,7 @@ import functools
 from collections import OrderedDict
 
 import order as od
+import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex
 from columnflow.types import Iterable, Any, Callable
@@ -62,7 +63,7 @@ def round_dynamic(value: int | float) -> int | float:
     Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
 
         - 0 -> 0
-        - (0, 1) -> round to 0.1
+        - (0, 1) -> round to 1 significant digit
         - [1, 20]: round to 1
         - (20, 100]: round to 5
         - (100, 500]: round to 10
@@ -82,8 +83,9 @@ def round_dynamic(value: int | float) -> int | float:
         # plain 0 int
         return 0
     if value < 1:
-        # round to float with 0.1 precision
-        return sign * round(value, 1)
+        # one significant digit
+        v_str, _, mag = sn.round_value(value, method=1)
+        return float(v_str) * 10**mag
 
     # determine the reference scale
     mag_over_100 = int(math.ceil(math.log10(value) - 2)) if value > 100 else 0
