@@ -2238,6 +2238,7 @@ class ChunkedIOMixin(AnalysisTask):
                         f"{self.task_family}__chunked_io_{key}",
                         getattr(self, f"default_{key}"),
                     )
+                # when still not set, remove it and let the handler decide using its defaults
                 if kwargs.get(key) is None:
                     kwargs.pop(key, None)
             # create the handler
