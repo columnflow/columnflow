@@ -133,7 +133,7 @@ def inject_label(
             elif c == "(":
                 in_parentheses -= 1
             if not in_parentheses:
-                return f"{label[:i]}{inject} {label[i:]}"
+                return f"{label[:i]} {inject} {label[i:]}"
 
     # otherwise, just append
     return f"{label} {inject}"
