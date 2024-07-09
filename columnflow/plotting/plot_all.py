@@ -236,12 +236,12 @@ def plot_all(
             raise ValueError(f"no histogram(s) given in plot_cfg entry {key}")
         hist = cfg["hist"]
         kwargs = cfg.get("kwargs", {})
-        plot_methods[method](ax, hist, **kwargs)
+        (plot_methods[method] if isinstance(method, str) else method)(ax, hist, **kwargs)
 
         if not skip_ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            plot_methods[method](rax, hist, **cfg["ratio_kwargs"])
+            (plot_methods[method] if isinstance(method, str) else method)(rax, hist, **cfg["ratio_kwargs"])
 
     # axis styling
     ax_kwargs = {
