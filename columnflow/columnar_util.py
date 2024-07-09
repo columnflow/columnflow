@@ -2205,10 +2205,10 @@ class TaskArrayFunction(ArrayFunction):
         positional arguments:
 
             - *reqs*, a dictionary containing the required tasks as defined by the custom
-              :py:meth:`requires_func`.
+            :py:meth:`requires_func`.
             - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
             - *reader_targets*, an InsertableDict containing the targets to be included
-              in an event chunk loop
+            in an event chunk loop
 
         The decorator does not return the wrapped function.
         """
