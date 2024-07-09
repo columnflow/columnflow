@@ -25,6 +25,7 @@ class Categorizer(TaskArrayFunction):
         cls,
         func: Callable | None = None,
         bases: tuple = (),
+        max_chunk_size: int | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
@@ -35,12 +36,14 @@ class Categorizer(TaskArrayFunction):
 
         :param func: Function to be wrapped and integrated into new :py:class:`Categorizer` class.
         :param bases: Additional base classes for new :py:class:`Categorizer`.
+        :param max_chunk_size: Maximum event chunk size when processing this categorizer.
         :return: The new :py:class:`Categorizer` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
             cls_dict = {
                 "call_func": func,
+                "max_chunk_size": max_chunk_size,
             }
             cls_dict.update(kwargs)
 

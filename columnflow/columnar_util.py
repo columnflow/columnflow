@@ -19,13 +19,13 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict
+from collections import namedtuple, OrderedDict, deque
 
 import law
 import order as od
 from law.util import InsertableDict
 
-from columnflow.types import Sequence, Callable, Any, T
+from columnflow.types import Sequence, Callable, Any, T, Generator
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path,
@@ -1673,6 +1673,26 @@ class ArrayFunction(Derivable):
         :return bool: Whether the dependency is present.
         """
         return dep_cls in self.deps
+
+    def walk_deps(self, include_self: bool = False) -> Generator[ArrayFunction, None, None]:
+        """
+        Walks through all dependencies of this instance in a depth-first manner.
+        """
+        seen = set()
+
+        q = deque(self.deps.values())
+        if include_self:
+            q.appendleft(self)
+
+        while q:
+            dep = q.popleft()
+            if dep in seen:
+                continue
+
+            yield dep
+            seen.add(dep)
+
+            q.extend(dep.deps.values())
 
     def deferred_init(self, instance_cache: dict | None = None) -> dict:
         """
