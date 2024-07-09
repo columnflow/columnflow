@@ -239,6 +239,7 @@ def normalization_weights_setup(
             xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
 
     self.xs_table = xs_table
+    self.xs_process_ids = set(self.xs_table.rows[0])
 
 
 @normalization_weights.init
