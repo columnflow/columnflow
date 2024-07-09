@@ -102,19 +102,20 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     datasets with a leaf process contained in the leaf processes of the py:attr:`dataset_inst`.
     For stitching, the process_id needs to be reconstructed for each leaf process on a per event basis.
     """
-    # get the lumi
+    # get the lumi and read the process id column
     lumi = self.config_inst.x.luminosity.nominal
-
-    # read the cross section per process from the lookup table
     process_id = np.asarray(events.process_id)
 
+    # ensure all ids were assigned a cross section
     unique_process_ids = set(process_id)
-    invalid_ids = unique_process_ids - set(self.xs_table.rows[0])
+    invalid_ids = unique_process_ids - self.xs_process_ids
     if invalid_ids:
-        logger.warning(
-            f"process_id field contains process ids {invalid_ids} that were not assigned a cross section",
+        raise Exception(
+            f"process_id field contains id(s) {invalid_ids} for which no cross sections were "
+            f"found; process ids with cross sections: {self.xs_process_ids}",
         )
 
+    # read the cross section per process from the lookup table
     xs = np.array(self.xs_table[0, process_id].todense())[0]
 
     # read the sum of event weights per process from the lookup table
@@ -173,9 +174,9 @@ def normalization_weights_setup(
     attributes:
 
         - py:attr:`sum_weights_table`: A sparse array serving as a lookup table for the sum of event
-          weights per process id.
+        weights per process id.
         - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
-          processes known to the config of the task, with keys being process ids.
+        processes known to the config of the task, with keys being process ids.
     """
     # load the selection stats
     normalization_selection_stats = {
@@ -234,11 +235,11 @@ def normalization_weights_setup(
     else:
         for process_inst in process_insts:
             if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
-                logger.warning(f"cross section for {process_inst.name} at {self.config_inst.campaign.ecm} not found")
                 continue
             xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
 
     self.xs_table = xs_table
+    self.xs_process_ids = set(self.xs_table.rows[0])
 
 
 @normalization_weights.init
