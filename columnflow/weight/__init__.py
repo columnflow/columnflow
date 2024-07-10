@@ -28,7 +28,6 @@ class WeightProducer(TaskArrayFunction):
         bases: tuple = (),
         mc_only: bool = False,
         data_only: bool = False,
-        max_chunk_size: int | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
@@ -54,7 +53,6 @@ class WeightProducer(TaskArrayFunction):
             on Monte Carlo simulation and skipped for real data.
         :param data_only: Boolean flag indicating that this :py:class:`WeightProducer` should only
             run on real data and skipped for Monte Carlo simulation.
-        :param max_chunk_size: Maximum event chunk size when processing this weight producer.
         :return: New :py:class:`WeightProducer` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
@@ -64,7 +62,6 @@ class WeightProducer(TaskArrayFunction):
                 "call_func": func,
                 "mc_only": mc_only,
                 "data_only": data_only,
-                "max_chunk_size": max_chunk_size,
             }
 
             # get the module name

@@ -84,10 +84,6 @@ class ProduceColumns(
         reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
         n_ext = len(reader_targets)
 
-        # determine the maximum chunk size
-        chunk_sizes = (dep.max_chunk_size for dep in self.producer_inst.walk_deps(include_self=True))
-        chunk_size = min((s for s in chunk_sizes if isinstance(s, int)), default=None)
-
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
@@ -114,7 +110,7 @@ class ProduceColumns(
                 [inp.path for inp in inps],
                 source_type=["awkward_parquet"] + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_ext),
-                chunk_size=chunk_size,
+                chunk_size=self.producer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:

@@ -30,7 +30,6 @@ class Producer(TaskArrayFunction):
         data_only: bool = False,
         nominal_only: bool = False,
         shifts_only: Sequence[str] | set[str] | None = None,
-        max_chunk_size: int | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
@@ -59,7 +58,6 @@ class Producer(TaskArrayFunction):
             on the nominal shift and skipped on any other shifts.
         :param shifts_only: Shift names that this :py:class:`Producer` should only run on, skipping
             all other shifts.
-        :param max_chunk_size: Maximum event chunk size when processing this producer.
         :return: New :py:class:`Producer` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
@@ -71,7 +69,6 @@ class Producer(TaskArrayFunction):
                 "data_only": data_only,
                 "nominal_only": nominal_only,
                 "shifts_only": shifts_only,
-                "max_chunk_size": max_chunk_size,
             }
 
             # get the module name

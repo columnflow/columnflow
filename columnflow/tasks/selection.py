@@ -131,10 +131,6 @@ class SelectEvents(
         reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
         n_ext = len(reader_targets)
 
-        # determine the maximum chunk size
-        chunk_sizes = (dep.max_chunk_size for dep in self.selector_inst.walk_deps(include_self=True))
-        chunk_size = min((s for s in chunk_sizes if isinstance(s, int)), default=None)
-
         # show an early warning in case the selector does not produce some mandatory columns
         produced_columns = self.selector_inst.produced_columns
         for c in self.reqs.get("CreateHistograms", CreateHistograms).mandatory_columns:
@@ -183,7 +179,7 @@ class SelectEvents(
                 [nano_file, *(inp.path for inp in inps)],
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_calib + n_ext),
-                chunk_size=chunk_size,
+                chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within additional columns
                 if self.check_overlapping_inputs:

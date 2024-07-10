@@ -2166,6 +2166,7 @@ class TaskArrayFunction(ArrayFunction):
     setup_func = None
     sandbox = None
     call_force = None
+    max_chunk_size = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
@@ -2241,6 +2242,7 @@ class TaskArrayFunction(ArrayFunction):
         setup_func: Callable | law.NoValue | None = law.no_value,
         sandbox: str | law.NoValue | None = law.no_value,
         call_force: bool | law.NoValue | None = law.no_value,
+        max_chunk_size: int | None = law.no_value,
         pick_cached_result: Callable | law.NoValue | None = law.no_value,
         inst_dict: dict | None = None,
         **kwargs,
@@ -2259,6 +2261,8 @@ class TaskArrayFunction(ArrayFunction):
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
             call_force = self.__class__.call_force
+        if max_chunk_size == law.no_value:
+            max_chunk_size = self.__class__.max_chunk_size
         if pick_cached_result == law.no_value:
             pick_cached_result = self.__class__.pick_cached_result
 
@@ -2271,6 +2275,7 @@ class TaskArrayFunction(ArrayFunction):
         # other attributes
         self.sandbox = sandbox
         self.call_force = call_force
+        self.max_chunk_size = max_chunk_size
         self.pick_cached_result = pick_cached_result
 
         # cached results of the main call function per thread id
@@ -2456,6 +2461,19 @@ class TaskArrayFunction(ArrayFunction):
             self._cache_result(result)
 
         return result
+
+    def get_min_chunk_size(self) -> int | None:
+        """
+        Walks through all dependencies and returns the minimum value of :py:attr:`max_chunk_size`
+        which defines the bottleneck for chunked processing.
+
+        :return: The minimum value of :py:attr:`max_chunk_size` or *None* if none is set.
+        """
+        # get maximum chunk sizes for all deps
+        sizes = (dep.max_chunk_size for dep in self.selector_inst.walk_deps(include_self=True))
+
+        # select the minimum value that defines the bottleneck
+        return min((s for s in sizes if isinstance(s, int)), default=None)
 
 
 class NoThreadPool(object):
