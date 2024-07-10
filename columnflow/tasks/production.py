@@ -50,7 +50,6 @@ class ProduceColumns(
         return reqs
 
     def requires(self):
-        print(f"requirements evaluated, {self!r}")
         return {
             "events": self.reqs.ProvideReducedEvents.req(self),
             "producer": law.util.make_unique(law.util.flatten(self.producer_inst.run_requires())),
