@@ -2350,7 +2350,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if callable(self.requires_func):
-            self.requires_func(reqs.setdefault(self.cls_name, DotDict()))
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            self.requires_func(reqs[self.cls_name])
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
@@ -2383,11 +2385,11 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(
-                reqs.setdefault(self.cls_name, DotDict()),
-                inputs.setdefault(self.cls_name, DotDict()),
-                reader_targets,
-            )
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            if self.cls_name not in inputs:
+                inputs[self.cls_name] = DotDict()
+            self.setup_func(reqs[self.cls_name], inputs[self.cls_name], reader_targets)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
