@@ -2476,7 +2476,7 @@ class TaskArrayFunction(ArrayFunction):
         :return: The minimum value of :py:attr:`max_chunk_size` or *None* if none is set.
         """
         # get maximum chunk sizes for all deps
-        sizes = (dep.max_chunk_size for dep in self.selector_inst.walk_deps(include_self=True))
+        sizes = (dep.max_chunk_size for dep in self.walk_deps(include_self=True))
 
         # select the minimum value that defines the bottleneck
         return min((s for s in sizes if isinstance(s, int)), default=None)
