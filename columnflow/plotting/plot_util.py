@@ -6,11 +6,13 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+import re
 import operator
 import functools
 from collections import OrderedDict
 
 import order as od
+import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex
 from columnflow.types import Iterable, Any, Callable
@@ -26,6 +28,7 @@ label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
     "pw": "Private work",
+    "pwip": "Private work in progress",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
@@ -53,6 +56,74 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     }
 
     return cms_label_kwargs
+
+
+def round_dynamic(value: int | float) -> int | float:
+    """
+    Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
+
+        - 0 -> 0 (int)
+        - (0, 1) -> round to 1 significant digit (float)
+        - [1, 10) -> round to 1 significant digit (int)
+        - [10, inf) -> round to 2 significant digits (int)
+
+    :param value: The value to round.
+    :return: The rounded value.
+    """
+    # determine significant digits
+    digits = 1 if abs(value) < 10 else 2
+
+    # split into value and magnitude
+    v_str, _, mag = sn.round_value(value, method=digits)
+
+    # recombine
+    value = float(v_str) * 10**mag
+
+    # return with proper type
+    return int(value) if value >= 1 else value
+
+
+def inject_label(
+    label: str,
+    inject: str | int | float,
+    *,
+    placeholder: str | None = None,
+    before_parentheses: bool = False,
+) -> str:
+    """
+    Injects a string *inject* into a *label* at a specific position, determined by different
+    strategies in the following order:
+
+        - If *placeholder* is defined, *label* should contain a substring ``"__PLACEHOLDER__"``
+        which is replaced.
+        - Otherwise, if *before_parentheses* is set to True, the string is inserted before the last
+        pair of parentheses.
+        - Otherwise, the string is appended to the label.
+
+    :param label: The label to inject the string *inject* into.
+    :param inject: The string to inject.
+    :param placeholder: The placeholder to replace in the label.
+    :param before_parentheses: Whether to insert the string before the parentheses in the label.
+    :return: The updated label.
+    """
+    # replace the placeholder
+    if placeholder and f"__{placeholder}__" in label:
+        return label.replace(f"__{placeholder}__", inject)
+
+    # when the label contains trailing parentheses, insert the string before them
+    if before_parentheses and label.endswith(")"):
+        in_parentheses = 1
+        for i in range(len(label) - 2, -1, -1):
+            c = label[i]
+            if c == ")":
+                in_parentheses += 1
+            elif c == "(":
+                in_parentheses -= 1
+            if not in_parentheses:
+                return f"{label[:i]} {inject} {label[i:]}"
+
+    # otherwise, just append
+    return f"{label} {inject}"
 
 
 def apply_settings(
@@ -112,17 +183,24 @@ def apply_process_settings(
             )
         return stack_integral
 
-    # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
+        # apply "scale" setting directly to the hists
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
         if scale_factor == "stack":
-            # compute the scale factor and round to nearest 10
-            scale_factor = get_stack_integral() / h.sum().value
-            scale_factor = max(round(scale_factor, -1), 1)
+            # compute the scale factor and round
+            scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
-            proc_inst.label += f" x{scale_factor}"
+            proc_inst.label = inject_label(
+                proc_inst.label,
+                rf"$\times${scale_factor}",
+                placeholder="SCALE",
+                before_parentheses=True,
+            )
+
+        # remove remaining placeholders
+        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
 
     return hists
 

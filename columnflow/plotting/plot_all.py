@@ -263,7 +263,11 @@ def plot_all(
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
         rax.set(**rax_kwargs)
-        fig.align_ylabels()
+
+        if "xlabel" in rax_kwargs:
+            ax.set_xlabel("")
+
+    fig.align_labels()
 
     # legend
     if not skip_legend:
