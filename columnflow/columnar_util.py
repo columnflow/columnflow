@@ -2226,10 +2226,10 @@ class TaskArrayFunction(ArrayFunction):
         positional arguments:
 
             - *reqs*, a dictionary containing the required tasks as defined by the custom
-              :py:meth:`requires_func`.
+            :py:meth:`requires_func`.
             - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
             - *reader_targets*, an InsertableDict containing the targets to be included
-              in an event chunk loop
+            in an event chunk loop
 
         The decorator does not return the wrapped function.
         """
@@ -2367,7 +2367,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default requirements
         if reqs is None:
-            reqs = {}
+            reqs = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2375,7 +2375,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if callable(self.requires_func):
-            self.requires_func(reqs)
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            self.requires_func(reqs[self.cls_name])
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
@@ -2400,7 +2402,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default column targets
         if reader_targets is None:
-            reader_targets = {}
+            reader_targets = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2408,7 +2410,11 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(reqs, inputs, reader_targets)
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            if self.cls_name not in inputs:
+                inputs[self.cls_name] = DotDict()
+            self.setup_func(reqs[self.cls_name], inputs[self.cls_name], reader_targets)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():

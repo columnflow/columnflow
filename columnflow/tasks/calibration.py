@@ -4,6 +4,7 @@
 Tasks related to calibrating events.
 """
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
@@ -54,7 +55,7 @@ class CalibrateEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_inst.run_requires()
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
 
         return reqs
 
@@ -65,7 +66,7 @@ class CalibrateEvents(
         reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_inst.run_requires()
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
 
         return reqs
 
@@ -94,14 +95,13 @@ class CalibrateEvents(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
-        lfn_task = reqs["lfns"]
-        inputs = self.input()
+        lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
 
         # run the calibrator setup
-        reader_targets = self.calibrator_inst.run_setup(reqs["calibrator"], inputs["calibrator"])
+        calibrator_reqs = self.calibrator_inst.run_requires()
+        reader_targets = self.calibrator_inst.run_setup(calibrator_reqs, luigi.task.getpaths(calibrator_reqs))
         n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files

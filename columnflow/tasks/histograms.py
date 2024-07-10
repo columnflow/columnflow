@@ -78,7 +78,7 @@ class CreateHistograms(
                 ]
 
             # add weight_producer dependent requirements
-            reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+            reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
 
         return reqs
 
@@ -98,7 +98,7 @@ class CreateHistograms(
             ]
 
         # add weight_producer dependent requirements
-        reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+        reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
 
         return reqs
 
@@ -119,15 +119,15 @@ class CreateHistograms(
             Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
         )
 
-        # prepare inputs and outputs
-        reqs = self.requires()
+        # prepare inputs
         inputs = self.input()
 
         # declare output: dict of histograms
         histograms = {}
 
         # run the weight_producer setup
-        reader_targets = self.weight_producer_inst.run_setup(reqs["weight_producer"], inputs["weight_producer"])
+        producer_reqs = self.weight_producer_inst.run_requires()
+        reader_targets = self.weight_producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
