@@ -179,6 +179,7 @@ class SelectEvents(
                 [nano_file, *(inp.path for inp in inps)],
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_calib + n_ext),
+                chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within additional columns
                 if self.check_overlapping_inputs:

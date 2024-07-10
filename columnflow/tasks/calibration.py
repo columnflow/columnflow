@@ -133,6 +133,7 @@ class CalibrateEvents(
                 [nano_file, *(inp.path for inp in inps)],
                 source_type=["coffea_root"] + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_ext),
+                chunk_size=self.calibrator_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:

@@ -110,6 +110,7 @@ class ProduceColumns(
                 [inp.path for inp in inps],
                 source_type=["awkward_parquet"] + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_ext),
+                chunk_size=self.producer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
