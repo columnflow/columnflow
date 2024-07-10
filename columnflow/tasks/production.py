@@ -3,8 +3,10 @@
 """
 Tasks related to producing new columns.
 """
+
 import itertools
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
@@ -43,14 +45,15 @@ class ProduceColumns(
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
-        reqs["producer"] = self.producer_inst.run_requires()
+        reqs["producer"] = law.util.make_unique(law.util.flatten(self.producer_inst.run_requires()))
 
         return reqs
 
     def requires(self):
+        print(f"requirements evaluated, {self!r}")
         return {
             "events": self.reqs.ProvideReducedEvents.req(self),
-            "producer": self.producer_inst.run_requires(),
+            "producer": law.util.make_unique(law.util.flatten(self.producer_inst.run_requires())),
         }
 
     workflow_condition = ReducedEventsUser.workflow_condition.copy()
@@ -75,13 +78,13 @@ class ProduceColumns(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
         inputs = self.input()
         output = self.output()
         output_chunks = {}
 
         # run the producer setup
-        reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        producer_reqs = self.producer_inst.run_requires()
+        reader_targets = self.producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
         n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files

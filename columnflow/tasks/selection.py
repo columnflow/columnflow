@@ -7,6 +7,7 @@ Tasks related to selecting events and performing post-selection bookkeeping.
 import copy
 from collections import defaultdict
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
@@ -74,7 +75,7 @@ class SelectEvents(
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_inst.run_requires()
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
 
         return reqs
 
@@ -89,7 +90,7 @@ class SelectEvents(
         }
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_inst.run_requires()
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
 
         return reqs
 
@@ -118,8 +119,7 @@ class SelectEvents(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
-        lfn_task = reqs["lfns"]
+        lfn_task = self.requires()["lfns"]
         inputs = self.input()
         outputs = self.output()
         result_chunks = {}
@@ -128,7 +128,8 @@ class SelectEvents(
         hists = DotDict()
 
         # run the selector setup
-        reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        selector_reqs = self.selector_inst.run_requires()
+        reader_targets = self.selector_inst.run_setup(selector_reqs, luigi.task.getpaths(selector_reqs))
         n_ext = len(reader_targets)
 
         # show an early warning in case the selector does not produce some mandatory columns

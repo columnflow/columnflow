@@ -134,8 +134,6 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     Adds the requirements needed by the underlying py:attr:`task` to access selection stats into
     *reqs*.
     """
-    self.selection_stats_key = f"{'stitched_' if self.allow_stitching else 'norm_'}selection_stats"
-
     if self.allow_stitching:
         self.stitching_datasets = self.get_stitching_datasets()
     else:
@@ -149,7 +147,7 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
             )
 
     from columnflow.tasks.selection import MergeSelectionStats
-    reqs[self.selection_stats_key] = {
+    reqs["selection_stats"] = {
         dataset.name: MergeSelectionStats.req(
             self.task,
             dataset=dataset.name,
@@ -184,7 +182,7 @@ def normalization_weights_setup(
             key=f"selection_stats_{dataset}",
             func=lambda: inp["collection"][0]["stats"].load(formatter="json"),
         )
-        for dataset, inp in inputs[self.selection_stats_key].items()
+        for dataset, inp in inputs["selection_stats"].items()
     }
     # if necessary, merge the selection stats across datasets
     if len(normalization_selection_stats) > 1:

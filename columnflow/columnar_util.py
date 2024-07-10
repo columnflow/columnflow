@@ -2342,7 +2342,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default requirements
         if reqs is None:
-            reqs = {}
+            reqs = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2350,7 +2350,7 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if callable(self.requires_func):
-            self.requires_func(reqs)
+            self.requires_func(reqs.setdefault(self.cls_name, DotDict()))
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
@@ -2375,7 +2375,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default column targets
         if reader_targets is None:
-            reader_targets = {}
+            reader_targets = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2383,7 +2383,11 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(reqs, inputs, reader_targets)
+            self.setup_func(
+                reqs.setdefault(self.cls_name, DotDict()),
+                inputs.setdefault(self.cls_name, DotDict()),
+                reader_targets,
+            )
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
