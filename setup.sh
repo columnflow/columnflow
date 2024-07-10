@@ -359,7 +359,6 @@ EOF
     else
         cat << EOF
 
-     $( cf_color green '┓' )
   ┏┏┓$( cf_color green '┃' )╻┏┏┳┓┏┓
   ┗┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
     ┏$( cf_color green '┃' )
