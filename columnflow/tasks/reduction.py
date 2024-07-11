@@ -570,15 +570,20 @@ class ProvideReducedEvents(
         # - otherwise, always require the reduction stats as they are needed to make a decision
         # - when merging is forced, require it
         # - otherwise, and if the merging is already known, require either reduced or merged events
-        if self.skip_merging or self.dataset_info_inst.n_files == 1:
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
+            # reduced events are used directly without having to look into the file merging factor
             if not self.pilot:
                 reqs["events"] = self._req_reduced_events()
         else:
+            # here, the merging is unclear so require the stats
             reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
 
             if self.force_merging:
+                # require merged events when forced
                 reqs["events"] = self._req_merged_reduced_events()
             else:
+                # require either when the file merging is known, and nothing otherwise to let the
+                # dynamic dependency definition resolve it at runtime
                 file_merging = self.file_merging
                 if file_merging > 1:
                     reqs["events"] = self._req_merged_reduced_events()
@@ -590,7 +595,7 @@ class ProvideReducedEvents(
     def requires(self):
         # same as for workflow requirements without optional pilot check
         reqs = {}
-        if self.skip_merging or self.dataset_info_inst.n_files == 1:
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             reqs["events"] = self._req_reduced_events()
         else:
             reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
@@ -624,7 +629,7 @@ class ProvideReducedEvents(
 
     def _yield_dynamic_deps(self):
         # do nothing if a decision was pre-set in which case requirements were already triggered
-        if self.skip_merging or self.dataset_info_inst.n_files == 1 or self.force_merging:
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             return
 
         # yield the appropriate requirement
