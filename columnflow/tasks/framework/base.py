@@ -150,7 +150,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # when not explicitly set in kwargs and no global value was defined on the cli for the task
         # family, evaluate and use the default value
-        # use a default version when not explicitly set in kwargs and no global command line option
         if (
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
