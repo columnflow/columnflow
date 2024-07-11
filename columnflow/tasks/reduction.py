@@ -613,15 +613,8 @@ class ProvideReducedEvents(
 
     @workflow_condition.output
     def output(self):
-        # determine the definitive requirement
-        if (
-            self.skip_merging or
-            self.dataset_info_inst.n_files == 1 or
-            (not self.force_merging and self.file_merging == 1)
-        ):
-            req = self._req_reduced_events()
-        else:
-            req = self._req_merged_reduced_events()
+        # the "events" requirement is known at this point
+        req = self.requires()["events"]
 
         # to simplify the handling for downstream tasks, extract the single output from workflows
         output = req.output()
