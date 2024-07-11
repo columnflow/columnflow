@@ -1674,15 +1674,25 @@ class ArrayFunction(Derivable):
         """
         return dep_cls in self.deps
 
-    def walk_deps(self, include_self: bool = False) -> Generator[ArrayFunction, None, None]:
+    def walk_deps(
+        self,
+        depth_first: bool = False,
+        include_self: bool = False,
+    ) -> Generator[ArrayFunction, None, None]:
         """
-        Walks through all dependencies of this instance in a depth-first manner.
+        Walks through and yields all dependencies of this instance. By default, the traversal is
+        breadth-first.
+
+        :param depth_first: Whether to traverse the dependencies depth-first.
+        :param include_self: Whether to include this instance in the walk.
         """
         seen = set()
-
         q = deque(self.deps.values())
         if include_self:
             q.appendleft(self)
+
+        # shorthand to extend to queue either to the front or back
+        extend = q.extendleft if depth_first else q.extend
 
         while q:
             dep = q.popleft()
@@ -1692,7 +1702,8 @@ class ArrayFunction(Derivable):
             yield dep
             seen.add(dep)
 
-            q.extend(dep.deps.values())
+            # add the next dependencies
+            extend(dep.deps.values())
 
     def deferred_init(self, instance_cache: dict | None = None) -> dict:
         """
@@ -2467,6 +2478,38 @@ class TaskArrayFunction(ArrayFunction):
             self._cache_result(result)
 
         return result
+
+    def get_sandbox(self, raise_on_collision: bool = False) -> str | None:
+        """
+        Returns the sandbox defined by this instance or any of its dependencies. When multiple
+        different sandboxes are found, a warning is issued the first one is returned.
+
+        :param raise_on_collision: Whether to raise an exception when multiple different sandboxes
+            are found instead of just issuing a warning.
+        :return: The sandbox name or *None* if none is set.
+        """
+        # collect all unique sandboxes
+        sandboxes = law.util.make_unique(
+            dep.sandbox
+            for dep in self.walk_deps(include_self=True)
+            if dep.sandbox
+        )
+
+        # trivial cases
+        if not sandboxes:
+            return None
+        if len(sandboxes) == 1:
+            return sandboxes[0]
+
+        # collision handling
+        msg = (
+            f"multiple sandboxes found while traversing dependencies of {self.cls_name}: "
+            f"{','.sandboxes}"
+        )
+        if not raise_on_collision:
+            logger.warning(f"{msg}; using the first one")
+            return sandboxes[0]
+        raise Exception(msg)
 
     def get_min_chunk_size(self) -> int | None:
         """
