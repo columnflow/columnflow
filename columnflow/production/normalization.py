@@ -116,10 +116,10 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
         )
 
     # read the cross section per process from the lookup table
-    xs = np.array(self.xs_table[0, process_id].todense())[0]
+    xs = np.squeeze(np.asarray(self.xs_table[0, process_id].todense()))
 
     # read the sum of event weights per process from the lookup table
-    sum_weights = np.array(self.sum_weights_table[0, process_id].todense())[0]
+    sum_weights = np.squeeze(np.asarray(self.sum_weights_table[0, process_id].todense()))
 
     # compute the weight and store it
     norm_weight = events.mc_weight * lumi * xs / sum_weights
