@@ -13,7 +13,7 @@ from collections import OrderedDict
 import order as od
 from typing import Tuple
 
-from columnflow.util import maybe_import, try_int, try_complex
+from columnflow.util import maybe_import, try_int, try_complex, try_float
 from columnflow.types import Iterable, Any, Callable, Sequence, Union
 
 math = maybe_import("math")
@@ -110,8 +110,8 @@ def apply_process_settings(
     # apply "scale" setting directly to the hists
     for proc_inst, h in hists.items():
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
-        if try_int(scale_factor):
-            scale_factor = int(scale_factor)
+        if try_float(scale_factor):
+            scale_factor = float(scale_factor)
             hists[proc_inst] = h * scale_factor
             proc_inst.label += f" x{scale_factor}"
 
