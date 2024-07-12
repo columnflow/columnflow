@@ -30,6 +30,12 @@ bootstrap_htcondor_standalone() {
     local lcg_setup="{{cf_remote_lcg_setup}}"
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
 
+    # temporary fix for missing voms/x509 variables in the lcg setup
+    export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
+    export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
+    export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
     if [ -z "${CF_SOFTWARE_BASE}" ]; then
