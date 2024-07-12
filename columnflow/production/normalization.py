@@ -67,7 +67,7 @@ def get_br_from_inclusive_dataset(stats: dict) -> dict:
     sum_mc_weight = stats["sum_mc_weight"]
     sum_mc_weight_per_process = stats["sum_mc_weight_per_process"]
 
-    if not sum_mc_weight == sum(sum_mc_weight_per_process.values()):
+    if not np.isclose(sum_mc_weight, sum(sum_mc_weight_per_process.values())):
         raise Exception(
             "sum of event weights does not match the sum of event weights per process",
         )
@@ -184,6 +184,7 @@ def normalization_weights_setup(
         )
         for dataset, inp in inputs["selection_stats"].items()
     }
+
     # if necessary, merge the selection stats across datasets
     if len(normalization_selection_stats) > 1:
         from columnflow.tasks.selection import MergeSelectionStats
