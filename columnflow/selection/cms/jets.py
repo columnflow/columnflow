@@ -93,7 +93,7 @@ def jet_veto_map(
     # get the Jet veto mask (events containing such a jet should be vetoed)
     veto_map_jet_mask = (veto_map_result > 0)
 
-    if "bpix" in self.config_inst.campaign.x("postfix", "").lower():
+    if self.config_inst.campaign.x("postfix", "").lower() == "bpix":
         # in postBPix, we need to run the veto map with type=jetvetomap_bpix and subtract this from
         # the result of the nominal jet veto map
         raise NotImplementedError("Jet Veto Map for 2023 postBPix not implemented yet")
