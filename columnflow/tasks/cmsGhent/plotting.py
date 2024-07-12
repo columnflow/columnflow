@@ -23,6 +23,7 @@ class PlotVariablesCatsPerProcessBase(PlotVariablesBaseSingleShift):
             cats = [self.initial, *cats]
         return [
             DotDict({
+                "category": law.util.create_hash(cats),
                 "categories": cats,
                 "process": proc_name,
                 "variable": var_name,
@@ -32,11 +33,9 @@ class PlotVariablesCatsPerProcessBase(PlotVariablesBaseSingleShift):
         ]
 
     def output(self):
-        b = self.branch_data
-        cat_tag = "_".join(b.categories)
         return {"plots": [
             self.local_target(name)
-            for name in self.get_plot_names(f"plot__proc_{b.process}__cat_{cat_tag}__var_{b.variable}")
+            for name in self.get_plot_names("plot")
         ]}
 
     @law.decorator.log
@@ -150,6 +149,7 @@ class PlotVariables2DMigration(
     def create_branch_map(self):
         return [
             DotDict({
+                "category": self.initial + "_" + cat_name,
                 "categories": [self.initial, cat_name],
                 "process": proc_name,
                 "variable": var_name,
