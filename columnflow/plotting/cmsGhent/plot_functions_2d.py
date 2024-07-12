@@ -44,7 +44,6 @@ def plot_migration_matrices(
 
     remove_residual_axis(hists, "shift")
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
-
     initial_hist = hists.pop(initial)
     [(category, hist_2d)] = hists.items()
 
@@ -116,6 +115,18 @@ def plot_migration_matrices(
     axes[0, 0].tick_params(labelbottom=False)
     axes[0, 0].set_ylabel(axes[0, 1].get_ylabel(), size="medium")
     axes[0, 0].set_xlabel("efficiency", size="small", loc="left")
+
+    # condition number
+    cond = np.linalg.cond(migrations.values())
+    axes[1, 0].text(
+        0.05, 0.05,
+        f"condition\nnumber\n{cond:.1f}",
+        transform=axes[1, 0].transAxes,
+        size="small",
+        va="bottom",
+        ha="left",
+        color="red",
+    )
 
     # finally remove redundant stuff
     for i in [0, 2]:
