@@ -639,6 +639,13 @@ class ProvideReducedEvents(
         return self._yield_dynamic_deps()
 
 
+ProvideReducedEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=ProvideReducedEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
 class ReducedEventsUser(
     SelectorStepsMixin,
     CalibratorsMixin,
