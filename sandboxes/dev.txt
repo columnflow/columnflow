@@ -8,3 +8,4 @@ flake8-commas~=4.0.0
 flake8-quotes~=3.4.0
 pipdeptree~=2.23.0
 pymarkdownlnt~=0.9.20
+uniplot~=0.13.0
