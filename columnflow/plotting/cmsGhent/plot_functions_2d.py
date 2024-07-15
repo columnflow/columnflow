@@ -7,6 +7,7 @@ np = maybe_import("numpy")
 od = maybe_import("order")
 mtrans = maybe_import("matplotlib.transforms")
 mplhep = maybe_import("mplhep")
+hist = maybe_import("hist")
 
 from columnflow.plotting.plot_all import make_plot_2d
 from columnflow.plotting.plot_util import (
@@ -17,6 +18,57 @@ from columnflow.plotting.plot_util import (
     fix_cbar_minor_ticks,
 )
 
+def merge_migration_bins(h):
+    '''
+    binning both axes in equal bins
+    '''
+
+    x_edges = h.axes[0].edges
+    y_edges = h.axes[1].edges
+
+    # check if edges are subsets of each other
+    x_subset_of_y = np.all([x in y_edges for x in x_edges])
+    y_subset_of_x = np.all([y in x_edges for y in y_edges])
+
+    # if they are both, no rebinning is needed
+    # so return the original histogram
+    if x_subset_of_y and y_subset_of_x:
+        return h
+
+    if not (x_subset_of_y or y_subset_of_x):
+        raise ValueError(
+            f"Bin edges of 2D histograms not compatible:\n"
+            f"x: {x_edges}\n"
+            f"y: {y_edges}"
+        )
+
+    # get the indices of the common bin edges and create index tuples
+    if x_subset_of_y:
+        rebin_y = np.array([list(y_edges).index(x) for x in x_edges])
+        rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_y[:-1], rebin_y[1:])]
+        new_edges = x_edges
+    if y_subset_of_x:
+        rebin_x = np.array([list(x_edges).index(y) for y in y_edges])
+        rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_x[:-1], rebin_x[1:])]
+        new_edges = y_edges
+
+    # create a new 2d array with merged bins
+    if x_subset_of_y:
+        new_h = np.array([ h[:,slc].values().sum(axis=1) for slc in rebin_tuples ])
+    if y_subset_of_x:
+        new_h = np.array([ h[slc,:].values().sum(axis=0) for slc in rebin_tuples ])
+
+    # initialize a new boost histogram with updated axes
+    h_eq_ax = hist.Hist( 
+        hist.axis.Variable( new_edges, name=h.axes[0].name, label=h.axes[0].label ), 
+        hist.axis.Variable( new_edges, name=h.axes[1].name, label=h.axes[1].label ) 
+    )
+
+    # update the bin contents
+    h_eq_ax[:,:] = new_h
+
+    # return the new histogram
+    return h_eq_ax
 
 def plot_migration_matrices(
     hists: OrderedDict,
@@ -48,10 +100,16 @@ def plot_migration_matrices(
     initial_hist = hists.pop(initial)
     [(category, hist_2d)] = hists.items()
 
+    # forcing histograms to have equal bins on gen and reco axis
+    hist_2d_eq_ax = merge_migration_bins(hist_2d)
+    initial_hist_eq_ax = merge_migration_bins(initial_hist)
+
     # add all processes into 1 histogram
     projections = [hist_2d.project(v.name) for v in variable_insts]
+    projections_eq_ax = [hist_2d_eq_ax.project(v.name) for v in variable_insts]
 
     migrations = hist_2d / projections[1].values(flow=True)[None]
+    migrations_eq_ax = hist_2d_eq_ax / projections_eq_ax[1].values(flow=True)[None]
 
     plot_config = prepare_plot_config_2d(
         {category_inst: migrations},
@@ -82,17 +140,18 @@ def plot_migration_matrices(
     # make main central migration plot
     make_plot_2d(plot_config, style_config, figaxes=(fig, axes[0, 1]))
     if label_numbers:
-        for i, x in enumerate(migrations.axes[0].centers):
-            for j, y in enumerate(migrations.axes[1].centers):
+        for i, x in enumerate(migrations_eq_ax.axes[0].centers):
+            for j, y in enumerate(migrations_eq_ax.axes[1].centers):
                 if abs(i - j) <= 1:
-                    axes[0, 1].text(x, y, f"{migrations[i, j].value:.2f}", ha="center", va="center", size="large")
+                    axes[0, 1].text(x, y, f"{migrations_eq_ax[i, j].value:.2f}", ha="center", va="center", size="large")
 
     cbar = plt.colorbar(axes[0, 1].collections[0], **plot_config["cbar_kwargs"])
     fix_cbar_minor_ticks(cbar)
 
+
     # make purity plot
-    purity = hist_2d / projections[0].values(flow=True)[:, None]
-    purity_diagonal = purity * np.eye(*[len(a) for a in hist_2d.axes[1:]])
+    purity = hist_2d_eq_ax / projections_eq_ax[0].values(flow=True)[:, None]
+    purity_diagonal = purity * np.eye(*[len(a) for a in hist_2d_eq_ax.axes[1:]])
     purity_diagonal = purity_diagonal[:, sum]
     purity_diagonal.plot1d(ax=axes[1, 1])
     trans = mtrans.blended_transform_factory(axes[1, 1].transData, axes[1, 1].transAxes)
@@ -105,7 +164,7 @@ def plot_migration_matrices(
     axes[1, 1].tick_params(labelleft=False)
 
     # make efficiency plot
-    efficiency = projections[1] / initial_hist.project(variable_insts[1].name).values()
+    efficiency = projections_eq_ax[1] / initial_hist_eq_ax.project(variable_insts[1].name).values()
     trans = mtrans.Affine2D().scale(1, -1).rotate_deg(90) + axes[0, 0].transData
     efficiency.plot1d(ax=axes[0, 0], transform=trans)
     trans = mtrans.blended_transform_factory(axes[0, 0].transAxes, axes[0, 0].transData)
