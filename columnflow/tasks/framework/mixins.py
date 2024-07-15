@@ -230,7 +230,7 @@ class CalibratorsMixin(ConfigTask):
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of calibrators to be applied; default: value of the "
-        "'default_calibrator' config in a 1-tuple",
+        "'default_calibrator' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -598,7 +598,7 @@ class SelectorStepsMixin(SelectorMixin):
     selector_steps = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "default: value of the 'default_selector_steps' config in a 1-tuple",
+        "default: value of the 'default_selector_steps' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -882,7 +882,7 @@ class ProducersMixin(ConfigTask):
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of producers to be applied; default: value of the "
-        "'default_producer' config in a 1-tuple",
+        "'default_producer' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1593,7 +1593,7 @@ class MLModelsMixin(ConfigTask):
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of ML models to be applied; default: value of the "
-        "'default_ml_model' config in a 1-tuple",
+        "'default_ml_model' config",
         brace_expand=True,
         parse_empty=True,
     )
