@@ -16,6 +16,7 @@ from columnflow.selection import Selector, SelectionResult, selector
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
+
 logger = law.logger.get_logger(__name__)
 
 
@@ -25,7 +26,7 @@ logger = law.logger.get_logger(__name__)
         "Muon.{pt,eta,phi,mass,isPFcand}",
         optional("Jet.puId"),
     },
-    produces={"Jet.veto_maps"},
+    produces={"Jet.veto_map_mask"},
     get_veto_map_file=(lambda self, external_files: external_files.jet_veto_map),
 )
 def jet_veto_map(
@@ -53,7 +54,6 @@ def jet_veto_map(
 
     documentation: https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps
     """
-
     jet = events.Jet
     muon = events.Muon[events.Muon.isPFcand]
 
@@ -61,11 +61,11 @@ def jet_veto_map(
         (jet.pt > 15) &
         (jet.jetId >= 2) &
         (jet.chEmEF < 0.9) &
-        (ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2))
+        ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2)
     )
 
     # apply loose Jet puId in Run 2 to jets with pt below 50 GeV
-    if self.config_inst.campaign.x.year <= 2018:
+    if self.config_inst.campaign.x.run == 2:
         jet_pu_mask = (events.Jet.puId >= 4) | (events.Jet.pt > 50)
         jet_mask = jet_mask & jet_pu_mask
 
@@ -73,39 +73,43 @@ def jet_veto_map(
     pi = math.pi - 1e-10
 
     # values outside [-pi, pi] are not included, so we need to wrap the phi values
-    jet_phi = ak.where(np.abs(events.Jet.phi) > pi, events.Jet.phi - 2 * pi * np.sign(events.Jet.phi), events.Jet.phi)
-
+    jet_phi = ak.where(
+        np.abs(events.Jet.phi) > pi,
+        events.Jet.phi - 2 * pi * np.sign(events.Jet.phi),
+        events.Jet.phi,
+    )
     variable_map = {
         "type": "jetvetomap",
         "eta": jet.eta,
         "phi": jet_phi,
     }
-
     inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
 
-    # apply the veto map
-    veto_map_result = ak.where(
-        jet_mask,
-        self.veto_map(*inputs),
-        -1,
-    )
-
-    # get the Jet veto mask (events containing such a jet should be vetoed)
-    veto_map_jet_mask = (veto_map_result > 0)
-
-    if self.config_inst.campaign.x("postfix", "").lower() == "bpix":
-        # in postBPix, we need to run the veto map with type=jetvetomap_bpix and subtract this from
-        # the result of the nominal jet veto map
-        raise NotImplementedError("Jet Veto Map for 2023 postBPix not implemented yet")
+    # apply the veto map to selected jets
+    # (a map value of 0 means the jet is to be vetoed)
+    veto_mask = jet_mask & (self.veto_map(*inputs) == 0)
 
     # add the veto map result to the events
-    events = set_ak_column(events, "Jet.veto_maps", veto_map_result)
+    events = set_ak_column(events, "Jet.veto_map_mask", veto_mask)
     results = SelectionResult(
-        steps={"jet_veto_map": ak.sum(veto_map_jet_mask, axis=1) >= 1},
-        aux={"veto_map_jet_mask": veto_map_jet_mask},
+        steps={"jet_veto_map": ak.sum(veto_mask, axis=1) >= 1},
     )
 
     return events, results
+
+
+@jet_veto_map.init
+def jet_veto_map_init(self: Selector, **kwargs) -> None:
+    if getattr(self, "config_inst", None) is None:
+        return
+
+    if (
+        self.config_inst.campaign.x.year == 2023 and
+        self.config_inst.campaign.x.postfix.lower() == "bpix"
+    ):
+        # in postBPix, we need to run the veto map with type=jetvetomap_bpix and subtract this from
+        # the result of the nominal jet veto map
+        raise NotImplementedError("Jet Veto Map for 2023 postBPix not implemented yet")
 
 
 @jet_veto_map.requires
@@ -133,7 +137,7 @@ def jet_veto_map_setup(
         self.get_veto_map_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
     keys = list(correction_set.keys())
-    if not len(keys) == 1:
+    if len(keys) != 1:
         raise ValueError(f"Expected exactly one correction in the file, got {len(keys)}")
 
     self.veto_map = correction_set[keys[0]]
