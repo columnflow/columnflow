@@ -9,9 +9,9 @@ from __future__ import annotations
 import law
 import math
 
-from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import set_ak_column, optional_column as optional
 from columnflow.selection import Selector, SelectionResult, selector
+from columnflow.util import maybe_import, InsertableDict
+from columnflow.columnar_util import set_ak_column, flat_np_view, optional_column as optional
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -57,16 +57,17 @@ def jet_veto_map(
     jet = events.Jet
     muon = events.Muon[events.Muon.isPFcand]
 
+    # loose jet selection
     jet_mask = (
         (jet.pt > 15) &
-        (jet.jetId >= 2) &
+        (jet.jetId >= 2) &  # tight id
         (jet.chEmEF < 0.9) &
         ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2)
     )
 
     # apply loose Jet puId in Run 2 to jets with pt below 50 GeV
     if self.config_inst.campaign.x.run == 2:
-        jet_pu_mask = (events.Jet.puId >= 4) | (events.Jet.pt > 50)
+        jet_pu_mask = (events.Jet.puId >= 4) | (events.Jet.pt >= 50)
         jet_mask = jet_mask & jet_pu_mask
 
     # for some reason, math.pi is not included in the ranges, so we need to subtract a small number
@@ -80,19 +81,23 @@ def jet_veto_map(
     )
     variable_map = {
         "type": "jetvetomap",
-        "eta": jet.eta,
-        "phi": jet_phi,
+        "eta": jet.eta[jet_mask],
+        "phi": jet_phi[jet_mask],
     }
     inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
 
-    # apply the veto map to selected jets
-    # (a map value of 0 means the jet is to be vetoed)
-    veto_mask = jet_mask & (self.veto_map(*inputs) == 0)
+    # evalute the veto map only for selected jets
+    # (a map value of != 0 means the jet is vetoed)
+    veto_mask = jet_mask
+    flat_veto_mask = flat_np_view(veto_mask)
+    flat_veto_mask[flat_veto_mask] = ak.flatten(self.veto_map(*inputs) != 0)
 
-    # add the veto map result to the events
+    # store the per-jet veto mask
     events = set_ak_column(events, "Jet.veto_map_mask", veto_mask)
+
+    # create the selection result
     results = SelectionResult(
-        steps={"jet_veto_map": ak.sum(veto_mask, axis=1) >= 1},
+        steps={"jet_veto_map": ~ak.any(veto_mask, axis=1)},
     )
 
     return events, results
