@@ -89,11 +89,12 @@ def plot_migration_matrices(
     plt.style.use(mplhep.style.CMS)
     fig, axes = plt.subplots(
         2, 3,
-        figsize=(10, 10),
-        gridspec_kw=dict(width_ratios=[1, 4, 0.5], height_ratios=[4, 1], hspace=0, wspace=0),
+        gridspec_kw=dict(width_ratios=[1, 4, 0.25], height_ratios=[4, 1], hspace=0, wspace=0),
+        figsize=((1+4+0.3)*2, (1+4)*2),
     )
-    axes[0, 1].sharex(axes[1, 1])
-    axes[0, 1].sharey(axes[0, 0])
+    plt.subplots_adjust(left=0.2)
+    axes[1, 1].sharex(axes[0, 1])
+    axes[0, 0].sharey(axes[0, 1])
 
     remove_residual_axis(hists, "shift")
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
@@ -103,6 +104,7 @@ def plot_migration_matrices(
     # forcing histograms to have equal bins on gen and reco axis
     hist_2d_eq_ax = merge_migration_bins(hist_2d)
     initial_hist_eq_ax = merge_migration_bins(initial_hist)
+    common_edges = hist_2d_eq_ax.axes[0].edges
 
     # add all processes into 1 histogram
     projections = [hist_2d.project(v.name) for v in variable_insts]
@@ -144,11 +146,12 @@ def plot_migration_matrices(
         for i, x in enumerate(migrations_eq_ax.axes[0].centers):
             for j, y in enumerate(migrations_eq_ax.axes[1].centers):
                 if abs(i - j) <= 1:
-                    axes[0, 1].text(x, y, f"{migrations_eq_ax[i, j].value:.2f}", ha="center", va="center", size="large")
+                    axes[0, 1].text(x, y, f"{migrations_eq_ax[i, j]:.2f}", ha="center", va="center", size="large")
 
     cbar = plt.colorbar(axes[0, 1].collections[0], **plot_config["cbar_kwargs"])
     fix_cbar_minor_ticks(cbar)
-
+    # set cbar range
+    cbar.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
     # make purity plot
     purity = hist_2d_eq_ax / projections_eq_ax[0].values(flow=True)[:, None]
@@ -158,11 +161,19 @@ def plot_migration_matrices(
     trans = mtrans.blended_transform_factory(axes[1, 1].transData, axes[1, 1].transAxes)
     if label_numbers:
         for i, x in enumerate(purity_diagonal.axes[0].centers):
-            axes[1, 1].text(x, 0.5, f"{purity_diagonal[i].value * 100:.1f}%", rotation="vertical",
+            axes[1, 1].text(x, 0.5, f"{purity_diagonal[i] * 100:.1f}%", rotation="vertical",
                             ha="center", va="center", size="medium", transform=trans)
     axes[1, 1].set_xlabel(axes[0, 1].get_xlabel(), size="medium")
     axes[1, 1].set_ylabel("purity", size="small", loc="bottom")
     axes[1, 1].tick_params(labelleft=False)
+    axes[1, 1].set_xticks(ticks=common_edges)
+    axes[1, 1].set_xticks(ticks=[], minor=True)
+
+    # find sensible range for purity
+    ymax = 1.0
+    if np.all(purity_diagonal.values() < 0.5):
+        ymax = 0.5
+    axes[1, 1].set_ylim(0, ymax)
 
     # make efficiency plot
     efficiency = projections_eq_ax[1] / initial_hist_eq_ax.project(variable_insts[1].name).values()
@@ -171,11 +182,22 @@ def plot_migration_matrices(
     trans = mtrans.blended_transform_factory(axes[0, 0].transAxes, axes[0, 0].transData)
     if label_numbers:
         for i, x in enumerate(efficiency.axes[0].centers):
-            axes[0, 0].text(0.5, x, f"{efficiency[i].value * 100:.1f}%", rotation="horizontal",
+            axes[0, 0].text(0.5, x, f"{efficiency[i] * 100:.1f}%", rotation="horizontal",
                             ha="center", va="center", size="medium", transform=trans)
     axes[0, 0].tick_params(labelbottom=False)
+    axes[0, 0].set_yticks(ticks=common_edges)
+    axes[0, 0].set_yticks(ticks=[], minor=True)
     axes[0, 0].set_ylabel(axes[0, 1].get_ylabel(), size="medium")
     axes[0, 0].set_xlabel("efficiency", size="small", loc="left")
+
+    # find sensible range for efficiency
+    xmax = 1.0
+    if np.all(efficiency.values() < 0.5):
+        xmax = 0.5
+    axes[0, 0].set_xlim(0, xmax)
+
+    # grid on main plot
+    axes[0, 1].grid(which="major", axis="both")
 
     # condition number
     cond = np.linalg.cond(migrations.values())
@@ -195,4 +217,6 @@ def plot_migration_matrices(
     axes[0, 1].tick_params(labelbottom=False, labelleft=False)
     axes[0, 1].set_ylabel(None)
     axes[0, 1].set_xlabel(None)
+    plt.tight_layout()
+
     return fig, axes
