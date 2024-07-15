@@ -230,7 +230,7 @@ class CalibratorsMixin(ConfigTask):
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of calibrators to be applied; default: value of the "
-        "'default_calibrator' config in a 1-tuple",
+        "'default_calibrator' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -588,17 +588,17 @@ class SelectorMixin(ConfigTask):
 
 
 class SelectorStepsMixin(SelectorMixin):
-    """Mixin to include multiple selector steps into tasks.
+    """
+    Mixin to include multiple selector steps into tasks.
 
-    Inheriting from this mixin will allow a task to access selector steps,
-    which can be a comma-separated list of selector step names and is an input
-    parameter for this task.
+    Inheriting from this mixin will allow a task to access selector steps, which can be a
+    comma-separated list of selector step names and is an input parameter for this task.
     """
 
     selector_steps = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "empty default",
+        "default: value of the 'default_selector_steps' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -881,7 +881,8 @@ class ProducersMixin(ConfigTask):
 
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of producers to be applied; empty default",
+        description="comma-separated names of producers to be applied; default: value of the "
+        "'default_producer' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1591,7 +1592,8 @@ class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of ML models to be applied; empty default",
+        description="comma-separated names of ML models to be applied; default: value of the "
+        "'default_ml_model' config",
         brace_expand=True,
         parse_empty=True,
     )

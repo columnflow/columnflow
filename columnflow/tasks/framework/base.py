@@ -560,7 +560,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
-        if law.is_no_param(param) or resolve_default or param == "":
+        if law.is_no_param(param) or resolve_default or param == "" or param == ():
             param = None
 
         # actual resolution
