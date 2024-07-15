@@ -85,7 +85,7 @@ def plot_2d(
 
     # check histogram value range
     vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
-    vmin, vmax = np.nan_to_num([vmin, vmax], 0)
+    vmin, vmax = np.nan_to_num(np.array([vmin, vmax]), 0)
 
     # default to full z range
     if zlim is None:
