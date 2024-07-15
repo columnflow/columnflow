@@ -30,6 +30,7 @@ def plot_migration_matrices(
     variable_settings: dict = None,
     initial: str = "Initial",
     label_numbers: bool = False,
+    colormap: str = "Blues",
     cms_label: str = "wip",
     **kwargs,
 ):
@@ -56,6 +57,7 @@ def plot_migration_matrices(
         {category_inst: migrations},
         shape_norm=shape_norm,
         zscale="linear",
+        colormap=colormap,
     )
 
     # will add cbar separately!

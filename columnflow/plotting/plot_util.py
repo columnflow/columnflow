@@ -661,7 +661,7 @@ def prepare_plot_config_2d(
         )
 
     # obtain colormap
-    cmap = plt.get_cmap(colormap or "viridis")
+    cmap = plt.get_cmap(colormap or "Blues")
 
     # use dark and light gray to mark extreme values
     if extremes == "color":
