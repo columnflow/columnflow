@@ -17,6 +17,7 @@ np = maybe_import("numpy")
 sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 ak = maybe_import("awkward")
+sci = maybe_import("scinum")
 
 logger = law.logger.get_logger(__name__)
 
@@ -59,24 +60,49 @@ def get_stitching_datasets(self: Producer) -> list[od.Dataset]:
     return list(stitching_datasets)
 
 
-def get_br_from_inclusive_dataset(stats: dict) -> dict:
+def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
     """
     Helper function to compute the branching ratios from the inclusive sample.
     """
-    # get the sum of weights inclusive and per process
-    sum_mc_weight = stats["sum_mc_weight"]
-    sum_mc_weight_per_process = stats["sum_mc_weight_per_process"]
-
-    if not sum_mc_weight == sum(sum_mc_weight_per_process.values()):
-        raise Exception(
-            "sum of event weights does not match the sum of event weights per process",
-        )
-
-    # compute the branching ratios
-    branching_ratios = {
-        int(process_id): sum_weights / sum_mc_weight
-        for process_id, sum_weights in sum_mc_weight_per_process.items()
+    # define a helper variables and mapping between process ids and dataset names
+    proc_ds_map = {
+        d.processes.get_first().id: d
+        for d in self.config_inst.datasets
+        if d.name in stats.keys()
     }
+    leading_ds = self.get_inclusive_dataset()
+    leading_proc = leading_ds.processes.get_first()
+
+    br = {}
+    for proc, _, child_procs in leading_ds.walk_processes():
+        if proc.id not in proc_ds_map or not child_procs:
+            continue
+        # get the mc weights for the "mother" dataset and add an entry for the process
+        sum_mc_weight = stats[proc_ds_map[proc.id].name]["sum_mc_weight"]
+        sum_mc_weight_per_process = stats[proc_ds_map[proc.id].name]["sum_mc_weight_per_process"]
+
+        # save the ratio of mc weights of all direct child processes under the br key of the mother process
+        br[proc.id] = {}
+
+        # compute the branching ratios for the children wrt the mother process
+        for child_proc in child_procs:
+            # skip processes that have no occurrences
+            if not child_proc.get_leaf_processes() and str(child_proc.id) not in sum_mc_weight_per_process:
+                continue
+            proc_ids = [p.id for p in child_proc.get_leaf_processes()] + [child_proc.id]
+            br[proc.id][child_proc.id] = (
+                sum(sum_mc_weight_per_process.get(str(proc_id), 0) for proc_id in proc_ids) / sum_mc_weight
+            )
+
+    branching_ratios = {}
+    for proc_id, brs in br[leading_proc.id].items():
+        # if the process has no leafs, take the process branching ratio as is
+        if proc_id not in br:
+            branching_ratios[proc_id] = brs
+            continue
+        for child_id, child_br in br[proc_id].items():
+            branching_ratios[child_id] = child_br * brs
+
     return branching_ratios
 
 
@@ -89,6 +115,7 @@ def get_br_from_inclusive_dataset(stats: dict) -> dict:
     get_xsecs_from_inclusive_dataset=False,
     get_stitching_datasets=get_stitching_datasets,
     get_inclusive_dataset=get_inclusive_dataset,
+    get_br_from_inclusive_dataset=get_br_from_inclusive_dataset,
     # only run on mc
     mc_only=True,
 )
@@ -226,7 +253,7 @@ def normalization_weights_setup(
         logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # get the branching ratios from the inclusive sample
-        branching_ratios = get_br_from_inclusive_dataset(normalization_selection_stats[inclusive_dataset.name])
+        branching_ratios = self.get_br_from_inclusive_dataset(normalization_selection_stats)
         inclusive_xsec = inclusive_dataset.processes.get_first().get_xsec(self.config_inst.campaign.ecm).nominal
         for process_id, br in branching_ratios.items():
             xs_table[0, process_id] = inclusive_xsec * br
