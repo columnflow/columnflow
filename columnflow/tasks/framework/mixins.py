@@ -24,7 +24,7 @@ from columnflow.production import Producer
 from columnflow.weight import WeightProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
-from columnflow.columnar_util import Route, ColumnCollection
+from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler
 from columnflow.util import maybe_import, DotDict
 
 ak = maybe_import("awkward")
@@ -179,8 +179,9 @@ class CalibratorMixin(ConfigTask):
             self._calibrator_inst = self.get_calibrator_inst(self.calibrator, {"task": self})
 
             # overwrite the sandbox when set
-            if self._calibrator_inst.sandbox:
-                self.sandbox = self._calibrator_inst.sandbox
+            sandbox = self._calibrator_inst.get_sandbox()
+            if sandbox:
+                self.sandbox = sandbox
                 # rebuild the sandbox inst when already initialized
                 if self._sandbox_initialized:
                     self._initialize_sandbox(force=True)
@@ -229,7 +230,7 @@ class CalibratorsMixin(ConfigTask):
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of calibrators to be applied; default: value of the "
-        "'default_calibrator' config in a 1-tuple",
+        "'default_calibrator' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -554,8 +555,9 @@ class SelectorMixin(ConfigTask):
             self._selector_inst = self.get_selector_inst(self.selector, {"task": self})
 
             # overwrite the sandbox when set
-            if self._selector_inst.sandbox:
-                self.sandbox = self._selector_inst.sandbox
+            sandbox = self._selector_inst.get_sandbox()
+            if sandbox:
+                self.sandbox = sandbox
                 # rebuild the sandbox inst when already initialized
                 if self._sandbox_initialized:
                     self._initialize_sandbox(force=True)
@@ -586,17 +588,17 @@ class SelectorMixin(ConfigTask):
 
 
 class SelectorStepsMixin(SelectorMixin):
-    """Mixin to include multiple selector steps into tasks.
+    """
+    Mixin to include multiple selector steps into tasks.
 
-    Inheriting from this mixin will allow a task to access selector steps,
-    which can be a comma-separated list of selector step names and is an input
-    parameter for this task.
+    Inheriting from this mixin will allow a task to access selector steps, which can be a
+    comma-separated list of selector step names and is an input parameter for this task.
     """
 
     selector_steps = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "empty default",
+        "default: value of the 'default_selector_steps' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -827,8 +829,9 @@ class ProducerMixin(ConfigTask):
             self._producer_inst = self.get_producer_inst(self.producer, {"task": self})
 
             # overwrite the sandbox when set
-            if self._producer_inst.sandbox:
-                self.sandbox = self._producer_inst.sandbox
+            sandbox = self._producer_inst.get_sandbox()
+            if sandbox:
+                self.sandbox = sandbox
                 # rebuild the sandbox inst when already initialized
                 if self._sandbox_initialized:
                     self._initialize_sandbox(force=True)
@@ -878,7 +881,8 @@ class ProducersMixin(ConfigTask):
 
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of producers to be applied; empty default",
+        description="comma-separated names of producers to be applied; default: value of the "
+        "'default_producer' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1588,7 +1592,8 @@ class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of ML models to be applied; empty default",
+        description="comma-separated names of ML models to be applied; default: value of the "
+        "'default_ml_model' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -2151,6 +2156,14 @@ class WeightProducerMixin(ConfigTask):
                 {"task": self},
             )
 
+            # overwrite the sandbox when set
+            sandbox = self._weight_producer_inst.get_sandbox()
+            if sandbox:
+                self.sandbox = sandbox
+                # rebuild the sandbox inst when already initialized
+                if self._sandbox_initialized:
+                    self._initialize_sandbox(force=True)
+
         return self._weight_producer_inst
 
     def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
@@ -2174,6 +2187,10 @@ class ChunkedIOMixin(AnalysisTask):
     )
 
     exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
+
+    # define default chunk and pool sizes that can be adjusted per inheriting task
+    default_chunk_size = ChunkedIOHandler.default_chunk_size
+    default_pool_size = ChunkedIOHandler.default_pool_size
 
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
@@ -2221,12 +2238,23 @@ class ChunkedIOMixin(AnalysisTask):
             )
 
     def iter_chunked_io(self, *args, **kwargs):
-        from columnflow.columnar_util import ChunkedIOHandler
-
         # get the chunked io handler from first arg or create a new one with all args
         if len(args) == 1 and isinstance(args[0], ChunkedIOHandler):
             handler = args[0]
         else:
+            # default chunk and pool sizes
+            for key in ["chunk_size", "pool_size"]:
+                if kwargs.get(key) is None:
+                    # get the default from the config, defaulting to the class default
+                    kwargs[key] = law.config.get_expanded_int(
+                        "analysis",
+                        f"{self.task_family}__chunked_io_{key}",
+                        getattr(self, f"default_{key}"),
+                    )
+                # when still not set, remove it and let the handler decide using its defaults
+                if kwargs.get(key) is None:
+                    kwargs.pop(key, None)
+            # create the handler
             handler = ChunkedIOHandler(*args, **kwargs)
 
         # iterate in the handler context

@@ -82,7 +82,7 @@ def json_filter(
     lookup_result = self.run_ls_lookup[run, ls].todense()
 
     # remove extra dimensions
-    lookup_result = np.squeeze(np.array(lookup_result))
+    lookup_result = np.squeeze(np.asarray(lookup_result))
 
     # reject out-ouf-bounds entries
     lookup_result = ak.where(out_of_bounds, False, lookup_result)

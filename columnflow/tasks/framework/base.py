@@ -148,8 +148,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # use a default version when not explicitly set in kwargs
-        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+        # when not explicitly set in kwargs and no global value was defined on the cli for the task
+        # family, evaluate and use the default value
+        if (
+            isinstance(getattr(cls, "version", None), luigi.Parameter) and
+            "version" not in kwargs and
+            not law.parser.global_cmdline_values().get(f"{cls.task_family}_version")
+        ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
                 params["version"] = default_version
@@ -555,7 +560,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
-        if law.is_no_param(param) or resolve_default or param == "":
+        if law.is_no_param(param) or resolve_default or param == "" or param == ():
             param = None
 
         # actual resolution

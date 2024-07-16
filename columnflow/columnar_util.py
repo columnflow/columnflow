@@ -19,13 +19,13 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict
+from collections import namedtuple, OrderedDict, deque
 
 import law
 import order as od
 from law.util import InsertableDict
 
-from columnflow.types import Sequence, Callable, Any, T
+from columnflow.types import Sequence, Callable, Any, T, Generator
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path,
@@ -1674,6 +1674,37 @@ class ArrayFunction(Derivable):
         """
         return dep_cls in self.deps
 
+    def walk_deps(
+        self,
+        depth_first: bool = False,
+        include_self: bool = False,
+    ) -> Generator[ArrayFunction, None, None]:
+        """
+        Walks through and yields all dependencies of this instance. By default, the traversal is
+        breadth-first.
+
+        :param depth_first: Whether to traverse the dependencies depth-first.
+        :param include_self: Whether to include this instance in the walk.
+        """
+        seen = set()
+        q = deque(self.deps.values())
+        if include_self:
+            q.appendleft(self)
+
+        # shorthand to extend to queue either to the front or back
+        extend = q.extendleft if depth_first else q.extend
+
+        while q:
+            dep = q.popleft()
+            if dep in seen:
+                continue
+
+            yield dep
+            seen.add(dep)
+
+            # add the next dependencies
+            extend(dep.deps.values())
+
     def deferred_init(self, instance_cache: dict | None = None) -> dict:
         """
         Controls the deferred part of the initialization process.
@@ -2146,6 +2177,7 @@ class TaskArrayFunction(ArrayFunction):
     setup_func = None
     sandbox = None
     call_force = None
+    max_chunk_size = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
@@ -2205,10 +2237,10 @@ class TaskArrayFunction(ArrayFunction):
         positional arguments:
 
             - *reqs*, a dictionary containing the required tasks as defined by the custom
-              :py:meth:`requires_func`.
+            :py:meth:`requires_func`.
             - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
             - *reader_targets*, an InsertableDict containing the targets to be included
-              in an event chunk loop
+            in an event chunk loop
 
         The decorator does not return the wrapped function.
         """
@@ -2221,6 +2253,7 @@ class TaskArrayFunction(ArrayFunction):
         setup_func: Callable | law.NoValue | None = law.no_value,
         sandbox: str | law.NoValue | None = law.no_value,
         call_force: bool | law.NoValue | None = law.no_value,
+        max_chunk_size: int | None = law.no_value,
         pick_cached_result: Callable | law.NoValue | None = law.no_value,
         inst_dict: dict | None = None,
         **kwargs,
@@ -2239,6 +2272,8 @@ class TaskArrayFunction(ArrayFunction):
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
             call_force = self.__class__.call_force
+        if max_chunk_size == law.no_value:
+            max_chunk_size = self.__class__.max_chunk_size
         if pick_cached_result == law.no_value:
             pick_cached_result = self.__class__.pick_cached_result
 
@@ -2251,6 +2286,7 @@ class TaskArrayFunction(ArrayFunction):
         # other attributes
         self.sandbox = sandbox
         self.call_force = call_force
+        self.max_chunk_size = max_chunk_size
         self.pick_cached_result = pick_cached_result
 
         # cached results of the main call function per thread id
@@ -2342,7 +2378,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default requirements
         if reqs is None:
-            reqs = {}
+            reqs = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2350,7 +2386,9 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's requires function
         if callable(self.requires_func):
-            self.requires_func(reqs)
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            self.requires_func(reqs[self.cls_name])
 
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
@@ -2375,7 +2413,7 @@ class TaskArrayFunction(ArrayFunction):
         """
         # default column targets
         if reader_targets is None:
-            reader_targets = {}
+            reader_targets = DotDict()
 
         # create the call cache
         if _cache is None:
@@ -2383,7 +2421,11 @@ class TaskArrayFunction(ArrayFunction):
 
         # run this instance's setup function
         if callable(self.setup_func):
-            self.setup_func(reqs, inputs, reader_targets)
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            if self.cls_name not in inputs:
+                inputs[self.cls_name] = DotDict()
+            self.setup_func(reqs[self.cls_name], inputs[self.cls_name], reader_targets)
 
         # run the setup of all dependent objects
         for dep in self.get_dependencies():
@@ -2436,6 +2478,51 @@ class TaskArrayFunction(ArrayFunction):
             self._cache_result(result)
 
         return result
+
+    def get_sandbox(self, raise_on_collision: bool = False) -> str | None:
+        """
+        Returns the sandbox defined by this instance or any of its dependencies. When multiple
+        different sandboxes are found, a warning is issued the first one is returned.
+
+        :param raise_on_collision: Whether to raise an exception when multiple different sandboxes
+            are found instead of just issuing a warning.
+        :return: The sandbox name or *None* if none is set.
+        """
+        # collect all unique sandboxes
+        sandboxes = law.util.make_unique(
+            dep.sandbox
+            for dep in self.walk_deps(include_self=True)
+            if dep.sandbox
+        )
+
+        # trivial cases
+        if not sandboxes:
+            return None
+        if len(sandboxes) == 1:
+            return sandboxes[0]
+
+        # collision handling
+        msg = (
+            f"multiple sandboxes found while traversing dependencies of {self.cls_name}: "
+            f"{','.sandboxes}"
+        )
+        if not raise_on_collision:
+            logger.warning(f"{msg}; using the first one")
+            return sandboxes[0]
+        raise Exception(msg)
+
+    def get_min_chunk_size(self) -> int | None:
+        """
+        Walks through all dependencies and returns the minimum value of :py:attr:`max_chunk_size`
+        which defines the bottleneck for chunked processing.
+
+        :return: The minimum value of :py:attr:`max_chunk_size` or *None* if none is set.
+        """
+        # get maximum chunk sizes for all deps
+        sizes = (dep.max_chunk_size for dep in self.walk_deps(include_self=True))
+
+        # select the minimum value that defines the bottleneck
+        return min((s for s in sizes if isinstance(s, int)), default=None)
 
 
 class NoThreadPool(object):
@@ -2797,12 +2884,16 @@ class ChunkedIOHandler(object):
         ["chunk", "chunk_pos"],
     )
 
+    default_chunk_size = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000)
+    default_pool_size = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 2)
+
     def __init__(
         self,
         source: Any,
+        *,
         source_type: str | Sequence[str] | None = None,
-        chunk_size: int = law.config.get_expanded_int("analysis", "chunked_io_chunk_size", 50000),
-        pool_size: int = law.config.get_expanded_int("analysis", "chunked_io_pool_size", 4),
+        chunk_size: int = default_chunk_size,
+        pool_size: int = default_pool_size,
         open_options: dict | Sequence[dict] | None = None,
         read_options: dict | Sequence[dict] | None = None,
         read_columns: set | Sequence[set] | None = None,
