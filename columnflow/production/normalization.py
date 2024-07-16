@@ -72,6 +72,7 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
     }
     leading_ds = self.get_inclusive_dataset()
     leading_proc = leading_ds.processes.get_first()
+    N = lambda x: sci.Number(x, np.sqrt(x))  # alias for Number with counting error
 
     br = {}
     for proc, _, child_procs in leading_ds.walk_processes():
@@ -80,6 +81,9 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
         # get the mc weights for the "mother" dataset and add an entry for the process
         sum_mc_weight = stats[proc_ds_map[proc.id].name]["sum_mc_weight"]
         sum_mc_weight_per_process = stats[proc_ds_map[proc.id].name]["sum_mc_weight_per_process"]
+        # use the number of events to compute the error on the branching ratio
+        num_events = stats[proc_ds_map[proc.id].name]["num_events"]
+        num_events_per_process = stats[proc_ds_map[proc.id].name]["num_events_per_process"]
 
         # save the ratio of mc weights of all direct child processes under the br key of the mother process
         br[proc.id] = {}
@@ -89,9 +93,14 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
             # skip processes that have no occurrences
             if not child_proc.get_leaf_processes() and str(child_proc.id) not in sum_mc_weight_per_process:
                 continue
+
             proc_ids = [p.id for p in child_proc.get_leaf_processes()] + [child_proc.id]
-            br[proc.id][child_proc.id] = (
-                sum(sum_mc_weight_per_process.get(str(proc_id), 0) for proc_id in proc_ids) / sum_mc_weight
+            # compute the error on the branching ratio using number of events
+            error = N(sum(num_events_per_process.get(str(proc_id), 0) for proc_id in proc_ids)) / N(num_events)
+            # Error is independent of the mc weights, so we can use the same relative error
+            br[proc.id][child_proc.id] = sci.Number(
+                sum(sum_mc_weight_per_process.get(str(proc_id), 0) for proc_id in proc_ids) / sum_mc_weight,
+                error(sci.UP, unc=True, factor=True) * 1j,
             )
 
     branching_ratios = {}
@@ -101,7 +110,8 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
             branching_ratios[proc_id] = brs
             continue
         for child_id, child_br in br[proc_id].items():
-            branching_ratios[child_id] = child_br * brs
+            # The error between the brs from two different datasets should be uncorrelated
+            branching_ratios[child_id] = child_br.mul(brs, rho=0, inplace=False)
 
     return branching_ratios
 
