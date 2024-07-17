@@ -27,8 +27,9 @@ def merge_migration_bins(h):
     y_edges = h.axes[1].edges
 
     # check if edges are subsets of each other
-    x_subset_of_y = np.all([x in y_edges for x in x_edges])
-    y_subset_of_x = np.all([y in x_edges for y in y_edges])
+    # ignore first and last entry as lower and upper bound may be different
+    x_subset_of_y = np.all([x in y_edges for x in x_edges[1:-1]])
+    y_subset_of_x = np.all([y in x_edges for y in y_edges[1:-1]])
 
     # if they are both, no rebinning is needed
     # so return the original histogram
@@ -44,28 +45,35 @@ def merge_migration_bins(h):
 
     # get the indices of the common bin edges and create index tuples
     if x_subset_of_y:
-        rebin_y = np.array([list(y_edges).index(x) for x in x_edges])
+        # force first and last entry and find indices in between
+        rebin_y = [0] + [list(y_edges).index(x) for x in x_edges[1:-1]] + [len(y_edges)-1]
+        # make slice tuples
         rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_y[:-1], rebin_y[1:])]
-        new_edges = x_edges
-    if y_subset_of_x:
-        rebin_x = np.array([list(x_edges).index(y) for y in y_edges])
-        rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_x[:-1], rebin_x[1:])]
-        new_edges = y_edges
-
-    # create a new 2d array with merged bins
-    if x_subset_of_y:
+        # set new edges
+        new_edges_y = y_edges[rebin_y]
+        new_edges_x = x_edges
+        # create new 2d array with merged bins
         new_h = np.array([ h[:,slc].values().sum(axis=1) for slc in rebin_tuples ])
+
     if y_subset_of_x:
+        # force first and last entry and find indices in between
+        rebin_x = [0] + [list(x_edges).index(y) for y in y_edges[1:-1]] + [len(x_edges)-1]
+        # make slice tuples
+        rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_x[:-1], rebin_x[1:])]
+        # set new edges
+        new_edges_x = x_edges[rebin_x]
+        new_edges_y = y_edges
+        # create new 2d array with merged bins
         new_h = np.array([ h[slc,:].values().sum(axis=0) for slc in rebin_tuples ])
 
     # initialize a new boost histogram with updated axes
     h_eq_ax = hist.Hist( 
-        hist.axis.Variable( new_edges, name=h.axes[0].name, label=h.axes[0].label ), 
-        hist.axis.Variable( new_edges, name=h.axes[1].name, label=h.axes[1].label ) 
+        hist.axis.Variable( new_edges_x, name=h.axes[0].name, label=h.axes[0].label ), 
+        hist.axis.Variable( new_edges_y, name=h.axes[1].name, label=h.axes[1].label ) 
     )
 
     # update the bin contents
-    h_eq_ax[:,:] = new_h
+    h_eq_ax.values()[:,:] = new_h
 
     # return the new histogram
     return h_eq_ax
@@ -104,7 +112,8 @@ def plot_migration_matrices(
     # forcing histograms to have equal bins on gen and reco axis
     hist_2d_eq_ax = merge_migration_bins(hist_2d)
     initial_hist_eq_ax = merge_migration_bins(initial_hist)
-    common_edges = hist_2d_eq_ax.axes[0].edges
+    common_x_edges = hist_2d_eq_ax.axes[0].edges
+    common_y_edges = hist_2d_eq_ax.axes[1].edges
 
     # add all processes into 1 histogram
     projections = [hist_2d.project(v.name) for v in variable_insts]
@@ -146,12 +155,11 @@ def plot_migration_matrices(
         for i, x in enumerate(migrations_eq_ax.axes[0].centers):
             for j, y in enumerate(migrations_eq_ax.axes[1].centers):
                 if abs(i - j) <= 1:
-                    axes[0, 1].text(x, y, f"{migrations_eq_ax[i, j]:.2f}", ha="center", va="center", size="large")
+                    axes[0, 1].text(x, y, f"{migrations_eq_ax.values()[i, j] * 100:.0f}", ha="center", va="center", size="large")
 
     cbar = plt.colorbar(axes[0, 1].collections[0], **plot_config["cbar_kwargs"])
     fix_cbar_minor_ticks(cbar)
     # set cbar range
-    cbar.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
     # make purity plot
     purity = hist_2d_eq_ax / projections_eq_ax[0].values(flow=True)[:, None]
@@ -161,12 +169,12 @@ def plot_migration_matrices(
     trans = mtrans.blended_transform_factory(axes[1, 1].transData, axes[1, 1].transAxes)
     if label_numbers:
         for i, x in enumerate(purity_diagonal.axes[0].centers):
-            axes[1, 1].text(x, 0.5, f"{purity_diagonal[i] * 100:.1f}%", rotation="vertical",
+            axes[1, 1].text(x, 0.5, f"{purity_diagonal.values()[i] * 100:.1f}%", rotation="vertical",
                             ha="center", va="center", size="medium", transform=trans)
     axes[1, 1].set_xlabel(axes[0, 1].get_xlabel(), size="medium")
     axes[1, 1].set_ylabel("purity", size="small", loc="bottom")
     axes[1, 1].tick_params(labelleft=False)
-    axes[1, 1].set_xticks(ticks=common_edges)
+    axes[1, 1].set_xticks(ticks=common_x_edges)
     axes[1, 1].set_xticks(ticks=[], minor=True)
 
     # find sensible range for purity
@@ -182,10 +190,10 @@ def plot_migration_matrices(
     trans = mtrans.blended_transform_factory(axes[0, 0].transAxes, axes[0, 0].transData)
     if label_numbers:
         for i, x in enumerate(efficiency.axes[0].centers):
-            axes[0, 0].text(0.5, x, f"{efficiency[i] * 100:.1f}%", rotation="horizontal",
+            axes[0, 0].text(0.5, x, f"{efficiency.values()[i] * 100:.1f}%", rotation="horizontal",
                             ha="center", va="center", size="medium", transform=trans)
     axes[0, 0].tick_params(labelbottom=False)
-    axes[0, 0].set_yticks(ticks=common_edges)
+    axes[0, 0].set_yticks(ticks=common_y_edges)
     axes[0, 0].set_yticks(ticks=[], minor=True)
     axes[0, 0].set_ylabel(axes[0, 1].get_ylabel(), size="medium")
     axes[0, 0].set_xlabel("efficiency", size="small", loc="left")
@@ -200,7 +208,10 @@ def plot_migration_matrices(
     axes[0, 1].grid(which="major", axis="both")
 
     # condition number
-    cond = np.linalg.cond(migrations.values())
+    try:
+        cond = np.linalg.cond(migrations.values())
+    except:
+        cond = np.nan
     axes[1, 0].text(
         0.05, 0.05,
         f"condition\nnumber\n{cond:.1f}",
