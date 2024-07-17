@@ -16,9 +16,9 @@ from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, ak_copy
 from columnflow.types import Any
 
-
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
+
 
 # helper
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
