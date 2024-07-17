@@ -104,14 +104,25 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
             )
 
     branching_ratios = {}
-    for proc_id, brs in br[leading_proc.id].items():
-        # if the process has no leafs, take the process branching ratio as is
+    def multiply_branching_ratios(proc_id: int, proc_br: float) -> tuple[int, float]:
+        """
+        Recursively multiply the branching ratios from the nested dictionary.
+        """
         if proc_id not in br:
-            branching_ratios[proc_id] = brs
-            continue
+            # Warn the user if the error is large
+            if proc_br(sci.UP, unc=True, factor=True) > 0.01:
+                logger.warning(
+                    "Large error on the branching ratio for process "
+                    f"{leading_proc.get_process(proc_id).name} with process id {proc_id} "
+                    f"({proc_br(sci.UP, unc=True, factor=True):.2f}%)",
+                )
+            branching_ratios[proc_id] = proc_br()
+            return proc_id, proc_br
         for child_id, child_br in br[proc_id].items():
-            # The error between the brs from two different datasets should be uncorrelated
-            branching_ratios[child_id] = child_br.mul(brs, rho=0, inplace=False)
+            multiply_branching_ratios(child_id, child_br.mul(proc_br, rho=0, inplace=False))
+
+    for proc_id, brs in br[leading_proc.id].items():
+        multiply_branching_ratios(proc_id, brs)
 
     return branching_ratios
 
