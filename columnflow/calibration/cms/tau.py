@@ -139,7 +139,7 @@ def tec(
     # custom adjustment 1: reset where the matching value is unhandled
     # custom adjustment 2: reset electrons faking taus where the pt is too small
     mask1 = (match < 1) | (match > 5)
-    mask2 = ((match == 1) | (match == 3) & (pt <= 20.0))
+    mask2 = ((match == 1) | (match == 3)) & (pt <= 20.0)
 
     # apply reset masks
     mask = mask1 | mask2
