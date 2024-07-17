@@ -651,7 +651,7 @@ cf_setup_software_stack() {
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
                 curl -Ls "https://micro.mamba.pm/api/micromamba/${system}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
-                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
+                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --root-prefix "$PWD" &> micromamba.sh
                 ret="$?"
                 if [ "${ret}" != "0" ]; then
                     [ -f "micromamba.sh" ] && >&2 cat micromamba.sh
