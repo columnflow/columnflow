@@ -164,11 +164,10 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
         )
 
     # read the cross section per process from the lookup table
-    xs = np.squeeze(np.asarray(self.xs_table[0, process_id].todense()))
+    xs = np.squeeze(np.asarray(self.lookup_table[1, process_id].todense()))
 
     # read the sum of event weights per process from the lookup table
-    sum_weights = np.squeeze(np.asarray(self.sum_weights_table[0, process_id].todense()))
-
+    sum_weights = np.squeeze(np.asarray(self.lookup_table[0, process_id].todense()))
     # compute the weight and store it
     norm_weight = events.mc_weight * lumi * xs / sum_weights
     events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
@@ -219,10 +218,9 @@ def normalization_weights_setup(
     Sets up objects required by the computation of normalization weights and stores them as instance
     attributes:
 
-        - py:attr:`sum_weights_table`: A sparse array serving as a lookup table for the sum of event
-        weights per process id.
-        - py:attr:`xs_table`: A sparse array serving as a lookup table for cross sections of all
-        processes known to the config of the task, with keys being process ids.
+        - py:attr:`lookup_table`: A sparse array serving as a lookup table for the sum of event
+        weights per process id in the 0th row and for cross sections of all processes known to the
+        config of the task, with keys being process ids in the 1st row.
     """
     # load the selection stats
     normalization_selection_stats = {
@@ -261,14 +259,11 @@ def normalization_weights_setup(
             f"registered to the config '{self.config_inst.name}'",
         )
 
-    # create a event weight sum lookup table with all known processes
-    sum_weights_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
+    # create a event weight sum and cross-section lookup table with all known processes
+    # The event weight sum is stored in the 0th, the cross section in the 1st row
+    lookup_table = sp.sparse.lil_matrix((2, max_id + 1), dtype=np.float32)
     for process_id, sum_weights in merged_selection_stats["sum_mc_weight_per_process"].items():
-        sum_weights_table[0, int(process_id)] = sum_weights
-    self.sum_weights_table = sum_weights_table
-
-    # create a cross section lookup table with all known processes with a cross section
-    xs_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
+        lookup_table[0, int(process_id)] = sum_weights
     if self.allow_stitching and self.get_xsecs_from_inclusive_dataset:
         inclusive_dataset = self.get_inclusive_dataset()
         logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
@@ -277,15 +272,15 @@ def normalization_weights_setup(
         branching_ratios = self.get_br_from_inclusive_dataset(normalization_selection_stats)
         inclusive_xsec = inclusive_dataset.processes.get_first().get_xsec(self.config_inst.campaign.ecm).nominal
         for process_id, br in branching_ratios.items():
-            xs_table[0, process_id] = inclusive_xsec * br
+            lookup_table[1, process_id] = inclusive_xsec * br
     else:
         for process_inst in process_insts:
             if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
                 continue
-            xs_table[0, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
+            lookup_table[1, process_inst.id] = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
 
-    self.xs_table = xs_table
-    self.xs_process_ids = set(self.xs_table.rows[0])
+    self.lookup_table = lookup_table
+    self.xs_process_ids = set(self.lookup_table.rows[1])
 
 
 @normalization_weights.init
@@ -298,7 +293,7 @@ def normalization_weights_init(self: Producer) -> None:
 
 stitched_normalization_weights_brs_from_processes = normalization_weights.derive(
     "stitched_normalization_weights_brs_from_processes", cls_dict={
-        "weight_name": "stitched_normalization_weight_brs_from_processes",
+        "weight_name": "normalization_weight",
         "get_xsecs_from_inclusive_dataset": False,
         "allow_stitching": True,
     },
@@ -307,7 +302,7 @@ stitched_normalization_weights_brs_from_processes = normalization_weights.derive
 
 stitched_normalization_weights = normalization_weights.derive(
     "stitched_normalization_weights", cls_dict={
-        "weight_name": "stitched_normalization_weight",
+        "weight_name": "normalization_weight",
         "get_xsecs_from_inclusive_dataset": True,
         "allow_stitching": True,
     },
