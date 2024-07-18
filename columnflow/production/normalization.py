@@ -4,6 +4,8 @@
 Column production methods related to sample normalization event weights.
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 
 import law
