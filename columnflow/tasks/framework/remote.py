@@ -810,13 +810,6 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
 
-        # custom tmp dir since slurm uses the job submission dir as the main job directory, and law
-        # puts the tmp directory in this job directory which might become quite long; then,
-        # python's default multiprocessing puts socket files into that tmp directory which comes
-        # with the restriction of less then 80 characters that would be violated, and potentially
-        # would also overwhelm the submission directory
-        config.render_variables["law_job_tmp"] = "/tmp/law_$( basename \"$LAW_JOB_HOME\" )"
-
         # forward env variables
         for ev, rv in self.slurm_forward_env_variables.items():
             config.render_variables[rv] = os.environ[ev]
