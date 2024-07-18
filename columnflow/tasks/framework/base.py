@@ -153,7 +153,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if (
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
-            not law.parser.global_cmdline_values().get(f"{cls.task_family}_version")
+            not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
+            cls.task_family != law.parser.root_task().task_family
         ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
