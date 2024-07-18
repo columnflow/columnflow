@@ -8,6 +8,7 @@ from collections import defaultdict
 
 import law
 import order as od
+import scinum as sn
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
@@ -17,7 +18,7 @@ np = maybe_import("numpy")
 sp = maybe_import("scipy")
 maybe_import("scipy.sparse")
 ak = maybe_import("awkward")
-sci = maybe_import("scinum")
+
 
 logger = law.logger.get_logger(__name__)
 
@@ -60,7 +61,7 @@ def get_stitching_datasets(self: Producer) -> list[od.Dataset]:
     return list(stitching_datasets)
 
 
-def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
+def get_br_from_inclusive_dataset(self: Producer, inclusive_dataset: od.Dataset, stats: dict) -> dict[int, float]:
     """
     Helper function to compute the branching ratios from the inclusive sample.
     """
@@ -70,14 +71,15 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
         for d in self.config_inst.datasets
         if d.name in stats.keys()
     }
-    leading_ds = self.get_inclusive_dataset()
-    leading_proc = leading_ds.processes.get_first()
-    N = lambda x: sci.Number(x, np.sqrt(x))  # alias for Number with counting error
+    inclusive_proc = inclusive_dataset.processes.get_first()
+    N = lambda x: sn.Number(x, np.sqrt(x))  # alias for Number with counting error
 
-    br = {}
-    for proc, _, child_procs in leading_ds.walk_processes():
-        if proc.id not in proc_ds_map or not child_procs:
+    # create a dictionary of branching ratios based on all gen weight sums
+    br: dict[int, dict[int, sn.Number]] = defaultdict(dict)
+    for proc, _, child_procs in inclusive_dataset.walk_processes():
+        if proc.id not in proc_ds_map or proc.is_leaf_process:
             continue
+
         # get the mc weights for the "mother" dataset and add an entry for the process
         sum_mc_weight = stats[proc_ds_map[proc.id].name]["sum_mc_weight"]
         sum_mc_weight_per_process = stats[proc_ds_map[proc.id].name]["sum_mc_weight_per_process"]
@@ -85,43 +87,53 @@ def get_br_from_inclusive_dataset(self: Producer, stats: dict) -> dict:
         num_events = stats[proc_ds_map[proc.id].name]["num_events"]
         num_events_per_process = stats[proc_ds_map[proc.id].name]["num_events_per_process"]
 
-        # save the ratio of mc weights of all direct child processes under the br key of the mother process
-        br[proc.id] = {}
-
         # compute the branching ratios for the children wrt the mother process
         for child_proc in child_procs:
-            # skip processes that have no occurrences
-            if not child_proc.get_leaf_processes() and str(child_proc.id) not in sum_mc_weight_per_process:
+            # skip processes that are not covered by any dataset
+            # (identified as leaf processes that have no occurrences in the stats)
+            is_leaf = child_proc.is_leaf_process
+            if is_leaf and str(child_proc.id) not in sum_mc_weight_per_process:
                 continue
 
-            proc_ids = [p.id for p in child_proc.get_leaf_processes()] + [child_proc.id]
-            # compute the error on the branching ratio using number of events
-            error = N(sum(num_events_per_process.get(str(proc_id), 0) for proc_id in proc_ids)) / N(num_events)
-            # Error is independent of the mc weights, so we can use the same relative error
-            br[proc.id][child_proc.id] = sci.Number(
+            proc_ids = [child_proc.id] if is_leaf else [p.id for p in child_proc.get_leaf_processes()]
+            # compute the uncertainty on the branching ratio using number of events
+            _br = N(sum(num_events_per_process.get(str(proc_id), 0) for proc_id in proc_ids)) / N(num_events)
+            # uncertainty is independent of the mc weights, so we can use the same relative uncertainty
+            br[proc.id][child_proc.id] = sn.Number(
                 sum(sum_mc_weight_per_process.get(str(proc_id), 0) for proc_id in proc_ids) / sum_mc_weight,
-                error(sci.UP, unc=True, factor=True) * 1j,
+                _br(sn.UP, unc=True, factor=True) * 1j,  # same relative uncertainty
             )
 
-    branching_ratios = {}
-    def multiply_branching_ratios(proc_id: int, proc_br: float) -> tuple[int, float]:
+    branching_ratios: dict[int, float] = {}
+
+    def multiply_branching_ratios(proc_id: int, proc_br: sn.Number) -> tuple[int, float] | None:
         """
         Recursively multiply the branching ratios from the nested dictionary.
         """
-        if proc_id not in br:
-            # Warn the user if the error is large
-            if proc_br(sci.UP, unc=True, factor=True) > 0.01:
-                logger.warning(
-                    "Large error on the branching ratio for process "
-                    f"{leading_proc.get_process(proc_id).name} with process id {proc_id} "
-                    f"({proc_br(sci.UP, unc=True, factor=True):.2f}%)",
-                )
-            branching_ratios[str(proc_id)] = proc_br()
-            return proc_id, proc_br
-        for child_id, child_br in br[proc_id].items():
-            multiply_branching_ratios(child_id, child_br.mul(proc_br, rho=0, inplace=False))
+        # when the br for proc_id can be created from sub processes, calculate it via product
+        if proc_id in br:
+            for child_id, child_br in br[proc_id].items():
+                # multiply the branching ratios assuming no correlation
+                prod_br = child_br.mul(proc_br, rho=0, inplace=False)
+                multiply_branching_ratios(child_id, prod_br)
+            return
 
-    for proc_id, brs in br[leading_proc.id].items():
+        # warn the user if the relative (statistical) error is large
+        rel_unc = proc_br(sn.UP, unc=True, factor=True)
+        if rel_unc > 0.01:
+            logger.warning(
+                "large error on the branching ratio for process "
+                f"{inclusive_proc.get_process(proc_id).name} with process id {proc_id} "
+                f"({rel_unc * 100:.2f}%)",
+            )
+
+        # just store the nominal value
+        branching_ratios[proc_id] = proc_br.nominal
+
+        return proc_id, proc_br
+
+    # fill all branching ratios
+    for proc_id, brs in br[inclusive_proc.id].items():
         multiply_branching_ratios(proc_id, brs)
 
     return branching_ratios
@@ -163,10 +175,10 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
         )
 
     # read the weight per process (defined as lumi * xsec / sum_weights) from the lookup table
-    weights = np.squeeze(np.asarray(self.weight_table[0, process_id].todense()))
+    process_weight = np.squeeze(np.asarray(self.process_weight_table[0, process_id].todense()))
 
     # compute the weight and store it
-    norm_weight = events.mc_weight * weights
+    norm_weight = events.mc_weight * process_weight
     events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
 
     return events
@@ -215,9 +227,9 @@ def normalization_weights_setup(
     Sets up objects required by the computation of normalization weights and stores them as instance
     attributes:
 
-        - py:attr:`weight_table`: A sparse array serving as a lookup table for the calculated process
-        weights. This weight is defined as the product of the luminosity, the cross section , divided
-        by the sum of event weights per process.
+        - py: attr: `process_weight_table`: A sparse array serving as a lookup table for the
+        calculated process weights. This weight is defined as the product of the luminosity, the
+        cross section, divided by the sum of event weights per process.
     """
     # load the selection stats
     normalization_selection_stats = {
@@ -247,7 +259,6 @@ def normalization_weights_setup(
 
     # ensure that the selection stats do not contain any process that was not previously registered
     allowed_ids = set(int(process_id) for process_id in merged_selection_stats["sum_mc_weight_per_process"])
-
     unregistered_process_ids = allowed_ids - {p.id for p in process_insts}
     if unregistered_process_ids:
         id_str = ",".join(map(str, unregistered_process_ids))
@@ -256,7 +267,7 @@ def normalization_weights_setup(
             f"registered to the config '{self.config_inst.name}'",
         )
 
-    # Get the luminosity from the config
+    # get the luminosity from the config
     lumi = self.config_inst.x.luminosity.nominal
 
     # create a event weight lookup table
@@ -266,11 +277,11 @@ def normalization_weights_setup(
         logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # get the branching ratios from the inclusive sample
-        branching_ratios = self.get_br_from_inclusive_dataset(normalization_selection_stats)
+        branching_ratios = self.get_br_from_inclusive_dataset(inclusive_dataset, normalization_selection_stats)
         inclusive_xsec = inclusive_dataset.processes.get_first().get_xsec(self.config_inst.campaign.ecm).nominal
         for process_id, br in branching_ratios.items():
-            sum_weights = merged_selection_stats["sum_mc_weight_per_process"][process_id]
-            weight_table[0, int(process_id)] = lumi * inclusive_xsec * br / sum_weights
+            sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(process_id)]
+            weight_table[0, process_id] = lumi * inclusive_xsec * br / sum_weights
     else:
         for process_inst in process_insts:
             if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
@@ -279,8 +290,8 @@ def normalization_weights_setup(
             xsec = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
             weight_table[0, process_inst.id] = lumi * xsec / sum_weights
 
-    self.weight_table = weight_table
-    self.xs_process_ids = set(self.weight_table.rows[0])
+    self.process_weight_table = weight_table
+    self.xs_process_ids = set(self.process_weight_table.rows[0])
 
 
 @normalization_weights.init
@@ -291,19 +302,16 @@ def normalization_weights_init(self: Producer) -> None:
     self.produces.add(self.weight_name)
 
 
-stitched_normalization_weights_brs_from_processes = normalization_weights.derive(
-    "stitched_normalization_weights_brs_from_processes", cls_dict={
-        "weight_name": "normalization_weight",
-        "get_xsecs_from_inclusive_dataset": False,
-        "allow_stitching": True,
-    },
-)
-
-
 stitched_normalization_weights = normalization_weights.derive(
     "stitched_normalization_weights", cls_dict={
         "weight_name": "normalization_weight",
         "get_xsecs_from_inclusive_dataset": True,
         "allow_stitching": True,
+    },
+)
+
+stitched_normalization_weights_brs_from_processes = stitched_normalization_weights.derive(
+    f"{stitched_normalization_weights.cls_name}_brs_from_processes", cls_dict={
+        "get_xsecs_from_inclusive_dataset": False,
     },
 )
