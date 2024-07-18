@@ -190,7 +190,7 @@ class CalibratorMixin(ConfigTask):
 
     @property
     def calibrator_repr(self):
-        """Return the name of the calibrator."""
+        """Return a string representation of the calibrator."""
         return str(self.calibrator_inst)
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
@@ -380,12 +380,12 @@ class CalibratorsMixin(ConfigTask):
         """
         Return a string representation of the calibrators.
         """
-        part = "none"
+        calibs_repr = "none"
         if self.calibrators:
-            part = "__".join([str(calib) for calib in self.calibrator_insts[:5]])
+            calibs_repr = "__".join([str(calib) for calib in self.calibrator_insts[:5]])
             if len(self.calibrators) > 5:
-                part += f"__{law.util.create_hash([str(calib) for calib in self.calibrator_insts[5:]])}"
-        return part
+                calibs_repr += f"__{law.util.create_hash([str(calib) for calib in self.calibrator_insts[5:]])}"
+        return calibs_repr
 
     def store_parts(self):
         """Create parts to create the output path to store intermediary results
@@ -1042,12 +1042,12 @@ class ProducersMixin(ConfigTask):
     @property
     def producers_repr(self) -> str:
         """Return a string representation of the producers."""
-        part = "none"
+        prods_repr = "none"
         if self.producers:
-            part = "__".join([str(prod) for prod in self.producer_insts[:5]])
+            prods_repr = "__".join([str(prod) for prod in self.producer_insts[:5]])
             if len(self.producers) > 5:
-                part += f"__{law.util.create_hash([str(prod) for prod in self.producer_insts[5:]])}"
-        return part
+                prods_repr += f"__{law.util.create_hash([str(prod) for prod in self.producer_insts[5:]])}"
+        return prods_repr
 
     def store_parts(self):
         """Create parts to create the output path to store intermediary results
