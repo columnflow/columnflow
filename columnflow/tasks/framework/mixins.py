@@ -188,6 +188,11 @@ class CalibratorMixin(ConfigTask):
 
         return self._calibrator_inst
 
+    @property
+    def calibrator_repr(self):
+        """Return the name of the calibrator."""
+        return str(self.calibrator_inst)
+
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
@@ -199,7 +204,7 @@ class CalibratorMixin(ConfigTask):
         :return: Updated parts to create output path to store intermediary results.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "calibrator", f"calib__{self.calibrator}")
+        parts.insert_before("version", "calibrator", f"calib__{self.calibrator_repr}")
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
@@ -370,6 +375,18 @@ class CalibratorsMixin(ConfigTask):
             self._calibrator_insts = self.get_calibrator_insts(self.calibrators, {"task": self})
         return self._calibrator_insts
 
+    @property
+    def calibrators_repr(self) -> str:
+        """
+        Return a string representation of the calibrators.
+        """
+        part = "none"
+        if self.calibrators:
+            part = "__".join([str(calib) for calib in self.calibrator_insts[:5]])
+            if len(self.calibrators) > 5:
+                part += f"__{law.util.create_hash([str(calib) for calib in self.calibrator_insts[5:]])}"
+        return part
+
     def store_parts(self):
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
@@ -384,12 +401,7 @@ class CalibratorsMixin(ConfigTask):
         :return: Updated parts to create output path to store intermediary results.
         """
         parts = super().store_parts()
-
-        part = "__".join(self.calibrators[:5])
-        if len(self.calibrators) > 5:
-            part += f"__{law.util.create_hash(self.calibrators[5:])}"
-        parts.insert_before("version", "calibrators", f"calib__{part or 'none'}")
-
+        parts.insert_before("version", "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
@@ -564,6 +576,11 @@ class SelectorMixin(ConfigTask):
 
         return self._selector_inst
 
+    @property
+    def selector_repr(self):
+        """Return a string representation of the selector."""
+        return str(self.selector_inst)
+
     def store_parts(self):
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
@@ -575,7 +592,7 @@ class SelectorMixin(ConfigTask):
         :return: Updated parts to create output path to store intermediary results.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "selector", f"sel__{self.selector}")
+        parts.insert_before("version", "selector", f"sel__{self.selector_repr}")
         return parts
 
     def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
@@ -838,6 +855,11 @@ class ProducerMixin(ConfigTask):
 
         return self._producer_inst
 
+    @property
+    def producer_repr(self) -> str:
+        """Return a string representation of the producer."""
+        return str(self.producer) if self.producer != law.NO_STR else "none"
+
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
@@ -849,7 +871,7 @@ class ProducerMixin(ConfigTask):
         :return: Updated parts to create output path to store intermediary results.
         """
         parts = super().store_parts()
-        producer = f"prod__{self.producer}" if self.producer != law.NO_STR else "none"
+        producer = f"prod__{self.producer_repr}"
         parts.insert_before("version", "producer", producer)
         return parts
 
@@ -1017,6 +1039,16 @@ class ProducersMixin(ConfigTask):
             self._producer_insts = self.get_producer_insts(self.producers, {"task": self})
         return self._producer_insts
 
+    @property
+    def producers_repr(self) -> str:
+        """Return a string representation of the producers."""
+        part = "none"
+        if self.producers:
+            part = "__".join([str(prod) for prod in self.producer_insts[:5]])
+            if len(self.producers) > 5:
+                part += f"__{law.util.create_hash([str(prod) for prod in self.producer_insts[5:]])}"
+        return part
+
     def store_parts(self):
         """Create parts to create the output path to store intermediary results
         for the current :py:class:`~law.task.base.Task`.
@@ -1031,13 +1063,7 @@ class ProducersMixin(ConfigTask):
         :return: Updated parts to create output path to store intermediary results.
         """
         parts = super().store_parts()
-
-        part = "none"
-        if self.producers:
-            part = "__".join(self.producers[:5])
-            if len(self.producers) > 5:
-                part += f"__{law.util.create_hash(self.producers[5:])}"
-        parts.insert_before("version", "producers", f"prod__{part or 'none'}")
+        parts.insert_before("version", "producers", f"prod__{self.producers_repr}")
 
         return parts
 
@@ -1721,10 +1747,14 @@ class InferenceModelMixin(ConfigTask):
         # get the inference model instance
         self.inference_model_inst = self.get_inference_model_inst(self.inference_model, self.config_inst)
 
+    @property
+    def inference_model_repr(self):
+        return str(self.inference_model)
+
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if self.inference_model != law.NO_STR:
-            parts.insert_before("version", "inf_model", f"inf__{self.inference_model}")
+            parts.insert_before("version", "inf_model", f"inf__{self.inference_model_repr}")
         return parts
 
 
@@ -2166,9 +2196,13 @@ class WeightProducerMixin(ConfigTask):
 
         return self._weight_producer_inst
 
+    @property
+    def weight_producer_repr(self: WeightProducerMixin) -> str:
+        return str(self.weight_producer_inst)
+
     def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
         parts = super().store_parts()
-        parts.insert_before("version", "weightprod", f"weight__{self.weight_producer}")
+        parts.insert_before("version", "weightprod", f"weight__{self.weight_producer_repr}")
         return parts
 
 
