@@ -91,10 +91,14 @@ def get_br_from_inclusive_dataset(self: Producer, inclusive_dataset: od.Dataset,
 
         # compute the branching ratios for the children wrt the mother process
         for child_proc in child_procs:
-            # skip processes that are not covered by any dataset
+            # skip processes that are not covered by any dataset or irrelevant for the used dataset
             # (identified as leaf processes that have no occurrences in the stats)
+            # (or as non-leaf processes that are not in the stitching datasets)
             is_leaf = child_proc.is_leaf_process
-            if is_leaf and str(child_proc.id) not in sum_mc_weight_per_process:
+            if (
+                (is_leaf and str(child_proc.id) not in sum_mc_weight_per_process) or
+                (not is_leaf and child_proc.id not in proc_ds_map)
+            ):
                 continue
 
             proc_ids = [child_proc.id] if is_leaf else [p.id for p in child_proc.get_leaf_processes()]
