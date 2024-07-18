@@ -120,7 +120,7 @@ At this point, and before types such as IOFlagged objects, other functions, rout
 The init of `DeferredColumn` accepts multiple arguments, or a single set.
 
 A simple example (here campaign-dependent filter), can be defined by
- 
+
 ```python
 class IF_NANO_V11(ArrayFunction.DeferredColumn):
 
