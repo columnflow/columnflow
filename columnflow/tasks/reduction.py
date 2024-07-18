@@ -87,7 +87,7 @@ class ReduceEvents(
         return {"events": self.target(f"events_{self.branch}.parquet")}
 
     @ensure_proxy
-    @law.decorator.localize
+    @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
@@ -165,72 +165,70 @@ class ReduceEvents(
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-        # open the input file with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
-
-        # collect input paths
-        input_paths = [nano_file]
-        input_paths.append(inputs["selection"]["results"].path)
-        input_paths.extend([inp["columns"].path for inp in inputs["calibrations"]])
+        # collect input targets
+        input_targets = [input_file]
+        input_targets.append(inputs["selection"]["results"])
+        input_targets.extend([inp["columns"] for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
-            input_paths.append(inputs["selection"]["columns"].path)
+            input_targets.append(inputs["selection"]["columns"])
 
-        # iterate over chunks of events and diffs
-        for (events, sel, *diffs), pos in self.iter_chunked_io(
-            input_paths,
-            source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
-        ):
-            # optional check for overlapping inputs within diffs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping(list(diffs))
+        # prepare inputs for localization
+        with law.localize_file_targets(input_targets, mode="r") as inps:
+            # iterate over chunks of events and diffs
+            for (events, sel, *diffs), pos in self.iter_chunked_io(
+                [inp.abspath for inp in inps],
+                source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
+                read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+            ):
+                # optional check for overlapping inputs within diffs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping(list(diffs))
 
-            # add the calibrated diffs and potentially new columns
-            events = update_ak_array(events, *diffs)
+                # add the calibrated diffs and potentially new columns
+                events = update_ak_array(events, *diffs)
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
-
-            # build the event mask
-            if self.selector_steps:
-                # check if all steps are present
-                missing_steps = set(self.selector_steps) - set(sel.steps.fields)
-                if missing_steps:
-                    raise Exception(
-                        f"selector steps {','.join(missing_steps)} are not produced by "
-                        f"selector '{self.selector}'",
-                    )
-                event_mask = functools.reduce(
-                    (lambda a, b: a & b),
-                    (sel["steps", step] for step in self.selector_steps),
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
                 )
-            else:
-                event_mask = sel.event if "event" in sel.fields else Ellipsis
 
-            # apply the mask
-            n_all += len(events)
-            events = events[event_mask]
-            n_reduced += len(events)
+                # build the event mask
+                if self.selector_steps:
+                    # check if all steps are present
+                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
+                    if missing_steps:
+                        raise Exception(
+                            f"selector steps {','.join(missing_steps)} are not produced by "
+                            f"selector '{self.selector}'",
+                        )
+                    event_mask = functools.reduce(
+                        (lambda a, b: a & b),
+                        (sel["steps", step] for step in self.selector_steps),
+                    )
+                else:
+                    event_mask = sel.event if "event" in sel.fields else Ellipsis
 
-            # loop through all object selection, go through their masks
-            # and create new collections if required
-            if "objects" in sel.fields:
-                # apply the event mask
-                events = create_collections_from_masks(events, sel.objects[event_mask])
+                # apply the mask
+                n_all += len(events)
+                events = events[event_mask]
+                n_reduced += len(events)
 
-            # remove columns
-            events = route_filter(events)
+                # loop through all object selection, go through their masks
+                # and create new collections if required
+                if "objects" in sel.fields:
+                    # apply the event mask
+                    events = create_collections_from_masks(events, sel.objects[event_mask])
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-            output_chunks[pos.index] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # remove columns
+                events = route_filter(events)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[pos.index] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # some logs
         self.publish_message(
