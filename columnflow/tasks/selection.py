@@ -52,7 +52,8 @@ class SelectEvents(
         CalibrateEvents=CalibrateEvents,
     )
 
-    # register shifts found in the chosen selector to this task
+    # register sandbox and shifts found in the chosen selector to this task
+    register_selector_sandbox = True
     register_selector_shifts = True
 
     # strategy for handling missing source columns when adding aliases on event chunks

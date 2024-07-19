@@ -51,6 +51,7 @@ class CalibratorMixin(ConfigTask):
         'default_calibrator' config""".split())
 
     # decides whether the task itself runs the calibrator and implements its shifts
+    register_calibrator_sandbox = False
     register_calibrator_shifts = False
 
     @classmethod
@@ -184,12 +185,13 @@ class CalibratorMixin(ConfigTask):
             self._calibrator_inst = self.get_calibrator_inst(self.calibrator, {"task": self})
 
             # overwrite the sandbox when set
-            sandbox = self._calibrator_inst.get_sandbox()
-            if sandbox:
-                self.sandbox = sandbox
-                # rebuild the sandbox inst when already initialized
-                if self._sandbox_initialized:
-                    self._initialize_sandbox(force=True)
+            if self.register_calibrator_sandbox:
+                sandbox = self._calibrator_inst.get_sandbox()
+                if sandbox:
+                    self.sandbox = sandbox
+                    # rebuild the sandbox inst when already initialized
+                    if self._sandbox_initialized:
+                        self._initialize_sandbox(force=True)
 
         return self._calibrator_inst
 
@@ -454,6 +456,7 @@ class SelectorMixin(ConfigTask):
     )
 
     # decides whether the task itself runs the selector and implements its shifts
+    register_selector_sandbox = False
     register_selector_shifts = False
 
     @classmethod
@@ -587,12 +590,13 @@ class SelectorMixin(ConfigTask):
             self._selector_inst = self.get_selector_inst(self.selector, {"task": self})
 
             # overwrite the sandbox when set
-            sandbox = self._selector_inst.get_sandbox()
-            if sandbox:
-                self.sandbox = sandbox
-                # rebuild the sandbox inst when already initialized
-                if self._sandbox_initialized:
-                    self._initialize_sandbox(force=True)
+            if self.register_selector_sandbox:
+                sandbox = self._selector_inst.get_sandbox()
+                if sandbox:
+                    self.sandbox = sandbox
+                    # rebuild the sandbox inst when already initialized
+                    if self._sandbox_initialized:
+                        self._initialize_sandbox(force=True)
 
         return self._selector_inst
 
@@ -741,6 +745,7 @@ class ProducerMixin(ConfigTask):
     )
 
     # decides whether the task itself runs the producer and implements its shifts
+    register_producer_sandbox = False
     register_producer_shifts = False
 
     @classmethod
@@ -878,12 +883,13 @@ class ProducerMixin(ConfigTask):
             self._producer_inst = self.get_producer_inst(self.producer, {"task": self})
 
             # overwrite the sandbox when set
-            sandbox = self._producer_inst.get_sandbox()
-            if sandbox:
-                self.sandbox = sandbox
-                # rebuild the sandbox inst when already initialized
-                if self._sandbox_initialized:
-                    self._initialize_sandbox(force=True)
+            if self.register_producer_sandbox:
+                sandbox = self._producer_inst.get_sandbox()
+                if sandbox:
+                    self.sandbox = sandbox
+                    # rebuild the sandbox inst when already initialized
+                    if self._sandbox_initialized:
+                        self._initialize_sandbox(force=True)
 
         return self._producer_inst
 
@@ -2161,6 +2167,7 @@ class WeightProducerMixin(ConfigTask):
     )
 
     # decides whether the task itself runs the weight producer and implements its shifts
+    register_weight_producer_sandbox = False
     register_weight_producer_shifts = False
 
     @classmethod
@@ -2234,12 +2241,13 @@ class WeightProducerMixin(ConfigTask):
             )
 
             # overwrite the sandbox when set
-            sandbox = self._weight_producer_inst.get_sandbox()
-            if sandbox:
-                self.sandbox = sandbox
-                # rebuild the sandbox inst when already initialized
-                if self._sandbox_initialized:
-                    self._initialize_sandbox(force=True)
+            if self.register_weight_producer_sandbox:
+                sandbox = self._weight_producer_inst.get_sandbox()
+                if sandbox:
+                    self.sandbox = sandbox
+                    # rebuild the sandbox inst when already initialized
+                    if self._sandbox_initialized:
+                        self._initialize_sandbox(force=True)
 
         return self._weight_producer_inst
 

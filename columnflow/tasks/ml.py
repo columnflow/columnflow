@@ -92,8 +92,12 @@ class PrepareMLEvents(
         self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
         # overwrite the sandbox when set
-        if self._preparation_producer_inst.sandbox:
-            self.sandbox = self._preparation_producer_inst.sandbox
+        sandbox = self._preparation_producer_inst.get_sandbox()
+        if sandbox:
+            self.sandbox = sandbox
+            # rebuild the sandbox inst when already initialized
+            if self._sandbox_initialized:
+                self._initialize_sandbox(force=True)
 
         return self._preparation_producer_inst
 

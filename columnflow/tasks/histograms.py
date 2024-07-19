@@ -51,7 +51,8 @@ class CreateHistograms(
     # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
 
-    # register shifts found in the chosen weight producer to this task
+    # register sandbox and shifts found in the chosen weight producer to this task
+    register_weight_producer_sandbox = True
     register_weight_producer_shifts = True
 
     @law.util.classproperty
