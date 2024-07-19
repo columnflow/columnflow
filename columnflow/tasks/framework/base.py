@@ -417,7 +417,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     _cache["all_object_names"] = {
                         obj.name
                         for obj, _, _ in
-                        getattr(container, "walk_{}".format(plural))()
+                        getattr(container, f"walk_{plural}")()
                     }
                 else:
                     _cache["all_object_names"] = set(getattr(container, plural).names())
@@ -429,7 +429,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 if object_cls in container._deep_child_classes:
                     kwargs["deep"] = deep
                 _cache["has_obj_func"] = functools.partial(
-                    getattr(container, "has_{}".format(singular)),
+                    getattr(container, f"has_{singular}"),
                     **kwargs,
                 )
             return _cache["has_obj_func"](name)
