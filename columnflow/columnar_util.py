@@ -2181,8 +2181,7 @@ class TaskArrayFunction(ArrayFunction):
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
-    @property
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Returns a string representation of this TaskArrayFunction instance.
         """
