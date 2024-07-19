@@ -2181,6 +2181,13 @@ class TaskArrayFunction(ArrayFunction):
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
 
+    @property
+    def __str__(self):
+        """
+        Returns a string representation of this TaskArrayFunction instance.
+        """
+        return self.cls_name
+
     @staticmethod
     def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
         """
