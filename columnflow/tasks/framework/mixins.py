@@ -613,9 +613,9 @@ class SelectorStepsMixin(SelectorMixin):
     """
 
     selector_steps = law.CSVParameter(
-        default=(RESOLVE_DEFAULT,),
+        default=(),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "default: value of the 'default_selector_steps' config",
+        "default: empty",
         brace_expand=True,
         parse_empty=True,
     )
