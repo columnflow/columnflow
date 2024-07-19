@@ -316,3 +316,59 @@ In the following example definitions needed to plot variables that are created i
 :start-at: def setup
 :end-at: return
 ```
+
+## Adjusting the ML model settings via the command line
+
+In the configuration of your ML model, it can be helpful to define the `self.parameters` attribute, which stores all relevant network parameters in the following way:
+
+```python
+    self.parameters = {
+        "parameter_name": self.parameters.get("parameter_name", default_value),
+        "batchsize": int(self.parameters.get("batchsize", 1024)),
+        ...
+    }
+```
+
+With that, the model's parameters can be changed on the command line via the `--ml-model-settings` parameter.
+
+```shell
+law run cf.MLTraining --version v1 --ml-model MyModel --ml-model-settings "batchsize=2048,layers=32;32;32,some_other_parameter=0.7"
+```
+
+The task can parse the user's input of the `--ml-model-settings` parameter and can write the key-value pairs directly into the `self.parameters` attribute.
+
+:::{dropdown} Example of the ML Model
+
+```python
+class MyModel(MLModel):
+    def __init__(
+        self,
+        *args,
+        **kwargs,
+    ):
+        # we cannot cast to dict on command line, but one can do this by hand
+        ml_process_weights = self.parameters.get("ml_process_weights", {"st": 1, "tt": 2})
+        if isinstance(ml_process_weight, tuple):
+            ml_process_weights = {proc: int(weight) for proc, weight in [s.split(":") for s in ml_process_weights]}
+
+        # store parameters of interest in the ml_model_inst, e.g. via the parameters attribute
+        self.parameters = {
+            "batchsize": int(self.parameters.get("batchsize", 1024)),
+            "layers": tuple(int(layer) for layer in self.parameters.get("layers, (64, 64, 64)),
+            "ml_process_weights": ml_process_weights
+        }
+
+        # create representation of ml_model_inst
+        self.parameters_repr = law.util.create_hash(sorted(self.parameters.items()))
+
+```
+
+```shell
+law run cf.MLTraining --version v1 --ml-model MyModel --ml-model-settings "batchsize=2048,layers=32;32;32,ml_process_weights=st:1;tt:4"
+```
+
+:::
+
+:::{dropdown} Limitations of this parameter
+At the moment, the `ml_model_settings` is not implemented for the `MLModelsMixin`, therefore we can only use the "default" model (or create new model via `derive`) when e.g. creating histograms.
+:::

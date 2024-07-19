@@ -99,6 +99,15 @@ to produce the following plot:
 :::
 ::::
 
+Another option to compare shapes, which can be very helpful when comparing unstacked low statistics processes (usually signal processes) with the rest of the stack, is to use ``scale=stack`` in the ```--process-settings``` parameter.
+This will automatically scale the process to the integral of all processes in the stack (the value of the integral is rounded to a reasonable number).
+In the task call this would look like
+
+```shell
+law run cf.PlotVariables1D --version v1 --processes tt,st,hh --variables n_jet,jet1_pt \
+    --process-settings "hh,unstack,scale=stack"
+```
+
 Parameters that only contain a single value can also be passed via the ```--general-settings```, which is a single comma-separated list of parameters, where the name and the value are separated via a `=`.
 The value of each parameter is automatically resolved to either a float, bool, or a string.
 When no `=` is present, the parameter is automatically set to True.
@@ -129,6 +138,27 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 :width: 100%
 :::
 ::::
+
+:::{dropdown} Slicing, Overflows and Underflows
+
+On a variable level, slicing a histogram during the plotting task can be achieved by using the ```slice``` option in the ```--variable-settings``` parameter.
+A task call that selects the 5th to 15th bin of the variable ```jet1_pt``` might look like
+
+```shell
+law run cf.PlotVariables1D --variable-settings "jet1_pt,slice=5;15" --version prod1 \
+    --variables jet1_pt  --processes tt
+```
+
+For slicing ranges instead of bin numbers, you can append a "j" to the values, which are then interpreted as ```x_min``` and ```x_max``` values.
+This only slices the histogram itself but does not modify the ```x_min``` and ```x_max``` range of the plot since they are taken from the variable inst, but this can be modified via `--variable-settings "jet1_pt,x_min=50,x_max=200"`.
+
+Moving entries from the overflow (underflow) bin into the last (first) visible bin of the histogram during plotting, can be enabled by adding the `overflow` (`underflow`) auxiliary via ```--variable-settings```, e.g.
+
+```shell
+law run cf.PlotVariables1D --variable-settings "jet1_pt,overflow" --...
+```
+
+:::
 
 :::{dropdown} Limitations of the ```variable_settings```
 While in theory we can change anything inside the variable and process instances via the ```variable_settings``` parameter, there are certain attributes that are already used during the creation of the histograms (e.g. the ```expression``` and the ```binning```).
