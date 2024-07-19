@@ -283,8 +283,12 @@ def normalization_weights_setup(
         logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # get the branching ratios from the inclusive sample
-        branching_ratios = self.get_br_from_inclusive_dataset(inclusive_dataset, normalization_selection_stats)
-        inclusive_xsec = inclusive_dataset.processes.get_first().get_xsec(self.config_inst.campaign.ecm).nominal
+        inclusive_proc = inclusive_dataset.processes.get_first()
+        if self.dataset_inst == inclusive_dataset and process_insts == {inclusive_proc}:
+            branching_ratios = {inclusive_proc.id: 1.0}
+        else:
+            branching_ratios = self.get_br_from_inclusive_dataset(inclusive_dataset, normalization_selection_stats)
+        inclusive_xsec = inclusive_proc.get_xsec(self.config_inst.campaign.ecm).nominal
         for process_id, br in branching_ratios.items():
             sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(process_id)]
             weight_table[0, process_id] = lumi * inclusive_xsec * br / sum_weights
