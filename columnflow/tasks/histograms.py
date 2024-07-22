@@ -312,28 +312,43 @@ class MergeHistograms(
         # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
 
+    def _get_variables(self):
+        if self.is_workflow():
+            return self.as_branch()._get_variables()
+
+        variables = self.variables
+
+        # optional dynamic behavior: determine not yet created variables and require only those
+        if self.only_missing:
+            missing = self.output().count(existing=False, keys=True)[1]
+            variables = sorted(missing, key=variables.index)
+
+        return variables
+
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        reqs["hists"] = self.as_branch().requires()
+        if not self.pilot:
+            variables = self._get_variables()
+            if variables:
+                reqs["hists"] = self.reqs.CreateHistograms.req_different_branching(
+                    self,
+                    branch=-1,
+                    variables=tuple(variables),
+                )
 
         return reqs
 
     def requires(self):
-        # optional dynamic behavior: determine not yet created variables and require only those
-        variables = self.variables
-        if self.only_missing:
-            missing = self.output().count(existing=False, keys=True)[1]
-            variables = tuple(sorted(missing, key=variables.index))
-
+        variables = self._get_variables()
         if not variables:
             return []
 
-        return self.reqs.CreateHistograms.req(
+        return self.reqs.CreateHistograms.req_different_branching(
             self,
             branch=-1,
             variables=tuple(variables),
-            _exclude={"branches"},
+            workflow="local",
         )
 
     def output(self):
