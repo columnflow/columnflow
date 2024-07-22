@@ -233,6 +233,26 @@ class CalibratorMixin(ConfigTask):
 
         return columns
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: CalibratorMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the calibrator name
+        calibrator = get("calibrator")
+        if calibrator not in {law.NO_STR, None, ""}:
+            keys["calibrator"] = f"calib_{calibrator}"
+
+        return keys
+
 
 class CalibratorsMixin(ConfigTask):
     """
@@ -630,6 +650,26 @@ class SelectorMixin(ConfigTask):
 
         return columns
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: SelectorMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the selector name
+        selector = get("selector")
+        if selector not in {law.NO_STR, None, ""}:
+            keys["selector"] = f"sel_{selector}"
+
+        return keys
+
 
 class SelectorStepsMixin(SelectorMixin):
     """
@@ -933,6 +973,26 @@ class ProducerMixin(ConfigTask):
             columns |= self.producer_inst.produced_columns
 
         return columns
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: ProducerMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the producer name
+        producer = get("producer")
+        if producer not in {law.NO_STR, None, ""}:
+            keys["producer"] = f"prod_{producer}"
+
+        return keys
 
 
 class ProducersMixin(ConfigTask):
@@ -2378,32 +2438,49 @@ class ChunkedIOMixin(AnalysisTask):
 
 class HistHookMixin(ConfigTask):
 
-    hist_hook = luigi.Parameter(
-        default=law.NO_STR,
-        description="name of a function in the config's auxiliary dictionary 'hist_hooks' that is "
+    hist_hooks = law.CSVParameter(
+        default=(),
+        description="names of functions in the config's auxiliary dictionary 'hist_hooks' that are "
         "invoked before plotting to update a potentially nested dictionary of histograms; "
         "default: empty",
     )
 
-    def invoke_hist_hook(self, hists: dict) -> dict:
+    def invoke_hist_hooks(self, hists: dict) -> dict:
         """
-        Hook to update histograms before plotting.
+        Invoke hooks to update histograms before plotting.
         """
-        if self.hist_hook in (None, "", law.NO_STR):
+        if not self.hist_hooks:
             return hists
 
-        # get the hook from the config instance
-        hooks = self.config_inst.x("hist_hooks", {})
-        if self.hist_hook not in hooks:
-            raise ValueError(
-                f"hist hook '{self.hist_hook}' not found in 'hist_hooks' auxiliary entry of config",
-            )
-        func = hooks[self.hist_hook]
-        if not callable(func):
-            raise ValueError(f"hist hook '{self.hist_hook}' is not callable: {func}")
+        for hook in self.hist_hooks:
+            if hook in (None, "", law.NO_STR):
+                continue
 
-        # invoke it
-        self.publish_message(f"invoking hist hook '{self.hist_hook}'")
-        hists = func(self, hists)
+            # get the hook from the config instance
+            hooks = self.config_inst.x("hist_hooks", {})
+            if hook not in hooks:
+                raise KeyError(
+                    f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of config",
+                )
+            func = hooks[hook]
+            if not callable(func):
+                raise TypeError(f"hist hook '{hook}' is not callable: {func}")
+
+            # invoke it
+            self.publish_message(f"invoking hist hook '{hook}'")
+            hists = func(self, hists)
 
         return hists
+
+    @property
+    def hist_hooks_repr(self) -> str:
+        """
+        Return a string representation of the hist hooks.
+        """
+        hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
+
+        hooks_repr = "__".join(hooks[:5])
+        if len(hooks) > 5:
+            hooks_repr += f"__{law.util.create_hash(hooks[5:])}"
+
+        return hooks_repr

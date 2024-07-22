@@ -40,6 +40,9 @@ Most tasks, however, define their lookup keys as:
 3. task family
 4. dataset name
 5. shift name
+6. calibrator name, prefixed by `calib_`
+7. selector name, prefixed by `sel_`
+8. producer name, prefixed by `prod_`
 
 When defining `TASK_IDENTIFIER`'s, not all keys need to be specified, and patterns or regular expressions (`^EXPR$`) can be used.
 The definition order is **important** as the first matching definition is used.
