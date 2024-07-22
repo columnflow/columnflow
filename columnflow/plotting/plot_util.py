@@ -669,7 +669,7 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
 def blind_sensitivity(
     hists: dict[od.Process, hist.Hist],
     config_inst: od.Config,
-    threshold: float
+    threshold: float,
 ) -> dict[od.Process, hist.Hist]:
     """
     Function that takes a histogram *h_in* and blinds the values of the profile
