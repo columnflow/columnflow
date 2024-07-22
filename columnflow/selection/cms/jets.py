@@ -70,18 +70,43 @@ def jet_veto_map(
         jet_pu_mask = (events.Jet.puId >= 4) | (events.Jet.pt >= 50)
         jet_mask = jet_mask & jet_pu_mask
 
+    jet_phi = jet.phi
+    jet_eta = jet.eta
+
     # for some reason, math.pi is not included in the ranges, so we need to subtract a small number
     pi = math.pi - 1e-10
+    phi_outside_range = np.abs(jet.phi) > pi
 
-    # values outside [-pi, pi] are not included, so we need to wrap the phi values
-    jet_phi = ak.where(
-        np.abs(events.Jet.phi) > pi,
-        events.Jet.phi - 2 * pi * np.sign(events.Jet.phi),
-        events.Jet.phi,
-    )
+    if ak.any(phi_outside_range):
+        # values outside [-pi, pi] are not included, so we need to wrap the phi values
+        jet_phi = ak.where(
+            np.abs(jet.phi) > pi,
+            jet.phi - 2 * pi * np.sign(jet.phi),
+            jet.phi,
+        )
+        logger.warning(
+            f"Jet phi values {jet.phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]} outside [-pi, pi] "
+            f"({ak.sum(phi_outside_range)} in total) "
+            f"detected and set to {jet_phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]}",
+        )
+
+    eta_outside_range = np.abs(jet.eta) > 5.19
+    if ak.any(eta_outside_range):
+        # values outside [-5.19, 5.19] are not included, so we need to clamp the eta values
+        jet_eta = ak.where(
+            np.abs(jet.eta) > 5.19,
+            5.19 * np.sign(jet.eta),
+            jet.eta,
+        )
+        logger.warning(
+            f"Jet eta values {jet.eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]} outside [-5.19, 5.19] "
+            f"({ak.sum(eta_outside_range)} in total) "
+            f"detected and set to {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}",
+        )
+
     variable_map = {
         "type": "jetvetomap",
-        "eta": jet.eta[jet_mask],
+        "eta": jet_eta[jet_mask],
         "phi": jet_phi[jet_mask],
     }
     inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
@@ -91,7 +116,6 @@ def jet_veto_map(
     veto_mask = jet_mask
     flat_veto_mask = flat_np_view(veto_mask)
     flat_veto_mask[flat_veto_mask] = ak.flatten(self.veto_map(*inputs) != 0)
-
     # store the per-jet veto mask
     events = set_ak_column(events, "Jet.veto_map_mask", veto_mask)
 
