@@ -87,7 +87,7 @@ def jet_veto_map(
         logger.warning(
             f"Jet phi values {jet.phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]} outside [-pi, pi] "
             f"({ak.sum(phi_outside_range)} in total) "
-            f"detected and set to {jet_phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]}"
+            f"detected and set to {jet_phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]}",
         )
 
     eta_outside_range = np.abs(jet.eta) > 5.19
@@ -101,7 +101,7 @@ def jet_veto_map(
         logger.warning(
             f"Jet eta values {jet.eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]} outside [-5.19, 5.19] "
             f"({ak.sum(eta_outside_range)} in total) "
-            f"detected and set to {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}"
+            f"detected and set to {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}",
         )
 
     variable_map = {
