@@ -233,6 +233,26 @@ class CalibratorMixin(ConfigTask):
 
         return columns
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: CalibratorMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the calibrator name
+        calibrator = get("calibrator")
+        if calibrator not in {law.NO_STR, None, ""}:
+            keys["calibrator"] = f"calib_{calibrator}"
+
+        return keys
+
 
 class CalibratorsMixin(ConfigTask):
     """
@@ -630,6 +650,26 @@ class SelectorMixin(ConfigTask):
 
         return columns
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: SelectorMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the selector name
+        selector = get("selector")
+        if selector not in {law.NO_STR, None, ""}:
+            keys["selector"] = f"sel_{selector}"
+
+        return keys
+
 
 class SelectorStepsMixin(SelectorMixin):
     """
@@ -933,6 +973,26 @@ class ProducerMixin(ConfigTask):
             columns |= self.producer_inst.produced_columns
 
         return columns
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: ProducerMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        get = (
+            inst_or_params.get
+            if isinstance(inst_or_params, dict)
+            else lambda attr: (getattr(inst_or_params, attr, None))
+        )
+
+        # add the producer name
+        producer = get("producer")
+        if producer not in {law.NO_STR, None, ""}:
+            keys["producer"] = f"prod_{producer}"
+
+        return keys
 
 
 class ProducersMixin(ConfigTask):
