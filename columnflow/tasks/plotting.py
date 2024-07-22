@@ -210,6 +210,14 @@ class PlotVariablesBaseSingleShift(
             for cat_name in sorted(self.categories)
         ]
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        # no need to require merged histograms since each branch already requires them as a workflow
+        reqs.pop("merged_hists", None)
+
+        return reqs
+
     def requires(self):
         return {
             d: self.reqs.MergeHistograms.req(
@@ -310,6 +318,14 @@ class PlotVariablesBaseMultiShifts(
             for source in sorted(self.shift_sources)
         ]
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        # no need to require merged histograms since each branch already requires them as a workflow
+        reqs.pop("merged_hists", None)
+
+        return reqs
+
     def requires(self):
         return {
             d: self.reqs.MergeShiftedHistograms.req(
@@ -371,12 +387,7 @@ class PlotShiftedVariables1D(
     )
 
 
-class PlotShiftedVariablesPerProcess1D(
-    law.WrapperTask,
-    PlotShiftedVariables1D,
-):
-    # force this one to be a local workflow
-    workflow = "local"
+class PlotShiftedVariablesPerProcess1D(law.WrapperTask):
 
     # upstream requirements
     reqs = Requirements(
