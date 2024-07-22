@@ -11,6 +11,7 @@ import operator
 import functools
 from collections import OrderedDict
 
+import law
 import order as od
 import scinum as sn
 
@@ -663,3 +664,41 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     h_down[...] = h_view
 
     return {"nominal": h_nom, "up": h_up, "down": h_down}
+
+
+def blind_sensitivity(hists: OrderedDict, config_inst: od.Config, threshold: float | None) -> hist.Hist:
+    """
+    Function that takes a histogram *h_in* and blinds the values of the profile
+    over the axis *axis* that are below a certain threshold *threshold*.
+    The function needs an entry in the process_groups key of the config auxiliary
+    that is called "signals" to know, where the signal processes are defined (regex allowed).
+    """
+    # do nothing if there are no data histograms or threshold is not given
+    if not any([proc.is_data for proc in hists.keys()]) or threshold is None:
+        return hists
+
+    # build the regex for the signal processes
+    signals_regex = re.compile(
+        "|".join(config_inst.x.process_groups.get("signals", [])).replace("*", ".*"),
+    )
+
+    # separate histograms into signals, backgrounds and data hists and calculate sums
+    signals = {proc: hist for proc, hist in hists.items() if signals_regex.match(proc.name)}
+    data = {proc: hist for proc, hist in hists.items() if proc.is_data}
+    backgrounds = {proc: hist for proc, hist in hists.items() if proc not in signals and proc.is_mc}
+    signals_sum = sum(signals.values())
+    backgrounds_sum = sum(backgrounds.values())
+
+    # calculate sensitivity by S / sqrt(S + B)
+    sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
+    mask = sensitivity >= threshold
+
+    # set data points in masked region to zero
+    for proc, hist in data.items():
+        hist.values()[mask] = 0
+        hist.variances()[mask] = 0
+
+    # merge all histograms
+    hists = law.util.merge_dicts(signals, backgrounds, data)
+
+    return hists

@@ -22,6 +22,7 @@ from columnflow.plotting.plot_util import (
     apply_density_to_hists,
     get_position,
     get_profile_variations,
+    blind_sensitivity,
 )
 
 hist = maybe_import("hist")
@@ -52,6 +53,7 @@ def plot_variable_per_process(
     remove_residual_axis(hists, "shift")
 
     variable_inst = variable_insts[0]
+    hists = blind_sensitivity(hists, config_inst, kwargs.get("blind_sensitivity"))
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
