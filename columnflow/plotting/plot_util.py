@@ -666,26 +666,30 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     return {"nominal": h_nom, "up": h_up, "down": h_down}
 
 
-def blind_sensitivity(hists: OrderedDict, config_inst: od.Config, threshold: float | None) -> hist.Hist:
+def blind_sensitivity(
+    hists: dict[od.Process, hist.Hist],
+    config_inst: od.Config,
+    threshold: float
+) -> dict[od.Process, hist.Hist]:
     """
     Function that takes a histogram *h_in* and blinds the values of the profile
     over the axis *axis* that are below a certain threshold *threshold*.
     The function needs an entry in the process_groups key of the config auxiliary
     that is called "signals" to know, where the signal processes are defined (regex allowed).
+    The histograms are not changed inplace, but The function return a copy of the modified histograms.
     """
-    # do nothing if there are no data histograms or threshold is not given
-    if not any([proc.is_data for proc in hists.keys()]) or threshold is None:
-        return hists
 
     # build the regex for the signal processes
-    signals_regex = re.compile(
-        "|".join(config_inst.x.process_groups.get("signals", [])).replace("*", ".*"),
-    )
+    cfg_signals = config_inst.x.process_groups.get("signals", [])
 
     # separate histograms into signals, backgrounds and data hists and calculate sums
-    signals = {proc: hist for proc, hist in hists.items() if signals_regex.match(proc.name)}
-    data = {proc: hist for proc, hist in hists.items() if proc.is_data}
+    signals = {proc: hist for proc, hist in hists.items() if proc.parent_processes.get_first().name in cfg_signals}
+    data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
     backgrounds = {proc: hist for proc, hist in hists.items() if proc not in signals and proc.is_mc}
+    # Return hists unchanged in case any of the three dicts is empty.
+    if not signals or not backgrounds or not data:
+        return hists
+
     signals_sum = sum(signals.values())
     backgrounds_sum = sum(backgrounds.values())
 
