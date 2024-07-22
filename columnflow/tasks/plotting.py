@@ -145,8 +145,8 @@ class PlotVariablesBase(
                     "  - selected --processes did not match any value on the process axis of the input histogram",
                 )
 
-            # update histograms using a custom hook
-            hists = self.invoke_hist_hook(hists)
+            # update histograms using custom hooks
+            hists = self.invoke_hist_hooks(hists)
 
             # add new processes to the end of the list
             for process_inst in hists:
@@ -229,8 +229,9 @@ class PlotVariablesBaseSingleShift(
         parts["category"] = f"cat_{self.branch_data.category}"
         parts["variable"] = f"var_{self.branch_data.variable}"
 
-        if self.hist_hook not in ("", law.NO_STR, None):
-            parts["hook"] = f"hook_{self.hist_hook}"
+        hooks_repr = self.hist_hooks_repr
+        if hooks_repr:
+            parts["hook"] = f"hooks_{hooks_repr}"
 
         return parts
 
@@ -330,8 +331,9 @@ class PlotVariablesBaseMultiShifts(
         parts["category"] = f"cat_{self.branch_data.category}"
         parts["variable"] = f"var_{self.branch_data.variable}"
 
-        if self.hist_hook not in ("", law.NO_STR, None):
-            parts["hook"] = f"hook_{self.hist_hook}"
+        hooks_repr = self.hist_hooks_repr
+        if hooks_repr:
+            parts["hook"] = f"hooks_{hooks_repr}"
 
         return parts
 
