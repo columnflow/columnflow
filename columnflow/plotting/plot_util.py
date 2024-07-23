@@ -682,13 +682,11 @@ def blind_sensitive_bins(
     The histograms are not changed inplace, but copies of the modified histograms are returned.
     """
     # build the logic to seperate signal processes
-    cfg_signals: set[od.Process] = {
+    signal_procs: set[od.Process] = {
         config_inst.get_process(proc)
         for proc in config_inst.x.process_groups.get("signals", [])
     }
-    if not cfg_signals:
-        raise Exception("No signal processes defined under `process_groups` in config")
-    check_if_signal = lambda proc: any(signal.has_process(proc) for signal in cfg_signals)
+    check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
 
     # separate histograms into signals, backgrounds and data hists and calculate sums
     signals = {proc: hist for proc, hist in hists.items() if check_if_signal(proc)}
@@ -698,8 +696,8 @@ def blind_sensitive_bins(
     # Return hists unchanged in case any of the three dicts is empty.
     if not signals or not backgrounds or not data:
         logger.info(
-            "One of the following categories: signals, backgrounds or data was not found in the given processes. "
-            "Returning unchanged histograms.",
+            "one of the following categories: signals, backgrounds or data was not found in the given processes, "
+            "returning unchanged histograms",
         )
         return hists
 
