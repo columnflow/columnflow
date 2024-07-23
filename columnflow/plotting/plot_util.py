@@ -25,6 +25,9 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 
 
+logger = law.logger.get_logger(__name__)
+
+
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
@@ -666,7 +669,7 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     return {"nominal": h_nom, "up": h_up, "down": h_down}
 
 
-def blind_sensitivity(
+def blind_sensitive_bins(
     hists: dict[od.Process, hist.Hist],
     config_inst: od.Config,
     threshold: float,
@@ -676,18 +679,28 @@ def blind_sensitivity(
     over the axis *axis* that are below a certain threshold *threshold*.
     The function needs an entry in the process_groups key of the config auxiliary
     that is called "signals" to know, where the signal processes are defined (regex allowed).
-    The histograms are not changed inplace, but The function return a copy of the modified histograms.
+    The histograms are not changed inplace, but copies of the modified histograms are returned.
     """
-
-    # build the regex for the signal processes
-    cfg_signals = config_inst.x.process_groups.get("signals", [])
+    # build the logic to seperate signal processes
+    cfg_signals: set[od.Process] = {
+        config_inst.get_process(proc)
+        for proc in config_inst.x.process_groups.get("signals", [])
+    }
+    if not cfg_signals:
+        raise Exception("No signal processes defined under `process_groups` in config")
+    check_if_signal = lambda proc: any(signal.has_process(proc) for signal in cfg_signals)
 
     # separate histograms into signals, backgrounds and data hists and calculate sums
-    signals = {proc: hist for proc, hist in hists.items() if proc.parent_processes.get_first().name in cfg_signals}
+    signals = {proc: hist for proc, hist in hists.items() if check_if_signal(proc)}
     data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
     backgrounds = {proc: hist for proc, hist in hists.items() if proc not in signals and proc.is_mc}
+
     # Return hists unchanged in case any of the three dicts is empty.
     if not signals or not backgrounds or not data:
+        logger.info(
+            "One of the following categories: signals, backgrounds or data was not found in the given processes. "
+            "Returning unchanged histograms.",
+        )
         return hists
 
     signals_sum = sum(signals.values())

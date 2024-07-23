@@ -75,9 +75,9 @@ class PlotBase(ConfigTask):
     blinding_threshold = luigi.FloatParameter(
         default=law.NO_FLOAT,
         significant=False,
-        description="parameter to blind datapoints in the region where the sensitivity exceeds a "
-        "certain threshold, calculated from the sensitivity of MC signal and background stacks; "
-        "defaults to the `default_blinding_threshold` aux field if not given via CLI",
+        description="parameter to blind datapoints in the region where the sensitivity s/sqrt(s+b) "
+        "exceeds a certain threshold; defaults to the `default_blinding_threshold` aux field of "
+        "the config",
     )
     exclude_params_remote_workflow = {"debug_plot"}
 

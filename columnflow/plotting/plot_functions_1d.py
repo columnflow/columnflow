@@ -22,7 +22,7 @@ from columnflow.plotting.plot_util import (
     apply_density_to_hists,
     get_position,
     get_profile_variations,
-    blind_sensitivity,
+    blind_sensitive_bins,
 )
 
 hist = maybe_import("hist")
@@ -56,7 +56,7 @@ def plot_variable_per_process(
     blinding_threshold = kwargs.get("blinding_threshold", None)
 
     if blinding_threshold:
-        hists = blind_sensitivity(hists, config_inst, blinding_threshold)
+        hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
