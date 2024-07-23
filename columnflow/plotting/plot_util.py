@@ -689,9 +689,9 @@ def blind_sensitive_bins(
     check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
 
     # separate histograms into signals, backgrounds and data hists and calculate sums
-    signals = {proc: hist for proc, hist in hists.items() if check_if_signal(proc)}
+    signals = {proc: hist for proc, hist in hists.items() if proc.is_mc and check_if_signal(proc)}
     data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
-    backgrounds = {proc: hist for proc, hist in hists.items() if proc not in signals and proc.is_mc}
+    backgrounds = {proc: hist for proc, hist in hists.items() if proc.is_mc and proc not in signals}
 
     # Return hists unchanged in case any of the three dicts is empty.
     if not signals or not backgrounds or not data:
