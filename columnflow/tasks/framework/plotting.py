@@ -72,7 +72,13 @@ class PlotBase(ConfigTask):
         description="when True, an ipython debugger is started after the plot figure is created "
         "for interactive adjustments; default: False",
     )
-
+    blinding_threshold = luigi.FloatParameter(
+        default=law.NO_FLOAT,
+        significant=False,
+        description="parameter to blind datapoints in the region where the sensitivity s/sqrt(s+b) "
+        "exceeds a certain threshold; defaults to the `default_blinding_threshold` aux field of "
+        "the config",
+    )
     exclude_params_remote_workflow = {"debug_plot"}
 
     @classmethod
@@ -110,6 +116,11 @@ class PlotBase(ConfigTask):
         dict_add_strict(params, "cms_label", None if self.cms_label == law.NO_STR else self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
+        dict_add_strict(
+            params,
+            "blinding_threshold",
+            None if self.blinding_threshold == law.NO_FLOAT else self.blinding_threshold,
+        )
         return params
 
     def plot_parts(self) -> law.util.InsertableDict:
@@ -265,6 +276,12 @@ class PlotBase(ConfigTask):
             kwargs["style_config"] = style_config
         # update defaults after application of general_settings
         kwargs.setdefault("cms_label", "pw")
+
+        # resolve blinding_threshold
+        blinding_threshold = kwargs.get("blinding_threshold", None)
+        if blinding_threshold is None:
+            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
+        kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
 
