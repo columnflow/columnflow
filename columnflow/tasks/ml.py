@@ -1171,6 +1171,6 @@ class PlotMLResults(PlotMLResultsBase):
 
                 for index, f in enumerate(figs):
                     f.savefig(
-                        file_path.abs_dirname + "/" + file_path.basename.replace("0", str(index)),
+                        file_path.absdirname + "/" + file_path.basename.replace("0", str(index)),
                         format=file_path.ext(),
                     )
