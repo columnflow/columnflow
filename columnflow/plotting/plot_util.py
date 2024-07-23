@@ -708,6 +708,11 @@ def blind_sensitive_bins(
     sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
     mask = sensitivity >= threshold
 
+    # adjust the mask to blind the bins inbetween blinded ones
+    if sum(mask) > 1:
+        first_ind, last_ind = np.where(mask)[0][::sum(mask) - 1]
+        mask[first_ind:last_ind] = True
+
     # set data points in masked region to zero
     for proc, hist in data.items():
         hist.values()[mask] = 0
