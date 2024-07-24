@@ -40,6 +40,9 @@ Most tasks, however, define their lookup keys as:
 3. task family
 4. dataset name
 5. shift name
+6. calibrator name, prefixed by `calib_`
+7. selector name, prefixed by `sel_`
+8. producer name, prefixed by `prod_`
 
 When defining `TASK_IDENTIFIER`'s, not all keys need to be specified, and patterns or regular expressions (`^EXPR$`) can be used.
 The definition order is **important** as the first matching definition is used.
@@ -105,6 +108,55 @@ They are **equivalent** since the `__`-separated `TASK_IDENTIFIER`'s in the `law
 
 As described above, the exact selection of possible keys and their resolution order is defined in {py:meth}:`~columnflow.tasks.framework.base.AnalysisTask.get_config_lookup_keys` (and subclasses), not all keys need to be specified when defining versions, and they are allowed to be patterns or regular expressions (`^EXPR$`).
 
+## Dynamic variation of used columns using ```DeferredColumn```
+
+Within an analysis, it is often necessary to change the the set of needed or produced columns depending the inputs. This can be achieved by defining multiple tasks with different sets of columns, and a complex conditional logic to determine the right task for each dataset but this can lead to code duplication and is not very flexible.
+```DeferredColumn``` offers the possibility to dynamically modify the set of columns depending on a given condition and can be directly used in the `uses` and `produces` attributes of a task without the need to define multiple tasks.
+
+During the initialization of functions, these the sets of used and produced columns are traversed and the actual requirements are determined.
+At this point, and before types such as IOFlagged objects, other functions, routes or strings are handled, `DeferredColumn`'s are evaluated (using their `__call__` method):
+
+- When the return value is false, the object is skipped.
+- When the return value is a set (i.e., nothing that the Route init would understand), the requirements are (left-)extended by the contained objects.
+- When the return value is anything else, the usual handling is continued with that value.
+
+The init of `DeferredColumn` accepts multiple arguments, or a single set.
+
+A simple example (here campaign-dependent filter), can be defined by
+
+```python
+class IF_NANO_V11(ArrayFunction.DeferredColumn):
+
+    def __call__(self, func: ArrayFunction) -> Any:
+        if func.config_inst.campaign.x.version == 11:
+            return super().__call__(func)
+
+        return None
+```
+
+or using a decorator to do the same (note the arguments in `super()` which are required when calling super() outside the usual class definition)
+
+```python
+@deferred_column
+def IF_NANO_V11(self, func: ArrayFunction) -> Any:
+    if func.config_inst.campaign.x.version == 11:
+        return super(IF_NANO_V11, self).__call__(func)
+
+    return None
+```
+
+With that, calibrators, selectors and producers can define dynamic requirements right in the decorator:
+
+```python
+@producer(
+    uses={
+        "common", "columns",
+        IF_NANO_V11("only", "existing", "in_v11"),
+    },
+)
+def ...
+```
+
 ## Columnflow convenience tools
 
 - Columnflow defines {py:attr}`~columnflow.columnar_util.EMPTY_FLOAT`, a float variable containing the value `-99999.0`.
@@ -117,16 +169,36 @@ In that case, the {py:class}`~columnflow.columnar_util.Route` class and its {py:
 For this purpose, you might use the {py:func}`~columnflow.production.util.attach_coffea_behavior` function.
 This function can be applied on the `events` array using
 
-```python
-events = self[attach_coffea_behavior](events, **kwargs)
-```
+    ```python
+    events = self[attach_coffea_behavior](events, **kwargs)
+    ```
 
-If the name of the field does not correspond to a standard coffea field name, e.g. "BtaggedJets", which should provide the same behaviour as a normal jet, the behaviour can still be set, using
+    If the name of the field does not correspond to a standard coffea field name, e.g. "BtaggedJets", which should provide the same behaviour as a normal jet, the behaviour can still be set, using
 
-```python
-collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
-events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
-```
+    ```python
+    collections = {x: {"type_name": "Jet"} for x in ["BtaggedJets"]}
+    events = self[attach_coffea_behavior](events, collections=collections, **kwargs)
+    ```
+
+- columnflow provides a route brace expansion to simplify the definition of routes and columns and to make longish configurations way easier to understand and maintain.
+This follows the `bash` brace expansion and can be used as follows:
+
+    ```python
+    @producer(
+        uses={"Jet.{pt,eta,phi}"},
+    )
+    def ...
+    ```
+
+    in the task (Callibrator / Selector / Producer) decorator as well as
+
+    ```python
+    cfg.x.keep_columns = DotDict.wrap({
+        "cf.ReduceEvents": {
+            "{Jet,FatJet}.{pt,eta,phi,mass,btagPNet*}",
+    ```
+
+    in the config.
 
 - shortcuts / winning strategies / walktrough guides e.g. pilot parameter: TODO
 

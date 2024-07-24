@@ -109,7 +109,11 @@ class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
         config.render_variables.setdefault("cf_post_setup_command", "")
         config.render_variables.setdefault(
             "cf_remote_lcg_setup",
-            law.config.get_expanded("job", "remote_lcg_setup"),
+            law.config.get_expanded("job", "remote_lcg_setup_el9"),
+        )
+        config.render_variables.setdefault(
+            "cf_remote_lcg_setup_force",
+            "1" if law.config.get_expanded_bool("job", "remote_lcg_setup_force") else "",
         )
 
         # forward env variables

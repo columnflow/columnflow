@@ -32,7 +32,8 @@ class ProduceColumns(
         RemoteWorkflow.reqs,
     )
 
-    # register shifts found in the chosen producer to this task
+    # register sandbox and shifts found in the chosen producer to this task
+    register_producer_sandbox = True
     register_producer_shifts = True
 
     # strategy for handling missing source columns when adding aliases on event chunks

@@ -120,7 +120,10 @@ cfg.x.default_variables = ("n_jet", "jet1_pt")
 
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
-cfg.x.process_groups = {}
+cfg.x.process_groups = {
+    "signals": [],  # list of signal parent processes e.g. h, hh etc. (needed for some features)
+    "other_groups": [],
+}
 
 # dataset groups for conveniently looping over certain datasets
 # (used in wrapper_factory and during plotting)

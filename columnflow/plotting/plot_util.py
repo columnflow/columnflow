@@ -11,6 +11,7 @@ import operator
 import functools
 from collections import OrderedDict
 
+import law
 import order as od
 import scinum as sn
 
@@ -22,6 +23,9 @@ hist = maybe_import("hist")
 np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
+
+
+logger = law.logger.get_logger(__name__)
 
 
 label_options = {
@@ -663,3 +667,58 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     h_down[...] = h_view
 
     return {"nominal": h_nom, "up": h_up, "down": h_down}
+
+
+def blind_sensitive_bins(
+    hists: dict[od.Process, hist.Hist],
+    config_inst: od.Config,
+    threshold: float,
+) -> dict[od.Process, hist.Hist]:
+    """
+    Function that takes a histogram *h_in* and blinds the values of the profile
+    over the axis *axis* that are below a certain threshold *threshold*.
+    The function needs an entry in the process_groups key of the config auxiliary
+    that is called "signals" to know, where the signal processes are defined (regex allowed).
+    The histograms are not changed inplace, but copies of the modified histograms are returned.
+    """
+    # build the logic to seperate signal processes
+    signal_procs: set[od.Process] = {
+        config_inst.get_process(proc)
+        for proc in config_inst.x.process_groups.get("signals", [])
+    }
+    check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
+
+    # separate histograms into signals, backgrounds and data hists and calculate sums
+    signals = {proc: hist for proc, hist in hists.items() if proc.is_mc and check_if_signal(proc)}
+    data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
+    backgrounds = {proc: hist for proc, hist in hists.items() if proc.is_mc and proc not in signals}
+
+    # Return hists unchanged in case any of the three dicts is empty.
+    if not signals or not backgrounds or not data:
+        logger.info(
+            "one of the following categories: signals, backgrounds or data was not found in the given processes, "
+            "returning unchanged histograms",
+        )
+        return hists
+
+    signals_sum = sum(signals.values())
+    backgrounds_sum = sum(backgrounds.values())
+
+    # calculate sensitivity by S / sqrt(S + B)
+    sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
+    mask = sensitivity >= threshold
+
+    # adjust the mask to blind the bins inbetween blinded ones
+    if sum(mask) > 1:
+        first_ind, last_ind = np.where(mask)[0][::sum(mask) - 1]
+        mask[first_ind:last_ind] = True
+
+    # set data points in masked region to zero
+    for proc, hist in data.items():
+        hist.values()[mask] = 0
+        hist.variances()[mask] = 0
+
+    # merge all histograms
+    hists = law.util.merge_dicts(signals, backgrounds, data)
+
+    return hists
