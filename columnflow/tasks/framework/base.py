@@ -65,6 +65,7 @@ class OutputLocation(enum.Enum):
     config = "config"
     local = "local"
     wlcg = "wlcg"
+    wlcg_mirrored = "wlcg_mirrored"
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -865,6 +866,31 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             kwargs.setdefault("fs", fs)
             kwargs.setdefault("store_parts_modifier", store_parts_modifier)
             return self.wlcg_target(*path, **kwargs)
+
+        if location[0] == OutputLocation.wlcg_mirrored:
+            # get other options
+            loc, wlcg_fs, store_parts_modifier = (location[1:] + [None, None, None])[:3]
+            kwargs.setdefault("store_parts_modifier", store_parts_modifier)
+            # create the local target
+            local_kwargs = kwargs.copy()
+            loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
+            local_kwargs.setdefault(loc_key, loc)
+            local_target = self.local_target(*path, **local_kwargs)
+            # create the wlcg target
+            wlcg_kwargs = kwargs.copy()
+            wlcg_kwargs.setdefault("fs", wlcg_fs)
+            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
+            # build the mirrored target from these two
+            mirrored_target_cls = (
+                law.MirroredFileTarget
+                if isinstance(local_target, law.LocalFileTarget)
+                else law.MirroredDirectoryTarget
+            )
+            return mirrored_target_cls(
+                path=local_target.path,
+                remote_target=wlcg_target,
+                local_target=local_target,
+            )
 
         raise Exception(f"cannot determine output location based on '{location}'")
 
