@@ -25,7 +25,7 @@ logger = law.logger.get_logger(__name__)
 @producer(
     produces={"category_ids"},
     # custom function to skip categorizers
-    skip_category=(lambda task, category_inst: False),
+    skip_category=(lambda self, task, category_inst: False),
 )
 def category_ids(
     self: Producer,
