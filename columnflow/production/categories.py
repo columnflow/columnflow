@@ -12,7 +12,7 @@ import law
 
 from columnflow.categorization import Categorizer
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -62,14 +62,12 @@ def category_ids(
     return target_events
 
 
-@category_ids.setup
-def category_ids_setup(
-    self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
-) -> None:
+@category_ids.init
+def category_ids_init(self: Producer) -> None:
+    if not self.inst_dict.get("task", None):
+        return
 
+    # define a dummy function to skip categories or get the given one
     skip_category = lambda task, category_inst: False
     if callable(self.skip_category_func):
         skip_category = self.skip_category_func
@@ -80,7 +78,7 @@ def category_ids_setup(
     # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
         # check if skipped
-        if skip_category(self.task, cat_inst):
+        if skip_category(self.inst_dict["task"], cat_inst):
             continue
 
         # treat all selections as lists of categorizers
