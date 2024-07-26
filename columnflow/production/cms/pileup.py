@@ -82,13 +82,6 @@ def pu_weight_setup(
     Loads the pileup calculator from the external files bundle and saves them in the
     py:attr:`pileup_corrector` attribute for simpler access in the actual callable.
     """
-    logger.warning_once(
-        "updated_pu_producer",
-        "As of 15.02.2024, The pu_weight producer has been changed, using the correctionlib instead "
-        "of producing pileup weights ourselves. The previously used pu_weight producer is now named "
-        "`pu_weights_from_columnflow`, but using this one is recommended",
-    )
-
     bundle = reqs["external_files"]
 
     # create the corrector

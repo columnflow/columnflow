@@ -560,7 +560,7 @@ class DotDict(OrderedDict):
         # => 123
 
         # use wrap() to convert a nested dict
-        d = DotDict({"foo": {"bar": 1}})
+        d = DotDict.wrap({"foo": {"bar": 1}})
         print(d.foo.bar)
         # => 1
     """
@@ -710,6 +710,29 @@ class DerivableMeta(abc.ABCMeta):
         cls_dict = cls_dict.copy()
         cls_dict["_subclasses"] = {}
 
+        # helper to find an attribute in the cls_dict, and falling back to the bases
+        no_value = object()
+
+        def get_base_attr(attr, default=no_value, /):
+            # prefer the cls_dict of the class to be created
+            if attr in cls_dict:
+                return cls_dict[attr]
+            # fallback to base classes
+            for base in bases:
+                value = getattr(base, attr, no_value)
+                if value != no_value:
+                    return value
+            if default != no_value:
+                return default
+            raise AttributeError(f"attribute {attr} not found in {cls_name}")
+
+        # trigger the hook that updates the cls_dict
+        update_cls_dict = get_base_attr("update_cls_dict", None)
+        if update_cls_dict is not None:
+            if "update_cls_dict" in cls_dict:
+                cls_dict["update_cls_dict"] = staticmethod(update_cls_dict)
+            update_cls_dict(cls_name, cls_dict, get_base_attr)
+
         # create the class
         cls = super().__new__(metacls, cls_name, bases, cls_dict)
 
@@ -719,7 +742,6 @@ class DerivableMeta(abc.ABCMeta):
         # save the class in the class cache of all subclassable base classes
         for base in bases:
             if isinstance(base, metacls):
-                # TODO: is it safe to overwrite here? probably yes
                 base._subclasses[cls_name] = cls
 
         return cls
@@ -786,8 +808,8 @@ class DerivableMeta(abc.ABCMeta):
         cls,
         cls_name: str,
         bases: tuple = (),
-        cls_dict: Union[dict, None] = None,
-        module: Union[str, None] = None,
+        cls_dict: dict[str, Any] | None = None,
+        module: str | None = None,
     ) -> DerivableMeta:
         """Creates a subclass named *cls_name* inheriting from *this* class an
         additional, optional *bases*.

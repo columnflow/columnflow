@@ -1,7 +1,8 @@
-# version 10
+# version 12
 
-luigi~=3.4.0
-scinum~=2.0.2
+tenacity!=8.4.0
+luigi~=3.5.1
+scinum~=2.1.1
 six~=1.16.0
-pyyaml==6.*
-typing_extensions~=4.8.0
+pyyaml~=6.0.1
+typing_extensions~=4.12.2

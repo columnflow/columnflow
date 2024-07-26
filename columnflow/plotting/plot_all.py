@@ -86,7 +86,33 @@ def draw_hist(
     norm: float | Sequence | np.ndarray = 1.0,
     **kwargs,
 ) -> None:
+    if kwargs.get("color", "") is None:
+        # when color is set to None, remove it such that matplotlib automatically chooses a color
+        kwargs.pop("color")
+
     h = h / norm
+    defaults = {
+        "ax": ax,
+        "stack": False,
+        "histtype": "step",
+    }
+    defaults.update(kwargs)
+    h.plot1d(**defaults)
+
+
+def draw_profile(
+    ax: plt.Axes,
+    h: hist.Hist,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
+    """
+    Profiled histograms contains the storage type "Mean" and can therefore not be normalized
+    """
+    if kwargs.get("color", "") is None:
+        # when color is set to None, remove it such that matplotlib automatically chooses a color
+        kwargs.pop("color")
+
     defaults = {
         "ax": ax,
         "stack": False,
@@ -169,7 +195,7 @@ def plot_all(
     # available plot methods mapped to their names
     plot_methods = {
         func.__name__: func
-        for func in [draw_error_bands, draw_stack, draw_hist, draw_errorbars]
+        for func in [draw_error_bands, draw_stack, draw_hist, draw_profile, draw_errorbars]
     }
 
     plt.style.use(mplhep.style.CMS)
@@ -237,7 +263,11 @@ def plot_all(
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
         rax.set(**rax_kwargs)
-        fig.align_ylabels()
+
+        if "xlabel" in rax_kwargs:
+            ax.set_xlabel("")
+
+    fig.align_labels()
 
     # legend
     if not skip_legend:

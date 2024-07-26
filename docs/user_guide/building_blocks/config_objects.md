@@ -10,17 +10,16 @@ The three main classes needed to define your analysis are {external+order:py:cla
 Their purpose and definition can be found in [the Analysis, Campaign and Config section](https://python-order.readthedocs.io/en/latest/quickstart.html#analysis-campaign-and-config) of the Quickstart section of the order documentation.
 
 After defining your Analysis object and your Campaign object(s), you can use the command
+
 ```python
 cfg = analysis.add_config(campaign, name=your_config_name, id=your_config_id)
 ```
+
 to create the new Config object `cfg`, which will be associated to both the Analysis object and the Campaign object needed for its creation.
 As the Config object should contain the analysis-dependent information related to a certain campaign, it should contain most of the information needed for running your analysis.
 Therefore, in this section, the Config parameters required by Columnflow and some convenience parameters will be presented.
 
-To start your analysis, do not forget to use the already existing analysis template in the
-`analysis_templates/cms_minimal` Git directory and its
-[config](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py).
-
+To start your analysis, do not forget to use the already existing analysis template in the `analysis_templates/cms_minimal` Git directory and its [config](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py).
 
 The Config saves information under two general formats: the objects from the order package, which are necessary for your analysis to run in columnflow, and the additional parameters, which are saved under the auxiliary key, accessible through the "x" key.
 In principle, the auxiliary field can contain any parameter the user wants to save and reuse for parts of the analysis.
@@ -30,12 +29,10 @@ These two general formats are presented below.
 Additionally, please note that some columnflow objects, like some Calibrators and Producers, require specific information that is needed to be accessible with predefined keywords.
 As explained in the {ref}`object-specific variables section <object-specific_variables_section>`, please check the documentation of these objects before using them.
 
-
 It is generally advised to use functions to set up Config objects.
 This enables easy and reliable reusage of parts of your analysis that are the same or similar between Campaigns (e.g. parts of the uncertainty model).
 Additionally, other parts of the analysis that might be changed quite often, e.g. the definition of variables, can be defined separately, thus improving the overall organization and readability of your code.
 An example of such a separation can be found in the existing [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau).
-
 
 ## Parameters from the order package (required)
 
@@ -57,8 +54,8 @@ Examples of information carried by a process could be the cross section of the p
 An example of a Process definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
 More information about processes can be found in the {external+order:py:class}`order.process.Process` and the {external+order:doc}`quickstart` sections of the order documentation.
 
-
 (datasets_docu_section)=
+
 ### Datasets
 
 The actual datasets to be processed in the analysis.
@@ -72,12 +69,14 @@ An example is given in the columnflow analysis template:
 :start-at: dataset_names = [
 :end-at: dataset = cfg.add_dataset(campaign.get_dataset(dataset_name))
 ```
+
 The Dataset objects should contain for example information about the number of files and number of events present in a Dataset as well as its keys (= the identifiers or origins of a dataset, used by the `cfg.x.get_dataset_lfns` parameter presented below in {ref}`the section on custom retrieval of datasets <custom_retrieval_of_dataset_files_section>`) and wether it contains observed or simulated data.
 
 It is also possible to change information of a dataset in the config script.
 An example would be reducing the number of files to process for test purposes in a specific test config.
 This could be done with the following lines of code:
 e.g.
+
 ```python
 n_files_max = 5
 for info in dataset.info.values():
@@ -87,7 +86,6 @@ for info in dataset.info.values():
 Once the processes and datasets have both been added to the config, one can check that the root process of all datasets is part of any of the registered processes, using the columnflow function {py:func}`~columnflow.config_util.verify_config_processes`.
 
 An example of a Dataset definition is given in the {ref}`Analysis, Campaign and Config <analysis_campaign_config>` section of the columnflow documentation.
-
 
 ### Variables
 
@@ -146,7 +144,6 @@ An example is given in the columnflow analysis template:
 :end-at: cfg.add_shift(name="nominal", id=0)
 ```
 
-
 Often, shifts are related to auxiliary parameters of the Config, like the name of the scale factors involved, or the paths of source files in case the shift requires external information.
 
 <!--
@@ -188,6 +185,7 @@ An example is given below:
 ```
 
 (custom_retrieval_of_dataset_files_section)=
+
 ### Custom retrieval of dataset files
 
 The Columnflow task {py:class}`~columnflow.tasks.external.GetDatasetLFNs` obtains by default the logical file names of the datasets based on the `keys` argument of the corresponding order Dataset.
@@ -261,6 +259,7 @@ Showing how to require the BundleExternalFiles task to have run in the example o
 :start-at: "@muon_weights.requires"
 :end-at: reqs["external_files"] = BundleExternalFiles.req(self.task)
 ```
+
 :::
 
 ### Luminosity
@@ -276,7 +275,6 @@ cfg.x.luminosity = Number(41480, {
     "lumi_13TeV_correlated": 0.009j,
 })
 ```
-
 
 ### Defaults
 
@@ -301,7 +299,6 @@ This is done with the `cfg.x.{parameter}_group` arguments.
 The expected format of the group is a dictionary containing the custom name of the groups as keys and the list of the parameter values as values.
 The name of the group can then be given as command-line argument instead of the single values.
 An example with a selector_steps group is given below.
-
 
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
@@ -343,6 +340,7 @@ cfg.x.reduced_file_size = 512.0
 ```
 
 (object-specific_variables_section)=
+
 ### Object-specific variables
 
 Other than the variables mentioned above, several might be needed for specific Producers for example.
@@ -354,7 +352,6 @@ Since the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer was 
 As for the CMS-specific objects, an example could be the task {py:class}`~columnflow.tasks.cms.external.CreatePileupWeights`, which requires for example the minimum bias cross sections `cfg.x.minbias_xs` and the `pu` entry in the external files.
 
 Examples of these entries in the Config objects can be found in already existing CMS-analyses working with columnflow, for example the [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau) or the [hh2bbww analysis](https://github.com/uhh-cms/hh2bbww) from UHH.
-
 
 ### Other examples of auxiliaries in the Config object
 
@@ -368,7 +365,3 @@ To give an idea of the kind of variables an analysis might want to include in th
 - MET filters
 
 For applications of these examples, you can look at already existing columnflow analyses, for example the [hh2bbtautau analysis](https://github.com/uhh-cms/hh2bbtautau) from UHH.
-
-
-
-
