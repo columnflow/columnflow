@@ -70,7 +70,7 @@ def category_ids_setup(
     reader_targets: InsertableDict,
 ) -> None:
 
-    skip_category = lambda self, task, category_inst: False
+    skip_category = lambda task, category_inst: False
     if callable(self.skip_category_func):
         skip_category = self.skip_category_func
 
