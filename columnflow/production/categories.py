@@ -12,7 +12,7 @@ import law
 
 from columnflow.categorization import Categorizer
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -22,7 +22,11 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-@producer(produces={"category_ids"})
+@producer(
+    produces={"category_ids"},
+    # custom function to skip categorizers
+    skip_category_func=None,
+)
 def category_ids(
     self: Producer,
     events: ak.Array,
@@ -34,12 +38,12 @@ def category_ids(
     """
     category_ids = []
 
-    for cat_inst in self.config_inst.get_leaf_categories():
+    for cat_inst, categorizers in self.categorizer_map.items():
         # start with a true mask
         cat_mask = np.ones(len(events), dtype=bool)
 
         # loop through selectors
-        for categorizer in self.categorizer_map[cat_inst]:
+        for categorizer in categorizers:
             events, mask = self[categorizer](events, **kwargs)
             cat_mask = cat_mask & mask
 
@@ -58,13 +62,27 @@ def category_ids(
     return target_events
 
 
-@category_ids.init
-def category_ids_init(self: Producer) -> None:
+@category_ids.setup
+def category_ids_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
+
+    skip_category = lambda task, category_inst: False
+    if callable(self.skip_category_func):
+        skip_category = self.skip_category_func
+
     # store a mapping from leaf category to categorizer classes for faster lookup
     self.categorizer_map = defaultdict(list)
 
     # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
+        # check if skipped
+        if skip_category(self.task, cat_inst):
+            continue
+
         # treat all selections as lists of categorizers
         for sel in law.util.make_list(cat_inst.selection):
             if Categorizer.derived_by(sel):
