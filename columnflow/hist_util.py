@@ -60,20 +60,22 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
         )
     elif axis_type == "intcategory" or axis_type == "intcat":
         binning = [int(b) for b in variable_inst.binning] if isinstance(variable_inst.binning, list) else []
+        axis_kwargs.setdefault("growth", True)
         return histogram.IntCat(
             binning,
-            growth=True,
             **axis_kwargs,
         )
     elif axis_type == "strcategory" or axis_type == "strcat":
+        axis_kwargs.setdefault("growth", True)
         return histogram.StrCat(
             [],
-            growth=True,
             **axis_kwargs,
         )
     elif axis_type == "regular" or axis_type == "reg":
+        if not variable_inst.even_binning:
+            logger.warning("Regular axis with uneven binning is not supported. Using first and last bin edge instead.")
         return histogram.Regular(
-            variable_inst.nbins,
+            variable_inst.n_bins,
             variable_inst.bin_edges[0],
             variable_inst.bin_edges[-1],
             **axis_kwargs,
