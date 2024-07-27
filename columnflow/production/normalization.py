@@ -99,16 +99,21 @@ def get_br_from_inclusive_dataset(
             # (identified as leaf processes that have no occurrences in the stats)
             # (or as non-leaf processes that are not in the stitching datasets)
             is_leaf = child_proc.is_leaf_process
+            child_in_weight_procs = str(child_proc.id) in sum_mc_weight_per_process
             if (
                 (is_leaf and str(child_proc.id) not in sum_mc_weight_per_process) or
                 (not is_leaf and child_proc.id not in proc_ds_map)
             ):
                 continue
 
-            proc_ids = [child_proc.id] if is_leaf else [p.id for p in child_proc.get_leaf_processes()]
+            proc_ids = [child_proc.id] if (is_leaf or child_in_weight_procs) else [
+                p.id for p, _, _ in child_proc.walk_processes() if str(p.id) in sum_mc_weight_per_process
+            ]
             # compute the uncertainty on the branching ratio using number of events
             _br = N(sum(num_events_per_process.get(str(proc_id), 0) for proc_id in proc_ids)) / N(num_events)
-            # uncertainty is independent of the mc weights, so we can use the same relative uncertainty
+            # NOTE: we assume that the uncertainty is independent of the mc weights, so we can use
+            # the same relative uncertainty. This is a simplification, but should be fine for most
+            # cases. We can improve this by switching from jsons to hists when storing sum of weights.
             br[proc.id][child_proc.id] = sn.Number(
                 sum(sum_mc_weight_per_process.get(str(proc_id), 0) for proc_id in proc_ids) / sum_mc_weight,
                 _br(sn.UP, unc=True, factor=True) * 1j,  # same relative uncertainty
