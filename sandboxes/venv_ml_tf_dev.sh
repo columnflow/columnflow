@@ -13,7 +13,7 @@ action() {
     export CF_VENV_NAME="$( basename "${this_file%.sh}" )"
     export CF_VENV_REQUIREMENTS="${this_dir}/requirements_ml_dev.txt"
     export CF_VENV_ADDITIONAL_REQUIREMENTS=""
-    export CF_VENV_EXTRAS="ml,dev"
+    export CF_VENV_EXTRAS="ml_tf,dev"
 
     source "${this_dir}/_setup_venv.sh" "$@"
 }
