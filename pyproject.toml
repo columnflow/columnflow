@@ -75,7 +75,7 @@ dependencies = [
     {conda = 'myproxy:linux'},
     {conda = "conda-pack"},
     {conda = "unidep[all]"},
-    {conda = "pip-tools[toml]"}
+    {conda = "uv"}
 ]
 local-dependencies = {file = ["sandboxes/cf.txt"]}
 optional-dependencies={"dev" = {file = ["sandboxes/dev.txt"]}, "columnar"= {file = ["sandboxes/columnar.txt"]}, "ml_tf"= {file = ["sandboxes/ml_tf.txt", "sandboxes/columnar.txt"]}}

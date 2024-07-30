@@ -117,7 +117,9 @@ setup_venv() {
     local SOURCE="$CF_BASE"
     local EXTRAS=""
     if [ ! -z "${CF_VENV_EXTRAS}" ]; then
-        EXTRAS="--extra ${CF_VENV_EXTRAS}"
+        for extra in ${CF_VENV_EXTRAS//,/ }; do
+            EXTRAS="${EXTRAS} --extra ${extra}"
+        done
         SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
     fi
 
@@ -134,11 +136,11 @@ setup_venv() {
     if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
         local TMP_REQS="${this_dir}/requirements_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
-        
-        cmd="pip-compile -r \
+        cmd="uv pip compile -n \
             --output-file ${TMP_REQS} \
             --no-annotate --strip-extras --no-header --unsafe-package '' \
-            ${EXTRAS} ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
+            ${EXTRAS} --prerelease=allow ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
+        echo "$cmd"
         eval "$cmd"
         # generate unique hash based on current state of software packages
         local this_hash="$( openssl sha256 "$TMP_REQS" | awk '{print $2}' | sed s/[[:blank:]].*//)"
@@ -303,10 +305,12 @@ setup_venv() {
 
             # actual installation
             eval "python -m pip install --force wheel"
-            cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
-            cf_color magenta "evaluating $cmd"
-            eval "$cmd"
             eval "python -m pip install -U --no-cache-dir ${install_reqs}"
+            # install cf itself to make the shell script available
+            # cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
+            # cf_color magenta "evaluating $cmd"
+            # eval "$cmd"
+            
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
             # make newly installed packages relocatable
@@ -320,6 +324,12 @@ setup_venv() {
 
         # remove the pending_flag
         clear_pending
+
+        # remove the temporary python env file if requested
+        if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
+            cf_color magenta "Cleaning temporary file ${CF_VENV_REQUIREMENTS}"
+            rm ${CF_VENV_REQUIREMENTS}
+        fi
     fi
 
     # handle remote job environments
