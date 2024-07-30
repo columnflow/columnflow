@@ -95,22 +95,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - exe_files: sandboxes/venv_columnar.sh
-            name: "columnar"
-            hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
-            hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
-          - exe_files: sandboxes/venv_columnar_dev.sh
-            name: "columnar_dev"
-            hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
-            hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}
-          - exe_files: sandboxes/venv_ml_tf.sh
-            name: "ml_tf"
-            hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
-            hash: ${{ needs.parse_env_vars.outputs.ML_TF_FILE_HASH }}
-          - exe_files: sandboxes/venv_docs_dev.sh
-            name: "docs_dev"
-            hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
-            hash: ${{ needs.parse_env_vars.outputs.DOCS_FILE_HASH }}
+          # - exe_files: sandboxes/venv_columnar.sh
+          #   name: "columnar"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
+          # - exe_files: sandboxes/venv_columnar_dev.sh
+          #   name: "columnar_dev"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}
+          # - exe_files: sandboxes/venv_ml_tf.sh
+          #   name: "ml_tf"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.ML_TF_FILE_HASH }}
+          # - exe_files: sandboxes/venv_docs_dev.sh
+          #   name: "docs_dev"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.DOCS_FILE_HASH }}
           - exe_files: sandboxes/venv_ml_tf.sh,sandboxes/venv_columnar_dev.sh
             name: "testing_base"
             hashFiles: ${{ needs.parse_env_vars.outputs.TEST_DEV_HASH_FILES }}
