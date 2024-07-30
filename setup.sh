@@ -202,7 +202,10 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
     # flag to recompile dependencies or not
+    export CF_CLEAN_TEMP_ENV_FILES="${CF_CLEAN_TEMP_ENV_FILES:-False}"
     export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
+    # flag to clean up temporary files for different environments
+    
 
 
     #
@@ -218,6 +221,7 @@ setup_columnflow() {
 
     cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
 
+    cf_color yellow "DEBUG: after call cf_seetup_software_stack: CF_CONDA_BASE=${CF_CONDA_BASE}"
 
     #
     # git hooks
@@ -227,6 +231,8 @@ setup_columnflow() {
     if [ "${CF_LOCAL_ENV}" = "1" ]; then
         cf_setup_git_hooks || return "$?"
     fi
+
+    cf_color yellow "DEBUG: after call cf_setup_git_hooks: CF_CONDA_BASE=${CF_CONDA_BASE}"
 
 
     #
@@ -244,6 +250,7 @@ setup_columnflow() {
         law index -q
     fi
 
+    cf_color yellow "DEBUG: after law setup: CF_CONDA_BASE=${CF_CONDA_BASE}"
     # finalize
     export CF_SETUP="1"
 }
@@ -665,29 +672,38 @@ EOF
             micromamba activate || return "$?"
             echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
+            # configure path to conda environment file
+            export CONDA_ENV_FILE="${CF_BASE}/sandboxes/environment_${system}_py${pyv}.yaml"
+
             # install packages
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                
-                
+
                 cf_color cyan "building micromamba command"
-                export CONDA_ENV_FILE="${CF_BASE}/sandboxes/environment_${system}_py${pyv}.yaml"
-                #
+                
+                # if the environment file does not exist or recompilation is requested, created the file again
                 if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
+
                     # compile micromamba environment.yaml file from pyproject.toml
                     # if it doesn't exist
                     cf_color cyan "install unidep"
-                    python3 -m pip install unidep[toml] || return "$?"
+                    micromamba install unidep[toml] || return "$?"
 
                     unidep merge -o $CONDA_ENV_FILE \
                         --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
+                    
+                    # resulting environment.yaml file contains environment name
+                    # which we do not use, so delete the name
+                    sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                    cat $CONDA_ENV_FILE
                 fi
-                # resulting environment.yaml file contains environment name
-                # which we do not use, so delete the name
-                sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
-                cat $CONDA_ENV_FILE
+                
                 micromamba install -f $CONDA_ENV_FILE || return "$?"
+                if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
+                    cf_color magenta "Cleaning temporary file ${CONDA_ENV_FILE}"
+                    rm ${CONDA_ENV_FILE}
+                fi
                 micromamba clean --yes --all
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
@@ -763,6 +779,7 @@ EOF
         # source the production sandbox
         source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
+    cf_color yellow "DEBUG: at end of setup.sh: CF_CONDA_BASE=${CF_CONDA_BASE}"
 }
 
 cf_setup_git_hooks() {
@@ -1005,4 +1022,6 @@ main() {
 # entry point
 if [ "${CF_SKIP_SETUP}" != "1" ]; then
     main "$@"
+    cf_color yellow "DEBUG: after call main: CF_CONDA_BASE=${CF_CONDA_BASE}"
+    env > env_after_setup.log
 fi
