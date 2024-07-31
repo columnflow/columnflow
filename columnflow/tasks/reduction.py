@@ -137,7 +137,8 @@ class ReduceEvents(
         # define columns to read for the differently structured selection masks
         read_sel_columns = set()
         # open either selector steps of the full event selection mask
-        read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
+        read_sel_columns.add(Route(
+            "steps.*" if self.selector_steps and self.selector_steps != self.selector_steps_all else "event"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
         sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
@@ -145,17 +146,19 @@ class ReduceEvents(
             for src_field in sel_results.objects.fields:
                 for dst_field in sel_results.objects[src_field].fields:
                     # nothing to do in case the top level column does not need to be loaded
-                    if not law.util.multi_match(dst_field, write_columns_groups.keys()):
+                    matches = [wc for wc in write_columns_groups if law.util.multi_match(dst_field, wc)]
+                    if not matches:
                         continue
                     # register the object masks
                     read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
                     # in case new collections are created and configured to be written, make sure
                     # that the corresponding columns of the source collection are loaded
                     if src_field != dst_field:
-                        read_columns |= {
-                            src_field + route[1:]
-                            for route in write_columns_groups[dst_field]
-                        }
+                        for wc in matches:
+                            read_columns |= {
+                                src_field + route[1:]
+                                for route in write_columns_groups[wc]
+                            }
         del sel_results
 
         # event counters
@@ -196,7 +199,7 @@ class ReduceEvents(
                 )
 
                 # build the event mask
-                if self.selector_steps:
+                if self.selector_steps and self.selector_steps != self.selector_steps_all:
                     # check if all steps are present
                     missing_steps = set(self.selector_steps) - set(sel.steps.fields)
                     if missing_steps:

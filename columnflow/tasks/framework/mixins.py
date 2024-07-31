@@ -679,10 +679,12 @@ class SelectorStepsMixin(SelectorMixin):
     comma-separated list of selector step names and is an input parameter for this task.
     """
 
+    selector_steps_all = ("ALL",)
+
     selector_steps = law.CSVParameter(
-        default=(),
-        description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "default: empty",
+        default=selector_steps_all,
+        description=f"a subset of steps of the selector to apply; "
+                    f"Set to {selector_steps_all[0]} to apply all (default).",
         brace_expand=True,
         parse_empty=True,
     )
@@ -722,7 +724,7 @@ class SelectorStepsMixin(SelectorMixin):
             )
 
         # sort selector steps when the order does not matter
-        if not cls.selector_steps_order_sensitive and "selector_steps" in params:
+        if "selector_steps" in params and not cls.selector_steps_order_sensitive:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))
 
         return params
@@ -761,10 +763,10 @@ class SelectorStepsMixin(SelectorMixin):
         parts = super().store_parts()
 
         steps = self.selector_steps
-        if not self.selector_steps_order_sensitive:
-            steps = sorted(steps)
-        if steps:
-            parts["selector"] += "__steps_" + "_".join(steps)
+        if steps != self.selector_steps_all:
+            if not self.selector_steps_order_sensitive:
+                steps = sorted(steps)
+            parts["selector"] += ("__steps_" + "_".join(steps) if steps else "__inclusive")
 
         return parts
 
@@ -2484,3 +2486,101 @@ class HistHookMixin(ConfigTask):
             hooks_repr += f"__{law.util.create_hash(hooks[5:])}"
 
         return hooks_repr
+
+
+class MergeHistogramMixin(
+        VariablesMixin,
+        law.LocalWorkflow,
+):
+    only_missing = luigi.BoolParameter(
+        default=False,
+        description="when True, identify missing variables first and only require histograms of "
+                    "missing ones; default: False",
+    )
+    remove_previous = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, remove particlar input histograms after merging; default: False",
+    )
+
+    @classmethod
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
+        _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"variables"}
+        kwargs["_prefer_cli"] = _prefer_cli
+        return super().req_params(inst, **kwargs)
+
+    def create_branch_map(self):
+        # create a dummy branch map so that this task could be submitted as a job
+        return {0: None}
+
+    def _get_variables(self):
+        if self.is_workflow():
+            return self.as_branch()._get_variables()
+
+        variables = self.variables
+
+        # optional dynamic behavior: determine not yet created variables and require only those
+        if self.only_missing:
+            missing = self.output().count(existing=False, keys=True)[1]
+            variables = sorted(missing, key=variables.index)
+
+        return variables
+
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        if not self.pilot:
+            variables = self._get_variables()
+            if variables:
+                reqs["hists"] = self.reqs.CreateHistograms.req_different_branching(
+                    self,
+                    branch=-1,
+                    variables=tuple(variables),
+                )
+
+        return reqs
+
+    def requires(self):
+        # optional dynamic behavior: determine not yet created variables and require only those
+        variables = self._get_variables()
+
+        if not variables:
+            return []
+
+        return self.reqs.CreateHistograms.req_different_branching(
+            self,
+            branch=-1,
+            variables=tuple(variables),
+            workflow="local",
+        )
+
+    def output(self):
+        return {"hists": law.SiblingFileCollection({
+            variable_name: self.target(f"hist__{variable_name}.pickle")
+            for variable_name in self.variables
+        })}
+
+    @law.decorator.log
+    def run(self):
+        # preare inputs and outputs
+        inputs = self.input()["collection"]
+        outputs = self.output()
+
+        # load input histograms
+        hists = [
+            inp["hists"].load(formatter="pickle")
+            for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
+        ]
+
+        # create a separate file per output variable
+        variable_names = list(hists[0].keys())
+        for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
+            self.publish_message(f"merging histograms for '{variable_name}'")
+
+            variable_hists = [h[variable_name] for h in hists]
+            merged = sum(variable_hists[1:], variable_hists[0].copy())
+            outputs["hists"][variable_name].dump(merged, formatter="pickle")
+
+        # optionally remove inputs
+        if self.remove_previous:
+            inputs.remove()

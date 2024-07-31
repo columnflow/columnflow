@@ -16,7 +16,7 @@ from columnflow.tasks.framework.base import (
     Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory, RESOLVE_DEFAULT,
 )
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -24,8 +24,13 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
-from columnflow.tasks.selection import MergeSelectionMasks
-from columnflow.util import DotDict, dev_sandbox
+from columnflow.tasks.external import GetDatasetLFNs
+from columnflow.tasks.selection import SelectEvents
+from columnflow.tasks.calibration import CalibrateEvents
+from columnflow.production import Producer
+from columnflow.util import DotDict, dev_sandbox, maybe_import
+
+np = maybe_import("numpy")
 
 
 class CreateCutflowHistograms(
@@ -41,7 +46,8 @@ class CreateCutflowHistograms(
     selector_steps = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
-        "default: value of the 'default_selector_steps' config",
+                    f"Set to {SelectorStepsMixin.selector_steps_all[0]} to apply all alphabetically."
+                    "default: value of the 'default_selector_steps' config",
         brace_expand=True,
         parse_empty=True,
     )
@@ -58,32 +64,64 @@ class CreateCutflowHistograms(
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
-        MergeSelectionMasks=MergeSelectionMasks,
+        GetDatasetLFNs=GetDatasetLFNs,
+        CalibrateEvents=CalibrateEvents,
+        SelectEvents=SelectEvents,
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store the normalization weight producer for MC
+        self.norm_weight_producer = None
+        if self.dataset_inst.is_mc:
+            self.norm_weight_producer = Producer.get_cls("normalization_weights")(
+                inst_dict=self.get_producer_kwargs(self),
+            )
 
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
 
-    def create_branch_map(self):
-        # dummy branch map
-        return [None]
-
     def workflow_requires(self):
         reqs = super().workflow_requires()
+        reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
+        if not self.pilot:
+            reqs["calibrations"] = [
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
+            ]
+            reqs["selection"] = self.reqs.SelectEvents.req(self)
+        else:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.reqs.SelectEvents.req(self)
+            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
-        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
+        if self.dataset_inst.is_mc:
+            reqs["normalization"] = self.norm_weight_producer.run_requires()
 
         return reqs
 
     def requires(self):
-        return {
-            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
+        reqs = {
+            "lfns": self.reqs.GetDatasetLFNs.req(self),
+            "calibrations": [
+                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                for calibrator_inst in self.calibrator_insts
+                if calibrator_inst.produced_columns
+            ],
+            "selection": self.reqs.SelectEvents.req(self),
         }
 
+        if self.dataset_inst.is_mc:
+            reqs["normalization"] = self.norm_weight_producer.run_requires()
+
+        return reqs
+
+    # TODO: CreateHistograms has a @MergeReducedEventsUser.maybe_dummy here
     def output(self):
         return {
-            var: self.target(f"cutflow_hist__{var}.pickle")
-            for var in self.variables
+            "hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle"),
         }
 
     @law.decorator.log
@@ -93,10 +131,11 @@ class CreateCutflowHistograms(
         import hist
         import numpy as np
         import awkward as ak
-        from columnflow.columnar_util import Route, add_ak_aliases, fill_hist
+        from columnflow.columnar_util import Route, add_ak_aliases, fill_hist, mandatory_coffea_columns, update_ak_array
 
         # prepare inputs and outputs
         inputs = self.input()
+        lfn_task = self.requires()["lfns"]
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -105,10 +144,17 @@ class CreateCutflowHistograms(
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
 
+        # setup the normalization weights producer
+        if self.dataset_inst.is_mc:
+            self.norm_weight_producer.run_setup(
+                self.requires()["normalization"],
+                self.input()["normalization"],
+            )
+
         # define columns that need to be read
         read_columns = {"category_ids", "process_id"} | set(aliases.values())
         if self.dataset_inst.is_mc:
-            read_columns |= {"normalization_weight"}
+            read_columns |= self.norm_weight_producer.used_columns
         read_columns = {Route(c) for c in read_columns}
 
         # define steps
@@ -132,7 +178,9 @@ class CreateCutflowHistograms(
                 expressions[variable_inst.name] = expr
 
         # prepare columns to load
-        load_columns = {("events" + route) for route in read_columns} | {Route("steps.*")}
+        load_columns = read_columns | set(mandatory_coffea_columns)
+        load_nano_columns = {("events" + route) for route in read_columns} | set(mandatory_coffea_columns)
+        load_sel_columns = {Route("steps.*")}
 
         # prepare histograms
         histograms = {}
@@ -159,16 +207,35 @@ class CreateCutflowHistograms(
                     # enable weights and store it
                     histograms[var_key] = h.Weight()
 
-        for arr, pos in self.iter_chunked_io(
-            inputs["selection"]["masks"].path,
-            source_type="awkward_parquet",
-            read_columns=load_columns,
+        # let the lfn_task prepare the nano file (basically determine a good pfn)
+        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
+
+        # open the input file with uproot
+        with self.publish_step("load and open ..."):
+            nano_file = input_file.load(formatter="uproot")
+
+        input_paths = [nano_file]
+        input_paths.append(inputs["selection"]["results"].path)
+        input_paths.extend([inp["columns"].path for inp in inputs["calibrations"]])
+        if self.selector_inst.produced_columns:
+            input_paths.append(inputs["selection"]["columns"].path)
+
+        for (events, sel, *diffs), pos in self.iter_chunked_io(
+            input_paths,
+            source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
+            read_columns=[load_nano_columns, load_sel_columns] + (len(input_paths) - 2) * [load_columns],
         ):
-            events = arr.events
+
+            # add the calibrated diffs and potentially new columns
+            events = update_ak_array(events, *diffs)
+
+            # add normalization weight
+            if self.dataset_inst.is_mc:
+                events = self.norm_weight_producer(events)
 
             # overwrite steps if not defined yet
-            if not steps:
-                steps = arr.steps.fields
+            if steps == self.selector_steps_default:
+                steps = sel.steps.fields
 
             # prepare histograms and exprepssions once
             if not histograms:
@@ -216,12 +283,13 @@ class CreateCutflowHistograms(
                 # fill all other steps
                 mask = True
                 for step in steps:
-                    if step not in arr.steps.fields:
+                    if step not in sel.steps.fields:
                         raise ValueError(
                             f"step '{step}' is not defined by selector {self.selector}",
                         )
                     # incrementally update the mask and fill the point
-                    mask = mask & arr.steps[step]
+
+                    mask = mask & sel.steps[step]
                     fill_data = get_point(mask)
                     fill_hist(
                         histograms[var_key],
@@ -231,13 +299,37 @@ class CreateCutflowHistograms(
                     )
 
         # dump the histograms
-        for var_key in histograms.keys():
-            self.output()[var_key].dump(histograms[var_key], formatter="pickle")
+        self.output()["hists"].dump(histograms, formatter="pickle")
 
 
 CreateCutflowHistogramsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CreateCutflowHistograms,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
+
+
+class MergeCutflowHistograms(
+    MergeHistogramMixin,
+    SelectorStepsMixin,
+    CalibratorsMixin,
+    DatasetTask,
+    RemoteWorkflow,
+):
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        CreateHistograms=CreateCutflowHistograms,
+    )
+
+    selector_steps_order_sensitive = True
+
+
+MergeCutflowHistogramsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=MergeCutflowHistograms,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 
@@ -262,7 +354,7 @@ class PlotCutflowBase(
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
-        CreateCutflowHistograms=CreateCutflowHistograms,
+        MergeCutflowHistograms=MergeCutflowHistograms,
     )
 
     def store_parts(self):
@@ -289,6 +381,18 @@ class PlotCutflow(
         f"default: '{CreateCutflowHistograms.default_variables[0]}'",
     )
 
+    relative = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="plot cutflow as fraction of total at each step",
+    )
+
+    skip_initial = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="do not plot the event selection before applying any steps",
+    )
+
     # upstream requirements
     reqs = Requirements(
         PlotCutflowBase.reqs,
@@ -309,7 +413,7 @@ class PlotCutflow(
         reqs = super().workflow_requires()
 
         reqs["hists"] = [
-            self.reqs.CreateCutflowHistograms.req(
+            self.reqs.MergeCutflowHistograms.req(
                 self,
                 dataset=d,
                 variables=(self.variable,),
@@ -321,7 +425,7 @@ class PlotCutflow(
 
     def requires(self):
         return {
-            d: self.reqs.CreateCutflowHistograms.req(
+            d: self.reqs.MergeCutflowHistograms.req(
                 self,
                 branch=0,
                 dataset=d,
@@ -370,7 +474,7 @@ class PlotCutflow(
         with self.publish_step(f"plotting cutflow in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp[self.variable].load(formatter="pickle")
+                h_in = inp["hists"][self.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
@@ -397,6 +501,9 @@ class PlotCutflow(
                     }]
                     h = h[{"process": sum}]
 
+                    if self.skip_initial:
+                        h = h[{"step": self.selector_steps}]
+
                     # add the histogram
                     if process_inst in hists:
                         hists[process_inst] += h
@@ -406,6 +513,8 @@ class PlotCutflow(
             # there should be hists to plot
             if not hists:
                 raise Exception("no histograms found to plot")
+
+            total = sum(hists.values()).values() if self.relative else np.ones((len(self.selector_steps) + 1, 1))
 
             # axis selections and reductions, including sorting by process order
             _hists = OrderedDict()
@@ -422,7 +531,7 @@ class PlotCutflow(
                 # reductions
                 h = h[{"category": sum, self.variable: sum}]
                 # store
-                _hists[process_inst] = h
+                _hists[process_inst] = h / total
             hists = _hists
 
             # call the plot function
@@ -499,14 +608,14 @@ class PlotCutflowVariablesBase(
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["hists"] = [
-            self.reqs.CreateCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
+            self.reqs.MergeCutflowHistograms.req(self, dataset=d, _exclude={"branches"})
             for d in self.datasets
         ]
         return reqs
 
     def requires(self):
         return {
-            d: self.reqs.CreateCutflowHistograms.req(self, dataset=d, branch=0)
+            d: self.reqs.MergeCutflowHistograms.req(self, dataset=d, branch=0)
             for d in self.datasets
         }
 
@@ -553,7 +662,7 @@ class PlotCutflowVariablesBase(
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp[self.branch_data.variable].load(formatter="pickle")
+                h_in = inp["hists"][self.branch_data.variable].load(formatter="pickle")
 
                 # sanity checks
                 n_shifts = len(h_in.axes["shift"])
