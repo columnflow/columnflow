@@ -62,6 +62,8 @@ jobs:
       ML_TF_DEV_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_DEV_FILE_HASH }}
       DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
       DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
+      TEST_DEV_HASH_FILES: ${{ steps.file_manager.outputs.TEST_DEV_HASH_FILES }}
+      TEST_DEV_FILE_HASH: ${{ steps.file_manager.outputs.TEST_DEV_FILE_HASH }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@master
@@ -77,18 +79,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - CONTAINER: "software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+          - CONTAINER: "software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
             NAME: "Lint 🔍"
             EXECUTABLE: "./tests/run_linting"
             UPLOAD_FILES: false
             USER: cf_user
-          - CONTAINER: "venv_columnar_dev:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}"
+          - CONTAINER: "testing_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}"
             NAME: Test 🎢
             EXECUTABLE: "./tests/run_tests"
             UPLOAD_FILES: false
             USER: cf_user
             FORCE_COMPILE_ENV: "False"
-          - CONTAINER: "venv_columnar_dev:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}"
+          - CONTAINER: "testing_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}"
             NAME: Run coverage 🎢
             EXECUTABLE: "./tests/run_coverage"
             UPLOAD_FILES: true
@@ -110,7 +112,7 @@ jobs:
     needs: [parse_env_vars, test_matrix]
     environment: Pypi tests
     container: 
-      image: "ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+      image: "ghcr.io/${{ github.repository }}/software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
       options: --user root
     steps:
       - name: Prepare session

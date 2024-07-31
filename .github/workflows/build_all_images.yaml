@@ -58,7 +58,7 @@ jobs:
       packages: write
     name: Build base software
     with:
-      IMAGE_NAME: "software-base"
+      IMAGE_NAME: "software_base"
       PUSH_IMAGE: true
       PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
       BUILD_ARGS: |
@@ -75,7 +75,7 @@ jobs:
         packages: write
       name: Build base software
       with:
-        IMAGE_NAME: "software-base-dev"
+        IMAGE_NAME: "software_base_dev"
         PUSH_IMAGE: true
         PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
         BUILD_ARGS: |
@@ -117,12 +117,12 @@ jobs:
             hash: ${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}
     uses: ./.github/workflows/build_docker_container.yaml
     with:
-      IMAGE_NAME: venv_${{ matrix.name }}
+      IMAGE_NAME: ${{ matrix.name }}
       PUSH_IMAGE: true
       PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
       BUILD_ARGS: |
         exe_files=${{ matrix.exe_files }}
-        base=ghcr.io/${{ github.repository }}/software-base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+        base=ghcr.io/${{ github.repository }}/software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       HASHFILES: |
         ${{ matrix.hashFiles }}
       HASH: ${{ matrix.hash }}
