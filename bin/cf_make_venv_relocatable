@@ -42,12 +42,12 @@ cf_make_venv_relocatable() {
     rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}
 
     # replace absolute paths in the activation file to make it relocatable for bash and zsh
-    sed -i -r \
+    sed -i.bak -r \
         's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "${ZSH_VERSION}" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
         "${CF_VENV_BASE}/${name}/bin/activate"
 
     # let the home variable in pyvenv.cfg point to the conda bin directory
-    sed -i -r \
+    sed -i.bak -r \
         "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
         "${CF_VENV_BASE}/${name}/pyvenv.cfg"
 
@@ -56,14 +56,14 @@ cf_make_venv_relocatable() {
     for f in $( find "${CF_VENV_BASE}/${name}/bin" -type f ); do
         # must be readable and executable
         if [ -r "${f}" ] && [ -x "${f}" ]; then
-            sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
+            sed -i.bak -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
             [ "$?" != "0" ] && return "5"
         fi
     done
 
     # in case any of the installed sitepackages contains an absolute path, change it to the environment variable
     grep -rl --binary-files without-match "$CF_BASE" ${CF_VENV_BASE}/${name}/lib | while read -r f ; do
-        sed -i "s#$CF_BASE#\${CF_BASE}#g" $f
+        sed -i.bak "s#$CF_BASE#\${CF_BASE}#g" $f
     done
 
     # replace all symlinked files pointing outside of the venv with copies

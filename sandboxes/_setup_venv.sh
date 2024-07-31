@@ -368,7 +368,7 @@ setup_venv() {
         fi
 
         # let the home variable in pyvenv.cfg point to the conda bin directory
-        sed -i -r \
+        sed -i.bak -r \
             "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
             "${install_path}/pyvenv.cfg"
 
