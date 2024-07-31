@@ -47,7 +47,7 @@ class CreateCutflowHistograms(
         default=(RESOLVE_DEFAULT,),
         description="a subset of steps of the selector to apply; uses all steps when empty; "
                     f"Set to {SelectorStepsMixin.selector_steps_all[0]} to apply all alphabetically."
-                    "default: value of the 'default_selector_steps' config",
+                    "default: value of config.x.default_selector_steps",
         brace_expand=True,
         parse_empty=True,
     )
