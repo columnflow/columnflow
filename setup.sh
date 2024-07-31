@@ -396,6 +396,8 @@ cf_setup_interactive_common_variables() {
     export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
     export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
 
+    query CF_PYVERSION "Python version for software stack" "3.9"
+    export_and_save CF_PYVERSION "${CF_PYVERSION}"
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
@@ -573,7 +575,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="${PYVERSION:-3.9}"
+    local pyv="${CF_PYVERSION:-3.9}"
     local ret
 
     # zsh options
@@ -688,7 +690,7 @@ EOF
                     # compile micromamba environment.yaml file from pyproject.toml
                     # if it doesn't exist
                     cf_color cyan "install unidep"
-                    micromamba install unidep[toml] || return "$?"
+                    micromamba install unidep[toml] python=${pyv} || return "$?"
 
                     unidep merge -o $CONDA_ENV_FILE \
                         --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
@@ -717,6 +719,9 @@ EOF
                 echo
             fi
         fi
+
+        # introduce sanity check for requested python version (pyv) vs python version in conda environment
+        
 
         #
         # venv setup
