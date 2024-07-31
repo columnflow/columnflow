@@ -201,12 +201,9 @@ setup_columnflow() {
     export CF_ORIG_PYTHONPATH="${PYTHONPATH}"
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
-    # flag to recompile dependencies or not
-    export CF_CLEAN_TEMP_ENV_FILES="${CF_CLEAN_TEMP_ENV_FILES:-False}"
-    export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
-    # flag to clean up temporary files for different environments
-    
 
+    # flag to recompile dependencies or not
+    export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
 
     #
     # common variables
@@ -289,6 +286,13 @@ cf_setup_common_variables() {
 
     # detect environments
     cf_detect_envs || return "$?"
+
+    export CF_REQ_OUTPUT_DIR="${CF_REQ_OUTPUT_DIR:-${CF_BASE}/.requirements}"
+    # flag to clean up temporary files for different environments
+    export CF_CLEAN_TEMP_ENV_FILES="${CF_CLEAN_TEMP_ENV_FILES:-False}"
+
+    cf_color yellow "DEBUG: before call cf_setup_software_stack: CF_CLEAN_TEMP_ENV_FILES=${CF_CLEAN_TEMP_ENV_FILES}"
+    mkdir -p "${CF_REQ_OUTPUT_DIR}"
 
     # lang defaults
     if [ "${CF_RTD_ENV}" = "1" ]; then
@@ -675,7 +679,7 @@ EOF
             echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
             # configure path to conda environment file
-            export CONDA_ENV_FILE="${CF_BASE}/sandboxes/environment_${system}_py${pyv}.yaml"
+            export CONDA_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_${system}_py${pyv}.yaml"
 
             # install packages
             if ${conda_missing}; then
