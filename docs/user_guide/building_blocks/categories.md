@@ -1,52 +1,49 @@
-Work in Progess! This guide has not been finalized and the presented code has not yet been tested.
-
-TODO: make the code testable
-
-(categories)=
 # Categories
 
-In columnflow, there are many tools to create a complex and flexible categorization of all analysed
-events.
+(categories)=
+
+> Work in Progess! This guide has not been finalized and the presented code has not yet been tested.
+> TODO: make the code testable
+
+In columnflow, there are many tools to create a complex and flexible categorization of all analysed events.
 Generally, this categorization can be layered.
-We refer to the smallest building block of these layers as **leaf categories**, which can subsequently
-be either run individually or combined into more complex categories.
-This guide presents how to implement a set of categories in columnflow and shows how to use the
-resulting categories via the {py:class}`~columnflow.tasks.yields.CreateYieldTable` task.
-
-
+We refer to the smallest building block of these layers as **leaf categories**, which can subsequently be either run individually or combined into more complex categories.
+This guide presents how to implement a set of categories in columnflow and shows how to use the resulting categories via the {py:class}`~columnflow.tasks.yields.CreateYieldTable` task.
 
 ## Create a category
 
-If you used the analysis template to setup your analysis, there are already two categories
-included, named ```incl``` and ```2j```.
-To test that the categories are properly implemented,
-we can use the CreateYieldTable task:
+If you used the analysis template to setup your analysis, there are already two categories included, named ```incl``` and ```2j```.
+To test that the categories are properly implemented, we can use the CreateYieldTable task:
+
 ```shell
 law run cf.CreateYieldTable --version v1 \
     --calibrators example --selector example --producers example \
     --processes tt,st --categories incl,2j
 ```
 
-When all tasks are finished, this should create a table presenting the event yield of each process
-for all categories. To create new categories, we essentially need three ingredients:
+When all tasks are finished, this should create a table presenting the event yield of each process for all categories.
+To create new categories, we essentially need three ingredients:
 
 1. We need to define our categories as {external+order:py:class}`order.category.Category` instances in the config
-```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
-:language: python
-:start-at: add_category(
-:end-at: )
-```
-2. We need to write a {py:class}`~columnflow.categorization.Categorizer` that defines which events
-to select for each category. The name of the Categorizer needs to be the same as the "selection"
-attribute of the category inst.
-```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/categorization/example.py
-:language: python
-```
-Keep in mind that the module in which your define your Categorizer needs to be included in the law config
 
-3. We need to run the {py:class}`~columnflow.production.categories.category_ids` Producer to create
-the ```category_ids``` column. This is directly included via the ```--producers category_ids```,
-but you could also run the ```category_ids``` Producer as part of another Selector or Producer.
+    ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+    :language: python
+    :start-at: add_category(
+    :end-at: )
+    ```
+
+2. We need to write a {py:class}`~columnflow.categorization.Categorizer` that defines which events to select for each category.
+    The name of the Categorizer needs to be the same as the "selection" attribute of the category inst.
+
+    ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/categorization/example.py
+    :language: python
+    ```
+
+    Keep in mind that the module in which your define your Categorizer needs to be included in the law config
+
+3. We need to run the {py:class}`~columnflow.production.categories.category_ids` Producer to create the ```category_ids``` column.
+    This is directly included via the ```--producers category_ids```, but you could also run the ```category_ids``` Producer as part of another Selector or Producer.
+
 ```python
 @producer(
     uses={category_ids},
@@ -63,50 +60,34 @@ def my_producer(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 ```
 
 :::{dropdown} But how does this actually work?
-The `category_ids` Producer loads all category instances from your config. For each leaf category inst
-(which is the "smallest unit" of categories),
-it maps the `category_inst.selection` string to a `Categorizer` and adds it the to the `uses` and
-`produces`, meaning that columns required (produced) by the `Categorizer` will automatically be
-loaded (stored) when running the `category_ids` Producer.
+The `category_ids` Producer loads all category instances from your config.
+For each leaf category inst (which is the "smallest unit" of categories), it maps the `category_inst.selection` string to a `Categorizer` and adds it the to the `uses` and `produces`, meaning that columns required (produced) by the `Categorizer` will automatically be loaded (stored) when running the `category_ids` Producer.
 
-During the event processing, the `Categorizer` of each leaf category is evaluated to generate
-a mask, which defines, whether the event is part of this category or not.
-The mask is then transformed to an array of ids (either the `category_inst.id` if True, and
-`None` for False entries).t
+During the event processing, the `Categorizer` of each leaf category is evaluated to generate a mask, which defines, whether the event is part of this category or not.
+The mask is then transformed to an array of ids (either the `category_inst.id` if True, and `None` for False entries).
 
-In the end, we return a jagged array of category ids, which allows us to categorize one event
-into multiple different types of categories.
+In the end, we return a jagged array of category ids, which allows us to categorize one event into multiple different types of categories.
 
-You can also store a list of strings in the `category_inst.selection` field. In that case, the logical
-`and` of all masks obtained by the `Categorizer` is used to define the mask corresponding to this
-category.
+You can also store a list of strings in the `category_inst.selection` field. In that case, the logical `and` of all masks obtained by the `Categorizer` is used to define the mask corresponding to this category.
 :::
-
 
 :::{dropdown} And where are the ```category_ids``` actually used?
-The `category_ids` column is primarily used when creating our histograms (e.g. in the
-{py:class}`~columnflow.tasks.histograms.CreateHistograms` task).
-The created histograms always contain one axis for categories, using the values from the `category_ids`
-column. Since this column is a jagged array, it is possible to fill events either never or multiple
-times in a histogram.
+The `category_ids` column is primarily used when creating our histograms (e.g. in the {py:class}`~columnflow.tasks.histograms.CreateHistograms` task).
+The created histograms always contain one axis for categories, using the values from the `category_ids` column.
+Since this column is a jagged array, it is possible to fill events either never or multiple times in a histogram.
 
-Other tasks such as {py:class}`~columnflow.tasks.plotting.PlotVariables1D` are then using this
-axis with categories to obtain all entries from the histogram corresponding to the category
-that is requested via the `--categories` parameter. When the given category is not a leaf category
-but contains categories itself, the ids of all its leaf categories combined are used for the category.
+Other tasks such as {py:class}`~columnflow.tasks.plotting.PlotVariables1D` are then using this axis with categories to obtain all entries from the histogram corresponding to the category that is requested via the `--categories` parameter.
+When the given category is not a leaf category but contains categories itself, the ids of all its leaf categories combined are used for the category.
 :::
-
 
 ## Creation of nested categories
 
 :::{note}
-The following section is mostly included for didactic purposes. To implement a set of nested
-categories, it is recommended to follow the section
-{ref}`Categorization with multiple layers <categorization_multiple_layers>`.
+The following section is mostly included for didactic purposes.
+To implement a set of nested categories, it is recommended to follow the section {ref}`Categorization with multiple layers <categorization_multiple_layers>`.
 :::
 
-Often times, there are multiple layers of categorization. For example, we might want to categorize
-based on the number of leptons and the number of jets.
+Often times, there are multiple layers of categorization. For example, we might want to categorize based on the number of leptons and the number of jets.
 
 ```python
 # do 0 lepton vs >= 1 lepton instead?
@@ -163,10 +144,8 @@ law run cf.CreateYieldTable --version v1 \
     --processes tt,st --categories "*"
 ```
 
-
-As a next step, one might want to combine these categories to categorize based on the number of
-jets and leptons simutaneously. You could simply create all combinations by hand. The following code
-snippet shows how to combine the "2jet" and the "1lep" category:
+As a next step, one might want to combine these categories to categorize based on the number of jets and leptons simutaneously.
+You could simply create all combinations by hand. The following code snippet shows how to combine the "2jet" and the "1lep" category:
 
 ```python
 cat_2jet = config.get_category("2jet")
@@ -208,18 +187,15 @@ cat_1mu.add_category(cat_1mu__2jet)
 cat_1mu.add_category(cat_1mu__3jet)
 ```
 
-We now created categories with dependencies between each other. In columnflow, we always use the
-smallest units of categories (commonly called "leaf categories") to build our parent categories. For
-example, the `2jet` category consists of the leaf categories `1e__2jet` and `1mu__2jet`. To select
-events corresponding to `2jet`, we will add all events with category ids corresponding to either
-`1e__2jet` or `1mu__2jet`.
-
+We now created categories with dependencies between each other.
+In columnflow, we always use the smallest units of categories (commonly called "leaf categories") to build our parent categories.
+For example, the `2jet` category consists of the leaf categories `1e__2jet` and `1mu__2jet`.
+To select events corresponding to `2jet`, we will add all events with category ids corresponding to either `1e__2jet` or `1mu__2jet`.
 
 :::{note} We might add unexpected selections by combining categorization.
 
-In this example, the `cat_1e` and `cat_1mu` Categorizer only select events with exactly one lepton
-(either electron or muon). This means, that events with zero or multiple leptons will not be considered
-in our categorization, even when building e.g. the `2jet` category.
+In this example, the `cat_1e` and `cat_1mu` Categorizer only select events with exactly one lepton (either electron or muon).
+This means, that events with zero or multiple leptons will not be considered in our categorization, even when building e.g. the `2jet` category.
 :::
 
 Let's test if our leaf categories are working as intended:
@@ -230,14 +206,13 @@ law run cf.CreateYieldTable --version v1 \
     --processes tt,st --categories 1e,2jet,1e__2jet,1e__3jet,1mu__2jet,1mu__3jet
 ```
 
-We should see that the yield of the `2jet` category is the same as the `1e__2jet` and `1mu__2jet`
-categories combined. This is to be expected, since the `2jet` category will be built by combining
-histograms from all of their leaf categories.
+We should see that the yield of the `2jet` category is the same as the `1e__2jet` and `1mu__2jet` categories combined.
+This is to be expected, since the `2jet` category will be built by combining histograms from all of their leaf categories.
 
 :::{note} Take care to define your categories orthogonal!
 
-There is no mechanism that automatically prevents double counting. It is therefore essential to define
-categories such that there is no overlap between leaf categories of any defined category.
+There is no mechanism that automatically prevents double counting.
+It is therefore essential to define categories such that there is no overlap between leaf categories of any defined category.
 
 :::::{dropdown} Example of what NOT to do
 We might have two categories selecting either exactly two or at least two jets.
@@ -265,10 +240,8 @@ def cat_geq2jet(self: Categorizer, events: ak.Array, **kwargs) -> tuple[ak.Array
     return events, ak.num(events.Jet.pt, axis=1) >= 2
 ```
 
-This can be done without any issues since these two categories are independent of each other
-(they will each produce their own category id).
-However, if we now add a parent category that contains both `2jet` and `geq2jet`, this will result
-in couting all events twice that contain exactly two jets.
+This can be done without any issues since these two categories are independent of each other (they will each produce their own category id).
+However, if we now add a parent category that contains both `2jet` and `geq2jet`, this will result in couting all events twice that contain exactly two jets.
 
 ```python
 non_orthogonal_cat = config.add_category(
@@ -279,15 +252,16 @@ non_orthogonal_cat = config.add_category(
 non_orthogonal_cat.add_category(cat_2jet)
 non_orthogonal_cat.add_category(cat_geq2jet)
 ```
+
 :::::
 :::
 
 (categorization_multiple_layers)=
+
 ## Categorization with multiple layers
 
-But what should you do when the number of category combinations is getting large? For example, you might
-want to define categories based on the number of leptons, the number of jets, and based on a simple
-obervable such as ```HT```:
+But what should you do when the number of category combinations is getting large?
+For example, you might want to define categories based on the number of leptons, the number of jets, and based on a simple obervable such as ```HT```:
 
 ```python
 jet_categories = (2, 3, 4, 5, 6)
@@ -295,8 +269,8 @@ lep_categories = (1, 2, 3)
 ht_categories = ((0, 200), (200, 400), (400, 600))
 ```
 
-If you want to build all combinations of this set of 5+3+3 categories, you end up with 5 x 3 x 3 = 45
-leaf categories. To build all of them by hand is very tedious, unflexible, and error prone.
+If you want to build all combinations of this set of 5+3+3 categories, you end up with 5 x 3 x 3 = 45 leaf categories.
+To build all of them by hand is very tedious, unflexible, and error prone.
 Luckily, columnflow provides all necessary tools to build combinations of categories automatically.
 To use these tools, we first need to create our base categories and their corresponding Categorizers.
 
@@ -348,9 +322,8 @@ for ht_down, ht_up in ht_categories:
         return events, ((ht > ht_down) & (ht <= ht_up))
 ```
 
-This will only create the (5+3+3) parent categories. To create all possible combinations of
-these categories, we can use the {py:func}`~columnflow.config_util.create_category_combinations`
-function that will do most of the work for us:
+This will only create the (5+3+3) parent categories.
+To create all possible combinations of these categories, we can use the {py:func}`~columnflow.config_util.create_category_combinations` function that will do most of the work for us:
 
 ```python
 def name_fn(root_cats):
@@ -408,28 +381,22 @@ law run cf.CreateYieldTable --version v1 \
     --processes tt,st --categories "*"
 ```
 
-
 :::{note} This categorization is not inclusive!
 
-Since we only store leaf category ids, all the events that are not considered by one of the category
-blocks will not be considered at all. For this set of categories it means that we implicitly added cuts
-on the number of jets (>= 2 and <= 6), the number of leptons (>= 1 and <= 3), and HT (<= 600) as soon
-as we use one of these categories.
+Since we only store leaf category ids, all the events that are not considered by one of the category blocks will not be considered at all.
+For this set of categories it means that we implicitly added cuts on the number of jets (>= 2 and <= 6), the number of leptons (>= 1 and <= 3), and HT (<= 600) as soon as we use one of these categories.
 
 TODO: it might be more instructive to build this example such that our categorization is inclusive.
 :::
 
-
 ## Extend your categorization as part of a Producer
 
-Some of your categories might need some computationally expensive reconstructed observables
-and can therefore only be called after certain requirements are met.
+Some of your categories might need some computationally expensive reconstructed observables and can therefore only be called after certain requirements are met.
 In these cases, it might be beneficial to first produce columns and then load these columns when necessary.
 To streamline this, you can set these dependencies as part of the Producer instance that creates the category ids (i.e. via the `category_ids` producer).
 
-To properly set this up, add the category instances as part of the `Producer.init`. Columns from
-custom requirements can be added to a Producer via the `Producer.requires` in combination
-with the `Producer.setup`.
+To properly set this up, add the category instances as part of the `Producer.init`.
+Columns from custom requirements can be added to a Producer via the `Producer.requires` in combination with the `Producer.setup`.
 
 ```python
 @producer(
@@ -484,14 +451,11 @@ def my_categorization_producer_init(self: Producer) -> None:
     )
 ```
 
-
 ## Helper functions for categories
 
 ### get_events_from_categories
 
-To obtain the events of a certain category (or categories) of an akward array `events` that contains the
-`category_ids` column, you can use the  {py:func}`~columnflow.util.get_events_from_categories` function.
-
+To obtain the events of a certain category (or categories) of an akward array `events` that contains the `category_ids` column, you can use the  {py:func}`~columnflow.util.get_events_from_categories` function.
 
 ```python
 from columnflow.util import get_events_from_cateogries
@@ -507,19 +471,16 @@ selected_events = get_events_from_cateogries(events, config_inst.get_category("m
 selected_events = get_events_from_cateogries(events, ["cat1", "cat2"], config_inst)
 ```
 
-This function automatically consideres category ids of all leaf categories from the requested
-categories. This is especially helpful when your category contains multiple leaf categories.
-
+This function automatically consideres category ids of all leaf categories from the requested categories.
+This is especially helpful when your category contains multiple leaf categories.
 
 ## Key points (TL; DR)
 
 - Categories are {external+order:py:class}`order.category.Category` instances defined in the config.
 - We can add categories to each other; the "smallest unit" of category is referred to as "leaf category".
 - We build each category by combining all of it's leaf categories (both in columns and in histograms).
-- Leaf categories need to define one or multiple {py:class}`~columnflow.categorization.Categorizer`,
-which is a function that defines whether or not an event belongs in this category.
-- The `category_ids` column is produced via the
-{py:class}`~columnflow.production.categories.category_ids` Producer.
+- Leaf categories need to define one or multiple {py:class}`~columnflow.categorization.Categorizer`, which is a function that defines whether or not an event belongs in this category.
+- The `category_ids` column is produced via the {py:class}`~columnflow.production.categories.category_ids` Producer.
 - Make sure that for each category, all of its leaf categories are defined orthogonal to prevent double counting.
 - Groups of categories can be combined via {py:func}`~columnflow.config_util.create_category_combinations`.
 - Combining categories can impact your parent categories; this can be prevented by defining

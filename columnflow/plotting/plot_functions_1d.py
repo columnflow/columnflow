@@ -84,6 +84,7 @@ def plot_variable_variants(
     yscale: str | None = None,
     hide_errors: bool | None = None,
     variable_settings: dict | None = None,
+    initial: str = "Initial",
     **kwargs,
 ) -> plt.Figure:
     """
@@ -111,7 +112,7 @@ def plot_variable_variants(
                 "label": selector_step_labels.get(label, label),
             },
             "ratio_kwargs": {
-                "norm": hists["Initial"].values(),
+                "norm": hists[initial].values(),
             },
         }
         if hide_errors:
@@ -125,7 +126,7 @@ def plot_variable_variants(
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
-    default_style_config["rax_cfg"]["ylabel"] = "Step / Initial"
+    default_style_config["rax_cfg"]["ylabel"] = "Step / " + initial
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:

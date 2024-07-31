@@ -20,7 +20,7 @@ action() {
     local ret
 
     # markdown linting
-    pymarkdown --config "${cf_dir}/.markdownlint" scan --recurse "${cf_dir/README.md}" "${cf_dir/docs}"
+    pymarkdown --config "${cf_dir}/.markdownlint" scan --recurse "${cf_dir}/README.md" "${cf_dir}/docs"
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 

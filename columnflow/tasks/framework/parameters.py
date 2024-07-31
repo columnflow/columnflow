@@ -21,6 +21,7 @@ user_parameter_inst = luigi.Parameter(
     "default: current user",
 )
 
+
 class SettingsParameter(law.CSVParameter):
     """
     Parameter that parses the input of a CSVParameter into a dictionary
