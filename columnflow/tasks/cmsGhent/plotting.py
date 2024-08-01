@@ -1,8 +1,9 @@
 import law
+import order as od
 import luigi
 from collections import OrderedDict
 
-from columnflow.tasks.plotting import PlotVariablesBaseSingleShift
+from columnflow.tasks.plotting import PlotVariablesBaseSingleShift, PlotVariables1D
 from columnflow.tasks.framework.plotting import PlotBase1D, PlotBase, PlotBase2D
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.util import DotDict
@@ -158,3 +159,239 @@ class PlotVariables2DMigration(
             for proc_name in sorted(self.processes)
             for var_name in sorted(self.variables)
         ]
+
+
+class MultiVarMixin:
+
+    def requires(self):
+        variables = ",".join([",".join(self.variable_tuples[vr]) for vr in self.variables])
+        reqs = {
+            dataset: self.reqs.MergeHistograms.req(
+                self,
+                variables=variables,
+                branch=-1,
+                dataset=dataset,
+                _exclude={"branches"},
+                _prefer_cli={"variables"},
+            )
+            for dataset in self.datasets
+        }
+        return reqs
+
+    def run_var(
+            self,
+            variable_inst: od.Variable,
+            sub_process_insts: dict[od.Process, list[od.Process]],
+            category_insts: list[od.Category],
+            plot_shifts: list[od.Shift],
+    ):
+        import hist
+
+        hists = {}
+        process_insts = list(sub_process_insts)
+
+        for dataset, inp in self.input().items():
+            dataset_inst = self.config_inst.get_dataset(dataset)
+            h_in = inp["collection"][0]["hists"].targets[variable_inst.name].load(formatter="pickle")
+
+            # loop and extract one histogram per process
+            for process_inst in process_insts:
+                # skip when the dataset is already known to not contain any sub process
+                if not any(
+                        dataset_inst.has_process(sub_process_inst.name)
+                        for sub_process_inst in sub_process_insts[process_inst]
+                ):
+                    continue
+
+                # select processes and reduce axis
+                h = h_in.copy()
+                h = h[{
+                    "process": [
+                        hist.loc(p.id)
+                        for p in sub_process_insts[process_inst]
+                        if p.id in h.axes["process"]
+                    ],
+                }]
+                h = h[{"process": sum}]
+
+                # add the histogram
+                if process_inst in hists:
+                    hists[process_inst] += h
+                else:
+                    hists[process_inst] = h
+
+        # there should be hists to plot
+        if not hists:
+            raise Exception(
+                "no histograms found to plot; possible reasons:\n"
+                "  - requested variable requires columns that were missing during histogramming\n"
+                "  - selected --processes did not match any value on the process axis of the input histogram",
+            )
+
+        # update histograms using a custom hook
+        hists = self.invoke_hist_hook(hists)
+
+        # add new processes to the end of the list
+        for process_inst in hists:
+            if process_inst not in process_insts:
+                process_insts.append(process_inst)
+
+        # axis selections and reductions, including sorting by process order
+        _hists = OrderedDict()
+        for process_inst in sorted(hists, key=process_insts.index):
+            h = hists[process_inst]
+            # selections
+            h = h[{
+                "category": [
+                    hist.loc(c.id)
+                    for c in category_insts
+                    if c.id in h.axes["category"]
+                ],
+                "shift": [
+                    hist.loc(s.id)
+                    for s in plot_shifts
+                    if s.id in h.axes["shift"]
+                ],
+            }]
+            # reductions
+            h = h[{"category": sum}]
+            # store
+            _hists[process_inst] = h
+        return _hists
+
+
+class PlotVariables1DMultiVar(MultiVarMixin, PlotVariables1D):
+
+    exclude_index = False
+
+    plot_function = PlotVariables1D.plot_function.copy(
+        default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_multi_variables",
+    )
+
+    skip_ratio = PlotVariables1D.skip_ratio.copy(
+        default=True,
+    )
+
+    @law.decorator.log
+    @view_output_plots
+    def run(self):
+        # get the shifts to extract and plot
+        plot_shifts = law.util.make_list(self.get_plot_shifts())
+
+        # prepare config objects
+        variable_tuple = self.variable_tuples[self.branch_data.variable]
+        variable_insts = [
+            self.config_inst.get_variable(var_name)
+            for var_name in variable_tuple
+        ]
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        # histogram data per variable
+        hists = {}
+
+        with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
+
+            # histogram data per variable
+
+            for variable_inst in variable_insts:
+                var_hists = self.run_var(variable_inst, sub_process_insts, leaf_category_insts, plot_shifts)
+                var_hists = list(var_hists.values())
+                hists[variable_inst] = sum(var_hists[1:], var_hists[0])
+
+            # sort hists by varianle order
+            hists = OrderedDict(
+                (variable_inst, hists[variable_inst])
+                for variable_inst in sorted(hists, key=variable_insts.index)
+            )
+            # call the plot function
+            fig, _ = self.call_plot_func(
+                self.plot_function,
+                hists=hists,
+                config_inst=self.config_inst,
+                category_inst=category_inst.copy_shallow(),
+                **self.get_plot_parameters(),
+            )
+
+            # save the plot
+            for outp in self.output()["plots"]:
+                outp.dump(fig, formatter="mpl")
+
+
+class PlotROC(MultiVarMixin, PlotVariablesBaseSingleShift):
+
+    exclude_index = False
+
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_roc",
+        add_default_to_description=True,
+    )
+
+    def create_branch_map(self):
+        return [
+            DotDict({"category": cat_name})
+            for cat_name in sorted(self.categories)
+        ]
+
+    def plot_parts(self) -> law.util.InsertableDict:
+        parts = law.util.InsertableDict()
+        parts["processes"] = f"proc_{self.processes_repr}"
+        parts["category"] = f"cat_{self.branch_data.category}"
+        parts["variable"] = f"var_{self.variables_repr}"
+
+        if self.hist_hook not in ("", law.NO_STR, None):
+            parts["hook"] = f"hook_{self.hist_hook}"
+
+        return parts
+
+    @law.decorator.log
+    @view_output_plots
+    def run(self):
+        # get the shifts to extract and plot
+        plot_shifts = law.util.make_list(self.get_plot_shifts())
+
+        # prepare config objects
+        variable_tuples = [self.variable_tuples[vr] for vr in self.variables]
+        variable_insts_groups = [
+            [self.config_inst.get_variable(var_name) for var_name in variable_tuple]
+            for variable_tuple in variable_tuples
+        ]
+        category_inst = self.config_inst.get_category(self.branch_data.category)
+        leaf_category_insts = [category_inst]
+        process_insts = list(map(self.config_inst.get_process, self.processes))
+        sub_process_insts = {
+            proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
+            for proc in process_insts
+        }
+
+        # histogram data per variable
+        hists = {}
+
+        with self.publish_step(f"plotting {self.variables} in {category_inst.name}"):
+
+            # histogram data per variable
+
+            for variable_insts in variable_insts_groups:
+                for variable_inst in variable_insts:
+                    var_hists = self.run_var(variable_inst, sub_process_insts, leaf_category_insts, plot_shifts)
+                    var_hists = list(var_hists.values())
+                    hists[variable_inst] = sum(var_hists[1:], var_hists[0])
+
+            # call the plot function
+            fig, _ = self.call_plot_func(
+                self.plot_function,
+                hists=hists,
+                config_inst=self.config_inst,
+                category_inst=category_inst.copy_shallow(),
+                variable_insts_groups=variable_insts_groups,
+                **self.get_plot_parameters(),
+            )
+
+            # save the plot
+            for outp in self.output()["plots"]:
+                outp.dump(fig, formatter="mpl")

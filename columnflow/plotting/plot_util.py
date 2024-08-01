@@ -6,11 +6,14 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+import re
 import operator
 import functools
 from collections import OrderedDict
 
+import law
 import order as od
+import scinum as sn
 from typing import Tuple
 
 from columnflow.util import maybe_import, try_int, try_complex, try_float
@@ -30,10 +33,14 @@ mticker = maybe_import("matplotlib.ticker")
 FigAxesType = Tuple[plt.Figure, Union[npt.NDArray[plt.Axes], Sequence[plt.Axes], plt.Axes]]
 
 
+logger = law.logger.get_logger(__name__)
+
+
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
     "pw": "Private work",
+    "pwip": "Private work in progress",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
@@ -61,6 +68,74 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     }
 
     return cms_label_kwargs
+
+
+def round_dynamic(value: int | float) -> int | float:
+    """
+    Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
+
+        - 0 -> 0 (int)
+        - (0, 1) -> round to 1 significant digit (float)
+        - [1, 10) -> round to 1 significant digit (int)
+        - [10, inf) -> round to 2 significant digits (int)
+
+    :param value: The value to round.
+    :return: The rounded value.
+    """
+    # determine significant digits
+    digits = 1 if abs(value) < 10 else 2
+
+    # split into value and magnitude
+    v_str, _, mag = sn.round_value(value, method=digits)
+
+    # recombine
+    value = float(v_str) * 10**mag
+
+    # return with proper type
+    return int(value) if value >= 1 else value
+
+
+def inject_label(
+    label: str,
+    inject: str | int | float,
+    *,
+    placeholder: str | None = None,
+    before_parentheses: bool = False,
+) -> str:
+    """
+    Injects a string *inject* into a *label* at a specific position, determined by different
+    strategies in the following order:
+
+        - If *placeholder* is defined, *label* should contain a substring ``"__PLACEHOLDER__"``
+        which is replaced.
+        - Otherwise, if *before_parentheses* is set to True, the string is inserted before the last
+        pair of parentheses.
+        - Otherwise, the string is appended to the label.
+
+    :param label: The label to inject the string *inject* into.
+    :param inject: The string to inject.
+    :param placeholder: The placeholder to replace in the label.
+    :param before_parentheses: Whether to insert the string before the parentheses in the label.
+    :return: The updated label.
+    """
+    # replace the placeholder
+    if placeholder and f"__{placeholder}__" in label:
+        return label.replace(f"__{placeholder}__", inject)
+
+    # when the label contains trailing parentheses, insert the string before them
+    if before_parentheses and label.endswith(")"):
+        in_parentheses = 1
+        for i in range(len(label) - 2, -1, -1):
+            c = label[i]
+            if c == ")":
+                in_parentheses += 1
+            elif c == "(":
+                in_parentheses -= 1
+            if not in_parentheses:
+                return f"{label[:i]} {inject} {label[i:]}"
+
+    # otherwise, just append
+    return f"{label} {inject}"
 
 
 def apply_settings(
@@ -107,13 +182,37 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
-    # apply "scale" setting directly to the hists
+    # helper to compute the stack integral
+    stack_integral = None
+
+    def get_stack_integral() -> float:
+        nonlocal stack_integral
+        if stack_integral is None:
+            stack_integral = sum(
+                proc_h.sum().value
+                for proc, proc_h in hists.items()
+                if not hasattr(proc, "unstack") and not proc.is_data
+            )
+        return stack_integral
+
     for proc_inst, h in hists.items():
+        # apply "scale" setting directly to the hists
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        if scale_factor == "stack":
+            # compute the scale factor and round
+            scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
         if try_float(scale_factor):
             scale_factor = float(scale_factor)
             hists[proc_inst] = h * scale_factor
-            proc_inst.label += f" x{scale_factor}"
+            proc_inst.label = inject_label(
+                proc_inst.label,
+                rf"$\times${scale_factor:.2g}",
+                placeholder="SCALE",
+                before_parentheses=True,
+            )
+
+        # remove remaining placeholders
+        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
 
     return hists
 
@@ -661,7 +760,7 @@ def prepare_plot_config_2d(
         )
 
     # obtain colormap
-    cmap = plt.get_cmap(colormap or "viridis")
+    cmap = plt.get_cmap(colormap or "Blues")
 
     # use dark and light gray to mark extreme values
     if extremes == "color":
@@ -762,3 +861,58 @@ def prepare_style_config_2d(
         }
 
     return style_config
+
+
+def blind_sensitive_bins(
+    hists: dict[od.Process, hist.Hist],
+    config_inst: od.Config,
+    threshold: float,
+) -> dict[od.Process, hist.Hist]:
+    """
+    Function that takes a histogram *h_in* and blinds the values of the profile
+    over the axis *axis* that are below a certain threshold *threshold*.
+    The function needs an entry in the process_groups key of the config auxiliary
+    that is called "signals" to know, where the signal processes are defined (regex allowed).
+    The histograms are not changed inplace, but copies of the modified histograms are returned.
+    """
+    # build the logic to seperate signal processes
+    signal_procs: set[od.Process] = {
+        config_inst.get_process(proc)
+        for proc in config_inst.x.process_groups.get("signals", [])
+    }
+    check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
+
+    # separate histograms into signals, backgrounds and data hists and calculate sums
+    signals = {proc: hist for proc, hist in hists.items() if proc.is_mc and check_if_signal(proc)}
+    data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
+    backgrounds = {proc: hist for proc, hist in hists.items() if proc.is_mc and proc not in signals}
+
+    # Return hists unchanged in case any of the three dicts is empty.
+    if not signals or not backgrounds or not data:
+        logger.info(
+            "one of the following categories: signals, backgrounds or data was not found in the given processes, "
+            "returning unchanged histograms",
+        )
+        return hists
+
+    signals_sum = sum(signals.values())
+    backgrounds_sum = sum(backgrounds.values())
+
+    # calculate sensitivity by S / sqrt(S + B)
+    sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
+    mask = sensitivity >= threshold
+
+    # adjust the mask to blind the bins inbetween blinded ones
+    if sum(mask) > 1:
+        first_ind, last_ind = np.where(mask)[0][::sum(mask) - 1]
+        mask[first_ind:last_ind] = True
+
+    # set data points in masked region to zero
+    for proc, hist in data.items():
+        hist.values()[mask] = 0
+        hist.variances()[mask] = 0
+
+    # merge all histograms
+    hists = law.util.merge_dicts(signals, backgrounds, data)
+
+    return hists

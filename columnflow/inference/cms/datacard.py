@@ -354,13 +354,14 @@ class DatacardWriter(object):
             cat_obj = self.inference_model_inst.get_category(cat_name)
 
             # helper to fill empty bins in-place
-            fill_empty = lambda h: None
             if cat_obj.empty_bin_value:
                 def fill_empty(h):
                     value = h.view().value
                     mask = value <= 0
                     value[mask] = cat_obj.empty_bin_value
                     h.view().variance[mask] = cat_obj.empty_bin_value
+            else:
+                fill_empty = lambda h: None
 
             _rates = rates[cat_name] = OrderedDict()
             _effects = effects[cat_name] = OrderedDict()

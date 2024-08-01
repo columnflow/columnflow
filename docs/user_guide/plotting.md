@@ -4,7 +4,7 @@ In columnflow, there are multiple tasks to create plots.
 This section showcases how to create and customize a plot based on the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
 The usage of other plotting tasks is mostly analogous to the ```PlotVariables1D``` task.
 The most important differences compared to ```PlotVariables1D``` are presented in a separate section for each of the other plotting tasks.
-An overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting.md) section.
+An overview of all plotting tasks is given in the [Plotting tasks](../task_overview/plotting_tasks.md) section.
 
 ## Creating your first plot
 
@@ -31,13 +31,13 @@ This will run the full analysis chain for the given processes (data, tt, st) and
 :::{dropdown} Where do I find that plot?
 You can add ```--print-output 0``` to every task call, which will print the full filename of all outputs of the requested task.
 Alternatively, you can add ```--fetch-output 0,a``` to directly copy all outputs of this task into the directory you are currently in.
-Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince-previewer```.
+Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince-previewer``` or ```--view-cmd imgcat```.
 :::
 
 The ```PlotVariables1D``` task is located at the bottom of our [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that all tasks leading to ```PlotVariables1D``` will be run for all datasets corresponding to the ```--processes``` we requested using the {py:class}`~columnflow.calibration.Calibrator`s, {py:class}`~columnflow.selection.Selector`, and {py:class}`~columnflow.production.Producer`s (often referred to as CSPs) as requested.
 In the following examples, we will skip the ```--calibrators```, ```--selector``` and ```--producers``` parameters, which means that the defaults defined in the config will be used automatically.
 Examples on how to implement your own CSPs can be found in the [calibrators](building_blocks/calibrators), [selectors](building_blocks/selectors), and [producers](building_blocks/producers) sections of the user guide.
-The ```--variables``` parameter defines, for which variables we want to create histograms and plots.
+The ```--variables``` parameter defines for which variables we want to create histograms and plots.
 Variables are [order](https://github.com/riga/order) objects that need to be defined in the config as shown in the [config objects](building_blocks/config_objects) section.
 The column corresponding to the expression statement needs to be stored either after the {py:class}`~columnflow.tasks.reduction.ReduceEvents` task or as part of a ```Producer``` used in the {py:class}`~columnflow.tasks.production.ProduceColumns` task.
 For each of the category given with the ```--categories``` parameter, one plot will be produced.
@@ -46,7 +46,7 @@ A detailed guide on how to implement categories in Columnflow is given in the [c
 To define which processes and datasets to consider when plotting, you can use the ```--processes``` and ```--datasets``` parameter.
 When only processes are given, all datasets corresponding to the requested processes will be considered.
 When only datasets are given, all processes in the config will be considered.
-The ```--processes``` parameter can be used to change the order of processes in the stack and the legend (try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes (e.g. via ```--processses tt_sl,tt_dl,tt_fh```).
+The ```--processes``` parameter can be used to change the order of processes in the stack and the legend (try for example ```--processes st,tt``` instead) and to further distinguish between sub-processes (e.g. via ```--processes tt_sl,tt_dl,tt_fh```).
 
 :::{dropdown} IMPORTANT! Do not add the same dataset via multiple processes!
 At the time of writing this documentation, there is still an issue present that histograms corresponding to a dataset can accidentally be used multiple times.
@@ -56,9 +56,9 @@ For example, when adding ```--processes tt,tt_sl```, the events corresponding to
 ## Customization of plots
 
 There are many different parameters implemented that allow customizing the style of a plot.
-A short overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting.md).
+A short overview to all plotting parameters is given in the [Plotting tasks](../task_overview/plotting_tasks.md).
 In the following, a few exemplary task calls are given to present the usage of our plotting parameters, using the {py:class}`~columnflow.tasks.plotting.PlotVariables1D` task.
-Most paramaters are shared between the different plotting tasks.
+Most parameters are shared between the different plotting tasks.
 The most important changes regarding the task parameters are discussed in separate sections for each type of plotting task.
 
 Per default, the ```PlotVariables1D``` task creates one plot per variable with all Monte Carlo processes being included in a stack and data being shown as separate points.
@@ -99,6 +99,15 @@ to produce the following plot:
 :::
 ::::
 
+Another option to compare shapes, which can be very helpful when comparing unstacked low statistics processes (usually signal processes) with the rest of the stack, is to use ``scale=stack`` in the ```--process-settings``` parameter.
+This will automatically scale the process to the integral of all processes in the stack (the value of the integral is rounded to a reasonable number).
+In the task call this would look like
+
+```shell
+law run cf.PlotVariables1D --version v1 --processes tt,st,hh --variables n_jet,jet1_pt \
+    --process-settings "hh,unstack,scale=stack"
+```
+
 Parameters that only contain a single value can also be passed via the ```--general-settings```, which is a single comma-separated list of parameters, where the name and the value are separated via a `=`.
 The value of each parameter is automatically resolved to either a float, bool, or a string.
 When no `=` is present, the parameter is automatically set to True.
@@ -111,7 +120,7 @@ This is especially helpful when you want to parametrize
 :::
 
 We can also change the y-scale of the plot to a log scale by adding ```--yscale log``` and change some properties of specific variables via the ```variable-settings``` parameter.
-For example, we might want to create the plots of our two obserables in one call, but would like to try out a rebinned version of `jet1_pt` that merges bins by a factor of 10.
+For example, we might want to create the plots of our two observables in one call, but would like to try out a rebinned version of `jet1_pt` that merges bins by a factor of 10.
 A corresponding task call might be
 
 ```shell
@@ -129,6 +138,27 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 :width: 100%
 :::
 ::::
+
+:::{dropdown} Slicing, Overflows and Underflows
+
+On a variable level, slicing a histogram during the plotting task can be achieved by using the ```slice``` option in the ```--variable-settings``` parameter.
+A task call that selects the 5th to 15th bin of the variable ```jet1_pt``` might look like
+
+```shell
+law run cf.PlotVariables1D --variable-settings "jet1_pt,slice=5;15" --version prod1 \
+    --variables jet1_pt  --processes tt
+```
+
+For slicing ranges instead of bin numbers, you can append a "j" to the values, which are then interpreted as ```x_min``` and ```x_max``` values.
+This only slices the histogram itself but does not modify the ```x_min``` and ```x_max``` range of the plot since they are taken from the variable inst, but this can be modified via `--variable-settings "jet1_pt,x_min=50,x_max=200"`.
+
+Moving entries from the overflow (underflow) bin into the last (first) visible bin of the histogram during plotting, can be enabled by adding the `overflow` (`underflow`) auxiliary via ```--variable-settings```, e.g.
+
+```shell
+law run cf.PlotVariables1D --variable-settings "jet1_pt,overflow" --...
+```
+
+:::
 
 :::{dropdown} Limitations of the ```variable_settings```
 While in theory we can change anything inside the variable and process instances via the ```variable_settings``` parameter, there are certain attributes that are already used during the creation of the histograms (e.g. the ```expression``` and the ```binning```).
@@ -186,7 +216,7 @@ law run cf.PlotVariables2D --version v1 \
 ::::
 
 While most of the plotting parameters used in the ```PlotVariables1D``` task can be reused for this task, there are also some additional parameters only available for 2D plotting tasks.
-For more information on the task parameters of the ```PlotVariables2D``` task, take a look into the [plotting task overview](../task_overview/plotting.md).
+For more information on the task parameters of the ```PlotVariables2D``` task, take a look into the [plotting task overview](../task_overview/plotting_tasks.md).
 
 ## Creating cutflow plots
 
