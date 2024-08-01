@@ -128,11 +128,11 @@ setup_venv() {
         local req_file=`basename ${CF_VENV_REQUIREMENTS}`
         local new_env_reqs="${req_dir}/python_${pyv}_${req_file}"
         # build requirements if needed
-        cf_color magenta "updating requirements file '${CF_VENV_REQUIREMENTS}' to '${new_env_reqs}"
+        # cf_color magenta "updating requirements file '${CF_VENV_REQUIREMENTS}' to '${new_env_reqs}"
         export CF_VENV_REQUIREMENTS="${new_env_reqs}"
     fi
     
-    cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
+    # cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
     if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
         local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
@@ -146,10 +146,10 @@ setup_venv() {
         if [ -f $CF_VENV_REQUIREMENTS ]; then rm $CF_VENV_REQUIREMENTS; fi
         # generate unique hash based on current state of software packages
         local this_hash="$( sha256sum "$TMP_REQS" | awk '{print $1}' | sed s/[[:blank:]].*//)"
-        cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
+        # cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
         echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
         cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
-        cf_color magenta "Cleanup ${TMP_REQS}"
+        # cf_color magenta "Cleanup ${TMP_REQS}"
         rm $TMP_REQS
     fi
     # split $CF_VENV_REQUIREMENTS into an array
@@ -329,7 +329,7 @@ setup_venv() {
 
         # remove the temporary python env file if requested
         if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
-            cf_color magenta "Cleaning temporary file ${CF_VENV_REQUIREMENTS}"
+            # cf_color magenta "Cleaning temporary file ${CF_VENV_REQUIREMENTS}"
             rm ${CF_VENV_REQUIREMENTS}
         fi
     fi

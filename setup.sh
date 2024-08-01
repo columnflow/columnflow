@@ -218,8 +218,6 @@ setup_columnflow() {
 
     cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
 
-    cf_color yellow "DEBUG: after call cf_seetup_software_stack: CF_CONDA_BASE=${CF_CONDA_BASE}"
-
     #
     # git hooks
     #
@@ -228,9 +226,6 @@ setup_columnflow() {
     if [ "${CF_LOCAL_ENV}" = "1" ]; then
         cf_setup_git_hooks || return "$?"
     fi
-
-    cf_color yellow "DEBUG: after call cf_setup_git_hooks: CF_CONDA_BASE=${CF_CONDA_BASE}"
-
 
     #
     # law setup
@@ -247,7 +242,6 @@ setup_columnflow() {
         law index -q
     fi
 
-    cf_color yellow "DEBUG: after law setup: CF_CONDA_BASE=${CF_CONDA_BASE}"
     # finalize
     export CF_SETUP="1"
 }
@@ -291,7 +285,6 @@ cf_setup_common_variables() {
     # flag to clean up temporary files for different environments
     export CF_CLEAN_TEMP_ENV_FILES="${CF_CLEAN_TEMP_ENV_FILES:-False}"
 
-    cf_color yellow "DEBUG: before call cf_setup_software_stack: CF_CLEAN_TEMP_ENV_FILES=${CF_CLEAN_TEMP_ENV_FILES}"
     mkdir -p "${CF_REQ_OUTPUT_DIR}"
 
     # lang defaults
@@ -401,7 +394,6 @@ cf_setup_interactive_common_variables() {
     export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
 
     query CF_PYVERSION "Python version for software stack" "3.9"
-    export_and_save CF_PYVERSION "${CF_PYVERSION}"
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
@@ -598,7 +590,6 @@ cf_setup_software_stack() {
 
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
-    cf_color yellow "updated PATH: ${PATH}"
 
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
@@ -693,7 +684,6 @@ EOF
 
                     # compile micromamba environment.yaml file from pyproject.toml
                     # if it doesn't exist
-                    cf_color cyan "install unidep"
                     micromamba install unidep[toml] python=${pyv} || return "$?"
 
                     unidep merge -o $CONDA_ENV_FILE \
@@ -707,7 +697,6 @@ EOF
                 
                 micromamba install -f $CONDA_ENV_FILE || return "$?"
                 if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
-                    cf_color magenta "Cleaning temporary file ${CONDA_ENV_FILE}"
                     rm ${CONDA_ENV_FILE}
                 fi
                 micromamba clean --yes --all
@@ -788,7 +777,6 @@ EOF
         # source the production sandbox
         source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
-    cf_color yellow "DEBUG: at end of setup.sh: CF_CONDA_BASE=${CF_CONDA_BASE}"
 }
 
 cf_setup_git_hooks() {
@@ -1031,6 +1019,4 @@ main() {
 # entry point
 if [ "${CF_SKIP_SETUP}" != "1" ]; then
     main "$@"
-    cf_color yellow "DEBUG: after call main: CF_CONDA_BASE=${CF_CONDA_BASE}"
-    env > env_after_setup.log
 fi
