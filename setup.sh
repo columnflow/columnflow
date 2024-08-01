@@ -646,8 +646,8 @@ cf_setup_software_stack() {
             *) cf_color red "unknown platform"; return 1 ;;
          esac
 
-        # not needed in CI or RTD jobs
-        if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
+        # not needed in RTD jobs
+        if [ "${CF_RTD_ENV}" != "1" ]; then
             # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
