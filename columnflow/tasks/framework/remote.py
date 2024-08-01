@@ -584,6 +584,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+        "CF_PYVERSION": "cf_pyversion",
     }
 
     # upstream requirements
@@ -752,6 +753,7 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+        "CF_PYVERSION": "cf_pyversion",
     }
 
     # upstream requirements
