@@ -28,7 +28,14 @@ bootstrap_htcondor_standalone() {
     fi
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"
-    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
+    local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
+
+    # temporary fix for missing voms/x509 variables in the lcg setup
+    export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
+    export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
+    export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -45,7 +52,7 @@ bootstrap_htcondor_standalone() {
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
-    if ! type gfal-ls &> /dev/null; then
+    if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"
@@ -147,11 +154,12 @@ bootstrap_crab() {
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
     local lcg_setup="{{cf_remote_lcg_setup}}"
-    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
+    local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
-    if ! type gfal-ls &> /dev/null; then
+    if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"

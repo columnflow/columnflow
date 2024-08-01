@@ -87,12 +87,12 @@ class ReduceEvents(
         return {"events": self.target(f"events_{self.branch}.parquet")}
 
     @ensure_proxy
-    @law.decorator.localize
+    @law.decorator.localize(input=False)
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            ColumnCollection, Route, RouteFilter, mandatory_coffea_columns, update_ak_array,
-            add_ak_aliases, sorted_ak_to_parquet,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
+            sorted_ak_to_parquet,
         )
         from columnflow.selection.util import create_collections_from_masks
 
@@ -113,7 +113,7 @@ class ReduceEvents(
         write_columns: set[Route] = set()
         skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
-            for r in (self.find_keep_columns(c) if isinstance(c, ColumnCollection) else {Route(c)}):
+            for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
                     skip_columns.add(r.column)
                 else:
@@ -138,7 +138,7 @@ class ReduceEvents(
         read_sel_columns = set()
         # open either selector steps of the full event selection mask
         read_sel_columns.add(Route(
-            "steps.*" if self.selector_steps and self.selector_steps != self.selector_steps_default else "event"))
+            "steps.*" if self.selector_steps and self.selector_steps != self.selector_steps_all else "event"))
         # add object masks, depending on the columns to write
         # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
         sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
@@ -168,72 +168,70 @@ class ReduceEvents(
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
 
-        # open the input file with uproot
-        with self.publish_step("load and open ..."):
-            nano_file = input_file.load(formatter="uproot")
-
-        # collect input paths
-        input_paths = [nano_file]
-        input_paths.append(inputs["selection"]["results"].path)
-        input_paths.extend([inp["columns"].path for inp in inputs["calibrations"]])
+        # collect input targets
+        input_targets = [input_file]
+        input_targets.append(inputs["selection"]["results"])
+        input_targets.extend([inp["columns"] for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
-            input_paths.append(inputs["selection"]["columns"].path)
+            input_targets.append(inputs["selection"]["columns"])
 
-        # iterate over chunks of events and diffs
-        for (events, sel, *diffs), pos in self.iter_chunked_io(
-            input_paths,
-            source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_columns=[read_columns, read_sel_columns] + (len(input_paths) - 2) * [read_columns],
-        ):
-            # optional check for overlapping inputs within diffs
-            if self.check_overlapping_inputs:
-                self.raise_if_overlapping(list(diffs))
+        # prepare inputs for localization
+        with law.localize_file_targets(input_targets, mode="r") as inps:
+            # iterate over chunks of events and diffs
+            for (events, sel, *diffs), pos in self.iter_chunked_io(
+                [inp.abspath for inp in inps],
+                source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
+                read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+            ):
+                # optional check for overlapping inputs within diffs
+                if self.check_overlapping_inputs:
+                    self.raise_if_overlapping(list(diffs))
 
-            # add the calibrated diffs and potentially new columns
-            events = update_ak_array(events, *diffs)
+                # add the calibrated diffs and potentially new columns
+                events = update_ak_array(events, *diffs)
 
-            # add aliases
-            events = add_ak_aliases(
-                events,
-                aliases,
-                remove_src=True,
-                missing_strategy=self.missing_column_alias_strategy,
-            )
-
-            # build the event mask
-            if self.selector_steps and self.selector_steps != self.selector_steps_default:
-                # check if all steps are present
-                missing_steps = set(self.selector_steps) - set(sel.steps.fields)
-                if missing_steps:
-                    raise Exception(
-                        f"selector steps {','.join(missing_steps)} are not produced by "
-                        f"selector '{self.selector}'",
-                    )
-                event_mask = functools.reduce(
-                    (lambda a, b: a & b),
-                    (sel["steps", step] for step in self.selector_steps),
+                # add aliases
+                events = add_ak_aliases(
+                    events,
+                    aliases,
+                    remove_src=True,
+                    missing_strategy=self.missing_column_alias_strategy,
                 )
-            else:
-                event_mask = sel.event if "event" in sel.fields else Ellipsis
 
-            # apply the mask
-            n_all += len(events)
-            events = events[event_mask]
-            n_reduced += len(events)
+                # build the event mask
+                if self.selector_steps and self.selector_steps != self.selector_steps_all:
+                    # check if all steps are present
+                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
+                    if missing_steps:
+                        raise Exception(
+                            f"selector steps {','.join(missing_steps)} are not produced by "
+                            f"selector '{self.selector}'",
+                        )
+                    event_mask = functools.reduce(
+                        (lambda a, b: a & b),
+                        (sel["steps", step] for step in self.selector_steps),
+                    )
+                else:
+                    event_mask = sel.event if "event" in sel.fields else Ellipsis
 
-            # loop through all object selection, go through their masks
-            # and create new collections if required
-            if "objects" in sel.fields:
-                # apply the event mask
-                events = create_collections_from_masks(events, sel.objects[event_mask])
+                # apply the mask
+                n_all += len(events)
+                events = events[event_mask]
+                n_reduced += len(events)
 
-            # remove columns
-            events = route_filter(events)
+                # loop through all object selection, go through their masks
+                # and create new collections if required
+                if "objects" in sel.fields:
+                    # apply the event mask
+                    events = create_collections_from_masks(events, sel.objects[event_mask])
 
-            # save as parquet via a thread in the same pool
-            chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
-            output_chunks[pos.index] = chunk
-            self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                # remove columns
+                events = route_filter(events)
+
+                # save as parquet via a thread in the same pool
+                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                output_chunks[pos.index] = chunk
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # some logs
         self.publish_message(
@@ -534,7 +532,7 @@ class ProvideReducedEvents(
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
-        if self.skip_merging:
+        if self.skip_merging or self.dataset_info_inst.n_files == 1:
             return 1
 
         # check if the merging stats are present
@@ -551,12 +549,14 @@ class ProvideReducedEvents(
 
     def _req_merged_reduced_events(self, **params) -> law.Task:
         if self.is_workflow():
+            # require the full merging forest
             params["tree_index"] = -1
             params["branch"] = 0
         else:
-            _exclude = params.pop("_exclude", None)
-            _exclude = set() if _exclude is None else law.util.make_set(_exclude)
+            # require a single merging tree identified by the tree_index via a local workflow
+            _exclude = law.util.make_set(params.pop("_exclude", None) or set())
             _exclude |= {"branch"}
+            params["_exclude"] = _exclude
             params["tree_index"] = self.branch
             params["workflow"] = "local"
 
@@ -565,50 +565,68 @@ class ProvideReducedEvents(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # when skipping merging, require the reduced events directly
-        # when forcing merging, require the merged events
-        # (also, when merged events are complete, require them to show the dependence in the cli)
-        # otherwise, do not register reqs but yield them dynamically in local_workflow_pre_run()
-        if self.skip_merging:
+        # strategy:
+        # - when it is clear that the reduced events are being used directly, require them when not
+        #   in pilot mode
+        # - otherwise, always require the reduction stats as they are needed to make a decision
+        # - when merging is forced, require it
+        # - otherwise, and if the merging is already known, require either reduced or merged events
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
+            # reduced events are used directly without having to look into the file merging factor
             if not self.pilot:
                 reqs["events"] = self._req_reduced_events()
         else:
-            req_merged = self._req_merged_reduced_events()
-            if self.force_merging or req_merged.complete():
-                reqs["events"] = req_merged
+            # here, the merging is unclear so require the stats
+            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
+
+            if self.force_merging:
+                # require merged events when forced
+                reqs["events"] = self._req_merged_reduced_events()
+            else:
+                # require either when the file merging is known, and nothing otherwise to let the
+                # dynamic dependency definition resolve it at runtime
+                file_merging = self.file_merging
+                if file_merging > 1:
+                    reqs["events"] = self._req_merged_reduced_events()
+                elif file_merging == 1 and not self.pilot:
+                    reqs["events"] = self._req_reduced_events()
 
         return reqs
 
     def requires(self):
-        # same as for workflow requirements, declare static requirements when a decision is pre-set,
-        # and otherwise let run() yield dynamic ones
-        if self.skip_merging:
-            return self._req_reduced_events()
-        req_merged = self._req_merged_reduced_events()
-        if self.force_merging or req_merged.complete():
-            return req_merged
-        return []
+        # same as for workflow requirements without optional pilot check
+        reqs = {}
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
+            reqs["events"] = self._req_reduced_events()
+        else:
+            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
+
+            if self.force_merging:
+                reqs["events"] = self._req_merged_reduced_events()
+            else:
+                file_merging = self.file_merging
+                if file_merging > 1:
+                    reqs["events"] = self._req_merged_reduced_events()
+                elif file_merging == 1:
+                    reqs["events"] = self._req_reduced_events()
+
+        return reqs
 
     @workflow_condition.output
     def output(self):
-        if self.skip_merging or self.force_merging:
-            return self.requires().output()
+        # the "events" requirement is known at this point
+        req = self.requires()["events"]
 
-        # declare the output to be the one of the upstream task
-        return (
-            self._req_reduced_events()
-            if self.file_merging == 1
-            else self._req_merged_reduced_events()
-        ).output()
+        # to simplify the handling for downstream tasks, extract the single output from workflows
+        output = req.output()
+        return list(output.collection.targets.values())[0] if req.is_workflow() else output
 
     def _yield_dynamic_deps(self):
-        # do nothing if a decision was pre-set
-        if self.skip_merging or self.force_merging:
+        # do nothing if a decision was pre-set in which case requirements were already triggered
+        if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             return
 
-        if self.file_merging == 0:
-            yield self.reqs.MergeReductionStats.req(self)
-
+        # yield the appropriate requirement
         yield (
             self._req_reduced_events()
             if self.file_merging == 1
@@ -620,6 +638,13 @@ class ProvideReducedEvents(
 
     def run(self):
         return self._yield_dynamic_deps()
+
+
+ProvideReducedEventsWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=ProvideReducedEvents,
+    enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
+)
 
 
 class ReducedEventsUser(

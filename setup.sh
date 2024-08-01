@@ -359,7 +359,6 @@ EOF
     else
         cat << EOF
 
-     $( cf_color green '┓' )
   ┏┏┓$( cf_color green '┃' )╻┏┏┳┓┏┓
   ┗┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
     ┏$( cf_color green '┃' )
@@ -539,6 +538,9 @@ cf_setup_software_stack() {
     #       When "1", the "cf" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
+    #   CF_CONDA_ARCH
+    #       The OS / architecture for the conda installation. Defaults to "linux-64". For more info:
+    #       https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#linux-and-macos
 
     # check global variables
     if [ -z "${CF_BASE}" ]; then
@@ -560,6 +562,8 @@ cf_setup_software_stack() {
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
     local pyv="3.9"
+    local conda_arch="${CF_CONDA_ARCH:-linux-64}"
+    local ret
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -622,8 +626,13 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
-                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
+                curl -Ls "https://micro.mamba.pm/api/micromamba/${conda_arch}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --root-prefix "$PWD" &> micromamba.sh
+                ret="$?"
+                if [ "${ret}" != "0" ]; then
+                    [ -f "micromamba.sh" ] && >&2 cat micromamba.sh
+                    return "${ret}"
+                fi
                 # make the setup file relocatable
                 sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 sed -i -r "6 s|/ada_mnt/ada||" "micromamba.sh" || return "$?"
@@ -688,7 +697,6 @@ EOF
         }
 
         # source the production sandbox, potentially skipped in CI and RTD jobs
-        local ret
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"

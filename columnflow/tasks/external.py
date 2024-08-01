@@ -17,6 +17,7 @@ import order as od
 
 from columnflow.types import Sequence
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.util import wget, DotDict
 
 
@@ -202,7 +203,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             # use an optional hook in the config
             get_fs = self.config_inst.x("get_dataset_lfns_remote_fs", None)
             if callable(get_fs):
-                fs = get_fs(task.dataset_inst)
+                fs = get_fs(self.dataset_inst)
         if not fs:
             # use the law config
             fs = law.config.get_expanded("outputs", "lfn_sources", [], split_csv=True)
@@ -332,6 +333,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         default=5,
         description="number of replicas to generate; default: 5",
     )
+    user = user_parameter_inst
     version = None
 
     def __init__(self, *args, **kwargs):

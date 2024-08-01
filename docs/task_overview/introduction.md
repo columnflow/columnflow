@@ -6,7 +6,7 @@ In general (at least for people working in the CMS experiment), using columnflow
 The grid proxy should be activated after the setup of the default environment.
 It is however possible to create a custom law config file to be used by people without a grid certificate, although someone with a grid proxy must run the tasks {py:class}`~columnflow.tasks.external.GetDatasetLFNs` (and potentially the cms-specific {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`) for them.
 Once these tasks are done, the local task outputs can be used without grid certificate by other users if they are able to access them with the storage location declared in the custom law config file.
-An example for such a custom config file can be found in the {doc}`examples` section of this documentation.
+An example for such a custom config file can be found in the {ref}`Custom law.cfg <custom_law_config>` section of this documentation.
 
 While the name of each task is fairly descriptive of its purpose, a short introduction of the most important facts and parameters about each task group is provided below.
 As some tasks require others to run, the arguments for a task higher in the tree will also be required for tasks below in the tree (sometimes in a slightly different version, e.g. with an "s" if the task allows several instances of the parameter to be given at once (e.g. several dataset**s**)).
@@ -57,14 +57,16 @@ Tasks to train, evaluate neural networks and plot (to be implemented) their resu
 Task to create histograms with the python package [Hist](https://hist.readthedocs.io/en/latest/) which can be used by the tasks below in the task graph.
 From this task on, the ```--producer``` argument is replaced by ```--producers```. The histograms are saved in a pickle file.
 
-- {py:class}`~columnflow.tasks.cms.inference.CreateDatacards`: TODO
+- {py:class}`~columnflow.tasks.cms.inference.CreateDatacards`: Task to create Datacards compatible with the [CMS Higgs combination tool](https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/latest/) (now public), based on the object of the class {py:class}`~columnflow.inference.InferenceModel` used and the corresponding histograms created in {py:class}`~columnflow.tasks.histograms.CreateHistograms`.
+The outputs are the datacards in `.txt` format and (if needed) the shape histograms stored in `.root` format.
+The argument ```--inference-model``` followed by the name of the InferenceModel object to be run is needed for this task to run.
+A default value for this argument can be set in the analysis config.
 
 - ```Merge``` tasks (e.g. {py:class}`~columnflow.tasks.reduction.MergeReducedEvents`,{py:class}`~columnflow.tasks.histograms.MergeHistograms`):
 Tasks to merge the local outputs from the various occurences of the corresponding tasks.
 
+- Plotting tasks, described in the [plotting section](plotting_tasks.md).
+
 There are also CMS-specialized tasks, like {py:class}`~columnflow.tasks.cms.external.CreatePileUpWeights`, which are described in the {ref}`CMS specializations section <cms_specializations_section>`.
 As a note, the CreatePileUpWeights task is interesting from a workflow point of view as it is an example of a task required through an object of the {py:class}`~columnflow.production.Producer` class.
 This behaviour can be observed in the {py:meth}`~columnflow.production.cms.pileup.pu_weight_requires` method.
-
-TODO: maybe interesting to have examples e.g. for the usage of the parameters for the 2d plots.
-Maybe in the example section, or after the next subsection, such that all parameters are explained? If so, at least to be mentioned here.

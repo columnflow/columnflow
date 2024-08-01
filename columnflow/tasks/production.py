@@ -3,14 +3,14 @@
 """
 Tasks related to producing new columns.
 """
+
 import itertools
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    ChunkedIOMixin, ProducersMixin, ProducerMixin,
-)
+from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
@@ -32,7 +32,8 @@ class ProduceColumns(
         RemoteWorkflow.reqs,
     )
 
-    # register shifts found in the chosen producer to this task
+    # register sandbox and shifts found in the chosen producer to this task
+    register_producer_sandbox = True
     register_producer_shifts = True
 
     # strategy for handling missing source columns when adding aliases on event chunks
@@ -45,14 +46,14 @@ class ProduceColumns(
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
-        reqs["producer"] = self.producer_inst.run_requires()
+        reqs["producer"] = law.util.make_unique(law.util.flatten(self.producer_inst.run_requires()))
 
         return reqs
 
     def requires(self):
         return {
             "events": self.reqs.ProvideReducedEvents.req(self),
-            "producer": self.producer_inst.run_requires(),
+            "producer": law.util.make_unique(law.util.flatten(self.producer_inst.run_requires())),
         }
 
     workflow_condition = ReducedEventsUser.workflow_condition.copy()
@@ -77,13 +78,13 @@ class ProduceColumns(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
         inputs = self.input()
         output = self.output()
         output_chunks = {}
 
         # run the producer setup
-        reader_targets = self.producer_inst.run_setup(reqs["producer"], inputs["producer"])
+        producer_reqs = self.producer_inst.run_requires()
+        reader_targets = self.producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
         n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files
@@ -112,6 +113,7 @@ class ProduceColumns(
                 [inp.path for inp in inps],
                 source_type=["awkward_parquet"] + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_ext),
+                chunk_size=self.producer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
@@ -165,24 +167,30 @@ ProduceColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_input
 )
 
 
-ProduceColumnsWrapperBase = wrapper_factory(
+_ProduceColumnsWrapperBase = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=ProduceColumns,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
-ProduceColumnsWrapperBase.exclude_index = True
+_ProduceColumnsWrapperBase.exclude_index = True
 
 
-class ProduceColumnsWrapper(
-    ProduceColumnsWrapperBase,
-    ProducersMixin,
-):
+class ProduceColumnsWrapper(_ProduceColumnsWrapperBase):
+
+    producers = law.CSVParameter(
+        default=(),
+        description="names of producers to use; if empty, the default producer is used",
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # add the producers parameter
-        self.wrapper_fields.extend(["producer"])
+        if self.producers:
+            # add the producers parameter
+            self.wrapper_fields.append("producer")
 
-        combined_parameters = itertools.product(self.wrapper_parameters, self.producers)
-        combined_parameters = [params_tuple + (producer,) for params_tuple, producer in combined_parameters]
-        self.wrapper_parameters = combined_parameters
+            # extend the parameter combinations with producers
+            self.wrapper_parameters = [
+                params + (producer,)
+                for params, producer in itertools.product(self.wrapper_parameters, self.producers)
+            ]

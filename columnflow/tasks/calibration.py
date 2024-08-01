@@ -4,6 +4,7 @@
 Tasks related to calibrating events.
 """
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
@@ -39,7 +40,8 @@ class CalibrateEvents(
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
-    # register shifts found in the chosen calibrator to this task
+    # register sandbox and shifts found in the chosen calibrator to this task
+    register_calibrator_sandbox = True
     register_calibrator_shifts = True
 
     def workflow_requires(self) -> dict:
@@ -54,7 +56,7 @@ class CalibrateEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_inst.run_requires()
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
 
         return reqs
 
@@ -65,7 +67,7 @@ class CalibrateEvents(
         reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = self.calibrator_inst.run_requires()
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
 
         return reqs
 
@@ -94,15 +96,13 @@ class CalibrateEvents(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
-        lfn_task = reqs["lfns"]
-        inputs = self.input()
+        lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
 
         # run the calibrator setup
-        reader_targets = self.calibrator_inst.run_setup(reqs["calibrator"], inputs["calibrator"])
-        n_ext = len(reader_targets)
+        calibrator_reqs = self.calibrator_inst.run_requires()
+        reader_targets = self.calibrator_inst.run_setup(calibrator_reqs, luigi.task.getpaths(calibrator_reqs))
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -123,16 +123,13 @@ class CalibrateEvents(
         with law.localize_file_targets(
             [input_file, *reader_targets.values()],
             mode="r",
-        ) as (local_input_file, *inps):
-            # open with uproot
-            with self.publish_step("load and open ..."):
-                nano_file = local_input_file.load(formatter="uproot")
-
+        ) as inps:
             # iterate over chunks
             for (events, *cols), pos in self.iter_chunked_io(
-                [nano_file, *(inp.path for inp in inps)],
-                source_type=["coffea_root"] + [None] * n_ext,
-                read_columns=[read_columns] * (1 + n_ext),
+                [inp.abspath for inp in inps],
+                source_type=["coffea_root"] + (len(inps) - 1) * [None],
+                read_columns=len(inps) * [read_columns],
+                chunk_size=self.calibrator_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
@@ -154,7 +151,7 @@ class CalibrateEvents(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # merge output files
         with output["columns"].localize("w") as outp:

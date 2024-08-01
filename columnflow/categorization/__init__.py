@@ -40,9 +40,9 @@ class Categorizer(TaskArrayFunction):
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
             cls_dict = {
+                **kwargs,
                 "call_func": func,
             }
-            cls_dict.update(kwargs)
 
             # get the module name
             frame = inspect.stack()[1]

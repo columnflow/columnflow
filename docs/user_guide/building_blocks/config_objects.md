@@ -19,9 +19,7 @@ to create the new Config object `cfg`, which will be associated to both the Anal
 As the Config object should contain the analysis-dependent information related to a certain campaign, it should contain most of the information needed for running your analysis.
 Therefore, in this section, the Config parameters required by Columnflow and some convenience parameters will be presented.
 
-To start your analysis, do not forget to use the already existing analysis template in the
-`analysis_templates/cms_minimal` Git directory and its
-[config](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py).
+To start your analysis, do not forget to use the already existing analysis template in the `analysis_templates/cms_minimal` Git directory and its [config](https://github.com/columnflow/columnflow/blob/master/analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py).
 
 The Config saves information under two general formats: the objects from the order package, which are necessary for your analysis to run in columnflow, and the additional parameters, which are saved under the auxiliary key, accessible through the "x" key.
 In principle, the auxiliary field can contain any parameter the user wants to save and reuse for parts of the analysis.
