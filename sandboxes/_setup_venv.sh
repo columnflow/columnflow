@@ -134,7 +134,7 @@ setup_venv() {
     
     cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
     if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
-        local TMP_REQS="${this_dir}/requirements_tmp.txt"
+        local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
         # compile pip dependencies and clear all caches before evaluating dependencies
         cmd="uv pip compile -n \
             --output-file ${TMP_REQS} \
@@ -142,8 +142,10 @@ setup_venv() {
             ${EXTRAS} --prerelease=allow ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
         echo "$cmd"
         eval "$cmd"
+
+        if [ -f $CF_VENV_REQUIREMENTS ]; then rm $CF_VENV_REQUIREMENTS; fi
         # generate unique hash based on current state of software packages
-        local this_hash="$( openssl sha256 "$TMP_REQS" | awk '{print $2}' | sed s/[[:blank:]].*//)"
+        local this_hash="$( sha256sum "$TMP_REQS" | awk '{print $1}' | sed s/[[:blank:]].*//)"
         cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
         echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
         cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
