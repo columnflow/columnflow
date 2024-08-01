@@ -55,7 +55,7 @@ WORKDIR ${CF_BASE}
 
 RUN source ./setup.sh 
 
-RUN source ./setup.sh && for exe_file in ${exe_files//,/ }; do if [ "${exe_file}" != "setup.sh" ]; then source ${exe_file}; fi ; done
+RUN source ./setup.sh && for exe_file in ${exe_files//,/ }; do if [ "${exe_file}" != "setup.sh" ]; then bash -c "source ${exe_file}"; fi ; done
 
 # setup ownership so user can also run things
 RUN chown cf_user:cf_user_base ${CF_BASE} -R

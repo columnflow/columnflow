@@ -63,7 +63,7 @@ channels=[
     "defaults",
 ]
 dependencies = [
-    {conda = 'libgcc-ng'},
+    {conda = 'libgcc:linux'},
     {conda = "bash"},
     {conda = 'zsh:linux'},
     {conda = "python"},
