@@ -97,7 +97,6 @@ class CreateCutflowHistograms(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        import hist
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import Route, add_ak_aliases, fill_hist
@@ -202,15 +201,12 @@ class CreateCutflowHistograms(
 
                 # fill the raw point
                 fill_data = get_point()
-                try:
-                    fill_hist(
-                        histograms[var_key],
-                        fill_data,
-                        fill_kwargs={"step": self.initial_step},
-                        last_edge_inclusive=self.last_edge_inclusive,
-                    )
-                except Exception as e:
-                    from hbw.util import debugger; debugger()
+                fill_hist(
+                    histograms[var_key],
+                    fill_data,
+                    fill_kwargs={"step": self.initial_step},
+                    last_edge_inclusive=self.last_edge_inclusive,
+                )
 
                 # fill all other steps
                 mask = True
