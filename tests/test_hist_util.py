@@ -14,6 +14,7 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 hist = maybe_import("hist")
 
+
 class HistUtilTests(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
@@ -100,5 +101,3 @@ class HistUtilTests(unittest.TestCase):
             self.assertIn(axis, histogram.axes.name)
             self.assertEqual(histogram.axes[axis].name, axis)
             self.assertEqual(type(histogram.axes[axis]), hist.axis.IntCategory)
-
-        from hbw.util import debugger; debugger()
