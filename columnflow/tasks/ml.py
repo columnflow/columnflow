@@ -92,8 +92,12 @@ class PrepareMLEvents(
         self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
 
         # overwrite the sandbox when set
-        if self._preparation_producer_inst.sandbox:
-            self.sandbox = self._preparation_producer_inst.sandbox
+        sandbox = self._preparation_producer_inst.get_sandbox()
+        if sandbox:
+            self.sandbox = sandbox
+            # rebuild the sandbox inst when already initialized
+            if self._sandbox_initialized:
+                self._initialize_sandbox(force=True)
 
         return self._preparation_producer_inst
 
@@ -422,8 +426,8 @@ class MergeMLEvents(
     def merge_workflow_requires(self):
         req = self.reqs.PrepareMLEvents.req(self, _exclude={"branches"})
 
-        # if the merging stats exist, allow the forest to be cached
-        self._cache_forest = req.merging_stats_exist
+        # if the workflow shape is known, allow the forest to be cached
+        self._cache_forest = req.workflow_condition()
 
         return req
 
@@ -764,7 +768,7 @@ class MLEvaluation(
         route_filter = RouteFilter(write_columns)
 
         # iterate over chunks of events and columns
-        file_targets = [inputs["events"]["collection"][0]["events"]]
+        file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
         if reader_targets:
@@ -1082,6 +1086,18 @@ class PlotMLResults(PlotMLResultsBase):
     receiver operating characteristic (ROC) curve. This task uses the output of the
     MergeMLEvaluation task as input and saves the plots with the corresponding array
     used to create the plot.
+
+    For the function to run correctly, the following input structure is required:
+    * The ``category_ids`` column must be kept in the Evaluation and passed with the network outputs.
+    (must be accessible via ``events.category_id`` and can be set by adding ``category_ids`` to the
+    :py:meth:`~columnflow.ml.MLModel.uses` and :py:meth:`~columnflow.ml.MLModel.produces`
+    methode of the ML-Model)
+    * The outputs of the ML model must be stored under a column with the name of the model itself
+    (This can be set in the :py:meth:`~columnflow.ml.MLModel.evaluate` methode of the model via:
+
+    ``events = set_ak_column(events, f"{self.cls_name}.{output_i}", output_i)``
+
+    ).
     """
 
     # override the plot_function parameter to be able to only choose between CM and ROC
@@ -1104,6 +1120,9 @@ class PlotMLResults(PlotMLResultsBase):
                 params.general_settings[label] = params.general_settings[label].split(";")
 
     def output(self: PlotMLResults):
+        """
+        override the output method to return the plots and the array used for plotting.
+        """
         b = self.branch_data
         return {
             "plots": [
@@ -1113,7 +1132,7 @@ class PlotMLResults(PlotMLResultsBase):
                 )
             ],
             "array": self.target(
-                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.parquet",
+                f"plot__{self.plot_function}__proc_{self.processes_repr}__cat_{b.category}/data.pickle",
             ),
         }
 
@@ -1152,6 +1171,6 @@ class PlotMLResults(PlotMLResultsBase):
 
                 for index, f in enumerate(figs):
                     f.savefig(
-                        file_path.abs_dirname + "/" + file_path.basename.replace("0", str(index)),
+                        file_path.absdirname + "/" + file_path.basename.replace("0", str(index)),
                         format=file_path.ext(),
                     )

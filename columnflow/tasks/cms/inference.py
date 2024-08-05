@@ -76,7 +76,7 @@ class CreateDatacards(
 
             if cat_obj.config_data_datasets:
                 for dataset in cat_obj.config_data_datasets:
-                    data_dataset_params[dataset].add(cat_obj.config_variable)
+                    data_dataset_params[dataset]["variables"].add(cat_obj.config_variable)
 
         # set workflow requirements per mc dataset
         reqs["merged_hists"] = set(

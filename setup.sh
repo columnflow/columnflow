@@ -334,6 +334,41 @@ cf_setup_common_variables() {
     fi
 }
 
+cf_show_banner() {
+    local no_utf8="$( [ "$1" = "1" ] && echo "true" || echo "false" )"
+    if ! ${no_utf8}; then
+        local charmap="$( locale charmap | tr '[:upper:]' '[:lower:]' )"
+        no_utf8="$( [ "${charmap}" = "utf-8" ] && echo "false" || echo "true" )"
+    fi
+
+    if ${no_utf8}; then
+        cat << EOF
+                $( cf_color green '_' )
+    ___   ___  $( cf_color green '| |' ) _   _  _ __ ___   _ __
+   / __| / _ \ $( cf_color green '| |' )| | | || '_ \` _ \ | '_ \\
+  | (__ | (_) |$( cf_color green '| |' )| |_| || | | | | || | | |
+   \___| \___/ $( cf_color green '| |' ) \__,_||_| |_| |_||_| |_|
+            __ $( cf_color green '| |' )
+           / _|$( cf_color green '| |' )  ___ __      __
+          | |_ $( cf_color green '| |' ) / _ \\ \ /\ / /
+          |  _|$( cf_color green '| |' )| (_) |\ V  V /
+          |_|  $( cf_color green '| |' ) \___/  \_/\_/
+               $( cf_color green '|_|' )
+
+EOF
+    else
+        cat << EOF
+
+  ┏┏┓$( cf_color green '┃' )╻┏┏┳┓┏┓
+  ┗┗┛$( cf_color green '┃' )┗┛╹┗┗╹┗
+    ┏$( cf_color green '┃' )
+    ╋$( cf_color green '┃' )┏┓┓┏┏
+    ┛$( cf_color green '┃' )┗┛┗┻┛
+
+EOF
+    fi
+}
+
 cf_setup_interactive_common_variables() {
     # Queries for common variables which should be called from called inside custom
     # cf_setup_interactive_body funtions, which in turn is called by cf_setup_interactive.
@@ -385,12 +420,19 @@ cf_setup_interactive() {
     #   1. The name of the setup. "default" triggers a setup with good defaults, avoiding all
     #      queries to the user and the writing of a custom setup file.
     #   2. The location of the setup file when a custom, named setup was triggered.
+    #
+    # Optionally preconfigured environment variables:
+    #   CF_SKIP_BANNER
+    #       When "1", the "columnflow" banner is not shown.
 
     local setup_name="${1}"
     local env_file="${2}"
     local env_file_tmp="${env_file}.tmp"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
+
+    # optionally show the banner
+    [ "${CF_SKIP_BANNER}" != "1" ] && cf_show_banner
 
     # when the setup already exists and it's not the default one,
     # source the corresponding env file and stop
@@ -496,6 +538,9 @@ cf_setup_software_stack() {
     #       When "1", the "cf" venv is skipped and only the "cf_dev" env is built.
     #   CF_REINSTALL_SOFTWARE
     #       When "1", any existing software stack is removed and freshly installed.
+    #   CF_CONDA_ARCH
+    #       The OS / architecture for the conda installation. Defaults to "linux-64". For more info:
+    #       https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#linux-and-macos
 
     # check global variables
     if [ -z "${CF_BASE}" ]; then
@@ -517,6 +562,8 @@ cf_setup_software_stack() {
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
     local pyv="3.9"
+    local conda_arch="${CF_CONDA_ARCH:-linux-64}"
+    local ret
 
     # zsh options
     if ${shell_is_zsh}; then
@@ -579,8 +626,13 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
-                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
+                curl -Ls "https://micro.mamba.pm/api/micromamba/${conda_arch}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --root-prefix "$PWD" &> micromamba.sh
+                ret="$?"
+                if [ "${ret}" != "0" ]; then
+                    [ -f "micromamba.sh" ] && >&2 cat micromamba.sh
+                    return "${ret}"
+                fi
                 # make the setup file relocatable
                 sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
@@ -644,7 +696,6 @@ EOF
         }
 
         # source the production sandbox, potentially skipped in CI and RTD jobs
-        local ret
         if [ "${CF_CI_ENV}" != "1" ] && [ "${CF_RTD_ENV}" != "1" ]; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"

@@ -8,11 +8,11 @@ import law
 import order as od
 from scinum import Number
 
-from columnflow.util import DotDict, maybe_import
-from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection
 from columnflow.config_util import (
     get_root_processes_from_campaign, add_shift_aliases, add_category, verify_config_processes,
 )
+from columnflow.columnar_util import EMPTY_FLOAT, ColumnCollection, skip_column
+from columnflow.util import DotDict, maybe_import
 
 ak = maybe_import("awkward")
 
@@ -46,6 +46,9 @@ ana.x.cmssw_sandboxes = [
 # config groups for conveniently looping over certain configs
 # (used in wrapper_factory)
 ana.x.config_groups = {}
+
+# named function hooks that can modify store_parts of task outputs if needed
+ana.x.store_parts_modifiers = {}
 
 
 #
@@ -115,10 +118,12 @@ cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
-
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
-cfg.x.process_groups = {}
+cfg.x.process_groups = {
+    "signals": [],  # list of signal parent processes e.g. h, hh etc. (needed for some features)
+    "other_groups": [],
+}
 
 # dataset groups for conveniently looping over certain datasets
 # (used in wrapper_factory and during plotting)
@@ -169,7 +174,6 @@ cfg.x.producer_groups = {}
 # ml_model groups for conveniently looping over certain ml_models
 # (used during the machine learning tasks)
 cfg.x.ml_model_groups = {}
-
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None
@@ -239,14 +243,16 @@ cfg.x.reduced_file_size = 512.0
 cfg.x.keep_columns = DotDict.wrap({
     "cf.ReduceEvents": {
         # general event info, mandatory for reading files with coffea
-        ColumnCollection.MANDATORY_COFFEA,  # additional columns can be added as strings, similar to object info
+        # additional columns can be added as strings, similar to object info
+        ColumnCollection.MANDATORY_COFFEA,
         # object info
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.btagDeepFlavB", "Jet.hadronFlavour",
-        "Muon.pt", "Muon.eta", "Muon.phi", "Muon.mass", "Muon.pfRelIso04_all",
-        "MET.pt", "MET.phi", "MET.significance", "MET.covXX", "MET.covXY", "MET.covYY",
+        "Jet.{pt,eta,phi,mass,btagDeepFlavB,hadronFlavour}",
+        "Muon.{pt,eta,phi,mass,pfRelIso04_all}",
+        "MET.{pt,phi,significance,covXX,covXY,covYY}",
         "PV.npvs",
-        # all columns added during selection using a ColumnCollection flag
+        # all columns added during selection using a ColumnCollection flag, but skip cutflow ones
         ColumnCollection.ALL_FROM_SELECTOR,
+        skip_column("cutflow.*"),
     },
     "cf.MergeSelectionMasks": {
         "cutflow.*",
@@ -256,17 +262,16 @@ cfg.x.keep_columns = DotDict.wrap({
     },
 })
 
-# versions per task family, either referring to strings or to callables receving the invoking
-# task instance and parameters to be passed to the task family
-cfg.x.versions = {
-    # "cf.CalibrateEvents": "prod1",
-    # "cf.SelectEvents": (lambda cls, inst, params: "prod1" if params.get("selector") == "default" else "dev1"),
-    # ...
-}
+# pinned versions
+# (see [versions] in law.cfg for more info)
+cfg.x.versions = {}
 
 # channels
 # (just one for now)
 cfg.add_channel(name="mutau", id=1)
+
+# histogramming hooks, invoked before creating plots when --hist-hook parameter set
+cfg.x.hist_hooks = {}
 
 # add categories using the "add_category" tool which adds auto-generated ids
 # the "selection" entries refer to names of categorizers, e.g. in categorization/example.py

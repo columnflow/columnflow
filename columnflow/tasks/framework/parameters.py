@@ -6,10 +6,35 @@ Custom luigi parameters.
 
 from __future__ import annotations
 
+import getpass
+
+import luigi
 import law
 
 from columnflow.util import try_float, try_complex, DotDict
 from columnflow.types import Iterable
+
+
+user_parameter_inst = luigi.Parameter(
+    default=getpass.getuser(),
+    description="the user running the current task, mainly for central schedulers to distinguish "
+    "between tasks that should or should not be run in parallel by multiple users; "
+    "default: current user",
+)
+
+_default_last_bin_edge_inclusive = law.config.get_expanded_bool(
+    "analysis",
+    "default_histogram_last_edge_inclusive",
+    None,
+)
+last_edge_inclusive_inst = law.OptionalBoolParameter(
+    default=_default_last_bin_edge_inclusive,
+    significant=False,
+    description="whether to shift entries that have the exact value of the right-most bin edge "
+    "slightly to the left such that they end up in the last instead of the overflow bin; when "
+    "'None', shifting is performed for all variable axes that are continuous and non-circular; "
+    f"default: {_default_last_bin_edge_inclusive}",
+)
 
 
 class SettingsParameter(law.CSVParameter):

@@ -4,8 +4,10 @@
 Tasks related to selecting events and performing post-selection bookkeeping.
 """
 
+import copy
 from collections import defaultdict
 
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
@@ -14,10 +16,19 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.production import Producer
-from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
+
+logger = law.logger.get_logger(__name__)
+
+default_selection_hists_optional = law.config.get_expanded_bool(
+    "analysis",
+    "default_selection_hists_optional",
+    True,
+)
 
 
 class SelectEvents(
@@ -28,6 +39,9 @@ class SelectEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    # flag that sets the *hists* output to optional if True
+    selection_hists_optional = default_selection_hists_optional
+
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -38,7 +52,8 @@ class SelectEvents(
         CalibrateEvents=CalibrateEvents,
     )
 
-    # register shifts found in the chosen selector to this task
+    # register sandbox and shifts found in the chosen selector to this task
+    register_selector_sandbox = True
     register_selector_shifts = True
 
     # strategy for handling missing source columns when adding aliases on event chunks
@@ -61,7 +76,7 @@ class SelectEvents(
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_inst.run_requires()
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
 
         return reqs
 
@@ -76,7 +91,7 @@ class SelectEvents(
         }
 
         # add selector dependent requirements
-        reqs["selector"] = self.selector_inst.run_requires()
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
 
         return reqs
 
@@ -84,6 +99,7 @@ class SelectEvents(
         outputs = {
             "results": self.target(f"results_{self.branch}.parquet"),
             "stats": self.target(f"stats_{self.branch}.json"),
+            "hists": self.target(f"hists_{self.branch}.pickle", optional=self.selection_hists_optional),
         }
 
         # add additional columns in case the selector produces some
@@ -104,16 +120,17 @@ class SelectEvents(
         )
 
         # prepare inputs and outputs
-        reqs = self.requires()
-        lfn_task = reqs["lfns"]
+        lfn_task = self.requires()["lfns"]
         inputs = self.input()
         outputs = self.output()
         result_chunks = {}
         column_chunks = {}
         stats = defaultdict(float)
+        hists = DotDict()
 
         # run the selector setup
-        reader_targets = self.selector_inst.run_setup(reqs["selector"], inputs["selector"])
+        selector_reqs = self.selector_inst.run_requires()
+        reader_targets = self.selector_inst.run_setup(selector_reqs, luigi.task.getpaths(selector_reqs))
         n_ext = len(reader_targets)
 
         # show an early warning in case the selector does not produce some mandatory columns
@@ -153,17 +170,14 @@ class SelectEvents(
                 *reader_targets.values(),
             ],
             mode="r",
-        ) as (local_input_file, *inps):
-            # open with uproot
-            with self.publish_step("load and open ..."):
-                nano_file = local_input_file.load(formatter="uproot")
-
+        ) as inps:
             # iterate over chunks of events and diffs
             n_calib = len(inputs["calibrations"])
             for (events, *cols), pos in self.iter_chunked_io(
-                [nano_file, *(inp.path for inp in inps)],
+                [inp.abspath for inp in inps],
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_calib + n_ext),
+                chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within additional columns
                 if self.check_overlapping_inputs:
@@ -181,7 +195,7 @@ class SelectEvents(
                 )
 
                 # invoke the selection function
-                events, results = self.selector_inst(events, stats)
+                events, results = self.selector_inst(events, stats, hists=hists)
 
                 # complain when there is no event mask
                 if results.event is None:
@@ -200,7 +214,7 @@ class SelectEvents(
                 # save results as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
                 result_chunks[(lfn_index, pos.index)] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.abspath))
 
                 # remove columns
                 if write_columns:
@@ -213,7 +227,7 @@ class SelectEvents(
                     # save additional columns as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
                     column_chunks[(lfn_index, pos.index)] = chunk
-                    self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                    self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
@@ -231,6 +245,7 @@ class SelectEvents(
 
         # save stats
         outputs["stats"].dump(stats, indent=4, formatter="json")
+        outputs["hists"].dump(hists, formatter="pickle")
 
         # print some stats
         eff = safe_div(stats["num_events_selected"], stats["num_events"])
@@ -272,8 +287,14 @@ class MergeSelectionStats(
     DatasetTask,
     law.tasks.ForestMerge,
 ):
-    # recursively merge 20 files into one
-    merge_factor = 20
+    # flag that sets the *hists* output to optional if True
+    selection_hists_optional = default_selection_hists_optional
+
+    # default sandbox, might be overwritten by selector function (needed to load hist objects)
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    # merge 25 stats files into 1 at every step of the merging cascade
+    merge_factor = 25
 
     # skip receiving some parameters via req
     exclude_params_req_get = {"workflow"}
@@ -299,7 +320,10 @@ class MergeSelectionStats(
         )
 
     def merge_output(self):
-        return {"stats": self.target("stats.json")}
+        return {
+            "stats": self.target("stats.json"),
+            "hists": self.target("hists.pickle", optional=self.selection_hists_optional),
+        }
 
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs(inputs["collection"].targets.values())
@@ -311,12 +335,29 @@ class MergeSelectionStats(
     def merge(self, inputs, output):
         # merge input stats
         merged_stats = defaultdict(float)
+        merged_hists = {}
+
+        # check that hists are present for all inputs
+        hist_inputs_exist = [inp["hists"].exists() for inp in inputs]
+        if any(hist_inputs_exist) and not all(hist_inputs_exist):
+            logger.warning(
+                f"For dataset {self.dataset_inst.name}, cf.SelectEvents has produced hists for "
+                "some but not all files. Histograms will not be merged and an empty pickle file will be stored.",
+            )
+
         for inp in inputs:
             stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
+        # merge hists only if all hists are present
+        if all(hist_inputs_exist):
+            for inp in inputs:
+                hists = inp["hists"].load(formatter="pickle", cache=False)
+                self.merge_counts(merged_hists, hists)
+
         # write the output
         output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
+        output["hists"].dump(merged_hists, formatter="pickle", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
@@ -325,11 +366,11 @@ class MergeSelectionStats(
         *dst* is updated in-place and also returned.
         """
         for key, obj in src.items():
-            if isinstance(obj, dict):
-                cls.merge_counts(dst.setdefault(key, {}), obj)
+            if key not in dst:
+                dst[key] = copy.deepcopy(obj)
+            elif isinstance(obj, dict):
+                cls.merge_counts(dst[key], obj)
             else:
-                if key not in dst:
-                    dst[key] = 0.0
                 dst[key] += obj
         return dst
 
@@ -421,7 +462,7 @@ class MergeSelectionMasks(
 
     def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import (
-            ColumnCollection, Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
+            Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
         )
 
         chunks = []
@@ -434,13 +475,21 @@ class MergeSelectionMasks(
             )
 
         # define columns that will be written
-        write_columns = mandatory_coffea_columns
-        write_columns |= {"category_ids", "process_id", "normalization_weight"}
+        write_columns: set[Route] = set()
+        skip_columns: set[str] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, []):
-            if isinstance(c, ColumnCollection):
-                write_columns |= self.find_keep_columns(c)
-            else:
-                write_columns.add(Route(c))
+            for r in self._expand_keep_column(c):
+                if r.has_tag("skip"):
+                    skip_columns.add(r.column)
+                else:
+                    write_columns.add(r)
+        write_columns = {
+            r for r in write_columns
+            if not law.util.multi_match(r.column, skip_columns, mode=any)
+        }
+        # add some mandatory columns
+        write_columns |= set(map(Route, mandatory_coffea_columns))
+        write_columns |= set(map(Route, {"category_ids", "process_id", "normalization_weight"}))
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:
@@ -459,7 +508,7 @@ class MergeSelectionMasks(
 
             chunk = tmp_dir.child(f"tmp_{inp['results'].basename}", type="f")
             chunks.append(chunk)
-            sorted_ak_to_parquet(out, chunk.path)
+            sorted_ak_to_parquet(out, chunk.abspath)
 
         return chunks
 

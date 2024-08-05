@@ -22,6 +22,7 @@ from columnflow.plotting.plot_util import (
     apply_density_to_hists,
     get_position,
     get_profile_variations,
+    blind_sensitive_bins,
 )
 
 hist = maybe_import("hist")
@@ -52,6 +53,10 @@ def plot_variable_per_process(
     remove_residual_axis(hists, "shift")
 
     variable_inst = variable_insts[0]
+    blinding_threshold = kwargs.get("blinding_threshold", None)
+
+    if blinding_threshold:
+        hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
@@ -286,7 +291,7 @@ def plot_cutflow(
         },
         "annotate_cfg": {"text": category_inst.label},
         "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
     }

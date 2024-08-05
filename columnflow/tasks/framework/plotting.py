@@ -44,15 +44,15 @@ class PlotBase(ConfigTask):
     general_settings = SettingsParameter(
         default=DotDict(),
         significant=False,
-        description="Parameter to set a list of custom plotting parameters. Format: "
+        description="parameter to set a list of custom plotting parameters; format: "
         "'option1=val1,option2=val2,...'",
     )
     custom_style_config = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         significant=False,
-        description="Parameter to overwrite the *style_config* that is passed to the plot function"
-        "via a dictionary in the `custom_style_config_groups` auxiliary in the config;"
-        "defaults to the `default_custom_style_config` aux",
+        description="parameter to overwrite the *style_config* that is passed to the plot function"
+        "via a dictionary in the `custom_style_config_groups` auxiliary in the config; "
+        "defaults to the `default_custom_style_config` aux field",
     )
     skip_legend = law.OptionalBoolParameter(
         default=None,
@@ -66,6 +66,20 @@ class PlotBase(ConfigTask):
         "the following special values are expanded into the usual postfixes: wip, pre, pw, sim, "
         "simwip, simpre, simpw, od, odwip, public; no default",
     )
+    debug_plot = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, an ipython debugger is started after the plot figure is created "
+        "for interactive adjustments; default: False",
+    )
+    blinding_threshold = luigi.FloatParameter(
+        default=law.NO_FLOAT,
+        significant=False,
+        description="parameter to blind datapoints in the region where the sensitivity s/sqrt(s+b) "
+        "exceeds a certain threshold; defaults to the `default_blinding_threshold` aux field of "
+        "the config",
+    )
+    exclude_params_remote_workflow = {"debug_plot"}
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -102,21 +116,36 @@ class PlotBase(ConfigTask):
         dict_add_strict(params, "cms_label", None if self.cms_label == law.NO_STR else self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
+        dict_add_strict(
+            params,
+            "blinding_threshold",
+            None if self.blinding_threshold == law.NO_FLOAT else self.blinding_threshold,
+        )
         return params
+
+    def plot_parts(self) -> law.util.InsertableDict:
+        """
+        Returns a sorted, insertable dictionary containing all parts that make up the name of a
+        plot file.
+        """
+        return law.util.InsertableDict()
 
     def get_plot_names(self, name: str) -> list[str]:
         """
         Returns a list of basenames for created plots given a file *name* for all configured file
         types, plus the additional plot suffix.
         """
-        suffix = ""
-        if self.plot_suffix and self.plot_suffix != law.NO_STR:
-            suffix = f"__{self.plot_suffix}"
+        # get plot parts
+        parts = self.plot_parts()
 
-        return [
-            f"{name}{suffix}.{ft}"
-            for ft in self.file_types
-        ]
+        # add the plot_suffix if not already present
+        if "suffix" not in parts and self.plot_suffix not in ("", law.NO_STR, None):
+            parts["suffix"] = self.plot_suffix
+
+        # build the full name
+        full_name = "__".join(map(str, [name] + list(parts.values())))
+
+        return [f"{full_name}.{ft}" for ft in self.file_types]
 
     def get_plot_func(self, func_name: str) -> Callable:
         """
@@ -146,8 +175,76 @@ class PlotBase(ConfigTask):
         Gets the plot function referred to by *func_name* via :py:meth:`get_plot_func`, calls it
         with all *kwargs* and returns its result. *kwargs* are updated through the
         :py:meth:`update_plot_kwargs` hook first.
+
+        Also, when the :py:attr:`debug_plot` parameter is set to True, an ipython debugger is
+        started after the plot is created and can be interactively debugged.
         """
-        return self.get_plot_func(func_name)(**(self.update_plot_kwargs(kwargs)))
+        plot_func = self.get_plot_func(func_name)
+        plot_kwargs = self.update_plot_kwargs(kwargs)
+
+        # defer to debug routine
+        if self.debug_plot:
+            return self._debug_plot(plot_func, plot_kwargs)
+
+        return plot_func(**plot_kwargs)
+
+    def _debug_plot(self, plot_func: Callable, plot_kwargs: dict[str, Any]) -> Any:
+        plot_kwargs = DotDict.wrap(plot_kwargs)
+
+        # helper to create the plot and set the return value, plus some locals for debugging
+        ret = fig = ax = None
+        has_fig = False
+        def plot():
+            nonlocal ret, fig, ax, has_fig
+            ret = plot_func(**plot_kwargs)
+            if isinstance(ret, tuple) and len(ret) == 2:
+                fig, ax = ret
+                has_fig = True
+            return ret
+
+        # helper to show the plot with a view command
+        tmp_plots = {}
+        pdf, png, imgcat = "pdf", "png", "imgcat"  # noqa: F841
+        default_cmd = imgcat if law.util.which("imgcat") else None
+        def show(cmd=default_cmd, ext=pdf):
+            if ext not in tmp_plots:
+                tmp_plots[ext] = law.LocalFileTarget(is_tmp=ext)
+            tmp_plots[ext].dump(fig, formatter="mpl")
+            if cmd:
+                law.util.interruptable_popen([cmd, tmp_plots[ext].abspath])
+            else:
+                print(f"created {tmp_plots[ext].abspath}")
+
+        # helper to reload plotting modules
+        def reload():
+            for mod in ["plot_all", "plot_util", "plot_functions_1d", "plot_functions_2d"]:
+                importlib.reload(importlib.import_module(f"columnflow.plotting.{mod}"))
+
+        # helper to repeat the reload, plot and show steps
+        def repeat(*args, **kwargs):
+            reload()
+            plot()
+            show(*args, **kwargs)
+
+        # debugger message
+        c = lambda s: law.util.colored(s, color="cyan")
+        msg = " plot debugging ".center(80, "-")
+        msg += f"\n - run '{c('plot()')}' to repeat the plot creation"
+        msg += f"\n - run '{c('show(CMD)')}' to show the plot with the given command"
+        if default_cmd:
+            msg += f" (default: {c(default_cmd)})"
+        msg += f"\n - run '{c('reload()')}' to reload plotting libraries"
+        msg += f"\n - run '{c('repeat()')}' to trigger the reload->plot->show steps"
+        msg += f"\n - access plot options via '{c('plot_kwargs')}'"
+        if has_fig:
+            msg += f"\n - access figure and axes objects via '{c('fig')}' and '{c('ax')}'"
+
+        # call the plot function and debug
+        plot()
+        from IPython import embed
+        embed(header=msg)
+
+        return ret
 
     def update_plot_kwargs(self, kwargs: dict) -> dict:
         """
@@ -177,8 +274,14 @@ class PlotBase(ConfigTask):
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
             style_config = law.util.merge_dicts(custom_style_config, style_config)
             kwargs["style_config"] = style_config
-        # update defaults after application of `general_settings`
+        # update defaults after application of general_settings
         kwargs.setdefault("cms_label", "pw")
+
+        # resolve blinding_threshold
+        blinding_threshold = kwargs.get("blinding_threshold", None)
+        if blinding_threshold is None:
+            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
+        kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
 
