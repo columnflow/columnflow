@@ -6,7 +6,7 @@ Task to produce and merge histograms.
 
 from __future__ import annotations
 
-# import luigi
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
