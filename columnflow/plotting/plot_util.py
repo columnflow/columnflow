@@ -231,7 +231,6 @@ def apply_variable_settings(
 
     # apply certain  setting directly to histograms
     for var_inst in variable_insts:
-
         # rebinning
         rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
         if try_int(rebin_factor):
@@ -259,6 +258,7 @@ def apply_variable_settings(
             for proc_inst, h in list(hists.items()):
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
+
     return hists
 
 
