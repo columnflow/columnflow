@@ -38,8 +38,7 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
         deep=True,
     )
 
-    # NOTE: surprisingly, our plotting methods worked directly with integer axes instead of variable axes,
-    # but we should still do some more testing
+    # NOTE: maybe "discrete_x" should correspond to "intcat" instead of "integer" per default
     default_axis_type = "integer" if variable_inst.discrete_x else "variable"
     axis_type = variable_inst.x("axis_type", default_axis_type).lower()
 
