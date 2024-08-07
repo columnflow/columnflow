@@ -100,19 +100,7 @@ build-backend = "setuptools.build_meta"
 distribution = true
 
 [tool.ruff]
-ignore = [
-    "E402",
-    "E722",
-    "E731",
-    "Q003",
-]
-line-length = 120
-select = [
-    "E",
-    "F",
-    "Q",
-    "W",
-]
+
 
 exclude = [
     ".bzr",
@@ -139,9 +127,23 @@ exclude = [
 ]
 
 target-version = "py39"
+line-length = 120
 
-[tool.ruff.flake8-quotes]
-inline-quotes = "double"
 
-[tool.ruff.pydocstyle]
-convention = "numpy"
+[tool.ruff.lint]
+ignore = [
+    "E402",
+    "E722",
+    "E731",
+    "Q003",
+]
+select = [
+    "E",
+    "F",
+    "Q",
+    "W",
+    "NPY201",
+]
+
+flake8-quotes.inline-quotes = "double"
+pydocstyle.convention = "numpy"
