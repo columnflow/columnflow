@@ -118,6 +118,7 @@ class SelectEvents(
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
             sorted_ak_to_parquet,
         )
+        from columnflow.selection import SelectionResult
 
         # prepare inputs and outputs
         lfn_task = self.requires()["lfns"]
@@ -195,7 +196,10 @@ class SelectEvents(
                 )
 
                 # invoke the selection function
-                events, results = self.selector_inst(events, stats, hists=hists)
+                if len(events) != 0:
+                    events, results = self.selector_inst(events, stats, hists=hists)
+                else:
+                    results = SelectionResult(event=events.event > 0)
 
                 # complain when there is no event mask
                 if results.event is None:

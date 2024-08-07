@@ -23,6 +23,7 @@ from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
 
 ak = maybe_import("awkward")
+pq = maybe_import("pyarrow.parquet")
 
 
 # default parameters
@@ -482,7 +483,11 @@ class MergeReducedEvents(
         ])
 
     def merge(self, inputs, output):
-        inputs = [inp["events"] for inp in inputs]
+        # remove empty inputs
+        inputs = [
+            inp["events"] for inp in inputs
+            if not pq.read_metadata(inp["events"].path).num_rows == 0
+        ]
         law.pyarrow.merge_parquet_task(
             self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
         )
