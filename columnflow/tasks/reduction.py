@@ -483,13 +483,23 @@ class MergeReducedEvents(
         ])
 
     def merge(self, inputs, output):
-        # remove empty inputs
-        inputs = [
-            inp["events"] for inp in inputs
-            if not pq.read_metadata(inp["events"].path).num_rows == 0
-        ]
+        inputs = [inp["events"] for inp in inputs]
+
+        # check if the number of columns is consistent
+        metadata = [pq.read_metadata(inp.path) for inp in inputs]
+        unique_num_fields = set(meta.num_columns for meta in metadata if not meta.num_rows == 0)
+        if len(unique_num_fields) > 1:
+            raise Exception(
+                "cannot merge input files with inconsistent number of columns; found files with "
+                f"the following number of columns: {', '.join(map(str, unique_num_fields))}",
+            )
+
+        # remove empty input files
+        cleaned_inputs = [inp for inp, meta in zip(inputs, metadata) if not meta.num_rows == 0]
+
+        # merge the input files
         law.pyarrow.merge_parquet_task(
-            self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
+            self, cleaned_inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
         )
 
         # optionally remove initial inputs
