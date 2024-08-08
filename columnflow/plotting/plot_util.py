@@ -245,6 +245,7 @@ def apply_variable_settings(
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
+                hists[proc_inst] = h
 
         # slicing
         slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
