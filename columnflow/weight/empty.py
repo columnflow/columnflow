@@ -14,4 +14,4 @@ ak = maybe_import("awkward")
 @weight_producer
 def empty(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
     # simply return ones
-    return ak.Array(np.ones(len(events), dtype=np.float32))
+    return events, ak.Array(np.ones(len(events), dtype=np.float32))

@@ -81,6 +81,7 @@ class WeightProducer(TaskArrayFunction):
                     raise Exception(
                         f"weight producer {cls_name} received both mc_only and data_only",
                     )
+
                 if mc_only or data_only:
                     if cls_dict.get("skip_func"):
                         raise Exception(
@@ -88,6 +89,7 @@ class WeightProducer(TaskArrayFunction):
                             "mc_only or data_only are set",
                         )
 
+                if "skip_func" not in cls_dict:
                     def skip_func(self):
                         # check mc_only and data_only
                         if getattr(self, "dataset_inst", None):
