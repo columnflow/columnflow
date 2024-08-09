@@ -21,6 +21,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.columnar_util import mandatory_coffea_columns
 
 ak = maybe_import("awkward")
 pq = maybe_import("pyarrow.parquet")
@@ -487,7 +488,7 @@ class MergeReducedEvents(
         metadata = [pq.read_metadata(inp.path) for inp in inputs]
 
         # empty nano files are not considered for merging
-        empty_nano = lambda meta: (meta.num_rows == 0) & (meta.num_columns <= 3)
+        empty_nano = lambda meta: (meta.num_rows == 0) & (meta.num_columns <= len(mandatory_coffea_columns))
 
         # check if the number of columns is consistent
         unique_num_fields = set(meta.num_columns for meta in metadata if not empty_nano(meta))
