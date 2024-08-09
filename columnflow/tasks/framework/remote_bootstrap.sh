@@ -19,6 +19,7 @@ bootstrap_htcondor_standalone() {
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
+    export CF_PYVERSION="{{cf_pyversion}}"
     if [ ! -z "{{vomsproxy_file}}" ]; then
         export X509_USER_PROXY="${PWD}/{{vomsproxy_file}}"
         # also move it to the /tmp/x509up_u<uid> location as some packages expect
@@ -125,6 +126,7 @@ bootstrap_slurm() {
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export KRB5CCNAME="FILE:{{kerberosproxy_file}}"
+    export CF_PYVERSION="{{cf_pyversion}}"
     [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="{{vomsproxy_file}}"
 
     # optional custom command before the setup is sourced
@@ -153,6 +155,8 @@ bootstrap_crab() {
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
+    export CF_PYVERSION="{{cf_pyversion}}"
+
     local lcg_setup="{{cf_remote_lcg_setup}}"
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
     local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"

@@ -1,0 +1,32 @@
+name: "Build and test for multiple python versions"
+on:
+    workflow_call:
+        inputs:
+            PYVERSION:
+                description: "Python version to be used for build"
+                required: false
+                type: string
+                default: "3.10"
+            FORCE_COMPILE_ENV:
+                description: "Force compile environment"
+                type: string
+                default: "True"
+                required: false
+
+jobs:
+    build:
+        name: Build all images
+        uses: ./.github/workflows/build_all_images.yaml
+        with:
+            PYVERSION: ${{ inputs.PYVERSION }}
+        secrets: inherit
+    test:
+        needs: build
+        name: Test all images
+        uses: ./.github/workflows/lint_and_test.yaml
+        with:
+            PYVERSION: ${{ inputs.PYVERSION }}
+            FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
+        secrets: inherit
+        
+    
