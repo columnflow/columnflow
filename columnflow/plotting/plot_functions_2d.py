@@ -248,16 +248,23 @@ def plot_2d(
         h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
 
     # fix color bar minor ticks with SymLogNorm
-    cbar = ax.collections[-1].colorbar
     if isinstance(cbar_norm, mpl.colors.SymLogNorm):
-        _scale = cbar.ax.yaxis._scale
-        _scale.subs = [2, 3, 4, 5, 6, 7, 8, 9]
-        cbar.ax.yaxis.set_minor_locator(
-            mticker.SymmetricalLogLocator(_scale.get_transform(), subs=_scale.subs),
-        )
-        cbar.ax.yaxis.set_minor_formatter(
-            mticker.LogFormatterSciNotation(_scale.base),
-        )
+        # returned collections can vary -> brute-force set
+        # norm on all colorbars that are found
+        cbars = {
+            coll.colorbar
+            for coll in ax.collections
+            if coll.colorbar
+        }
+        for cbar in cbars:
+            _scale = cbar.ax.yaxis._scale
+            _scale.subs = [2, 3, 4, 5, 6, 7, 8, 9]
+            cbar.ax.yaxis.set_minor_locator(
+                mticker.SymmetricalLogLocator(_scale.get_transform(), subs=_scale.subs),
+            )
+            cbar.ax.yaxis.set_minor_formatter(
+                mticker.LogFormatterSciNotation(_scale.base),
+            )
 
     plt.tight_layout()
 
