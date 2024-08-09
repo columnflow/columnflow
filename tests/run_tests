@@ -32,6 +32,12 @@ action() {
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 
+    # test_hist_util
+    echo
+    bash "${this_dir}/run_test" test_hist_util "${cf_dir}/sandboxes/venv_columnar${dev}.sh"
+    ret="$?"
+    [ "${gret}" = "0" ] && gret="${ret}"
+
     # test_task_parameters
     echo
     bash "${this_dir}/run_test" test_task_parameters
