@@ -484,18 +484,21 @@ class MergeReducedEvents(
 
     def merge(self, inputs, output):
         inputs = [inp["events"] for inp in inputs]
+        metadata = [pq.read_metadata(inp.path) for inp in inputs]
+
+        # empty nano files are not considered for merging
+        empty_nano = lambda meta: (meta.num_rows == 0) & (meta.num_columns <= 3)
 
         # check if the number of columns is consistent
-        metadata = [pq.read_metadata(inp.path) for inp in inputs]
-        unique_num_fields = set(meta.num_columns for meta in metadata if not meta.num_rows == 0)
+        unique_num_fields = set(meta.num_columns for meta in metadata if not empty_nano(meta))
         if len(unique_num_fields) > 1:
             raise Exception(
                 "cannot merge input files with inconsistent number of columns; found files with "
                 f"the following number of columns: {', '.join(map(str, unique_num_fields))}",
             )
 
-        # remove empty input files
-        cleaned_inputs = [inp for inp, meta in zip(inputs, metadata) if not meta.num_rows == 0]
+        # remove empty nano input files
+        cleaned_inputs = [inp for inp, meta in zip(inputs, metadata) if not empty_nano(meta)]
 
         # merge the input files
         law.pyarrow.merge_parquet_task(
