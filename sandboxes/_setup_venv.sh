@@ -134,23 +134,49 @@ setup_venv() {
     
     # cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
     if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
-        local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
-        # compile pip dependencies and clear all caches before evaluating dependencies
-        cmd="uv pip compile -n \
-            --output-file ${TMP_REQS} \
-            --no-annotate --strip-extras --no-header --unsafe-package '' \
-            ${EXTRAS} --prerelease=allow ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
-        echo "$cmd"
-        eval "$cmd"
-
+        # delete requirement file if it exists
         if [ -f $CF_VENV_REQUIREMENTS ]; then rm $CF_VENV_REQUIREMENTS; fi
-        # generate unique hash based on current state of software packages
-        local this_hash="$( sha256sum "$TMP_REQS" | awk '{print $1}' | sed s/[[:blank:]].*//)"
-        # cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
-        echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
-        cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
-        # cf_color magenta "Cleanup ${TMP_REQS}"
-        rm $TMP_REQS
+
+        # create the pending_flag to express that the requirements are currently compiled
+        local pending_uv_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}_requirements"
+        if [ ! -f "${CF_VENV_REQUIREMENTS}" ]; then
+            wait_for_setup "${pending_uv_flag_file}"
+        fi
+        
+        if [ ! -f $CF_VENV_REQUIREMENTS ]; then
+            # create the pending_flag to express that the venv state might be changing
+            touch "${pending_uv_flag_file}"
+            local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
+            # compile pip dependencies and clear all caches before evaluating dependencies
+            cmd="uv pip compile -n \
+                --output-file ${TMP_REQS} \
+                --no-annotate --strip-extras --no-header --unsafe-package '' \
+                ${EXTRAS} --prerelease=allow ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
+            echo "$cmd"
+            eval "$cmd"
+            if [ "$?" != "0" ]; then
+                rm $TMP_REQS
+                rm ${pending_uv_flag_file}
+                echo "uv command failed"
+                return "24"
+            fi
+            
+            # generate unique hash based on current state of software packages
+            local this_hash="$( sha256sum "$TMP_REQS" | awk '{print $1}' | sed s/[[:blank:]].*//)"
+            if [ "$?" != "0" ]; then
+                rm $TMP_REQS
+                rm ${pending_uv_flag_file}
+                echo "could not generate hash for file ${TMP_REQS}"  
+                return "24"
+            fi
+            # cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
+            echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
+            cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
+            # cf_color magenta "Cleanup ${TMP_REQS}"
+            rm $TMP_REQS
+            # remove the pending_flag
+            rm -f "${pending_uv_flag_file}"
+        fi
     fi
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
@@ -215,25 +241,7 @@ setup_venv() {
         # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
         # starting processes getting here at the same time
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            local sleep_counter="0"
-            sleep "$( python3 -c 'import random;print(random.random() * 10)')"
-            # when the file is older than 30 minutes, consider it a dangling leftover from a
-            # previously failed installation attempt and delete it.
-            if [ -f "${pending_flag_file}" ]; then
-                local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
-                [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
-            fi
-            # start the sleep loop
-            while [ -f "${pending_flag_file}" ]; do
-                # wait at most 20 minutes
-                sleep_counter="$(( $sleep_counter + 1 ))"
-                if [ "${sleep_counter}" -ge 120 ]; then
-                    >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
-                    return "22"
-                fi
-                cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
-                sleep 10
-            done
+            wait_for_setup "${pending_flag_file}"
         fi
 
         # create the pending_flag to express that the venv state might be changing
@@ -391,4 +399,28 @@ setup_venv() {
 
     return "${ret}"
 }
+
+wait_for_setup() {
+    local tmp_pending_flag_file="$1"
+    local sleep_counter="0"
+    sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+    # when the file is older than 30 minutes, consider it a dangling leftover from a
+    # previously failed installation attempt and delete it.
+    if [ -f "${tmp_pending_flag_file}" ]; then
+        local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${tmp_pending_flag_file}" )))"
+        [ "${flag_file_age}" -ge "1800" ] && rm -f "${tmp_pending_flag_file}"
+    fi
+    # start the sleep loop
+    while [ -f "${tmp_pending_flag_file}" ]; do
+        # wait at most 20 minutes
+        sleep_counter="$(( $sleep_counter + 1 ))"
+        if [ "${sleep_counter}" -ge 120 ]; then
+            >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
+            return "22"
+        fi
+        cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
+        sleep 10
+    done
+}
+
 setup_venv "$@"
