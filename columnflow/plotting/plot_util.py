@@ -719,7 +719,7 @@ def prepare_plot_config_2d(
 
     # check h_sum value range
     vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
-    vmin, vmax = np.nan_to_num([vmin, vmax], 0)
+    vmin, vmax = [0 if np.isnan(x) else x for x in [vmin, vmax]]
 
     # default to full z range
     if zlim is None:
