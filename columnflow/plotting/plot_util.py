@@ -238,6 +238,7 @@ def apply_variable_settings(
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
+                hists[proc_inst] = h
 
         # slicing
         slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
@@ -267,18 +268,20 @@ def use_flow_bins(
     :param axis_name: Name or index of the axis of interest.
     :param underflow: Whether to add the content of the underflow bin to the first bin of axis *axis_name.
     :param overflow: Whether to add the content of the overflow bin to the last bin of axis *axis_name*.
-    :return: Histogram with underflow and/or overflow content added to the first/last bin of the histogram.
+    :return: Copy of the histogram with underflow and/or overflow content added to the first/last
+        bin of the histogram.
     """
-    if not overflow and not underflow:
-        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
-        return h_in
-
-    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
-
     # work on a copy of the histogram
     h_out = h_in.copy()
-    h_view = h_out.view(flow=True)
 
+    # nothing to do if neither flag is set
+    if not overflow and not underflow:
+        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
+        return h_out
+
+    # determine the index of the axis of interest and check if it has flow bins activated
+    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
+    h_view = h_out.view(flow=True)
     if h_out.view().shape[axis_idx] + 2 != h_view.shape[axis_idx]:
         raise Exception(f"We expect axis {axis_name} to have assigned an underflow and overflow bin")
 

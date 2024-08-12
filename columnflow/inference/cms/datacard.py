@@ -268,6 +268,14 @@ class DatacardWriter(object):
         if blocks.line_parameters:
             empty_lines.add("line_parameters")
 
+        # groups
+        blocks.groups = []
+        for group in self.inference_model_inst.get_parameter_groups():
+            blocks.groups.append([group.name, "group", "="] + group.parameter_names)
+
+        if blocks.groups:
+            empty_lines.add("groups")
+
         # mc stats
         blocks.mc_stats = []
         for cat_obj in cat_objects:
@@ -291,6 +299,8 @@ class DatacardWriter(object):
             blocks.rates = self.align_lines(list(blocks.rates))
         if blocks.line_parameters:
             blocks.line_parameters = self.align_lines(list(blocks.line_parameters))
+        if blocks.groups:
+            blocks.groups = self.align_lines(list(blocks.groups))
         if blocks.mc_stats:
             blocks.mc_stats = self.align_lines(list(blocks.mc_stats))
 
@@ -498,7 +508,7 @@ class DatacardWriter(object):
                 h_data = sum(h_data[1:], h_data[0].copy())
                 data_name = data_pattern.format(category=cat_name)
                 out_file[data_name] = h_data
-                _rates["data"] = h_data.sum().value
+                _rates["data"] = int(round(h_data.sum().value))
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
 
