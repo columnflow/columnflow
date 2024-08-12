@@ -446,8 +446,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 # match all name parts
                 if all([law.util.multi_match(n, all_objects) for n in name_parts]):
                     object_names.append(name)
-
-
         return law.util.make_unique(object_names)
 
     @classmethod

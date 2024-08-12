@@ -14,7 +14,7 @@ and three dimensional variables, e.g.
 where the first variable is the one displayed on the x axis and the second one is the ancillary binning.
 `x_labels` and `discrete_x=True` of the ancillary variable can be used to put labels on each of the side-by-side plots.
 The tag "Ancillary region X:" is currently pre-pended per default.
-The third variable is the gen level variable for splitting the processes.    
+The third variable is the gen level variable for splitting the processes.
 Per default all processes are merged along the third axis, unless they are specified in the general options:
 ```
 --general-settings split_processes=ttbb+ttcc
@@ -26,9 +26,6 @@ The labels of the split processes are updated based on the `x_labels` of the gen
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Literal
-from functools import partial
-from unittest.mock import patch
 
 import law
 
@@ -45,7 +42,6 @@ from columnflow.plotting.plot_util import (
     apply_density_to_hists,
     get_cms_label,
     get_position,
-    reduce_with,
 )
 
 hist = maybe_import("hist")
@@ -61,7 +57,8 @@ colorsys = maybe_import("colorsys")
 def change_saturation(hls, saturation_factor):
     # Convert back to RGB
     new_rgb = colorsys.hls_to_rgb(hls[0], hls[1], saturation_factor)
-    return new_rgb    
+    return new_rgb
+
 
 def get_new_colors(original_color, n_new_colors=2):
     # Convert RGB to HLS
@@ -71,7 +68,7 @@ def get_new_colors(original_color, n_new_colors=2):
     new_sat = np.linspace(min(hls[2], 0.2), 1.0, n_new_colors)[::-1]
 
     return [change_saturation(hls, sat) for sat in new_sat]
-    
+
 
 def unroll_hists(hists, split_processes, gen_variable):
     unrolled_hists = []
@@ -84,10 +81,10 @@ def unroll_hists(hists, split_processes, gen_variable):
             n_aux = hist.shape[1]
             n_gen = hist.shape[2]
             for iaux in range(n_aux):
-                unrolled_hists.append( OrderedDict() )
+                unrolled_hists.append(OrderedDict())
 
             # get the aux variable for return
-            aux_bins = hist.axes[1]
+            hist.axes[1]
             first = False
 
         # splitting processes in gen bins
@@ -110,7 +107,7 @@ def unroll_hists(hists, split_processes, gen_variable):
                         bin_label = f"[{bin_labels[i]}]"
                     else:
                         bin_label = "[overflow]"
-                else:    
+                else:
                     bin_label = f"[gen bin {i}]"
                 p.label = f"{p.label} {bin_label}"
 
@@ -126,8 +123,9 @@ def unroll_hists(hists, split_processes, gen_variable):
                 sliced_hist.name = split_hist.axes[0].name
                 sliced_hist.label = split_hist.axes[0].label
                 unrolled_hists[iaux][sub_process] = sliced_hist
-        
+
     return unrolled_hists
+
 
 def plot_unrolled_3d(
     hists: OrderedDict,
@@ -177,12 +175,12 @@ def plot_unrolled_3d(
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)
-    
+
     # create (2, n_aux) canvas
-    figsize=(16,10)
+    figsize = (16, 10)
     if not skip_ratio:
         fig, x = plt.subplots(2, y_variable_inst.n_bins, figsize=figsize,
-                    gridspec_kw=dict(height_ratios=[3, 1], hspace=0, wspace=0), 
+                    gridspec_kw=dict(height_ratios=[3, 1], hspace=0, wspace=0),
                     sharex="col", sharey="row")
         (axes, raxes) = x
     else:
@@ -218,7 +216,7 @@ def plot_unrolled_3d(
                 method = cfg.get("ratio_method", method)
                 rkw = cfg.get("ratio_kwargs", {})
                 plot_methods[method](raxes[i], h, **rkw)
-        
+
     # some options to be used below
     magnitudes = kwargs.get("magnitudes", 4)
     whitespace_fraction = kwargs.get("whitespace_fraction", 0.2)
@@ -231,11 +229,11 @@ def plot_unrolled_3d(
         "xlabel": "variable",
         "yscale": "linear",
     }
-    
+
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
-    
+
     ax_ymin = ax.get_ylim()[1] / 10**magnitudes if log_y else 0.0000001
-    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], 
+    ax_ymax = get_position(ax_ymin, ax.get_ylim()[1],
                 factor=1 / (1 - whitespace_fraction),
                 logscale=log_y)
     ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
@@ -253,7 +251,7 @@ def plot_unrolled_3d(
         # x label only for last ax
         if not ax == axes[-1]:
             this_kwargs["xlabel"] = None
-        
+
         # y label only for first ax
         if not ax == axes[0]:
             this_kwargs["ylabel"] = None
@@ -276,7 +274,7 @@ def plot_unrolled_3d(
         for rax in raxes:
             this_kwargs = rax_kwargs.copy()
 
-            # hard coded line at 1  
+            # hard coded line at 1
             rax.axhline(y=1.0, linestyle="dashed", color="gray")
 
             # x label only for last ax
@@ -298,18 +296,18 @@ def plot_unrolled_3d(
             "borderaxespad": 0.,
             "title_fontsize": 18,
             "alignment": "left",
-            "labelspacing": 0.2
+            "labelspacing": 0.2,
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
 
         # overwrite some forced options for this plotting style
         legend_kwargs["ncol"] = 1
-        legend_kwargs["loc"] = "upper left" 
+        legend_kwargs["loc"] = "upper left"
         legend_kwargs["fontsize"] = 20
-    
+
         # retreive legend handles and labels from last upper plot
         handles, labels = axes[-1].get_legend_handles_labels()
-        
+
         # assime all `StepPatch` objects are part of MC stack
         in_stack = [
             isinstance(handle, mpl.patches.StepPatch)
@@ -322,13 +320,13 @@ def plot_unrolled_3d(
                 entries = np.array(entries, dtype=object)
                 entries[mask] = entries[mask][::-1]
                 return list(entries)
-    
+
             handles = shuffle(handles, in_stack)
             labels = shuffle(labels, in_stack)
 
         # make legend using ordered handles/labels
         title = style_config.get("annotate_cfg", {}).get("text", None)
-        axes[-1].legend(handles, labels, title=title, 
+        axes[-1].legend(handles, labels, title=title,
             bbox_to_anchor=(1., 1.), **legend_kwargs)
         fig.subplots_adjust(right=0.8)
 
@@ -348,7 +346,7 @@ def plot_unrolled_3d(
         if len(aux_labels) == len(axes):
             for i, aux_label in enumerate(aux_labels):
                 region = f"Ancillary region {i+1}:"
-                label = region+"\n"+aux_label
+                label = region + "\n " + aux_label
                 this_annotation = annotate_kwargs.copy()
                 this_annotation["text"] = label
                 this_annotation["xy"] = (
@@ -356,23 +354,20 @@ def plot_unrolled_3d(
                     get_position(*axes[i].get_ylim(), factor=0.95, logscale=log_y),
                 )
                 axes[i].annotate(**this_annotation)
-                    
-
     # cms label
     if cms_label != "skip":
         cms_label_kwargs = get_cms_label(axes[0], cms_label)
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
-        
+
         # one label on left
-        mplhep.cms.label(ax=axes[0], llabel=cms_label_kwargs["llabel"], 
+        mplhep.cms.label(ax=axes[0], llabel=cms_label_kwargs["llabel"],
                         data=cms_label_kwargs["data"], rlabel="")
 
         # one label on right
-        mplhep.cms.label(ax=axes[-1], llabel="", label="", exp="", 
+        mplhep.cms.label(ax=axes[-1], llabel="", label="", exp="",
                         lumi=cms_label_kwargs["lumi"],
                         com=cms_label_kwargs["com"])
 
     plt.tight_layout()
 
     return fig, x
-
