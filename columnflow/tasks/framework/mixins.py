@@ -1369,7 +1369,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of calibrator sequences does not match
             the number of configs used by the ML model.
         """
-        calibrators: Union[tuple[str], tuple[tuple[str]]] = params.get("calibrators") or ((),)
+        calibrators: Union[tuple[str], tuple[tuple[str]]] = params.get("calibrators") or (None,)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
@@ -1494,7 +1494,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of producer sequences does not match
             the number of configs used by the ML model.
         """
-        producers = params.get("producers") or ((),)
+        producers = params.get("producers") or (None,)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
