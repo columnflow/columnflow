@@ -67,9 +67,9 @@ def merge_migration_bins(h):
         new_h = np.array([ h[slc,:].values().sum(axis=0) for slc in rebin_tuples ])
 
     # initialize a new boost histogram with updated axes
-    h_eq_ax = hist.Hist( 
-        hist.axis.Variable( new_edges_x, name=h.axes[0].name, label=h.axes[0].label ), 
-        hist.axis.Variable( new_edges_y, name=h.axes[1].name, label=h.axes[1].label ) 
+    h_eq_ax = hist.Hist(
+        hist.axis.Variable( new_edges_x, name=h.axes[0].name, label=h.axes[0].label ),
+        hist.axis.Variable( new_edges_y, name=h.axes[1].name, label=h.axes[1].label )
     )
 
     # update the bin contents
@@ -92,6 +92,7 @@ def plot_migration_matrices(
     label_numbers: bool = False,
     colormap: str = "Blues",
     cms_label: str = "wip",
+    keep_bins_in_bkg: bool = False,
     **kwargs,
 ):
     plt.style.use(mplhep.style.CMS)
@@ -121,6 +122,8 @@ def plot_migration_matrices(
 
     migrations = hist_2d / projections[1].values(flow=True)[None]
     migrations_eq_ax = hist_2d_eq_ax / projections_eq_ax[1].values(flow=True)[None]
+    if not keep_bins_in_bkg:
+        migrations = migrations_eq_ax
 
     plot_config = prepare_plot_config_2d(
         {category_inst: migrations},
