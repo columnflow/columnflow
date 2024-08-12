@@ -179,7 +179,6 @@ class CreateCutflowHistograms(
 
         # prepare columns to load
         load_columns = read_columns | set(mandatory_coffea_columns)
-        load_nano_columns = {("events" + route) for route in read_columns} | set(mandatory_coffea_columns)
         load_sel_columns = {Route("steps.*")}
 
         # prepare histograms
@@ -223,7 +222,7 @@ class CreateCutflowHistograms(
         for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_columns=[load_nano_columns, load_sel_columns] + (len(input_paths) - 2) * [load_columns],
+            read_columns=[load_columns, load_sel_columns] + (len(input_paths) - 2) * [load_columns],
         ):
 
             # add the calibrated diffs and potentially new columns
@@ -279,7 +278,6 @@ class CreateCutflowHistograms(
                     fill_kwargs={"step": self.initial_step},
                     last_edge_inclusive=self.last_edge_inclusive,
                 )
-
                 # fill all other steps
                 mask = True
                 for step in steps:
