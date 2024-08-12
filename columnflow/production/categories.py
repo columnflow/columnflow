@@ -23,7 +23,11 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-@producer(produces={"category_ids"})
+@producer(
+    produces={"category_ids"},
+    # custom function to skip categorizers
+    skip_category=(lambda self, task, category_inst: False),
+)
 def category_ids(
     self: Producer,
     events: ak.Array,
@@ -35,12 +39,12 @@ def category_ids(
     """
     category_ids = []
 
-    for cat_inst in self.config_inst.get_leaf_categories():
+    for cat_inst, categorizers in self.categorizer_map.items():
         # start with a true mask
         cat_mask = np.ones(len(events), dtype=bool)
 
         # loop through selectors
-        for categorizer in self.categorizer_map[cat_inst]:
+        for categorizer in categorizers:
             events, mask = self[categorizer](events, **kwargs)
             cat_mask = cat_mask & mask
 
@@ -61,11 +65,18 @@ def category_ids(
 
 @category_ids.init
 def category_ids_init(self: Producer) -> None:
+    if not self.inst_dict.get("task"):
+        return
+
     # store a mapping from leaf category to categorizer classes for faster lookup
     self.categorizer_map = defaultdict(list)
 
     # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
+        # check if skipped
+        if self.skip_category(self.inst_dict["task"], cat_inst):
+            continue
+
         # treat all selections as lists of categorizers
         for sel in law.util.make_list(cat_inst.selection):
             if Categorizer.derived_by(sel):

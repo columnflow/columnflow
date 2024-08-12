@@ -362,13 +362,17 @@ class SelectionResult(od.AuxDataMixin):
 
         # helper to create a view without behavior
         def deepcopy_without_behavior(struct: T) -> T:
-            return copy.deepcopy(law.util.map_struct(
-                (lambda obj: ak.Array(obj, behavior={}) if isinstance(obj, ak.Array) else obj),
+            return law.util.map_struct(
+                (lambda obj: (
+                    ak.Array(obj, behavior={})
+                    if isinstance(obj, ak.Array)
+                    else copy.deepcopy(obj)
+                )),
                 struct,
                 map_list=True,
                 map_tuple=True,
                 map_dict=True,
-            ))
+            )
 
         # logical AND between event masks
         if self.event is None:

@@ -19,9 +19,9 @@ import luigi
 import law
 import order as od
 
-from columnflow.types import Sequence, Callable, Any
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
 from columnflow.util import is_regex, DotDict
+from columnflow.types import Sequence, Callable, Any, T
 
 
 # default analysis and config related objects
@@ -65,6 +65,7 @@ class OutputLocation(enum.Enum):
     config = "config"
     local = "local"
     wlcg = "wlcg"
+    wlcg_mirrored = "wlcg_mirrored"
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -141,15 +142,21 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_memory", "htcondor_pool",
+            "htcondor_gpus", "htcondor_memory", "htcondor_pool", "pilot",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # use a default version when not explicitly set in kwargs
-        if isinstance(getattr(cls, "version", None), luigi.Parameter) and "version" not in kwargs:
+        # when not explicitly set in kwargs and no global value was defined on the cli for the task
+        # family, evaluate and use the default value
+        if (
+            isinstance(getattr(cls, "version", None), luigi.Parameter) and
+            "version" not in kwargs and
+            not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
+            cls.task_family != law.parser.root_task().task_family
+        ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
                 params["version"] = default_version
@@ -411,7 +418,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     _cache["all_object_names"] = {
                         obj.name
                         for obj, _, _ in
-                        getattr(container, "walk_{}".format(plural))()
+                        getattr(container, f"walk_{plural}")()
                     }
                 else:
                     _cache["all_object_names"] = set(getattr(container, plural).names())
@@ -423,7 +430,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 if object_cls in container._deep_child_classes:
                     kwargs["deep"] = deep
                 _cache["has_obj_func"] = functools.partial(
-                    getattr(container, "has_{}".format(singular)),
+                    getattr(container, f"has_{singular}"),
                     **kwargs,
                 )
             return _cache["has_obj_func"](name)
@@ -440,10 +447,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 lookup.extend(list(object_groups[name]))
             elif accept_patterns:
                 # must eventually be a pattern, perform an object traversal
-                for _name in sorted(get_all_object_names()):
-                    if law.util.multi_match(_name, name):
-                        object_names.append(_name)
-
+                # make this also viable for multi-dim variables for plotting/histograms
+                name_parts = name.split("-")
+                all_objects = get_all_object_names()
+                # match all name parts
+                if all([law.util.multi_match(n, all_objects) for n in name_parts]):
+                    object_names.append(name)
         return law.util.make_unique(object_names)
 
     @classmethod
@@ -555,7 +564,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
-        if law.is_no_param(param) or resolve_default or param == "":
+        if law.is_no_param(param) or resolve_default or param == "" or param == ():
             param = None
 
         # actual resolution
@@ -671,8 +680,26 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # store the analysis instance
         self.analysis_inst = self.get_analysis_inst(self.analysis)
 
+        # cached values added and accessed by cached_value()
+        self._cached_values = {}
+
+    def cached_value(self, key: str, func: Callable[[], T]) -> T:
+        """
+        Upon first invocation, the function *func* is called and its return value is stored under
+        *key* in :py:attr:`_cached_values`. Subsequent calls with the same *key* return the cached
+        value.
+
+        :param key: The key under which the value is stored.
+        :param func: The function that is called to generate the value.
+        :return: The cached value.
+        """
+        if key not in self._cached_values:
+            self._cached_values[key] = func()
+        return self._cached_values[key]
+
     def store_parts(self) -> law.util.InsertableDict:
-        """Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
+        """
+        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
 
@@ -842,6 +869,31 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             kwargs.setdefault("store_parts_modifier", store_parts_modifier)
             return self.wlcg_target(*path, **kwargs)
 
+        if location[0] == OutputLocation.wlcg_mirrored:
+            # get other options
+            loc, wlcg_fs, store_parts_modifier = (location[1:] + [None, None, None])[:3]
+            kwargs.setdefault("store_parts_modifier", store_parts_modifier)
+            # create the local target
+            local_kwargs = kwargs.copy()
+            loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
+            local_kwargs.setdefault(loc_key, loc)
+            local_target = self.local_target(*path, **local_kwargs)
+            # create the wlcg target
+            wlcg_kwargs = kwargs.copy()
+            wlcg_kwargs.setdefault("fs", wlcg_fs)
+            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
+            # build the mirrored target from these two
+            mirrored_target_cls = (
+                law.MirroredFileTarget
+                if isinstance(local_target, law.LocalFileTarget)
+                else law.MirroredDirectoryTarget
+            )
+            return mirrored_target_cls(
+                path=local_target.path,
+                remote_target=wlcg_target,
+                local_target=local_target,
+            )
+
         raise Exception(f"cannot determine output location based on '{location}'")
 
     def get_parquet_writer_opts(self, repeating_values: bool = False) -> dict[str, Any]:
@@ -962,6 +1014,31 @@ class ConfigTask(AnalysisTask):
             columns |= set(Route(c) for c in mandatory_coffea_columns)
 
         return columns
+
+    def _expand_keep_column(
+        self: ConfigTask,
+        column:
+            ColumnCollection | Route | str |
+            Sequence[str | int | slice | type(Ellipsis) | list | tuple],
+    ) -> set[Route]:
+        """
+        Expands a *column* into a set of :py:class:`Route` objects. *column* can be a
+        :py:class:`ColumnCollection`, a string, or any type that is accepted by :py:class:`Route`.
+        Collections are expanded through :py:meth:`find_keep_columns`.
+
+        :param column: The column to expand.
+        :return: A set of :py:class:`Route` objects.
+        """
+        # expand collections
+        if isinstance(column, ColumnCollection):
+            return self.find_keep_columns(column)
+
+        # brace expand strings
+        if isinstance(column, str):
+            return set(map(Route, law.util.brace_expand(column)))
+
+        # let Route handle it
+        return {Route(column)}
 
 
 class ShiftTask(ConfigTask):

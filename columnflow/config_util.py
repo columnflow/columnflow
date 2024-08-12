@@ -23,8 +23,7 @@ import itertools
 from collections import OrderedDict
 
 import law
-import order
-od = order
+import order as od
 
 from columnflow.util import maybe_import
 from columnflow.types import Callable, Any, Sequence
@@ -71,8 +70,9 @@ def get_events_from_categories(
     return events[mask]
 
 
-def get_root_processes_from_campaign(campaign: order.config.Campaign) -> order.unique.UniqueObjectIndex:
-    """Extracts all root process objects from datasets contained in an order *campaign* and returns
+def get_root_processes_from_campaign(campaign: od.config.Campaign) -> od.unique.UniqueObjectIndex:
+    """
+    Extracts all root process objects from datasets contained in an order *campaign* and returns
     them in a unique object index.
 
     :param campaign: :py:class:`~order.config.Campaign` object containing information
@@ -99,12 +99,12 @@ def get_root_processes_from_campaign(campaign: order.config.Campaign) -> order.u
 
 
 def get_datasets_from_process(
-    config: order.config.Config,
-    process: str | order.process.Process,
+    config: od.config.Config,
+    process: str | od.process.Process,
     strategy: str = "inclusive",
     only_first: bool = True,
     check_deep: bool = False,
-) -> list[order.dataset.Dataset]:
+) -> list[od.dataset.Dataset]:
     r"""Given a *process* and the *config* it belongs to, returns a list of order dataset objects that
     contain matching processes. This is done by walking through *process* and its child processes
     and checking whether they are contained in known datasets. *strategy* controls how possible
