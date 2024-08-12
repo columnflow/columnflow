@@ -255,7 +255,7 @@ class InferenceModel(Derivable):
         config_variable: str | None = None,
         config_data_datasets: Sequence[str] | None = None,
         data_from_processes: Sequence[str] | None = None,
-        mc_stats: float | tuple | None = None,
+        mc_stats: int | float | tuple | None = None,
         empty_bin_value: float = 1e-5,
     ) -> DotDict:
         """
@@ -268,8 +268,8 @@ class InferenceModel(Derivable):
             - *config_data_datasets*: List of names of datasets in the config to use for real data.
             - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
               when *config_data_datasets* is not defined, make of a fake data contribution.
-            - *mc_stats*: Either *None* to disable MC stat uncertainties, or a float or tuple of
-              floats to control the options of MC stat options.
+            - *mc_stats*: Either *None* to disable MC stat uncertainties, or an integer, a float or
+              a tuple of thereof to control the options of MC stat options.
             - *empty_bin_value*: When bins are no content, they are filled with this value.
         """
         return DotDict([
@@ -881,6 +881,7 @@ class InferenceModel(Derivable):
         *args,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        group: str | Sequence[str] | None = None,
         **kwargs,
     ) -> DotDict:
         """
@@ -888,6 +889,9 @@ class InferenceModel(Derivable):
         *process*, with all *args* and *kwargs* used to create the structured parameter dictionary
         via :py:meth:`parameter_spec`. Both *process* and *category* can be a string, a pattern, or
         sequence of them.
+
+        When *group* is given, the parameter is added to one or more parameter groups via
+        :py:meth:`add_parameter_to_group`.
 
         If a parameter with the same name already exists in one of the processes throughout the
         categories, an exception is raised.
@@ -914,6 +918,10 @@ class InferenceModel(Derivable):
         for category_name, _processes in processes.items():
             for process in _processes:
                 process.parameters.append(_copy.deepcopy(parameter))
+
+        # add to groups
+        if group:
+            self.add_parameter_to_group(parameter.name, group)
 
         return parameter
 
@@ -965,7 +973,7 @@ class InferenceModel(Derivable):
         only_names: bool = False,
     ) -> list[DotDict | str]:
         """
-        Returns a list of parameter group whose name match *group*. *group* can be a string, a
+        Returns a list of parameter groups whose name match *group*. *group* can be a string, a
         pattern, or sequence of them.
 
         When *only_names* is *True*, only names of parameter groups are returned rather than
