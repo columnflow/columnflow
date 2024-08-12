@@ -191,7 +191,7 @@ def plot_unrolled(
     else:
         raise AssertionError(
             "columnflow.plotting.cmsGhent.unrolled.plot_unrolled need 2d or 3d variables, "
-            f"but a {len(variable_insts)}d variable has been provided"
+            f"but a {len(variable_insts)}d variable has been provided",
         )
 
     # set up style config
