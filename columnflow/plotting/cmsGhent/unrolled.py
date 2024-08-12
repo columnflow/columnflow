@@ -1,19 +1,31 @@
 # coding: utf-8
 
 """
-unrolling a 2d histogram into 1d
+unrolling a 3d histogram into 1d
 
 Can be called as a `cf.PlotVariables1D` task with
 ```
---plot-function ttcc.plotting.unrolled_2d.plot_unrolled_2d
+--plot-function columnflow.plotting.cmsGhent.unrolled.plot_unrolled
 ```
 and two dimensional variables, e.g.
 ```
 --variables bjet_HT-anc_4j4b__n_btagL
 ```
+or a three dimensional variables, e.g.
+```
+--variables n_jet-anc_4j4b__n_btagM-n_genjet
+```
 where the first variable is the one displayed on the x axis and the second one is the ancillary binning.
 `x_labels` and `discrete_x=True` of the ancillary variable can be used to put labels on each of the side-by-side plots.
 The tag "Ancillary region X:" is currently pre-pended per default.
+
+For 3d variables, the third variable is the gen level variable for splitting the processes.
+Per default all processes are merged along the third axis, unless they are specified in the general options:
+```
+--general-settings split_processes=ttbb+ttcc
+```
+The labels of the split processes are updated based on the `x_labels` of the gen level observable.
+
 """
 
 from __future__ import annotations
@@ -44,9 +56,26 @@ plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
 od = maybe_import("order")
 mticker = maybe_import("matplotlib.ticker")
+colorsys = maybe_import("colorsys")
 
 
-def unroll_hists(hists):
+def change_saturation(hls, saturation_factor):
+    # Convert back to RGB
+    new_rgb = colorsys.hls_to_rgb(hls[0], hls[1], saturation_factor)
+    return new_rgb
+
+
+def get_new_colors(original_color, n_new_colors=2):
+    # Convert RGB to HLS
+    hls = colorsys.rgb_to_hls(*original_color)
+
+    # space new saturation values equally between 0.2 and 0.8
+    new_sat = np.linspace(min(hls[2], 0.2), 1.0, n_new_colors)[::-1]
+
+    return [change_saturation(hls, sat) for sat in new_sat]
+
+
+def unroll_2d_hists(hists):
     unrolled_hists = []
     first = True
     for process in hists:
@@ -72,19 +101,76 @@ def unroll_hists(hists):
     return aux_bins, unrolled_hists
 
 
-def plot_unrolled_2d(
-    hists: OrderedDict,
-    config_inst: od.Config,
-    category_inst: od.Category,
-    variable_insts: list[od.Variable],
-    style_config: dict | None = None,
-    density: bool | None = False,
-    shape_norm: bool | None = False,
-    yscale: str | None = "",
-    hide_errors: bool | None = None,
-    process_settings: dict | None = None,
-    variable_settings: dict | None = None,
-    **kwargs,
+def unroll_3d_hists(hists, split_processes, gen_variable):
+    unrolled_hists = []
+    first = True
+    for process in hists:
+        hist = hists[process]
+        if first:
+            # add the aux binning to the unrolled hist list
+            # todo should also access the custom bin labels here
+            n_aux = hist.shape[1]
+            n_gen = hist.shape[2]
+            for iaux in range(n_aux):
+                unrolled_hists.append(OrderedDict())
+
+            # get the aux variable for return
+            aux_bins = hist.axes[1]
+            first = False
+
+        # splitting processes in gen bins
+        if process.name in split_processes:
+            # split by 3rd axis
+            split_hists = [hist[:, :, i] for i in range(n_gen)]
+
+            # new array of processes
+            processes = [process.copy() for i in range(n_gen)]
+
+            # new colors as gradient from original
+            new_colors = get_new_colors(process.color, n_gen)
+
+            # labelling and naming of new processes
+            for i, p in enumerate(processes):
+                p.name = f"{p.name}_bin{i}"
+                p.color = new_colors[i]
+                if bin_labels := gen_variable.x_labels:
+                    if len(bin_labels) > i:
+                        bin_label = f"[{bin_labels[i]}]"
+                    else:
+                        bin_label = "[overflow]"
+                else:
+                    bin_label = f"[gen bin {i}]"
+                p.label = f"{p.label} {bin_label}"
+
+        else:
+            # other processes are just merged along 3rd axis
+            split_hists = [hist.project(0, 1)]
+            processes = [process]
+
+        for sub_process, split_hist in zip(processes, split_hists):
+            # loop over aux bins and slice histogram into 1D hists
+            for iaux in range(n_aux):
+                sliced_hist = split_hist[:, iaux]
+                sliced_hist.name = split_hist.axes[0].name
+                sliced_hist.label = split_hist.axes[0].label
+                unrolled_hists[iaux][sub_process] = sliced_hist
+
+    return aux_bins, unrolled_hists
+
+
+def plot_unrolled(
+        hists: OrderedDict,
+        config_inst: od.Config,
+        category_inst: od.Category,
+        variable_insts: list[od.Variable],
+        style_config: dict | None = None,
+        density: bool | None = False,
+        shape_norm: bool | None = False,
+        yscale: str | None = "",
+        hide_errors: bool | None = None,
+        process_settings: dict | None = None,
+        variable_settings: dict | None = None,
+        **kwargs,
 ) -> plt.Figure:
 
     # remove shift axis from histograms
@@ -94,12 +180,19 @@ def plot_unrolled_2d(
     y_variable_inst = variable_insts[1]
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
-
     hists = apply_process_settings(hists, process_settings)
-
     hists = apply_density_to_hists(hists, density)
-
-    aux_dimension, hists = unroll_hists(hists)
+    if len(variable_insts) == 3:
+        # get the processes to be split along the third dimension
+        split_processes = kwargs.get("split_processes", "").split("+")
+        aux_dimension, hists = unroll_3d_hists(hists, split_processes, variable_insts[2])
+    elif len(variable_insts) == 2:
+        aux_dimension, hists = unroll_2d_hists(hists)
+    else:
+        raise AssertionError(
+            "columnflow.plotting.cmsGhent.unrolled.plot_unrolled need 2d or 3d variables, "
+            f"but a {len(variable_insts)}d variable has been provided"
+        )
 
     # set up style config
     default_style_config = prepare_style_config(
@@ -121,14 +214,14 @@ def plot_unrolled_2d(
     figsize = (16, 10)
     if not skip_ratio:
         fig, x = plt.subplots(2, y_variable_inst.n_bins, figsize=figsize,
-                    gridspec_kw=dict(height_ratios=[3, 1], hspace=0, wspace=0),
-                    sharex="col", sharey="row")
+                              gridspec_kw=dict(height_ratios=[3, 1], hspace=0, wspace=0),
+                              sharex="col", sharey="row")
         (axes, raxes) = x
     else:
         fig, axes = plt.subplots(1, y_variable_inst.n_bins, figsize=figsize,
-                    gridspec_kw=dict(wspace=0),
-                    sharey="row")
-        x = (axes, )
+                                 gridspec_kw=dict(wspace=0),
+                                 sharey="row")
+        x = (axes,)
 
     for i, hist in enumerate(hists):
         ax = axes[i]
@@ -173,10 +266,10 @@ def plot_unrolled_2d(
 
     log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
 
-    ax_ymin = ax.get_ylim()[1] / 10**magnitudes if log_y else 0.0000001
+    ax_ymin = ax.get_ylim()[1] / 10 ** magnitudes if log_y else 0.0000001
     ax_ymax = get_position(ax_ymin, ax.get_ylim()[1],
-                factor=1 / (1 - whitespace_fraction),
-                logscale=log_y)
+                           factor=1 / (1 - whitespace_fraction),
+                           logscale=log_y)
     ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
     # prioritize style_config ax settings
@@ -237,7 +330,10 @@ def plot_unrolled_2d(
             "borderaxespad": 0.,
             "title_fontsize": 18,
             "alignment": "left",
+            "labelspacing": 0.2,
         }
+        if len(variable_insts) > 2:
+            legend_kwargs["labelspacing"] = 0.2
         legend_kwargs.update(style_config.get("legend_cfg", {}))
 
         # overwrite some forced options for this plotting style
@@ -267,7 +363,7 @@ def plot_unrolled_2d(
         # make legend using ordered handles/labels
         title = style_config.get("annotate_cfg", {}).get("text", None)
         axes[-1].legend(handles, labels, title=title,
-            bbox_to_anchor=(1., 1.), **legend_kwargs)
+                        bbox_to_anchor=(1., 1.), **legend_kwargs)
         fig.subplots_adjust(right=0.8)
 
     # custom annotation
@@ -285,7 +381,7 @@ def plot_unrolled_2d(
     if aux_labels := y_variable_inst.x_labels:
         if len(aux_labels) == len(axes):
             for i, aux_label in enumerate(aux_labels):
-                region = f"Ancillary region {i+1}:"
+                region = f"Ancillary region {i + 1}:"
                 label = region + "\n " + aux_label
                 this_annotation = annotate_kwargs.copy()
                 this_annotation["text"] = label
@@ -301,12 +397,12 @@ def plot_unrolled_2d(
 
         # one label on left
         mplhep.cms.label(ax=axes[0], llabel=cms_label_kwargs["llabel"],
-                        data=cms_label_kwargs["data"], rlabel="")
+                         data=cms_label_kwargs["data"], rlabel="")
 
         # one label on right
         mplhep.cms.label(ax=axes[-1], llabel="", label="", exp="",
-                        lumi=cms_label_kwargs["lumi"],
-                        com=cms_label_kwargs["com"])
+                         lumi=cms_label_kwargs["lumi"],
+                         com=cms_label_kwargs["com"])
 
     plt.tight_layout()
 
