@@ -180,12 +180,12 @@ def draw_efficiency(
 
     if np.any(efficiency > 1):
         logger.warning(
-            f"Some efficiencies for {kwargs['label']} are greater than 1, errorbars are capped at zero"
-            )
+            f"Some efficiencies for {kwargs['label']} are greater than 1, errorbars are capped at zero",
+        )
     elif np.any(efficiency < 0):
         logger.warning(
-            f"Some efficiencies for {kwargs['label']} are less than 0, errorbars are capped at zero"
-            )
+            f"Some efficiencies for {kwargs['label']} are less than 0, errorbars are capped at zero",
+        )
 
     # getting error bars
     band_low, band_high = binom_int(values, norm)
