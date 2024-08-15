@@ -120,6 +120,7 @@ class Selector(TaskArrayFunction):
                             "data_only, nominal_only or shifts_only are set",
                         )
 
+                if "skip_func" not in cls_dict:
                     def skip_func(self):
                         # check mc_only and data_only
                         if getattr(self, "dataset_inst", None):
