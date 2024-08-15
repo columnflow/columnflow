@@ -164,7 +164,8 @@ class DatacardWriter(object):
                 elif _param_obj.type != param_obj.type:
                     raise ValueError(
                         f"misconfigured parameter '{param_name}' with type '{_param_obj.type}' "
-                        f"that was previously seen with incompatible type '{param_obj.type}'")
+                        f"that was previously seen with incompatible type '{param_obj.type}'",
+                    )
 
                 # get the effect
                 effect = _param_obj.effect
