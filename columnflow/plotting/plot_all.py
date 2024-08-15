@@ -158,6 +158,9 @@ def draw_errorbars(
 
 
 def binom_int(num, den, confint=0.68):
+    """
+    calculates clopper-pearson error
+    """
     from scipy.stats import beta
     quant = (1 - confint) / 2.
     low = beta.ppf(quant, num, den - num + 1)
@@ -168,13 +171,17 @@ def binom_int(num, den, confint=0.68):
 def draw_efficiency(
     ax: plt.Axes,
     h: hist.Hist,
-    norm: float | Sequence | np.ndarray = 1.0,
+    h_norm: hist.Hist,
     **kwargs,
 ) -> None:
+    """
+    Draw efficiency plot with error bars.
+    """
 
     # Extract histogram data
     values = h.values()
     bins = h.axes[0].edges
+    norm = h_norm.values()
 
     efficiency = np.nan_to_num(values / norm)
 
@@ -188,7 +195,13 @@ def draw_efficiency(
         )
 
     # getting error bars
-    band_low, band_high = binom_int(values, norm)
+    # To calculate the errorbars, using weighted histograms results in heavily overestimated errors
+    # assuming the weights are constant for each bin, we can calculate scale factors to scale the hist values
+    # back to the total number of MC events. This still overstimates the errors, but is a better approximation
+    h_scale = np.nan_to_num(h.values() / h.variances(), nan=1)
+    h_norm_scale = np.nan_to_num(h_norm.values() / h_norm.variances(), nan=1)
+
+    band_low, band_high = binom_int(values * h_scale, norm * h_norm_scale)
     error_low = np.asarray(efficiency - band_low)
     error_high = np.asarray(band_high - efficiency)
 
@@ -221,6 +234,9 @@ def draw_hist_twin(
     norm: float | Sequence | np.ndarray = 1.0,
     **kwargs,
 ) -> None:
+    """
+    calls draw_hist to plot a histogram on the right y-axis
+    """
     ax2 = ax.twinx()
     draw_hist(ax2, h, norm, **kwargs)
     bin_widths = h.axes[0].widths
