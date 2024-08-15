@@ -102,7 +102,7 @@ class DatacardWriter(object):
             blocks.observations = [
                 ("bin", list(rates)),
                 ("observation", [
-                    round(_rates["data"], self.rate_precision)
+                    int(round(_rates["data"], self.rate_precision))
                     for _rates in rates.values()
                 ]),
             ]
@@ -300,7 +300,7 @@ class DatacardWriter(object):
         if blocks.line_parameters:
             blocks.line_parameters = self.align_lines(list(blocks.line_parameters))
         if blocks.groups:
-            blocks.groups = self.align_lines(list(blocks.groups))
+            blocks.groups = self.align_lines(list(blocks.groups), end=3)
         if blocks.mc_stats:
             blocks.mc_stats = self.align_lines(list(blocks.mc_stats))
 
@@ -516,32 +516,36 @@ class DatacardWriter(object):
     def align_lines(
         cls,
         lines: Sequence[Any],
+        end: int = -1,
     ) -> list[str]:
         lines = [
             (line.split() if isinstance(line, str) else list(map(str, law.util.flatten(line))))
             for line in lines
         ]
 
-        lengths = {len(line) for line in lines}
+        lengths = {min(len(line), 1e9 if end < 0 else end) for line in lines}
         if len(lengths) > 1:
             raise Exception(
                 f"line alignment cannot be performed with lines of varying lengths: {lengths}",
             )
 
-        # convert to rows and get the maximum width per row
-        n_rows = list(lengths)[0]
-        rows = [
+        # convert to columns and get the maximum width per column
+        n_cols = lengths.pop()
+        cols = [
             [line[j] for line in lines]
-            for j in range(n_rows)
+            for j in range(n_cols)
         ]
         max_widths = [
-            max(len(s) for s in row)
-            for row in rows
+            max(len(s) for s in col)
+            for col in cols
         ]
 
         # stitch back
         return [
-            cls.col_sep.join(f"{s: <{max_widths[j]}}" for j, s in enumerate(line))
+            cls.col_sep.join(
+                f"{s: <{max_widths[j]}}" if end < 0 or j < end else s
+                for j, s in enumerate(line)
+            )
             for line in lines
         ]
 
