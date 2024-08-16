@@ -940,7 +940,7 @@ class ProducerMixin(ConfigTask):
         """
         Return a string representation of the producer.
         """
-        return str(self.producer) if self.producer != law.NO_STR else "none"
+        return str(self.producer_inst) if self.producer != law.NO_STR else "none"
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """

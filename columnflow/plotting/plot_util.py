@@ -39,12 +39,13 @@ logger = law.logger.get_logger(__name__)
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
-    "pw": "Private work",
-    "pwip": "Private work in progress",
+    "pw": "Private work (CMS data/simulation)",
+    "pwip": "Private work in progress (CMS)",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
-    "simpw": "Simulation private work",
+    "simpw": "Private work (CMS simulation)",
+    "datapw": "Private work (CMS data)",
     "od": "OpenData",
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
@@ -60,12 +61,15 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     :param llabel: The left label of the CMS label.
     :return: A dictionary with the CMS label configuration.
     """
+    llabel = label_options.get(llabel, llabel)
     cms_label_kwargs = {
         "ax": ax,
-        "llabel": label_options.get(llabel, llabel),
+        "llabel": llabel,
         "fontsize": 22,
         "data": False,
     }
+    if "CMS" in llabel:
+        cms_label_kwargs["exp"] = ""
 
     return cms_label_kwargs
 
@@ -275,18 +279,20 @@ def use_flow_bins(
     :param axis_name: Name or index of the axis of interest.
     :param underflow: Whether to add the content of the underflow bin to the first bin of axis *axis_name.
     :param overflow: Whether to add the content of the overflow bin to the last bin of axis *axis_name*.
-    :return: Histogram with underflow and/or overflow content added to the first/last bin of the histogram.
+    :return: Copy of the histogram with underflow and/or overflow content added to the first/last
+        bin of the histogram.
     """
-    if not overflow and not underflow:
-        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
-        return h_in
-
-    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
-
     # work on a copy of the histogram
     h_out = h_in.copy()
-    h_view = h_out.view(flow=True)
 
+    # nothing to do if neither flag is set
+    if not overflow and not underflow:
+        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
+        return h_out
+
+    # determine the index of the axis of interest and check if it has flow bins activated
+    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
+    h_view = h_out.view(flow=True)
     if h_out.view().shape[axis_idx] + 2 != h_view.shape[axis_idx]:
         raise Exception(f"We expect axis {axis_name} to have assigned an underflow and overflow bin")
 

@@ -409,7 +409,15 @@ def make_plot_2d(
 
     if plot_config.get("kwargs", {}).get("cbar", False):
         # fix color bar minor ticks with SymLogNorm
-        fix_cbar_minor_ticks(ax.collections[0].colorbar)
+        # returned collections can vary -> brute-force set
+        # norm on all colorbars that are found
+        cbars = {
+            coll.colorbar
+            for coll in ax.collections
+            if coll.colorbar
+        }
+        for cbar in cbars:
+            fix_cbar_minor_ticks(cbar)
 
     fig.tight_layout()
     return fig, (ax,)
