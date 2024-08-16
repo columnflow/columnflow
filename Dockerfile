@@ -30,7 +30,7 @@ RUN if [ -z $pyversion ]; then echo "export PYVERSION=\"$(python -c 'import plat
 #             All paths should be relative to the Columnflow base directory.
 ARG exe_files=""
 RUN apt-get update
-RUN apt-get install curl nano less vim locales git git-lfs -y
+RUN apt-get install curl less locales git git-lfs -y
 RUN locale-gen en_US
 RUN locale-gen en_US.UTF-8
 RUN update-locale 

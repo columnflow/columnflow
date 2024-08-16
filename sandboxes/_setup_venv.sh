@@ -150,12 +150,20 @@ setup_venv() {
             touch "${pending_uv_flag_file}"
             local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
             # compile pip dependencies and clear all caches before evaluating dependencies
-            cmd="uv pip compile -n \
-                --output-file ${TMP_REQS} \
-                --no-annotate --strip-extras --no-header --unsafe-package '' \
-                ${EXTRAS} --prerelease=allow ${CF_BASE}/pyproject.toml ${CF_VENV_ADDITIONAL_REQUIREMENTS}"
-            echo "$cmd"
-            eval "$cmd"
+            args=(
+                uv pip compile -n
+                --output-file "${TMP_REQS}"
+                --no-annotate --strip-extras --no-header --unsafe-package
+                `echo ${EXTRAS}`
+                --prerelease=allow
+                ${CF_BASE}/pyproject.toml
+                `echo ${CF_VENV_ADDITIONAL_REQUIREMENTS}`
+            )
+            for arg in "${args[@]}"; do
+                echo "|${arg}|"
+            done
+            echo "${args[*]}"
+            "${args[@]}"
             if [ "$?" != "0" ]; then
                 rm $TMP_REQS
                 rm ${pending_uv_flag_file}
