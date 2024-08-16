@@ -324,7 +324,13 @@ setup_venv() {
             add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
-            eval "python -m pip install --require-virtualenv -I -U --no-cache-dir ${install_reqs}"
+            pip_command=(
+                python -m pip install
+                --require-virtualenv -I -U --no-cache-dir
+                ${install_reqs}
+            )
+            echo "${pip_command[@]}"
+            "${pip_command[@]}"
             
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
