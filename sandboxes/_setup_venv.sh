@@ -153,16 +153,14 @@ setup_venv() {
             args=(
                 uv pip compile -n
                 --output-file "${TMP_REQS}"
-                --no-annotate --strip-extras --no-header --unsafe-package
+                --no-annotate --strip-extras --no-header --unsafe-package ''
                 `echo ${EXTRAS}`
                 --prerelease=allow
                 ${CF_BASE}/pyproject.toml
                 `echo ${CF_VENV_ADDITIONAL_REQUIREMENTS}`
             )
-            for arg in "${args[@]}"; do
-                echo "|${arg}|"
-            done
-            echo "${args[*]}"
+
+            echo "${args[@]}"
             "${args[@]}"
             if [ "$?" != "0" ]; then
                 rm $TMP_REQS
@@ -326,7 +324,6 @@ setup_venv() {
             add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
-            # eval "python -m pip install --require-virtualenv --force wheel"
             eval "python -m pip install --require-virtualenv -I -U --no-cache-dir ${install_reqs}"
             
             [ "$?" != "0" ] && clear_pending && return "27"
