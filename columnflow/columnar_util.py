@@ -1612,6 +1612,11 @@ class ArrayFunction(Derivable):
     ) -> None:
         super().__init__()
 
+        if not hasattr(self, "config_inst") and hasattr(self, "config_insts"):
+            self.config_inst = self.config_insts[0]
+        elif not hasattr(self, "config_inst") and not hasattr(self, "config_insts"):
+            return
+
         # add class-level attributes as defaults for unset arguments (no_value)
         if call_func == law.no_value:
             call_func = self.__class__.call_func
