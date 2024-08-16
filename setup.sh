@@ -746,14 +746,10 @@ EOF
                 return "${ret}"
             fi
         fi
-        if [ "$?" != "0" ]; then
-            return "$?"
-        fi
+
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        if [ "$?" != "0" ]; then
-            return "$?"
-        fi
+
         ret="$?"
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"
