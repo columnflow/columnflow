@@ -381,6 +381,9 @@ setup_venv() {
         sed -i.bak -r \
             "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
             "${install_path}/pyvenv.cfg"
+        if [ -f "${install_path}/pyvenv.cfg.bak" ]; then
+            rm "${install_path}/pyvenv.cfg.bak"
+        fi
 
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"

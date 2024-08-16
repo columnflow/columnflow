@@ -655,6 +655,9 @@ cf_setup_software_stack() {
                 fi
                 # make the setup file relocatable
                 sed -i.bak -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                if [ -f "micromamba.sh.bak" ]; then
+                    rm "micromamba.sh.bak"
+                fi
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -692,6 +695,9 @@ EOF
                     # resulting environment.yaml file contains environment name
                     # which we do not use, so delete the name
                     sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                    if [ -f $CONDA_ENV_FILE.bak ]; then
+                        rm $CONDA_ENV_FILE.bak
+                    fi
                     cat $CONDA_ENV_FILE
                 fi
                 
