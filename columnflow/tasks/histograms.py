@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
@@ -273,27 +273,15 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    VariablesMixin,
+    MergeHistogramMixin,
     WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    only_missing = luigi.BoolParameter(
-        default=False,
-        description="when True, identify missing variables first and only require histograms of "
-        "missing ones; default: False",
-    )
-    remove_previous = luigi.BoolParameter(
-        default=False,
-        significant=False,
-        description="when True, remove particlar input histograms after merging; default: False",
-    )
-
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -301,86 +289,6 @@ class MergeHistograms(
         RemoteWorkflow.reqs,
         CreateHistograms=CreateHistograms,
     )
-
-    @classmethod
-    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
-        _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"variables"}
-        kwargs["_prefer_cli"] = _prefer_cli
-        return super().req_params(inst, **kwargs)
-
-    def create_branch_map(self):
-        # create a dummy branch map so that this task could be submitted as a job
-        return {0: None}
-
-    def _get_variables(self):
-        if self.is_workflow():
-            return self.as_branch()._get_variables()
-
-        variables = self.variables
-
-        # optional dynamic behavior: determine not yet created variables and require only those
-        if self.only_missing:
-            missing = self.output().count(existing=False, keys=True)[1]
-            variables = sorted(missing, key=variables.index)
-
-        return variables
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-
-        if not self.pilot:
-            variables = self._get_variables()
-            if variables:
-                reqs["hists"] = self.reqs.CreateHistograms.req_different_branching(
-                    self,
-                    branch=-1,
-                    variables=tuple(variables),
-                )
-
-        return reqs
-
-    def requires(self):
-        variables = self._get_variables()
-        if not variables:
-            return []
-
-        return self.reqs.CreateHistograms.req_different_branching(
-            self,
-            branch=-1,
-            variables=tuple(variables),
-            workflow="local",
-        )
-
-    def output(self):
-        return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"hist__{variable_name}.pickle")
-            for variable_name in self.variables
-        })}
-
-    @law.decorator.log
-    def run(self):
-        # preare inputs and outputs
-        inputs = self.input()["collection"]
-        outputs = self.output()
-
-        # load input histograms
-        hists = [
-            inp["hists"].load(formatter="pickle")
-            for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
-        ]
-
-        # create a separate file per output variable
-        variable_names = list(hists[0].keys())
-        for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
-            self.publish_message(f"merging histograms for '{variable_name}'")
-
-            variable_hists = [h[variable_name] for h in hists]
-            merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outputs["hists"][variable_name].dump(merged, formatter="pickle")
-
-        # optionally remove inputs
-        if self.remove_previous:
-            inputs.remove()
 
 
 MergeHistogramsWrapper = wrapper_factory(

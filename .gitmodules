@@ -1,7 +1,7 @@
 [submodule "modules/law"]
     path = modules/law
-    url = ../../riga/law.git
+    url = https://github.com/riga/law.git
 
 [submodule "modules/order"]
     path = modules/order
-    url = ../../riga/order.git
+    url = https://github.com/riga/order.git
