@@ -315,15 +315,11 @@ setup_venv() {
             }
 
             # update packaging tools
-            add_requirements --require-virtualenv -I pip setuptools -r $CF_VENV_REQUIREMENTS
+            add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
-            eval "python -m pip install --require-virtualenv --force wheel"
+            # eval "python -m pip install --require-virtualenv --force wheel"
             eval "python -m pip install --require-virtualenv -I -U --no-cache-dir ${install_reqs}"
-            # install cf itself to make the shell script available
-            # cmd="python -m pip install -U --no-cache-dir -e ${SOURCE}"
-            # cf_color magenta "evaluating $cmd"
-            # eval "$cmd"
             
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
