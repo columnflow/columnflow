@@ -164,13 +164,15 @@ setup_venv() {
             fi
             
             # generate unique hash based on current state of software packages
-            local this_hash="$( openssl sha256 "$TMP_REQS" | awk '{print $2}' )"
+            local tmp_hash="$( openssl sha256 '${TMP_REQS}' )"
             if [ "$?" != "0" ]; then
                 rm $TMP_REQS
                 rm ${pending_uv_flag_file}
                 echo "could not generate hash for file ${TMP_REQS}"  
                 return "24"
             fi
+            # parse hash from openssl output
+            local this_hash="$(echo '${tmp_hash}'| awk '{print $2}')" 
             # cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
             echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
             cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
