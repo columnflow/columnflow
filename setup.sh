@@ -646,7 +646,7 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls https://micro.mamba.pm/api/micromamba/${system}/latest | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                curl -Ls "https://micro.mamba.pm/api/micromamba/${system}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --prefix="$PWD" &> micromamba.sh || return "$?"
                 ret="$?"
                 if [ "${ret}" != "0" ]; then
@@ -682,10 +682,11 @@ EOF
                 # if the environment file does not exist or recompilation is requested, created the file again
                 if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
 
-                    # compile micromamba environment.yaml file from pyproject.toml
-                    # if it doesn't exist
+                    # first, install unidep into conda environment
                     micromamba install unidep[toml] python=${pyv} || return "$?"
 
+                    # compile micromamba environment.yaml file from pyproject.toml
+                    # if it doesn't exist
                     unidep merge -o $CONDA_ENV_FILE \
                         --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
                     
