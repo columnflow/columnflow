@@ -193,7 +193,7 @@ class CreateHistograms(
                 )
 
                 # build the full event weight
-                if not self.weight_producer_inst.skip_func():
+                if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
                     events, weight = self.weight_producer_inst(events)
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
