@@ -488,7 +488,7 @@ class MergeReducedEvents(
         with law.localize_file_targets(
             inputs, cache=False, mode="r",
         ) as localized_inputs:
-            
+
             metadata = [pq.read_metadata(inp.abspath) for inp in localized_inputs]
 
             # empty nano files are not considered for merging
