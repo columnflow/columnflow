@@ -25,10 +25,10 @@ ENV CF_BASE ${CF_BASE}
 
 ENV PYVERSION $pyversion
 RUN if [ -z $pyversion ]; then echo "export PYVERSION=\"$(python -c 'import platform; print(platform.python_version())')\"" >> /root/.bashrc ; fi
-# executable: Executable to run the container. This should be either the basic
-#             setup.sh script or a script to create a specific sandbox.
+# executable: Executable to run the container. This should never be the basic
+#             setup.sh script, but rathere a script to create a specific sandbox if needed.
 #             All paths should be relative to the Columnflow base directory.
-ARG exe_files
+ARG exe_files=""
 RUN apt-get update
 RUN apt-get install curl nano less vim locales git git-lfs -y
 RUN locale-gen en_US
@@ -52,10 +52,7 @@ SHELL ["/bin/bash", "-c"]
 
 WORKDIR ${CF_BASE}
 
-
-RUN source ./setup.sh 
-
-RUN source ./setup.sh && for exe_file in ${exe_files//,/ }; do if [ "${exe_file}" != "setup.sh" ]; then bash -c "source ${exe_file}"; fi ; done
+RUN source ./setup.sh && for exe_file in ${exe_files//,/ }; do bash -c "source ${exe_file}"; done
 
 # setup ownership so user can also run things
 RUN chown cf_user:cf_user_base ${CF_BASE} -R

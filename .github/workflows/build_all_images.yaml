@@ -61,8 +61,6 @@ jobs:
       IMAGE_NAME: "software_base"
       PUSH_IMAGE: true
       PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
-      BUILD_ARGS: |
-        exe_file=setup.sh
       HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
       HASH: ${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
       FORCE_PUSH_IMAGE: false
@@ -78,8 +76,6 @@ jobs:
         IMAGE_NAME: "software_base_dev"
         PUSH_IMAGE: true
         PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
-        BUILD_ARGS: |
-          exe_file=setup.sh
         HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_DEV_HASH_FILES }}
         HASH: ${{ needs.parse_env_vars.outputs.BASE_DEV_FILE_HASH }}
         FORCE_PUSH_IMAGE: false
