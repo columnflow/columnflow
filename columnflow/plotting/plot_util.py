@@ -31,12 +31,13 @@ logger = law.logger.get_logger(__name__)
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
-    "pw": "Private work",
-    "pwip": "Private work in progress",
+    "pw": "Private work (CMS data/simulation)",
+    "pwip": "Private work in progress (CMS)",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
-    "simpw": "Simulation private work",
+    "simpw": "Private work (CMS simulation)",
+    "datapw": "Private work (CMS data)",
     "od": "OpenData",
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
@@ -52,12 +53,15 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     :param llabel: The left label of the CMS label.
     :return: A dictionary with the CMS label configuration.
     """
+    llabel = label_options.get(llabel, llabel)
     cms_label_kwargs = {
         "ax": ax,
-        "llabel": label_options.get(llabel, llabel),
+        "llabel": llabel,
         "fontsize": 22,
         "data": False,
     }
+    if "CMS" in llabel:
+        cms_label_kwargs["exp"] = ""
 
     return cms_label_kwargs
 
