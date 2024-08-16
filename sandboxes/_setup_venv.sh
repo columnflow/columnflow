@@ -144,6 +144,8 @@ setup_venv() {
         fi
         
         if [ ! -f $CF_VENV_REQUIREMENTS ]; then
+            # create directory if it doesn't exist yet
+            mkdir -p "${CF_VENV_BASE}"
             # create the pending_flag to express that the venv state might be changing
             touch "${pending_uv_flag_file}"
             local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
@@ -162,7 +164,7 @@ setup_venv() {
             fi
             
             # generate unique hash based on current state of software packages
-            local this_hash="$( sha256sum "$TMP_REQS" | awk '{print $1}' | sed s/[[:blank:]].*//)"
+            local this_hash="$( openssl sha256 "$TMP_REQS" | awk '{print $2}' )"
             if [ "$?" != "0" ]; then
                 rm $TMP_REQS
                 rm ${pending_uv_flag_file}
