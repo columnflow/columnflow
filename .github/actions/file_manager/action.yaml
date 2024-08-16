@@ -35,7 +35,7 @@ inputs:
       sandboxes/ml_tf.txt
       docs/requirements.txt
     required: false
-  dev_requires:
+  DEV_REQUIRES:
     description: 'List of files to be used for dev environments'
     default: |
       sandboxes/dev.txt
@@ -52,7 +52,7 @@ outputs:
     description: 'List of files to be used base software image'
     value: |
       ${{ inputs.BASE_HASH_FILES }}
-      ${{ inputs.dev_requires }}
+      ${{ inputs.DEV_REQUIRES }}
   BASE_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.BASE_DEV_FILE_HASH }}
@@ -71,7 +71,7 @@ outputs:
     value: |
       ${{ inputs.COLUMNAR }}
       ${{ inputs.BASE_HASH_FILES }}
-      ${{ inputs.dev_requires }}
+      ${{ inputs.DEV_REQUIRES }}
   COLUMNAR_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
@@ -90,7 +90,7 @@ outputs:
     value: |
       ${{ inputs.ML_TF }}
       ${{ inputs.BASE_HASH_FILES }}
-      ${{ inputs.dev_requires }}
+      ${{ inputs.DEV_REQUIRES }}
   ML_TF_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.ML_TF_DEV_HASH_FILES }}
@@ -109,7 +109,7 @@ outputs:
     value: |
       ${{ inputs.DOCS }}
       ${{ inputs.BASE_HASH_FILES }}
-      ${{ inputs.dev_requires }}
+      ${{ inputs.DEV_REQUIRES }}
   DOCS_DEV_FILE_HASH:
     description: 'Hash of files used for base software image'
     value: ${{ steps.parse_env_vars.outputs.DOCS_DEV_HASH_FILES }}
@@ -119,7 +119,7 @@ outputs:
       ${{ inputs.ML_TF }}
       ${{ inputs.COLUMNAR }}
       ${{ inputs.BASE_HASH_FILES }}
-      ${{ inputs.dev_requires }}
+      ${{ inputs.DEV_REQUIRES }}
   TEST_DEV_FILE_HASH:
     description: 'Hash of files used for base software image for testing'
     value: ${{ steps.parse_env_vars.outputs.TEST_DEV_HASH_FILES }}
@@ -131,14 +131,14 @@ runs:
     id: parse_env_vars
     run: |
       echo "BASE_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-      echo "BASE_DEV_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+      echo "BASE_DEV_FILE_HASH=${{ hashFiles(inputs.BASE_HASH_FILES, inputs.DEV_REQUIRES) }}" >> $GITHUB_OUTPUT
 
       echo "COLUMNAR_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-      echo "COLUMNAR_DEV_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+      echo "COLUMNAR_DEV_HASH_FILES=${{ hashFiles(inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.DEV_REQUIRES) }}" >> $GITHUB_OUTPUT
       echo "ML_TF_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-      echo "ML_TF_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+      echo "ML_TF_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.BASE_HASH_FILES, inputs.DEV_REQUIRES) }}" >> $GITHUB_OUTPUT
       echo "DOCS_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES) }}" >> $GITHUB_OUTPUT
-      echo "DOCS_DEV_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
-      echo "TEST_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.dev_requires) }}" >> $GITHUB_OUTPUT
+      echo "DOCS_DEV_HASH_FILES=${{ hashFiles(inputs.DOCS, inputs.BASE_HASH_FILES, inputs.DEV_REQUIRES) }}" >> $GITHUB_OUTPUT
+      echo "TEST_DEV_HASH_FILES=${{ hashFiles(inputs.ML_TF, inputs.COLUMNAR, inputs.BASE_HASH_FILES, inputs.DEV_REQUIRES) }}" >> $GITHUB_OUTPUT
 
     shell: bash
