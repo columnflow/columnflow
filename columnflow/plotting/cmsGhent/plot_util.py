@@ -16,7 +16,9 @@ def cumulate(h: np.ndarray | hist.Hist, direction="below", axis: str | int | od.
         ax_names = [ax.name for ax in h.axes]
         assert axis in ax_names, f"requested axis not available in histrogram axes {', '.join(ax_names)}"
         axis = ax_names.index(axis)
-    arr = np.cumsum(arr[idx_slice], axis=axis)[idx_slice]
+    arr = np.swapaxes(arr, 0, axis)
+    arr = np.cumsum(arr[idx_slice], axis=0)[idx_slice]
+    arr = np.swapaxes(arr, 0, axis)
     if isinstance(h, np.ndarray):
         return arr
     h_cum = h.copy()
