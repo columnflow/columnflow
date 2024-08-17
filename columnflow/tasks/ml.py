@@ -638,9 +638,6 @@ class MLEvaluation(
         reqs["models"] = self.reqs.MLTraining.req_different_branching(
             self,
             configs=(self.config_inst.name,),
-            calibrators=(self.calibrators,),
-            selectors=(self.selector,),
-            producers=(self.producers,),
         )
 
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
@@ -663,9 +660,6 @@ class MLEvaluation(
             "models": self.reqs.MLTraining.req_different_branching(
                 self,
                 configs=(self.config_inst.name,),
-                calibrators=(self.calibrators,),
-                selectors=(self.selector,),
-                producers=(self.producers,),
                 branch=-1,
             ),
             "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
