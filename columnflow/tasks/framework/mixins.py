@@ -44,11 +44,11 @@ class CalibratorMixin(AnalysisTask):
     calibrator = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the calibrator to be applied; default: value of the "
-        "'default_calibrator' config",
+        "'default_calibrator' analysis aux",
     )
     calibrator.__annotations__ = " ".join("""
         the name of the calibrator to be applied; default: value of the
-        'default_calibrator' config""".split())
+        'default_calibrator' analysis aux""".split())
 
     # decides whether the task itself runs the calibrator and implements its shifts
     register_calibrator_sandbox = False
@@ -266,7 +266,7 @@ class CalibratorsMixin(AnalysisTask):
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of calibrators to be applied; default: value of the "
-        "'default_calibrator' config",
+        "'default_calibrator' analysis aux",
         brace_expand=True,
         parse_empty=True,
     )
@@ -472,7 +472,7 @@ class SelectorMixin(AnalysisTask):
     selector = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the selector to be applied; default: value of the "
-        "'default_selector' config",
+        "'default_selector' analysis aux",
     )
 
     # decides whether the task itself runs the selector and implements its shifts
@@ -782,7 +782,7 @@ class ProducerMixin(AnalysisTask):
     producer = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the producer to be applied; default: value of the "
-        "'default_producer' config",
+        "'default_producer' analysis aux",
     )
 
     # decides whether the task itself runs the producer and implements its shifts
@@ -1009,7 +1009,7 @@ class ProducersMixin(AnalysisTask):
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
         description="comma-separated names of producers to be applied; default: value of the "
-        "'default_producer' config",
+        "'default_producer' analysis aux",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1402,7 +1402,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
     ml_model = luigi.Parameter(
         default=RESOLVE_DEFAULT,
         description="the name of the ML model to be applied; default: value of the "
-        "'default_ml_model' config",
+        "'default_ml_model' analysis aux",
     )
 
     allow_empty_ml_model = True
