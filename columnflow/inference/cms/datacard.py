@@ -360,6 +360,17 @@ class DatacardWriter(object):
         # create the output file
         out_file = uproot.recreate(shapes_path)
 
+        # helper to remove underflow and overflow values
+        def remove_flow(h):
+            ax = h.axes[0]
+            view = h.view(flow=True)
+            if ax.traits.underflow:
+                view.value[0] = 0.0
+                view.variance[0] = 0.0
+            if ax.traits.overflow:
+                view.value[-1] = 0.0
+                view.variance[-1] = 0.0
+
         # iterate through shapes
         for cat_name, hists in self.histograms.items():
             cat_obj = self.inference_model_inst.get_category(cat_name)
@@ -391,7 +402,9 @@ class DatacardWriter(object):
                 h_nom = _hists["nominal"].copy() * scale
                 fill_empty(h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
+                remove_flow(h_nom)
                 out_file[nom_name] = h_nom
+
                 _rates[proc_name] = h_nom.sum().value
 
                 # helper to return the two variations
@@ -479,6 +492,8 @@ class DatacardWriter(object):
                             parameter=param_obj.name,
                             direction="Up",
                         )
+                        remove_flow(h_down)
+                        remove_flow(h_up)
                         out_file[down_name] = h_down
                         out_file[up_name] = h_up
 
