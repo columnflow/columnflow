@@ -1566,6 +1566,17 @@ class ArrayFunction(Derivable):
         return cls.IOFlagged(cls, cls.IOFlag.PRODUCES)
 
     @classmethod
+    def call(cls, func: Callable[[Any, ...], Any]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`call_func`
+        which defines the main callable for processing chunks of data. The function should accept
+        arbitrary arguments and can return arbitrary objects.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.call_func = func
+
+    @classmethod
     def init(cls, func: Callable[[], None]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`init_func`

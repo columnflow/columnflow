@@ -813,6 +813,8 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
+        if self.slurm_flavor not in ("", law.NO_STR):
+            config.render_variables["cf_slurm_flavor"] = self.slurm_flavor
 
         # forward env variables
         for ev, rv in self.slurm_forward_env_variables.items():
