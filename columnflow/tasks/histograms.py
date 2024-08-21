@@ -203,7 +203,9 @@ class CreateHistograms(
                     # get variable instances
                     variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
-                    histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
+                    if var_key not in histograms:
+                        # create the histogram in the first chunk
+                        histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
 
                     # merge category ids
                     category_ids = ak.concatenate(
