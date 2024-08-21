@@ -23,7 +23,7 @@ action() {
         # install a venv into ${CMSSW_BASE}/venvs, which is included by BundleCMSSWSandbox
         CF_VENV_BASE="${CMSSW_BASE}/venvs" cf_create_venv columnar &&
         source "${CMSSW_BASE}/venvs/columnar/bin/activate" "" &&
-        pip install -r "${CF_BASE}/sandboxes/columnar.txt" &&
+        pip install -I -r "${CF_BASE}/sandboxes/columnar.txt" &&
         CF_VENV_BASE="${CMSSW_BASE}/venvs" cf_make_venv_relocatable columnar
     }
     cf_cmssw_custom_setup() {
