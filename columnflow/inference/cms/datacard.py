@@ -362,7 +362,7 @@ class DatacardWriter(object):
         # create the output file
         out_file = uproot.recreate(shapes_path)
 
-        # helper to remove underflow and overflow values
+        # helper to handle and apply flow strategy to histogram
         def handle_flow(cat_obj, h, name):
             # stop early if flow is ignored altogether
             if cat_obj.flow_strategy == FlowStrategy.ignore:

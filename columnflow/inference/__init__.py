@@ -310,10 +310,9 @@ class InferenceModel(Derivable):
             ("config_data_datasets", list(map(str, config_data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
             ("flow_strategy", (
-                flow_strategy if
-                isinstance(flow_strategy, FlowStrategy)
-                else FlowStrategy[flow_strategy])
-            ),
+                flow_strategy
+                if isinstance(flow_strategy, FlowStrategy)
+                else FlowStrategy[flow_strategy])),
             ("mc_stats", mc_stats),
             ("empty_bin_value", empty_bin_value),
             ("processes", []),
