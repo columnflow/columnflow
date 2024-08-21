@@ -105,6 +105,20 @@ class ParameterTransformations(tuple):
         return any(t.from_rate for t in self)
 
 
+class FlowStrategy(enum.Enum):
+    """
+    Strategy to handle over- and underflow bin contents.
+    """
+
+    ignore = "ignore"
+    warn = "warn"
+    remove = "remove"
+    move = "move"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class InferenceModel(Derivable):
     """
     Interface to statistical inference models with connections to config objects (such as
@@ -121,6 +135,7 @@ class InferenceModel(Derivable):
             config_variable: ht
             config_data_datasets: [data_mu_a]
             data_from_processes: []
+            flow_strategy: warn
             mc_stats: 10
             processes:
               - name: HH
@@ -215,6 +230,7 @@ class InferenceModel(Derivable):
             self.add_representer(ParameterType, self._str_repr)
             self.add_representer(ParameterTransformation, self._str_repr)
             self.add_representer(ParameterTransformations, self._list_repr)
+            self.add_representer(FlowStrategy, self._str_repr)
 
         def ignore_aliases(self, *args, **kwargs) -> bool:
             return True
@@ -266,6 +282,7 @@ class InferenceModel(Derivable):
         config_variable: str | None = None,
         config_data_datasets: Sequence[str] | None = None,
         data_from_processes: Sequence[str] | None = None,
+        flow_strategy: FlowStrategy | str = FlowStrategy.warn,
         mc_stats: int | float | tuple | None = None,
         empty_bin_value: float = 1e-5,
     ) -> DotDict:
@@ -280,6 +297,8 @@ class InferenceModel(Derivable):
               real data.
             - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
               when *config_data_datasets* is not defined, make of a fake data contribution.
+            - *flow_strategy*: A :py:class:`FlowStrategy` instance describing the strategy to handle
+              over- and underflow bin contents.
             - *mc_stats*: Either *None* to disable MC stat uncertainties, or an integer, a float or
               a tuple of thereof to control the options of MC stat options.
             - *empty_bin_value*: When bins are no content, they are filled with this value.
@@ -290,6 +309,11 @@ class InferenceModel(Derivable):
             ("config_variable", str(config_variable) if config_variable else None),
             ("config_data_datasets", list(map(str, config_data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
+            ("flow_strategy", (
+                flow_strategy if
+                isinstance(flow_strategy, FlowStrategy)
+                else FlowStrategy[flow_strategy])
+            ),
             ("mc_stats", mc_stats),
             ("empty_bin_value", empty_bin_value),
             ("processes", []),
