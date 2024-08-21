@@ -332,8 +332,6 @@ setup_cmssw() {
     cd "${orig_dir}"
 
     # prepend persistent path fragments again to ensure priority for local packages and
-    # remove the conda based python fragments since there are too many overlaps between packages
-    # export PYTHONPATH="${CF_PERSISTENT_PATH}:$( echo ${PYTHONPATH} | sed "s|${CF_CONDA_PYTHONPATH}||g" )"
     export PYTHONPATH="${CF_PERSISTENT_PATH}:$( echo ${PYTHONPATH} )"
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
 
