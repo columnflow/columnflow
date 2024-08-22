@@ -22,6 +22,11 @@ from columnflow.util import (
 class ParameterType(enum.Enum):
     """
     Parameter type flag.
+
+    :cvar rate_gauss: Gaussian rate parameter.
+    :cvar rate_uniform: Uniform rate parameter.
+    :cvar rate_unconstrained: Unconstrained rate parameter.
+    :cvar shape: Shape parameter.
     """
 
     rate_gauss = "rate_gauss"
@@ -30,10 +35,20 @@ class ParameterType(enum.Enum):
     shape = "shape"
 
     def __str__(self: ParameterType) -> str:
+        """
+        Returns the string representation of the parameter type.
+
+        :returns: The string representation of the parameter type.
+        """
         return self.value
 
     @property
     def is_rate(self: ParameterType) -> bool:
+        """
+        Checks if the parameter type is a rate type.
+
+        :returns: *True* if the parameter type is a rate type, *False* otherwise.
+        """
         return self in (
             self.rate_gauss,
             self.rate_uniform,
@@ -42,6 +57,11 @@ class ParameterType(enum.Enum):
 
     @property
     def is_shape(self: ParameterType) -> bool:
+        """
+        Checks if the parameter type is a shape type.
+
+        :returns: *True* if the parameter type is a shape type, *False* otherwise.
+        """
         return self in (
             self.shape,
         )
@@ -50,6 +70,15 @@ class ParameterType(enum.Enum):
 class ParameterTransformation(enum.Enum):
     """
     Flags denoting transformations to be applied on parameters.
+
+    :cvar none: No transformation.
+    :cvar centralize: Centralize the parameter.
+    :cvar symmetrize: Symmetrize the parameter.
+    :cvar asymmetrize: Asymmetrize the parameter.
+    :cvar asymmetrize_if_large: Asymmetrize the parameter if it is large.
+    :cvar normalize: Normalize the parameter.
+    :cvar effect_from_shape: Derive effect from shape.
+    :cvar effect_from_rate: Derive effect from rate.
     """
 
     none = "none"
@@ -62,16 +91,31 @@ class ParameterTransformation(enum.Enum):
     effect_from_rate = "effect_from_rate"
 
     def __str__(self: ParameterTransformation) -> str:
+        """
+        Returns the string representation of the parameter transformation.
+
+        :returns: The string representation of the parameter transformation.
+        """
         return self.value
 
     @property
     def from_shape(self: ParameterTransformation) -> bool:
+        """
+        Checks if the transformation is derived from shape.
+
+        :returns: *True* if the transformation is derived from shape, *False* otherwise.
+        """
         return self in (
             self.effect_from_shape,
         )
 
     @property
     def from_rate(self: ParameterTransformation) -> bool:
+        """
+        Checks if the transformation is derived from rate.
+
+        :returns: *True* if the transformation is derived from rate, *False* otherwise.
+        """
         return self in (
             self.effect_from_rate,
         )
@@ -81,12 +125,20 @@ class ParameterTransformations(tuple):
     """
     Container around a sequence of :py:class:`ParameterTransformation`'s with a few convenience
     methods.
+
+    :param transformations: A sequence of :py:class:`ParameterTransformation` or their string names.
     """
 
     def __new__(
         cls,
         transformations: Sequence[ParameterTransformation | str],
     ) -> ParameterTransformations:
+        """
+        Creates a new instance of :py:class:`ParameterTransformations`.
+
+        :param transformations: A sequence of :py:class:`ParameterTransformation` or their string names.
+        :returns: A new instance of :py:class:`ParameterTransformations`.
+        """
         # TODO: at this point one could object / complain in case incompatible transfos are used
         transformations = [
             (t if isinstance(t, ParameterTransformation) else ParameterTransformation[t])
@@ -98,10 +150,20 @@ class ParameterTransformations(tuple):
 
     @property
     def any_from_shape(self: ParameterTransformations) -> bool:
+        """
+        Checks if any transformation is derived from shape.
+
+        :returns: *True* if any transformation is derived from shape, *False* otherwise.
+        """
         return any(t.from_shape for t in self)
 
     @property
     def any_from_rate(self: ParameterTransformations) -> bool:
+        """
+        Checks if any transformation is derived from rate.
+
+        :returns: *True* if any transformation is derived from rate, *False* otherwise.
+        """
         return any(t.from_rate for t in self)
 
 
@@ -182,7 +244,7 @@ class InferenceModel(Derivable):
 
         type: DotDict
 
-        The internal data structure representing the model.
+        The internal data structure representing the model, see :py:meth:`InferenceModel.model_spec`.
     """
 
     # optional initialization method
@@ -228,8 +290,12 @@ class InferenceModel(Derivable):
     ) -> DerivableMeta | Callable:
         """
         Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
-        *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs* are
-        added as class members of the new subclasses.
+        *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs*
+        are added as class members of the new subclass.
+
+        :param func: The function to be decorated and attached as ``init_func``.
+        :param bases: Optional tuple of base classes for the new subclass.
+        :returns: The new subclass or a decorator function.
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
@@ -273,16 +339,17 @@ class InferenceModel(Derivable):
         Returns a dictionary representing a category (interchangeably called bin or channel in other
         tools), forwarding all arguments.
 
-            - *name*: The name of the category in the model.
-            - *config_category*: The name of the source category in the config to use.
-            - *config_variable*: The name of the variable in the config to use.
-            - *config_data_datasets*: List of names or patterns of datasets in the config to use for
-              real data.
-            - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
-              when *config_data_datasets* is not defined, make of a fake data contribution.
-            - *mc_stats*: Either *None* to disable MC stat uncertainties, or an integer, a float or
-              a tuple of thereof to control the options of MC stat options.
-            - *empty_bin_value*: When bins are no content, they are filled with this value.
+        :param name: The name of the category in the model.
+        :param config_category: The name of the source category in the config to use.
+        :param config_variable: The name of the variable in the config to use.
+        :param config_data_datasets: List of names or patterns of datasets in the config to use for
+            real data.
+        :param data_from_processes: Optional list of names of :py:meth:`process_spec` objects that,
+            when *config_data_datasets* is not defined, make up a fake data contribution.
+        :param mc_stats: Either *None* to disable MC stat uncertainties, or an integer, a float or
+            a tuple thereof to control the options of MC stat options.
+        :param empty_bin_value: When bins have no content, they are filled with this value.
+        :returns: A dictionary representing the category.
         """
         return DotDict([
             ("name", str(name)),
@@ -303,15 +370,17 @@ class InferenceModel(Derivable):
         is_signal: bool = False,
         config_mc_datasets: Sequence[str] | None = None,
         scale: float | int = 1.0,
+        is_dynamic: bool = False,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
 
-            - *name*: The name of the process in the model.
-            - *is_signal*: A boolean flag deciding whether this process describes signal.
-            - *config_process*: The name of the source process in the config to use.
-            - *config_mc_datasets*: List of names or patterns of MC datasets in the config to use.
-            - *scale*: A float value to scale the process, defaulting to 1.0.
+        :param name: The name of the process in the model.
+        :param is_signal: A boolean flag deciding whether this process describes signal.
+        :param config_process: The name of the source process in the config to use.
+        :param config_mc_datasets: List of names or patterns of MC datasets in the config to use.
+        :param scale: A float value to scale the process, defaulting to 1.0.
+        :returns: A dictionary representing the process.
         """
         return DotDict([
             ("name", str(name)),
@@ -320,6 +389,7 @@ class InferenceModel(Derivable):
             ("config_mc_datasets", list(map(str, config_mc_datasets or []))),
             ("scale", float(scale)),
             ("parameters", []),
+            ("is_dynamic", bool(is_dynamic)),
         ])
 
     @classmethod
@@ -334,14 +404,15 @@ class InferenceModel(Derivable):
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
 
-            - *name*: The name of the parameter in the model.
-            - *type*: A :py:class:`ParameterType` instance describing the type of this parameter.
-            - *transformations*: A sequence of :py:class:`ParameterTransformation` instances
-              describing transformations to be applied to the effect of this parameter.
-            - *config_shift_source*: The name of a systematic shift source in the config that this
-              parameter corresponds to.
-            - *effect*: An arbitrary object describing the effect of the parameter (e.g. float for
-              symmetric rate effects, 2-tuple for down/up variation, etc).
+        :param name: The name of the parameter in the model.
+        :param type: A :py:class:`ParameterType` instance describing the type of this parameter.
+        :param transformations: A sequence of :py:class:`ParameterTransformation` instances
+            describing transformations to be applied to the effect of this parameter.
+        :param config_shift_source: The name of a systematic shift source in the config that this
+            parameter corresponds to.
+        :param effect: An arbitrary object describing the effect of the parameter (e.g. float for
+            symmetric rate effects, 2-tuple for down/up variation, etc).
+        :returns: A dictionary representing the parameter.
         """
         return DotDict([
             ("name", str(name)),
@@ -360,8 +431,9 @@ class InferenceModel(Derivable):
         """
         Returns a dictionary representing a group of parameter names.
 
-            - *name*: The name of the parameter group in the model.
-            - *parameter_names*: Names of parameter objects this group contains.
+        :param name: The name of the parameter group in the model.
+        :param parameter_names: Names of parameter objects this group contains.
+        :returns: A dictionary representing the group of parameter names.
         """
         return DotDict([
             ("name", str(name)),
@@ -371,8 +443,11 @@ class InferenceModel(Derivable):
     @classmethod
     def require_shapes_for_parameter(self, param_obj: dict) -> bool:
         """
-        Returns *True* if for a certain parameter object *param_obj* varied shapes are needed, and
-        *False* otherwise.
+        Function to check if for a certain parameter object *param_obj* varied
+        shapes are needed.
+
+        :param param_obj: The parameter object to check.
+        :returns: *True* if varied shapes are needed, *False* otherwise.
         """
         if param_obj.type.is_shape:
             # the shape might be build from a rate, in which case input shapes are not required
@@ -411,6 +486,9 @@ class InferenceModel(Derivable):
         """
         Writes the content of the :py:attr:`model` into a file-like object *stream* when given, and
         returns a string representation otherwise.
+
+        :param stream: A file-like object to write the model content into.
+        :returns: A string representation of the model content if *stream* is not provided.
         """
         return yaml.dump(self.model, stream=stream, Dumper=self.YamlDumper)
 
@@ -445,6 +523,10 @@ class InferenceModel(Derivable):
         Returns a list of categories whose name match *category*. *category* can be a string, a
         pattern, or sequence of them. When *only_names* is *True*, only names of categories are
         returned rather than structured dictionaries.
+
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param only_names: A boolean flag to return only names of categories if set to *True*.
+        :returns: A list of matching categories or their names.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -467,6 +549,12 @@ class InferenceModel(Derivable):
         pattern, or sequence of them. An exception is raised if no or more than one category is
         found, unless *silent* is *True* in which case *None* is returned. When *only_name* is
         *True*, only the name of the category is returned rather than a structured dictionary.
+
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or
+            more than one category is found.
+        :param only_name: A boolean flag to return only the name of the category if set to *True*.
+        :returns: A single matching category or its name.
         """
         # rename arguments to make their meaning explicit
         category_name = category
@@ -492,6 +580,9 @@ class InferenceModel(Derivable):
         """
         Returns *True* if a category whose name matches *category* is existing, and *False*
         otherwise. *category* can be a string, a pattern, or sequence of them.
+
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if a matching category exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -504,6 +595,8 @@ class InferenceModel(Derivable):
         Adds a new category with all *args* and *kwargs* used to create the structured category
         dictionary via :py:meth:`category_spec`. If a category with the same name already exists, an
         exception is raised.
+
+        :raises ValueError: If a category with the same name already exists.
         """
         # create the object
         category = self.category_spec(*args, **kwargs)
@@ -520,9 +613,10 @@ class InferenceModel(Derivable):
         category: str | Sequence[str],
     ) -> bool:
         """
-        Removes one or more categories whose names match *category*. Returns *True* if at least one
-        category was removed, and *False* otherwise. *category* can be a string, a pattern, or
-        sequence of them.
+        Removes one or more categories whose names match *category*.
+
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if at least one category was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -560,6 +654,12 @@ class InferenceModel(Derivable):
 
         When *only_names* is *True*, only names of processes are returned rather than structured
         dictionaries. When *flat* is *True*, a flat, unique list of process names is returned.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to filter categories.
+        :param only_names: A boolean flag to return only names of processes if set to *True*.
+        :param flat: A boolean flag to return a flat, unique list of process names if set to *True*.
+        :returns: A dictionary of processes mapped to the category name, or a list of process names.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -600,13 +700,21 @@ class InferenceModel(Derivable):
         silent: bool = False,
     ) -> DotDict | str:
         """
-        Returns a single process whose name matches *process*, and optionally, whose category's name
-        matches *category*. Both *process* and *category* can be a string, a pattern, or sequence of
-        them.
+        Returns a single process whose name matches *process*, and optionally, whose category's
+        name matches *category*. Both *process* and *category* can be a string, a pattern, or
+        sequence of them.
 
-        An exception is raised if no or more than one process is found, unless
-        *silent* is *True* in which case *None* is returned. When *only_name* is *True*, only the
-        name of the process is returned rather than a structured dictionary.
+        An exception is raised if no or more than one process is found, unless *silent* is *True*
+        in which case *None* is returned. When *only_name* is *True*, only the name of the
+        process is returned rather than a structured dictionary.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or
+            more than one process is found.
+        :param only_name: A boolean flag to return only the name of the process if set to *True*.
+        :returns: A single matching process or its name.
+        :raises ValueError: If no process or more than one process is found and *silent* is *False*.
         """
         # rename arguments to make their meaning explicit
         process_name = process
@@ -652,8 +760,12 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Returns *True* if a process whose name matches *process*, and optionally whose category's
-        name matches *category*, is existing, and *False* otherwise. Both *process* and *category*
-        can be a string, a pattern, or sequence of them.
+        name matches *category*, exists, and *False* otherwise. Both *process* and *category* can
+        be a string, a pattern, or sequence of them.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if a matching process exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -676,6 +788,14 @@ class InferenceModel(Derivable):
 
         If a process with the same name already exists in one of the categories, an exception is
         raised unless *silent* is *True*.
+
+        :param args: Positional arguments used to create the process.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param silent: A boolean flag to suppress exceptions if a process with the same name
+            already exists.
+        :param kwargs: Keyword arguments used to create the process.
+        :raises ValueError: If a process with the same name already exists in one of the
+            categories and *silent* is *False*.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -708,8 +828,12 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Removes one or more processes whose names match *process*, and optionally whose category's
-        name match *category*. Both *process* and *category* can be a string, a pattern, or sequence
-        of them. Returns *True* if at least one process was removed, and *False* otherwise.
+        name matches *category*. Both *process* and *category* can be a string, a pattern, or
+        sequence of them. Returns *True* if at least one process was removed, and *False* otherwise.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if at least one process was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -748,13 +872,21 @@ class InferenceModel(Derivable):
         flat: bool = False,
     ) -> dict[str, dict[str, DotDict | str]] | list[str]:
         """
-        Returns a dictionary of parameter whose names match *parameter*, mapped twice to the name of
-        the category and the name of the process they belong to. Categories and processes can
+        Returns a dictionary of parameters whose names match *parameter*, mapped twice to the name
+        of the category and the name of the process they belong to. Categories and processes can
         optionally be filtered through *category* and *process*. All three, *parameter*, *process*
         and *category* can be a string, a pattern, or sequence of them.
 
         When *only_names* is *True*, only names of parameters are returned rather than structured
         dictionaries. When *flat* is *True*, a flat, unique list of parameter names is returned.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param only_names: A boolean flag to return only names of parameters if set to *True*.
+        :param flat: A boolean flag to return a flat, unique list of parameter names if set to *True*.
+        :returns: A dictionary of parameters mapped to category and process names, or a list of
+            parameter names.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -811,6 +943,15 @@ class InferenceModel(Derivable):
         An exception is raised if no or more than one parameter is found, unless *silent* is *True*
         in which case *None* is returned. When *only_name* is *True*, only the name of the parameter
         is returned rather than a structured dictionary.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param only_name: A boolean flag to return only the name of the parameter if set to *True*.
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or more
+            than one parameter is found.
+        :returns: A single matching parameter or its name.
+        :raises ValueError: If no parameter or more than one parameter is found and *silent* is *False*.
         """
         # rename arguments to make their meaning explicit
         parameter_name = parameter
@@ -871,9 +1012,14 @@ class InferenceModel(Derivable):
     ) -> bool:
         """
         Returns *True* if a parameter whose name matches *parameter*, and optionally whose
-        category's and process' name match *category* and *process*, is existing, and *False*
-        otherwise. All three, *parameter*, *process* and *category* can be a string, a pattern, or
-        sequence of them.
+        category's and process' name match *category* and *process*, exists, and *False*
+        otherwise. All three, *parameter*, *process* and *category* can be a string, a pattern,
+        or sequence of them.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if a matching parameter exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -906,6 +1052,15 @@ class InferenceModel(Derivable):
 
         If a parameter with the same name already exists in one of the processes throughout the
         categories, an exception is raised.
+
+        :param args: Positional arguments used to create the parameter.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param group: A string, pattern, or sequence of them to specify parameter groups.
+        :param kwargs: Keyword arguments used to create the parameter.
+        :returns: The created parameter.
+        :raises ValueError: If a parameter with the same name already exists in one of the processes
+            throughout the categories.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -945,8 +1100,12 @@ class InferenceModel(Derivable):
         """
         Removes one or more parameters whose names match *parameter*, and optionally whose
         category's and process' name match *category* and *process*. All three, *parameter*,
-        *process* and *category* can be a string, a pattern, or sequence of them. Returns *True* if
-        at least one parameter was removed, and *False* otherwise.
+        *process* and *category* can be a string, a pattern, or sequence of them.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if at least one parameter was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -984,11 +1143,15 @@ class InferenceModel(Derivable):
         only_names: bool = False,
     ) -> list[DotDict | str]:
         """
-        Returns a list of parameter groups whose name match *group*. *group* can be a string, a
+        Returns a list of parameter groups whose names match *group*. *group* can be a string, a
         pattern, or sequence of them.
 
         When *only_names* is *True*, only names of parameter groups are returned rather than
         structured dictionaries.
+
+        :param group: A string, pattern, or sequence of them to match group names.
+        :param only_names: A boolean flag to return only names of parameter groups if set to *True*.
+        :returns: A list of parameter groups or their names.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
@@ -1012,6 +1175,11 @@ class InferenceModel(Derivable):
         An exception is raised in case no or more than one parameter group is found. When
         *only_name* is *True*, only the name of the parameter group is returned rather than a
         structured dictionary.
+
+        :param group: A string, pattern, or sequence of them to match group names.
+        :param only_name: A boolean flag to return only the name of the parameter group if set to *True*.
+        :returns: A single matching parameter group or its name.
+        :raises ValueError: If no parameter group or more than one parameter group is found.
         """
         # rename arguments to make their meaning explicit
         group_name = group
@@ -1031,8 +1199,11 @@ class InferenceModel(Derivable):
         group: str | Sequence[str],
     ) -> bool:
         """
-        Returns *True* if a parameter group whose name matches *group* is existing, and *False*
+        Returns *True* if a parameter group whose name matches *group* exists, and *False*
         otherwise. *group* can be a string, a pattern, or sequence of them.
+
+        :param group: A string, pattern, or sequence of them to match group names.
+        :returns: *True* if a matching parameter group exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
@@ -1045,6 +1216,10 @@ class InferenceModel(Derivable):
         Adds a new parameter group with all *args* and *kwargs* used to create the structured
         parameter group dictionary via :py:meth:`parameter_group_spec`. If a group with the same
         name already exists, an exception is raised.
+
+        :param args: Positional arguments used to create the parameter group.
+        :param kwargs: Keyword arguments used to create the parameter group.
+        :raises ValueError: If a parameter group with the same name already exists.
         """
         # create the instance
         group = self.parameter_group_spec(*args, **kwargs)
@@ -1063,6 +1238,9 @@ class InferenceModel(Derivable):
         Removes one or more parameter groups whose names match *group*. *group* can be a string, a
         pattern, or sequence of them. Returns *True* if at least one group was removed, and *False*
         otherwise.
+
+        :param group: A string, pattern, or sequence of them to match group names.
+        :returns: *True* if at least one group was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
@@ -1084,11 +1262,15 @@ class InferenceModel(Derivable):
         group: str | Sequence[str],
     ) -> bool:
         """
-        Adds a parameter named *parameter* to one or multiple parameter groups whose name match
+        Adds a parameter named *parameter* to one or multiple parameter groups whose names match
         *group*. *group* can be a string, a pattern, or sequence of them. When *parameter* is a
         pattern or regular expression, all previously added, matching parameters are added.
-        Otherwise, *parameter* is added as as. If a parameter was added to at least one group,
+        Otherwise, *parameter* is added as is. If a parameter was added to at least one group,
         *True* is returned and *False* otherwise.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param group: A string, pattern, or sequence of them to match group names.
+        :returns: *True* if at least one parameter was added to a group, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1126,6 +1308,10 @@ class InferenceModel(Derivable):
         Removes all parameters matching *parameter* from parameter groups whose names match *group*.
         Both *parameter* and *group* can be a string, a pattern, or sequence of them. Returns *True*
         if at least one parameter was removed, and *False* otherwise.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param group: A string, pattern, or sequence of them to match group names.
+        :returns: *True* if at least one parameter was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1160,6 +1346,9 @@ class InferenceModel(Derivable):
         """
         Returns a flat list of category names that contain processes matching *process*. *process*
         can be a string, a pattern, or sequence of them.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :returns: A list of category names containing matching processes.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -1175,10 +1364,15 @@ class InferenceModel(Derivable):
     ) -> list[str] | dict[str, list[str]]:
         """
         Returns a dictionary of names of processes that contain a parameter whose names match
-        *parameter*, mapped to categories names. Categories can optionally be filtered through
+        *parameter*, mapped to category names. Categories can optionally be filtered through
         *category*. Both *parameter* and *category* can be a string, a pattern, or sequence of them.
 
         When *flat* is *True*, a flat, unique list of process names is returned.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :param flat: A boolean flag to return a flat, unique list of process names if set to *True*.
+        :returns: A dictionary of process names mapped to category names, or a flat list of process names.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1210,10 +1404,15 @@ class InferenceModel(Derivable):
     ) -> list[str] | dict[str, list[str]]:
         """
         Returns a dictionary of category names mapping to process names that contain parameters
-        whose name match *parameter*. Processes can optionally be filtered through *process*. Both
+        whose names match *parameter*. Processes can optionally be filtered through *process*. Both
         *parameter* and *process* can be a string, a pattern, or sequence of them.
 
         When *flat* is *True*, a flat, unique list of category names is returned.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param flat: A boolean flag to return a flat, unique list of category names if set to *True*.
+        :returns: A dictionary of category names mapped to process names, or a flat list of category names.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1243,7 +1442,10 @@ class InferenceModel(Derivable):
     ) -> list[str]:
         """
         Returns a list of names of parameter groups that contain a parameter whose name matches
-        *parameter*, which can be a string, a pattern, or sequence of them.
+        *parameter*. *parameter* can be a string, a pattern, or sequence of them.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :returns: A list of names of parameter groups containing the matching parameter.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -1267,6 +1469,8 @@ class InferenceModel(Derivable):
         Cleans the internal model structure by removing empty and dangling objects by calling
         :py:meth:`remove_empty_categories`, :py:meth:`remove_dangling_parameters_from_groups`
         (receiving *keep_parameters*), and :py:meth:`remove_empty_parameter_groups` in that order.
+
+        :param keep_parameters: A string, pattern, or sequence of them to specify parameters to keep.
         """
         self.remove_empty_categories()
         self.remove_dangling_parameters_from_groups(keep_parameters=keep_parameters)
@@ -1289,6 +1493,8 @@ class InferenceModel(Derivable):
         """
         Removes names of parameters from parameter groups that are not assigned to any process in
         any category.
+
+        :param keep_parameters: A string, pattern, or sequence of them to specify parameters to keep.
         """
         # get a list of all parameters
         parameter_names = self.get_parameters("*", flat=True)
@@ -1330,7 +1536,11 @@ class InferenceModel(Derivable):
         """
         Generator that iteratively yields all processes whose names match *process*, optionally
         in all categories whose names match *category*. The yielded value is a 2-tuple containing
-        the cagegory name and the process object.
+        the category name and the process object.
+
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: A generator yielding 2-tuples of category name and process object.
         """
         processes = self.get_processes(process=process, category=category)
         for category_name, processes in processes.items():
@@ -1346,7 +1556,12 @@ class InferenceModel(Derivable):
         """
         Generator that iteratively yields all parameters whose names match *parameter*, optionally
         in all processes and categories whose names match *process* and *category*. The yielded
-        value is a 3-tuple containing the cagegory name, the process name and the parameter object.
+        value is a 3-tuple containing the category name, the process name, and the parameter object.
+
+        :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: A generator yielding 3-tuples of category name, process name, and parameter object.
         """
         parameters = self.get_parameters(parameter=parameter, process=process, category=category)
         for category_name, parameters in parameters.items():
@@ -1365,10 +1580,14 @@ class InferenceModel(Derivable):
         category: str | Sequence[str] | None = None,
     ) -> bool:
         """
-        Sets the scale attribute of all processes whose names match *process*, optionally in all
-        categories whose names match *category*, to *scale*. Returns *True* if at least one process
-        was found and scale, and *False* otherwise.
-        """
+    Sets the scale attribute of all processes whose names match *process*, optionally in all
+    categories whose names match *category*, to *scale*.
+
+    :param scale: The scale value to set for the matching processes.
+    :param process: A string, pattern, or sequence of them to match process names.
+    :param category: A string, pattern, or sequence of them to match category names.
+    :returns: *True* if at least one process was found and scaled, *False* otherwise.
+    """
         found = False
         for _, process in self.iter_processes(process=process, category=category):
             process.scale = float(scale)
