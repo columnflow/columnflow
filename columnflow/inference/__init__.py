@@ -312,7 +312,8 @@ class InferenceModel(Derivable):
             ("flow_strategy", (
                 flow_strategy
                 if isinstance(flow_strategy, FlowStrategy)
-                else FlowStrategy[flow_strategy])),
+                else FlowStrategy[flow_strategy]
+            )),
             ("mc_stats", mc_stats),
             ("empty_bin_value", empty_bin_value),
             ("processes", []),
