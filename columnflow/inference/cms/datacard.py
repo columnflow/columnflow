@@ -13,7 +13,9 @@ import law
 
 from columnflow import __version__ as cf_version
 from columnflow.types import Sequence, Any
-from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation
+from columnflow.inference import (
+    InferenceModel, ParameterType, ParameterTransformation, FlowStrategy,
+)
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div
 
 np = maybe_import("np")
@@ -360,19 +362,65 @@ class DatacardWriter(object):
         # create the output file
         out_file = uproot.recreate(shapes_path)
 
+        # helper to handle and apply flow strategy to histogram
+        def handle_flow(cat_obj, h, name):
+            # stop early if flow is ignored altogether
+            if cat_obj.flow_strategy == FlowStrategy.ignore:
+                return
+
+            # get objects and flow contents
+            ax = h.axes[0]
+            view = h.view(flow=True)
+            underflow = (view.value[0], view.variance[0]) if ax.traits.underflow else (0.0, 0.0)
+            overflow = (view.value[-1], view.variance[-1]) if ax.traits.overflow else (0.0, 0.0)
+
+            # nothing to do if flow bins are emoty
+            if not underflow[0] and not overflow[0]:
+                return
+
+            # warn in case of flow content
+            if cat_obj.flow_strategy == FlowStrategy.warn:
+                if underflow[0]:
+                    logger.warning(
+                        f"underflow content detected in category '{cat_obj.name}' for histogram "
+                        f"'{name}' ({underflow[0] / view.value.sum() * 100:.1f}% of integral)",
+                    )
+                if overflow[0]:
+                    logger.warning(
+                        f"overflow content detected in category '{cat_obj.name}' for histogram "
+                        f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral)",
+                    )
+                return
+
+            # here, we can already remove overflow values
+            if underflow[0]:
+                view.value[0] = 0.0
+                view.variance[0] = 0.0
+            if overflow[0]:
+                view.value[-1] = 0.0
+                view.variance[-1] = 0.0
+
+            # finally handle move
+            if cat_obj.flow_strategy == FlowStrategy.move:
+                if underflow[0]:
+                    view.value[1] += underflow[0]
+                    view.variance[1] += underflow[1]
+                if overflow[0]:
+                    view.value[-2] += overflow[0]
+                    view.variance[-2] += overflow[1]
+
+        # helper to fill empty bins in-place
+        def fill_empty(cat_obj, h):
+            if not cat_obj.empty_bin_value:
+                return
+            value = h.view().value
+            mask = value <= 0
+            value[mask] = cat_obj.empty_bin_value
+            h.view().variance[mask] = cat_obj.empty_bin_value
+
         # iterate through shapes
         for cat_name, hists in self.histograms.items():
             cat_obj = self.inference_model_inst.get_category(cat_name)
-
-            # helper to fill empty bins in-place
-            if cat_obj.empty_bin_value:
-                def fill_empty(h):
-                    value = h.view().value
-                    mask = value <= 0
-                    value[mask] = cat_obj.empty_bin_value
-                    h.view().variance[mask] = cat_obj.empty_bin_value
-            else:
-                fill_empty = lambda h: None
 
             _rates = rates[cat_name] = OrderedDict()
             _effects = effects[cat_name] = OrderedDict()
@@ -389,8 +437,9 @@ class DatacardWriter(object):
 
                 # nominal shape
                 h_nom = _hists["nominal"].copy() * scale
-                fill_empty(h_nom)
+                fill_empty(cat_obj, h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
+                handle_flow(cat_obj, h_nom, nom_name)
                 out_file[nom_name] = h_nom
                 _rates[proc_name] = h_nom.sum().value
 
@@ -462,8 +511,8 @@ class DatacardWriter(object):
                             continue
 
                     # empty bins are always filled
-                    fill_empty(h_down)
-                    fill_empty(h_up)
+                    fill_empty(cat_obj, h_down)
+                    fill_empty(cat_obj, h_up)
 
                     # save them when they represent real shapes
                     if param_obj.type.is_shape:
@@ -479,6 +528,8 @@ class DatacardWriter(object):
                             parameter=param_obj.name,
                             direction="Up",
                         )
+                        handle_flow(cat_obj, h_down, down_name)
+                        handle_flow(cat_obj, h_up, up_name)
                         out_file[down_name] = h_down
                         out_file[up_name] = h_up
 
@@ -500,6 +551,7 @@ class DatacardWriter(object):
                 # simply save the data histogram
                 h_data = hists["data"]["nominal"].copy()
                 data_name = data_pattern.format(category=cat_name)
+                handle_flow(cat_obj, h_data, data_name)
                 out_file[data_name] = h_data
                 _rates["data"] = h_data.sum().value
 
