@@ -163,7 +163,7 @@ def plot_2d(
             "loc": "upper right",
         },
         "cms_label_cfg": {
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
         },
         "plot2d_cfg": {
             "norm": cbar_norm,
