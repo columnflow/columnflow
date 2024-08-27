@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# Script that triggers all run_* scripts in this directory with default arguments. By default, the
+# process is terminated if a script returns with a non-zero exit code.
+#
+# Arguments:
+#   1. The mode. When "force", all scripts are executed independenlty of non-zero exit codes of
+#      previous scripts.
+
+action() {
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
+
+    # get arguments
+    local mode="${1}"
+
+    # local and global return codes
+    local ret_global="0"
+    local ret
+
+    # colored echo helper
+    cecho() {
+        local col="${1}"
+        local msg="${2}"
+        echo -e "\x1b[0;49;${col}m${msg}\x1b[0m"
+    }
+
+    # linting
+    cecho 35 "check linting ..."
+    bash "${this_dir}/run_linting"
+    ret="$?"
+    if [ "${ret}" != "0" ]; then
+        >&2 cecho 31 "run_linting failed with exit code ${ret}"
+        [ "${mode}" = "force" ] || return "${ret}"
+        ret_global="1"
+    else
+        cecho 32 "done"
+    fi
+
+    return "${ret_global}"
+}
+action "$@"

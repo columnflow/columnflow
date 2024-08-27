@@ -14,15 +14,23 @@ from collections import OrderedDict
 import law
 import order as od
 import scinum as sn
+from typing import Tuple
 
-from columnflow.util import maybe_import, try_int, try_complex
-from columnflow.types import Iterable, Any, Callable
+from columnflow.util import maybe_import, try_int, try_complex, try_float
+from columnflow.types import Iterable, Any, Callable, Sequence, Union
 
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
+npt = maybe_import("numpy.typing")
+np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
+mpl = maybe_import("matplotlib")
 mplhep = maybe_import("mplhep")
+mticker = maybe_import("matplotlib.ticker")
+
+
+FigAxesType = Tuple[plt.Figure, Union[npt.NDArray[plt.Axes], Sequence[plt.Axes], plt.Axes]]
 
 
 logger = law.logger.get_logger(__name__)
@@ -197,12 +205,12 @@ def apply_process_settings(
         if scale_factor == "stack":
             # compute the scale factor and round
             scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
-        if try_int(scale_factor):
-            scale_factor = int(scale_factor)
+        if try_float(scale_factor):
+            scale_factor = float(scale_factor)
             hists[proc_inst] = h * scale_factor
             proc_inst.label = inject_label(
                 proc_inst.label,
-                rf"$\times${scale_factor}",
+                rf"$\times${scale_factor:.2g}",
                 placeholder="SCALE",
                 before_parentheses=True,
             )
@@ -234,7 +242,6 @@ def apply_variable_settings(
                 rebin_factor = int(rebin_factor)
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
-
         # overflow and underflow bins
         overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
         underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
@@ -388,9 +395,16 @@ def prepare_style_config(
 
     # disable minor ticks based on variable_inst
     if variable_inst.discrete_x:
-        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
-        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
+        # TODO: options for very large ranges, or non-uniform discrete x
+        tx = np.ceil(np.arange(*xlim))
+        style_config["ax_cfg"]["xticks"] = tx
         style_config["ax_cfg"]["minorxticks"] = []
+
+        # add custom bin labels if specified and same amount of x ticks
+        if x_labels := variable_inst.x_labels:
+            if len(x_labels) == len(tx):
+                style_config["ax_cfg"]["xticklabels"] = x_labels
+
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
 
@@ -674,6 +688,186 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     h_down[...] = h_view
 
     return {"nominal": h_nom, "up": h_up, "down": h_down}
+
+
+def fix_cbar_minor_ticks(cbar: mpl.colorbar.Colorbar):
+    if isinstance(cbar.norm, mpl.colors.SymLogNorm):
+        _scale = cbar.ax.yaxis._scale
+        _scale.subs = [2, 3, 4, 5, 6, 7, 8, 9]
+        cbar.ax.yaxis.set_minor_locator(
+            mticker.SymmetricalLogLocator(_scale.get_transform(), subs=_scale.subs),
+        )
+        cbar.ax.yaxis.set_minor_formatter(
+            mticker.LogFormatterSciNotation(_scale.base),
+        )
+
+
+def prepare_plot_config_2d(
+    hists: OrderedDict | dict,
+    shape_norm: bool = False,
+    zscale: str = "linear",
+    # z axis range
+    zlim: tuple | None = None,
+    # how to handle bins with values outside the z range
+    extremes: str = "",
+    # colors to use for marking out-of-bounds values
+    extreme_colors: tuple[str] | None = None,
+    colormap: str = "",
+):
+    # add all processes into 1 histogram
+    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+    if shape_norm:
+        h_sum = h_sum / h_sum.sum().value
+
+    # mask bins without any entries (variance == 0)
+    h_view = h_sum.view()
+    h_view.value[h_view.variance == 0] = np.nan
+
+    # check h_sum value range
+    vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
+    vmin, vmax = [0 if np.isnan(x) else x for x in [vmin, vmax]]
+
+    # default to full z range
+    if zlim is None:
+        zlim = ("min", "max")
+
+    # resolve string specifiers like "min", "max", etc.
+    zlim = tuple(reduce_with(lim, h_sum.values()) for lim in zlim)
+
+    # if requested, hide or clip bins outside specified plot range
+    if extremes == "hide":
+        h_view.value[h_view.value < zlim[0]] = np.nan
+        h_view.value[h_view.value > zlim[1]] = np.nan
+    elif extremes == "clip":
+        h_view.value[h_view.value < zlim[0]] = zlim[0]
+        h_view.value[h_view.value > zlim[1]] = zlim[1]
+
+    # update h_sum values from view
+    h_sum[...] = h_view
+
+    # choose appropriate colorbar normalization
+    # based on scale type and h_sum content
+
+    # log scale (turning linear for low values)
+    if zscale == "log":
+        # use SymLogNorm to correctly handle both positive and negative values
+        cbar_norm = mpl.colors.SymLogNorm(
+            vmin=zlim[0],
+            vmax=zlim[1],
+            # TODO: better heuristics?
+            linscale=1.0,
+            linthresh=max(0.05 * min(abs(zlim[0]), abs(zlim[1])), 1e-3),
+        )
+
+    # linear scale
+    else:
+        cbar_norm = mpl.colors.Normalize(
+            vmin=zlim[0],
+            vmax=zlim[1],
+        )
+
+    # obtain colormap
+    cmap = plt.get_cmap(colormap or "Blues")
+
+    # use dark and light gray to mark extreme values
+    if extremes == "color":
+        # choose light/dark order depending on the
+        # lightness of first/last colormap color
+        if not extreme_colors:
+            extreme_colors = ["#444444", "#bbbbbb"]
+            if sum(cmap(0.0)[:3]) > sum(cmap(1.0)[:3]):
+                extreme_colors = extreme_colors[::-1]
+
+        # copy if colormap with extreme colors set
+        cmap = cmap.with_extremes(
+            under=extreme_colors[0],
+            over=extreme_colors[1],
+        )
+
+    # decide at which ends of the colorbar to draw symbols
+    # indicating that there are values outside the range
+    if extremes == "hide":
+        extend = "neither"
+    elif vmax > zlim[1] and vmin < zlim[0]:
+        extend = "both"
+    elif vmin < zlim[0]:
+        extend = "min"
+    elif vmax > zlim[1]:
+        extend = "max"
+    else:
+        extend = "neither"
+
+    return {
+        "hist": h_sum,
+        "kwargs": {
+            "norm": cbar_norm,
+            "cmap": cmap,
+            "cbar": True,
+            "cbarextend": True,
+            # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
+        },
+        "cbar_kwargs": {
+            "extend": extend,
+        },
+    }
+
+
+def prepare_style_config_2d(
+    config_inst: od.Config,
+    category_inst: od.Category,
+    process_insts: list[od.Process],
+    variable_insts: list[od.Variable],
+    cms_label: str = "",
+) -> dict:
+    # setup style config
+    # TODO: some kind of z-label is still missing
+
+    style_config = {
+        "ax_cfg": {
+            "xticks": {
+                "minor": {"ticks": []} if variable_insts[0].discrete_x else {},
+                "major": {},
+            },
+            "yticks": {
+                "minor": {"ticks": []} if variable_insts[1].discrete_x else {},
+                "major": {},
+            },
+            "xlim": (variable_insts[0].x_min, variable_insts[0].x_max),
+            "ylim": (variable_insts[1].x_min, variable_insts[1].x_max),
+            "xlabel": variable_insts[0].get_full_x_title(),
+            "ylabel": variable_insts[1].get_full_x_title(),
+            "xscale": "log" if variable_insts[0].log_x else "linear",
+            "yscale": "log" if variable_insts[1].log_x else "linear",
+        },
+        "legend_cfg": {
+            "title": "Process" if len(process_insts) == 1 else "Processes",
+            "handles": [mpl.lines.Line2D([0], [0], lw=0) for _ in process_insts],  # dummy handle
+            "labels": [proc_inst.label for proc_inst in process_insts],
+            "ncol": 1,
+            "loc": "upper right",
+        },
+        "annotate_cfg": {
+            "text": category_inst.label,
+            "xy": (0.05, 0.95),
+            "xycoords": "axes fraction",
+            "color": "black",
+            "fontsize": 22,
+            "horizontalalignment": "left",
+            "verticalalignment": "top",
+        },
+    }
+
+    # cms label
+    if cms_label != "skip":
+        style_config["cms_label_cfg"] = {
+            # "ax": ax,  # need to add ax later !!
+            "lumi": 0.001 * config_inst.x.luminosity.get("nominal"),  # pb -> fb
+            "llabel": label_options.get(cms_label, cms_label),
+            "fontsize": 22,
+            "data": False,
+        }
+
+    return style_config
 
 
 def blind_sensitive_bins(
