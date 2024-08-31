@@ -1009,6 +1009,21 @@ class ConfigTask(AnalysisTask):
     )
 
     @classmethod
+    def switch_cspm_defaults(cls, params: dict):
+        # TaskArrayFunctions that should be set via the analysis inst aux values
+        cspm_defaults = ("default_calibrator", "default_selector", "default_producer", "default_ml_model")
+
+        # set defaults to the analysis inst if they are set in the config inst
+        for default in cspm_defaults:
+            if params["config_inst"].has_aux(default) and not params["analysis_inst"].has_aux(default):
+                law.logger.get_logger(cls.task_family).warning(
+                    f"The {default} aux value is set in the config, but not in the analysis. "
+                    "It is recommended to set this value in the analysis instead. The value in the "
+                    f"analysis inst will be set to '{params['config_inst'].x(default)}'.",
+                )
+                params["analysis_inst"].set_aux(default, params["config_inst"].x(default))
+
+    @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
 
@@ -1016,6 +1031,8 @@ class ConfigTask(AnalysisTask):
         if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
 
+            # switch defaults from config to analysis inst
+            cls.switch_cspm_defaults(params)
         return params
 
     @classmethod
