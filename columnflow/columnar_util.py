@@ -1612,10 +1612,15 @@ class ArrayFunction(Derivable):
     ) -> None:
         super().__init__()
 
-        if not hasattr(self, "config_inst") and hasattr(self, "config_insts"):
-            self.config_inst = self.config_insts[0]
-        elif not hasattr(self, "config_inst") and not hasattr(self, "config_insts"):
-            return
+        # NOTE: it might be necessary/advantageous to skip CSP init functions when no config_inst is present
+        # currently this is not needed since all tasks are either a *ConfigTask* or a
+        # *MultiConfigTask* (which sets config_inst = config_insts[0]). However, we should keep
+        # in mind that this might be problematic in the future.
+
+        # if not hasattr(self, "config_inst") and hasattr(self, "config_insts"):
+        #     self.config_inst = self.config_insts[0]
+        # elif not hasattr(self, "config_inst") and not hasattr(self, "config_insts"):
+        #     return
 
         # add class-level attributes as defaults for unset arguments (no_value)
         if call_func == law.no_value:
