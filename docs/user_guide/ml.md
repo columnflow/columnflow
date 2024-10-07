@@ -354,8 +354,8 @@ class MyModel(MLModel):
         # store parameters of interest in the ml_model_inst, e.g. via the parameters attribute
         self.parameters = {
             "batchsize": int(self.parameters.get("batchsize", 1024)),
-            "layers": tuple(int(layer) for layer in self.parameters.get("layers, (64, 64, 64)),
-            "ml_process_weights": ml_process_weights
+            "layers": tuple(int(layer) for layer in self.parameters.get("layers", (64, 64, 64))),
+            "ml_process_weights": ml_process_weights,
         }
 
         # create representation of ml_model_inst
