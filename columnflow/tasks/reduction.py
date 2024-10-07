@@ -21,8 +21,10 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.columnar_util import mandatory_coffea_columns
 
 ak = maybe_import("awkward")
+pq = maybe_import("pyarrow.parquet")
 
 
 # default parameters
@@ -485,9 +487,32 @@ class MergeReducedEvents(
 
     def merge(self, inputs, output):
         inputs = [inp["events"] for inp in inputs]
-        law.pyarrow.merge_parquet_task(
-            self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
-        )
+        with law.localize_file_targets(
+            inputs, cache=False, mode="r",
+        ) as localized_inputs:
+
+            metadata = [pq.read_metadata(inp.abspath) for inp in localized_inputs]
+
+            # empty nano files are not considered for merging
+            empty_nano = lambda meta: (meta.num_rows == 0) & (meta.num_columns <= len(mandatory_coffea_columns))
+
+            # check if the number of columns is consistent
+            unique_num_fields = set(meta.num_columns for meta in metadata if not empty_nano(meta))
+            if len(unique_num_fields) > 1:
+                raise Exception(
+                    "cannot merge input files with inconsistent number of columns; found files with "
+                    f"the following number of columns: {', '.join(map(str, unique_num_fields))}",
+                )
+
+            # remove empty nano input files
+            cleaned_inputs = [inp for inp, meta in zip(localized_inputs, metadata) if not empty_nano(meta)]
+
+            # merge the input files
+            with output["events"].localize(cache=False, mode="w") as local_output:
+                law.pyarrow.merge_parquet_task(
+                    self, cleaned_inputs, local_output, writer_opts=self.get_parquet_writer_opts(),
+                    local=True,
+                )
 
         # optionally remove initial inputs
         if not self.keep_reduced_events and self.is_leaf():
