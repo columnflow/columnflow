@@ -396,14 +396,15 @@ def prepare_style_config(
     # disable minor ticks based on variable_inst
     if variable_inst.discrete_x:
         # TODO: options for very large ranges, or non-uniform discrete x
-        tx = np.ceil(np.arange(*xlim, variable_inst.n_bins // 10 + 1))
-        style_config["ax_cfg"]["xticks"] = tx
+        tx = np.array(variable_inst.bin_edges)
+        tx = (tx[1:] + tx[:-1]) / 2
+        style_config["ax_cfg"]["xticks"] = tx[::len(tx) // 10]
         style_config["ax_cfg"]["minorxticks"] = []
 
         # add custom bin labels if specified and same amount of x ticks
         if x_labels := variable_inst.x_labels:
             if len(x_labels) == len(tx):
-                style_config["ax_cfg"]["xticklabels"] = x_labels
+                style_config["ax_cfg"]["xticklabels"] = x_labels[::len(tx) // 10]
 
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
