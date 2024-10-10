@@ -11,7 +11,9 @@ action() {
     # set variables and source the generic venv setup
     export CF_SANDBOX_FILE="${CF_SANDBOX_FILE:-${this_file}}"
     export CF_VENV_NAME="$( basename "${this_file%.sh}" )"
-    export CF_VENV_REQUIREMENTS="${this_dir}/columnar.txt,${this_dir}/dev.txt"
+    export CF_VENV_REQUIREMENTS="${CF_REQ_OUTPUT_DIR}/requirements_columnar_dev.txt"
+    export CF_VENV_ADDITIONAL_REQUIREMENTS=""
+    export CF_VENV_EXTRAS="columnar,dev"
 
     source "${this_dir}/_setup_venv.sh" "$@"
 }
