@@ -227,7 +227,6 @@ class CreateCutflowHistograms(
 
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
-
             # add normalization weight
             if self.dataset_inst.is_mc:
                 events = self.norm_weight_producer(events)

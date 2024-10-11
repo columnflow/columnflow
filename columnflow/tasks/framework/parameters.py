@@ -24,7 +24,7 @@ user_parameter_inst = luigi.Parameter(
 _default_last_bin_edge_inclusive = law.config.get_expanded_bool(
     "analysis",
     "default_histogram_last_edge_inclusive",
-    None,
+    False,
 )
 last_edge_inclusive_inst = law.OptionalBoolParameter(
     default=_default_last_bin_edge_inclusive,
