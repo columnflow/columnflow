@@ -142,10 +142,12 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
 
+        broken_files = dataset_inst[shift_inst.name].get_aux("broken_files", [])
+
         return [
             line.strip()
             for line in out.strip().split("\n")
-            if line.strip().endswith(".root")
+            if line.strip().endswith(".root") and line.strip() not in broken_files
         ]
 
     def iter_nano_files(
