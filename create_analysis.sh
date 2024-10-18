@@ -17,7 +17,7 @@ create_analysis() {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local exec_dir="$( pwd )"
-    local fetch_cf_branch="main"
+    local fetch_cf_branch="master"
     local fetch_cmsdb_branch="master"
     local verbose="${CF_CREATE_ANALYSIS_VERBOSE:-false}"
     local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
