@@ -144,7 +144,7 @@ class ProduceColumns(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

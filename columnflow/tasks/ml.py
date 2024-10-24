@@ -204,7 +204,7 @@ class PrepareMLEvents(
             mode="r",
         ) as inps:
             for (events, *columns), pos in self.iter_chunked_io(
-                [inp.path for inp in inps],
+                [inp.abspath for inp in inps],
                 source_type=len(files) * ["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=(len(files) + len(reader_targets)) * [read_columns],
             ):
@@ -253,7 +253,7 @@ class PrepareMLEvents(
                     # save as parquet via a thread in the same pool
                     chunk = tmp_dir.child(f"file_{f}_{pos.index}.parquet", type="f")
                     output_chunks[f][pos.index] = chunk
-                    self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.path))
+                    self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.abspath))
 
             # merge output files of all folds
             for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
@@ -778,7 +778,7 @@ class MLEvaluation(
             mode="r",
         ) as inps:
             for (events, *columns), pos in self.iter_chunked_io(
-                [inp.path for inp in inps],
+                [inp.abspath for inp in inps],
                 source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
             ):
@@ -828,7 +828,7 @@ class MLEvaluation(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
@@ -1033,7 +1033,7 @@ class PlotMLResultsBase(
                     "which is not implemented yet.",
                 )
 
-            events = ak.from_parquet(inp["mlcolumns"].path)
+            events = ak.from_parquet(inp["mlcolumns"].abspath)
 
             # masking with leaf categories
             category_mask = False
