@@ -236,8 +236,7 @@ def default(
     results.event = (results.event &
                      results.steps.Trigger &
                      results.steps.Lepton &
-                     results.steps.Jet &
-                     results.steps.Bjet)
+                     results.steps.Jet)
 
     # add cutflow features, passing per-object masks
     events, results = self[post_selection](events, results, stats, **kwargs)
