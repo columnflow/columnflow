@@ -160,7 +160,7 @@ class CreateCutflowHistograms(
                     histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
-            inputs["selection"]["masks"].path,
+            inputs["selection"]["masks"].abspath,
             source_type="awkward_parquet",
             read_columns=load_columns,
         ):

@@ -887,7 +887,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 else law.MirroredDirectoryTarget
             )
             return mirrored_target_cls(
-                path=local_target.path,
+                path=local_target.abspath,
                 remote_target=wlcg_target,
                 local_target=local_target,
             )
@@ -1390,7 +1390,7 @@ class CommandTask(AnalysisTask):
         if "cwd" not in kwargs and self.run_command_in_tmp:
             tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
             tmp_dir.touch()
-            kwargs["cwd"] = tmp_dir.path
+            kwargs["cwd"] = tmp_dir.abspath
         self.publish_message("cwd: {}".format(kwargs.get("cwd", os.getcwd())))
 
         # call it

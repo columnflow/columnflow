@@ -426,7 +426,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # helper function to fetch generic files
         def fetch_file(src, counter=[0]):
-            dst = os.path.join(tmp_dir.path, self.create_unique_basename(src))
+            dst = os.path.join(tmp_dir.abspath, self.create_unique_basename(src))
             src = src[0] if isinstance(src, tuple) else src
             if src.startswith(("http://", "https://")):
                 # download via wget
