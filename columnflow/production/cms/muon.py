@@ -6,12 +6,28 @@ Muon related event weights.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
+
+@dataclass
+class MuonSFConfig:
+    correction: str
+    campaign: str
+
+    @classmethod
+    def new(
+        cls,
+        obj: MuonSFConfig | tuple[str, str],
+    ) -> MuonSFConfig:
+        # purely for backwards compatibility with the old tuple format
+        return obj if isinstance(obj, cls) else cls(*obj)
 
 
 @producer(
@@ -24,7 +40,7 @@ ak = maybe_import("awkward")
     # function to determine the correction file
     get_muon_file=(lambda self, external_files: external_files.muon_sf),
     # function to determine the muon weight config
-    get_muon_config=(lambda self: self.config_inst.x.muon_sf_names),
+    get_muon_config=(lambda self: MuonSFConfig.new(self.config_inst.x.muon_sf_names)),
     weight_name="muon_weight",
     supported_versions=(1, 2),
 )
@@ -52,7 +68,10 @@ def muon_weights(
 
     .. code-block:: python
 
-        cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", "2017_UL")
+        cfg.x.muon_sf_names = MuonSFConfig(
+            correction="NUM_TightRelIso_DEN_TightIDandIPCut",
+            campaign="2017_UL",
+        )
 
     *get_muon_config* can be adapted in a subclass in case it is stored differently in the config.
 
@@ -64,7 +83,7 @@ def muon_weights(
     pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
 
     variable_map = {
-        "year": self.year,
+        "year": self.muon_config.campaign,
         "abseta": abs_eta,
         "eta": abs_eta,
         "pt": pt,
@@ -121,8 +140,8 @@ def muon_weights_setup(
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name, self.year = self.get_muon_config()
-    self.muon_sf_corrector = correction_set[corrector_name]
+    self.muon_config: MuonSFConfig = self.get_muon_config()
+    self.muon_sf_corrector = correction_set[self.muon_config.correction]
 
     # check versions
     if self.supported_versions and self.muon_sf_corrector.version not in self.supported_versions:
