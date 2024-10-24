@@ -133,7 +133,10 @@ setup_columnflow() {
     #   PYTHONPATH
     #       Ammended PYTHONPATH variable.
     #   PYTHONWARNINGS
-    #       Set to "ignore".
+    #       Set to "ignore" when not defined already.
+    #   PYTHONNOUSERSITE
+    #       Set to "1" when not defined alreedy, to prevent python from loading packages from e.g.
+    #       "$HOME/.local", which can lead to encapsulation and debugging issues.
     #   GLOBUS_THREAD_MODEL
     #       Set to "none".
     #   VIRTUAL_ENV_DISABLE_PROMPT
@@ -591,6 +594,7 @@ cf_setup_software_stack() {
     export MAMBA_ROOT_PREFIX="${CF_CONDA_BASE}"
     export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
     export PYTHONWARNINGS="${PYTHONWARNINGS:-ignore}"
+    export PYTHONNOUSERSITE="${PYTHONNOUSERSITE:-1}"
     export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
     export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
     export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
