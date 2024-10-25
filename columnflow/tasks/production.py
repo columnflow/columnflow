@@ -110,7 +110,7 @@ class ProduceColumns(
         ) as inps:
             # iterate over chunks of events and diffs
             for (events, *cols), pos in self.iter_chunked_io(
-                [inp.path for inp in inps],
+                [inp.abspath for inp in inps],
                 source_type=["awkward_parquet"] + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_ext),
                 chunk_size=self.producer_inst.get_min_chunk_size(),
