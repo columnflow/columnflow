@@ -68,12 +68,12 @@ def get_new_colors(original_color, n_new_colors=2):
     hls = colorsys.rgb_to_hls(*original_color)
 
     # space new saturation values equally between 0.2 and 0.8
-    new_sat = np.linspace(min(hls[2], 0.2), 1.0, n_new_colors)[::-1]
+    new_sat = np.linspace(min(hls[2], 0.1), 1.0, n_new_colors)[::-1]
 
     return [change_saturation(hls, sat) for sat in new_sat]
     
 
-def unroll_hists(hists, split_processes, gen_variable):
+def unroll_hists(hists, split_processes, gen_variable, density):
     unrolled_hists = []
     first = True
     for process in hists:
@@ -125,6 +125,8 @@ def unroll_hists(hists, split_processes, gen_variable):
                 sliced_hist = split_hist[:, iaux]
                 sliced_hist.name = split_hist.axes[0].name
                 sliced_hist.label = split_hist.axes[0].label
+                if density:
+                    sliced_hist /= sliced_hist.axes[0].widths
                 unrolled_hists[iaux][sub_process] = sliced_hist
         
     return unrolled_hists
@@ -158,9 +160,9 @@ def plot_unrolled_3d(
 
     hists = apply_process_settings(hists, process_settings)
 
-    hists = apply_density_to_hists(hists, density)
+    hists = unroll_hists(hists, split_processes, z_variable_inst, density)
 
-    hists = unroll_hists(hists, split_processes, z_variable_inst)
+    #hists = apply_density_to_hists(hists, density)
 
     # set up style config
     default_style_config = prepare_style_config(
@@ -177,7 +179,13 @@ def plot_unrolled_3d(
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)
-    
+
+    # get some general settings from the reco variable
+    discrete_x = x_variable_inst.discrete_x
+    x_labels = x_variable_inst.x_labels
+    log_y = x_variable_inst.log_y
+    unit = x_variable_inst.unit
+
     # create (2, n_aux) canvas
     figsize=(16,10)
     if not skip_ratio:
@@ -190,6 +198,8 @@ def plot_unrolled_3d(
                     gridspec_kw=dict(wspace=0),
                     sharey="row")
         x = (axes, )
+    if y_variable_inst.n_bins == 1:
+        axes = [axes]
 
     for i, hist in enumerate(hists):
         ax = axes[i]
@@ -202,6 +212,13 @@ def plot_unrolled_3d(
 
         if shape_norm:
             style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
+
+        if density:
+            if unit:
+                ylabel = f"Entries / {unit}"
+            else:
+                ylabel = "Entries / unit"
+            style_config["ax_cfg"]["ylabel"] = ylabel
 
         for key, cfg in plot_config.items():
             if "method" not in cfg:
@@ -220,8 +237,8 @@ def plot_unrolled_3d(
                 plot_methods[method](raxes[i], h, **rkw)
         
     # some options to be used below
-    magnitudes = kwargs.get("magnitudes", 4)
-    whitespace_fraction = kwargs.get("whitespace_fraction", 0.2)
+    magnitudes = kwargs.get("magnitudes", 3)
+    whitespace_fraction = kwargs.get("whitespace_fraction", 0.15)
     skip_legend = kwargs.get("skip_legend", False)
     cms_label = kwargs.get("cms_label", "wip")
 
@@ -231,21 +248,30 @@ def plot_unrolled_3d(
         "xlabel": "variable",
         "yscale": "linear",
     }
-    
-    log_y = style_config.get("ax_cfg", {}).get("yscale", "linear") == "log"
-    
+
+ 
     ax_ymin = ax.get_ylim()[1] / 10**magnitudes if log_y else 0.0000001
     ax_ymax = get_position(ax_ymin, ax.get_ylim()[1], 
                 factor=1 / (1 - whitespace_fraction),
                 logscale=log_y)
     ax_kwargs.update({"ylim": (ax_ymin, ax_ymax)})
 
+    if x_labels:
+        edges = x_variable_inst.bin_edges
+        tx = (np.array(edges[1:]) + np.array(edges[:-1]))/2.
+        style_config["ax_cfg"]["xticks"] = tx
+        if len(x_labels) == len(tx):
+            style_config["ax_cfg"]["xticklabels"] = x_labels
+
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
+    if log_y: ax_kwargs["yscale"] = "log"
 
     # ax configs that can not be handled by ax.set
     minorxticks = ax_kwargs.pop("minorxticks", None)
     minoryticks = ax_kwargs.pop("minoryticks", None)
+    if discrete_x:
+        minorxticks = []
 
     for ax in axes:
         this_kwargs = ax_kwargs.copy()
@@ -258,6 +284,8 @@ def plot_unrolled_3d(
         if not ax == axes[0]:
             this_kwargs["ylabel"] = None
 
+        print(this_kwargs)
+        print(this_kwargs["yscale"])
         ax.set(**this_kwargs)
 
         if minorxticks is not None:
@@ -308,7 +336,41 @@ def plot_unrolled_3d(
         legend_kwargs["fontsize"] = 20
     
         # retreive legend handles and labels from last upper plot
-        handles, labels = axes[-1].get_legend_handles_labels()
+        handles_all, labels_all = axes[-1].get_legend_handles_labels()
+        handles, labels = [], []
+        current_label = []
+        current_handle = []
+        proc = None
+        for i, (lab, han) in enumerate(zip(labels_all, handles_all)):
+            if "[" in lab and "]" in lab:
+                base = lab.split("[")[0]
+                next_label = None
+                if not (han == handles[-1]):
+                    next_label = labels_all[i+1]
+
+                if (proc is None) or (base == proc):
+                    current_label.append(lab)
+                    current_handle.append(han)
+                    proc = base
+
+                if (next_label is None) or not (base in next_label):
+                    handles.append(current_handle[0])
+                    labels.append(current_label[0])
+                    if len(current_handle) > 2:
+                        mid = int(len(current_handle)/2)
+                        handles.append(current_handle[mid])
+                        labels.append("...")
+                    if len(current_handle) > 1:
+                        handles.append(current_handle[-1])
+                        labels.append(current_label[-1])
+                    current_handle = []
+                    current_label = []
+                    proc = None
+            else:
+                proc = None
+                current_label, current_handle = [], []
+                handles.append(han)
+                labels.append(lab)
         
         # assime all `StepPatch` objects are part of MC stack
         in_stack = [
