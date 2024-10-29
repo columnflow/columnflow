@@ -13,7 +13,7 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import (
-    Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory,
+    Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory, RESOLVE_DEFAULT,
 )
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin, MergeHistogramMixin,
@@ -21,8 +21,9 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
 )
-from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import view_output_plots
+from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import SelectEvents
 from columnflow.tasks.calibration import CalibrateEvents
@@ -41,6 +42,17 @@ class CreateCutflowHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    # overwrite selector steps to use default resolution
+    selector_steps = law.CSVParameter(
+        default=(RESOLVE_DEFAULT,),
+        description="a subset of steps of the selector to apply; uses all steps when empty; "
+                    f"Set to {SelectorStepsMixin.selector_steps_all[0]} to apply all alphabetically."
+                    "default: value of config.x.default_selector_steps",
+        brace_expand=True,
+        parse_empty=True,
+    )
+    last_edge_inclusive = last_edge_inclusive_inst
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     selector_steps_order_sensitive = True
@@ -167,7 +179,6 @@ class CreateCutflowHistograms(
 
         # prepare columns to load
         load_columns = read_columns | set(mandatory_coffea_columns)
-        load_nano_columns = {("events" + route) for route in read_columns} | set(mandatory_coffea_columns)
         load_sel_columns = {Route("steps.*")}
 
         # prepare histograms
@@ -211,18 +222,17 @@ class CreateCutflowHistograms(
         for (events, sel, *diffs), pos in self.iter_chunked_io(
             input_paths,
             source_type=["coffea_root"] + (len(input_paths) - 1) * ["awkward_parquet"],
-            read_columns=[load_nano_columns, load_sel_columns] + (len(input_paths) - 2) * [load_columns],
+            read_columns=[load_columns, load_sel_columns] + (len(input_paths) - 2) * [load_columns],
         ):
 
             # add the calibrated diffs and potentially new columns
             events = update_ak_array(events, *diffs)
-
             # add normalization weight
             if self.dataset_inst.is_mc:
                 events = self.norm_weight_producer(events)
 
             # overwrite steps if not defined yet
-            if steps == self.selector_steps_default:
+            if steps == self.selector_steps_all:
                 steps = sel.steps.fields
 
             # prepare histograms and exprepssions once
@@ -261,8 +271,12 @@ class CreateCutflowHistograms(
 
                 # fill the raw point
                 fill_data = get_point()
-                fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": self.initial_step})
-
+                fill_hist(
+                    histograms[var_key],
+                    fill_data,
+                    fill_kwargs={"step": self.initial_step},
+                    last_edge_inclusive=self.last_edge_inclusive,
+                )
                 # fill all other steps
                 mask = True
                 for step in steps:
@@ -274,7 +288,12 @@ class CreateCutflowHistograms(
 
                     mask = mask & sel.steps[step]
                     fill_data = get_point(mask)
-                    fill_hist(histograms[var_key], fill_data, fill_kwargs={"step": step})
+                    fill_hist(
+                        histograms[var_key],
+                        fill_data,
+                        fill_kwargs={"step": step},
+                        last_edge_inclusive=self.last_edge_inclusive,
+                    )
 
         # dump the histograms
         self.output()["hists"].dump(histograms, formatter="pickle")
@@ -321,6 +340,8 @@ class PlotCutflowBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    selector_steps = CreateCutflowHistograms.selector_steps
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     exclude_index = True

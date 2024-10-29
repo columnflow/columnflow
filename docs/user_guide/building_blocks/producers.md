@@ -31,7 +31,7 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
-# maybe import awkward in case this Produser is actually run, this needs to be set as columnflow
+# maybe import awkward in case this Producer is actually run, this needs to be set as columnflow
 # would else give an error during setup, as these packages are not in the default sandbox
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -66,7 +66,7 @@ from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
-# maybe import awkward in case this Produser is actually run, this needs to be set as columnflow
+# maybe import awkward in case this Producer is actually run, this needs to be set as columnflow
 # would else give an error during setup, as these packages are not in the default sandbox
 np = maybe_import("numpy")
 ak = maybe_import("awkward")

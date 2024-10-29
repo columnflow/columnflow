@@ -6,7 +6,7 @@ Task to produce and merge histograms.
 
 from __future__ import annotations
 
-# import luigi
+import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
@@ -15,6 +15,7 @@ from columnflow.tasks.framework.mixins import (
     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, MergeHistogramMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
@@ -31,6 +32,8 @@ class CreateHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    last_edge_inclusive = last_edge_inclusive_inst
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -48,7 +51,8 @@ class CreateHistograms(
     # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
 
-    # register shifts found in the chosen weight producer to this task
+    # register sandbox and shifts found in the chosen weight producer to this task
+    register_weight_producer_sandbox = True
     register_weight_producer_shifts = True
 
     @law.util.classproperty
@@ -75,7 +79,7 @@ class CreateHistograms(
                 ]
 
             # add weight_producer dependent requirements
-            reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+            reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
 
         return reqs
 
@@ -95,7 +99,7 @@ class CreateHistograms(
             ]
 
         # add weight_producer dependent requirements
-        reqs["weight_producer"] = self.weight_producer_inst.run_requires()
+        reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
 
         return reqs
 
@@ -116,15 +120,15 @@ class CreateHistograms(
             Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
         )
 
-        # prepare inputs and outputs
-        reqs = self.requires()
+        # prepare inputs
         inputs = self.input()
 
         # declare output: dict of histograms
         histograms = {}
 
         # run the weight_producer setup
-        reader_targets = self.weight_producer_inst.run_setup(reqs["weight_producer"], inputs["weight_producer"])
+        producer_reqs = self.weight_producer_inst.run_requires()
+        reader_targets = self.weight_producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -171,6 +175,7 @@ class CreateHistograms(
                 [inp.path for inp in inps],
                 source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
+                chunk_size=self.weight_producer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
@@ -188,7 +193,7 @@ class CreateHistograms(
                 )
 
                 # build the full event weight
-                if not self.weight_producer_inst.skip_func():
+                if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
                     events, weight = self.weight_producer_inst(events)
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
@@ -242,7 +247,11 @@ class CreateHistograms(
                         fill_data[variable_inst.name] = expr(events)
 
                     # fill it
-                    fill_hist(histograms[var_key], fill_data)
+                    fill_hist(
+                        histograms[var_key],
+                        fill_data,
+                        last_edge_inclusive=self.last_edge_inclusive,
+                    )
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")

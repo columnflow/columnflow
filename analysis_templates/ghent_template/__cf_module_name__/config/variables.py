@@ -41,3 +41,11 @@ def add_variables(config: od.Config) -> None:
         x_title="Number of jets",
         discrete_x=True,
     )
+    config.add_variable(
+        "genTop_pt",
+        expression="genTop.pt[:,0]",
+        null_value=EMPTY_FLOAT,
+        binning=(50, 0, 300),
+        x_title="Gen-level Top pT",
+        unit="GeV",
+    )

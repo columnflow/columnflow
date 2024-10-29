@@ -14,7 +14,6 @@ from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetT
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
     SelectorMixin,
-    ProducerMixin,
     ProducersMixin,
     MLModelDataMixin,
     MLModelTrainingMixin,
@@ -88,12 +87,15 @@ class PrepareMLEvents(
             # set producer inst to None when no producer is requested
             self._preparation_producer_inst = None
             return self._preparation_producer_inst
-
-        self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+        self._preparation_producer_inst = self.get_producer_insts([producer], {"task": self})[0]
 
         # overwrite the sandbox when set
-        if self._preparation_producer_inst.sandbox:
-            self.sandbox = self._preparation_producer_inst.sandbox
+        sandbox = self._preparation_producer_inst.get_sandbox()
+        if sandbox:
+            self.sandbox = sandbox
+            # rebuild the sandbox inst when already initialized
+            if self._sandbox_initialized:
+                self._initialize_sandbox(force=True)
 
         return self._preparation_producer_inst
 
@@ -639,7 +641,7 @@ class MLEvaluation(
             self._preparation_producer_inst = None
             return self._preparation_producer_inst
 
-        self._preparation_producer_inst = ProducerMixin.get_producer_inst(producer, {"task": self})
+        self._preparation_producer_inst = self.get_producer_insts([producer], {"task": self})[0]
 
         # check that preparation_producer does not clash with ml_model_inst sandbox
         if (
@@ -1167,6 +1169,6 @@ class PlotMLResults(PlotMLResultsBase):
 
                 for index, f in enumerate(figs):
                     f.savefig(
-                        file_path.abs_dirname + "/" + file_path.basename.replace("0", str(index)),
+                        file_path.absdirname + "/" + file_path.basename.replace("0", str(index)),
                         format=file_path.ext(),
                     )

@@ -310,6 +310,8 @@ class RemoteWorkflowMixin(object):
     def add_bundle_requirements(
         self,
         reqs: dict[str, AnalysisTask],
+        *,
+        share_software: bool,
     ) -> None:
         """
         Adds requirements related to bundles of the repository, conda environment, bash and cmssw
@@ -319,15 +321,15 @@ class RemoteWorkflowMixin(object):
         """
         # add the repository bundle and trigger the checksum calculation
         if getattr(self, "bundle_repo_req", None) is not None:
-            reqs["repo"] = self.bundle_repo_req
+            reqs["repo_bundle"] = self.bundle_repo_req
         elif "BundleRepo" in self.reqs:
-            reqs["repo"] = self.reqs.BundleRepo.req(self)
-        if "repo" in reqs:
+            reqs["repo_bundle"] = self.reqs.BundleRepo.req(self)
+        if "repo_bundle" in reqs:
             self.bundle_repo_req.checksum
 
         # main software stack
-        if "BundleSoftware" in self.reqs:
-            reqs["software"] = self.reqs.BundleSoftware.req(self)
+        if not share_software and "BundleSoftware" in self.reqs:
+            reqs["software_bundle"] = self.reqs.BundleSoftware.req(self)
 
         # get names of bash and cmssw sandboxes
         bash_sandboxes = set()
@@ -343,19 +345,30 @@ class RemoteWorkflowMixin(object):
         bash_sandboxes = {law.Sandbox.remove_type(s) for s in bash_sandboxes}
         cmssw_sandboxes = {law.Sandbox.remove_type(s) for s in cmssw_sandboxes}
 
-        # bash-based sandboxes
-        if bash_sandboxes and "BundleBashSandbox" in self.reqs:
-            reqs["bash_sandboxes"] = [
-                self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in sorted(bash_sandboxes)
-            ]
-
-        # optional cmssw sandboxes
-        if cmssw_sandboxes and "BundleCMSSWSandbox" in self.reqs:
-            reqs["cmssw_sandboxes"] = [
-                self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in sorted(cmssw_sandboxes)
-            ]
+        # build sandboxes when sharing software, otherwise require bundles
+        if share_software:
+            if "BuildBashSandbox" in self.reqs:
+                if bash_sandboxes:
+                    reqs["bash_sandbox_builds"] = [
+                        self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                        for sandbox_file in sorted(bash_sandboxes)
+                    ]
+                if cmssw_sandboxes:
+                    reqs["cmssw_sandbox_builds"] = [
+                        self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
+                        for sandbox_file in sorted(cmssw_sandboxes)
+                    ]
+        else:
+            if "BundleBashSandbox" in self.reqs and bash_sandboxes:
+                reqs["bash_sandbox_bundles"] = [
+                    self.reqs.BundleBashSandbox.req(self, sandbox_file=sandbox_file)
+                    for sandbox_file in sorted(bash_sandboxes)
+                ]
+            if "BundleCMSSWSandbox" in self.reqs and cmssw_sandboxes:
+                reqs["cmssw_sandbox_bundles"] = [
+                    self.reqs.BundleCMSSWSandbox.req(self, sandbox_file=sandbox_file)
+                    for sandbox_file in sorted(cmssw_sandboxes)
+                ]
 
     def add_bundle_render_variables(
         self,
@@ -378,34 +391,34 @@ class RemoteWorkflowMixin(object):
             return ",".join(uris), pattern
 
         # add repo variables
-        if "repo" in reqs:
-            uris, pattern = get_bundle_info(reqs["repo"])
+        if "repo_bundle" in reqs:
+            uris, pattern = get_bundle_info(reqs["repo_bundle"])
             config.render_variables["cf_repo_uris"] = uris
             config.render_variables["cf_repo_pattern"] = pattern
 
         # add software variables
-        if "software" in reqs:
-            uris, pattern = get_bundle_info(reqs["software"])
+        if "software_bundle" in reqs:
+            uris, pattern = get_bundle_info(reqs["software_bundle"])
             config.render_variables["cf_software_uris"] = uris
             config.render_variables["cf_software_pattern"] = pattern
 
         # add bash sandbox variables
-        if "bash_sandboxes" in reqs:
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandboxes"]])
+        if "bash_sandbox_bundles" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["bash_sandbox_bundles"]])
             names = [
                 os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["bash_sandboxes"]
+                for t in reqs["bash_sandbox_bundles"]
             ]
             config.render_variables["cf_bash_sandbox_uris"] = join_bash(uris)
             config.render_variables["cf_bash_sandbox_patterns"] = join_bash(patterns)
             config.render_variables["cf_bash_sandbox_names"] = join_bash(names)
 
         # add cmssw sandbox variables
-        if "cmssw_sandboxes" in reqs:
-            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandboxes"]])
+        if "cmssw_sandbox_bundles" in reqs:
+            uris, patterns = law.util.unzip([get_bundle_info(t) for t in reqs["cmssw_sandbox_bundles"]])
             names = [
                 os.path.splitext(os.path.basename(t.sandbox_file))[0]
-                for t in reqs["cmssw_sandboxes"]
+                for t in reqs["cmssw_sandbox_bundles"]
             ]
             config.render_variables["cf_cmssw_sandbox_uris"] = join_bash(uris)
             config.render_variables["cf_cmssw_sandbox_patterns"] = join_bash(patterns)
@@ -542,10 +555,13 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
-        choices=("naf", "cern", "cern_el7", "cern_el8", "cern_el9", law.NO_STR),
+        choices=(
+            "naf", "naf_el7", "naf_el9", "cern", "cern_el7", "cern_el8", "cern_el9", law.NO_STR,
+        ),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
-        f"naf,cern,cern_el7,cern_el8,cern_el9,NO_STR; default: '{_default_htcondor_flavor}'",
+        "naf,naf_el7,naf_el9,cern,cern_el7,cern_el8,cern_el9,NO_STR; "
+        f"default: '{_default_htcondor_flavor}'",
     )
     htcondor_share_software = luigi.BoolParameter(
         default=_default_htcondor_share_software,
@@ -588,8 +604,8 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
-        # add requirements dealing with software bundling
-        self.add_bundle_requirements(reqs)
+        # add requirements dealing with sandbox/software building and bundling
+        self.add_bundle_requirements(reqs, share_software=self.htcondor_share_software)
 
         return reqs
 
@@ -626,14 +642,25 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # some htcondor setups require a "log" config, but we can safely use /dev/null by default
         config.log = "log.txt" if self.htcondor_logs else "/dev/null"
 
-        # at CERN, select the correct env https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
+        # default lcg setup file
+        remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
+
+        # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
-            cern_os = {"cern_el7": "el7", "cern_el8": "el8"}.get(self.htcondor_flavor, "el9")
+            cern_os = "el9"
+            if self.htcondor_flavor == "cern_el7":
+                cern_os = "el7"
+                remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el7")
+            elif self.htcondor_flavor == "cern_el8":
+                cern_os = "el8"
             config.custom_content.append(("MY.WantOS", cern_os))
 
-        # use cc7 on naf (https://confluence.desy.de/display/IS/BIRD)
-        if self.htcondor_flavor == "naf":
-            config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
+        # NAF settings (https://confluence.desy.de/display/IS/BIRD)
+        if self.htcondor_flavor.startswith("naf"):
+            if self.htcondor_flavor == "naf_el7":
+                config.custom_content.append(("requirements", "(OpSysAndVer == \"CentOS7\")"))
+            else:
+                config.custom_content.append(("Request_OpSysAndVer", "\"RedHat9\""))
 
         # maximum runtime, compatible with multiple batch systems
         if self.max_runtime is not None and self.max_runtime > 0:
@@ -661,7 +688,13 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
             config.render_variables["cf_htcondor_flavor"] = self.htcondor_flavor
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
-        config.render_variables.setdefault("cf_remote_lcg_setup", law.config.get_expanded("job", "remote_lcg_setup"))
+        config.render_variables.setdefault("cf_remote_lcg_setup", remote_lcg_setup)
+        config.render_variables.setdefault(
+            "cf_remote_lcg_setup_force",
+            "1" if law.config.get_expanded_bool("job", "remote_lcg_setup_force") else "",
+        )
+        if self.htcondor_share_software:
+            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():
@@ -729,28 +762,8 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
     def slurm_workflow_requires(self):
         reqs = law.slurm.SlurmWorkflow.slurm_workflow_requires(self)
 
-        # get names of pure bash and cmssw sandboxes
-        bash_sandboxes = None
-        cmssw_sandboxes = None
-        if getattr(self, "analysis_inst", None):
-            bash_sandboxes = self.analysis_inst.x("bash_sandboxes", [])
-            cmssw_sandboxes = self.analysis_inst.x("cmssw_sandboxes", [])
-        if getattr(self, "config_inst", None):
-            bash_sandboxes = self.config_inst.x("bash_sandboxes", bash_sandboxes)
-            cmssw_sandboxes = self.config_inst.x("cmssw_sandboxes", cmssw_sandboxes)
-
-        # bash-based sandboxes
-        reqs["bash_sandboxes"] = [
-            self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
-            for sandbox_file in bash_sandboxes
-        ]
-
-        # optional cmssw sandboxes
-        if cmssw_sandboxes:
-            reqs["cmssw_sandboxes"] = [
-                self.reqs.BuildBashSandbox.req(self, sandbox_file=sandbox_file)
-                for sandbox_file in cmssw_sandboxes
-            ]
+        # add requirements dealing with sandbox/software building and bundling
+        self.add_bundle_requirements(reqs, share_software=True)
 
         return reqs
 
@@ -800,13 +813,8 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
-
-        # custom tmp dir since slurm uses the job submission dir as the main job directory, and law
-        # puts the tmp directory in this job directory which might become quite long; then,
-        # python's default multiprocessing puts socket files into that tmp directory which comes
-        # with the restriction of less then 80 characters that would be violated, and potentially
-        # would also overwhelm the submission directory
-        config.render_variables["law_job_tmp"] = "/tmp/law_$( basename \"$LAW_JOB_HOME\" )"
+        if self.slurm_flavor not in ("", law.NO_STR):
+            config.render_variables["cf_slurm_flavor"] = self.slurm_flavor
 
         # forward env variables
         for ev, rv in self.slurm_forward_env_variables.items():

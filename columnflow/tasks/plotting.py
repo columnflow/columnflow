@@ -145,8 +145,8 @@ class PlotVariablesBase(
                     "  - selected --processes did not match any value on the process axis of the input histogram",
                 )
 
-            # update histograms using a custom hook
-            hists = self.invoke_hist_hook(hists)
+            # update histograms using custom hooks
+            hists = self.invoke_hist_hooks(hists)
 
             # add new processes to the end of the list
             for process_inst in hists:
@@ -210,6 +210,15 @@ class PlotVariablesBaseSingleShift(
             for cat_name in sorted(self.categories)
         ]
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        # no need to require merged histograms since each branch already requires them as a workflow
+        # if self.workflow == "local":
+        #     reqs.pop("merged_hists", None)
+
+        return reqs
+
     def requires(self):
         return {
             d: self.reqs.MergeHistograms.req(
@@ -229,8 +238,9 @@ class PlotVariablesBaseSingleShift(
         parts["category"] = f"cat_{self.branch_data.category}"
         parts["variable"] = f"var_{self.branch_data.variable}"
 
-        if self.hist_hook not in ("", law.NO_STR, None):
-            parts["hook"] = f"hook_{self.hist_hook}"
+        hooks_repr = self.hist_hooks_repr
+        if hooks_repr:
+            parts["hook"] = f"hooks_{hooks_repr}"
 
         return parts
 
@@ -310,6 +320,15 @@ class PlotVariablesBaseMultiShifts(
             for source in sorted(self.shift_sources)
         ]
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+
+        # no need to require merged histograms since each branch already requires them as a workflow
+        if self.workflow == "local":
+            reqs.pop("merged_hists", None)
+
+        return reqs
+
     def requires(self):
         return {
             d: self.reqs.MergeShiftedHistograms.req(
@@ -330,8 +349,9 @@ class PlotVariablesBaseMultiShifts(
         parts["category"] = f"cat_{self.branch_data.category}"
         parts["variable"] = f"var_{self.branch_data.variable}"
 
-        if self.hist_hook not in ("", law.NO_STR, None):
-            parts["hook"] = f"hook_{self.hist_hook}"
+        hooks_repr = self.hist_hooks_repr
+        if hooks_repr:
+            parts["hook"] = f"hooks_{hooks_repr}"
 
         return parts
 
@@ -371,12 +391,7 @@ class PlotShiftedVariables1D(
     )
 
 
-class PlotShiftedVariablesPerProcess1D(
-    law.WrapperTask,
-    PlotShiftedVariables1D,
-):
-    # force this one to be a local workflow
-    workflow = "local"
+class PlotShiftedVariablesPerProcess1D(law.WrapperTask):
 
     # upstream requirements
     reqs = Requirements(

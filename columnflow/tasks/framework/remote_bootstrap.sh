@@ -7,9 +7,11 @@
 # Bootstrap function for standalone htcondor jobs.
 bootstrap_htcondor_standalone() {
     # set env variables
-    export CF_ON_HTCONDOR="1"
     export CF_REMOTE_ENV="1"
+    export CF_ON_HTCONDOR="1"
+    export CF_HTCONDOR_FLAVOR="{{cf_htcondor_flavor}}"
     export CF_CERN_USER="{{cf_cern_user}}"
+    export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="{{cf_software_base}}"
@@ -28,7 +30,15 @@ bootstrap_htcondor_standalone() {
     fi
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"
-    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
+    local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
+
+    # temporary fix for missing voms/x509 variables in the lcg setup
+    # (disabled in favor of the general software fix below which also sets these variables)
+    # export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
+    # export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
+    # export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    # export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -41,11 +51,23 @@ bootstrap_htcondor_standalone() {
     else
         fetch_software="false"
         echo "found existing software at ${CF_SOFTWARE_BASE}"
+
+        # temporary fix on the NAF that suffers from a proliferation of python 2.7 packages being
+        # prepended to the general python path, and simultaneously missing libraries (e.g. json-c)
+        # in the alma9 lcg setup that stops gfal from working
+        if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
+            export PATH="$( filter_path_var "${PATH}" "python2\.7" )"
+            export PYTHONPATH="$( filter_path_var "${PYTHONPATH}" "python2\.7" )"
+            export MAMBA_ROOT_PREFIX="${CF_SOFTWARE_BASE}/conda"
+            export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
+            source "${CF_SOFTWARE_BASE}/conda/etc/profile.d/micromamba.sh" "" || return "$?"
+            micromamba activate || return "$?"
+        fi
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
-    if ! type gfal-ls &> /dev/null; then
+    if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"
@@ -113,8 +135,9 @@ bootstrap_htcondor_standalone() {
 # Bootstrap function for slurm jobs.
 bootstrap_slurm() {
     # set env variables
-    export CF_ON_SLURM="1"
     export CF_REMOTE_ENV="1"
+    export CF_ON_SLURM="1"
+    export CF_SLURM_FLAVOR="{{cf_slurm_flavor}}"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export KRB5CCNAME="FILE:{{kerberosproxy_file}}"
@@ -139,6 +162,7 @@ bootstrap_crab() {
     export CF_ON_GRID="1"
     export CF_REMOTE_ENV="1"
     export CF_CERN_USER="{{cf_cern_user}}"
+    export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
@@ -147,11 +171,12 @@ bootstrap_crab() {
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
     local lcg_setup="{{cf_remote_lcg_setup}}"
-    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/centos7-ui-200122/etc/profile.d/setup-c7-ui-python3-example.sh}"
+    lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
+    local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
-    if ! type gfal-ls &> /dev/null; then
+    if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
         ls "$( dirname "${lcg_setup}" )" &> /dev/null
         if [ ! -f "${lcg_setup}" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"
@@ -209,6 +234,33 @@ bootstrap_crab() {
     {{cf_post_setup_command}}
 
     return "0"
+}
+
+# helper to remove fragments from ":"-separated path variables using expressions
+filter_path_var() {
+    # get arguments
+    local old_val="$1"
+    shift
+    local regexps
+    regexps=( ${@} )
+
+    # loop through paths and set the new variable if no expression matched
+    local new_val=""
+    printf '%s:\0' "${old_val}" | while IFS=: read -d: -r p; do
+        local matched="false"
+        local regexp
+        for regexp in ${regexps[@]}; do
+            if echo "${p}" | grep -Po "${regexp}" &> /dev/null; then
+                matched="true"
+                break
+            fi
+        done
+        if ! ${matched}; then
+            [ ! -z "${new_val}" ] && new_val="${new_val}:"
+            new_val="${new_val}${p}"
+            echo "${new_val}"
+        fi
+    done | tail -n 1
 }
 
 # job entry point

@@ -7,7 +7,7 @@ To maintain flexibility and lightweight configurations [venv](https://docs.pytho
 
 The following guide explains how to define, update, and utilize a sandbox within Columnflow.
 
-## Whats needs to be defined
+## What needs to be defined
 
 A Columnflow environment consists of two files:
 
@@ -25,7 +25,6 @@ Begin your setup file with "venv," for example, `venv_YOUR_ENVIRONMENT.sh`, and 
 
 Begin your setup file by referencing an existing setup file within the `$ANALYSIS_BASE/sandboxes/` directory.
 In this example, we start from a copy of `venv_columnar.sh`:
-We start from `venv_columnar.sh`
 
 ```{literalinclude} ../../sandboxes/venv_columnar.sh
 :language: bash

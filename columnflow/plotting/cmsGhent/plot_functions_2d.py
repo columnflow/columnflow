@@ -18,10 +18,11 @@ from columnflow.plotting.plot_util import (
     fix_cbar_minor_ticks,
 )
 
+
 def merge_migration_bins(h):
-    '''
+    """
     binning both axes in equal bins
-    '''
+    """
 
     x_edges = h.axes[0].edges
     y_edges = h.axes[1].edges
@@ -40,43 +41,44 @@ def merge_migration_bins(h):
         raise ValueError(
             f"Bin edges of 2D histograms not compatible:\n"
             f"x: {x_edges}\n"
-            f"y: {y_edges}"
+            f"y: {y_edges}",
         )
 
     # get the indices of the common bin edges and create index tuples
     if x_subset_of_y:
         # force first and last entry and find indices in between
-        rebin_y = [0] + [list(y_edges).index(x) for x in x_edges[1:-1]] + [len(y_edges)-1]
+        rebin_y = [0] + [list(y_edges).index(x) for x in x_edges[1:-1]] + [len(y_edges) - 1]
         # make slice tuples
         rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_y[:-1], rebin_y[1:])]
         # set new edges
         new_edges_y = y_edges[rebin_y]
         new_edges_x = x_edges
         # create new 2d array with merged bins
-        new_h = np.array([ h[:,slc].values().sum(axis=1) for slc in rebin_tuples ])
+        new_h = np.array([h[:, slc].values().sum(axis=1) for slc in rebin_tuples])
 
     if y_subset_of_x:
         # force first and last entry and find indices in between
-        rebin_x = [0] + [list(x_edges).index(y) for y in y_edges[1:-1]] + [len(x_edges)-1]
+        rebin_x = [0] + [list(x_edges).index(y) for y in y_edges[1:-1]] + [len(x_edges) - 1]
         # make slice tuples
         rebin_tuples = [slice(int(lo), int(hi)) for lo, hi in zip(rebin_x[:-1], rebin_x[1:])]
         # set new edges
         new_edges_x = x_edges[rebin_x]
         new_edges_y = y_edges
         # create new 2d array with merged bins
-        new_h = np.array([ h[slc,:].values().sum(axis=0) for slc in rebin_tuples ])
+        new_h = np.array([h[slc, :].values().sum(axis=0) for slc in rebin_tuples])
 
     # initialize a new boost histogram with updated axes
-    h_eq_ax = hist.Hist( 
-        hist.axis.Variable( new_edges_x, name=h.axes[0].name, label=h.axes[0].label ), 
-        hist.axis.Variable( new_edges_y, name=h.axes[1].name, label=h.axes[1].label ) 
+    h_eq_ax = hist.Hist(
+        hist.axis.Variable(new_edges_x, name=h.axes[0].name, label=h.axes[0].label),
+        hist.axis.Variable(new_edges_y, name=h.axes[1].name, label=h.axes[1].label),
     )
 
     # update the bin contents
-    h_eq_ax.values()[:,:] = new_h
+    h_eq_ax.values()[:, :] = new_h
 
     # return the new histogram
     return h_eq_ax
+
 
 def plot_migration_matrices(
     hists: OrderedDict,
@@ -92,13 +94,14 @@ def plot_migration_matrices(
     label_numbers: bool = False,
     colormap: str = "Blues",
     cms_label: str = "wip",
+    keep_bins_in_bkg: bool = False,
     **kwargs,
 ):
     plt.style.use(mplhep.style.CMS)
     fig, axes = plt.subplots(
         2, 3,
         gridspec_kw=dict(width_ratios=[1, 4, 0.25], height_ratios=[4, 1], hspace=0, wspace=0),
-        figsize=((1+4+0.3)*2, (1+4)*2),
+        figsize=((1 + 4 + 0.3) * 2, (1 + 4) * 2),
     )
     plt.subplots_adjust(left=0.2)
     axes[1, 1].sharex(axes[0, 1])
@@ -121,6 +124,8 @@ def plot_migration_matrices(
 
     migrations = hist_2d / projections[1].values(flow=True)[None]
     migrations_eq_ax = hist_2d_eq_ax / projections_eq_ax[1].values(flow=True)[None]
+    if not keep_bins_in_bkg:
+        migrations = migrations_eq_ax
 
     plot_config = prepare_plot_config_2d(
         {category_inst: migrations},
@@ -155,7 +160,8 @@ def plot_migration_matrices(
         for i, x in enumerate(migrations_eq_ax.axes[0].centers):
             for j, y in enumerate(migrations_eq_ax.axes[1].centers):
                 if abs(i - j) <= 1:
-                    axes[0, 1].text(x, y, f"{migrations_eq_ax.values()[i, j] * 100:.0f}", ha="center", va="center", size="large")
+                    lbl = f"{migrations_eq_ax.values()[i, j] * 100:.0f}"
+                    axes[0, 1].text(x, y, lbl, ha="center", va="center", size="large")
 
     cbar = plt.colorbar(axes[0, 1].collections[0], **plot_config["cbar_kwargs"])
     fix_cbar_minor_ticks(cbar)

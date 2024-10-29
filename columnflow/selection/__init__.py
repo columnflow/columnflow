@@ -123,6 +123,7 @@ class Selector(TaskArrayFunction):
                             "data_only, nominal_only or shifts_only are set",
                         )
 
+                if "skip_func" not in cls_dict:
                     def skip_func(self):
                         # check mc_only and data_only
                         if getattr(self, "dataset_inst", None):
@@ -362,13 +363,17 @@ class SelectionResult(od.AuxDataMixin):
 
         # helper to create a view without behavior
         def deepcopy_without_behavior(struct: T) -> T:
-            return copy.deepcopy(law.util.map_struct(
-                (lambda obj: ak.Array(obj, behavior={}) if isinstance(obj, ak.Array) else obj),
+            return law.util.map_struct(
+                (lambda obj: (
+                    ak.Array(obj, behavior={})
+                    if isinstance(obj, ak.Array)
+                    else copy.deepcopy(obj)
+                )),
                 struct,
                 map_list=True,
                 map_tuple=True,
                 map_dict=True,
-            ))
+            )
 
         # logical AND between event masks
         if self.event is None:

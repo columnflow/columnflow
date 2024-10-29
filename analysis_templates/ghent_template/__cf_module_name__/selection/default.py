@@ -96,7 +96,7 @@ def lepton_selection(
     # required for pt cuts and Z-cuts on masks
     fill_with = {
         "pt": -999, "eta": -999, "phi": -999, "charge": -999,
-        "pdgId": -999, "mass": -999,  "sip3d": -999, 'tight': False,
+        "pdgId": -999, "mass": -999, "sip3d": -999, 'tight': False,
     }
     lepton = ak.fill_none(ak.pad_none(lepton, 2, axis=-1), fill_with)
 
@@ -155,10 +155,10 @@ def jet_selection(
 
 @selector(
     uses={
-        category_ids, __cf_short_name_lc___increment_stats
+        category_ids, __cf_short_name_lc___increment_stats, cutflow_features
     },
     produces={
-        category_ids, __cf_short_name_lc___increment_stats
+        category_ids, __cf_short_name_lc___increment_stats, cutflow_features
     },
     exposed=False,
 )
@@ -172,8 +172,7 @@ def post_selection(
     # build categories
     events = self[category_ids](events, results=results, **kwargs)
     # add cutflow features
-    if self.config_inst.x("do_cutflow_features", False):
-        events = self[cutflow_features](events, results=results, **kwargs)
+    events = self[cutflow_features](events, results=results, **kwargs)
 
     # produce event weights
     if self.dataset_inst.is_mc:
@@ -187,9 +186,6 @@ def post_selection(
 
 @post_selection.init
 def post_selection_init(self: Selector) -> None:
-    if self.config_inst.x("do_cutflow_features", False):
-        self.uses.add(cutflow_features)
-        self.produces.add(cutflow_features)
 
     if not getattr(self, "dataset_inst", None) or self.dataset_inst.is_data:
         return
@@ -240,8 +236,7 @@ def default(
     results.event = (results.event &
                      results.steps.Trigger &
                      results.steps.Lepton &
-                     results.steps.Jet &
-                     results.steps.Bjet)
+                     results.steps.Jet)
 
     # add cutflow features, passing per-object masks
     events, results = self[post_selection](events, results, stats, **kwargs)

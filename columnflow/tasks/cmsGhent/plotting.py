@@ -144,7 +144,7 @@ class PlotVariables2DMigration(
     PlotBase2D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.cmsGhent.plot_functions_2d.plot_migration_matrices"
+        default="columnflow.plotting.cmsGhent.plot_functions_2d.plot_migration_matrices",
     )
 
     def create_branch_map(self):

@@ -282,7 +282,11 @@ def plot_all(
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
         rax.set(**rax_kwargs)
-        fig.align_ylabels()
+
+        if "xlabel" in rax_kwargs:
+            ax.set_xlabel("")
+
+    fig.align_labels()
 
     # legend
     if not skip_legend:
@@ -405,7 +409,15 @@ def make_plot_2d(
 
     if plot_config.get("kwargs", {}).get("cbar", False):
         # fix color bar minor ticks with SymLogNorm
-        fix_cbar_minor_ticks(ax.collections[0].colorbar)
+        # returned collections can vary -> brute-force set
+        # norm on all colorbars that are found
+        cbars = {
+            coll.colorbar
+            for coll in ax.collections
+            if coll.colorbar
+        }
+        for cbar in cbars:
+            fix_cbar_minor_ticks(cbar)
 
     fig.tight_layout()
     return fig, (ax,)

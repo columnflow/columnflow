@@ -1,5 +1,20 @@
 # __cf_analysis_name__ Analysis
 
+# Quickstart
+
+1. clone the analysis framework.
+   > git clone --recursive ssh://git@gitlab.cern.ch:7999/ghentanalysis/columnflowanalysis/ttz.git
+
+2. Setup the repository and install the environment.
+   > cd ttz
+   > source setup.sh
+
+3. Create a GRID proxy if you intend to run tasks that need one
+   > voms-proxy-init -rfc -valid 196:00
+
+4. Checkout the 'Getting started' guide to run your first tasks.
+https://github.com/GhentAnalysis/columnflow/blob/master/docs/user_guide/getting_started.md
+
 # Datasets and processes
 
 All processes and datasets are defined in the [cmsdb gitlab](https://gitlab.cern.ch/ghentanalysis/cmsdb/-/blob/master/cmsdb/).

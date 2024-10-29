@@ -6,14 +6,17 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+import re
 import operator
 import functools
 from collections import OrderedDict
 
+import law
 import order as od
+import scinum as sn
 from typing import Tuple
 
-from columnflow.util import maybe_import, try_int, try_complex
+from columnflow.util import maybe_import, try_int, try_complex, try_float
 from columnflow.types import Iterable, Any, Callable, Sequence, Union
 
 math = maybe_import("math")
@@ -30,14 +33,19 @@ mticker = maybe_import("matplotlib.ticker")
 FigAxesType = Tuple[plt.Figure, Union[npt.NDArray[plt.Axes], Sequence[plt.Axes], plt.Axes]]
 
 
+logger = law.logger.get_logger(__name__)
+
+
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
-    "pw": "Private work",
+    "pw": "Private work (CMS data/simulation)",
+    "pwip": "Private work in progress (CMS)",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
-    "simpw": "Simulation private work",
+    "simpw": "Private work (CMS simulation)",
+    "datapw": "Private work (CMS data)",
     "od": "OpenData",
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
@@ -53,14 +61,85 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     :param llabel: The left label of the CMS label.
     :return: A dictionary with the CMS label configuration.
     """
+    llabel = label_options.get(llabel, llabel)
     cms_label_kwargs = {
         "ax": ax,
-        "llabel": label_options.get(llabel, llabel),
+        "llabel": llabel,
         "fontsize": 22,
         "data": False,
     }
+    if "CMS" in llabel:
+        cms_label_kwargs["exp"] = ""
 
     return cms_label_kwargs
+
+
+def round_dynamic(value: int | float) -> int | float:
+    """
+    Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
+
+        - 0 -> 0 (int)
+        - (0, 1) -> round to 1 significant digit (float)
+        - [1, 10) -> round to 1 significant digit (int)
+        - [10, inf) -> round to 2 significant digits (int)
+
+    :param value: The value to round.
+    :return: The rounded value.
+    """
+    # determine significant digits
+    digits = 1 if abs(value) < 10 else 2
+
+    # split into value and magnitude
+    v_str, _, mag = sn.round_value(value, method=digits)
+
+    # recombine
+    value = float(v_str) * 10**mag
+
+    # return with proper type
+    return int(value) if value >= 1 else value
+
+
+def inject_label(
+    label: str,
+    inject: str | int | float,
+    *,
+    placeholder: str | None = None,
+    before_parentheses: bool = False,
+) -> str:
+    """
+    Injects a string *inject* into a *label* at a specific position, determined by different
+    strategies in the following order:
+
+        - If *placeholder* is defined, *label* should contain a substring ``"__PLACEHOLDER__"``
+        which is replaced.
+        - Otherwise, if *before_parentheses* is set to True, the string is inserted before the last
+        pair of parentheses.
+        - Otherwise, the string is appended to the label.
+
+    :param label: The label to inject the string *inject* into.
+    :param inject: The string to inject.
+    :param placeholder: The placeholder to replace in the label.
+    :param before_parentheses: Whether to insert the string before the parentheses in the label.
+    :return: The updated label.
+    """
+    # replace the placeholder
+    if placeholder and f"__{placeholder}__" in label:
+        return label.replace(f"__{placeholder}__", inject)
+
+    # when the label contains trailing parentheses, insert the string before them
+    if before_parentheses and label.endswith(")"):
+        in_parentheses = 1
+        for i in range(len(label) - 2, -1, -1):
+            c = label[i]
+            if c == ")":
+                in_parentheses += 1
+            elif c == "(":
+                in_parentheses -= 1
+            if not in_parentheses:
+                return f"{label[:i]} {inject} {label[i:]}"
+
+    # otherwise, just append
+    return f"{label} {inject}"
 
 
 def apply_settings(
@@ -107,13 +186,37 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
-    # apply "scale" setting directly to the hists
+    # helper to compute the stack integral
+    stack_integral = None
+
+    def get_stack_integral() -> float:
+        nonlocal stack_integral
+        if stack_integral is None:
+            stack_integral = sum(
+                proc_h.sum().value
+                for proc, proc_h in hists.items()
+                if not hasattr(proc, "unstack") and not proc.is_data
+            )
+        return stack_integral
+
     for proc_inst, h in hists.items():
+        # apply "scale" setting directly to the hists
         scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
-        if try_int(scale_factor):
-            scale_factor = int(scale_factor)
+        if scale_factor == "stack":
+            # compute the scale factor and round
+            scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
+        if try_float(scale_factor):
+            scale_factor = float(scale_factor)
             hists[proc_inst] = h * scale_factor
-            proc_inst.label += f" x{scale_factor}"
+            proc_inst.label = inject_label(
+                proc_inst.label,
+                rf"$\times${scale_factor:.2g}",
+                placeholder="SCALE",
+                before_parentheses=True,
+            )
+
+        # remove remaining placeholders
+        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
 
     return hists
 
@@ -146,6 +249,7 @@ def apply_variable_settings(
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
+                hists[proc_inst] = h
 
         # slicing
         slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
@@ -175,18 +279,20 @@ def use_flow_bins(
     :param axis_name: Name or index of the axis of interest.
     :param underflow: Whether to add the content of the underflow bin to the first bin of axis *axis_name.
     :param overflow: Whether to add the content of the overflow bin to the last bin of axis *axis_name*.
-    :return: Histogram with underflow and/or overflow content added to the first/last bin of the histogram.
+    :return: Copy of the histogram with underflow and/or overflow content added to the first/last
+        bin of the histogram.
     """
-    if not overflow and not underflow:
-        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
-        return h_in
-
-    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
-
     # work on a copy of the histogram
     h_out = h_in.copy()
-    h_view = h_out.view(flow=True)
 
+    # nothing to do if neither flag is set
+    if not overflow and not underflow:
+        print(f"{use_flow_bins.__name__} has nothing to do since overflow and underflow are set to False")
+        return h_out
+
+    # determine the index of the axis of interest and check if it has flow bins activated
+    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
+    h_view = h_out.view(flow=True)
     if h_out.view().shape[axis_idx] + 2 != h_view.shape[axis_idx]:
         raise Exception(f"We expect axis {axis_name} to have assigned an underflow and overflow bin")
 
@@ -619,7 +725,7 @@ def prepare_plot_config_2d(
 
     # check h_sum value range
     vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
-    vmin, vmax = np.nan_to_num([vmin, vmax], 0)
+    vmin, vmax = [0 if np.isnan(x) else x for x in [vmin, vmax]]
 
     # default to full z range
     if zlim is None:
@@ -755,10 +861,65 @@ def prepare_style_config_2d(
     if cms_label != "skip":
         style_config["cms_label_cfg"] = {
             # "ax": ax,  # need to add ax later !!
-            "lumi": config_inst.x.luminosity.get("nominal") / 1000,  # pb -> fb
+            "lumi": 0.001 * config_inst.x.luminosity.get("nominal"),  # pb -> fb
             "llabel": label_options.get(cms_label, cms_label),
             "fontsize": 22,
             "data": False,
         }
 
     return style_config
+
+
+def blind_sensitive_bins(
+    hists: dict[od.Process, hist.Hist],
+    config_inst: od.Config,
+    threshold: float,
+) -> dict[od.Process, hist.Hist]:
+    """
+    Function that takes a histogram *h_in* and blinds the values of the profile
+    over the axis *axis* that are below a certain threshold *threshold*.
+    The function needs an entry in the process_groups key of the config auxiliary
+    that is called "signals" to know, where the signal processes are defined (regex allowed).
+    The histograms are not changed inplace, but copies of the modified histograms are returned.
+    """
+    # build the logic to seperate signal processes
+    signal_procs: set[od.Process] = {
+        config_inst.get_process(proc)
+        for proc in config_inst.x.process_groups.get("signals", [])
+    }
+    check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
+
+    # separate histograms into signals, backgrounds and data hists and calculate sums
+    signals = {proc: hist for proc, hist in hists.items() if proc.is_mc and check_if_signal(proc)}
+    data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
+    backgrounds = {proc: hist for proc, hist in hists.items() if proc.is_mc and proc not in signals}
+
+    # Return hists unchanged in case any of the three dicts is empty.
+    if not signals or not backgrounds or not data:
+        logger.info(
+            "one of the following categories: signals, backgrounds or data was not found in the given processes, "
+            "returning unchanged histograms",
+        )
+        return hists
+
+    signals_sum = sum(signals.values())
+    backgrounds_sum = sum(backgrounds.values())
+
+    # calculate sensitivity by S / sqrt(S + B)
+    sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
+    mask = sensitivity >= threshold
+
+    # adjust the mask to blind the bins inbetween blinded ones
+    if sum(mask) > 1:
+        first_ind, last_ind = np.where(mask)[0][::sum(mask) - 1]
+        mask[first_ind:last_ind] = True
+
+    # set data points in masked region to zero
+    for proc, hist in data.items():
+        hist.values()[mask] = 0
+        hist.variances()[mask] = 0
+
+    # merge all histograms
+    hists = law.util.merge_dicts(signals, backgrounds, data)
+
+    return hists
