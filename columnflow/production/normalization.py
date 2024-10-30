@@ -197,6 +197,10 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     norm_weight = events.mc_weight * process_weight
     events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
 
+    # If we are stitching, we also compute the inclusive weight for debugging purposes
+    if self.allow_stitching:
+        incl_norm_weight = events.mc_weight * self.inclusive_weight
+        events = set_ak_column(events, f"{self.weight_name}_incl", incl_norm_weight, value_type=np.float32)
     return events
 
 
@@ -310,6 +314,11 @@ def normalization_weights_setup(
                     f"{inclusive_dataset}",
                 )
         inclusive_xsec = inclusive_proc.get_xsec(self.config_inst.campaign.ecm).nominal
+        self.inclusive_weight = (
+            lumi * inclusive_xsec / normalization_selection_stats[inclusive_dataset.name]["sum_mc_weight"]
+            if self.dataset_inst == inclusive_dataset
+            else 0
+        )
         for process_id, br in branching_ratios.items():
             sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(process_id)]
             process_weight_table[0, process_id] = lumi * inclusive_xsec * br / sum_weights
@@ -331,6 +340,8 @@ def normalization_weights_init(self: Producer) -> None:
     Initializes the normalization weights producer by setting up the normalization weight column.
     """
     self.produces.add(self.weight_name)
+    if self.allow_stitching:
+        self.produces.add(f"{self.weight_name}_incl")
 
 
 stitched_normalization_weights = normalization_weights.derive(
