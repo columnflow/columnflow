@@ -270,7 +270,7 @@ def plot_unrolled(
     magnitudes = kwargs.get("magnitudes", 3)
     whitespace_fraction = kwargs.get("whitespace_fraction", 0.15)
     skip_legend = kwargs.get("skip_legend", False)
-    cms_label = kwargs.get("cms_label", "wip")
+    cms_label = kwargs.get("cms_label", "pre")
 
     # axis styling
     ax_kwargs = {
@@ -414,7 +414,7 @@ def plot_unrolled(
         if any(in_stack):
             def shuffle(entries, mask):
                 entries = np.array(entries, dtype=object)
-                entries[mask] = entries[mask][::-1]
+                entries[mask] = entries[mask]
                 return list(entries)
 
             handles = shuffle(handles, in_stack)
