@@ -148,15 +148,15 @@ def increment_stats(
                     f"but found a sequence: {obj}",
                 )
             if len(obj) == 1:
-                weights = ak.values_astype(obj[0], float)
+                weights = ak.values_astype(obj[0], np.float64)
             elif len(obj) == 2:
-                weights, weight_mask = ak.values_astype(obj[0], float), obj[1]
+                weights, weight_mask = ak.values_astype(obj[0], np.float64), obj[1]
             else:
                 raise Exception(f"cannot interpret as weights and optional mask: '{obj}'")
         elif op == self.NUM:
             weight_mask = obj
         else:  # SUM
-            weights = ak.values_astype(obj, float)
+            weights = ak.values_astype(obj, np.float64)
 
         # when mask is an Ellipsis, it cannot be AND joined to other masks, so convert to true mask
         if weight_mask is Ellipsis:
