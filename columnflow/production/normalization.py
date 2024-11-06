@@ -339,6 +339,9 @@ def normalization_weights_init(self: Producer) -> None:
     """
     Initializes the normalization weights producer by setting up the normalization weight column.
     """
+    if getattr(self, "dataset_inst", None) is None:
+        return
+
     self.produces.add(self.weight_name)
     if self.allow_stitching:
         self.stitching_datasets = self.get_stitching_datasets()
