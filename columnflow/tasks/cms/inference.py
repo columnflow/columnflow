@@ -265,7 +265,7 @@ class CreateDatacards(
             outputs = self.output()
             writer = DatacardWriter(self.inference_model_inst, {cat_obj.name: hists})
             with outputs["card"].localize("w") as tmp_card, outputs["shapes"].localize("w") as tmp_shapes:
-                writer.write(tmp_card.path, tmp_shapes.path, shapes_path_ref=outputs["shapes"].basename)
+                writer.write(tmp_card.abspath, tmp_shapes.abspath, shapes_path_ref=outputs["shapes"].basename)
 
 
 CreateDatacardsWrapper = wrapper_factory(
