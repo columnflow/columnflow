@@ -60,7 +60,6 @@ name = "columnflow"
 target = "${CF_SOFTWARE}/columnflow"
 channels=[
     "conda-forge",
-    "defaults",
 ]
 dependencies = [
     {conda = 'libgcc:linux'},
