@@ -42,15 +42,14 @@ class ElectronSFConfig:
     uses={
         "Electron.pt", "Electron.eta", "Electron.deltaEtaSC",
     },
-    produces={
-        "electron_weight", "electron_weight_up", "electron_weight_down",
-    },
     # only run on mc
     mc_only=True,
     # function to determine the correction file
     get_electron_file=(lambda self, external_files: external_files.electron_sf),
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
+    weight_name="electron_weight",
+    supported_versions=(1, 2),
 )
 def electron_weights(
     self: Producer,
@@ -106,8 +105,8 @@ def electron_weights(
     # loop over systematics
     for syst, postfix in [
         ("sf", ""),
-        ("systup", "_up"),
-        ("systdown", "_down"),
+        ("sfup", "_up"),
+        ("sfdown", "_down"),
     ]:
         # get the inputs for this type of variation
         variable_map_syst = {
@@ -124,7 +123,7 @@ def electron_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"electron_weight{postfix}", weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", weight, value_type=np.float32)
 
     return events
 
@@ -157,7 +156,22 @@ def electron_weights_setup(
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
 
     # check versions
-    if self.electron_sf_corrector.version not in (2,):
-        raise Exception(
-            f"unsuppprted electron sf corrector version {self.electron_sf_corrector.version}",
-        )
+    if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
+        raise Exception(f"unsupported electron sf corrector version {self.electron_sf_corrector.version}")
+
+
+@electron_weights.init
+def electron_weights_init(self: Producer, **kwargs) -> None:
+    weight_name = self.weight_name
+    self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
+
+
+# custom electron weight that runs trigger SFs
+electron_trigger_weights = electron_weights.derive(
+    "electron_trigger_weights",
+    cls_dict={
+        "get_electron_file": (lambda self, external_files: external_files.electron_trigger_sf),
+        "get_electron_config": (lambda self: self.config_inst.x.electron_trigger_sf_names),
+        "weight_name": "electron_trigger_weight",
+    },
+)

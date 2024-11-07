@@ -145,10 +145,21 @@ def muon_weights_setup(
 
     # check versions
     if self.supported_versions and self.muon_sf_corrector.version not in self.supported_versions:
-        raise Exception(f"unsuppprted muon sf corrector version {self.muon_sf_corrector.version}")
+        raise Exception(f"unsupported muon sf corrector version {self.muon_sf_corrector.version}")
 
 
 @muon_weights.init
 def muon_weights_init(self: Producer, **kwargs) -> None:
     weight_name = self.weight_name
     self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
+
+
+# custom muon weight that runs trigger SFs
+muon_trigger_weights = muon_weights.derive(
+    "muon_trigger_weights",
+    cls_dict={
+        "get_muon_file": (lambda self, external_files: external_files.muon_trigger_sf),
+        "get_muon_config": (lambda self: self.config_inst.x.muon_trigger_sf_names),
+        "weight_name": "muon_trigger_weight",
+    },
+)
