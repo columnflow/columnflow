@@ -241,6 +241,9 @@ setup_columnflow() {
         # source law's bash completion scipt
         source "$( law completion )" ""
 
+        # add completion to the claw command
+        complete -o bashdefault -o default -F _law_complete claw
+
         # silently index
         law index -q
     fi
