@@ -318,7 +318,7 @@ cf_setup_common_variables() {
     # used by law.cfg and, in turn, tasks/framework/remote.py
     local cf_htcondor_flavor_default="naf"
     local cf_slurm_flavor_default="maxwell"
-    local cf_slurm_partition_default="cms-uhh"
+    local cf_slurm_partition_default="maxgpu"
     local hname="$( hostname 2> /dev/null )"
     if [ "$?" = "0" ]; then
         # lxplus
