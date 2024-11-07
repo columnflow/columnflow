@@ -156,6 +156,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         fs: str | Sequence[str] | None = None,
         lfn_indices: list[int] | None = None,
         eager_lookup: bool | int = 1,
+        skip_fallback: bool = False,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
@@ -222,9 +223,19 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 is_local = law.target.file.get_scheme(fs_base) in (None, "file")
                 logger.debug(f"fs {selected_fs} is {'local' if is_local else 'remote'}")
                 target_cls = law.LocalFileTarget if is_local else law.wlcg.WLCGFileTarget
+                logger.debug(f"checking fs {selected_fs} for lfn {lfn}")
+
+                # try an optional fallback to pre-emptively fetch the lfn if necessary
+                if not is_local and not skip_fallback:
+                    # TODO: improve tmp file location, maybe still use the wlcg fs' cache if set
+                    input_file = law.LocalFileTarget(is_tmp="root")
+                    input_file = self._fetch_lfn_fallback(lfn, selected_fs, input_file)
+                    if input_file:
+                        input_stat = input_file.stat()
+                        task.publish_message(f"using fs {selected_fs} via pre-emptive fetch")
+                        break
 
                 # measure the time required to perform the stat query
-                logger.debug(f"checking fs {selected_fs} for lfn {lfn}")
                 input_file = target_cls(lfn.lstrip(os.sep) if is_local else lfn, fs=selected_fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
@@ -268,6 +279,42 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             task.publish_message(f"lfn {lfn}, size is {input_size}")
 
             yield (lfn_index, input_file)
+
+    def _fetch_lfn_fallback(
+        self,
+        lfn: str,
+        selected_fs: str,
+        destination: law.LocalFileTarget,
+        force: bool = False,
+    ) -> law.LocalFileTarget | None:
+        # check if the file needs to be fetched in the first place
+        if not force:
+            # when gfal2 is available, no need to fetch
+            try:
+                import gfal2  # noqa: F401
+                return None
+            except ImportError:
+                pass
+
+        # get the base uri and check if the protocol is supported
+        base = (
+            law.config.get_expanded(selected_fs, "base_filecopy", None) or
+            law.config.get_expanded(selected_fs, "base")
+        )
+        scheme = law.target.file.get_scheme(base)
+        if scheme != "root":
+            raise NotImplementedError(f"fetching lfn via {scheme}:// is not supported")
+        uri = base + lfn
+
+        # fetch via xrdcp
+        destination.parent.touch()
+        cmd = f"xrdcp -f {uri} {destination.path}"
+        code = law.util.interruptable_popen(cmd, shell=True, executable="/bin/bash")[0]
+        if code != 0:
+            logger.warning(f"xrdcp failed for {uri}")
+            return None
+
+        return destination
 
 
 GetDatasetLFNsWrapper = wrapper_factory(
