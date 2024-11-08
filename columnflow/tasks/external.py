@@ -227,11 +227,10 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
                 # try an optional fallback to pre-emptively fetch the lfn if necessary
                 if not is_local and not skip_fallback:
-                    # TODO: improve tmp file location, maybe still use the wlcg fs' cache if set
-                    input_file = law.LocalFileTarget(is_tmp="root")
-                    input_file = self._fetch_lfn_fallback(lfn, selected_fs, input_file)
+                    input_file, input_stat, is_tmp = self._fetch_lfn_fallback(lfn, selected_fs)
                     if input_file:
-                        input_stat = input_file.stat()
+                        if is_tmp:
+                            input_file.is_tmp = True
                         task.publish_message(f"using fs {selected_fs} via pre-emptive fetch")
                         break
 
@@ -284,15 +283,16 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         self,
         lfn: str,
         selected_fs: str,
-        destination: law.LocalFileTarget,
         force: bool = False,
-    ) -> law.LocalFileTarget | None:
+    ) -> tuple[law.LocalFileTarget | None, os.stat_result | None, bool]:
+        is_tmp = False
+
         # check if the file needs to be fetched in the first place
         if not force:
             # when gfal2 is available, no need to fetch
             try:
                 import gfal2  # noqa: F401
-                return None
+                return None, None, is_tmp
             except ImportError:
                 pass
 
@@ -306,15 +306,45 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             raise NotImplementedError(f"fetching lfn via {scheme}:// is not supported")
         uri = base + lfn
 
-        # fetch via xrdcp
-        destination.parent.touch()
-        cmd = f"xrdcp -f {uri} {destination.path}"
+        # helper to fetch via xrdcp
+        def fetch(path):
+            cmd = f"xrdcp -f {uri} {path}"
+            code = law.util.interruptable_popen(cmd, shell=True, executable="/bin/bash")[0]
+            if code != 0:
+                logger.warning(f"xrdcp failed for {uri}")
+            return code == 0
+
+        # if the corresponding fs has a cache and the lfn is already in there, return it
+        # (no need to perform in/validation checks via mtime for lfns)
+        wlcg_fs = law.wlcg.WLCGFileSystem(selected_fs)
+        if wlcg_fs.cache and lfn in wlcg_fs.cache:
+            destination = law.LocalFileTarget(wlcg_fs.cache.cache_path(lfn))
+            return destination, destination.stat(), is_tmp
+
+        # fetch the file
+        destination = law.LocalFileTarget(is_tmp="root")
+        cmd = f"xrdcp -f {uri} {destination.abspath}"
         code = law.util.interruptable_popen(cmd, shell=True, executable="/bin/bash")[0]
         if code != 0:
             logger.warning(f"xrdcp failed for {uri}")
-            return None
+            return None, None, is_tmp
 
-        return destination
+        # when there is a cache, move the file there
+        stat = destination.stat()
+        if wlcg_fs.cache:
+            with wlcg_fs.cache.lock(lfn):
+                wlcg_fs.cache.allocate(stat.st_size)
+                clfn = law.LocalFileTarget(wlcg_fs.cache.cache_path(lfn))
+                destination.move_to_local(clfn)
+            destination = clfn
+
+        else:
+            # here, the destination will be temporary, but set its tmp flag to False to prevent
+            # deletion at the end of this method and set the decision for later use instead
+            destination.is_tmp = False
+            is_tmp = True
+
+        return destination, stat, is_tmp
 
 
 GetDatasetLFNsWrapper = wrapper_factory(
