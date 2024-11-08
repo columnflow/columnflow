@@ -288,7 +288,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         """
         Fetches an *lfn* via fallback mechanisms. Currently, only ``xrdcp`` for remote file systems
         *selected_fs* with `root://` bases is supported. Unless *force* is *True*, no fallbacks are
-        performed in case they are not necessary in the first place (determine by the availability
+        performed in case they are not necessary in the first place (determined by the availability
         of the ``gfal2`` package).
 
         :param lfn: Logical file name to fetch.
@@ -339,8 +339,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 wlcg_fs.cache.allocate(stat.st_size)
                 clfn = law.LocalFileTarget(wlcg_fs.cache.cache_path(lfn))
                 destination.move_to_local(clfn)
-            destination = clfn
-            return destination, stat, False
+            return clfn, stat, False
 
         # here, the destination will be temporary, but set its tmp flag to False to prevent its
         # deletion when this method goes out of scope, and set the decision for later use instead
