@@ -57,6 +57,8 @@ class TECConfig:
     with_uncertainties=True,
     # toggle for propagation to MET
     propagate_met=True,
+    # name of the met collection to use
+    met_name="MET",
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -173,16 +175,17 @@ def tec(
 
             # propagate changes to MET
             if self.propagate_met:
+                met = events[self.met_name]
                 met_pt_varied, met_phi_varied = propagate_met(
                     events.Tau.pt,
                     events.Tau.phi,
                     pt_varied,
                     events.Tau.phi,
-                    events.MET.pt,
-                    events.MET.phi,
+                    met.pt,
+                    met.phi,
                 )
-                events = set_ak_column_f32(events, f"MET.pt_{postfix}", met_pt_varied)
-                events = set_ak_column_f32(events, f"MET.phi_{postfix}", met_phi_varied)
+                events = set_ak_column_f32(events, f"{self.met_name}.pt_{postfix}", met_pt_varied)
+                events = set_ak_column_f32(events, f"{self.met_name}.phi_{postfix}", met_phi_varied)
 
     # apply the nominal correction
     # note: changes are applied to the views and directly propagate to the original ak arrays
@@ -193,16 +196,17 @@ def tec(
 
     # propagate changes to MET
     if self.propagate_met:
+        met = events[self.met_name]
         met_pt, met_phi = propagate_met(
             tau_sum_before.pt,
             tau_sum_before.phi,
             events.Tau.pt,
             events.Tau.phi,
-            events.MET.pt,
-            events.MET.phi,
+            met.pt,
+            met.phi,
         )
-        events = set_ak_column_f32(events, "MET.pt", met_pt)
-        events = set_ak_column_f32(events, "MET.phi", met_phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
     return events
 
@@ -213,15 +217,15 @@ def tec_init(self: Calibrator) -> None:
 
     # add nominal met columns of propagating nominal tec
     if self.propagate_met:
-        self.uses |= {"MET.pt", "MET.phi"}
-        self.produces |= {"MET.pt", "MET.phi"}
+        self.uses |= {f"{self.met_name}.{var}" for var in ["pt", "phi"]}
+        self.produces |= {f"{self.met_name}.{var}" for var in ["pt", "phi"]}
 
     # add columns with unceratinties if requested
     if self.with_uncertainties:
         # also check if met propagation is enabled
         src_fields = ["Tau.pt", "Tau.mass"]
         if self.propagate_met:
-            src_fields += ["MET.pt", "MET.phi"]
+            src_fields += [f"{self.met_name}.{var}" for var in ["pt", "phi"]]
 
         self.produces |= {
             f"{field}_tec_{match}_dm{dm}_{direction}"

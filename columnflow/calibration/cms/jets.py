@@ -234,6 +234,8 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
     },
     # name of the jet collection to calibrate
     jet_name="Jet",
+    # name of the associated MET collection
+    met_name="MET",
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -401,7 +403,7 @@ def jec(
         jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_all_levels = jetsum.pt
         jetsum_phi_all_levels = jetsum.phi
-
+        raw_met = events[self.met_name]
         # propagate changes to MET, starting from jets corrected with subset of JEC levels
         # (recommendation is to propagate only L2 corrections and onwards)
         met_pt, met_phi = propagate_met(
@@ -409,11 +411,11 @@ def jec(
             jetsum_phi_subset_type1_met,
             jetsum_pt_all_levels,
             jetsum_phi_all_levels,
-            events.RawMET.pt,
-            events.RawMET.phi,
+            raw_met.pt,
+            raw_met.phi,
         )
-        events = set_ak_column_f32(events, "MET.pt", met_pt)
-        events = set_ak_column_f32(events, "MET.phi", met_phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
     # variable naming conventions
     variable_map = {
@@ -461,10 +463,10 @@ def jec(
                 met_pt,
                 met_phi,
             )
-            events = set_ak_column_f32(events, f"MET.pt_jec_{name}_up", met_pt_up)
-            events = set_ak_column_f32(events, f"MET.pt_jec_{name}_down", met_pt_down)
-            events = set_ak_column_f32(events, f"MET.phi_jec_{name}_up", met_phi_up)
-            events = set_ak_column_f32(events, f"MET.phi_jec_{name}_down", met_phi_down)
+            events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_up", met_pt_up)
+            events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_down", met_pt_down)
+            events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_up", met_phi_up)
+            events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_down", met_phi_down)
 
     return events
 
@@ -499,12 +501,12 @@ def jec_init(self: Calibrator) -> None:
 
     # add MET variables
     if self.propagate_met:
-        self.uses |= {"RawMET.pt", "RawMET.phi"}
-        self.produces |= {"MET.pt", "MET.phi"}
+        self.uses |= {f"Raw{self.met_name}.{var}" for var in ("pt", "phi")}
+        self.produces |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
 
         # add shifted MET variables
         self.produces |= {
-            f"MET.{shifted_var}_jec_{junc_name}_{junc_dir}"
+            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
             for shifted_var in ("pt", "phi")
             for junc_name in sources
             for junc_dir in ("up", "down")
@@ -683,6 +685,8 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     jet_name="Jet",
     # name of the associated gen jet collection
     gen_jet_name="GenJet",
+    # name of the associated MET collection
+    met_name="MET",
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc
@@ -865,9 +869,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # met propagation
     if self.propagate_met:
+        met = events[self.met_name]
+
         # save unsmeared quantities
-        events = set_ak_column_f32(events, "MET.pt_unsmeared", events.MET.pt)
-        events = set_ak_column_f32(events, "MET.phi_unsmeared", events.MET.phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_unsmeared", met.pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_unsmeared", met.phi)
 
         # get pt and phi of all jets after correcting
         jetsum = events[jet_name].sum(axis=1)
@@ -880,11 +886,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             jetsum_phi_before,
             jetsum_pt_after,
             jetsum_phi_after,
-            events.MET.pt,
-            events.MET.phi,
+            met.pt,
+            met.phi,
         )
-        events = set_ak_column_f32(events, "MET.pt", met_pt)
-        events = set_ak_column_f32(events, "MET.phi", met_phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
         # syst variations on top of corrected MET
         met_pt_up, met_phi_up = propagate_met(
@@ -903,10 +909,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             met_pt,
             met_phi,
         )
-        events = set_ak_column_f32(events, "MET.pt_jer_up", met_pt_up)
-        events = set_ak_column_f32(events, "MET.pt_jer_down", met_pt_down)
-        events = set_ak_column_f32(events, "MET.phi_jer_up", met_phi_up)
-        events = set_ak_column_f32(events, "MET.phi_jer_down", met_phi_down)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_up", met_pt_up)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_down", met_pt_down)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_up", met_phi_up)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_down", met_phi_down)
 
     return events
 
@@ -939,15 +945,14 @@ def jer_init(self: Calibrator) -> None:
     # register produced MET columns
     if self.propagate_met:
         # register used MET columns
-        self.uses |= {
-            "MET.pt", "MET.phi",
-        }
+        self.uses |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
+
 
         # register produced MET columns
-        self.produces |= {
-            "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
-        }
+        self.produces |= {f"{self.met_name}.{var}" for var in (
+            "pt", "phi", "pt_jer_up", "pt_jer_down", "phi_jer_up", "phi_jer_down",
+            "pt_unsmeared", "phi_unsmeared",
+        )}
 
 
 @jer.requires
