@@ -677,7 +677,7 @@ EOF
             echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
             # configure path to conda environment file
-            export CONDA_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_${system}_py${pyv}.yaml"
+            export CONDA_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_${system}_py${pyv}.yml"
 
             # install packages
             if ${conda_missing}; then
@@ -689,20 +689,39 @@ EOF
                 # if the environment file does not exist or recompilation is requested, created the file again
                 if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
 
+                    local CONDA_UNLOCKED_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_py${pyv}.unlocked.yaml"
+                    local CONDA_ENV_FILE_TEMPLATE="${CF_REQ_OUTPUT_DIR}/environment_{platform}_py${pyv}"
                     # first, install unidep into conda environment
-                    micromamba install unidep[toml] python=${pyv} || return "$?"
+                    micromamba install unidep[toml] python=${pyv} conda-lock || return "$?"
 
-                    # compile micromamba environment.yaml file from pyproject.toml
-                    # if it doesn't exist
-                    unidep merge -o $CONDA_ENV_FILE \
-                        --overwrite-pin "python=${pyv}" -d $CF_BASE || return "$?"
+                    # first, create a merged environment file from pyproject.toml without any locks
+                    # to properly control the name of the unlocked file
+                    args=(
+                        unidep merge --overwrite-pin "python=${pyv}" 
+                        -o ${CONDA_UNLOCKED_ENV_FILE}
+                        -d $CF_BASE
+                    )
+                    echo "${args[@]}"
+                    "${args[@]}" || return "$?"
+                    
+                    # then call conda-lock lock directly to generate file with locked package versions
+                    # NB: the '--lockfile' option doesn't work properly, so use
+                    #     '--filename-template' to generate the file with the correct name
+                    args=(
+                        conda-lock lock -f ${CONDA_UNLOCKED_ENV_FILE}
+                         --micromamba -k env -p $system
+                         --filename-template ${CONDA_ENV_FILE_TEMPLATE}
+                    )
+                    
+                    echo "${args[@]}"
+                    "${args[@]}" || return "$?"
                     
                     # resulting environment.yaml file contains environment name
                     # which we do not use, so delete the name
-                    sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
-                    if [ -f $CONDA_ENV_FILE.bak ]; then
-                        rm $CONDA_ENV_FILE.bak
-                    fi
+                    # sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                    # if [ -f $CONDA_ENV_FILE.bak ]; then
+                    #     rm $CONDA_ENV_FILE.bak
+                    # fi
                     cat $CONDA_ENV_FILE
                 fi
                 
