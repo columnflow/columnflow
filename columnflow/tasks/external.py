@@ -170,6 +170,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         :param fs: Name of the local or remote file system where the LFNs are located, defaults to None
         :param lfn_indices: List of indices of LFNs that are processed by this *task* instance, defaults to None
         :param eager_lookup: Look at the next fs if stat takes too long, defaults to 1
+        :param skip_fallback: Skip the fallback mechanism to fetch the LFN, defaults to False
         :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not
             a task analyzing a single branch in the task tree
         :raises Exception: If current task is not complete as indicated with ``self.complete()``
@@ -292,7 +293,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         of the ``gfal2`` package).
 
         :param lfn: Logical file name to fetch.
-        :param selected_fs: Name of the file system to fetch the LFN from.
+        :param selected_fs: Name of the file system to fetch the LFN from. When remote, its *base*
+            or *base_filecopy* should use the `root://` protocol.
         :param force: When *True*, forces the fallback to be performed, defaults to *False*.
         :return: Tuple of the fetched file, its stat, and a flag indicating whether the file is
             temporary. *None*'s are returned when the file was not fetched.
