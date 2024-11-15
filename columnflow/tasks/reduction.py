@@ -260,6 +260,8 @@ class MergeReductionStats(
     SelectorStepsMixin,
     CalibratorsMixin,
     DatasetTask,
+    law.LocalWorkflow,
+    RemoteWorkflow,
 ):
 
     n_inputs = luigi.IntParameter(
@@ -279,6 +281,7 @@ class MergeReductionStats(
 
     # upstream requirements
     reqs = Requirements(
+        RemoteWorkflow.reqs,
         ReduceEvents=ReduceEvents,
     )
 
@@ -298,10 +301,31 @@ class MergeReductionStats(
 
         return params
 
+    def create_branch_map(self):
+        # single branch without payload
+        return {0: None}
+
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        if self.merged_size == 0:
+            return reqs
+
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
+            self,
+            branches=((0, self.n_inputs),),
+        )
+        return reqs
+
     def requires(self):
         if self.merged_size == 0:
             return []
-        return self.reqs.ReduceEvents.req(self, branches=((0, self.n_inputs),))
+
+        return self.reqs.ReduceEvents.req_different_branching(
+            self,
+            workflow="local",
+            branches=((0, self.n_inputs),),
+            _exclude={"branch"},
+        )
 
     def output(self):
         return {"stats": self.target(f"stats_n{self.n_inputs}.json")}
@@ -429,7 +453,7 @@ class MergeReducedEvents(
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
         # check if the merging stats are present
-        stats = self.reqs.MergeReductionStats.req(self).output()["stats"]
+        stats = self.reqs.MergeReductionStats.req_different_branching(self, branch=0).output()["stats"]
         return stats.load(formatter="json")["merge_factor"] if stats.exists() else 0
 
     @law.dynamic_workflow_condition
@@ -444,14 +468,14 @@ class MergeReducedEvents(
 
     def merge_workflow_requires(self):
         return {
-            "stats": self.reqs.MergeReductionStats.req(self),
+            "stats": self.reqs.MergeReductionStats.req_different_branching(self),
             "events": self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),)),
         }
 
     def merge_requires(self, start_branch, end_branch):
         return {
-            "stats": self.reqs.MergeReductionStats.req(self),
-            "events": self.reqs.ReduceEvents.req(
+            "stats": self.reqs.MergeReductionStats.req_different_branching(self, branch=0),
+            "events": self.reqs.ReduceEvents.req_different_branching(
                 self,
                 branches=((start_branch, end_branch),),
                 workflow="local",
@@ -508,6 +532,7 @@ class ProvideReducedEvents(
     CalibratorsMixin,
     DatasetTask,
     law.LocalWorkflow,
+    RemoteWorkflow,
 ):
 
     skip_merging = luigi.BoolParameter(
@@ -524,10 +549,18 @@ class ProvideReducedEvents(
 
     # upstream requirements
     reqs = Requirements(
+        RemoteWorkflow.reqs,
         ReduceEvents=ReduceEvents,
         MergeReductionStats=MergeReductionStats,
         MergeReducedEvents=MergeReducedEvents,
     )
+
+    @classmethod
+    def _resolve_workflow_parameters(cls, params):
+        # always fallback to local workflows
+        params["effective_workflow"] = "local"
+
+        return super()._resolve_workflow_parameters(params)
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
@@ -535,7 +568,7 @@ class ProvideReducedEvents(
             return 1
 
         # check if the merging stats are present
-        stats = self.reqs.MergeReductionStats.req(self).output()["stats"]
+        stats = self.reqs.MergeReductionStats.req_different_branching(self, branch=0).output()["stats"]
         return stats.load(formatter="json")["merge_factor"] if stats.exists() else 0
 
     @law.dynamic_workflow_condition
@@ -576,7 +609,7 @@ class ProvideReducedEvents(
                 reqs["events"] = self._req_reduced_events()
         else:
             # here, the merging is unclear so require the stats
-            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
+            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
 
             if self.force_merging:
                 # require merged events when forced
@@ -598,7 +631,7 @@ class ProvideReducedEvents(
         if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             reqs["events"] = self._req_reduced_events()
         else:
-            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req(self)
+            reqs["reduction_stats"] = self.reqs.MergeReductionStats.req_different_branching(self, branch=0)
 
             if self.force_merging:
                 reqs["events"] = self._req_merged_reduced_events()
