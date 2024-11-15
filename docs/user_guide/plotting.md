@@ -363,3 +363,51 @@ An example on how to implement such a plotting function is shown in the followin
 :start-at: def my_plot1d_func(
 :end-at: return fig, (ax,)
 ```
+
+## Applying a selection to a variable
+
+In some cases, you might want to apply a selection to a variable before plotting it.
+Instead of creating a new column with the selection applied, columnflow provides the possibility to apply a selection to a variable directly when histograming it.
+For this purpose, the ```selection``` parameter can be added in the variable definition in the config.
+This may look as follows:
+
+```python
+
+config.add_variable(
+    name="jet_pt",
+    expression="Jet.pt",
+    binning=(50, 0, 300.0),
+    selection=(lambda events: events.Jet.mass > 30.0),  # Select only jets with a mass larger than 30 GeV
+    null_value=EMPTY_FLOAT,  # Set the value of the variable to EMPTY_FLOAT if the selection is not passed
+    unit="GeV",
+    x_title=r"all Jet $p_{T}$",
+    aux={"inputs": ["Jet.mass"]},  # Add the needed selection columns to the auxiliary of the variable instance
+)
+
+```
+
+It is important to provide the ```null_value``` parameter, when using the ```selection``` parameter, as the variable will be set to this value if the selection is not passed.
+The ```selection``` parameter only supports functions / lambda expressions for now.
+The function itself can be as complex as needed, but its signature needs to match ```def my_selection(events: ak.Array) -> ak.Array[bool]``` where the variable array is passed to the function and the returned value is a boolean array of the same length as the input array.
+
+The used columns in the selection function are not automatically added to the required routes of the workflow.
+For this reason, it is necessary to add the columns used in the selection function to variable instance auxiliary and to make sure that the columns are produced at the time of creating the histograms.
+
+:::{dropdown} An other examble with a more complex selection:
+
+```python
+
+config.add_variable(
+    name="jet_pt",
+    expression="Jet.pt",
+    binning=(50, 0, 300.0),
+    selection=(lambda events: abs(events.Jet.eta) ** 2 + abs(events.Jet.phi) ** 2 < 0.4),
+    null_value=EMPTY_FLOAT,
+    unit="GeV",
+    x_title=r"all Jet $p_{T}$",
+    aux={"inputs": ["Jet.eta", "Jet.phi"]},
+)
+
+```
+
+:::

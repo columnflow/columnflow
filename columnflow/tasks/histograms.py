@@ -148,12 +148,16 @@ class CreateHistograms(
                 self.config_inst.get_variable(var_name)
                 for var_name in law.util.flatten(self.variable_tuples.values())
             )
-            for inp in (
+            for inp in ((
                 [variable_inst.expression]
                 if isinstance(variable_inst.expression, str)
                 # for variable_inst with custom expressions, read columns declared via aux key
                 else variable_inst.x("inputs", [])
-            )
+            ) + (
+                variable_inst.x("inputs", [])
+                if variable_inst.selection != "1"
+                else []
+            ))
         }
 
         # empty float array to use when input files have no entries
@@ -243,8 +247,17 @@ class CreateHistograms(
                                 if len(events) == 0 and not has_ak_column(events, route):
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
+                        arr = expr(events)
+                        # prepare the selection
+                        sel = variable_inst.selection
+                        if sel != "1":
+                            if callable(sel):
+                                mask = sel(events)
+                                arr = ak.where(mask, arr, variable_inst.null_value)
+                            else:
+                                raise ValueError(f"invalid selection: {sel}")
                         # apply it
-                        fill_data[variable_inst.name] = expr(events)
+                        fill_data[variable_inst.name] = arr
 
                     # fill it
                     fill_hist(
