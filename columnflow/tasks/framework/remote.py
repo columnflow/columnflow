@@ -568,6 +568,13 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         description="requested memeory in MB; empty value leads to the cluster default setting; "
         "empty default",
     )
+    htcondor_disk = law.BytesParameter(
+        default=law.NO_FLOAT,
+        unit="GB",
+        significant=False,
+        description="requested disk space in GB; empty value leads to the cluster default setting; "
+        "empty default",
+    )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
         choices=(
@@ -696,6 +703,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # request memory
         if self.htcondor_memory is not None and self.htcondor_memory > 0:
             config.custom_content.append(("Request_Memory", self.htcondor_memory))
+
+        # request disk space
+        if self.htcondor_disk is not None and self.htcondor_disk > 0:
+            # TODO: the exact conversion might be flavor dependent in the future, use kB for npw
+            # e.g. https://confluence.desy.de/pages/viewpage.action?pageId=128354529
+            config.custom_content.append(("RequestDisk", self.htcondor_disk * 1024**2))
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
