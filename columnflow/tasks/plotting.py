@@ -11,7 +11,7 @@ import law
 import luigi
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask, MultiConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
@@ -30,11 +30,12 @@ class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
     CategoriesMixin,
-    MLModelsMixin,
+    # MLModelsMixin,
     WeightProducerMixin,
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    MultiConfigTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -148,6 +149,8 @@ class PlotVariablesBase(
             # update histograms using custom hooks
             hists = self.invoke_hist_hooks(hists)
 
+
+
             # add new processes to the end of the list
             for process_inst in hists:
                 if process_inst not in process_insts:
@@ -191,10 +194,28 @@ class PlotVariablesBase(
                 outp.dump(fig, formatter="mpl")
 
 
+from columnflow.tasks.framework.base import AnalysisTask
+
+
+class PlotShiftMixin(AnalysisTask):
+    #TODO: details
+    shift = luigi.Parameter(
+        default="nominal",
+        description="the shift to plot; empty default",
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        # add the shift name
+        parts.insert_after("analysis", "shift", self.shift)
+        return parts
+
+
 class PlotVariablesBaseSingleShift(
     PlotVariablesBase,
-    ShiftTask,
+    PlotShiftMixin,
 ):
+
     exclude_index = True
 
     # upstream requirements
@@ -214,22 +235,41 @@ class PlotVariablesBaseSingleShift(
         reqs = super().workflow_requires()
 
         # no need to require merged histograms since each branch already requires them as a workflow
-        if self.workflow == "local":
-            reqs.pop("merged_hists", None)
+        # if self.workflow == "local":
+        #     reqs.pop("merged_hists", None)
 
         return reqs
 
     def requires(self):
-        return {
-            d: self.reqs.MergeHistograms.req(
-                self,
-                dataset=d,
-                branch=-1,
-                _exclude={"branches"},
-                _prefer_cli={"variables"},
-            )
-            for d in self.datasets
-        }
+        # return {
+        #     d: self.reqs.MergeHistograms.req(
+        #         self,
+        #         dataset=d,
+        #         branch=-1,
+        #         _exclude={"branches"},
+        #         _prefer_cli={"variables"},
+        #     )
+        #     for d in self.datasets
+        # }
+
+        # only require Histograms of datasets that exist in the configs
+        # Might need to change to only require datasets that exist in all configs
+        req = {}
+
+        for i, config_inst in enumerate(self.config_insts):
+            sub_datasets = self.datasets[i]
+            req[config_inst.name] = {}
+            for d in sub_datasets:
+                if d in config_inst.datasets.names():
+                    req[config_inst.name][d] = self.reqs.MergeHistograms.req(
+                        self,
+                        config=config_inst.name,
+                        dataset=d,
+                        branch=-1,
+                        _exclude={"branches"},
+                        _prefer_cli={"variables"},
+                    )
+        return req
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
@@ -245,6 +285,8 @@ class PlotVariablesBaseSingleShift(
         return parts
 
     def output(self):
+        from hbw.util import debugger; debugger()
+        breakpoint()
         return {
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
