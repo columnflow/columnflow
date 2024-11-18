@@ -105,6 +105,20 @@ class ParameterTransformations(tuple):
         return any(t.from_rate for t in self)
 
 
+class FlowStrategy(enum.Enum):
+    """
+    Strategy to handle over- and underflow bin contents.
+    """
+
+    ignore = "ignore"
+    warn = "warn"
+    remove = "remove"
+    move = "move"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class InferenceModel(Derivable):
     """
     Interface to statistical inference models with connections to config objects (such as
@@ -121,6 +135,7 @@ class InferenceModel(Derivable):
             config_variable: ht
             config_data_datasets: [data_mu_a]
             data_from_processes: []
+            flow_strategy: warn
             mc_stats: 10
             processes:
               - name: HH
@@ -188,26 +203,36 @@ class InferenceModel(Derivable):
     # optional initialization method
     init_func = None
 
-    class YamlDumper(yaml.SafeDumper or object):
+    class YamlDumper(yaml.SafeDumper):
         """
         YAML dumper for statistical inference models with ammended representers to serialize
         internal, structured objects as safe, standard objects.
         """
 
-        def __init__(self: InferenceModel.YamlDumper, *args, **kwargs) -> None:
+        @classmethod
+        def _map_repr(cls, dumper: yaml.Dumper, data: dict) -> str:
+            return dumper.represent_dict(dict(data))
+
+        @classmethod
+        def _list_repr(cls, dumper: yaml.Dumper, data: list) -> str:
+            return dumper.represent_list(list(data))
+
+        @classmethod
+        def _str_repr(cls, dumper: yaml.Dumper, data: str) -> str:
+            return dumper.represent_str(str(data))
+
+        def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
 
             # ammend representers
-            map_repr = lambda dumper, data: dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
-            self.add_representer(DotDict, map_repr)
+            self.add_representer(DotDict, self._map_repr)
+            self.add_representer(tuple, self._list_repr)
+            self.add_representer(ParameterType, self._str_repr)
+            self.add_representer(ParameterTransformation, self._str_repr)
+            self.add_representer(ParameterTransformations, self._list_repr)
+            self.add_representer(FlowStrategy, self._str_repr)
 
-            list_repr = lambda dumper, data: dumper.represent_list(list(data))
-            self.add_representer(tuple, list_repr)
-
-            str_repr = lambda dumper, data: dumper.represent_str(str(data))
-            self.add_representer(ParameterType, str_repr)
-
-        def ignore_aliases(self: InferenceModel.YamlDumper, *args, **kwargs) -> bool:
+        def ignore_aliases(self, *args, **kwargs) -> bool:
             return True
 
     @classmethod
@@ -224,8 +249,10 @@ class InferenceModel(Derivable):
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
-            cls_dict = {"init_func": func}
-            cls_dict.update(kwargs)
+            cls_dict = {
+                **kwargs,
+                "init_func": func,
+            }
 
             # create the subclass
             subclass = cls.derive(func.__name__, bases=bases, cls_dict=cls_dict)
@@ -255,6 +282,7 @@ class InferenceModel(Derivable):
         config_variable: str | None = None,
         config_data_datasets: Sequence[str] | None = None,
         data_from_processes: Sequence[str] | None = None,
+        flow_strategy: FlowStrategy | str = FlowStrategy.warn,
         mc_stats: int | float | tuple | None = None,
         empty_bin_value: float = 1e-5,
     ) -> DotDict:
@@ -265,9 +293,12 @@ class InferenceModel(Derivable):
             - *name*: The name of the category in the model.
             - *config_category*: The name of the source category in the config to use.
             - *config_variable*: The name of the variable in the config to use.
-            - *config_data_datasets*: List of names of datasets in the config to use for real data.
+            - *config_data_datasets*: List of names or patterns of datasets in the config to use for
+              real data.
             - *data_from_processes*: Optional list of names of :py:meth:`process_spec` objects that,
               when *config_data_datasets* is not defined, make of a fake data contribution.
+            - *flow_strategy*: A :py:class:`FlowStrategy` instance describing the strategy to handle
+              over- and underflow bin contents.
             - *mc_stats*: Either *None* to disable MC stat uncertainties, or an integer, a float or
               a tuple of thereof to control the options of MC stat options.
             - *empty_bin_value*: When bins are no content, they are filled with this value.
@@ -278,6 +309,11 @@ class InferenceModel(Derivable):
             ("config_variable", str(config_variable) if config_variable else None),
             ("config_data_datasets", list(map(str, config_data_datasets or []))),
             ("data_from_processes", list(map(str, data_from_processes or []))),
+            ("flow_strategy", (
+                flow_strategy
+                if isinstance(flow_strategy, FlowStrategy)
+                else FlowStrategy[flow_strategy]
+            )),
             ("mc_stats", mc_stats),
             ("empty_bin_value", empty_bin_value),
             ("processes", []),
@@ -298,7 +334,7 @@ class InferenceModel(Derivable):
             - *name*: The name of the process in the model.
             - *is_signal*: A boolean flag deciding whether this process describes signal.
             - *config_process*: The name of the source process in the config to use.
-            - *config_mc_datasets*: List of names of MC datasets in the config to use.
+            - *config_mc_datasets*: List of names or patterns of MC datasets in the config to use.
             - *scale*: A float value to scale the process, defaulting to 1.0.
         """
         return DotDict([
@@ -357,7 +393,7 @@ class InferenceModel(Derivable):
         ])
 
     @classmethod
-    def require_shapes_for_parameter(self: InferenceModel, param_obj: dict) -> bool:
+    def require_shapes_for_parameter(self, param_obj: dict) -> bool:
         """
         Returns *True* if for a certain parameter object *param_obj* varied shapes are needed, and
         *False* otherwise.
@@ -378,11 +414,11 @@ class InferenceModel(Derivable):
 
         # other cases are not supported
         raise Exception(
-            f"shape requirement cannot be evaluated of parameter '{param_obj.name}' with type " +
+            f"shape requirement cannot be evaluated for parameter '{param_obj.name}' with type " +
             f"'{param_obj.type}' and transformations {param_obj.transformations}",
         )
 
-    def __init__(self: InferenceModel, config_inst: od.Config) -> None:
+    def __init__(self, config_inst: od.Config) -> None:
         super().__init__()
 
         # store attributes
@@ -391,19 +427,18 @@ class InferenceModel(Derivable):
         # model info
         self.model = self.model_spec()
 
-        # custom init function when set, always followed by the cleanup
+        # custom init function when set
         if callable(self.init_func):
             self.init_func()
-            self.cleanup()
 
-    def to_yaml(self: InferenceModel, stream: TextIO | None = None) -> str | None:
+    def to_yaml(self, stream: TextIO | None = None) -> str | None:
         """
         Writes the content of the :py:attr:`model` into a file-like object *stream* when given, and
         returns a string representation otherwise.
         """
         return yaml.dump(self.model, stream=stream, Dumper=self.YamlDumper)
 
-    def pprint(self: InferenceModel) -> None:
+    def pprint(self) -> None:
         """
         Pretty-prints the content of the :py:attr:`model` in yaml-style.
         """
@@ -414,11 +449,11 @@ class InferenceModel(Derivable):
     #
 
     @property
-    def categories(self: InferenceModel) -> DotDict:
+    def categories(self) -> DotDict:
         return self.model.categories
 
     @property
-    def parameter_groups(self: InferenceModel) -> DotDict:
+    def parameter_groups(self) -> DotDict:
         return self.model.parameter_groups
 
     #
@@ -426,7 +461,7 @@ class InferenceModel(Derivable):
     #
 
     def get_categories(
-        self: InferenceModel,
+        self,
         category: str | Sequence[str] | None = None,
         only_names: bool = False,
     ) -> list[DotDict | str]:
@@ -446,7 +481,7 @@ class InferenceModel(Derivable):
         ]
 
     def get_category(
-        self: InferenceModel,
+        self,
         category: str | Sequence[str],
         only_name: bool = False,
         silent: bool = False,
@@ -475,7 +510,7 @@ class InferenceModel(Derivable):
         return categories[0]
 
     def has_category(
-        self: InferenceModel,
+        self,
         category: str | Sequence[str],
     ) -> bool:
         """
@@ -488,7 +523,7 @@ class InferenceModel(Derivable):
         # simple length check
         return len(self.get_categories(category_pattern)) > 0
 
-    def add_category(self: InferenceModel, *args, **kwargs) -> None:
+    def add_category(self, *args, **kwargs) -> None:
         """
         Adds a new category with all *args* and *kwargs* used to create the structured category
         dictionary via :py:meth:`category_spec`. If a category with the same name already exists, an
@@ -505,7 +540,7 @@ class InferenceModel(Derivable):
         self.categories.append(category)
 
     def remove_category(
-        self: InferenceModel,
+        self,
         category: str | Sequence[str],
     ) -> bool:
         """
@@ -536,7 +571,7 @@ class InferenceModel(Derivable):
     #
 
     def get_processes(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
         only_names: bool = False,
@@ -582,7 +617,7 @@ class InferenceModel(Derivable):
         return processes
 
     def get_process(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
         only_name: bool = False,
@@ -635,7 +670,7 @@ class InferenceModel(Derivable):
         return processes[0]
 
     def has_process(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
     ) -> bool:
@@ -652,7 +687,7 @@ class InferenceModel(Derivable):
         return len(self.get_processes(process_pattern, category=category_pattern)) > 0
 
     def add_process(
-        self: InferenceModel,
+        self,
         *args,
         category: str | Sequence[str] | None = None,
         silent: bool = False,
@@ -691,7 +726,7 @@ class InferenceModel(Derivable):
             category.processes.append(_copy.deepcopy(process))
 
     def remove_process(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
     ) -> bool:
@@ -729,7 +764,7 @@ class InferenceModel(Derivable):
     #
 
     def get_parameters(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str] | None = None,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -785,7 +820,7 @@ class InferenceModel(Derivable):
         return parameters
 
     def get_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -853,7 +888,7 @@ class InferenceModel(Derivable):
         return parameters[0]
 
     def has_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -877,7 +912,7 @@ class InferenceModel(Derivable):
         )) > 0
 
     def add_parameter(
-        self: InferenceModel,
+        self,
         *args,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -926,7 +961,7 @@ class InferenceModel(Derivable):
         return parameter
 
     def remove_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -968,7 +1003,7 @@ class InferenceModel(Derivable):
     #
 
     def get_parameter_groups(
-        self: InferenceModel,
+        self,
         group: str | Sequence[str] | None = None,
         only_names: bool = False,
     ) -> list[DotDict | str]:
@@ -990,7 +1025,7 @@ class InferenceModel(Derivable):
         ]
 
     def get_parameter_group(
-        self: InferenceModel,
+        self,
         group: str | Sequence[str],
         only_name: bool = False,
     ) -> DotDict | str:
@@ -1016,7 +1051,7 @@ class InferenceModel(Derivable):
         return groups[0]
 
     def has_parameter_group(
-        self: InferenceModel,
+        self,
         group: str | Sequence[str],
     ) -> bool:
         """
@@ -1029,7 +1064,7 @@ class InferenceModel(Derivable):
         # simeple length check
         return len(self.get_parameter_groups(group_pattern)) > 0
 
-    def add_parameter_group(self: InferenceModel, *args, **kwargs) -> None:
+    def add_parameter_group(self, *args, **kwargs) -> None:
         """
         Adds a new parameter group with all *args* and *kwargs* used to create the structured
         parameter group dictionary via :py:meth:`parameter_group_spec`. If a group with the same
@@ -1045,7 +1080,7 @@ class InferenceModel(Derivable):
         self.parameter_groups.append(group)
 
     def remove_parameter_group(
-        self: InferenceModel,
+        self,
         group: str | Sequence[str],
     ) -> bool:
         """
@@ -1068,7 +1103,7 @@ class InferenceModel(Derivable):
         return removed_any
 
     def add_parameter_to_group(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         group: str | Sequence[str],
     ) -> bool:
@@ -1107,7 +1142,7 @@ class InferenceModel(Derivable):
         return added_any
 
     def remove_parameter_from_groups(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         group: str | Sequence[str] | None = None,
     ) -> bool:
@@ -1143,7 +1178,7 @@ class InferenceModel(Derivable):
     #
 
     def get_categories_with_process(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str],
     ) -> list[str]:
         """
@@ -1157,7 +1192,7 @@ class InferenceModel(Derivable):
         return list(self.get_processes(process=process_pattern, only_names=True).keys())
 
     def get_processes_with_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         category: str | Sequence[str] | None = None,
         flat: bool = True,
@@ -1192,7 +1227,7 @@ class InferenceModel(Derivable):
         return processes
 
     def get_categories_with_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         flat: bool = True,
@@ -1227,7 +1262,7 @@ class InferenceModel(Derivable):
         return categories
 
     def get_groups_with_parameter(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str],
     ) -> list[str]:
         """
@@ -1248,17 +1283,20 @@ class InferenceModel(Derivable):
     # removal of empty and dangling objects
     #
 
-    def cleanup(self: InferenceModel) -> None:
+    def cleanup(
+        self,
+        keep_parameters: str | Sequence[str] | None = None,
+    ) -> None:
         """
         Cleans the internal model structure by removing empty and dangling objects by calling
-        :py:meth:`remove_empty_categories`, :py:meth:`remove_dangling_parameters_from_groups` and
-        :py:meth:`remove_empty_parameter_groups` in that order.
+        :py:meth:`remove_empty_categories`, :py:meth:`remove_dangling_parameters_from_groups`
+        (receiving *keep_parameters*), and :py:meth:`remove_empty_parameter_groups` in that order.
         """
         self.remove_empty_categories()
-        self.remove_dangling_parameters_from_groups()
+        self.remove_dangling_parameters_from_groups(keep_parameters=keep_parameters)
         self.remove_empty_parameter_groups()
 
-    def remove_empty_categories(self: InferenceModel) -> None:
+    def remove_empty_categories(self) -> None:
         """
         Removes all categories that contain no processes.
         """
@@ -1268,7 +1306,10 @@ class InferenceModel(Derivable):
             if category.processes
         ]
 
-    def remove_dangling_parameters_from_groups(self: InferenceModel) -> None:
+    def remove_dangling_parameters_from_groups(
+        self,
+        keep_parameters: str | Sequence[str] | None = None,
+    ) -> None:
         """
         Removes names of parameters from parameter groups that are not assigned to any process in
         any category.
@@ -1276,15 +1317,22 @@ class InferenceModel(Derivable):
         # get a list of all parameters
         parameter_names = self.get_parameters("*", flat=True)
 
+        # get list of parameters to keep
+        if keep_parameters:
+            keep_parameters = self.get_parameters(keep_parameters, flat=True)
+
         # go through groups and remove dangling parameters
         for group in self.parameter_groups:
             group.parameter_names[:] = [
                 parameter_name
                 for parameter_name in group.parameter_names
-                if parameter_name in parameter_names
+                if (
+                    parameter_name in parameter_names or
+                    (keep_parameters and parameter_name in keep_parameters)
+                )
             ]
 
-    def remove_empty_parameter_groups(self: InferenceModel) -> None:
+    def remove_empty_parameter_groups(self) -> None:
         """
         Removes parameter groups that contain no parameter names.
         """
@@ -1299,7 +1347,7 @@ class InferenceModel(Derivable):
     #
 
     def iter_processes(
-        self: InferenceModel,
+        self,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
     ) -> Generator[tuple[DotDict, DotDict], None, None]:
@@ -1314,7 +1362,7 @@ class InferenceModel(Derivable):
                 yield (category_name, process)
 
     def iter_parameters(
-        self: InferenceModel,
+        self,
         parameter: str | Sequence[str] | None = None,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
@@ -1335,7 +1383,7 @@ class InferenceModel(Derivable):
     #
 
     def scale_process(
-        self: InferenceModel,
+        self,
         scale: int | float,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
