@@ -928,6 +928,8 @@ class MultiConfigTask(AnalysisTask):
         parse_empty=True,
     )
 
+    config_order_dependent = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -992,10 +994,14 @@ class MultiConfigTask(AnalysisTask):
         """
         parts = super().store_parts()
 
-        configs_repr = "__".join(self.configs[:5])
+        configs = self.configs
+        if not self.config_order_dependent:
+            configs = sorted(configs)
 
-        if len(self.configs) > 5:
-            configs_repr += f"_{law.util.create_hash(self.configs[5:])}"
+        configs_repr = "__".join(configs[:5])
+
+        if len(configs) > 5:
+            configs_repr += f"_{law.util.create_hash(configs[5:])}"
 
         parts.insert_after("task_family", "configs", configs_repr)
 

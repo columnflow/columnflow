@@ -1648,9 +1648,13 @@ class CategoriesMixin(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+
+        config_insts = params["config_insts"]
+
+        #TODO: cross-checks over multiple config insts
+        config_inst = config_insts[0]
 
         # resolve categories
         if "categories" in params:
@@ -1705,9 +1709,13 @@ class VariablesMixin(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+
+        config_insts = params["config_insts"]
+
+        #TODO: cross-checks over multiple config insts
+        config_inst = config_insts[0]
 
         # resolve variables
         if "variables" in params:
@@ -1812,6 +1820,7 @@ class DatasetsProcessesMixin(AnalysisTask):
         brace_expand=True,
         parse_empty=True,
     )
+    #TODO: this should be per config
     processes = law.CSVParameter(
         default=(),
         description="comma-separated process names or patterns for filtering processes; can also "
@@ -1828,13 +1837,13 @@ class DatasetsProcessesMixin(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        config_insts = params.get("config_insts", None)
+        config_insts = params.get("config_insts", ())
 
-        if not config_insts:
-            # maybe single config?
-            config_inst = params.get("config_inst", None)
-            if config_inst:
-                config_insts = [config_inst]
+        # if not config_insts:
+        #     # maybe single config?
+        #     config_inst = params.get("config_inst", None)
+        #     if config_inst:
+        #         config_insts = [config_inst]
 
         if not config_insts:
             # configs not yet setup

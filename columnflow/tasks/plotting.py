@@ -11,13 +11,14 @@ import law
 import luigi
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, ShiftTask, MultiConfigTask
+from columnflow.tasks.framework.base import Requirements, MultiConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
+    PlotShiftMixin,
 )
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -30,7 +31,7 @@ class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
     CategoriesMixin,
-    # MLModelsMixin,
+    # MLModelsMixin,  # TODO: reintroduce
     WeightProducerMixin,
     ProducersMixin,
     SelectorStepsMixin,
@@ -72,6 +73,10 @@ class PlotVariablesBase(
     def get_plot_shifts(self):
         return
 
+    @property
+    def config_inst(self):
+        return self.config_insts[0]
+
     @law.decorator.log
     @view_output_plots
     def run(self):
@@ -83,6 +88,7 @@ class PlotVariablesBase(
         # copy process instances once so that their auxiliary data fields can be used as a storage
         # for process-specific plot parameters later on in plot scripts without affecting the
         # original instances
+        #TODO: this should be per config
         fake_root = od.Process(
             name=f"{hex(id(object()))[2:]}",
             id="+",
@@ -108,51 +114,66 @@ class PlotVariablesBase(
         hists = {}
 
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
-            for dataset, inp in self.input().items():
-                dataset_inst = self.config_inst.get_dataset(dataset)
-                h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
+            for config, dataset_dict in self.input().items():
+                hists[config] = {}
+                for dataset, inp in dataset_dict.items():
+                    dataset_inst = self.config_inst.get_dataset(dataset)
+                    h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
 
-                # loop and extract one histogram per process
-                for process_inst in process_insts:
-                    # skip when the dataset is already known to not contain any sub process
-                    if not any(
-                        dataset_inst.has_process(sub_process_inst.name)
-                        for sub_process_inst in sub_process_insts[process_inst]
-                    ):
-                        continue
+                    # loop and extract one histogram per process
+                    for process_inst in process_insts:
+                        # skip when the dataset is already known to not contain any sub process
+                        if not any(
+                            dataset_inst.has_process(sub_process_inst.name)
+                            for sub_process_inst in sub_process_insts[process_inst]
+                        ):
+                            continue
 
-                    # select processes and reduce axis
-                    h = h_in.copy()
-                    h = h[{
-                        "process": [
-                            hist.loc(p.id)
-                            for p in sub_process_insts[process_inst]
-                            if p.id in h.axes["process"]
-                        ],
-                    }]
-                    h = h[{"process": sum}]
+                        # select processes and reduce axis
+                        h = h_in.copy()
+                        h = h[{
+                            "process": [
+                                hist.loc(p.id)
+                                for p in sub_process_insts[process_inst]
+                                if p.id in h.axes["process"]
+                            ],
+                        }]
+                        h = h[{"process": sum}]
 
-                    # add the histogram
-                    if process_inst in hists:
-                        hists[process_inst] += h
-                    else:
-                        hists[process_inst] = h
+                        # add the histogram
+                        if process_inst in hists[config]:
+                            hists[config][process_inst] += h
+                        else:
+                            hists[config][process_inst] = h
 
-            # there should be hists to plot
-            if not hists:
-                raise Exception(
-                    "no histograms found to plot; possible reasons:\n"
-                    "  - requested variable requires columns that were missing during histogramming\n"
-                    "  - selected --processes did not match any value on the process axis of the input histogram",
-                )
+                # there should be hists to plot
+                if not hists:
+                    raise Exception(
+                        "no histograms found to plot; possible reasons:\n"
+                        "  - requested variable requires columns that were missing during histogramming\n"
+                        "  - selected --processes did not match any value on the process axis of the input histogram",
+                    )
 
             # update histograms using custom hooks
             hists = self.invoke_hist_hooks(hists)
 
-            # add new processes to the end of the list
-            for process_inst in hists:
-                if process_inst not in process_insts:
-                    process_insts.append(process_inst)
+            # merge configs
+            if len(self.config_insts) != 1:
+                process_memory = {}
+                merged_hists = {}
+                for config, _hists in hists.items():
+                    for process_inst, h in _hists.items():
+
+                        if process_inst.id in merged_hists:
+                            merged_hists[process_inst.id] += h
+                        else:
+                            merged_hists[process_inst.id] = h
+                            process_memory[process_inst.id] = process_inst
+            else:
+                merged_hists = hists[self.config_inst.name]
+
+            process_insts = list(process_memory.values())
+            hists = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
 
             # axis selections and reductions, including sorting by process order
             _hists = OrderedDict()
@@ -190,93 +211,6 @@ class PlotVariablesBase(
             # save the plot
             for outp in self.output()["plots"]:
                 outp.dump(fig, formatter="mpl")
-
-
-from columnflow.tasks.framework.base import AnalysisTask
-
-
-class PlotShiftMixin(AnalysisTask):
-    # TODO: details
-    shift = luigi.Parameter(
-        default="nominal",
-        description="the shift to plot; empty default",
-    )
-
-    @classmethod
-    def modify_param_values(cls, params):
-        """
-        When "config" and "shift" are set, this method evaluates them to set the global shift.
-        For that, it takes the shifts stored in the config instance and compares it with those
-        defined by this class.
-        """
-        params = super().modify_param_values(params)
-
-        # get params
-        config_insts = params.get("config_insts")
-        requested_shift = params.get("shift")
-
-
-        # require that the configs is set
-        if config_insts in (None, law.NO_STR, ()):
-            return params
-
-        # require that the shift is set and known
-        if requested_shift in (None, law.NO_STR):
-            if cls.allow_empty_shift:
-                params["shift"] = law.NO_STR
-                return params
-
-            raise Exception(f"no shift found in params: {params}")
-
-        for config_inst in config_insts:
-            if requested_shift not in config_inst.shifts:
-                raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
-
-        # determine the known shifts for this class
-        shifts, upstream_shifts = cls.get_known_shifts(config_insts[0], params)
-
-        # actual shift resolution: compare the requested shift to known ones
-        # local_shift -> the requested shift if implemented by the task itself, else nominal
-        # shift       -> the requested shift if implemented by this task
-        #                or an upsteam task (== global shift), else nominal
-
-        if requested_shift in shifts:
-            params["shift"] = requested_shift
-        elif requested_shift in upstream_shifts:
-            params["shift"] = requested_shift
-        else:
-            params["shift"] = "nominal"
-
-        # store references
-        params["shift_inst"] = config_insts[0].get_shift(params["shift"])
-
-        return params
-
-    @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
-        params = super().resolve_param_values(params)
-
-        # set default shift
-        if params.get("shift") in (None, law.NO_STR):
-            params["shift"] = "nominal"
-
-        return params
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # store references to the shift instances
-        self.shift_inst = None
-        self.global_shift_inst = None
-
-        if self.shift not in (None, law.NO_STR):
-            self.shift_inst = self.config_insts[0].get_shift(self.shift)
-
-    def store_parts(self):
-        parts = super().store_parts()
-        # add the shift name
-        parts.insert_after("analysis", "shift", self.shift)
-        return parts
 
 
 class PlotVariablesBaseSingleShift(
