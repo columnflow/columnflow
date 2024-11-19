@@ -149,8 +149,6 @@ class PlotVariablesBase(
             # update histograms using custom hooks
             hists = self.invoke_hist_hooks(hists)
 
-
-
             # add new processes to the end of the list
             for process_inst in hists:
                 if process_inst not in process_insts:
@@ -198,11 +196,70 @@ from columnflow.tasks.framework.base import AnalysisTask
 
 
 class PlotShiftMixin(AnalysisTask):
-    #TODO: details
+    # TODO: details
     shift = luigi.Parameter(
         default="nominal",
         description="the shift to plot; empty default",
     )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        """
+        When "config" and "shift" are set, this method evaluates them to set the global shift.
+        For that, it takes the shifts stored in the config instance and compares it with those
+        defined by this class.
+        """
+        params = super().modify_param_values(params)
+
+        # get params
+        config_insts = params.get("config_insts")
+        requested_shift = params.get("shift")
+
+        # require that the configs is set
+        if config_insts in (None, law.NO_STR):
+            return params
+
+        # require that the shift is set and known
+        if requested_shift in (None, law.NO_STR):
+            if cls.allow_empty_shift:
+                params["shift"] = law.NO_STR
+                return params
+
+            raise Exception(f"no shift found in params: {params}")
+
+        for config_inst in config_insts:
+            if requested_shift not in config_inst.shifts:
+                raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
+
+        # determine the known shifts for this class
+        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
+
+        # actual shift resolution: compare the requested shift to known ones
+        # local_shift -> the requested shift if implemented by the task itself, else nominal
+        # shift       -> the requested shift if implemented by this task
+        #                or an upsteam task (== global shift), else nominal
+
+        if requested_shift in shifts:
+            params["shift"] = requested_shift
+        elif requested_shift in upstream_shifts:
+            params["shift"] = requested_shift
+        else:
+            params["shift"] = "nominal"
+
+        # store references
+        params["shift_inst"] = config_inst.get_shift(params["shift"])
+
+        return params
+
+    @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
+
+        return params
 
     def store_parts(self):
         parts = super().store_parts()
@@ -241,18 +298,7 @@ class PlotVariablesBaseSingleShift(
         return reqs
 
     def requires(self):
-        # return {
-        #     d: self.reqs.MergeHistograms.req(
-        #         self,
-        #         dataset=d,
-        #         branch=-1,
-        #         _exclude={"branches"},
-        #         _prefer_cli={"variables"},
-        #     )
-        #     for d in self.datasets
-        # }
 
-        # only require Histograms of datasets that exist in the configs
         # Might need to change to only require datasets that exist in all configs
         req = {}
 
@@ -285,8 +331,6 @@ class PlotVariablesBaseSingleShift(
         return parts
 
     def output(self):
-        from hbw.util import debugger; debugger()
-        breakpoint()
         return {
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
@@ -298,7 +342,7 @@ class PlotVariablesBaseSingleShift(
         return parts
 
     def get_plot_shifts(self):
-        return [self.global_shift_inst]
+        return [self.shift_inst]
 
 
 class PlotVariables1D(
