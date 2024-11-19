@@ -1031,6 +1031,7 @@ class ConfigTask(AnalysisTask):
         # store a reference to the config inst
         if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
+            params["config_insts"] = [params["config_inst"]]
 
             # switch defaults from config to analysis inst
             cls.switch_cspm_defaults(params)
@@ -1090,6 +1091,7 @@ class ConfigTask(AnalysisTask):
 
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
+        self.config_insts = [self.config_inst]
 
     def store_parts(self):
         parts = super().store_parts()

@@ -1866,7 +1866,7 @@ class DatasetsProcessesMixin(AnalysisTask):
         # resolve datasets
         if "datasets" in params:
             if params["datasets"]:
-                datasets = params["datasets"]
+                datasets = list(params["datasets"])
                 if len(datasets) == 1:
                     # resolve to number of configs
                     datasets = list(datasets * len(config_insts))

@@ -215,8 +215,9 @@ class PlotShiftMixin(AnalysisTask):
         config_insts = params.get("config_insts")
         requested_shift = params.get("shift")
 
+
         # require that the configs is set
-        if config_insts in (None, law.NO_STR):
+        if config_insts in (None, law.NO_STR, ()):
             return params
 
         # require that the shift is set and known
@@ -232,7 +233,7 @@ class PlotShiftMixin(AnalysisTask):
                 raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
         # determine the known shifts for this class
-        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = cls.get_known_shifts(config_insts[0], params)
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -247,7 +248,7 @@ class PlotShiftMixin(AnalysisTask):
             params["shift"] = "nominal"
 
         # store references
-        params["shift_inst"] = config_inst.get_shift(params["shift"])
+        params["shift_inst"] = config_insts[0].get_shift(params["shift"])
 
         return params
 
@@ -261,6 +262,16 @@ class PlotShiftMixin(AnalysisTask):
 
         return params
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store references to the shift instances
+        self.shift_inst = None
+        self.global_shift_inst = None
+
+        if self.shift not in (None, law.NO_STR):
+            self.shift_inst = self.config_insts[0].get_shift(self.shift)
+
     def store_parts(self):
         parts = super().store_parts()
         # add the shift name
@@ -269,8 +280,8 @@ class PlotShiftMixin(AnalysisTask):
 
 
 class PlotVariablesBaseSingleShift(
-    PlotVariablesBase,
     PlotShiftMixin,
+    PlotVariablesBase,
 ):
 
     exclude_index = True
