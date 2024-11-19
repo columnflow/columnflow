@@ -81,7 +81,7 @@ class PrepareMLEvents(
             # producer has already been cached
             return self._preparation_producer_inst
 
-        producer = self.ml_model_inst.preparation_producer(self.config_inst)
+        producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested
@@ -611,7 +611,7 @@ class MLEvaluation(
         producer = None
         if self.ml_model_inst.preparation_producer_in_ml_evaluation:
             # only consider preparation_producer in MLEvaluation if requested by model
-            producer = self.ml_model_inst.preparation_producer(self.config_inst)
+            producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested

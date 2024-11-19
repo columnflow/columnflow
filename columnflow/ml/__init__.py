@@ -347,11 +347,11 @@ class MLModel(Derivable):
 
     def training_calibrators(
         self: MLModel,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_calibrators: Sequence[str],
     ) -> list[str]:
         """
-        Given a sequence of *requested_calibrators* for a *config_inst*, this method can alter
+        Given a sequence of *requested_calibrators* for a *analysis_inst*, this method can alter
         and/or replace them to define a different set of calibrators for the preprocessing and
         training pipeline. This can be helpful in cases where training and evaluation phase spaces,
         as well as the required input columns are intended to diverge.
@@ -362,18 +362,18 @@ class MLModel(Derivable):
             :language: python
             :pyobject: TestModel.training_calibrators
 
-        :param config_inst: Config instance to extract the *requested_calibrators* from
+        :param analysis_inst: Analysis instance to extract the *requested_calibrators* from
         :returns: Set with str of the *requested_calibrators*
         """
         return list(requested_calibrators)
 
     def training_selector(
         self: MLModel,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_selector: str,
     ) -> str:
         """
-        Given a *requested_selector* for a *config_inst*, this method can change it to define a
+        Given a *requested_selector* for a *analysis_inst*, this method can change it to define a
         different selector for the preprocessing and training pipeline. This can be helpful in cases
         where training and evaluation phase spaces, as well as the required input columns are
         intended to diverge.
@@ -384,18 +384,18 @@ class MLModel(Derivable):
             :language: python
             :pyobject: TestModel.training_selector
 
-        :param config_inst: Config instance to extract the *requested_selector* from
+        :param analysis_inst: Analysis instance to extract the *requested_selector* from
         :returns: Set with str of the *requested_selector*
         """
         return requested_selector
 
     def training_producers(
         self: MLModel,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_producers: Sequence[str],
     ) -> list[str]:
         """
-        Given a sequence of *requested_producers* for a *config_inst*, this method can alter and/or
+        Given a sequence of *requested_producers* for a *analysis_inst*, this method can alter and/or
         replace them to define a different set of producers for the preprocessing and training
         pipeline. This can be helpful in cases where training and evaluation phase spaces, as well
         as the required input columns are intended to diverge.
@@ -406,20 +406,20 @@ class MLModel(Derivable):
             :language: python
             :pyobject: TestModel.training_producers
 
-        :param config_inst: Config instance to extract the *requested_producers* from
+        :param analysis_inst: Analysis instance to extract the *requested_producers* from
         :returns: Set with str of the *requested_producers*
         """
         return list(requested_producers)
 
     def preparation_producer(
         self: MLModel,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
     ) -> str | None:
         """
         This method allows setting a producer that can be called as part of the preparation
-        of the ML input columns given a *config_inst*.
+        of the ML input columns given a *analysis_inst*.
 
-        :param config_inst: :py:class:`~order.Config` object for which the producer should run.
+        :param analysis_inst: :py:class:`~order.Analysis` object for which the producer should run.
         :return: Name of a :py:class:`Producer` class or *None*.
         """
         return None
