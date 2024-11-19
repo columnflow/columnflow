@@ -1511,13 +1511,13 @@ class MLModelsMixin(AnalysisTask):
         params = super().resolve_param_values(params)
 
         analysis_inst = params.get("analysis_inst")
-        config_inst = params.get("config_inst")
-        if analysis_inst and config_inst:
+        config_insts = params.get("config_insts")
+        if analysis_inst and config_insts:
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("ml_models"),
-                container=config_inst,
+                container=analysis_inst,
                 default_str="default_ml_model",
                 groups_str="ml_model_groups",
             )
@@ -1528,7 +1528,7 @@ class MLModelsMixin(AnalysisTask):
                     MLModelMixinBase.get_ml_model_inst(
                         ml_model,
                         analysis_inst,
-                        requested_configs=[config_inst],
+                        requested_configs=config_insts,
                     )
                     for ml_model in params["ml_models"]
                 ]
@@ -1552,7 +1552,7 @@ class MLModelsMixin(AnalysisTask):
             MLModelMixinBase.get_ml_model_inst(
                 ml_model,
                 self.analysis_inst,
-                requested_configs=[self.config_inst],
+                requested_configs=self.config_insts,
             )
             for ml_model in self.ml_models
         ]

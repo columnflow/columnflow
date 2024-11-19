@@ -31,7 +31,7 @@ class PlotVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
     CategoriesMixin,
-    # MLModelsMixin,  # TODO: reintroduce
+    MLModelsMixin,
     WeightProducerMixin,
     ProducersMixin,
     SelectorStepsMixin,
