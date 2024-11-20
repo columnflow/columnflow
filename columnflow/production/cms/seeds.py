@@ -112,7 +112,7 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, re
 
 @producer(
     uses={deterministic_event_seeds},
-    produces={"Jet.deterministic_seed", "xevent", "xrun", "xlumi"},
+    produces={"Jet.deterministic_seed", "event", "run", "luminosityBlock"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
