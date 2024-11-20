@@ -311,6 +311,26 @@ class PlotVariables1D(
     )
 
 
+class PlotVariablesPerConfig1D(
+    law.WrapperTask,
+    PlotVariables1D,
+):
+    # force this one to be a local workflow
+    workflow = "local"
+    output_collection_cls = law.NestedSiblingFileCollection
+
+    def requires(self):
+        return {
+            config: PlotVariables1D.req(
+                self,
+                datasets=(self.datasets[i],),
+                processes=(self.processes[i],),
+                configs=(config,)
+            )
+            for i, config in enumerate(self.configs)
+        }
+
+
 class PlotVariables2D(
     PlotVariablesBaseSingleShift,
     PlotBase2D,
@@ -319,6 +339,26 @@ class PlotVariables2D(
         default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
+
+
+class PlotVariablesPerConfig2D(
+    law.WrapperTask,
+    PlotVariables1D,
+):
+    # force this one to be a local workflow
+    workflow = "local"
+    output_collection_cls = law.NestedSiblingFileCollection
+
+    def requires(self):
+        return {
+            config: PlotVariablesPerConfig2D.req(
+                self,
+                datasets=(self.datasets[i],),
+                processes=(self.processes[i],),
+                configs=(config,)
+            )
+            for i, config in enumerate(self.configs)
+        }
 
 
 class PlotVariablesPerProcess2D(
