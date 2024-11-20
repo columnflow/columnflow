@@ -66,7 +66,8 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     for i, f in enumerate(global_fields, prime_offset):
         seed = seed + primes[i] * (events[f] if f in events.fields else ak.num(events[f[1:]]))
 
-    # get first-object integers
+    # get integers of objects, perform a custom hashing involving local indices,
+    # then multiply with primes and add to the seed
     object_fields = [
         "Tau.jetIdx", "Tau.decayMode", "Muon.jetIdx", "Muon.nStations", "Jet.nConstituents",
         "Jet.nElectrons", "Jet.nMuons",
@@ -81,7 +82,9 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
             ak.sum(values**2 * loc, axis=-1) +
             ak.num(values, axis=-1)
         )
-        seed = seed + primes[i] * (ak.fill_none(hashed, -1) + 1)
+        hashed = ak.fill_none(hashed, -1) + 1
+        prime_offsets = self.primes[hashed % len(self.primes)]
+        seed = seed + prime_offsets * hashed
 
     # create and store them
     seed = ak.Array(self.create_seed(seed))
@@ -108,6 +111,9 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, re
     # store a vectorized version
     # TODO: is there a real-vectorized version if hashlib for numpy/scipy?
     self.create_seed = np.vectorize(create_seed, otypes=[np.uint64])
+
+    # store primes in array
+    self.primes = np.array(primes)
 
 
 @producer(
@@ -156,6 +162,7 @@ def deterministic_jet_seeds_setup(
     inputs: dict,
     reader_targets: InsertableDict,
 ) -> None:
+    # store primes in array
     self.primes = np.array(primes)
 
 
