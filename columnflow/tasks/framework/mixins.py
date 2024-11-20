@@ -1546,7 +1546,6 @@ class MLModelsMixin(AnalysisTask):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         # get the ML model instances
         self.ml_model_insts = [
             MLModelMixinBase.get_ml_model_inst(
@@ -1653,7 +1652,7 @@ class CategoriesMixin(AnalysisTask):
 
         config_insts = params["config_insts"]
 
-        #TODO: cross-checks over multiple config insts
+        # TODO: cross-checks over multiple config insts
         config_inst = config_insts[0]
 
         # resolve categories
@@ -1714,7 +1713,7 @@ class VariablesMixin(AnalysisTask):
 
         config_insts = params["config_insts"]
 
-        #TODO: cross-checks over multiple config insts
+        # TODO: cross-checks over multiple config insts
         config_inst = config_insts[0]
 
         # resolve variables
@@ -1739,25 +1738,45 @@ class VariablesMixin(AnalysisTask):
                     else:
                         multi_var_parts.append(parts)
 
-                # resolve single variables
-                variables = cls.find_config_objects(
-                    single_vars,
-                    config_inst,
-                    od.Variable,
-                    config_inst.x("variable_groups", {}),
-                )
+                def resolve_config_objects(
+                    cls,
+                    objects,
+                    config_insts,
+                    Object,
+                    object_groups,
+                ) -> [str]:
+                    outp = None
+                    all_obj = set()
+                    config_obj = dict()
+                    for _config_inst in config_insts:
+                        config_obj[_config_inst] = set(cls.find_config_objects(
+                            objects,
+                            _config_inst,
+                            Object,
+                            _config_inst.x(object_groups, {}),
+                        ))
+                        all_obj |= config_obj[_config_inst]
+
+                        if outp:
+                            outp &= config_obj[_config_inst]
+                        else:
+                            outp = config_obj[_config_inst]
+
+                        # warnings for objects not defined in all configs
+                        if len(all_obj - config_obj[_config_inst]) != 0:
+                            for obj in (all_obj - config_obj[_config_inst]):
+                                law.logger.get_logger(cls.task_family).warning(
+                                    f"The object {Object} with name {obj} is not defined in the config {_config_inst.name}."
+                                )
+                    return list(outp)
+
+                variables = resolve_config_objects(cls, single_vars, config_insts, od.Variable, "variable_groups")
 
                 # for each multi-variable, resolve each part separately and create the full
                 # combinatorics of all possibly pattern-resolved parts
                 for parts in multi_var_parts:
                     resolved_parts = [
-                        cls.find_config_objects(
-                            part,
-                            config_inst,
-                            od.Variable,
-                            config_inst.x("variable_groups", {}),
-                        )
-                        for part in parts
+                        resolve_config_objects(cls, part, config_insts, od.Variable, "variable_groups") for part in parts
                     ]
                     variables.extend([
                         cls.join_multi_variable(_parts)
@@ -1809,10 +1828,10 @@ class VariablesMixin(AnalysisTask):
 
 
 class DatasetsProcessesMixin(AnalysisTask):
-    #NOTE: changed from CSV to MultiCSVParameter, might break things
+    # NOTE: changed from CSV to MultiCSVParameter, might break things
     # where self.dataset or self.dataset_inst is used
     datasets = law.MultiCSVParameter(
-        default=((),),
+        default=(),
         description="comma-separated dataset names or patters to select; can also be the key of a "
         "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
         "all datasets registered in the config that contain any of the selected --processes; empty "
@@ -1820,8 +1839,9 @@ class DatasetsProcessesMixin(AnalysisTask):
         brace_expand=True,
         parse_empty=True,
     )
-    #TODO: this should be per config
-    processes = law.CSVParameter(
+
+    # TODO: this should be per config
+    processes = law.MultiCSVParameter(
         default=(),
         description="comma-separated process names or patterns for filtering processes; can also "
         "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
@@ -1852,25 +1872,39 @@ class DatasetsProcessesMixin(AnalysisTask):
         n_configs = len(config_insts)
 
         # resolve processes
-        #TODO: should be resolved for all configs
+        # TODO: should be resolved for all configs
         if "processes" in params:
             if params["processes"]:
-                processes = cls.find_config_objects(
-                    params["processes"],
-                    config_insts[0],
-                    od.Process,
-                    config_insts[0].x("process_groups", {}),
-                    deep=True,
-                )
+                processes = list(params["processes"])
+                if len(processes) == 1:
+                    # resolve to number of configs
+                    processes = list(processes * len(config_insts))
+                elif len(processes) != n_configs:
+                    raise ValueError(
+                        f"number of processes ({len(processes)}) does not match number of configs ({n_configs})",
+                    )
+
+                for i, _processes in enumerate(processes):
+                    config_inst = config_insts[i]
+                    processes[i] = tuple(cls.find_config_objects(
+                        _processes,
+                        config_inst,
+                        od.Process,
+                        config_inst.x("process_groups", {}),
+                        deep=True,
+                    ))
             else:
-                processes = config_insts[0].processes.names()
+                processes = [config_inst.processes.names() for config_inst in config_insts]
 
             # complain when no processes were found
             if not processes and not cls.allow_empty_processes:
                 raise ValueError(f"no processes found matching {params['processes']}")
 
             params["processes"] = tuple(processes)
-            params["process_insts"] = [config_insts[0].get_process(p) for p in params["processes"]]
+            params["process_insts"] = tuple(
+                tuple(config_inst.get_process(p) for p in params["processes"][i])
+                for i, config_inst in enumerate(config_insts)
+            )
 
         # resolve datasets
         if "datasets" in params:
@@ -1895,15 +1929,19 @@ class DatasetsProcessesMixin(AnalysisTask):
 
             elif "processes" in params:
                 # pick all datasets that contain any of the requested (sub) processes
-                sub_process_insts = sum((
-                    [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
-                    for process_inst in map(config_inst.get_process, params["processes"])
-                ), [])
-                datasets = [
-                    dataset_inst.name
-                    for dataset_inst in config_inst.datasets
-                    if any(map(dataset_inst.has_process, sub_process_insts))
-                ]
+                datasets = list()
+                for i, _processes in enumerate(processes):
+
+                    sub_process_insts = sum((
+                        [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
+                        for process_inst in map(config_insts[i].get_process, _processes)
+                    ), [])
+
+                    datasets.append(tuple([
+                        dataset_inst.name
+                        for dataset_inst in config_insts[i].datasets
+                        if any(map(dataset_inst.has_process, sub_process_insts))
+                    ]))
 
             # complain when no datasets were found
             if not datasets and not cls.allow_empty_datasets:
@@ -1930,23 +1968,40 @@ class DatasetsProcessesMixin(AnalysisTask):
 
     @property
     def datasets_repr(self):
-        return "x"
-        # if len(self.datasets) == 1:
-        #     return self.datasets[0]
 
-        # return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
+        datasets = self.datasets
+        if len(set(datasets)) == 1:
+            datasets = (self.datasets[0],)
+
+        if (len(self.datasets) == 1) & (len(self.datasets[0]) == 1):
+            return self.datasets[0][0]
+
+        _repr = ""
+        merge_datasets = []
+        for _datasets in sorted(datasets):
+            merge_datasets += sorted(_datasets)
+            _repr += f"{len(_datasets)}_"
+        return _repr + f"_{law.util.create_hash(sorted(merge_datasets))}"
 
     @property
     def processes_repr(self):
-        return "y"
-        # if len(self.processes) == 1:
-        #     return self.processes[0]
+        processes = self.processes
+        if len(set(processes)) == 1:
+            processes = (self.processes[0],)
 
-        # return f"{len(self.processes)}_{law.util.create_hash(self.processes)}"
+        if (len(self.processes) == 1) & (len(self.processes[0]) == 1):
+            return self.processes[0][0]
+
+        _repr = ""
+        merge_processes = []
+        for _processes in sorted(processes):
+            merge_processes += sorted(_processes)
+            _repr += f"{len(_processes)}_"
+        return _repr + f"_{law.util.create_hash(sorted(merge_processes))}"
 
 
 class ShiftSourcesMixin(ConfigTask):
-    #TODO: should be AnalysisTask (look at PlotShiftedVariables1D)
+    # TODO: should be AnalysisTask (look at PlotShiftedVariables1D)
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; "

@@ -40,6 +40,7 @@ class Requirements(DotDict):
         instances and additional keyword arguments ``kwargs``, which are
         added.
         """
+
     def __init__(self, *others, **kwargs):
 
         super().__init__()
@@ -1006,6 +1007,8 @@ class MultiConfigTask(AnalysisTask):
         parts.insert_after("task_family", "configs", configs_repr)
 
         return parts
+
+    # function to resolve objects over multiple configs
 
 
 class ConfigTask(AnalysisTask):

@@ -85,18 +85,6 @@ class PlotVariablesBase(
         # get the shifts to extract and plot
         plot_shifts = law.util.make_list(self.get_plot_shifts())
 
-        # copy process instances once so that their auxiliary data fields can be used as a storage
-        # for process-specific plot parameters later on in plot scripts without affecting the
-        # original instances
-        #TODO: this should be per config
-        fake_root = od.Process(
-            name=f"{hex(id(object()))[2:]}",
-            id="+",
-            processes=list(map(self.config_inst.get_process, self.processes)),
-        ).copy()
-        process_insts = list(fake_root.processes)
-        fake_root.processes.clear()
-
         # prepare other config objects
         variable_tuple = self.variable_tuples[self.branch_data.variable]
         variable_insts = [
@@ -105,17 +93,33 @@ class PlotVariablesBase(
         ]
         category_inst = self.config_inst.get_category(self.branch_data.category)
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
-        sub_process_insts = {
-            process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
-            for process_inst in process_insts
-        }
 
         # histogram data per process copy
         hists = {}
 
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
-            for config, dataset_dict in self.input().items():
+            for i, (config, dataset_dict) in enumerate(self.input().items()):
+
+                config_inst = self.analysis_inst.get_config(config)
+                processes = self.processes[i]
+                # copy process instances once so that their auxiliary data fields can be used as a storage
+                # for process-specific plot parameters later on in plot scripts without affecting the
+                # original instances
+                # TODO: this should be per config
+                fake_root = od.Process(
+                    name=f"{hex(id(object()))[2:]}",
+                    id="+",
+                    processes=list(map(config_inst.get_process, processes)),
+                ).copy()
+                process_insts = list(fake_root.processes)
+                fake_root.processes.clear()
+
+                sub_process_insts = {
+                    process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
+                    for process_inst in process_insts
+                }
                 hists[config] = {}
+
                 for dataset, inp in dataset_dict.items():
                     dataset_inst = self.config_inst.get_dataset(dataset)
                     h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
@@ -169,11 +173,12 @@ class PlotVariablesBase(
                         else:
                             merged_hists[process_inst.id] = h
                             process_memory[process_inst.id] = process_inst
-            else:
-                merged_hists = hists[self.config_inst.name]
 
-            process_insts = list(process_memory.values())
-            hists = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
+                process_insts = list(process_memory.values())
+                hists = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
+            else:
+                hists = hists[self.config_inst.name]
+                process_insts = list(hists.keys())
 
             # axis selections and reductions, including sorting by process order
             _hists = OrderedDict()
@@ -198,11 +203,17 @@ class PlotVariablesBase(
                 _hists[process_inst] = h
             hists = _hists
 
+            # correct luminosity label in case of multiple configs
+            config_inst = self.config_inst.copy(id=-1, name=f"{self.config_inst.name}_merged")
+
+            if len(self.config_insts) != 1:
+                config_inst.x.luminosity = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
+
             # call the plot function
             fig, _ = self.call_plot_func(
                 self.plot_function,
                 hists=hists,
-                config_inst=self.config_inst,
+                config_inst=config_inst,
                 category_inst=category_inst.copy_shallow(),
                 variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
                 **self.get_plot_parameters(),
