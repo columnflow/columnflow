@@ -75,7 +75,13 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
         if not has_ak_column(events, f):
             continue
         values = Route(f).apply(events)
-        seed = seed + primes[i] * (ak.fill_none(ak.firsts(values, axis=1), -1) + 1)
+        loc = ak.local_index(values) + 1
+        hashed = (
+            ak.sum(values * loc, axis=-1) +
+            ak.sum(values**2 * loc, axis=-1) +
+            ak.num(values, axis=-1)
+        )
+        seed = seed + primes[i] * (ak.fill_none(hashed, -1) + 1)
 
     # create and store them
     seed = ak.Array(self.create_seed(seed))
@@ -106,7 +112,7 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, re
 
 @producer(
     uses={deterministic_event_seeds},
-    produces={"Jet.deterministic_seed"},
+    produces={"Jet.deterministic_seed", "xevent", "xrun", "xlumi"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -128,6 +134,11 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 
     # store them
     events = set_ak_column(events, "Jet.deterministic_seed", jet_seed)
+
+    # test
+    events = set_ak_column(events, "event", events.event)
+    events = set_ak_column(events, "run", events.run)
+    events = set_ak_column(events, "luminosityBlock", events.luminosityBlock)
 
     # uniqueness test across all jets in the chunk for debugging
     # n_jets = ak.sum(ak.num(events.Jet, axis=1))
