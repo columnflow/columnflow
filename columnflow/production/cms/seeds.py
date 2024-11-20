@@ -119,9 +119,9 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     events = self[deterministic_event_seeds](events, **kwargs)
 
     # create the per jet seeds
-    prime_offset = 18
+    prime_offsets = self.primes[events.deterministic_seed % len(self.primes)]
     jet_seed = events.deterministic_seed + (
-        primes[prime_offset] * ak.values_astype(ak.local_index(events.Jet, axis=1), np.uint64)
+        prime_offsets * ak.values_astype(ak.local_index(events.Jet, axis=1) + 1, np.uint64)
     )
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = self[deterministic_event_seeds].create_seed(np_jet_seed)
@@ -136,6 +136,16 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     # print(f"jets: {n_jets}, unique seeds: {n_seeds}, match: {match_text}")
 
     return events
+
+
+@deterministic_jet_seeds.setup
+def deterministic_jet_seeds_setup(
+    self: Producer,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: InsertableDict,
+) -> None:
+    self.primes = np.array(primes)
 
 
 @producer(
