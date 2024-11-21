@@ -2102,8 +2102,7 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
         return _repr + f"_{law.util.create_hash(sorted(merge_processes))}"
 
 
-class ShiftSourcesMixin(ConfigTask):
-    # TODO: should be AnalysisTask (look at PlotShiftedVariables1D)
+class ShiftSourcesMixin(AnalysisTask):
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; "
@@ -2119,9 +2118,13 @@ class ShiftSourcesMixin(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+
+        config_insts = params["config_insts"]
+
+        # TODO: we might have to resolve shifts per config
+        config_inst = config_insts[0]
 
         # resolve shift sources
         if "shift_sources" in params:
