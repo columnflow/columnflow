@@ -14,7 +14,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, MultiConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
+    CategoriesMixin, ShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -30,6 +30,7 @@ class PlotVariablesBase(
     HistHookMixin,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    MultiConfigDatasetsProcessesMixin,
     CategoriesMixin,
     MLModelsMixin,
     WeightProducerMixin,
@@ -254,8 +255,6 @@ class PlotVariablesBaseSingleShift(
         return reqs
 
     def requires(self):
-
-        # Might need to change to only require datasets that exist in all configs
         req = {}
 
         for i, config_inst in enumerate(self.config_insts):
@@ -325,7 +324,7 @@ class PlotVariablesPerConfig1D(
                 self,
                 datasets=(self.datasets[i],),
                 processes=(self.processes[i],),
-                configs=(config,)
+                configs=(config,),
             )
             for i, config in enumerate(self.configs)
         }
@@ -355,7 +354,7 @@ class PlotVariablesPerConfig2D(
                 self,
                 datasets=(self.datasets[i],),
                 processes=(self.processes[i],),
-                configs=(config,)
+                configs=(config,),
             )
             for i, config in enumerate(self.configs)
         }
@@ -412,16 +411,22 @@ class PlotVariablesBaseMultiShifts(
         return reqs
 
     def requires(self):
-        return {
-            d: self.reqs.MergeShiftedHistograms.req(
-                self,
-                dataset=d,
-                branch=-1,
-                _exclude={"branches"},
-                _prefer_cli={"variables"},
-            )
-            for d in self.datasets
-        }
+        req = {}
+
+        for i, config_inst in enumerate(self.config_insts):
+            sub_datasets = self.datasets[i]
+            req[config_inst.name] = {}
+            for d in sub_datasets:
+                if d in config_inst.datasets.names():
+                    req[config_inst.name][d] = self.reqs.MergeShiftedHistograms.req(
+                        self,
+                        config=config_inst.name,
+                        dataset=d,
+                        branch=-1,
+                        _exclude={"branches"},
+                        _prefer_cli={"variables"},
+                    )
+        return req
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()

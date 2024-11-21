@@ -17,6 +17,7 @@ from columnflow.tasks.framework.base import (
 )
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
+    DatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -243,6 +244,7 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 
 class PlotCutflowBase(
+    # NOTE: this is still a ConfigTask (from ShiftTask), could be changed to MultiConfigTask
     SelectorStepsMixin,
     CategoriesMixin,
     CalibratorsMixin,
@@ -275,6 +277,7 @@ class PlotCutflow(
     PlotCutflowBase,
     PlotBase1D,
     ProcessPlotSettingMixin,
+    DatasetsProcessesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -449,6 +452,7 @@ PlotCutflowWrapper = wrapper_factory(
 class PlotCutflowVariablesBase(
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
+    DatasetsProcessesMixin,
     PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,

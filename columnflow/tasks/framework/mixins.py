@@ -217,7 +217,7 @@ class CalibratorMixin(AnalysisTask):
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator_repr}")
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -440,7 +440,7 @@ class CalibratorsMixin(AnalysisTask):
         parts.insert_before("version", "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -958,7 +958,7 @@ class ProducerMixin(AnalysisTask):
         parts.insert_before("version", "producer", producer)
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -1178,7 +1178,7 @@ class ProducersMixin(AnalysisTask):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -1462,7 +1462,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
@@ -1564,7 +1564,7 @@ class MLModelsMixin(AnalysisTask):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_ML_EVALUATION:
@@ -1738,11 +1738,11 @@ class VariablesMixin(AnalysisTask):
                     else:
                         multi_var_parts.append(parts)
 
-                def resolve_config_objects(
+                def resolve_objects_multi_config(
                     cls,
                     objects,
                     config_insts,
-                    Object,
+                    object_cls,
                     object_groups,
                 ) -> [str]:
                     outp = None
@@ -1752,7 +1752,7 @@ class VariablesMixin(AnalysisTask):
                         config_obj[_config_inst] = set(cls.find_config_objects(
                             objects,
                             _config_inst,
-                            Object,
+                            object_cls,
                             _config_inst.x(object_groups, {}),
                         ))
                         all_obj |= config_obj[_config_inst]
@@ -1766,17 +1766,19 @@ class VariablesMixin(AnalysisTask):
                         if len(all_obj - config_obj[_config_inst]) != 0:
                             for obj in (all_obj - config_obj[_config_inst]):
                                 law.logger.get_logger(cls.task_family).warning(
-                                    f"The object {Object} with name {obj} is not defined in the config {_config_inst.name}."
+                                    f"The object {object_cls} with name {obj} is not defined "
+                                    f"in the config {_config_inst.name}.",
                                 )
                     return list(outp)
 
-                variables = resolve_config_objects(cls, single_vars, config_insts, od.Variable, "variable_groups")
+                variables = resolve_objects_multi_config(cls, single_vars, config_insts, od.Variable, "variable_groups")
 
                 # for each multi-variable, resolve each part separately and create the full
                 # combinatorics of all possibly pattern-resolved parts
                 for parts in multi_var_parts:
                     resolved_parts = [
-                        resolve_config_objects(cls, part, config_insts, od.Variable, "variable_groups") for part in parts
+                        resolve_objects_multi_config(cls, part, config_insts, od.Variable, "variable_groups")
+                        for part in parts
                     ]
                     variables.extend([
                         cls.join_multi_variable(_parts)
@@ -1827,7 +1829,114 @@ class VariablesMixin(AnalysisTask):
         return f"{len(self.variables)}_{law.util.create_hash(sorted(self.variables))}"
 
 
-class DatasetsProcessesMixin(AnalysisTask):
+class DatasetsProcessesMixin(ConfigTask):
+
+    datasets = law.CSVParameter(
+        default=(),
+        description="comma-separated dataset names or patters to select; can also be the key of a "
+        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
+        "all datasets registered in the config that contain any of the selected --processes; empty "
+        "default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+    processes = law.CSVParameter(
+        default=(),
+        description="comma-separated process names or patterns for filtering processes; can also "
+        "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
+        "uses all processes of the config when empty; empty default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    allow_empty_datasets = False
+    allow_empty_processes = False
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve processes
+        if "processes" in params:
+            if params["processes"]:
+                processes = cls.find_config_objects(
+                    params["processes"],
+                    config_inst,
+                    od.Process,
+                    config_inst.x("process_groups", {}),
+                    deep=True,
+                )
+            else:
+                processes = config_inst.processes.names()
+
+            # complain when no processes were found
+            if not processes and not cls.allow_empty_processes:
+                raise ValueError(f"no processes found matching {params['processes']}")
+
+            params["processes"] = tuple(processes)
+            params["process_insts"] = [config_inst.get_process(p) for p in params["processes"]]
+
+        # resolve datasets
+        if "datasets" in params:
+            if params["datasets"]:
+                datasets = cls.find_config_objects(
+                    params["datasets"],
+                    config_inst,
+                    od.Dataset,
+                    config_inst.x("dataset_groups", {}),
+                )
+            elif "processes" in params:
+                # pick all datasets that contain any of the requested (sub) processes
+                sub_process_insts = sum((
+                    [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
+                    for process_inst in map(config_inst.get_process, params["processes"])
+                ), [])
+                datasets = [
+                    dataset_inst.name
+                    for dataset_inst in config_inst.datasets
+                    if any(map(dataset_inst.has_process, sub_process_insts))
+                ]
+
+            # complain when no datasets were found
+            if not datasets and not cls.allow_empty_datasets:
+                raise ValueError(f"no datasets found matching {params['datasets']}")
+
+            params["datasets"] = tuple(datasets)
+            params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
+
+        return params
+
+    @classmethod
+    def get_known_shifts(cls, config_inst, params):
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+
+        # add shifts of all datasets to upstream ones
+        for dataset_inst in params.get("dataset_insts") or []:
+            if dataset_inst.is_mc:
+                upstream_shifts |= set(dataset_inst.info.keys())
+
+        return shifts, upstream_shifts
+
+    @property
+    def datasets_repr(self):
+        if len(self.datasets) == 1:
+            return self.datasets[0]
+
+        return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
+
+    @property
+    def processes_repr(self):
+        if len(self.processes) == 1:
+            return self.processes[0]
+
+        return f"{len(self.processes)}_{law.util.create_hash(self.processes)}"
+
+
+class MultiConfigDatasetsProcessesMixin(AnalysisTask):
     # NOTE: changed from CSV to MultiCSVParameter, might break things
     # where self.dataset or self.dataset_inst is used
     datasets = law.MultiCSVParameter(
@@ -1858,12 +1967,6 @@ class DatasetsProcessesMixin(AnalysisTask):
         params = super().resolve_param_values(params)
 
         config_insts = params.get("config_insts", ())
-
-        # if not config_insts:
-        #     # maybe single config?
-        #     config_inst = params.get("config_inst", None)
-        #     if config_inst:
-        #         config_insts = [config_inst]
 
         if not config_insts:
             # configs not yet setup
@@ -1936,12 +2039,11 @@ class DatasetsProcessesMixin(AnalysisTask):
                         [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
                         for process_inst in map(config_insts[i].get_process, _processes)
                     ), [])
-
-                    datasets.append(tuple([
+                    datasets.append(tuple(
                         dataset_inst.name
                         for dataset_inst in config_insts[i].datasets
                         if any(map(dataset_inst.has_process, sub_process_insts))
-                    ]))
+                    ))
 
             # complain when no datasets were found
             if not datasets and not cls.allow_empty_datasets:
@@ -1953,6 +2055,7 @@ class DatasetsProcessesMixin(AnalysisTask):
                 for i, config_inst in enumerate(config_insts)
             )
             params["configs_vs_dataset_insts"] = dict(zip([c.name for c in config_insts], params["dataset_insts"]))
+
         return params
 
     @classmethod
@@ -1968,7 +2071,6 @@ class DatasetsProcessesMixin(AnalysisTask):
 
     @property
     def datasets_repr(self):
-
         datasets = self.datasets
         if len(set(datasets)) == 1:
             datasets = (self.datasets[0],)
@@ -2092,13 +2194,13 @@ class WeightProducerMixin(AnalysisTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        config_inst = params.get("config_inst")
-        if config_inst:
+        analysis_inst = params.get("analysis_inst")
+        if analysis_inst:
             # add the default weight producer when empty
             params["weight_producer"] = cls.resolve_config_default(
                 params,
                 params.get("weight_producer"),
-                container=config_inst,
+                container=analysis_inst,
                 default_str="default_weight_producer",
                 multiple=False,
             )

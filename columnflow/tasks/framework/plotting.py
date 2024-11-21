@@ -11,7 +11,7 @@ import luigi
 
 from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict
 
@@ -413,7 +413,7 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
-    DatasetsProcessesMixin,
+    # TODO: could add back MultiConfigDatasetsProcessesMixin if it works with both ConfigTask and MultiConfigTask
     PlotBase,
 ):
     """

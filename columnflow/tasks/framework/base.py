@@ -99,6 +99,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     _cfg_outputs_dict = None
     _cfg_versions_dict = None
 
+    is_single_config = None
+
     @classmethod
     def modify_param_values(cls, params: dict) -> dict:
         params = super().modify_param_values(params)
@@ -931,6 +933,8 @@ class MultiConfigTask(AnalysisTask):
 
     config_order_dependent = False
 
+    is_single_config = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -1017,6 +1021,8 @@ class ConfigTask(AnalysisTask):
         default=default_config,
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
+
+    is_single_config = True
 
     @classmethod
     def switch_cspm_defaults(cls, params: dict):
