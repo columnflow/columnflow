@@ -249,8 +249,8 @@ class PlotVariablesBaseSingleShift(
         reqs = super().workflow_requires()
 
         # no need to require merged histograms since each branch already requires them as a workflow
-        # if self.workflow == "local":
-        #     reqs.pop("merged_hists", None)
+        if self.workflow == "local":
+            reqs.pop("merged_hists", None)
 
         return reqs
 
@@ -476,6 +476,26 @@ class PlotShiftedVariables1D(
         default="columnflow.plotting.plot_functions_1d.plot_shifted_variable",
         add_default_to_description=True,
     )
+
+
+class PlotShiftedVariablesPerConfig1D(
+    law.WrapperTask,
+    PlotShiftedVariables1D,
+):
+    # force this one to be a local workflow
+    workflow = "local"
+    output_collection_cls = law.NestedSiblingFileCollection
+
+    def requires(self):
+        return {
+            config: PlotShiftedVariables1D.req(
+                self,
+                datasets=(self.datasets[i],),
+                processes=(self.processes[i],),
+                configs=(config,),
+            )
+            for i, config in enumerate(self.configs)
+        }
 
 
 class PlotShiftedVariablesPerProcess1D(law.WrapperTask):
