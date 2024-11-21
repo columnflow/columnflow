@@ -402,6 +402,8 @@ class MergeReducedEvents(
         f"removed after successful merging; default: {default_keep_reduced_events}",
     )
 
+    max_merge_factor = 50
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -418,7 +420,7 @@ class MergeReducedEvents(
         Required by law.tasks.ForestMerge.
         """
         # return as many inputs as leafs are present to create the output of this tree, capped at 50
-        return min(self.file_merging, 50)
+        return min(self.file_merging, self.max_merge_factor)
 
     def is_sandboxed(self):
         # when the task is a merge forest, consider it sandboxed
@@ -446,7 +448,7 @@ class MergeReducedEvents(
     def merge_workflow_requires(self):
         return {
             "stats": self.reqs.MergeReductionStats.req(self),
-            "events": self.reqs.ReduceEvents.req(self, _exclude={"branches"}),
+            "events": self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),)),
         }
 
     def merge_requires(self, start_branch, end_branch):
