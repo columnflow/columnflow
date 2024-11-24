@@ -158,7 +158,7 @@ class CreateCutflowHistograms(
                         hist.Hist.new
                         .IntCat([], name="category", growth=True)
                         .IntCat([], name="process", growth=True)
-                        .StrCat(steps, name="step")
+                        .StrCat([], name="step", growth=True)
                         .IntCat([], name="shift", growth=True)
                     )
                     # add variable axes
@@ -350,6 +350,7 @@ class PlotCutflow(
                 branch=0,
                 dataset=d,
                 variables=(self.variable,),
+                missing_selector_step_strategy="skip",
             )
             for d in self.datasets
         }
