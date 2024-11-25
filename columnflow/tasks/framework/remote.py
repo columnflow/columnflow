@@ -570,7 +570,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="requested memeory in MB; empty value leads to the cluster default setting; "
+        description="requested memory in MB; empty value leads to the cluster default setting; "
         "empty default",
     )
     htcondor_disk = law.BytesParameter(
