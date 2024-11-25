@@ -706,6 +706,8 @@ class PlotCutflowVariables1D(
                 step_hists = OrderedDict(
                     (process_inst.copy_shallow(), h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
+                    # skip missing steps
+                    if step in h.axes["step"]
                 )
 
                 # call the plot function
@@ -728,6 +730,8 @@ class PlotCutflowVariables1D(
                 process_hists = OrderedDict(
                     (step, h[{"step": hist.loc(step)}])
                     for step in self.chosen_steps
+                    # skip missing steps
+                    if step in h.axes["step"]
                 )
 
                 # call the plot function
