@@ -8,12 +8,7 @@ import hashlib
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, primes, InsertableDict
-from columnflow.columnar_util import (
-    Route,
-    set_ak_column,
-    has_ak_column,
-    optional_column as optional,
-)
+from columnflow.columnar_util import Route, set_ak_column, optional_column as optional
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -23,12 +18,15 @@ ak = maybe_import("awkward")
     uses={
         # global columns for event seed
         "run", "luminosityBlock", "event",
-        optional("Photon.pt"), optional("SV.pt"),
-        # first-object columns for event seed
-        optional("Tau.jetIdx"), optional("Tau.decayMode"),
-        optional("Muon.jetIdx"), optional("Muon.nStations"),
-        optional("Jet.nConstituents"), optional("Jet.nElectrons"), optional("Jet.nMuons"),
+        "Pileup.nPU",
+        # columns needed to extract object counts only
+        "Photon.pt", "SV.pt", "FatJet.pt", "SubJet.pt",
         optional("GenJet.pt"), optional("GenPart.pt"),
+        # per-object columns for further hashing
+        "Electron.jetIdx", "Electron.seediPhiOriY",
+        "Muon.jetIdx", "Muon.nStations",
+        "Tau.jetIdx", "Tau.decayMode",
+        "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
     },
     produces={"deterministic_seed"},
 )
@@ -45,50 +43,54 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     """
     # start with a seed of the event number itself as the most sensitive integer
     # and define the offset of the first prime to use
-    seed = self.create_seed(events.event)
-    prime_offset = 3
+    seed = self.create_seed(
+        np.asarray(
+            self.primes[7] * ak.values_astype(events.event, np.uint64) +
+            self.primes[5] * ak.values_astype(events.run, np.uint64) +
+            self.primes[3] * ak.values_astype(events.luminosityBlock, np.uint64),
+        ),
+        n_hex=14,
+    )
 
-    # get counts of jagged fields
-    global_fields = []
-    for field in ["Jet", "Photon", "Muon", "Electron", "Tau", "SV"] + (
-        ["GenJet", "GenPart"] if self.dataset_inst.is_mc else []
-    ):
-        if not has_ak_column(events, field):
-            continue
-        events = set_ak_column(events, f"n{field}", ak.num(events[field], axis=1))
-        global_fields.append(f"n{field}")
+    # start extracting global fields
+    global_fields = ["Pileup.nPU"]
 
-    # get run and lumi for data
-    if not self.dataset_inst.is_mc:
-        global_fields.extend(["run", "luminosityBlock"])
+    # add fields for counts of jagged fields
+    collections = ["Jet", "FatJet", "SubJet", "Photon", "Muon", "Electron", "Tau", "SV"]
+    if self.dataset_inst.is_mc:
+        collections.extend(["GenJet", "GenPart"])
+    for col in collections:
+        global_fields.append(field := f"n{col}")
+        events = set_ak_column(events, field, ak.num(events[col], axis=1), value_type=np.uint64)
 
-    # calculate seed
-    for i, f in enumerate(global_fields, prime_offset):
-        seed = seed + primes[i] * (events[f] if f in events.fields else ak.num(events[f[1:]]))
+    # calculate seed from global fields
+    value_offset = 3
+    prime_offset = 15
+    for i, f in enumerate(global_fields, value_offset):
+        values = Route(f).apply(events) + i
+        primes = self.primes[(values + prime_offset) % len(self.primes)]
+        seed = seed + primes * ak.values_astype(values, np.uint64)
 
     # get integers of objects, perform a custom hashing involving local indices,
     # then multiply with primes and add to the seed
     object_fields = [
-        "Tau.jetIdx", "Tau.decayMode", "Muon.jetIdx", "Muon.nStations", "Jet.nConstituents",
-        "Jet.nElectrons", "Jet.nMuons",
+        "Electron.jetIdx", "Electron.seediPhiOriY", "Tau.jetIdx", "Tau.decayMode", "Muon.jetIdx",
+        "Muon.nStations", "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
     ]
-    for i, f in enumerate(object_fields, prime_offset + len(global_fields)):
-        if not has_ak_column(events, f):
-            continue
-        values = Route(f).apply(events)
+    for i, f in enumerate(object_fields, value_offset):
+        values = Route(f).apply(events) + i
         loc = ak.local_index(values) + 1
         hashed = (
+            ak.num(values, axis=-1) +
             ak.sum(values * loc, axis=-1) +
-            ak.sum(values**2 * loc, axis=-1) +
-            ak.num(values, axis=-1)
+            ak.sum(values**2 * loc, axis=-1)
         )
-        hashed = ak.fill_none(hashed, -1) + 1
-        prime_offsets = self.primes[hashed % len(self.primes)]
-        seed = seed + prime_offsets * hashed
+        primes = self.primes[(hashed + prime_offset) % len(self.primes)]
+        seed = seed + primes * ak.values_astype(hashed, np.uint64)
 
     # create and store them
-    seed = ak.Array(self.create_seed(seed))
-    events = set_ak_column(events, "deterministic_seed", seed)
+    seed = ak.Array(self.create_seed(np.asarray(seed)))
+    events = set_ak_column(events, "deterministic_seed", seed, value_type=np.uint64)
 
     # uniqueness test across the chunk for debugging
     # n_events = len(seed)
@@ -105,20 +107,19 @@ def deterministic_event_seeds_setup(self: Producer, reqs: dict, inputs: dict, re
     Setup function that defines the vectorized seed creation function once and stores it in the
     py:attr:`create_seed` attribute.
     """
-    def create_seed(n: int) -> int:
-        return int(hashlib.sha256(bytes(str(n), "utf-8")).hexdigest()[:-16:-1], base=16)
+    def create_seed(val: int, n_hex: int = 16) -> int:
+        return int(hashlib.sha256(bytes(str(val), "utf-8")).hexdigest()[:-(n_hex + 1):-1], base=16)
 
-    # store a vectorized version
-    # TODO: is there a real-vectorized version if hashlib for numpy/scipy?
+    # store a vectorized version (only interface, not actually simd'ing)
     self.create_seed = np.vectorize(create_seed, otypes=[np.uint64])
 
     # store primes in array
-    self.primes = np.array(primes)
+    self.primes = np.array(primes, dtype=np.uint64)
 
 
 @producer(
     uses={deterministic_event_seeds},
-    produces={"Jet.deterministic_seed", "event", "run", "luminosityBlock"},
+    produces={"Jet.deterministic_seed"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -131,20 +132,15 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     events = self[deterministic_event_seeds](events, **kwargs)
 
     # create the per jet seeds
-    prime_offsets = self.primes[events.deterministic_seed % len(self.primes)]
+    primes = self.primes[events.deterministic_seed % len(self.primes)]
     jet_seed = events.deterministic_seed + (
-        prime_offsets * ak.values_astype(ak.local_index(events.Jet, axis=1) + 1, np.uint64)
+        primes * ak.values_astype(ak.local_index(events.Jet, axis=1) + 1, np.uint64)
     )
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = self[deterministic_event_seeds].create_seed(np_jet_seed)
 
     # store them
-    events = set_ak_column(events, "Jet.deterministic_seed", jet_seed)
-
-    # test
-    events = set_ak_column(events, "event", events.event)
-    events = set_ak_column(events, "run", events.run)
-    events = set_ak_column(events, "luminosityBlock", events.luminosityBlock)
+    events = set_ak_column(events, "Jet.deterministic_seed", jet_seed, value_type=np.uint64)
 
     # uniqueness test across all jets in the chunk for debugging
     # n_jets = ak.sum(ak.num(events.Jet, axis=1))
@@ -163,7 +159,7 @@ def deterministic_jet_seeds_setup(
     reader_targets: InsertableDict,
 ) -> None:
     # store primes in array
-    self.primes = np.array(primes)
+    self.primes = np.array(primes, dtype=np.uint64)
 
 
 @producer(
