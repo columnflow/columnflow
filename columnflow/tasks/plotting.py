@@ -122,7 +122,7 @@ class PlotVariablesBase(
                 hists[config] = {}
 
                 for dataset, inp in dataset_dict.items():
-                    dataset_inst = self.config_inst.get_dataset(dataset)
+                    dataset_inst = config_inst.get_dataset(dataset)
                     h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
 
                     # loop and extract one histogram per process
