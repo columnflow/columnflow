@@ -528,6 +528,11 @@ class RemoteWorkflowMixin(object):
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+_default_htcondor_disk = law.util.parse_bytes(
+    law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
+    input_unit="GB",
+    unit="GB",
+)
 
 
 class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkflowMixin):
@@ -569,11 +574,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         "empty default",
     )
     htcondor_disk = law.BytesParameter(
-        default=law.NO_FLOAT,
+        default=_default_htcondor_disk,
         unit="GB",
         significant=False,
         description="requested disk space in GB; empty value leads to the cluster default setting; "
-        "empty default",
+        f"{'empty default' if _default_htcondor_disk <= 0 else 'default: ' + str(_default_htcondor_disk)}",
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
