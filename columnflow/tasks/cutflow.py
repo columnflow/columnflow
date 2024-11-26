@@ -235,12 +235,8 @@ class CreateCutflowHistograms(
                             raise ValueError(
                                 f"step '{step}' is not defined by selector {self.selector}",
                             )
-                        elif self.missing_selector_step_strategy == "skip":
+                        if self.missing_selector_step_strategy == "skip":
                             continue
-                        elif self.missing_selector_step_strategy == "dummy":
-                            pass
-                        else:
-                            assert False
                     else:
                         # incrementally update the mask
                         mask = mask & arr.steps[step]
