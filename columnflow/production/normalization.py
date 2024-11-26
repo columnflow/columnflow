@@ -203,7 +203,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
 
     # If we are stitching, we also compute the inclusive weight for debugging purposes
-    if self.allow_stitching and self.dataset_inst == self.inclusive_dataset:
+    if self.allow_stitching and self.get_xsecs_from_inclusive_dataset and self.dataset_inst == self.inclusive_dataset:
         incl_norm_weight = events.mc_weight * self.inclusive_weight
         events = set_ak_column(events, self.weight_name_incl, incl_norm_weight, value_type=np.float32)
     return events
@@ -349,7 +349,7 @@ def normalization_weights_init(self: Producer) -> None:
     else:
         self.stitching_datasets = [self.dataset_inst]
 
-    if self.allow_stitching and self.dataset_inst == self.inclusive_dataset:
+    if self.allow_stitching and self.get_xsecs_from_inclusive_dataset and self.dataset_inst == self.inclusive_dataset:
         self.weight_name_incl = f"{self.weight_name}_inclusive_only"
         self.produces.add(self.weight_name_incl)
 
