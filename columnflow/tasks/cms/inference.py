@@ -8,7 +8,7 @@ from collections import OrderedDict, defaultdict
 
 import law
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
 )
@@ -24,6 +24,7 @@ class CreateDatacards(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    ConfigTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
