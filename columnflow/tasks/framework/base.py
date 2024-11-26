@@ -145,7 +145,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_memory", "htcondor_pool", "pilot",
+            "htcondor_gpus", "htcondor_memory", "htcondor_disk", "htcondor_pool", "pilot",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
