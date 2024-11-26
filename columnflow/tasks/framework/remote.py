@@ -26,7 +26,22 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     user = user_parameter_inst
     version = None
 
-    exclude_files = ["docs", "tests", "data", "assets", ".law", ".setups", ".data", ".github"]
+    exclude_files = [
+        "docs",
+        "tests",
+        "data",
+        "assets",
+        ".law",
+        ".setups",
+        ".data",
+        ".github",
+        # also make sure that CF specific files that are not part of
+        # the repository are excluded
+        os.environ["CF_STORE_LOCAL"],
+        os.environ["CF_SOFTWARE_BASE"],
+        os.environ["CF_VENV_BASE"],
+        os.environ["CF_CONDA_BASE"],
+    ]
 
     def get_repo_path(self):
         # required by BundleGitRepository

@@ -44,7 +44,6 @@ from columnflow.plotting.plot_util import (
     remove_residual_axis,
     apply_variable_settings,
     apply_process_settings,
-    apply_density_to_hists,
     get_cms_label,
     get_position,
 )
@@ -73,6 +72,7 @@ def get_new_colors(original_color, n_new_colors=2):
     new_sat = np.linspace(min(hls[2], 0.1), 1.0, n_new_colors)[::-1]
 
     return [change_saturation(hls, sat) for sat in new_sat]
+
 
 def unroll_2d_hists(hists):
     unrolled_hists = []
@@ -290,14 +290,15 @@ def plot_unrolled(
 
     if x_labels:
         edges = x_variable_inst.bin_edges
-        tx = (np.array(edges[1:]) + np.array(edges[:-1]))/2.
+        tx = (np.array(edges[1:]) + np.array(edges[:-1])) / 2.
         style_config["ax_cfg"]["xticks"] = tx
         if len(x_labels) == len(tx):
             style_config["ax_cfg"]["xticklabels"] = x_labels
 
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
-    if log_y: ax_kwargs["yscale"] = "log"
+    if log_y:
+        ax_kwargs["yscale"] = "log"
 
     # ax configs that can not be handled by ax.set
     minorxticks = ax_kwargs.pop("minorxticks", None)
@@ -378,7 +379,7 @@ def plot_unrolled(
                 base = lab.split("[")[0]
                 next_label = None
                 if not (han == handles[-1]):
-                    next_label = labels_all[i+1]
+                    next_label = labels_all[i + 1]
 
                 if (proc is None) or (base == proc):
                     current_label.append(lab)
@@ -389,7 +390,7 @@ def plot_unrolled(
                     handles.append(current_handle[0])
                     labels.append(current_label[0])
                     if len(current_handle) > 2:
-                        mid = int(len(current_handle)/2)
+                        mid = int(len(current_handle) / 2)
                         handles.append(current_handle[mid])
                         labels.append("...")
                     if len(current_handle) > 1:
@@ -403,7 +404,7 @@ def plot_unrolled(
                 current_label, current_handle = [], []
                 handles.append(han)
                 labels.append(lab)
-        
+
         # assime all `StepPatch` objects are part of MC stack
         in_stack = [
             isinstance(handle, mpl.patches.StepPatch)
