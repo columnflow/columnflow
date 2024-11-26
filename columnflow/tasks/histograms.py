@@ -154,6 +154,7 @@ class CreateHistograms(
                 # for variable_inst with custom expressions, read columns declared via aux key
                 else variable_inst.x("inputs", [])
             ) + (
+                # for variable_inst with selection, read columns declared via aux key
                 variable_inst.x("inputs", [])
                 if variable_inst.selection != "1"
                 else []
@@ -251,11 +252,11 @@ class CreateHistograms(
                         # prepare the selection
                         sel = variable_inst.selection
                         if sel != "1":
-                            if callable(sel):
-                                mask = sel(events)
-                                arr = ak.where(mask, arr, variable_inst.null_value)
-                            else:
-                                raise ValueError(f"invalid selection: {sel}")
+                            if not callable(sel):
+                                raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                            mask = sel(events)
+                            arr = arr[mask]
+                            print(f"selection {variable_inst.name} applied")
                         # apply it
                         fill_data[variable_inst.name] = arr
 
