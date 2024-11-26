@@ -373,39 +373,45 @@ This may look as follows:
 
 ```python
 config.add_variable(
-    name="jet_pt",
-    expression="Jet.pt",
-    binning=(50, 0, 300.0),
-    selection=(lambda events: events.Jet.mass > 30.0),  # Select only jets with a mass larger than 30 GeV
+    name="hh_mass",
+    expression="hh.mass",
+    binning=(20, 250, 750.0),
+    selection=(lambda events: events.hh.pt > 30.0),  # Select only events with a pt larger than 30 GeV
     null_value=EMPTY_FLOAT,  # Set the value of the variable to EMPTY_FLOAT if the selection is not passed
     unit="GeV",
-    x_title=r"all Jet $p_{T}$",
-    aux={"inputs": ["Jet.mass"]},  # Add the needed selection columns to the auxiliary of the variable instance
+    x_title=r"$m_{hh}$",
+    aux={"inputs": ["hh.pt"]},  # Add the needed selection columns to the auxiliary of the variable instance
 )
 ```
 
 It is important to provide the `null_value` parameter, when using the `selection` parameter, as the variable will be set to this value if the selection is not passed.
 The `selection` parameter only supports functions / lambda expressions for now.
 The function itself can be as complex as needed, but its signature needs to match `def my_selection(events: ak.Array) -> ak.Array[bool]` where the variable array is passed to the function and the returned value is a boolean array of the same length as the input array.
+The returned array is supposed to be an one-dimensional mask applied on event level.
 
 The used columns in the selection function are not automatically added to the required routes of the workflow.
 For this reason, it is necessary to add the columns used in the selection function to variable instance auxiliary and to make sure that the columns are produced at the time of creating the histograms.
 
-:::{dropdown} An other examble with a more complex selection:
+:::{dropdown} An other examble with a more complex selection on event level:
 
 ```python
+def jet_selection(events):
+    """select events where the sum of pt of jets with eta < 2.1 is greater than 200 GeV"""
+    import awkward as ak
+    eta_mask = events.Jet.eta < 2.1
+    mask = (ak.sum(events.Jet.pt[eta_mask], axis=-1) > 200)
+    return mask
 
 config.add_variable(
     name="jet_pt",
     expression="Jet.pt",
     binning=(50, 0, 300.0),
-    selection=(lambda events: abs(events.Jet.eta) ** 2 + abs(events.Jet.phi) ** 2 < 0.4),
+    selection=jet_selection,
     null_value=EMPTY_FLOAT,
     unit="GeV",
     x_title=r"all Jet $p_{T}$",
-    aux={"inputs": ["Jet.eta", "Jet.phi"]},
+    aux={"inputs": ["Jet.pt", "Jet.eta"]},
 )
-
 ```
 
 :::

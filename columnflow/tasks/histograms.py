@@ -5,6 +5,8 @@ Task to produce and merge histograms.
 """
 
 from __future__ import annotations
+from functools import reduce
+from operator import and_
 
 import luigi
 import law
@@ -226,18 +228,29 @@ class CreateHistograms(
                         # enable weights and store it
                         histograms[var_key] = h.Weight()
 
+                    # create event mask
+                    masks = []
+                    for variable_inst in variable_insts:
+                        sel = variable_inst.selection
+                        if sel != "1":
+                            if not callable(sel):
+                                raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                            masks.append(sel(events))
+                    mask = reduce(and_, masks, np.ones(len(events), dtype=bool))
+                    masked_events = events[mask]
+
                     # merge category ids
                     category_ids = ak.concatenate(
-                        [Route(c).apply(events) for c in self.category_id_columns],
+                        [Route(c).apply(masked_events) for c in self.category_id_columns],
                         axis=-1,
                     )
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
                         "category": category_ids,
-                        "process": events.process_id,
-                        "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
-                        "weight": weight,
+                        "process": masked_events.process_id,
+                        "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
+                        "weight": weight[mask],
                     }
                     for variable_inst in variable_insts:
                         # prepare the expression
@@ -248,15 +261,7 @@ class CreateHistograms(
                                 if len(events) == 0 and not has_ak_column(events, route):
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
-                        arr = expr(events)
-                        # prepare the selection
-                        sel = variable_inst.selection
-                        if sel != "1":
-                            if not callable(sel):
-                                raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
-                            mask = sel(events)
-                            arr = arr[mask]
-                            print(f"selection {variable_inst.name} applied")
+                        arr = expr(masked_events)
                         # apply it
                         fill_data[variable_inst.name] = arr
 
