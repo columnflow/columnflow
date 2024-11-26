@@ -286,6 +286,7 @@ class MergeSelectionStats(
     CalibratorsMixin,
     DatasetTask,
     law.tasks.ForestMerge,
+    RemoteWorkflow,
 ):
     # flag that sets the *hists* output to optional if True
     selection_hists_optional = default_selection_hists_optional
@@ -296,11 +297,9 @@ class MergeSelectionStats(
     # merge 25 stats files into 1 at every step of the merging cascade
     merge_factor = 25
 
-    # skip receiving some parameters via req
-    exclude_params_req_get = {"workflow"}
-
     # upstream requirements
     reqs = Requirements(
+        RemoteWorkflow.reqs,
         SelectEvents=SelectEvents,
     )
 
@@ -309,10 +308,10 @@ class MergeSelectionStats(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        return self.reqs.SelectEvents.req(self, _exclude={"branches"})
+        return self.reqs.SelectEvents.req_different_branching(self, _exclude={"branches"})
 
     def merge_requires(self, start_branch, end_branch):
-        return self.reqs.SelectEvents.req(
+        return self.reqs.SelectEvents.req_different_branching(
             self,
             branches=((start_branch, end_branch),),
             workflow="local",
