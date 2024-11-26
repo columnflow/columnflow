@@ -87,8 +87,10 @@ def electron_weights(
         ("sfdown", "_down"),
     ]:
 
-        # define the weight before as all scale factors are applied as a single weight
-        weight = ak.ones_like(events.event)
+        # initialize weights (take the weights if already applied once)
+        # TODO might be dangerous if the electron_weight is applied multiple times
+        # but is needed to apply multiple corrections from different correctionlib files
+        weight = getattr(events, f"electron_weight{postfix}", ak.ones_like(events.event))
 
         # loop over correctors
         for corrector_name, electron_configs in self.get_electron_config().items():
