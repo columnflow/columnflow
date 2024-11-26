@@ -925,8 +925,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 class MultiConfigTask(AnalysisTask):
 
     configs = law.CSVParameter(
-        default=(),
-        description="comma-separated names of analysis config to use; empty default",
+        default=(default_config,),
+        description="comma-separated names of analysis config to use; default: ('{default_config}',)",
         brace_expand=True,
         parse_empty=True,
     )
