@@ -563,6 +563,8 @@ def get_jer_config(self) -> DotDict:
     propagate_met=True,
     # only run on mc
     mc_only=True,
+    # use deterministic seeds for random smearing
+    use_deterministic_seeds=False,
     # function to determine the correction file
     get_jer_file=get_jer_file,
     # function to determine the jer configuration dict
@@ -610,10 +612,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, "Jet.pt_unsmeared", events.Jet.pt)
     events = set_ak_column_f32(events, "Jet.mass_unsmeared", events.Jet.mass)
 
-    # use event numbers in chunk to seed random number generator
-    # TODO: use deterministic seeds!
-    rand_gen = np.random.Generator(np.random.SFC64(events.event.to_list()))
-
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
         events.fixedGridRhoFastjetAll
@@ -647,10 +645,14 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     )
 
     # -- stochastic smearing
-
     # normally distributed random numbers according to JER
-    jer_random_normal = ak_random(0, jer, rand_func=rand_gen.normal)
-
+    jer_random_normal = (
+        ak_random(0, jer, events.Jet.deterministic_seed, rand_func=self.deterministic_normal)
+        if self.use_deterministic_seeds else
+        ak_random(0, jer, rand_func=np.random.Generator(
+            np.random.SFC64(events.event.to_list())).normal,
+        )
+    )
     # scale random numbers according to JER SF
     jersf2_m1 = jersf ** 2 - 1
     add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
@@ -841,10 +843,20 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
         for name, key in jer_keys.items()
     }
 
+    # use deterministic seeds for random smearing if requested
+    if self.use_deterministic_seeds:
+        bit_generator = np.random.SFC64
+        def deterministic_normal(loc, scale, seed):
+            return np.asarray([
+                np.random.Generator(bit_generator(_seed)).normal(_loc, _scale)
+                for _loc, _scale, _seed in zip(loc, scale, seed)
+            ])
+        self.deterministic_normal = deterministic_normal
 
 #
 # single calibrator for doing both JEC and JER smearing
 #
+
 
 @calibrator(
     uses={jec, jer},
