@@ -927,7 +927,7 @@ def jer_init(self: Calibrator) -> None:
     self.produces |= {
         f"{self.jet_name}.{column}{suffix}"
         for column in ("pt", "mass")
-        for suffix in ("", "_unsmeared", "_jer_up")
+        for suffix in ("", "_unsmeared", "_jer_up", "_jer_down")
     }
 
     # register produced MET columns
