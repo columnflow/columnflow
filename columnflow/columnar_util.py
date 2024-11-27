@@ -584,7 +584,7 @@ def get_ak_routes(
         if getattr(arr, "fields", None) and (max_depth <= 0 or len(fields) < max_depth):
             # extend the lookup with nested fields
             lookup.extend([
-                (getattr(arr, field), fields + (field,))
+                (arr[field], fields + (field,))
                 for field in arr.fields
             ])
         else:
