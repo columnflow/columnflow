@@ -856,6 +856,7 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
             ])
         self.deterministic_normal = deterministic_normal
 
+
 #
 # single calibrator for doing both JEC and JER smearing
 #
