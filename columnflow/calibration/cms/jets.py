@@ -675,12 +675,7 @@ def get_jer_config_default(self) -> DotDict:
     uses={
         optional("Rho.fixedGridRhoFastjetAll"),
         optional("fixedGridRhoFastjetAll"),
-        "MET.pt", "MET.phi",
         attach_coffea_behavior,
-    },
-    produces={
-        "MET.pt", "MET.phi",
-        "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
     },
     # name of the jet collection to smear
     jet_name="Jet",
@@ -912,9 +907,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jer.init
 def jer_init(self: Calibrator) -> None:
-    if not self.propagate_met:
-        return
-
     # determine gen-level jet index column
     lower_first = lambda s: s[0].lower() + s[1:] if s else s
     self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
@@ -931,11 +923,6 @@ def jer_init(self: Calibrator) -> None:
         for column in ("pt", "eta", "phi")
     }
 
-    # register used MET columns
-    self.uses |= {
-        "MET.pt", "MET.phi",
-    }
-
     # register produced jet columns
     self.produces |= {
         f"{self.jet_name}.{column}{suffix}"
@@ -945,6 +932,12 @@ def jer_init(self: Calibrator) -> None:
 
     # register produced MET columns
     if self.propagate_met:
+        # register used MET columns
+        self.uses |= {
+            "MET.pt", "MET.phi",
+        }
+
+        # register produced MET columns
         self.produces |= {
             "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
             "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
