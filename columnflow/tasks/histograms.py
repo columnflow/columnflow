@@ -5,8 +5,6 @@ Task to produce and merge histograms.
 """
 
 from __future__ import annotations
-from functools import reduce
-from operator import and_
 
 import luigi
 import law
@@ -228,16 +226,18 @@ class CreateHistograms(
                         # enable weights and store it
                         histograms[var_key] = h.Weight()
 
-                    # create event mask
-                    masks = []
+                    # mask events and weights when selection expressions are found
+                    masked_events = events
+                    masked_weights = weight
                     for variable_inst in variable_insts:
                         sel = variable_inst.selection
-                        if sel != "1":
-                            if not callable(sel):
-                                raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
-                            masks.append(sel(events))
-                    mask = reduce(and_, masks, np.ones(len(events), dtype=bool))
-                    masked_events = events[mask]
+                        if sel == "1":
+                            continue
+                        if not callable(sel):
+                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                        mask = sel(masked_events)
+                        masked_events = masked_events[mask]
+                        masked_weights = masked_weights[mask]
 
                     # merge category ids
                     category_ids = ak.concatenate(
@@ -250,7 +250,7 @@ class CreateHistograms(
                         "category": category_ids,
                         "process": masked_events.process_id,
                         "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
-                        "weight": weight[mask],
+                        "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
                         # prepare the expression
@@ -261,9 +261,8 @@ class CreateHistograms(
                                 if len(events) == 0 and not has_ak_column(events, route):
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
-                        arr = expr(masked_events)
                         # apply it
-                        fill_data[variable_inst.name] = arr
+                        fill_data[variable_inst.name] = expr(masked_events)
 
                     # fill it
                     fill_hist(
