@@ -6,12 +6,7 @@ uproot==5.5.1
 pyarrow==18.0.0
 dask-awkward==2024.9.0
 correctionlib==2.6.4
-# newer coffea versions use the vector library in a suboptimal way:
-# when loading only the pt column of a "vector" array, the field cannot be accessed
-# since a check is in place to ensure that the three other columns (eta,phi,mass)
-# are present as well; however, we might not need them yet still cannot access pt;
-# see BUGREPORT-TO-BE-ADDED
-coffea==2024.6.1
+coffea==2024.11.0
 
 # minimum versions for general packages
 tabulate~=0.9.0
