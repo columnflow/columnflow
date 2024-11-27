@@ -563,8 +563,9 @@ def get_jer_config(self) -> DotDict:
     propagate_met=True,
     # only run on mc
     mc_only=True,
-    # use deterministic seeds for random smearing
-    use_deterministic_seeds=False,
+    # use deterministic seeds for random smearing and
+    # take the "index"-th random number per seed when not -1
+    deterministic_seed_index=-1,
     # function to determine the correction file
     get_jer_file=get_jer_file,
     # function to determine the jer configuration dict
@@ -648,11 +649,12 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # normally distributed random numbers according to JER
     jer_random_normal = (
         ak_random(0, jer, events.Jet.deterministic_seed, rand_func=self.deterministic_normal)
-        if self.use_deterministic_seeds else
-        ak_random(0, jer, rand_func=np.random.Generator(
+        if self.deterministic_seed_index >= 0
+        else ak_random(0, jer, rand_func=np.random.Generator(
             np.random.SFC64(events.event.to_list())).normal,
         )
     )
+
     # scale random numbers according to JER SF
     jersf2_m1 = jersf ** 2 - 1
     add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
@@ -844,11 +846,12 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     }
 
     # use deterministic seeds for random smearing if requested
-    if self.use_deterministic_seeds:
+    if self.deterministic_seed_index >= 0:
+        idx = self.deterministic_seed_index
         bit_generator = np.random.SFC64
         def deterministic_normal(loc, scale, seed):
             return np.asarray([
-                np.random.Generator(bit_generator(_seed)).normal(_loc, _scale)
+                np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1)[-1]
                 for _loc, _scale, _seed in zip(loc, scale, seed)
             ])
         self.deterministic_normal = deterministic_normal
@@ -856,7 +859,6 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
 #
 # single calibrator for doing both JEC and JER smearing
 #
-
 
 @calibrator(
     uses={jec, jer},
