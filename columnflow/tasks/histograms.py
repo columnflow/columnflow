@@ -148,12 +148,17 @@ class CreateHistograms(
                 self.config_inst.get_variable(var_name)
                 for var_name in law.util.flatten(self.variable_tuples.values())
             )
-            for inp in (
+            for inp in ((
                 [variable_inst.expression]
                 if isinstance(variable_inst.expression, str)
                 # for variable_inst with custom expressions, read columns declared via aux key
                 else variable_inst.x("inputs", [])
-            )
+            ) + (
+                # for variable_inst with selection, read columns declared via aux key
+                variable_inst.x("inputs", [])
+                if variable_inst.selection != "1"
+                else []
+            ))
         }
 
         # empty float array to use when input files have no entries
@@ -221,18 +226,31 @@ class CreateHistograms(
                         # enable weights and store it
                         histograms[var_key] = h.Weight()
 
+                    # mask events and weights when selection expressions are found
+                    masked_events = events
+                    masked_weights = weight
+                    for variable_inst in variable_insts:
+                        sel = variable_inst.selection
+                        if sel == "1":
+                            continue
+                        if not callable(sel):
+                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                        mask = sel(masked_events)
+                        masked_events = masked_events[mask]
+                        masked_weights = masked_weights[mask]
+
                     # merge category ids
                     category_ids = ak.concatenate(
-                        [Route(c).apply(events) for c in self.category_id_columns],
+                        [Route(c).apply(masked_events) for c in self.category_id_columns],
                         axis=-1,
                     )
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
                         "category": category_ids,
-                        "process": events.process_id,
-                        "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
-                        "weight": weight,
+                        "process": masked_events.process_id,
+                        "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
+                        "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
                         # prepare the expression
@@ -244,7 +262,7 @@ class CreateHistograms(
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
                         # apply it
-                        fill_data[variable_inst.name] = expr(events)
+                        fill_data[variable_inst.name] = expr(masked_events)
 
                     # fill it
                     fill_hist(

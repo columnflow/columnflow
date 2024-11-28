@@ -20,6 +20,7 @@ from columnflow.plotting.plot_util import (
     apply_variable_settings,
     apply_process_settings,
     apply_density_to_hists,
+    hists_merge_cutflow_steps,
     get_position,
     get_profile_variations,
     blind_sensitive_bins,
@@ -248,6 +249,7 @@ def plot_cutflow(
 
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
+    hists = hists_merge_cutflow_steps(hists)
 
     # setup plotting config
     plot_config = prepare_plot_config(
