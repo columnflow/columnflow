@@ -1,8 +1,12 @@
 
 # Systematic Uncertainties
 
-Many aspects of the work of analyzers revolves around systematic uncertainties on the modeling of the simulation or in the conditions during data taking.
+Many aspects of the work of analyzers revolve around systematic uncertainties on the modeling of the simulation or in the conditions during data taking.
 columnflow is designed to support various types of systematic uncertainties, also referred to as *shifts*.
+We distinguish two general classes of uncertainties: 
+
+- **rate uncertainties** only modify the overall yield of a distribution.
+- **shape uncertainties** can modify both the yield and the shape of distributions.
 
 The following section describe how to configure your modules to correctly register and use these shifts.
 
@@ -24,7 +28,7 @@ Note that the luminosity is defined as a {external+scinum:py:class}`scinum.Numbe
 
 These uncertainties do not impact the workflow itself since they do not modify the selection efficiency or require the processing of additional samples.
 Therefore, no additional steps are necessary to register this shift in the workflow, provided you do not want to use it for plotting tasks.
-For an example on the latter please see {ref}`section on weight-based uncertainties <weight_based_uncertainties>`.
+For an example on the latter please see the {ref}`section on weight-based uncertainties <weight_based_uncertainties>`.
 
 Since this uncertainty is defined in the config instance, it's accessible at any point within the workflow.
 Consequently, this uncertainty can be integrated into a statistical inference model like this:
@@ -41,13 +45,14 @@ Consequently, this uncertainty can be integrated into a statistical inference mo
 ## Weight-based uncertainties
 
 This class of shifts consists of uncertainties that enter the analysis with the application of weights to events or individual objects.
+This way, they can modify both the yield and the general shape of the distribution.
 Popular examples for this type of uncertainty are scale factors to generally improve the compatibility between observed data and simulation before the measurement.
 Since these factors are usually measured in dedicated control regions, they are also subject to both statistical and systematic uncertainties that need to be taken into account in the final statistical inference.
 The following example is based on scale factors for muons.
 
 columnflow provides the {py:class}`~columnflow.production.cms.muon.muon_weights` Producer to calculate the weights for scale factors.
 This module creates three columns: one for weights derived from the nominal scale factors and columns where the scale factors are varied within the 68% confidence intervals of the measurement (up and down variations).
-In order to derive templates that correspond to these variations, we need to tell the workflow that the varied versions of this weight when creating the templates.
+In order to derive templates that correspond to these variations, we need to tell the workflow to use the varied versions of this weight when creating the templates.
 
 As explained in the [config section](building_blocks/config_objects.md#shift), the shift needs to be registered in the config.
 As demonstrated in the cms analysis example, this can be done like so:
@@ -78,7 +83,7 @@ Therefore, it is sufficient to consider the varied quantities in the {py:class}`
 
 The calculation of the final event weight is handles by the {py:class}`~columnflow.weight.WeightProducer` instance you specify at command-line level.
 Consequently, this module needs to be aware of the shift.
-This can be done with the internal `shift` set, see e.g. the analysis example for a weight producer:
+This can be done with the internal {py:attr}`~columnflow.columnar_util.TaskArrayFunction.shifts` set, see e.g. the analysis example for a weight producer:
 
 ```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/weight/example.py
 :dedent:
@@ -87,7 +92,86 @@ This can be done with the internal `shift` set, see e.g. the analysis example fo
 ```
 
 Here, we use the {py:func}`~columnflow.config_util.get_shifts_from_sources` function to extract all shifts for source `mu` from the config inst.
+
+Adding a source of uncertainty to this set denotes that this module is sensitive to this shift.
 Whenever a shift that we defined above is requested, the WeightProducer will internally switch to the column defined in the `column_alias` auxiliary information that we defined earlier.
 This way, the workflow is now fully aware of the shift.
-You can test your implementation e.g. by running the {py:class}`columnflow.tasks.plotting.PlotShiftedVariables1D` task.
+You can test your implementation e.g. by running the {py:class}`~columnflow.tasks.plotting.PlotShiftedVariables1D` task.
 For more information, see the [plotting overview](../task_overview/plotting_tasks.md).
+
+
+To include this shift in a statistical inference model, we need to add it as a parameter (see CMS analysis example):
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/inference/example.py
+:dedent:
+:language: python
+:start-at: '# muon weight uncertainty'
+:end-before: '# jet energy correction uncertainty'
+```
+
+In particular, note that this type of uncertainty needs to define the keyword argument `config_shift_source` in the {py:func}`~columnflow.inference.InferenceModel.add_parameter` function to properly resolve the necessary shifts to run through the workflow.
+
+## Uncertainties that modify the selection efficiency
+
+A more complex type of shape uncertainty arises from effects that can modify vital quantities for analysis decisions. 
+One example for this class of uncertainties are calibrations of objects such as jets, which modify the four-momenta content of these objects.
+Since these calibrations are generally subject to uncertainties, the corresponding variations can propagate throughout the analysis workflow and modify for example selection efficiencies in the analysis phase space.
+The following will discuss the implementation of such uncertainties based on the energy calibration of jets at CMS.
+
+columnflow provides the {py:class}`~columnflow.calibration.cms.jets.jec` Calibrator module that performs the jet energy calibration.
+Apart from the nominal calibration, this module also saves the varied quantities, see e.g. the following code snippet:
+
+
+
+Note that in this case, the exact list of source of uncertainty is provided by the config instance itself.
+For more information, please consider reading through the {py:class}`~columnflow.calibration.cms.jets.jec` documentation and the config of the analysis example.
+
+As explained in the {ref}`previous section <weight_based_uncertainties>`, the shifts need to be registered in the config instance:
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:dedent:
+:language: python
+:start-at: '# fake jet energy correction shift, with aliases flaged as "selection_dependent", i.e. the aliases'
+:end-before: "# add column aliases for shift jec"
+```
+
+Note that in this case, we have also applied a `tag` to the shifts, which we can also later use to extract information about (groups of) uncertainties.
+
+Next, the aliases for the varied columns are added in accordance with the naming scheme that the Calibrator module uses:
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
+:dedent:
+:language: python
+:start-at: "# add column aliases for shift jec"
+:end-before: '# event weights due to muon scale factors'
+```
+
+Note that as opposed to the previous example, we use the `name` of the shift to construct the final name of the column containing the varied values.
+
+Finally, we need to make the relevant modules aware of the shift.
+As explained above, the jet energy calibration and its variations can have a non-trivial effect on the selection efficiency in the final analysis phase space.
+Therefore, the module that defines this phase space needs to consider these variations.
+This is generally done within the {py:class}`~columnflow.tasks.selection.SelectEvents` task, where {py:class}`~columnflow.selection.Selector` instances derive boolean masks based on criteria on for example the four-momenta of the objects.
+In the scope of this example, the jet selection is the relevant module, and we add the shifts accordingly in the selection of the CMS analysis example:
+
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
+:dedent:
+:language: python
+:pyobject: jet_selection_init
+```
+
+Note that in this example, we chose to retrieve shifts with specific tags, which is useful to map groups of uncertainty to modules.
+
+The workflow is thus fully integrating the jec shifts.
+All tasks following the {py:class}`~columnflow.tasks.selection.SelectEvents` will be provided outputs that were obtained with the varied sample.
+Including this type of shifts in the statistical inference model is very similar to the previous example:
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/inference/example.py
+:dedent:
+:language: python
+:start-at: '# jet energy correction uncertainty'
+:end-at: ')'
+```
+
+## Uncertainties with dedicated datasets
