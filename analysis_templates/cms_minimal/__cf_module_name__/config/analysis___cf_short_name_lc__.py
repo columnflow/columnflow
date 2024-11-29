@@ -221,6 +221,7 @@ add_shift_aliases(
 # event weights due to muon scale factors
 cfg.add_shift(name="mu_up", id=10, type="shape")
 cfg.add_shift(name="mu_down", id=11, type="shape")
+# add column aliases for shift mu
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
