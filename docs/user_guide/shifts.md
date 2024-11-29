@@ -76,4 +76,18 @@ Finally, we can now configure the modules within the workflow to use this shift.
 As mentioned above, this class of systematic uncertainties does not change any selection efficiencies.
 Therefore, it is sufficient to consider the varied quantities in the {py:class}`~columnflow.tasks.histograms.CreateHistograms` task.
 
+The calculation of the final event weight is handles by the {py:class}`~columnflow.weight.WeightProducer` instance you specify at command-line level.
+Consequently, this module needs to be aware of the shift.
+This can be done with the internal `shift` set, see e.g. the analysis example for a weight producer:
 
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/weight/example.py
+:dedent:
+:language: python
+:pyobject: example_init
+```
+
+Here, we use the {py:func}`~columnflow.config_util.get_shifts_from_sources` function to extract all shifts for source `mu` from the config inst.
+Whenever a shift that we defined above is requested, the WeightProducer will internally switch to the column defined in the `column_alias` auxiliary information that we defined earlier.
+This way, the workflow is now fully aware of the shift.
+You can test your implementation e.g. by running the {py:class}`columnflow.tasks.plotting.PlotShiftedVariables1D` task.
+For more information, see the [plotting overview](../task_overview/plotting_tasks.md).
