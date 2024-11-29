@@ -149,15 +149,15 @@ class CreateHistograms(
                 for var_name in law.util.flatten(self.variable_tuples.values())
             )
             for inp in ((
-                [variable_inst.expression]
+                {variable_inst.expression}
                 if isinstance(variable_inst.expression, str)
                 # for variable_inst with custom expressions, read columns declared via aux key
-                else variable_inst.x("inputs", [])
-            ) + (
+                else set(variable_inst.x("inputs", []))
+            ) | (
                 # for variable_inst with selection, read columns declared via aux key
-                variable_inst.x("inputs", [])
+                set(variable_inst.x("inputs", []))
                 if variable_inst.selection != "1"
-                else []
+                else set()
             ))
         }
 
