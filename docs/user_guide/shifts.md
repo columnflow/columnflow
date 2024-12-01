@@ -3,7 +3,7 @@
 
 Many aspects of the work of analyzers revolve around systematic uncertainties on the modeling of the simulation or in the conditions during data taking.
 columnflow is designed to support various types of systematic uncertainties, also referred to as *shifts*.
-We distinguish two general classes of uncertainties: 
+We distinguish two general classes of uncertainties:  
 
 - **rate uncertainties** only modify the overall yield of a distribution.
 - **shape uncertainties** can modify both the yield and the shape of distributions.
@@ -99,7 +99,6 @@ This way, the workflow is now fully aware of the shift.
 You can test your implementation e.g. by running the {py:class}`~columnflow.tasks.plotting.PlotShiftedVariables1D` task.
 For more information, see the [plotting overview](../task_overview/plotting_tasks.md).
 
-
 To include this shift in a statistical inference model, we need to add it as a parameter (see CMS analysis example):
 
 ```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/inference/example.py
@@ -113,15 +112,13 @@ In particular, note that this type of uncertainty needs to define the keyword ar
 
 ## Uncertainties that modify the selection efficiency
 
-A more complex type of shape uncertainty arises from effects that can modify vital quantities for analysis decisions. 
+A more complex type of shape uncertainty arises from effects that can modify vital quantities for analysis decisions.
 One example for this class of uncertainties are calibrations of objects such as jets, which modify the four-momenta content of these objects.
 Since these calibrations are generally subject to uncertainties, the corresponding variations can propagate throughout the analysis workflow and modify for example selection efficiencies in the analysis phase space.
 The following will discuss the implementation of such uncertainties based on the energy calibration of jets at CMS.
 
 columnflow provides the {py:class}`~columnflow.calibration.cms.jets.jec` Calibrator module that performs the jet energy calibration.
 Apart from the nominal calibration, this module also saves the varied quantities, see e.g. the following code snippet:
-
-
 
 Note that in this case, the exact list of source of uncertainty is provided by the config instance itself.
 For more information, please consider reading through the {py:class}`~columnflow.calibration.cms.jets.jec` documentation and the config of the analysis example.
@@ -153,7 +150,6 @@ As explained above, the jet energy calibration and its variations can have a non
 Therefore, the module that defines this phase space needs to consider these variations.
 This is generally done within the {py:class}`~columnflow.tasks.selection.SelectEvents` task, where {py:class}`~columnflow.selection.Selector` instances derive boolean masks based on criteria on for example the four-momenta of the objects.
 In the scope of this example, the jet selection is the relevant module, and we add the shifts accordingly in the selection of the CMS analysis example:
-
 
 ```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/selection/example.py
 :dedent:
