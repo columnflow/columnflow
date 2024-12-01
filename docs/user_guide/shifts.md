@@ -176,17 +176,17 @@ Including this type of shifts in the statistical inference model is very similar
 
 ## Uncertainties with dedicated datasets
 
-The final class of systematic variation that is considered in columnflow concern shifts that require dedicated datasets.
+The final class of systematic variations that is considered in columnflow concerns shifts that require dedicated datasets.
 Such measures can be necessary to account for complicated, untracktable effects, such as a modification of one of the parameters of a Monte Carlo generator early-on in the chain to generate simulated samples.
 In such cases, it is common practice to generate dedicated samples that need to traverse the complete workflow.
 
 Facilitating this situtation requires a certain amount of (columnflow-external) overhead.
 Currently, the metadata database that stores the information about the datasets and processes needs to defined with a {external+order:py:class}`~order.dataset.DatasetInfo` object.
 This object needs to define the nominal as well as the varied datasets in the {external+order:py:attr}`~order.dataset.Dataset.info` attribute.
-For more information, please consider the corresponding section in the [general columnflow structure](./structure.md#analysis-campaign-and-config).
+For more information, please consider the corresponding section in the [general columnflow structure](./structure.md#analysis-campaign-and-config) section.
 
 The names as defined in this structure should correspond to the names of the final shifts in the analysis.
-For example, the shift for the `tune` shifts can be defined as shown in the CMS analysis example:
+For example, the shift for the `tune` uncertainties can be defined as shown in the CMS analysis example:
 
 ```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :dedent:
@@ -196,3 +196,12 @@ For example, the shift for the `tune` shifts can be defined as shown in the CMS 
 ```
 
 Since the name of the dataset corresponds to the shift name, this will trigger the entire workflow independently from the nominal dataset and without applying any additional shifts.
+
+Integrating this uncertainty into a statistical inference model works the same as shown previously:
+
+```{literalinclude} ../../analysis_templates/cms_minimal/__cf_module_name__/inference/example.py
+:dedent:
+:language: python
+:start-at: '# tune uncertainty'
+:end-at: ')'
+```
