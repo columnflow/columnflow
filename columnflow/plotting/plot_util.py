@@ -465,6 +465,7 @@ def prepare_plot_config(
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
     data_hists, data_hide_errors = [], []
+    data_label = None
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
@@ -474,6 +475,8 @@ def prepare_plot_config(
         if process_inst.is_data:
             data_hists.append(h)
             data_hide_errors.append(proc_hide_errors)
+            if data_label is None:
+                data_label = process_inst.label
         elif process_inst.is_mc:
             if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
@@ -554,7 +557,7 @@ def prepare_plot_config(
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
-                "label": "Data",
+                "label": data_label or "Data",
             },
         }
 
