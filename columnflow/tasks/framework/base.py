@@ -942,6 +942,36 @@ class MultiConfigTask(AnalysisTask):
         self.config_insts = tuple(self.analysis_inst.get_config(config) for config in self.configs)
 
     @classmethod
+    def switch_to_analysis_inst_aux(cls, params: dict):
+        """
+        This function switches the default values from the config insts to the analysis inst to help
+        with the transition to the MultiConfigTask, for which the defaults need to be set in the
+        analysis inst.
+        """
+        if "config_insts" not in params:
+            return params
+
+        # TaskArrayFunctions that should be set via the analysis inst aux values
+        analysis_inst_aux = (
+            "default_calibrator", "default_selector", "default_producer", "default_ml_model",
+            "default_weight_producer",
+        )
+
+        # set defaults to the analysis inst if they are set in the config inst
+        # (assuming defaults are the same in all configs)
+        config_inst = params.get("config_insts")[0]
+        for default in analysis_inst_aux:
+            if config_inst.has_aux(default) and not params["analysis_inst"].has_aux(default):
+                law.logger.get_logger(cls.task_family).warning(
+                    f"The {default} aux value is set in the config, but not in the analysis. "
+                    "It is recommended to set this value in the analysis instead. The value in the "
+                    f"analysis inst will be set to '{config_inst.x(default)}'.",
+                )
+                params["analysis_inst"].set_aux(default, config_inst.x(default))
+
+        return params
+
+    @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         """Resolve the parameter values for the given parameters.
 
@@ -964,6 +994,9 @@ class MultiConfigTask(AnalysisTask):
                 params["analysis_inst"].get_config(config)
                 for config in params["configs"]
             ])
+
+        # for backwards compatibility, we automatically switch the defaults from config to analysis inst
+        params = cls.switch_to_analysis_inst_aux(params)
 
         return params
 
@@ -1025,21 +1058,6 @@ class ConfigTask(AnalysisTask):
     is_single_config = True
 
     @classmethod
-    def switch_cspm_defaults(cls, params: dict):
-        # TaskArrayFunctions that should be set via the analysis inst aux values
-        cspm_defaults = ("default_calibrator", "default_selector", "default_producer", "default_ml_model")
-
-        # set defaults to the analysis inst if they are set in the config inst
-        for default in cspm_defaults:
-            if params["config_inst"].has_aux(default) and not params["analysis_inst"].has_aux(default):
-                law.logger.get_logger(cls.task_family).warning(
-                    f"The {default} aux value is set in the config, but not in the analysis. "
-                    "It is recommended to set this value in the analysis instead. The value in the "
-                    f"analysis inst will be set to '{params['config_inst'].x(default)}'.",
-                )
-                params["analysis_inst"].set_aux(default, params["config_inst"].x(default))
-
-    @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
 
@@ -1047,9 +1065,6 @@ class ConfigTask(AnalysisTask):
         if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
             params["config_insts"] = [params["config_inst"]]
-
-            # switch defaults from config to analysis inst
-            cls.switch_cspm_defaults(params)
         return params
 
     @classmethod
