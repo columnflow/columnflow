@@ -85,21 +85,21 @@ class PlotBase(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "analysis_inst" not in params:
+        if "config_insts" not in params:
             return params
-        analysis_inst = params["analysis_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve general_settings
         if "general_settings" in params:
             settings = params["general_settings"]
             # when empty and default general_settings are defined, use them instead
-            if not settings and analysis_inst.x("default_general_settings", ()):
-                settings = analysis_inst.x("default_general_settings", ())
+            if not settings and config_inst.x("default_general_settings", ()):
+                settings = config_inst.x("default_general_settings", ())
                 if isinstance(settings, tuple):
                     settings = cls.general_settings.parse(settings)
 
             # when general_settings are a key to a general_settings_groups, use them instead
-            groups = analysis_inst.x("general_settings_groups", {})
+            groups = config_inst.x("general_settings_groups", {})
             if settings and list(settings.keys())[0] in groups.keys():
                 settings = groups[list(settings.keys())[0]]
                 if isinstance(settings, tuple):
@@ -263,9 +263,9 @@ class PlotBase(AnalysisTask):
         # resolve custom_style_config
         custom_style_config = kwargs.get("custom_style_config", None)
         if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = self.analysis_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
 
-        groups = self.analysis_inst.x("custom_style_config_groups", {})
+        groups = self.config_inst.x("custom_style_config_groups", {})
         if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
             custom_style_config = groups[custom_style_config]
 
@@ -280,7 +280,7 @@ class PlotBase(AnalysisTask):
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)
         if blinding_threshold is None:
-            blinding_threshold = self.analysis_inst.x("default_blinding_threshold", None)
+            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
         kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
@@ -434,21 +434,23 @@ class ProcessPlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "analysis_inst" not in params:
+        if "config_insts" not in params:
             return params
-        analysis_inst = params["analysis_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve process_settings
+        # NOTE: we currently assume that process_settings defaults and groups are the same for all
+        # config instances
         if "process_settings" in params:
             settings = params["process_settings"]
             # when empty and default process_settings are defined, use them instead
-            if not settings and analysis_inst.x("default_process_settings", ()):
-                settings = analysis_inst.x("default_process_settings", ())
+            if not settings and config_inst.x("default_process_settings", ()):
+                settings = config_inst.x("default_process_settings", ())
                 if isinstance(settings, tuple):
                     settings = cls.process_settings.parse(settings)
 
             # when process_settings are a key to a process_settings_groups, use them instead
-            groups = analysis_inst.x("process_settings_groups", {})
+            groups = config_inst.x("process_settings_groups", {})
             if settings and cls.process_settings.serialize(settings) in groups.keys():
                 settings = groups[cls.process_settings.serialize(settings)]
                 if isinstance(settings, tuple):
@@ -488,21 +490,23 @@ class VariablePlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "analysis_inst" not in params:
+        if "config_insts" not in params:
             return params
-        analysis_inst = params["analysis_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve variable_settings
+        # NOTE: we currently assume that variable_settings defaults and groups are the same for all
+        # config instances
         if "variable_settings" in params:
             settings = params["variable_settings"]
             # when empty and default variable_settings are defined, use them instead
-            if not settings and analysis_inst.x("default_variable_settings", ()):
-                settings = analysis_inst.x("default_variable_settings", ())
+            if not settings and config_inst.x("default_variable_settings", ()):
+                settings = config_inst.x("default_variable_settings", ())
                 if isinstance(settings, tuple):
                     settings = cls.variable_settings.parse(settings)
 
             # when variable_settings are a key to a variable_settings_groups, use them instead
-            groups = analysis_inst.x("variable_settings_groups", {})
+            groups = config_inst.x("variable_settings_groups", {})
             if settings and cls.variable_settings.serialize(settings) in groups.keys():
                 settings = groups[cls.variable_settings.serialize(settings)]
                 if isinstance(settings, tuple):
