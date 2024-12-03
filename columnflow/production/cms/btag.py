@@ -35,6 +35,8 @@ class BTagSFConfig:
                 self.discriminator = "btagDeepFlavB"
             elif "particlenet" in cs:
                 self.discriminator = "btagPNetB"
+            elif "robustparticletransformer" in cs:
+                self.discriminator = "btagRobustParTAK4B"
             else:
                 raise NotImplementedError(
                     "cannot identify btag discriminator for correction set "

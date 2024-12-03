@@ -134,7 +134,7 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
 
     :param external_files: Dictionary containing the information about the file location
     :return: path or url to correction file(s)
-    """ # noqa
+    """  # noqa
 
     # get config
     try_attrs = ("get_jec_config", "get_jer_config")
@@ -320,7 +320,7 @@ def jec(
         values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
         ``met.eta > *min_eta_met_prop*``.
-    """ # noqa
+    """  # noqa
     # use local variable for convenience
     jet_name = self.jet_name
 
@@ -745,7 +745,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Throws an error if running on data.
 
     :param events: awkward array containing events to process
-    """ # noqa
+    """  # noqa
     # use local variables for convenience
     jet_name = self.jet_name
     gen_jet_name = self.gen_jet_name
