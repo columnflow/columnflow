@@ -78,10 +78,10 @@ For convenience, we provide the {py:func}`~columnflow.config_util.add_shift_alia
 Note that this function makes some assumptions on the naming of the varied quantities and the shifts.
 
 Finally, we can now configure the modules within the workflow to use this shift.
-As mentioned above, this class of systematic uncertainties does not change any selection efficiencies.
+As mentioned above, this class of systematic uncertainties does not affect the selection acceptance.
 Therefore, it is sufficient to consider the varied quantities in the {py:class}`~columnflow.tasks.histograms.CreateHistograms` task.
 
-The calculation of the final event weight is handles by the {py:class}`~columnflow.weight.WeightProducer` instance you specify at command-line level.
+The calculation of the final event weight is handled by the {py:class}`~columnflow.weight.WeightProducer` instance you specify at command-line level.
 Consequently, this module needs to be aware of the shift.
 This can be done with the internal {py:attr}`~columnflow.columnar_util.TaskArrayFunction.shifts` set, see e.g. the analysis example for a weight producer:
 
@@ -114,7 +114,7 @@ In particular, note that this type of uncertainty needs to define the keyword ar
 
 A more complex type of shape uncertainty arises from effects that can modify vital quantities for analysis decisions.
 One example for this class of uncertainties are calibrations of objects such as jets, which modify the four-momenta content of these objects.
-Since these calibrations are generally subject to uncertainties, the corresponding variations can propagate throughout the analysis workflow and modify for example selection efficiencies in the analysis phase space.
+Since these calibrations are generally subject to uncertainties, the corresponding variations can propagate throughout the analysis workflow and modify event and object selection acceptances.
 The following will discuss the implementation of such uncertainties based on the energy calibration of jets at CMS.
 
 columnflow provides the {py:class}`~columnflow.calibration.cms.jets.jec` Calibrator module that performs the jet energy calibration.
@@ -177,7 +177,7 @@ Such measures can be necessary to account for complicated, untracktable effects,
 In such cases, it is common practice to generate dedicated samples that need to traverse the complete workflow.
 
 Facilitating this situtation requires a certain amount of (columnflow-external) overhead.
-Currently, the metadata database that stores the information about the datasets and processes needs to defined with a {external+order:py:class}`~order.dataset.DatasetInfo` object.
+Currently, the metadata database that stores the information about the datasets and processes needs to be defined with a {external+order:py:class}`~order.dataset.DatasetInfo` object.
 This object needs to define the nominal as well as the varied datasets in the {external+order:py:attr}`~order.dataset.Dataset.info` attribute.
 For more information, please consider the corresponding section in the [general columnflow structure](./structure.md#analysis-campaign-and-config) section.
 
