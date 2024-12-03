@@ -90,6 +90,8 @@ class PlotBase(AnalysisTask):
         config_inst = params["config_insts"][0]
 
         # resolve general_settings
+        # NOTE: we currently assume that general_settings defaults and groups are the same for all
+        # config instances
         if "general_settings" in params:
             settings = params["general_settings"]
             # when empty and default general_settings are defined, use them instead
@@ -255,6 +257,8 @@ class PlotBase(AnalysisTask):
             if value is None:
                 kwargs.pop(key)
 
+        config_inst = self.config_insts[0]
+
         # set items of general_settings in kwargs if corresponding key is not yet present
         general_settings = kwargs.get("general_settings", {})
         for key, value in general_settings.items():
@@ -263,9 +267,9 @@ class PlotBase(AnalysisTask):
         # resolve custom_style_config
         custom_style_config = kwargs.get("custom_style_config", None)
         if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+            custom_style_config = config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
 
-        groups = self.config_inst.x("custom_style_config_groups", {})
+        groups = config_inst.x("custom_style_config_groups", {})
         if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
             custom_style_config = groups[custom_style_config]
 
@@ -280,7 +284,7 @@ class PlotBase(AnalysisTask):
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)
         if blinding_threshold is None:
-            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
+            blinding_threshold = config_inst.x("default_blinding_threshold", None)
         kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
