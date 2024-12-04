@@ -68,20 +68,17 @@ def add_config(
     if year == 2016:
         cfg.x.luminosity = Number(36310, {
             "lumi_13TeV_2016": 0.01j,
-            "lumi_13TeV_2016_single": 0.012j,
             "lumi_13TeV_correlated": 0.006j,
         })
     elif year == 2017:
         cfg.x.luminosity = Number(41480, {
             "lumi_13TeV_2017": 0.02j,
-            "lumi_13TeV_2017_single": 0.023j,
             "lumi_13TeV_1718": 0.006j,
             "lumi_13TeV_correlated": 0.009j,
         })
     elif year == 2018:  # 2018
         cfg.x.luminosity = Number(59830, {
             "lumi_13TeV_2018": 0.015j,
-            "lumi_13TeV_2018_single": 0.025j,
             "lumi_13TeV_1718": 0.002j,
             "lumi_13TeV_correlated": 0.02j,
         })
