@@ -25,19 +25,23 @@ logger = law.logger.get_logger(__name__)
     uses={
         # global columns for event seed
         "run", "luminosityBlock", "event",
-        *optional({
-            "Pileup.nPU",
-            # columns needed to extract object counts only
-            "Photon.pt", "SV.pt", "FatJet.pt", "SubJet.pt",
-            "GenJet.pt", "GenPart.pt",
-            # per-object columns for further hashing
-            "Electron.jetIdx", "Electron.seediPhiOriY",
-            "Muon.jetIdx", "Muon.nStations",
-            "Tau.jetIdx", "Tau.decayMode",
-            "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
-        }),
+        # all other columns to be loaded are defined through the lists below
     },
     produces={"deterministic_seed"},
+    # columns of event integer fields
+    event_columns=[optional("Pileup.nPU")],
+    # columns to be loaded to infer counts of objects
+    object_count_columns=list(map(optional, [
+        "Jet.nConstituents", "FatJet.pt", "SubJet.pt", "Photon.pt", "Muon.jetIdx",
+        "Electron.jetIdx", "Tau.jetIdx", "SV.pt", "GenJet.pt", "GenPart.pt",
+    ])),
+    # columns of object integer fields (can have overlap to object_count_columns)
+    object_columns=list(map(optional, [
+        "Electron.jetIdx", "Electron.seediPhiOriY",
+        "Muon.jetIdx", "Muon.nStations",
+        "Tau.jetIdx", "Tau.decayMode",
+        "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
+    ])),
 )
 def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -60,40 +64,38 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
         n_hex=14,
     )
 
-    # start gathering global fields when available
-    global_fields = []
+    # start gathering global routes when available
+    global_routes = []
 
-    # flat fields
-    if self.apply_field(events, "Pileup.nPU") is not None:
-        global_fields.append("Pileup.nPU")
+    # event-based columns
+    for c in self.event_columns:
+        r = Route(c)
+        if self.apply_route(events, r) is not None:
+            global_routes.append(r)
 
-    # add fields for counts of jagged fields
-    collections = ["Jet", "FatJet", "SubJet", "Photon", "Muon", "Electron", "Tau", "SV"]
-    if self.dataset_inst.is_mc:
-        collections.extend(["GenJet", "GenPart"])
-    for col in collections:
-        if (arr := self.apply_field(events, col)) is None:
+    # add routes for counts of jagged collections
+    for c in self.object_count_columns:
+        r = Route(c)
+        if (arr := self.apply_route(events, r)) is None:
             continue
-        global_fields.append(field := f"n{col}")
-        events = set_ak_column(events, field, ak.num(arr, axis=1), value_type=np.uint64)
+        global_routes.append(r := Route(f"n{r[0]}"))
+        events = set_ak_column(events, r, ak.num(arr, axis=1), value_type=np.uint64)
 
-    # calculate seed from global fields
+    # calculate seed from global routes
     value_offset = 3
     prime_offset = 15
-    for i, f in enumerate(global_fields, value_offset):
-        values = Route(f).apply(events) + i
+    for i, r in enumerate(global_routes, value_offset):
+        values = r.apply(events) + i
         primes = self.primes[(values + prime_offset) % len(self.primes)]
         seed = seed + primes * ak.values_astype(values, np.uint64)
 
     # get integers of objects, perform a custom hashing involving local indices,
     # then multiply with primes and add to the seed
-    object_fields = [
-        "Electron.jetIdx", "Electron.seediPhiOriY", "Tau.jetIdx", "Tau.decayMode", "Muon.jetIdx",
-        "Muon.nStations", "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
-    ]
-    for i, f in enumerate(object_fields, value_offset):
-        if (values := self.apply_field(events, f)) is None:
+    for i, c in enumerate(self.object_columns, value_offset):
+        r = Route(c)
+        if (values := self.apply_route(events, r)) is None:
             continue
+        print("add", c)
         values = values + i
         loc = ak.local_index(values) + 1
         hashed = (
@@ -117,6 +119,17 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     return events
 
 
+@deterministic_event_seeds.init
+def deterministic_event_seeds_init(self: Producer) -> None:
+    """
+    Producer initialization that adds columns to the set of *used* columns based on the
+    *event_columns*, *object_count_columns*, and *object_columns* lists.
+    """
+    # add used columns
+    for column in self.event_columns + self.object_count_columns + self.object_columns:
+        self.uses.add(Route(column))
+
+
 @deterministic_event_seeds.setup
 def deterministic_event_seeds_setup(
     self: Producer,
@@ -137,18 +150,20 @@ def deterministic_event_seeds_setup(
     # store primes in array
     self.primes = np.array(primes, dtype=np.uint64)
 
-    # helper to apply a field to an array with a silent failure that only issues a warning
-    def apply_field(ak_array: ak.Array, field: str) -> ak.Array | None:
+    # helper to apply a route to an array with a silent failure that only issues a warning
+    def apply_route(ak_array: ak.Array, route: Route) -> ak.Array | None:
         try:
-            return Route(field).apply(ak_array)
+            return route.apply(ak_array)
         except ak.errors.FieldNotFoundError:
+            if not route.has_tag("optional"):
+                raise
             logger.warning_once(
-                f"{id(self)}_{field}",
-                f"optional field '{field}' not found in events chunk for seed calculation",
+                f"{id(self)}_{route}",
+                f"optional route '{route}' not found in events chunk for seed calculation",
             )
             return None
 
-    self.apply_field = apply_field
+    self.apply_route = apply_route
 
 
 @producer(
