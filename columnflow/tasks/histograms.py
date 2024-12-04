@@ -20,6 +20,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
+from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateHistograms(
@@ -113,7 +114,6 @@ class CreateHistograms(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        import hist
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import (
@@ -208,23 +208,9 @@ class CreateHistograms(
                     # get variable instances
                     variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
-                    # create the histogram if not present yet
                     if var_key not in histograms:
-                        h = (
-                            hist.Hist.new
-                            .IntCat([], name="category", growth=True)
-                            .IntCat([], name="process", growth=True)
-                            .IntCat([], name="shift", growth=True)
-                        )
-                        # add variable axes
-                        for variable_inst in variable_insts:
-                            h = h.Var(
-                                variable_inst.bin_edges,
-                                name=variable_inst.name,
-                                label=variable_inst.get_full_x_title(),
-                            )
-                        # enable weights and store it
-                        histograms[var_key] = h.Weight()
+                        # create the histogram in the first chunk
+                        histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
