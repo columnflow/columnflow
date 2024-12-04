@@ -95,7 +95,6 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
         r = Route(c)
         if (values := self.apply_route(events, r)) is None:
             continue
-        print("add", c)
         values = values + i
         loc = ak.local_index(values) + 1
         hashed = (
