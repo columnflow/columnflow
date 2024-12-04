@@ -78,7 +78,7 @@ def add_config(
         })
     elif year == 2018:  # 2018
         cfg.x.luminosity = Number(59830, {
-            "lumi_13TeV_2017": 0.015j,
+            "lumi_13TeV_2018": 0.015j,
             "lumi_13TeV_1718": 0.002j,
             "lumi_13TeV_correlated": 0.02j,
         })
