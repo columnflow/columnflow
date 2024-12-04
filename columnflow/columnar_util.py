@@ -6,7 +6,7 @@ Helpers and utilities for working with columnar libraries.
 
 from __future__ import annotations
 
-__all__ = []
+# __all__ = []
 
 import os
 import gc
@@ -584,7 +584,7 @@ def get_ak_routes(
         if getattr(arr, "fields", None) and (max_depth <= 0 or len(fields) < max_depth):
             # extend the lookup with nested fields
             lookup.extend([
-                (getattr(arr, field), fields + (field,))
+                (arr[field], fields + (field,))
                 for field in arr.fields
             ])
         else:
@@ -2673,6 +2673,15 @@ class DaskArrayReader(object):
         open_options = open_options or {}
         open_options["split_row_groups"] = False
         self.dak_array = dak.from_parquet(path, **open_options)
+        if materialization_strategy == self.MaterializationStrategy.SLICES:
+            # NOTE: by calling the `persist` method, the dask array is directly materialized in memory
+            # to prevent that the dask array is materialized multiple times. This prevents us from
+            # loading data in a chunked manner, which is not ideal for large datasets, but at the
+            # moment we do not have a better solution.
+            # This fix should be removed once we find a solution to only materialize the data
+            # from the sliced array that is actually needed.
+            self.dak_array = self.dak_array.persist()
+
         self.path = path
 
         # strategy dependent attributes and setup
@@ -2737,6 +2746,8 @@ class DaskArrayReader(object):
         entry_stop: int,
         max_chunk_size: int,
     ) -> ak.Array:
+        # NOTE: calling `compute()` will materialize the data from the full dataset in memory
+        # even if we only return a slice of the data.
         return self.dak_array[entry_start:entry_stop].compute()
 
     def _materialize_via_partitions(
