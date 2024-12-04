@@ -146,7 +146,7 @@ Next, the aliases for the varied columns are added in accordance with the naming
 Note that as opposed to the previous example, we use the `name` of the shift to construct the final name of the column containing the varied values.
 
 Finally, we need to make the relevant modules aware of the shift.
-As explained above, the jet energy calibration and its variations can have a non-trivial effect on the selection efficiency in the final analysis phase space.
+As explained above, the jet energy calibration and its variations can have a non-trivial effect on the selection acceptance in the final analysis phase space.
 Therefore, the module that defines this phase space needs to consider these variations.
 This is generally done within the {py:class}`~columnflow.tasks.selection.SelectEvents` task, where {py:class}`~columnflow.selection.Selector` instances derive boolean masks based on criteria on for example the four-momenta of the objects.
 In the scope of this example, the jet selection is the relevant module, and we add the shifts accordingly in the selection of the CMS analysis example:
