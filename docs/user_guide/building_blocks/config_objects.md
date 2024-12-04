@@ -131,6 +131,8 @@ A more detailed description of the usage of categories in columnflow is given in
 Similarly to categories, Channels are built to investigate specific parts of the phase space and are described in the [Channel and Category](https://python-order.readthedocs.io/en/latest/quickstart.html#channel-and-category) part of the Quickstart section of the order documentation.
 They can be added to the Config object using {external+order:py:meth}`order.config.Config.add_channel()`.
 
+(shift)=
+
 ### Shift
 
 In order to implement systematic variations in the Config object, the {external+order:py:class}`order.shift.Shift` class can be used.
@@ -181,7 +183,7 @@ An example is given below:
 ```{literalinclude} ../../../analysis_templates/cms_minimal/__cf_module_name__/config/analysis___cf_short_name_lc__.py
 :language: python
 :start-after: "# columns to keep after certain steps"
-:end-before: "# event weight columns as keys in an OrderedDict, mapped to shift instances they depend on"
+:end-before: "})"
 ```
 
 (custom_retrieval_of_dataset_files_section)=

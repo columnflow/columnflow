@@ -163,6 +163,59 @@ def apply_settings(
                     inst.set_aux(key, value)
 
 
+def hists_merge_cutflow_steps(
+    hists: dict,
+) -> dict:
+    """
+    Make 'step' axis uniform among a set of histograms. Takes a dict of 1D histogram
+    objects with a single 'step' axis of type *StrCategory*, computes the full list of possible
+    'step' values across all histograms, and returns a dict of histograms whose 'step' axis
+    has a corresponding, uniform structure. The values and variances inserted for missing 'step'
+    are taken from the previous existing step.
+    """
+    # return immediately if fewer than two hists to merge
+    if len(hists) < 2:
+        return hists
+
+    # get histogram instances
+    hist_insts = list(hists.values())
+
+    # validate inputs
+    if any(h.ndim != 1 for h in hist_insts):
+        raise ValueError(
+            "cannot merge cutflow steps: histograms must be one-dimensional",
+        )
+
+    # ensure step structure is uniform by taking a linear
+    # combination with only one nonzero coefficient
+    hist_insts_merged = []
+    for coeffs in np.eye(len(hist_insts)):
+        hist_row = sum(
+            h * coeff
+            for h, coeff in zip(hist_insts, coeffs)
+        )
+        hist_insts_merged.append(hist_row)
+
+    # fill missing entries from preceding steps
+    merged_steps = list(hist_insts_merged[0].axes[0])
+    for hist_inst, hist_inst_merged in zip(hist_insts, hist_insts_merged):
+        last_step = merged_steps[0]
+        for merged_step in merged_steps[1:]:
+            if merged_step not in hist_inst.axes[0]:
+                hist_inst_merged[merged_step] = hist_inst_merged[last_step]
+            else:
+                last_step = merged_step
+
+    # put merged hists into dict
+    hists = {
+        k: h
+        for k, h in zip(hists, hist_insts_merged)
+    }
+
+    # return
+    return hists
+
+
 def apply_process_settings(
     hists: dict,
     process_settings: dict | None = None,
@@ -413,6 +466,7 @@ def prepare_plot_config(
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
     data_hists, data_hide_errors = [], []
+    data_label = None
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
@@ -422,6 +476,8 @@ def prepare_plot_config(
         if process_inst.is_data:
             data_hists.append(h)
             data_hide_errors.append(proc_hide_errors)
+            if data_label is None:
+                data_label = process_inst.label
         elif process_inst.is_mc:
             if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
@@ -502,7 +558,7 @@ def prepare_plot_config(
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
-                "label": "Data",
+                "label": data_label or "Data",
             },
         }
 
