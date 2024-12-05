@@ -44,9 +44,7 @@ create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
     # columns to be loaded to infer counts of objects
     object_count_columns=list(map(optional, [
         "Jet.nConstituents", "FatJet.pt", "SubJet.pt", "Photon.pt", "Muon.jetIdx",
-        "Electron.jetIdx", "Tau.jetIdx", "SV.pt",
-        "GenJet.pt",
-        "GenPart.pt",
+        "Electron.jetIdx", "Tau.jetIdx", "SV.pt", "GenJet.pt", "GenPart.pt",
     ])),
     # columns of object integer fields (can have overlap to object_count_columns)
     object_columns=list(map(optional, [
