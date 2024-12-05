@@ -96,7 +96,7 @@ class PlotVariablesBase(
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process copy
-        hists = {}
+        hists: dict[od.Config, dict[od.Process, hist.Hist]] = {}
 
         with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
             for i, (config, dataset_dict) in enumerate(self.input().items()):

@@ -1353,9 +1353,6 @@ class MLModelTrainingMixin(
             # call the model's setup hook
             ml_model_inst._setup()
 
-        if "ml_model_inst" in params:
-            ml_model_inst = params["ml_model_inst"]
-
             # resolve CSPs based on the MLModel
             params["calibrators"] = law.util.make_tuple(
                 ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
@@ -1397,6 +1394,9 @@ class MLModelTrainingMixin(
 
 
 class MLModelMixin(ConfigTask, MLModelMixinBase):
+    """
+    A mixin for tasks that require a single machine learning model, e.g. for evaluation.
+    """
 
     ml_model = luigi.Parameter(
         default=RESOLVE_DEFAULT,
@@ -1424,19 +1424,15 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
                 multiple=False,
             )
 
-            if "config_inst" in params:
-                config_inst = params["config_inst"]
-
-                # initialize it once to trigger its set_config hook which might, in turn,
-                # add objects to the config itself
-                if params.get("ml_model") not in (None, law.NO_STR):
-                    params["ml_model_inst"] = cls.get_ml_model_inst(
-                        params["ml_model"],
-                        analysis_inst,
-                        requested_configs=[config_inst],
-                    )
-                elif not cls.allow_empty_ml_model:
-                    raise Exception(f"no ml_model configured for {cls.task_family}")
+            # when both config_inst and ml_model are set, initialize the ml_model_inst
+            if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+                params["ml_model_inst"] = cls.get_ml_model_inst(
+                    params["ml_model"],
+                    analysis_inst,
+                    requested_configs=[params["config_inst"]],
+                )
+            elif not cls.allow_empty_ml_model:
+                raise Exception(f"no ml_model configured for {cls.task_family}")
 
         return params
 
@@ -1946,7 +1942,6 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
         n_configs = len(config_insts)
 
         # resolve processes
-        # TODO: should be resolved for all configs
         if "processes" in params:
             if params["processes"]:
                 processes = list(params["processes"])
@@ -2040,37 +2035,39 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
 
         return shifts, upstream_shifts
 
-    @property
-    def datasets_repr(self):
-        datasets = self.datasets
-        if len(set(datasets)) == 1:
-            datasets = (self.datasets[0],)
+    def get_multi_config_objects_repr(self, names: Sequence[Sequence[str]]):
+        """
+        Returns a string representation from a list of list of names.
+        When the names are the same per config, handle names as if there is only one config.
+        When there is just one unique name in total, return it directly.
+        When there are different names per config, the representation consists of the number of names
+        per config and a hash of the sorted merge of all names.
 
-        if (len(self.datasets) == 1) & (len(self.datasets[0]) == 1):
-            return self.datasets[0][0]
+        :param names: A list of list of names.
+        :return: A string representation of the names.
+        """
+        # when names are the same per config, handle names as if there is only one config
+        if len(set(names)) == 1:
+            names = (names[0],)
+
+        # when there is just one unique name in total, return it directly
+        if (len(names) == 1) & (len(names[0]) == 1):
+            return names[0][0]
 
         _repr = ""
-        merge_datasets = []
-        for _datasets in sorted(datasets):
-            merge_datasets += sorted(_datasets)
-            _repr += f"{len(_datasets)}_"
-        return _repr + f"_{law.util.create_hash(sorted(merge_datasets))}"
+        merge_names = []
+        for _names in sorted(names):
+            merge_names += sorted(_names)
+            _repr += f"{len(_names)}_"
+        return _repr + f"_{law.util.create_hash(sorted(merge_names))}"
+
+    @property
+    def datasets_repr(self):
+        return self.get_multi_config_objects_repr(self.datasets)
 
     @property
     def processes_repr(self):
-        processes = self.processes
-        if len(set(processes)) == 1:
-            processes = (self.processes[0],)
-
-        if (len(self.processes) == 1) & (len(self.processes[0]) == 1):
-            return self.processes[0][0]
-
-        _repr = ""
-        merge_processes = []
-        for _processes in sorted(processes):
-            merge_processes += sorted(_processes)
-            _repr += f"{len(_processes)}_"
-        return _repr + f"_{law.util.create_hash(sorted(merge_processes))}"
+        return self.get_multi_config_objects_repr(self.processes)
 
 
 class ShiftSourcesMixin(AnalysisTask):
