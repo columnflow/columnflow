@@ -29,7 +29,6 @@ from columnflow.util import maybe_import, DotDict
 
 ak = maybe_import("awkward")
 
-
 logger = law.logger.get_logger(__name__)
 
 
@@ -1738,46 +1737,18 @@ class VariablesMixin(AnalysisTask):
                     else:
                         multi_var_parts.append(parts)
 
-                def resolve_objects_multi_config(
-                    cls,
-                    objects,
+                variables = cls.find_config_objects_multi_container(
+                    single_vars,
                     config_insts,
-                    object_cls,
-                    object_groups,
-                ) -> [str]:
-                    outp = None
-                    all_obj = set()
-                    config_obj = dict()
-                    for _config_inst in config_insts:
-                        config_obj[_config_inst] = set(cls.find_config_objects(
-                            objects,
-                            _config_inst,
-                            object_cls,
-                            _config_inst.x(object_groups, {}),
-                        ))
-                        all_obj |= config_obj[_config_inst]
-
-                        if outp:
-                            outp &= config_obj[_config_inst]
-                        else:
-                            outp = config_obj[_config_inst]
-
-                        # warnings for objects not defined in all configs
-                        if len(all_obj - config_obj[_config_inst]) != 0:
-                            for obj in (all_obj - config_obj[_config_inst]):
-                                law.logger.get_logger(cls.task_family).warning(
-                                    f"The object {object_cls} with name {obj} is not defined "
-                                    f"in the config {_config_inst.name}.",
-                                )
-                    return list(outp)
-
-                variables = resolve_objects_multi_config(cls, single_vars, config_insts, od.Variable, "variable_groups")
+                    od.Variable,
+                    "variable_groups",
+                )
 
                 # for each multi-variable, resolve each part separately and create the full
                 # combinatorics of all possibly pattern-resolved parts
                 for parts in multi_var_parts:
                     resolved_parts = [
-                        resolve_objects_multi_config(cls, part, config_insts, od.Variable, "variable_groups")
+                        cls.find_config_objects_multi_container(part, config_insts, od.Variable, "variable_groups")
                         for part in parts
                     ]
                     variables.extend([

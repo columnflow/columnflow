@@ -487,6 +487,61 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return law.util.make_unique(object_names)
 
     @classmethod
+    def find_config_objects_multi_container(
+        cls,
+        names: Sequence[str],
+        containers: Sequence[od.UniqueObject],
+        object_cls: od.UniqueObjectMeta,
+        object_groups: dict[str, list] | None = None,
+        check_missing: bool = True,
+        **kwargs,
+    ) -> [str]:
+        """
+        Returns all names of objects of type *object_cls* known to all *containers* (e.g.
+        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names* using the
+        *find_config_objects* method. The method is called for each container and the results
+        are intersected to find the objects that are defined in all containers.
+        When an object is not defined in all containers and *check_missing* is *True*,
+        a warning is issued.
+
+        :param cls: The current class.
+        :param objects: The objects to resolve.
+        :param containers: The containers to search for the objects.
+        :param object_cls: The class of the objects to search for.
+        :param object_groups: The object groups to search for.
+        :param check_missing: Whether to issue warnings for objects that are not defined in all
+            containers.
+        :param kwargs: Additional keyword arguments passed to the *find_config_objects* method.
+        :return: A list of object names that are defined in all containers.
+        """
+        outp = None
+        all_obj = set()
+        config_obj = dict()
+        for _container in containers:
+            config_obj[_container] = set(cls.find_config_objects(
+                names,
+                _container,
+                object_cls,
+                _container.x(object_groups, {}),
+                **kwargs,
+            ))
+            all_obj |= config_obj[_container]
+
+            if outp:
+                outp &= config_obj[_container]
+            else:
+                outp = config_obj[_container]
+
+            # warnings for objects not defined in all configs
+            if check_missing and len(all_obj - config_obj[_container]) != 0:
+                for obj in (all_obj - config_obj[_container]):
+                    law.logger.get_logger(cls.task_family).warning(
+                        f"The object {object_cls} with name {obj} is not defined "
+                        f"in the config {_container.name}.",
+                    )
+        return list(outp)
+
+    @classmethod
     def resolve_config_default(
         cls,
         task_params: dict[str, Any],
