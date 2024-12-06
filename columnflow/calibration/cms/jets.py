@@ -789,7 +789,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # -- stochastic smearing
     # normally distributed random numbers according to JER
     jer_random_normal = (
-        ak_random(0, jer, events.Jet.deterministic_seed, rand_func=self.deterministic_normal)
+        ak_random(0, jer, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
         if self.deterministic_seed_index >= 0
         else ak_random(0, jer, rand_func=np.random.Generator(
             np.random.SFC64(events.event.to_list())).normal,
