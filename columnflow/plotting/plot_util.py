@@ -440,9 +440,10 @@ def prepare_style_config(
     }
 
     # disable minor ticks based on variable_inst
-    if variable_inst.discrete_x:
-        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
-        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
+    axis_type = variable_inst.x("axis_type", "variable")
+    if variable_inst.discrete_x or "int" in axis_type:
+        # remove the "xscale" attribute since it messes up the bin edges
+        style_config["ax_cfg"].pop("xscale")
         style_config["ax_cfg"]["minorxticks"] = []
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
