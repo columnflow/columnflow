@@ -1,0 +1,83 @@
+name: Test sequence
+on:
+  workflow_call:
+    inputs:
+      CONTAINER: 
+        description: "container to be used for the job"
+        default: ""
+        type: string
+        required: false
+      GIT_SUBMODULE_STRATEGY: 
+        description: "strategy to be used for git submodules"
+        default: recursive
+        type: string
+        required: false
+      EXECUTABLE: 
+        description: "Executable to be run in the container"
+        type: string
+        required: true
+      UPLOAD_FILES: 
+        description: "Upload files to codecov"
+        default: false
+        type: boolean
+        required: false
+      NAME: 
+        description: "Name of the job"
+        type: string
+        required: true
+      USER: 
+        description: "User to be used in the container"
+        type: string
+        default: cf_user
+        required: false
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: string
+        default: "True"
+        required: false
+
+jobs:
+  test_sequence:
+    runs-on: ubuntu-latest
+    environment: Tests
+    name: Perform test ${{ inputs.NAME }}
+    container: 
+        image: ${{ inputs.CONTAINER }}
+        options: --user ${{ inputs.USER }}
+        env:
+          CF_FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
+    steps:
+    #   - uses: actions/checkout@v3
+    #     with:
+    #       clean: false
+    #       persist-credentials: false
+    #       submodules: ${{ inputs.GIT_SUBMODULE_STRATEGY }}
+      - name: ${{ inputs.NAME }}
+        run: |
+          shopt -s expand_aliases
+          echo "I am $(whoami) and I am in $(pwd)"
+          
+          if [[ $(whoami) == "root" ]]; then
+            echo "Setting /columnflow as safe repository"
+            git config --global --add safe.directory /columnflow
+          fi
+          
+          cd $CF_BASE
+          source setup.sh
+          
+          git fetch
+          git checkout $GITHUB_SHA
+          git submodule update --recursive
+          # source the setup and execute the test
+          ${{ inputs.EXECUTABLE }}
+        shell: bash
+      - if: ${{ inputs.UPLOAD_FILES }}
+        name: Upload report
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} 
+        with:
+          flags: unittests
+          files: coverage_test_util.xml,coverage_test_columnar_util.xml
+          verbose: true
+          
