@@ -170,6 +170,7 @@ def deterministic_event_seeds_setup(
 
 
 @producer(
+    uses={"Jet.pt"},
     produces={"Jet.deterministic_seed"},
 )
 def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
@@ -179,11 +180,14 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     :py:func:`deterministic_event_seeds` which is not called by this producer for the purpose of
     of modularity. The strategy for producing seeds is identical.
     """
-    # create the per jet seeds
+    # get sorting indices for jets using their pt as a local index is used for the hashing
+    sorting_indices = ak.argsort(-events.Jet.pt, axis=1)
+
+    # create the seeds
     primes = self.primes[events.deterministic_seed % len(self.primes)]
     jet_seed = events.deterministic_seed + (
         primes * ak.values_astype(ak.local_index(events.Jet, axis=1) + self.primes[50], np.uint64)
-    )
+    )[sorting_indices]
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = create_seed_vec(np_jet_seed)
 
