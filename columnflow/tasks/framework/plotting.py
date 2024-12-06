@@ -10,13 +10,13 @@ import law
 import luigi
 
 from columnflow.types import Any, Callable
-from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
+from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict
 
 
-class PlotBase(ConfigTask):
+class PlotBase(AnalysisTask):
     """
     Base class for all plotting tasks.
     """
@@ -85,11 +85,13 @@ class PlotBase(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve general_settings
+        # NOTE: we currently assume that general_settings defaults and groups are the same for all
+        # config instances
         if "general_settings" in params:
             settings = params["general_settings"]
             # when empty and default general_settings are defined, use them instead
@@ -255,6 +257,8 @@ class PlotBase(ConfigTask):
             if value is None:
                 kwargs.pop(key)
 
+        config_inst = self.config_insts[0]
+
         # set items of general_settings in kwargs if corresponding key is not yet present
         general_settings = kwargs.get("general_settings", {})
         for key, value in general_settings.items():
@@ -263,9 +267,9 @@ class PlotBase(ConfigTask):
         # resolve custom_style_config
         custom_style_config = kwargs.get("custom_style_config", None)
         if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+            custom_style_config = config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
 
-        groups = self.config_inst.x("custom_style_config_groups", {})
+        groups = config_inst.x("custom_style_config_groups", {})
         if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
             custom_style_config = groups[custom_style_config]
 
@@ -280,7 +284,7 @@ class PlotBase(ConfigTask):
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)
         if blinding_threshold is None:
-            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
+            blinding_threshold = config_inst.x("default_blinding_threshold", None)
         kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
@@ -413,7 +417,7 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
-    DatasetsProcessesMixin,
+    # TODO: could add back MultiConfigDatasetsProcessesMixin if it works with both ConfigTask and MultiConfigTask
     PlotBase,
 ):
     """
@@ -434,11 +438,13 @@ class ProcessPlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve process_settings
+        # NOTE: we currently assume that process_settings defaults and groups are the same for all
+        # config instances
         if "process_settings" in params:
             settings = params["process_settings"]
             # when empty and default process_settings are defined, use them instead
@@ -488,11 +494,13 @@ class VariablePlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve variable_settings
+        # NOTE: we currently assume that variable_settings defaults and groups are the same for all
+        # config instances
         if "variable_settings" in params:
             settings = params["variable_settings"]
             # when empty and default variable_settings are defined, use them instead
@@ -518,3 +526,86 @@ class VariablePlotSettingMixin(
         dict_add_strict(params, "variable_settings", self.variable_settings)
 
         return params
+
+
+class PlotShiftMixin(AnalysisTask):
+    # TODO: details
+    shift = luigi.Parameter(
+        default="nominal",
+        description="the shift to plot; empty default",
+    )
+
+    @classmethod
+    def modify_param_values(cls, params):
+        """
+        When "config" and "shift" are set, this method evaluates them to set the global shift.
+        For that, it takes the shifts stored in the config instance and compares it with those
+        defined by this class.
+        """
+        params = super().modify_param_values(params)
+
+        # get params
+        config_insts = params.get("config_insts")
+        requested_shift = params.get("shift")
+
+        # require that the configs is set
+        if config_insts in (None, law.NO_STR, ()):
+            return params
+
+        # require that the shift is set and known
+        if requested_shift in (None, law.NO_STR):
+            if cls.allow_empty_shift:
+                params["shift"] = law.NO_STR
+                return params
+
+            raise Exception(f"no shift found in params: {params}")
+
+        for config_inst in config_insts:
+            if requested_shift not in config_inst.shifts:
+                raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
+
+        # determine the known shifts for this class
+        shifts, upstream_shifts = cls.get_known_shifts(config_insts[0], params)
+
+        # actual shift resolution: compare the requested shift to known ones
+        # local_shift -> the requested shift if implemented by the task itself, else nominal
+        # shift       -> the requested shift if implemented by this task
+        #                or an upsteam task (== global shift), else nominal
+
+        if requested_shift in shifts:
+            params["shift"] = requested_shift
+        elif requested_shift in upstream_shifts:
+            params["shift"] = requested_shift
+        else:
+            params["shift"] = "nominal"
+
+        # store references
+        params["shift_inst"] = config_insts[0].get_shift(params["shift"])
+
+        return params
+
+    @classmethod
+    def resolve_param_values(cls, params: dict) -> dict:
+        params = super().resolve_param_values(params)
+
+        # set default shift
+        if params.get("shift") in (None, law.NO_STR):
+            params["shift"] = "nominal"
+
+        return params
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store references to the shift instances
+        self.shift_inst = None
+        self.global_shift_inst = None
+
+        if self.shift not in (None, law.NO_STR):
+            self.shift_inst = self.config_insts[0].get_shift(self.shift)
+
+    def store_parts(self):
+        parts = super().store_parts()
+        # add the shift name
+        parts.insert_after("analysis", "shift", self.shift)
+        return parts
