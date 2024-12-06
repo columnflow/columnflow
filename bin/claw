@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Executable that conveniently triggers "cf_sandbox SANDBOX law ..." commands.
+# The SANDBOX is determined with the following precedence:
+# 1. CLAW_SANDBOX (env)
+# 2. analysis.default_columnar_sandbox (law.cfg)
+# 3. venv_columnar_dev (default)
+
+action() {
+    # get the target sandbox
+    local sandbox
+    if [ ! -z "${CLAW_SANDBOX}" ]; then
+        sandbox="${CLAW_SANDBOX}"
+    fi
+    if [ -z "${sandbox}" ]; then
+        local sandbox_tmp="$( law config analysis.default_columnar_sandbox 2>/dev/null )"
+        if [ "$?" = "0" ]; then
+            # extract the name of the sandbox, remove file extension, potentially add '_dev' suffix
+            sandbox_tmp="$( basename "${sandbox_tmp}" )"
+            sandbox_tmp="${sandbox_tmp%.*}"
+            [[ "${sandbox_tmp}" = *_dev ]] || sandbox_tmp="${sandbox_tmp}_dev"
+            sandbox="${sandbox_tmp}"
+        fi
+    fi
+    if [ -z "${sandbox}" ]; then
+        sandbox="venv_columnar_dev"
+    fi
+    # echo "sandbox '${sandbox}'"
+
+    # run the command
+    cf_sandbox "${sandbox}" law "$@"
+}
+action "$@"

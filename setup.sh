@@ -241,6 +241,9 @@ setup_columnflow() {
         # source law's bash completion scipt
         source "$( law completion )" ""
 
+        # add completion to the claw command
+        complete -o bashdefault -o default -F _law_complete claw
+
         # silently index
         law index -q
     fi
@@ -318,7 +321,7 @@ cf_setup_common_variables() {
     # used by law.cfg and, in turn, tasks/framework/remote.py
     local cf_htcondor_flavor_default="naf"
     local cf_slurm_flavor_default="maxwell"
-    local cf_slurm_partition_default="cms-uhh"
+    local cf_slurm_partition_default="maxgpu"
     local hname="$( hostname 2> /dev/null )"
     if [ "$?" = "0" ]; then
         # lxplus

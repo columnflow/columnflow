@@ -20,6 +20,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
+from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateHistograms(
@@ -113,7 +114,6 @@ class CreateHistograms(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        import hist
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import (
@@ -148,12 +148,17 @@ class CreateHistograms(
                 self.config_inst.get_variable(var_name)
                 for var_name in law.util.flatten(self.variable_tuples.values())
             )
-            for inp in (
-                [variable_inst.expression]
+            for inp in ((
+                {variable_inst.expression}
                 if isinstance(variable_inst.expression, str)
                 # for variable_inst with custom expressions, read columns declared via aux key
-                else variable_inst.x("inputs", [])
-            )
+                else set(variable_inst.x("inputs", []))
+            ) | (
+                # for variable_inst with selection, read columns declared via aux key
+                set(variable_inst.x("inputs", []))
+                if variable_inst.selection != "1"
+                else set()
+            ))
         }
 
         # empty float array to use when input files have no entries
@@ -203,36 +208,35 @@ class CreateHistograms(
                     # get variable instances
                     variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
-                    # create the histogram if not present yet
                     if var_key not in histograms:
-                        h = (
-                            hist.Hist.new
-                            .IntCat([], name="category", growth=True)
-                            .IntCat([], name="process", growth=True)
-                            .IntCat([], name="shift", growth=True)
-                        )
-                        # add variable axes
-                        for variable_inst in variable_insts:
-                            h = h.Var(
-                                variable_inst.bin_edges,
-                                name=variable_inst.name,
-                                label=variable_inst.get_full_x_title(),
-                            )
-                        # enable weights and store it
-                        histograms[var_key] = h.Weight()
+                        # create the histogram in the first chunk
+                        histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
+
+                    # mask events and weights when selection expressions are found
+                    masked_events = events
+                    masked_weights = weight
+                    for variable_inst in variable_insts:
+                        sel = variable_inst.selection
+                        if sel == "1":
+                            continue
+                        if not callable(sel):
+                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                        mask = sel(masked_events)
+                        masked_events = masked_events[mask]
+                        masked_weights = masked_weights[mask]
 
                     # merge category ids
                     category_ids = ak.concatenate(
-                        [Route(c).apply(events) for c in self.category_id_columns],
+                        [Route(c).apply(masked_events) for c in self.category_id_columns],
                         axis=-1,
                     )
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
                         "category": category_ids,
-                        "process": events.process_id,
-                        "shift": np.ones(len(events), dtype=np.int32) * self.global_shift_inst.id,
-                        "weight": weight,
+                        "process": masked_events.process_id,
+                        "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
+                        "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
                         # prepare the expression
@@ -244,7 +248,7 @@ class CreateHistograms(
                                     return empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
                         # apply it
-                        fill_data[variable_inst.name] = expr(events)
+                        fill_data[variable_inst.name] = expr(masked_events)
 
                     # fill it
                     fill_hist(

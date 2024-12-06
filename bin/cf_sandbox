@@ -56,7 +56,8 @@ cf_sandbox() {
         return "3"
     elif [ -f "${CF_REPO_BASE}/sandboxes/${sandbox_file}" ]; then
         sandbox_file_abs="${CF_REPO_BASE}/sandboxes/${sandbox_file}"
-        sandbox_file_repr="\${CF_REPO_BASE}/sandboxes/${sandbox_file}"
+        local repo_base_var="${CF_REPO_BASE_ALIAS:-CF_REPO_BASE}"
+        sandbox_file_repr="\${${repo_base_var}}/sandboxes/${sandbox_file}"
     elif [ -z "${CF_BASE}" ]; then
         >&2 echo "environment variable CF_BASE must not be empty"
         return "3"

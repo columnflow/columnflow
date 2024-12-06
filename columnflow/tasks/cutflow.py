@@ -26,6 +26,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
+from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateCutflowHistograms(
@@ -45,6 +46,12 @@ class CreateCutflowHistograms(
         brace_expand=True,
         parse_empty=True,
     )
+
+    steps_variable = od.Variable(
+        name="step",
+        aux={"axis_type": "strcategory"},
+    )
+
     last_edge_inclusive = last_edge_inclusive_inst
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -63,6 +70,18 @@ class CreateCutflowHistograms(
 
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
+
+    # strategy for handling selector steps not defined by selectors
+    missing_selector_step_strategy = luigi.ChoiceParameter(
+        significant=False,
+        default=law.config.get_default("analysis", "missing_selector_step_strategy", "error"),
+        choices=("error", "skip", "dummy"),
+        description="how to handle selector steps that are not defined by the selector; if 'error', an "
+        "exception will be thrown; if 'skip', the selector step will be ignored; if 'dummy' the "
+        "output histogram will contain an entry for the step identical to the previous one; the "
+        "default can be configured via the law config entry *missing_selector_step_strategy* in "
+        "the *analysis* section; if no default is specified there, 'error' is assumed",
+    )
 
     def create_branch_map(self):
         # dummy branch map
@@ -90,7 +109,6 @@ class CreateCutflowHistograms(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        import hist
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import Route, add_ak_aliases, fill_hist
@@ -142,22 +160,11 @@ class CreateCutflowHistograms(
 
                 # create histogram of not already existing
                 if var_key not in histograms:
-                    h = (
-                        hist.Hist.new
-                        .IntCat([], name="category", growth=True)
-                        .IntCat([], name="process", growth=True)
-                        .StrCat(steps, name="step")
-                        .IntCat([], name="shift", growth=True)
+                    histograms[var_key] = create_hist_from_variables(
+                        self.steps_variable,
+                        *variable_insts,
+                        add_default_axes=True,
                     )
-                    # add variable axes
-                    for variable_inst in variable_insts:
-                        h = h.Var(
-                            variable_inst.bin_edges,
-                            name=variable_inst.name,
-                            label=variable_inst.get_full_x_title(),
-                        )
-                    # enable weights and store it
-                    histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
             inputs["selection"]["masks"].abspath,
@@ -189,6 +196,8 @@ class CreateCutflowHistograms(
                 # helper to build the point for filling, except for the step which does
                 # not support broadcasting
                 def get_point(mask=Ellipsis):
+                    if mask is True:
+                        mask = Ellipsis
                     n_events = len(events) if mask is Ellipsis else ak.sum(mask)
                     point = {
                         "process": events.process_id[mask],
@@ -217,11 +226,17 @@ class CreateCutflowHistograms(
                 mask = True
                 for step in steps:
                     if step not in arr.steps.fields:
-                        raise ValueError(
-                            f"step '{step}' is not defined by selector {self.selector}",
-                        )
-                    # incrementally update the mask and fill the point
-                    mask = mask & arr.steps[step]
+                        if self.missing_selector_step_strategy == "error":
+                            raise ValueError(
+                                f"step '{step}' is not defined by selector {self.selector}",
+                            )
+                        if self.missing_selector_step_strategy == "skip":
+                            continue
+                    else:
+                        # incrementally update the mask
+                        mask = mask & arr.steps[step]
+
+                    # fill the point
                     fill_data = get_point(mask)
                     fill_hist(
                         histograms[var_key],
@@ -326,6 +341,7 @@ class PlotCutflow(
                 branch=0,
                 dataset=d,
                 variables=(self.variable,),
+                missing_selector_step_strategy="skip",
             )
             for d in self.datasets
         }
@@ -682,6 +698,8 @@ class PlotCutflowVariables1D(
                 step_hists = OrderedDict(
                     (process_inst.copy_shallow(), h[{"step": hist.loc(step)}])
                     for process_inst, h in hists.items()
+                    # skip missing steps
+                    if step in h.axes["step"]
                 )
 
                 # call the plot function
@@ -704,6 +722,8 @@ class PlotCutflowVariables1D(
                 process_hists = OrderedDict(
                     (step, h[{"step": hist.loc(step)}])
                     for step in self.chosen_steps
+                    # skip missing steps
+                    if step in h.axes["step"]
                 )
 
                 # call the plot function
