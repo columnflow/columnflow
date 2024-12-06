@@ -27,7 +27,14 @@ class MuonSFConfig:
         obj: MuonSFConfig | tuple[str, str],
     ) -> MuonSFConfig:
         # purely for backwards compatibility with the old tuple format
-        return obj if isinstance(obj, cls) else cls(*obj)
+        if isinstance(obj, cls):
+            return obj
+        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+            return cls(*obj)
+        elif isinstance(obj, dict):
+            return cls(**obj)
+        else:
+            raise ValueError(f"cannot convert {obj} to MuonSFConfig")
 
 
 @producer(
