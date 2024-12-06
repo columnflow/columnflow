@@ -1644,6 +1644,10 @@ class CategoriesMixin(AnalysisTask):
         if "config_insts" not in params:
             return params
 
+        if "categories" in cls._resolved.keys():
+            params["categories"] = cls._resolved["categories"]
+            return params
+
         config_insts = params["config_insts"]
 
         # TODO: cross-checks over multiple config insts
@@ -1672,7 +1676,7 @@ class CategoriesMixin(AnalysisTask):
             if not categories and not cls.allow_empty_categories:
                 raise ValueError(f"no categories found matching {params['categories']}")
 
-            params["categories"] = tuple(categories)
+            params["categories"] = cls._resolved["categories"] = tuple(categories)
 
         return params
 
@@ -1704,6 +1708,10 @@ class VariablesMixin(AnalysisTask):
         params = super().resolve_param_values(params)
 
         if "config_insts" not in params:
+            return params
+
+        if "variables" in cls._resolved.keys():
+            params["variables"] = cls._resolved["variables"]
             return params
 
         config_insts = params["config_insts"]
@@ -1767,7 +1775,8 @@ class VariablesMixin(AnalysisTask):
             if not variables and not cls.allow_empty_variables:
                 raise ValueError(f"no variables found matching {params['variables']}")
 
-            params["variables"] = tuple(variables)
+            cls._variables_resolved = True
+            params["variables"] = cls._resolved["variables"] = tuple(variables)
 
         return params
 
@@ -1947,6 +1956,12 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
             # configs not yet setup
             return params
 
+        params_to_resolve = ("datasets", "processes", "dataset_insts", "process_insts", "configs_vs_dataset_insts")
+        if all(x in cls._resolved.keys() for x in params_to_resolve):
+            # print("MultiConfigDatasetsProcessesMixin already resolved")
+            params = {**params, **{k: cls._resolved[k] for k in params_to_resolve}}
+            return params
+
         n_configs = len(config_insts)
 
         # resolve processes
@@ -1977,8 +1992,8 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
             if not processes and not cls.allow_empty_processes:
                 raise ValueError(f"no processes found matching {params['processes']}")
 
-            params["processes"] = tuple(processes)
-            params["process_insts"] = tuple(
+            params["processes"] = cls._resolved["processes"] = tuple(processes)
+            params["process_insts"] = cls._resolved["process_insts"] = tuple(
                 tuple(config_inst.get_process(p) for p in params["processes"][i])
                 for i, config_inst in enumerate(config_insts)
             )
@@ -2023,12 +2038,14 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
             if not datasets and not cls.allow_empty_datasets:
                 raise ValueError(f"no datasets found matching {params['datasets']}")
 
-            params["datasets"] = tuple(datasets)
-            params["dataset_insts"] = tuple(
+            params["datasets"] = cls._resolved["datasets"] = tuple(datasets)
+            params["dataset_insts"] = cls._resolved["dataset_insts"] = tuple(
                 tuple(config_inst.get_dataset(d) for d in params["datasets"][i])
                 for i, config_inst in enumerate(config_insts)
             )
-            params["configs_vs_dataset_insts"] = dict(zip([c.name for c in config_insts], params["dataset_insts"]))
+            params["configs_vs_dataset_insts"] = cls._resolved["configs_vs_dataset_insts"] = dict(
+                zip([c.name for c in config_insts], params["dataset_insts"])
+            )
 
         return params
 

@@ -101,6 +101,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     is_single_config = None
 
+    _resolved = {}
+
     @classmethod
     def modify_param_values(cls, params: dict) -> dict:
         params = super().modify_param_values(params)
