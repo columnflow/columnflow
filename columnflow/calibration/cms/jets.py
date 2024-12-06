@@ -115,7 +115,7 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
 #
 
 # define default functions for jec calibrator
-def get_jerc_file_default(self, external_files: DotDict) -> str:
+def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
     """
     Function to obtain external correction files for JEC and/or JER.
 
@@ -123,13 +123,13 @@ def get_jerc_file_default(self, external_files: DotDict) -> str:
     files from the current config instance *config_inst*. The key of the
     external file depends on the jet collection. For ``Jet`` (AK4 jets), this
     resolves to ``jet_jerc``, and for ``FatJet`` it is resolved to
-    ``fatJet_jerc``.
+    ``fat_jet_jerc``.
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
-            "fatJet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
     :param external_files: Dictionary containing the information about the file location
@@ -175,11 +175,11 @@ def get_jerc_file_default(self, external_files: DotDict) -> str:
 # default external file keys for known jet collections
 get_jerc_file_default.map_jet_name_file_key = {
     "Jet": "jet_jerc",
-    "FatJet": "fatJet_jerc",
+    "FatJet": "fat_jet_jerc",
 }
 
 
-def get_jec_config_default(self) -> DotDict:
+def get_jec_config_default(self: Calibrator) -> DotDict:
     """
     Load config relevant to the jet energy corrections (JEC).
 
@@ -205,6 +205,7 @@ def get_jec_config_default(self) -> DotDict:
         # if jet collection is `Jet`, issue deprecation warning
         if self.jet_name == "Jet":
             logger.warning_once(
+                f"{id(self)}_depr_jec_config",
                 "config aux 'jec' does not contain key for input jet "
                 f"collection '{self.jet_name}'. This may be due to "
                 "an outdated config. Continuing under the assumption that "
@@ -259,14 +260,14 @@ def jec(
     Requires an external file in the config pointing to the JSON files containing the JECs.
     The file key can be specified via an optional ``external_file_key`` in the ``jec`` config entry.
     If not given, the file key will be determined automatically based on the jet collection name:
-    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fatJet`` for``FatJet`` (AK8 jets). A full set of JSON files
+    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
     can be specified as:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
-            "fatJet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
     For more file-grained control, the *get_jec_file* can be adapted in a subclass in case it is stored
@@ -621,7 +622,7 @@ jec_ak4_nominal = jec_ak4.derive("jec_ak4", cls_dict={"uncertainty_sources": []}
 jec_ak8_nominal = jec_ak8.derive("jec_ak8", cls_dict={"uncertainty_sources": []})
 
 
-def get_jer_config_default(self) -> DotDict:
+def get_jer_config_default(self: Calibrator) -> DotDict:
     """
     Load config relevant to the jet energy resolution (JER) smearing.
 
@@ -647,6 +648,7 @@ def get_jer_config_default(self) -> DotDict:
         # if jet collection is `Jet`, issue deprecation warning
         if self.jet_name == "Jet":
             logger.warning_once(
+                f"{id(self)}_depr_jer_config",
                 "config aux 'jer' does not contain key for input jet "
                 f"collection '{self.jet_name}'. This may be due to "
                 "an outdated config. Continuing under the assumption that "
@@ -706,14 +708,14 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Requires an external file in the config pointing to the JSON files containing the JER information.
     The file key can be specified via an optional ``external_file_key`` in the ``jer`` config entry.
     If not given, the file key will be determined automatically based on the jet collection name:
-    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fatJet`` for``FatJet`` (AK8 jets). A full set of JSON files
+    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
     can be specified as:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
-            "fatJet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
     For more fine-grained control, the *get_jer_file* can be adapted in a subclass in case it is stored
