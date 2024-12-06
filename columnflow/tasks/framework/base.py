@@ -142,7 +142,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_memory", "htcondor_pool", "pilot",
+            "htcondor_gpus", "htcondor_memory", "htcondor_disk", "htcondor_pool", "pilot",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
@@ -882,15 +882,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             # get other options
             loc, wlcg_fs, store_parts_modifier = (location[1:] + [None, None, None])[:3]
             kwargs.setdefault("store_parts_modifier", store_parts_modifier)
+            # create the wlcg target
+            wlcg_kwargs = kwargs.copy()
+            wlcg_kwargs.setdefault("fs", wlcg_fs)
+            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
+            # TODO: add rule for falling back to wlcg target
             # create the local target
             local_kwargs = kwargs.copy()
             loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
             local_kwargs.setdefault(loc_key, loc)
             local_target = self.local_target(*path, **local_kwargs)
-            # create the wlcg target
-            wlcg_kwargs = kwargs.copy()
-            wlcg_kwargs.setdefault("fs", wlcg_fs)
-            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
             # build the mirrored target from these two
             mirrored_target_cls = (
                 law.MirroredFileTarget
@@ -898,7 +899,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 else law.MirroredDirectoryTarget
             )
             return mirrored_target_cls(
-                path=local_target.path,
+                path=local_target.abspath,
                 remote_target=wlcg_target,
                 local_target=local_target,
             )
@@ -1401,7 +1402,7 @@ class CommandTask(AnalysisTask):
         if "cwd" not in kwargs and self.run_command_in_tmp:
             tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
             tmp_dir.touch()
-            kwargs["cwd"] = tmp_dir.path
+            kwargs["cwd"] = tmp_dir.abspath
         self.publish_message("cwd: {}".format(kwargs.get("cwd", os.getcwd())))
 
         # call it

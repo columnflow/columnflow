@@ -31,12 +31,13 @@ logger = law.logger.get_logger(__name__)
 label_options = {
     "wip": "Work in progress",
     "pre": "Preliminary",
-    "pw": "Private work",
-    "pwip": "Private work in progress",
+    "pw": "Private work (CMS data/simulation)",
+    "pwip": "Private work in progress (CMS)",
     "sim": "Simulation",
     "simwip": "Simulation work in progress",
     "simpre": "Simulation preliminary",
-    "simpw": "Simulation private work",
+    "simpw": "Private work (CMS simulation)",
+    "datapw": "Private work (CMS data)",
     "od": "OpenData",
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
@@ -52,12 +53,15 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     :param llabel: The left label of the CMS label.
     :return: A dictionary with the CMS label configuration.
     """
+    llabel = label_options.get(llabel, llabel)
     cms_label_kwargs = {
         "ax": ax,
-        "llabel": label_options.get(llabel, llabel),
+        "llabel": llabel,
         "fontsize": 22,
         "data": False,
     }
+    if "CMS" in llabel:
+        cms_label_kwargs["exp"] = ""
 
     return cms_label_kwargs
 
@@ -157,6 +161,59 @@ def apply_settings(
                     setattr(inst, key, value)
                 except (AttributeError, ValueError):
                     inst.set_aux(key, value)
+
+
+def hists_merge_cutflow_steps(
+    hists: dict,
+) -> dict:
+    """
+    Make 'step' axis uniform among a set of histograms. Takes a dict of 1D histogram
+    objects with a single 'step' axis of type *StrCategory*, computes the full list of possible
+    'step' values across all histograms, and returns a dict of histograms whose 'step' axis
+    has a corresponding, uniform structure. The values and variances inserted for missing 'step'
+    are taken from the previous existing step.
+    """
+    # return immediately if fewer than two hists to merge
+    if len(hists) < 2:
+        return hists
+
+    # get histogram instances
+    hist_insts = list(hists.values())
+
+    # validate inputs
+    if any(h.ndim != 1 for h in hist_insts):
+        raise ValueError(
+            "cannot merge cutflow steps: histograms must be one-dimensional",
+        )
+
+    # ensure step structure is uniform by taking a linear
+    # combination with only one nonzero coefficient
+    hist_insts_merged = []
+    for coeffs in np.eye(len(hist_insts)):
+        hist_row = sum(
+            h * coeff
+            for h, coeff in zip(hist_insts, coeffs)
+        )
+        hist_insts_merged.append(hist_row)
+
+    # fill missing entries from preceding steps
+    merged_steps = list(hist_insts_merged[0].axes[0])
+    for hist_inst, hist_inst_merged in zip(hist_insts, hist_insts_merged):
+        last_step = merged_steps[0]
+        for merged_step in merged_steps[1:]:
+            if merged_step not in hist_inst.axes[0]:
+                hist_inst_merged[merged_step] = hist_inst_merged[last_step]
+            else:
+                last_step = merged_step
+
+    # put merged hists into dict
+    hists = {
+        k: h
+        for k, h in zip(hists, hist_insts_merged)
+    }
+
+    # return
+    return hists
 
 
 def apply_process_settings(
@@ -383,9 +440,10 @@ def prepare_style_config(
     }
 
     # disable minor ticks based on variable_inst
-    if variable_inst.discrete_x:
-        # TODO: find sth better than plain bin edges or possibly memory intense range(*xlim)
-        style_config["ax_cfg"]["xticks"] = variable_inst.bin_edges
+    axis_type = variable_inst.x("axis_type", "variable")
+    if variable_inst.discrete_x or "int" in axis_type:
+        # remove the "xscale" attribute since it messes up the bin edges
+        style_config["ax_cfg"].pop("xscale")
         style_config["ax_cfg"]["minorxticks"] = []
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
@@ -408,6 +466,7 @@ def prepare_plot_config(
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
     data_hists, data_hide_errors = [], []
+    data_label = None
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
@@ -417,6 +476,8 @@ def prepare_plot_config(
         if process_inst.is_data:
             data_hists.append(h)
             data_hide_errors.append(proc_hide_errors)
+            if data_label is None:
+                data_label = process_inst.label
         elif process_inst.is_mc:
             if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
@@ -497,7 +558,7 @@ def prepare_plot_config(
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
-                "label": "Data",
+                "label": data_label or "Data",
             },
         }
 

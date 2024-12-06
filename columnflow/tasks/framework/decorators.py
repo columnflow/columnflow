@@ -72,10 +72,10 @@ def view_output_plots(
                 continue
             if output.path.endswith((".pdf", ".png")):
                 if not isinstance(output, law.LocalTarget):
-                    task.logger.warning(f"cannot show non-local plot at '{output.path}'")
+                    task.logger.warning(f"cannot show non-local plot at '{output.abspath}'")
                     continue
                 elif output.path not in view_paths:
-                    view_paths.append(output.path)
+                    view_paths.append(output.abspath)
 
         # loop through paths and view them
         for path in view_paths:

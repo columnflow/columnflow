@@ -26,7 +26,22 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     user = user_parameter_inst
     version = None
 
-    exclude_files = ["docs", "tests", "data", "assets", ".law", ".setups", ".data", ".github"]
+    exclude_files = [
+        "docs",
+        "tests",
+        "data",
+        "assets",
+        ".law",
+        ".setups",
+        ".data",
+        ".github",
+        # also make sure that CF specific files that are not part of
+        # the repository are excluded
+        os.environ["CF_STORE_LOCAL"],
+        os.environ["CF_SOFTWARE_BASE"],
+        os.environ["CF_VENV_BASE"],
+        os.environ["CF_CONDA_BASE"],
+    ]
 
     def get_repo_path(self):
         # required by BundleGitRepository
@@ -513,6 +528,11 @@ class RemoteWorkflowMixin(object):
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+_default_htcondor_disk = law.util.parse_bytes(
+    law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
+    input_unit="GB",
+    unit="GB",
+)
 
 
 class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkflowMixin):
@@ -550,8 +570,15 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="requested memeory in MB; empty value leads to the cluster default setting; "
+        description="requested memory in MB; empty value leads to the cluster default setting; "
         "empty default",
+    )
+    htcondor_disk = law.BytesParameter(
+        default=_default_htcondor_disk,
+        unit="GB",
+        significant=False,
+        description="requested disk space in GB; empty value leads to the cluster default setting; "
+        f"{'empty default' if _default_htcondor_disk <= 0 else 'default: ' + str(_default_htcondor_disk)}",
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
@@ -681,6 +708,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # request memory
         if self.htcondor_memory is not None and self.htcondor_memory > 0:
             config.custom_content.append(("Request_Memory", self.htcondor_memory))
+
+        # request disk space
+        if self.htcondor_disk is not None and self.htcondor_disk > 0:
+            # TODO: the exact conversion might be flavor dependent in the future, use kB for npw
+            # e.g. https://confluence.desy.de/pages/viewpage.action?pageId=128354529
+            config.custom_content.append(("RequestDisk", self.htcondor_disk * 1024**2))
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
@@ -813,6 +846,8 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
         config.render_variables.setdefault("cf_post_setup_command", "")
+        if self.slurm_flavor not in ("", law.NO_STR):
+            config.render_variables["cf_slurm_flavor"] = self.slurm_flavor
 
         # forward env variables
         for ev, rv in self.slurm_forward_env_variables.items():

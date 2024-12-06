@@ -41,19 +41,45 @@ class CreateDatacards(
 
     def get_mc_datasets(self, proc_obj: dict) -> list[str]:
         """
-        Helper to find automatic datasets
+        Helper to find mc datasets.
 
         :param proc_obj: process object from an InferenceModel
-        :return: List of dataset names corresponding to the process *proc_obj*
+        :return: List of dataset names corresponding to the process *proc_obj*.
         """
-        # when datasets are defined on the process object itself, return them
+        # when datasets are defined on the process object itself, interpret them as patterns
         if proc_obj.config_mc_datasets:
-            return proc_obj.config_mc_datasets
+            return [
+                dataset.name
+                for dataset in self.config_inst.datasets
+                if (
+                    dataset.is_mc and
+                    law.util.multi_match(dataset.name, proc_obj.config_mc_datasets, mode=any)
+                )
+            ]
 
         # if not, check the config
         return [
             dataset_inst.name
             for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
+        ]
+
+    def get_data_datasets(self, cat_obj: dict) -> list[str]:
+        """
+        Helper to find data datasets.
+
+        :param cat_obj: category object from an InferenceModel
+        :return: List of dataset names corresponding to the category *cat_obj*.
+        """
+        if not cat_obj.config_data_datasets:
+            return []
+
+        return [
+            dataset.name
+            for dataset in self.config_inst.datasets
+            if (
+                dataset.is_data and
+                law.util.multi_match(dataset.name, cat_obj.config_data_datasets, mode=any)
+            )
         ]
 
     def workflow_requires(self):
@@ -74,9 +100,8 @@ class CreateDatacards(
                         if self.inference_model_inst.require_shapes_for_parameter(param_obj)
                     )
 
-            if cat_obj.config_data_datasets:
-                for dataset in cat_obj.config_data_datasets:
-                    data_dataset_params[dataset]["variables"].add(cat_obj.config_variable)
+            for dataset in self.get_data_datasets(cat_obj):
+                data_dataset_params[dataset]["variables"].add(cat_obj.config_variable)
 
         # set workflow requirements per mc dataset
         reqs["merged_hists"] = set(
@@ -130,7 +155,7 @@ class CreateDatacards(
                     branch=-1,
                     workflow="local",
                 )
-                for dataset in cat_obj.config_data_datasets
+                for dataset in self.get_data_datasets(cat_obj)
             }
 
         return reqs
@@ -240,7 +265,7 @@ class CreateDatacards(
             outputs = self.output()
             writer = DatacardWriter(self.inference_model_inst, {cat_obj.name: hists})
             with outputs["card"].localize("w") as tmp_card, outputs["shapes"].localize("w") as tmp_shapes:
-                writer.write(tmp_card.path, tmp_shapes.path, shapes_path_ref=outputs["shapes"].basename)
+                writer.write(tmp_card.abspath, tmp_shapes.abspath, shapes_path_ref=outputs["shapes"].basename)
 
 
 CreateDatacardsWrapper = wrapper_factory(
