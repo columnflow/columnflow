@@ -26,6 +26,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
+from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateCutflowHistograms(
@@ -45,6 +46,12 @@ class CreateCutflowHistograms(
         brace_expand=True,
         parse_empty=True,
     )
+
+    steps_variable = od.Variable(
+        name="step",
+        aux={"axis_type": "strcategory"},
+    )
+
     last_edge_inclusive = last_edge_inclusive_inst
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -102,7 +109,6 @@ class CreateCutflowHistograms(
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
     def run(self):
-        import hist
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import Route, add_ak_aliases, fill_hist
@@ -154,22 +160,11 @@ class CreateCutflowHistograms(
 
                 # create histogram of not already existing
                 if var_key not in histograms:
-                    h = (
-                        hist.Hist.new
-                        .IntCat([], name="category", growth=True)
-                        .IntCat([], name="process", growth=True)
-                        .StrCat([], name="step", growth=True)
-                        .IntCat([], name="shift", growth=True)
+                    histograms[var_key] = create_hist_from_variables(
+                        self.steps_variable,
+                        *variable_insts,
+                        add_default_axes=True,
                     )
-                    # add variable axes
-                    for variable_inst in variable_insts:
-                        h = h.Var(
-                            variable_inst.bin_edges,
-                            name=variable_inst.name,
-                            label=variable_inst.get_full_x_title(),
-                        )
-                    # enable weights and store it
-                    histograms[var_key] = h.Weight()
 
         for arr, pos in self.iter_chunked_io(
             inputs["selection"]["masks"].abspath,

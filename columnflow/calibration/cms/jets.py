@@ -6,6 +6,8 @@ Jet energy corrections and jet resolution smearing.
 
 import functools
 
+import law
+
 from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met
@@ -16,6 +18,8 @@ from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_co
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 correctionlib = maybe_import("correctionlib")
+
+logger = law.logger.get_logger(__name__)
 
 
 #
@@ -111,58 +115,131 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
 #
 
 # define default functions for jec calibrator
-def get_jec_file_default(self, external_files: DotDict) -> str:
+def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
     """
-    Function to obtain external jec files.
+    Function to obtain external correction files for JEC and/or JER.
 
     By default, this function extracts the location of the jec correction
-    files from the current config instance *config_inst*:
+    files from the current config instance *config_inst*. The key of the
+    external file depends on the jet collection. For ``Jet`` (AK4 jets), this
+    resolves to ``jet_jerc``, and for ``FatJet`` it is resolved to
+    ``fat_jet_jerc``.
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
     :param external_files: Dictionary containing the information about the file location
     :return: path or url to correction file(s)
     """ # noqa
-    return external_files.jet_jerc
+
+    # get config
+    try_attrs = ("get_jec_config", "get_jer_config")
+    jerc_config = None
+    for try_attr in try_attrs:
+        try:
+            jerc_config = getattr(self, try_attr)()
+        except AttributeError:
+            continue
+        else:
+            break
+
+    # fail if not found
+    if jerc_config is None:
+        raise ValueError(
+            "could not retrieve jer/jec config, none of the following methods "
+            f"were found: {try_attrs}",
+        )
+
+    # first check config for user-supplied `external_file_key`
+    ext_file_key = jerc_config.get("external_file_key", None)
+    if ext_file_key is not None:
+        return external_files[ext_file_key]
+
+    # if not found, try to resolve from jet collection name and fail if not standard NanoAOD
+    if self.jet_name not in get_jerc_file_default.map_jet_name_file_key:
+        available_keys = ", ".join(sorted(get_jerc_file_default.map_jet_name_file_key))
+        raise ValueError(
+            f"could not determine external file key for jet collection '{self.jet_name}', "
+            f"name is not one of standard NanoAOD jet collections: {available_keys}",
+        )
+
+    # return external file
+    ext_file_key = get_jerc_file_default.map_jet_name_file_key[self.jet_name]
+    return external_files[ext_file_key]
 
 
-def get_jec_config_default(self) -> DotDict:
-    """Load config relevant to the JEC corrections.
+# default external file keys for known jet collections
+get_jerc_file_default.map_jet_name_file_key = {
+    "Jet": "jet_jerc",
+    "FatJet": "fat_jet_jerc",
+}
 
-    By default, this is extracted from the current *config_inst*:
+
+def get_jec_config_default(self: Calibrator) -> DotDict:
+    """
+    Load config relevant to the jet energy corrections (JEC).
+
+    By default, this is extracted from the current *config_inst*,
+    assuming the JEC configurations are stored under the 'jec'
+    aux key. Separate configurations should be specified for each
+    jet collection, using the collection name as a key. For example,
+    the configuration for the default jet collection ``Jet`` will
+    be retrieved from the following config entry:
 
     .. code-block:: python
 
-        self.config_inst.x.jec
+        self.config_inst.x.jec.Jet
 
     Used in :py:meth:`~.jec.setup_func`.
 
-    :return: Dictionary containing configurations for JEC callibrations
+    :return: Dictionary containing configuration for jet energy calibration
     """
-    return self.config_inst.x.jec
+    jec_cfg = self.config_inst.x.jec
+
+    # check for old-style config
+    if self.jet_name not in jec_cfg:
+        # if jet collection is `Jet`, issue deprecation warning
+        if self.jet_name == "Jet":
+            logger.warning_once(
+                f"{id(self)}_depr_jec_config",
+                "config aux 'jec' does not contain key for input jet "
+                f"collection '{self.jet_name}'. This may be due to "
+                "an outdated config. Continuing under the assumption that "
+                "the entire 'jec' entry refers to this jet collection. "
+                "This assumption will be removed in future versions of "
+                "columnflow, so please adapt the config according to the "
+                "documentation to remove this warning and ensure future "
+                "compatibility of the code.",
+            )
+            return jec_cfg
+
+        # otherwise raise exception
+        raise ValueError(
+            "config aux 'jec' does not contain key for input jet "
+            f"collection '{self.jet_name}'.",
+        )
+
+    return jec_cfg[self.jet_name]
 
 
 @calibrator(
     uses={
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.area", "Jet.rawFactor",
-        "Jet.jetId",
         optional("fixedGridRhoFastjetAll"),
         optional("Rho.fixedGridRhoFastjetAll"),
         attach_coffea_behavior,
     },
-    produces={
-        "Jet.pt", "Jet.mass", "Jet.rawFactor",
-    },
+    # name of the jet collection to calibrate
+    jet_name="Jet",
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
     propagate_met=True,
     # function to determine the correction file
-    get_jec_file=get_jec_file_default,
+    get_jec_file=get_jerc_file_default,
     # function to determine the jec configuration dict
     get_jec_config=get_jec_config_default,
 )
@@ -173,40 +250,52 @@ def jec(
     max_eta_met_prop: float = 5.2,
     **kwargs,
 ) -> ak.Array:
-    """Performs the jet energy corrections and uncertainty shifts using the
+    """Performs the jet energy corrections (JECs) and uncertainty shifts using the
     :external+correctionlib:doc:`index`, optionally
     propagating the changes to the MET.
 
-    Requires an external file in the config under ``jet_jerc``:
+    The *jet_name* should be set to the name of the NanoAOD jet collection to calibrate
+    (default: ``Jet``, i.e. AK4 jets).
+
+    Requires an external file in the config pointing to the JSON files containing the JECs.
+    The file key can be specified via an optional ``external_file_key`` in the ``jec`` config entry.
+    If not given, the file key will be determined automatically based on the jet collection name:
+    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
+    can be specified as:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
-    *get_jec_file* can be adapted in a subclass in case it is stored differently in the
-    external files
+    For more file-grained control, the *get_jec_file* can be adapted in a subclass in case it is stored
+    differently in the external files
 
-    The jec configuration should be an auxiliary entry in the config, specifying the correction
-    details under "jec":
+    The JEC configuration should be an auxiliary entry in the config, specifying the correction
+    details under "jec". Separate configs should be given for each jet collection to calibrate,
+    using the jet collection name as a subkey. An example of a valid configuration for correction
+    AK4 jets with JEC is:
 
     .. code-block:: python
 
         cfg.x.jec = {
-            "campaign": "Summer19UL17",
-            "version": "V5",
-            "jet_type": "AK4PFchs",
-            "levels": ["L1L2L3Res"],  # or individual correction levels
-            "levels_for_type1_met": ["L1FastJet"],
-            "uncertainty_sources": [
-                "Total",
-                "CorrelationGroupMPFInSitu",
-                "CorrelationGroupIntercalibration",
-                "CorrelationGroupbJES",
-                "CorrelationGroupFlavor",
-                "CorrelationGroupUncorrelated",
-            ]
+            "Jet": {
+                "campaign": "Summer19UL17",
+                "version": "V5",
+                "jet_type": "AK4PFchs",
+                "levels": ["L1L2L3Res"],  # or individual correction levels
+                "levels_for_type1_met": ["L1FastJet"],
+                "uncertainty_sources": [
+                    "Total",
+                    "CorrelationGroupMPFInSitu",
+                    "CorrelationGroupIntercalibration",
+                    "CorrelationGroupbJES",
+                    "CorrelationGroupFlavor",
+                    "CorrelationGroupUncorrelated",
+                ]
+            },
         }
 
     *get_jec_config* can be adapted in a subclass in case it is stored differently in the config.
@@ -228,9 +317,12 @@ def jec(
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
         ``met.eta > *min_eta_met_prop*``.
     """ # noqa
+    # use local variable for convenience
+    jet_name = self.jet_name
+
     # calculate uncorrected pt, mass
-    events = set_ak_column_f32(events, "Jet.pt_raw", events.Jet.pt * (1 - events.Jet.rawFactor))
-    events = set_ak_column_f32(events, "Jet.mass_raw", events.Jet.mass * (1 - events.Jet.rawFactor))
+    events = set_ak_column_f32(events, f"{jet_name}.pt_raw", events[jet_name].pt * (1 - events[jet_name].rawFactor))
+    events = set_ak_column_f32(events, f"{jet_name}.mass_raw", events[jet_name].mass * (1 - events[jet_name].rawFactor))
 
     def correct_jets(pt, area, eta, rho, evaluator_key="jec"):
         # variable naming convention
@@ -268,45 +360,45 @@ def jec(
     if self.propagate_met:
         # get correction factors
         jec_factors_subset_type1_met = correct_jets(
-            pt=events.Jet.pt_raw,
-            eta=events.Jet.eta,
-            area=events.Jet.area,
+            pt=events[jet_name].pt_raw,
+            eta=events[jet_name].eta,
+            area=events[jet_name].area,
             rho=rho,
             evaluator_key="jec_subset_type1_met",
         )
 
         # temporarily apply the new factors with only subset of corrections
-        events = set_ak_column_f32(events, "Jet.pt", events.Jet.pt_raw * jec_factors_subset_type1_met)
-        events = set_ak_column_f32(events, "Jet.mass", events.Jet.mass_raw * jec_factors_subset_type1_met)
-        events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+        events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt_raw * jec_factors_subset_type1_met)
+        events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass_raw * jec_factors_subset_type1_met)
+        events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
 
         # store pt and phi of the full jet system for MET propagation, including a selection in raw info
         # see https://twiki.cern.ch/twiki/bin/view/CMS/JECAnalysesRecommendations?rev=19#Minimum_jet_selection_cuts
-        met_prop_mask = (events.Jet.pt_raw > min_pt_met_prop) & (abs(events.Jet.eta) < max_eta_met_prop)
-        jetsum = events.Jet[met_prop_mask].sum(axis=1)
+        met_prop_mask = (events[jet_name].pt_raw > min_pt_met_prop) & (abs(events[jet_name].eta) < max_eta_met_prop)
+        jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_subset_type1_met = jetsum.pt
         jetsum_phi_subset_type1_met = jetsum.phi
 
     # factors for full jet correction with all levels
     jec_factors = correct_jets(
-        pt=events.Jet.pt_raw,
-        eta=events.Jet.eta,
-        area=events.Jet.area,
+        pt=events[jet_name].pt_raw,
+        eta=events[jet_name].eta,
+        area=events[jet_name].area,
         rho=rho,
         evaluator_key="jec",
     )
 
     # apply full jet correction
-    events = set_ak_column_f32(events, "Jet.pt", events.Jet.pt_raw * jec_factors)
-    events = set_ak_column_f32(events, "Jet.mass", events.Jet.mass_raw * jec_factors)
-    rawFactor = ak.nan_to_num(1 - events.Jet.pt_raw / events.Jet.pt, nan=0.0)
-    events = set_ak_column_f32(events, "Jet.rawFactor", rawFactor)
-    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+    events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt_raw * jec_factors)
+    events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass_raw * jec_factors)
+    rawFactor = ak.nan_to_num(1 - events[jet_name].pt_raw / events[jet_name].pt, nan=0.0)
+    events = set_ak_column_f32(events, f"{jet_name}.rawFactor", rawFactor)
+    events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
 
     # nominal met propagation
     if self.propagate_met:
         # get pt and phi of all jets after correcting
-        jetsum = events.Jet[met_prop_mask].sum(axis=1)
+        jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_all_levels = jetsum.pt
         jetsum_phi_all_levels = jetsum.phi
 
@@ -325,8 +417,8 @@ def jec(
 
     # variable naming conventions
     variable_map = {
-        "JetEta": events.Jet.eta,
-        "JetPt": events.Jet.pt_raw,
+        "JetEta": events[jet_name].eta,
+        "JetPt": events[jet_name].pt_raw,
     }
 
     # jet energy uncertainty components
@@ -336,20 +428,28 @@ def jec(
         jec_uncertainty = ak_evaluate(evaluator, *inputs)
 
         # apply jet uncertainty shifts
-        events = set_ak_column_f32(events, f"Jet.pt_jec_{name}_up", events.Jet.pt * (1.0 + jec_uncertainty))
-        events = set_ak_column_f32(events, f"Jet.pt_jec_{name}_down", events.Jet.pt * (1.0 - jec_uncertainty))
-        events = set_ak_column_f32(events, f"Jet.mass_jec_{name}_up", events.Jet.mass * (1.0 + jec_uncertainty))
-        events = set_ak_column_f32(events, f"Jet.mass_jec_{name}_down", events.Jet.mass * (1.0 - jec_uncertainty))
+        events = set_ak_column_f32(
+            events, f"{jet_name}.pt_jec_{name}_up", events[jet_name].pt * (1.0 + jec_uncertainty),
+        )
+        events = set_ak_column_f32(
+            events, f"{jet_name}.pt_jec_{name}_down", events[jet_name].pt * (1.0 - jec_uncertainty),
+        )
+        events = set_ak_column_f32(
+            events, f"{jet_name}.mass_jec_{name}_up", events[jet_name].mass * (1.0 + jec_uncertainty),
+        )
+        events = set_ak_column_f32(
+            events, f"{jet_name}.mass_jec_{name}_down", events[jet_name].mass * (1.0 - jec_uncertainty),
+        )
 
         # propagate shifts to MET
         if self.propagate_met:
-            jet_pt_up = events.Jet[met_prop_mask][f"pt_jec_{name}_up"]
-            jet_pt_down = events.Jet[met_prop_mask][f"pt_jec_{name}_down"]
+            jet_pt_up = events[jet_name][met_prop_mask][f"pt_jec_{name}_up"]
+            jet_pt_down = events[jet_name][met_prop_mask][f"pt_jec_{name}_down"]
             met_pt_up, met_phi_up = propagate_met(
                 jetsum_pt_all_levels,
                 jetsum_phi_all_levels,
                 jet_pt_up,
-                events.Jet[met_prop_mask].phi,
+                events[jet_name][met_prop_mask].phi,
                 met_pt,
                 met_phi,
             )
@@ -357,7 +457,7 @@ def jec(
                 jetsum_pt_all_levels,
                 jetsum_phi_all_levels,
                 jet_pt_down,
-                events.Jet[met_prop_mask].phi,
+                events[jet_name][met_prop_mask].phi,
                 met_pt,
                 met_phi,
             )
@@ -377,9 +477,21 @@ def jec_init(self: Calibrator) -> None:
     if sources is None:
         sources = jec_cfg.uncertainty_sources
 
+    # register used jet columns
+    self.uses |= {
+        f"{self.jet_name}.{column}"
+        for column in ("pt", "eta", "phi", "mass", "area", "rawFactor")
+    }
+
+    # register produced jet columns
+    self.produces |= {
+        f"{self.jet_name}.{column}"
+        for column in ("pt", "mass", "rawFactor")
+    }
+
     # add shifted jet variables
     self.produces |= {
-        f"Jet.{shifted_var}_jec_{junc_name}_{junc_dir}"
+        f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
         for junc_name in sources
         for junc_dir in ("up", "down")
@@ -503,40 +615,58 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
 # custom jec calibrator that only runs nominal correction
 jec_nominal = jec.derive("jec_nominal", cls_dict={"uncertainty_sources": []})
 
+# explicit calibrators for standard jet collections
+jec_ak4 = jec.derive("jec_ak4", cls_dict={"jet_name": "Jet"})
+jec_ak8 = jec.derive("jec_ak8", cls_dict={"jet_name": "FatJet", "propagate_met": False})
+jec_ak4_nominal = jec_ak4.derive("jec_ak4", cls_dict={"uncertainty_sources": []})
+jec_ak8_nominal = jec_ak8.derive("jec_ak8", cls_dict={"uncertainty_sources": []})
 
-# define default functions for jec calibrator
-def get_jer_file(self, external_files: DotDict) -> str:
+
+def get_jer_config_default(self: Calibrator) -> DotDict:
     """
-    Function to obtain external jer files.
+    Load config relevant to the jet energy resolution (JER) smearing.
 
-    By default, this function extracts the location of the jec correction files from the current
-    config instance *config_inst*:
+    By default, this is extracted from the current *config_inst*,
+    assuming the JER configurations are stored under the 'jer'
+    aux key. Separate configurations should be specified for each
+    jet collection, using the collection name as a key. For example,
+    the configuration for the default jet collection ``Jet`` will
+    be retrieved from the following config entry:
 
     .. code-block:: python
 
-        cfg.x.external_files = DotDict.wrap({
-            "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
-        })
+        self.config_inst.x.jer.Jet
 
-    :param external_files: Dictionary containing the information about the file location
-    :return: path or url to correction file(s)
-    """ # noqa
-    return external_files.jet_jerc
+    Used in :py:meth:`~.jer.setup_func`.
 
-
-def get_jer_config(self) -> DotDict:
+    :return: Dictionary containing configuration for JER smearing
     """
-    Load config relevant to the JER corrections.
+    jer_cfg = self.config_inst.x.jer
 
-    By default, this is extracted from the current *config_inst*:
+    # check for old-style config
+    if self.jet_name not in jer_cfg:
+        # if jet collection is `Jet`, issue deprecation warning
+        if self.jet_name == "Jet":
+            logger.warning_once(
+                f"{id(self)}_depr_jer_config",
+                "config aux 'jer' does not contain key for input jet "
+                f"collection '{self.jet_name}'. This may be due to "
+                "an outdated config. Continuing under the assumption that "
+                "the entire 'jer' entry refers to this jet collection. "
+                "This assumption will be removed in future versions of "
+                "columnflow, so please adapt the config according to the "
+                "documentation to remove this warning and ensure future "
+                "compatibility of the code.",
+            )
+            return jer_cfg
 
-    .. code-block:: python
+        # otherwise raise exception
+        raise ValueError(
+            "config aux 'jer' does not contain key for input jet "
+            f"collection '{self.jet_name}'.",
+        )
 
-        self.config_inst.x.jer
-
-    :return: Dictionary containing configurations for JEC callibrations
-    """
-    return self.config_inst.x.jer
+    return jer_cfg[self.jet_name]
 
 
 #
@@ -545,20 +675,14 @@ def get_jer_config(self) -> DotDict:
 
 @calibrator(
     uses={
-        "Jet.pt", "Jet.eta", "Jet.phi", "Jet.mass", "Jet.genJetIdx",
         optional("Rho.fixedGridRhoFastjetAll"),
         optional("fixedGridRhoFastjetAll"),
-        "GenJet.pt", "GenJet.eta", "GenJet.phi",
-        "MET.pt", "MET.phi",
         attach_coffea_behavior,
     },
-    produces={
-        "Jet.pt", "Jet.mass",
-        "Jet.pt_unsmeared", "Jet.mass_unsmeared",
-        "Jet.pt_jer_up", "Jet.pt_jer_down", "Jet.mass_jer_up", "Jet.mass_jer_down",
-        "MET.pt", "MET.phi",
-        "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up", "MET.phi_jer_down",
-    },
+    # name of the jet collection to smear
+    jet_name="Jet",
+    # name of the associated gen jet collection
+    gen_jet_name="GenJet",
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc
@@ -567,9 +691,9 @@ def get_jer_config(self) -> DotDict:
     # take the "index"-th random number per seed when not -1
     deterministic_seed_index=-1,
     # function to determine the correction file
-    get_jer_file=get_jer_file,
+    get_jer_file=get_jerc_file_default,
     # function to determine the jer configuration dict
-    get_jer_config=get_jer_config,
+    get_jer_config=get_jer_config_default,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -577,27 +701,40 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     shifts using the :external+correctionlib:doc:`index`, following the recommendations given in
     https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
 
-    Requires an external file in the config under ``jet_jerc``:
+    The *jet_name* and *gen_jet_name* should be set to the name of the NanoAOD jet and gen jet
+    collections to use as an input for JER smearing (default: ``Jet`` and ``GenJet``, respectively,
+    i.e. AK4 jets).
+
+    Requires an external file in the config pointing to the JSON files containing the JER information.
+    The file key can be specified via an optional ``external_file_key`` in the ``jer`` config entry.
+    If not given, the file key will be determined automatically based on the jet collection name:
+    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
+    can be specified as:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
             "jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/jet_jerc.json.gz",
+            "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
-    *get_jer_file* can be adapted in a subclass in case it is stored differently in the external
-    files.
+    For more fine-grained control, the *get_jer_file* can be adapted in a subclass in case it is stored
+    differently in the external files.
 
-    The jer configuration should be an auxiliary entry in the config, specifying the correction
-    details under ``jer``:
+    The JER smearing configuration should be an auxiliary entry in the config, specifying the input
+    JER to use under "jer". Separate configs should be given for each jet collection to smear, using
+    the jet collection name as a subkey. An example of a valid configuration for smearing
+    AK4 jets with JER is:
 
     .. code-block:: python
 
         cfg.x.jer = {
-            "campaign": "Summer19UL17",
-            "version": "JRV2",
-            "jet_type": "AK4PFchs",
-        },
+            "Jet": {
+                "campaign": "Summer19UL17",
+                "version": "JRV2",
+                "jet_type": "AK4PFchs",
+            },
+        }
 
     *get_jer_config* can be adapted in a subclass in case it is stored differently in the config.
 
@@ -605,13 +742,17 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :param events: awkward array containing events to process
     """ # noqa
+    # use local variables for convenience
+    jet_name = self.jet_name
+    gen_jet_name = self.gen_jet_name
+
     # fail when running on data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
 
     # save the unsmeared properties in case they are needed later
-    events = set_ak_column_f32(events, "Jet.pt_unsmeared", events.Jet.pt)
-    events = set_ak_column_f32(events, "Jet.mass_unsmeared", events.Jet.mass)
+    events = set_ak_column_f32(events, f"{jet_name}.pt_unsmeared", events[jet_name].pt)
+    events = set_ak_column_f32(events, f"{jet_name}.mass_unsmeared", events[jet_name].mass)
 
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
@@ -622,8 +763,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # variable naming convention
     variable_map = {
-        "JetEta": events.Jet.eta,
-        "JetPt": events.Jet.pt,
+        "JetEta": events[jet_name].eta,
+        "JetPt": events[jet_name].pt,
         "Rho": rho,
     }
 
@@ -648,7 +789,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # -- stochastic smearing
     # normally distributed random numbers according to JER
     jer_random_normal = (
-        ak_random(0, jer, events.Jet.deterministic_seed, rand_func=self.deterministic_normal)
+        ak_random(0, jer, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
         if self.deterministic_seed_index >= 0
         else ak_random(0, jer, rand_func=np.random.Generator(
             np.random.SFC64(events.event.to_list())).normal,
@@ -668,16 +809,17 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # -- scaling method (using gen match)
 
     # mask negative gen jet indices (= no gen match)
-    valid_gen_jet_idxs = ak.mask(events.Jet.genJetIdx, events.Jet.genJetIdx >= 0)
+    gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
+    valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
 
     # pad list of gen jets to prevent index error on match lookup
-    padded_gen_jets = ak.pad_none(events.GenJet, ak.max(valid_gen_jet_idxs) + 1)
+    padded_gen_jets = ak.pad_none(events[gen_jet_name], ak.max(valid_gen_jet_idxs) + 1)
 
     # gen jets that match the reconstructed jets
     matched_gen_jets = padded_gen_jets[valid_gen_jet_idxs]
 
     # compute the relative (reco - gen) pt difference
-    pt_relative_diff = (events.Jet.pt - matched_gen_jets.pt) / events.Jet.pt
+    pt_relative_diff = (events[jet_name].pt - matched_gen_jets.pt) / events[jet_name].pt
 
     # test if matched gen jets are within 3 * resolution
     is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
@@ -705,21 +847,21 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # store pt and phi of the full jet system
     if self.propagate_met:
-        jetsum = events.Jet.sum(axis=1)
+        jetsum = events[jet_name].sum(axis=1)
         jetsum_pt_before = jetsum.pt
         jetsum_phi_before = jetsum.phi
 
     # apply the smearing factors to the pt and mass
     # (note: apply variations first since they refer to the original pt)
-    events = set_ak_column_f32(events, "Jet.pt_jer_up", events.Jet.pt * smear_factors[:, :, 1])
-    events = set_ak_column_f32(events, "Jet.mass_jer_up", events.Jet.mass * smear_factors[:, :, 1])
-    events = set_ak_column_f32(events, "Jet.pt_jer_down", events.Jet.pt * smear_factors[:, :, 2])
-    events = set_ak_column_f32(events, "Jet.mass_jer_down", events.Jet.mass * smear_factors[:, :, 2])
-    events = set_ak_column_f32(events, "Jet.pt", events.Jet.pt * smear_factors[:, :, 0])
-    events = set_ak_column_f32(events, "Jet.mass", events.Jet.mass * smear_factors[:, :, 0])
+    events = set_ak_column_f32(events, f"{jet_name}.pt_jer_up", events[jet_name].pt * smear_factors[:, :, 1])
+    events = set_ak_column_f32(events, f"{jet_name}.mass_jer_up", events[jet_name].mass * smear_factors[:, :, 1])
+    events = set_ak_column_f32(events, f"{jet_name}.pt_jer_down", events[jet_name].pt * smear_factors[:, :, 2])
+    events = set_ak_column_f32(events, f"{jet_name}.mass_jer_down", events[jet_name].mass * smear_factors[:, :, 2])
+    events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt * smear_factors[:, :, 0])
+    events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass * smear_factors[:, :, 0])
 
     # recover coffea behavior
-    events = self[attach_coffea_behavior](events, collections=["Jet"], **kwargs)
+    events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
 
     # met propagation
     if self.propagate_met:
@@ -728,7 +870,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events = set_ak_column_f32(events, "MET.phi_unsmeared", events.MET.phi)
 
         # get pt and phi of all jets after correcting
-        jetsum = events.Jet.sum(axis=1)
+        jetsum = events[jet_name].sum(axis=1)
         jetsum_pt_after = jetsum.pt
         jetsum_phi_after = jetsum.phi
 
@@ -748,16 +890,16 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         met_pt_up, met_phi_up = propagate_met(
             jetsum_pt_after,
             jetsum_phi_after,
-            events.Jet.pt_jer_up,
-            events.Jet.phi,
+            events[jet_name].pt_jer_up,
+            events[jet_name].phi,
             met_pt,
             met_phi,
         )
         met_pt_down, met_phi_down = propagate_met(
             jetsum_pt_after,
             jetsum_phi_after,
-            events.Jet.pt_jer_down,
-            events.Jet.phi,
+            events[jet_name].pt_jer_down,
+            events[jet_name].phi,
             met_pt,
             met_phi,
         )
@@ -771,16 +913,41 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jer.init
 def jer_init(self: Calibrator) -> None:
-    if not self.propagate_met:
-        return
+    # determine gen-level jet index column
+    lower_first = lambda s: s[0].lower() + s[1:] if s else s
+    self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
 
+    # register used jet columns
     self.uses |= {
-        "MET.pt", "MET.phi",
+        f"{self.jet_name}.{column}"
+        for column in ("pt", "eta", "phi", "mass", self.gen_jet_idx_column)
     }
+
+    # register used gen jet columns
+    self.uses |= {
+        f"{self.gen_jet_name}.{column}"
+        for column in ("pt", "eta", "phi")
+    }
+
+    # register produced jet columns
     self.produces |= {
-        "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-        "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
+        f"{self.jet_name}.{column}{suffix}"
+        for column in ("pt", "mass")
+        for suffix in ("", "_unsmeared", "_jer_up", "_jer_down")
     }
+
+    # register produced MET columns
+    if self.propagate_met:
+        # register used MET columns
+        self.uses |= {
+            "MET.pt", "MET.phi",
+        }
+
+        # register produced MET columns
+        self.produces |= {
+            "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
+            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
+        }
 
 
 @jer.requires
@@ -857,6 +1024,11 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
         self.deterministic_normal = deterministic_normal
 
 
+# explicit calibrators for standard jet collections
+jer_ak4 = jer.derive("jer_ak4", cls_dict={"jet_name": "Jet", "gen_jet_name": "GenJet"})
+jer_ak8 = jer.derive("jer_ak8", cls_dict={"jet_name": "FatJet", "gen_jet_name": "GenJetAK8", "propagate_met": False})
+
+
 #
 # single calibrator for doing both JEC and JER smearing
 #
@@ -864,6 +1036,10 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
 @calibrator(
     uses={jec, jer},
     produces={jec, jer},
+    # name of the jet collection to smear
+    jet_name="Jet",
+    # name of the associated gen jet collection (for JER smearing)
+    gen_jet_name="GenJet",
     # toggle for propagation to MET
     propagate_met=None,
     # functions to determine configs and files
@@ -892,6 +1068,9 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 @jets.init
 def jets_init(self: Calibrator) -> None:
     # forward argument to the producers
+    self.deps_kwargs[jec]["jet_name"] = self.jet_name
+    self.deps_kwargs[jer]["jet_name"] = self.jet_name
+    self.deps_kwargs[jer]["gen_jet_name"] = self.gen_jet_name
     if self.propagate_met is not None:
         self.deps_kwargs[jec]["propagate_met"] = self.propagate_met
         self.deps_kwargs[jer]["propagate_met"] = self.propagate_met
@@ -903,3 +1082,8 @@ def jets_init(self: Calibrator) -> None:
         self.deps_kwargs[jer]["get_jer_file"] = self.get_jer_file
     if self.get_jer_config is not None:
         self.deps_kwargs[jer]["get_jer_config"] = self.get_jer_config
+
+
+# explicit calibrators for standard jet collections
+jets_ak4 = jets.derive("jets_ak4", cls_dict={"jet_name": "Jet", "gen_jet_name": "GenJet"})
+jets_ak8 = jets.derive("jets_ak8", cls_dict={"jet_name": "FatJet", "gen_jet_name": "GenJetAK8"})
