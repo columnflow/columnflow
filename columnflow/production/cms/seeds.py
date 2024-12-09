@@ -64,6 +64,12 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
         2. multiply them with a vector of primes
         3. use the resulting integer as an input to sha256 and hex-digest the result
         4. reverse it and int-cast the leading 16 characters, leading to a 64 bit int
+
+    .. note::
+
+        When using :py:attr:`object_columns`, the event seeds depend on the position of the
+        particular objects per event. It is up to the user to bring them into the desired order
+        before invoking this producer.
     """
     # started from an already hashed seed based on event, run and lumi info multiplied with primes
     seed = create_seed_vec(
@@ -179,15 +185,17 @@ def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     The jet seeds are based on the event seeds like the ones produced by
     :py:func:`deterministic_event_seeds` which is not called by this producer for the purpose of
     of modularity. The strategy for producing seeds is identical.
-    """
-    # get sorting indices for jets using their pt as a local index is used for the hashing
-    sorting_indices = ak.argsort(-events.Jet.pt, axis=1)
 
+    .. note::
+
+        The jet seeds depend on the position of the particular jet in the event. It is up to the
+        user to bring them into the desired order before invoking this producer.
+    """
     # create the seeds
     primes = self.primes[events.deterministic_seed % len(self.primes)]
     jet_seed = events.deterministic_seed + (
         primes * ak.values_astype(ak.local_index(events.Jet, axis=1) + self.primes[50], np.uint64)
-    )[sorting_indices]
+    )
     np_jet_seed = np.asarray(ak.flatten(jet_seed))
     np_jet_seed[:] = create_seed_vec(np_jet_seed)
 
