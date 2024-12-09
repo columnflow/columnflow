@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hist
-
 import law
 import order as od
 from collections import OrderedDict
@@ -9,7 +7,7 @@ from itertools import product
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, VariablesMixin, SelectorMixin,
+    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D,
@@ -17,8 +15,9 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin
 
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.util import dev_sandbox, dict_add_strict, DotDict
+from columnflow.util import dev_sandbox, dict_add_strict, DotDict, maybe_import
 
+hist = maybe_import("hist")
 
 class BTagEfficiencyBase:
     tag_name = "btag"
@@ -64,7 +63,7 @@ class BTagEfficiency(
 
         # combine tagged and inclusive histograms to an efficiency histogram
         cum_histogram = cumulate(sum_histogram, direction="above", axis=f"{self.tag_name}_wp")
-        incl = cum_histogram[{f"{self.tag_name}_wp": slice(0, 1)}].values()
+        incl = cum_histogram[{f"{self.tag_name}_wp": slice(0, 1)}]
 
         axes = OrderedDict(zip(cum_histogram.axes.name, cum_histogram.axes))
         axes[f"{self.tag_name}_wp"] = hist.axis.StrCategory(self.wps, name=f"{self.tag_name}_wp", label="working point")
@@ -86,41 +85,48 @@ class BTagEfficiency(
         cset = correctionlib.schemav2.CorrectionSet(schema_version=2, description=description, corrections=[clibcorr])
         self.output()["json"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
 
-        if not self.make_plots:
-            return
-
 
 
 class BTagEfficiencyPlot(
     BTagEfficiencyBase,
+    DatasetsProcessesMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
     PlotBase2D,
 ):
     reqs = Requirements(BTagEfficiency=BTagEfficiency)
 
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
+        add_default_to_description=True,
+    )
+
+    def store_parts(self):
+        parts = super().store_parts()
+        parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
+        return parts
+
     def create_branch_map(self):
         return [
             DotDict({"flav": flav, "wp": wp})
-            for flav in self.flavours.values()
+            for flav in self.flavours
             for wp in self.wps
         ]
 
     def requires(self):
-        return {
-            d: self.reqs.MergeHistograms.req(
-                self,
-                dataset=d,
-                branch=-1,
-                _exclude={"branches"},
-            )
-            for d in self.datasets
-        }
+        return self.reqs.BTagEfficiency.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+        )
 
     def output(self):
         return [
             [
                 self.target(name)
                 for name in self.get_plot_names(
-                    f"{self.tag_name}_eff__{self.branch_data.wp}_{self.flav_name}"
+                    f"{self.tag_name}_eff__{self.flavours[self.branch_data.flav]}_{self.flav_name}"
                     f"__wp_{self.branch_data.wp}" +
                     (f"__err_{dr}" if dr != "central" else ""),
                 )
@@ -131,10 +137,10 @@ class BTagEfficiencyPlot(
     def run(self):
         import numpy as np
 
-        variable_insts = list(map(self.config_inst.get_variable, self.variables))
+        # variable_insts = list(map(self.config_inst.get_variable, self.variables))
 
         # plot efficiency for each hadronFlavour and wp
-        efficiency_hist = self.input()["hist"].load(formatter="pickle")
+        efficiency_hist = self.input()["collection"][0]["hist"].load(formatter="pickle")
 
         for i, sys in enumerate(["central", "down", "up"]):
             # create a dummy histogram dict for plotting with the first process
@@ -144,9 +150,9 @@ class BTagEfficiencyPlot(
                  f"{self.tag_name}_wp": self.branch_data.wp,
             }]
 
-            h_sys = h[{"systematics": sys}]
+            h_sys = h[{"systematic": sys}]
             if sys != "central":
-                h_sys -= h[{"systematics": "central"}].values()
+                h_sys -= h[{"systematic": "central"}].values()
 
             proc = self.config_inst.get_process(self.processes[-1])
 
@@ -155,6 +161,8 @@ class BTagEfficiencyPlot(
                 name=self.flav_name,
                 label=self.flavours[self.branch_data.flav],
             )
+
+            variable_insts = list(map(self.config_inst.get_variable, h_sys.axes.name))
 
             # custom styling:
             label_values = np.round(h_sys.values() * 100, decimals=1)

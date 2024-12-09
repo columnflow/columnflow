@@ -3,19 +3,21 @@ from __future__ import annotations
 import luigi
 import law
 import order as od
-import hist
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
 from columnflow.tasks.selection import MergeSelectionStats
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox, maybe_import
 
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, VariablePlotSettingMixin, ProcessPlotSettingMixin
 )
 
 from columnflow.types import Any
+
+
+hist = maybe_import("hist")
 
 
 class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
@@ -41,7 +43,7 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
         f"""
         Resolve values *params* and check against possible default values
 
-        Check the values in *params* against the default value in the current config inst. 
+        Check the values in *params* against the default value in the current config inst.
         See {cls.__class__}.get_default_variables for where the default value should be stored
         For more information, see
         :py:meth:`~columnflow.tasks.framework.base.ConfigTask.resolve_config_default_and_groups`.
@@ -109,7 +111,7 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
         the needs of a specific analysis using a patch.
         """
         dataset_inst = dataset if isinstance(dataset, od.Dataset) else config_inst.get_dataset(dataset)
-        process_inst = dataset_inst.process.get_first()
+        process_inst = dataset_inst.processes.get_first()
         if config_inst.has_process(process_inst):
             process_inst = config_inst.get_process(process_inst)
         xsec = 1 if process_inst.is_data else process_inst.get_xsec(config_inst.campaign.ecm).nominal
@@ -192,7 +194,8 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
         eff_full = hist.Hist(
             hist.axis.StrCategory(["central", "down", "up"], name="systematic"),
             *selected_counts.axes,
-            storage=hist.storage.Weight()
+            storage=hist.storage.Weight(),
+            name=selected_counts.name,
         )
         eff_full.values()[:] = [efficiency.values(), *error]
         return eff_full
