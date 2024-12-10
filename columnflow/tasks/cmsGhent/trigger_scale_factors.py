@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import law
 from collections.abc import Iterator
 import order as od
 from itertools import product
 import luigi
 
+from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, VariablesMixin, SelectorMixin,
 )
@@ -16,70 +18,40 @@ from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMix
 
 
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
+from columnflow.util import dev_sandbox, dict_add_strict, maybe_import, DotDict
 
 np = maybe_import("numpy")
+hist = maybe_import("hist")
 
 
-class TriggerScaleFactors(
+class TriggerScaleFactorsBase(
     SelectionEfficiencyHistMixin,
     VariablesMixin,
     SelectorMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
-    PlotBase2D,
 ):
-
+    exclude_index = True
     trigger = luigi.Parameter(description="Trigger to measure")
     ref_trigger = luigi.Parameter(description="Reference to use")
-
-    make_plots = law.CSVParameter(
-        default=tuple(),
-        significant=False,
-        description=("which plots to make. Choose from:\n"
-                    "\tcorr: correlation plots\n",
-                    "\tsf_2d: 2d scale factor plots\n",
-                    "\tsf_1d: 1d scale factor plots\n",
-                    "\teff_1d: 1d efficiency plots,\n"
-                    "\thist: plots of event counts,\n"),
-    )
-    plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot_functions_2d.plot_2d",
-        add_default_to_description=True,
-    )
-
-    plot_function_1d_line = PlotBase.plot_function.copy(
-        default="singletop.plotting.plot_1d_line",
-        add_default_to_description=True,
-    )
-
-    plot_function_1d_hist = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
-        add_default_to_description=True,
-    )
-
-    hist1d_skip_ratio = PlotBase1D.skip_ratio.copy()
-    hist1d_density = PlotBase1D.density.copy()
-    hist1d_yscale = PlotBase1D.yscale.copy()
-    hist1d_shape_norm = PlotBase1D.shape_norm.copy()
-    hist1d_hide_errors = PlotBase1D.hide_errors.copy()
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.variable_insts: list[od.Variable] = list(map(self.config_inst.get_variable, self.variables))
+
+        # auxiliary variables mapped to how they should be treated for the nominal scale factors
+        # An integer means the nominal is calculated in the corresponding bin.
+        # "sum" means the variable is auxiliary over.
         self.aux_variable_insts: dict[od.Variable, int | sum] = {
             v: v.x("auxiliary") for v in self.variable_insts
             if v.aux.get("auxiliary") is not None
         }
-        self.aux_label = self.bin_label({v: i for v, i in self.aux_variable_insts.items() if isinstance(i, int)})
-        self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
-        self.var_bin_cats = {}
-        if "all" in self.make_plots:
-            self.make_plots = ("sf_1d", "sf_2d", "eff_1d", "corr", "hist")
 
+        # variable in which the nominal variables are binned
+        self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
         self.trigger_vr = "HLT." + self.trigger
         self.ref_trigger_vr = "HLT." + self.ref_trigger
 
@@ -104,12 +76,6 @@ class TriggerScaleFactors(
                 name.append(f"{len(datasets)}_{law.util.create_hash(sorted(datasets))}")
         return "__".join(name)
 
-    def bin_label(self, index: dict[od.Variable, int]):
-        return "\n".join([
-            f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
-            for vr, bn in index.items()
-        ])
-
     def store_parts(self):
         parts = super().store_parts()
         name = f"trigger_{self.trigger}_ref_{self.ref_trigger}"
@@ -120,7 +86,6 @@ class TriggerScaleFactors(
         self,
         nonaux: slice | bool = True,
         aux: od.Variable | None = None,
-        make_cat=False,
     ) -> Iterator[tuple[dict[str, int], od.Category] | dict[str, int]]:
         loop_vars = []
         if nonaux:
@@ -132,70 +97,27 @@ class TriggerScaleFactors(
 
         for index in np.ndindex(*[v.n_bins for v in loop_vars]):
             index = dict(zip(loop_vars, index))
-            # create a dummy category for plotting
-            if make_cat:
-                cat_name = "__".join([f"{vr.name}_{bn}" for vr, bn in index.items()])
-                if not cat_name:
-                    cat_name = "nominal"
-                if cat_name not in self.var_bin_cats:
-                    self.var_bin_cats[cat_name] = od.Category(name=cat_name, label=self.bin_label(index))
-                yield {vr.name: bn for vr, bn in index.items()}, self.var_bin_cats[cat_name]
-            else:
-                yield {vr.name: bn for vr, bn in index.items()}
+            yield {vr.name: bn for vr, bn in index.items()}
+
+    def data_mc_keys(suff):
+        """
+        get data and mc key with suffix (omitted if empty)
+        """
+        return [f"{dt_type}{'' if not suff else '_' + suff}" for dt_type in ["data", "mc"]]
+
+
+class TriggerScaleFactors(TriggerScaleFactorsBase):
+    exclude_index = False
 
     def output(self):
         out = {
-            "stats": self.target(".".join(
-                self.get_plot_names(f"{self.tag_name}_efficiency")[0].split(".")[:-1],
-            ) + ".json"),
+            "json": self.target(f"{self.tag_name}_sf.json"),
+            "sf": self.target(f"{self.tag_name}_sf.pickle"),
+            "eff": self.target(f"{self.tag_name}_eff.pickle"),
+            "cnt": self.target(f"{self.tag_name}_counts.pickle"),
+            "corr": self.target(f"{self.tag_name}_counts.pickle"),
         }
-
-        if "sf_2d" in self.make_plots:
-            out["sf_2d"] = {
-                cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
-                for _, cat in self.loop_variables(nonaux=slice(2, None), make_cat=True)
-            } | {
-                cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
-                for aux_var in self.aux_variable_insts
-                for _, cat in self.loop_variables(nonaux=slice(2, None), make_cat=True, aux=aux_var)
-            }
-
-        if "sf_1d" in self.make_plots:
-            out["sf_1d"] = [self.target(name) for name in self.get_plot_names("sf_nominal_1d")]
-            for aux_var in self.aux_variable_insts:
-                n_group = aux_var.aux.get("group_bins", 3)
-                for i in range(0, aux_var.n_bins, n_group):
-                    name = "sf_1d_" + aux_var.name
-                    name += "" if aux_var.n_bins <= n_group else f"_{i}:{i + n_group}"
-                    out[name] = [self.target(name) for name in self.get_plot_names(name)]
-
-        if "eff_1d" in self.make_plots:
-            out["eff_1d"] = [self.target(name) for name in self.get_plot_names("eff_1d")]
-            for vr in self.variable_insts:
-                out[f"eff_proj_{vr.name}"] = [self.target(name) for name in self.get_plot_names(f"eff_proj_{vr.name}")]
-
-        if "hist" in self.make_plots:
-            for tr, vr in product(["ref", "trig"], self.variable_insts):
-                name = f"proj_{tr}_{vr.name}"
-                out[name] = [self.target(name) for name in self.get_plot_names(name)]
-
-        if "corr" in self.make_plots:
-            for vr in ["all"] + [variable_inst.name for variable_inst in self.nonaux_variable_insts]:
-                out[f"corr_{vr}"] = [self.target(name) for name in self.get_plot_names(f"corr_{vr}")]
         return out
-
-    def get_plot_parameters(self):
-        # convert parameters to usable values during plotting
-        params = super().get_plot_parameters()
-        dict_add_strict(params, "legend_title", "Processes")
-        return params
-
-    def get_hist1d_plot_parameter(self):
-        params = PlotBase.get_plot_parameters(self)
-        for pp in ["skip_ratio", "density", "shape_norm", "hide_errors"]:
-            params[pp] = getattr(self, f"hist1d_{pp}")
-        params["yscale"] = None if self.hist1d_yscale == law.NO_STR else self.control_yscale
-        return params
 
     def correlation_efficiency_bias(self, passfailhist):
         """
@@ -222,7 +144,7 @@ class TriggerScaleFactors(
         ref_trigger_values = np.array([0, 1, 0, 1])
 
         # log Eff(T|M) = b + a * M
-        # Eff(T|M = 1) / Eff(T|M = 0) - 1 = exp(a) - 1
+        # Eff(T|M = 1) / Eff(T|M = 0) = exp(a)
         with np.testing.suppress_warnings() as sup:
             # Using the Log linking function with binomial values is convenient,
             # but can result in issues since the function does not map to [0, 1].
@@ -235,12 +157,12 @@ class TriggerScaleFactors(
                             family=Binomial(link=Log()))
             res = model.fit()
 
-        # bias = exp(a) - 1
-        bias = np.exp(res.params[1])
+        # multiplicative bias = exp(a)
+        mult_bias = np.exp(res.params[1])
         # d(exp a) = exp(a) da
-        err = (np.sqrt(res.cov_params()[1, 1])) * bias
+        var = res.cov_params()[1, 1] * mult_bias ** 2
 
-        return bias - 1, err
+        return mult_bias - 1, var
 
     @law.decorator.log
     def run(self):
@@ -256,24 +178,40 @@ class TriggerScaleFactors(
         efficiencies = {}
         sum_histograms = {}
 
-        def calc_eff(dt_type: str, vr: od.Variable, proj_all=False):
+        def calc_eff(dt_type: str, vr: od.Variable = None, reduce_all=False):
             """
-            sum histograms certain datatype, and calculate efficiencies
+            sum histograms from datasets certain data type, reduce selected axes, and calculate efficiencies.
+            Summed histograms are stored in the dict **sum_histograms**. Efficiencies in the dict **efficiencies**.
+            Keys are of the form **{dt_type}_{vr.name}_proj** if **reduce_all** else **{dt_type}_{vr.name}**
+            By default, all auxiliary variable axes are reduced, unless **reduce_all=True**.
+            The axis of the variable **vr** is not reduced. Combine **vr** with **reduce_all** to make 1D efficiencies.
+
+            @param dt_type: data type of the datasets (data or mc)
+            @param vr: variable whose axis will not be reduced
+            @param reduce_all: if True, reduce all variable axis, otherwise only auxiliaries (always except **vr**)
             """
+
             h_key = dt_type
-            if aux_vr is not None:
+            if vr is not None:
                 h_key += f"_{vr.name}"
-                if proj_all:
+                if reduce_all:
                     h_key += "_proj"
+
+            # sum all mc / data histograms
             sum_histograms[h_key] = sum([histograms[dt] for dt in histograms if getattr(dt, f"is_{dt_type}")])
             assert sum_histograms[h_key] != 0, f"did not find any {dt_type} histograms"
 
-            all_vars = self.variable_insts if proj_all else self.aux_variable_insts
+            # choose all variables or only the auxiliary ones to reduce
+            all_vars = self.variable_insts if reduce_all else self.aux_variable_insts
+            # apply reduction method specified in the dict **self.aux_variable_insts** (sum or slice)
             idx = {v.name: self.aux_variable_insts.get(v, sum) for v in all_vars if v != vr}
             sum_histograms[h_key] = sum_histograms[h_key][idx]
 
+            # counts that pass both triggers
             selected_counts = sum_histograms[h_key][{self.ref_trigger_vr: 1, self.trigger_vr: 1}]
+            # counts that pass reference triggers
             incl = sum_histograms[h_key][{self.ref_trigger_vr: 1, self.trigger_vr: sum}]
+            # calculate efficiency
             efficiencies[h_key] = self.efficiency(selected_counts, incl)
 
         # multidim efficiencies with additional auxiliaries
@@ -282,37 +220,42 @@ class TriggerScaleFactors(
 
         # 1d efficiencies
         for dt_type, aux_vr in product(["data", "mc"], self.variable_insts):
-            calc_eff(dt_type, aux_vr, proj_all=True)
+            calc_eff(dt_type, aux_vr, reduce_all=True)
+
+        # save efficiency  and summed hists
+        self.output()["cnt"].dump(efficiencies, formatter="pickle")
+        self.output()["eff"].dump(efficiencies, formatter="pickle")
 
         # scale factors
-        def data_mc_keys(suff):
-            """
-            get data and mc key with suffix (omitted if empty)
-            """
-            return [f"{dt_type}{'' if not suff else '_' + suff}" for dt_type in ["data", "mc"]]
 
         def calc_sf(suff=""):
             """
-            get scale factor for efficiencies determined by the given suffix
+            get central scale factor for efficiencies determined by the given suffix
             """
-            data, mc = data_mc_keys(suff)
-            return efficiencies[data][0] / efficiencies[mc][0].values()
+            data, mc = self.data_mc_keys(suff)
+            ct_idx = {"systematic": "central"}
+            return efficiencies[data][ct_idx] / efficiencies[mc][ct_idx].values()
 
-        scale_factors: dict[str, hist.Hist] = {"nominal": calc_sf()}
+        nom_centr_sf = calc_sf()
+        scale_factors: dict[str, dict[str, hist.Hist]] = {"nominal": {"central": nom_centr_sf}}
 
-        # bias auxiliary
-        aux_bias = {}
+        def up_down_dict(name, err):
+            """convenience function"""
+            return {f"{name}_down": nom_centr_sf - err, f"{name}_up": nom_centr_sf + err}
+
+        # bias from auxiliary variables: e.g. HT in single electron trigger
         for aux_vr in self.aux_variable_insts:
-            scale_factors[aux_vr.name] = calc_sf(aux_vr.name)
-            aux_idx = scale_factors[aux_vr.name].axes.name.index(aux_vr.name)
-            dev = np.abs(scale_factors[aux_vr.name].values() -
-                         np.expand_dims(scale_factors["nominal"].values(), axis=aux_idx))
-            aux_bias[aux_vr.name] = np.max(dev, axis=aux_idx)
+            sf_aux = calc_sf(aux_vr.name)
+            scale_factors[aux_vr.name]["central"] = sf_aux
+            aux_idx = sf_aux.axes.name.index(aux_vr.name)
+            dev = np.abs(sf_aux.values() - np.expand_dims(nom_centr_sf.values(), axis=aux_idx))
+            scale_factors["nominal"] |= up_down_dict(aux_vr.name, np.max(dev, axis=aux_idx, keepdims=True))
 
         # koopman-based statistical error
         def calc_staterr(aux_vr: od.Variable = None):
             """
-            get scale factor uncertainties for efficiencies determined by the given suffix
+            get scale factor uncertainties for efficiencies determined by the given suffix. Allow
+            for one additional auxiliary variable in the binning.
             """
             container_dim = bindim
             if aux_vr is not None:
@@ -320,77 +263,201 @@ class TriggerScaleFactors(
 
             container = np.ones((2, *container_dim))
             for idx in self.loop_variables(aux=aux_vr):
-                data, mc = data_mc_keys("" if aux_vr is None else aux_vr.name)
+                data, mc = self.data_mc_keys("" if aux_vr is None else aux_vr.name)
                 t_idx = idx | {self.ref_trigger_vr: 1}
                 data = sum_histograms[data][t_idx]
                 mc = sum_histograms[mc][t_idx]
                 inputs = [x.value for x in [data[1], data[sum], mc[1], mc[sum]]]
                 container[(..., *idx.values())] = koopman_confint(*inputs)
-            return container
+            return dict(zip(["stat_down", "stat_down"], container))
 
-        scale_factors_staterr = {
-            "nominal": calc_staterr(),
-        }
+        scale_factors["nominal"] |= calc_staterr()
         for aux_vr in self.aux_variable_insts:
-            scale_factors_staterr[aux_vr.name] = calc_staterr(aux_vr=aux_vr)
+            scale_factors[aux_vr.name] |= calc_staterr(aux_vr=aux_vr)
 
-        scale_factors_staterr = {x: np.abs(err - scale_factors[x].values()) for x, err in scale_factors_staterr.items()}
-
-        # bias because of correlation
-        corr_bias = {"all": np.zeros((2, *bindim))}
+        # bias in efficiency because of correlation
+        corr_bias = {
+            "all": hist.Hist(
+                *scale_factors["nominal"].axes,
+                name="correlation bias",
+                label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
+                      f"for year {self.config_inst.x.year} "
+                      f"(binned in {', '.join([vr.name for vr in self.nonaux_variable_insts])})",
+                storage=hist.storage.Weight(),
+            )
+        }
         for idx in self.loop_variables(aux=None):
             pf = sum_histograms["mc"][idx]
-            corr_bias["all"][(..., *idx.values())] = self.correlation_efficiency_bias(pf)
+            corr_bias["all"][idx] = self.correlation_efficiency_bias(pf)
+            scale_factors["nominal"] |= up_down_dict("corr", corr_bias["all"].values() * nom_centr_sf.values())
 
+        # correlation bias in 1D efficiencies
         for vr in self.nonaux_variable_insts:
-            corr_bias[vr.name] = np.zeros((2, vr.n_bins))
+            corr_bias[vr.name] = hist.Hist(
+                scale_factors["nominal"].axes[vr.name],
+                name="correlation bias",
+                label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
+                      f"for year {self.config_inst.x.year} (binned in {vr.name})",
+                storage=hist.storage.Weight(),
+            )
+            # trigger must be along first axis!
+            pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr, vr.name)
             for idx in range(vr.n_bins):
-                # trigger must be along first axis!
-                pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr, vr.name)[{vr.name: idx}]
-                corr_bias[vr.name][:, idx] = self.correlation_efficiency_bias(pf)
+                corr_bias[vr.name][idx] = self.correlation_efficiency_bias(pf[{vr.name: idx}])
 
-        # save as correctionlib file (unfortunately not possible to specify the flow for each variable separately)
-        corr_lib_hist = hist.Hist(
-            hist.axis.StrCategory(["central", "down", "up"], name="systematic"),
-            *scale_factors["nominal"].axes,
-            name="scale_factors",
-            label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
-                  f"for year {self.config_inst.x.year}",
-            storage=hist.storage.Double(),
-        )
+            # broad cast projected hist back to nominal binning
+            vr_idx = nom_centr_sf.axes.name.index(vr.name)
+            bias = np.expand_dims(corr_bias[vr.name][0], np.delete(np.arange(nom_centr_sf.ndim), vr_idx).tolist())
 
-        corr_lib_hist.values()[0] = scale_factors["nominal"].values()
-        err = scale_factors_staterr["nominal"] ** 2 + corr_bias["all"][0][None] ** 2
-        for aux_bias_vals in aux_bias.values():
-            err += aux_bias_vals[None] ** 2
-        sign = np.array([-1, 1]).reshape((2,) + (1,) * (err.ndim - 1))
-        corr_lib_hist.values()[1:] = corr_lib_hist.values()[0][None] + sign * np.sqrt(err)
+            scale_factors["nominal"] |= up_down_dict("corr", bias * nom_centr_sf.values())
 
-        clibcorr = correctionlib.convert.from_histogram(corr_lib_hist, flow="clamp")
-        clibcorr.description = corr_lib_hist.label
+        sf_hists = {}
+        for sf_type, arrays in scale_factors.items():
+            ct = arrays.pop("central")
+            hst = hist.Hist(
+                hist.axis.StrCategory(["central", "down", "up", *arrays], name="systematic"),
+                *scale_factors["nominal"].axes,
+                name="scale_factors",
+                label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
+                      f"for year {self.config_inst.x.year}",
+                storage=hist.storage.Double(),
+            )
+            hst.values()[(idx := 0)] = ct
+            # add quadratic sum of all uncertainties
+            for dr in ["down", "up"]:
+                err = np.sqrt(sum([(h - ct).values() ** 2 for k, h in arrays.items() if dr in k]))
+                hst.values()[(idx := idx + 1)] = ct.values() - (-1) ** idx * err
+
+            # add remaining uncertainties
+            hst.values()[idx:] = [h.values() for h in arrays.values()]
+
+            # remove variances
+            hst.variances()[:] = 1
+
+            sf_hists[sf_type] = hst
+
+        # save sf histograms
+        self.output()["sf"].dump(sf_hists, formatter="pickle")
+
+        # save nominal as correctionlib file (not possible to specify the flow for each variable separately)
+        clibcorr = correctionlib.convert.from_histogram(sf_hists["nominal"], flow="clamp")
+        clibcorr.description = sf_hists["nominal"].label
 
         cset = correctionlib.schemav2.CorrectionSet(
-            schema_version=2, description=corr_lib_hist.label, corrections=[clibcorr],
+            schema_version=2, description=sf_hists["nominal"].label, corrections=[clibcorr],
         )
-        self.output()["stats"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
+        self.output()["json"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
 
-        if not self.make_plots:
-            return
+
+class TriggerScaleFactorsPlotBase(
+    TriggerScaleFactorsBase
+):
+    exclude_index = True
+
+    baseline_label = luigi.Parameter(
+        default="",
+        description="Label for the baseline selection."
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.var_bin_cats = {}  # for caching
+
+    def baseline_cat(self, add: od.Category=None, exclude: list[str]=tuple()):
+        p_cat = od.Category(name=self.baseline_label)
+        if add is not None and add.label:
+            p_cat.label += "\n" + add.label
+        if aux_label := self.bin_label({
+            v: i
+            for v, i in self.aux_variable_insts.items()
+            if isinstance(i, int) and v.name not in exclude
+        }):
+            p_cat.label += "\n" + aux_label
+        return p_cat
+
+    def loop_variables(
+        self,
+        nonaux: slice | bool = True,
+        aux: od.Variable | None = None,
+    ) -> Iterator[od.Category]:
+        for index in super().loop_variables(nonaux, aux):
+            cat_name = "__".join([f"{vr}_{bn}" for vr, bn in index.items()])
+            if not cat_name:
+                cat_name = "nominal"
+            if cat_name not in self.var_bin_cats:
+                self.var_bin_cats[cat_name] = od.Category(
+                    name=cat_name,
+                    selection=index,
+                    label=self.bin_label(index)
+                )
+            yield self.var_bin_cats[cat_name]
+
+    def bin_label(self, index: dict[od.Variable, int]):
+        return "\n".join([
+            f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
+            for vr, bn in index.items()
+        ])
+
+    def get_plot_parameters(self):
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "legend_title", "Processes")
+        return params
+
+
+class TriggerScaleFactors2D(
+    TriggerScaleFactorsPlotBase,
+    PlotBase2D,
+):
+    exclude_index = False
+
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_functions_2d.plot_2d",
+        add_default_to_description=True,
+    )
+
+    reqs = Requirements(TriggerScaleFactors=TriggerScaleFactors)
+
+    def requires(self):
+        return self.reqs.TriggerScaleFactors.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+        )
+
+    def full_output(self):
+        out = {}
+        for sys in ["central", "down", "up"]:
+            out |= {
+                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
+                for cat in self.loop_variables(nonaux=slice(2, None))
+            } | {
+                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
+                for aux_var in self.aux_variable_insts
+                for cat in self.loop_variables(nonaux=slice(2, None), aux=aux_var)
+            }
+        return out
+
+    def create_branch_map(self):
+        return list(self.full_output())
+
+    def output(self):
+        return self.full_output()[self.branch_data]
+
+    @law.decorator.log
+    def run(self):
+        import hist
+        import numpy as np
 
         plot_process: od.Process = self.config_inst.get_process(self.processes[-1])
-        dummy_cat = od.Category(name="1e1mu, $n_j > 1, n_b > 0$")
 
-        def make_plot2d(hist2d: hist.Hist, cat: od.Category, aux_selection=True):
-            label_values = np.around(hist2d.values(), decimals=2)
+        def make_plot2d(hist2d: hist.Hist, sys: str, cat: od.Category):
+            label_values = np.round(hist2d.values(), decimals=2)
             style_config = {
                 "plot2d_cfg": {"cmap": "PiYG", "labels": label_values},
                 "annotate_cfg": {"bbox": dict(alpha=0.5, facecolor="white")},
             }
-            p_cat = dummy_cat.copy_shallow()
-            if cat.label:
-                p_cat.label += "\n" + cat.label
-            if aux_selection:
-                p_cat.label += "\n" + self.aux_label
+            p_cat = self.baseline_cat(add=cat, exclude=cat.name.split("__"))
 
             fig, _ = self.call_plot_func(
                 self.plot_function,
@@ -401,26 +468,96 @@ class TriggerScaleFactors(
                 style_config=style_config,
                 **self.get_plot_parameters(),
             )
-            for p in self.output()["sf_2d"][cat.name]:
+            for p in self.output()[sys][cat.name]:
                 p.dump(fig, formatter="mpl")
 
-        if "sf_2d" in self.make_plots:
-            # scale factor 2d plot
-            for index, cat in self.loop_variables(nonaux=slice(2, None), aux=None, make_cat=True):
-                make_plot2d(scale_factors["nominal"][index], cat)
+        scale_factors = self.input()["collection"][0]["sf"].load(formatter="pickle")
+        sys, cat_name = self.branch_data.split("__", maxsplit=1)
+        cat = self.var_bin_cats[cat_name]
+        index = cat.selection | {"systematic": sys}
 
-            # scale factor 2d plot per aux bin
-            for aux_vr, aux_idx in self.aux_variable_insts.items():
-                for index, cat in self.loop_variables(make_cat=True, aux=aux_vr, nonaux=slice(2, None)):
-                    make_plot2d(scale_factors[aux_vr.name][index], cat, aux_selection=not isinstance(aux_idx, int))
+        # scale factor 2d plot
+        make_plot2d(scale_factors["nominal"][index], sys, cat)
 
-        def plot_1d(key: str, hists, vrs=None, aux_selection=True, **kwargs):
-            p_cat = dummy_cat.copy_shallow()
-            if aux_selection:
-                p_cat.label += "\n" + self.aux_label
+
+class TriggerScaleFactors1D(
+    TriggerScaleFactorsPlotBase,
+    PlotBase2D,
+):
+    make_plots = law.CSVParameter(
+        default=tuple(),
+        significant=False,
+        description=("which plots to make. Choose from:\n"
+                    "\tcorr: correlation plots\n",
+                    "\tsf_1d: 1d scale factor plots\n",
+                    "\teff_1d: 1d efficiency plots,\n",)
+    )
+
+    plot_function = PlotBase.plot_function.copy(
+        default="singletop.plotting.plot_1d_line",
+        add_default_to_description=True,
+    )
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "all" in self.make_plots:
+            self.make_plots = ("sf_1d", "eff_1d", "corr")
+
+    def full_output(self):
+        out = {}
+        if "sf_1d" in self.make_plots:
+            out["sf_1d_stat"] = [self.target(name) for name in self.get_plot_names("sf_nominal_1d_stat")]
+            out["sf_1d_full"] = [self.target(name) for name in self.get_plot_names("sf_nominal_1d_full")]
+
+            for aux_var in self.aux_variable_insts:
+                n_group = aux_var.aux.get("group_bins", 3)
+                for i in range(0, aux_var.n_bins, n_group):
+                    name = "sf_1d_" + aux_var.name
+                    name += "" if aux_var.n_bins <= n_group else f"_{i}:{i + n_group}"
+                    out[name] = [self.target(name) for name in self.get_plot_names(name)]
+
+        if "eff_1d" in self.make_plots:
+            out["eff_1d"] = [self.target(name) for name in self.get_plot_names("eff_1d")]
+            for vr in self.variable_insts:
+                out[f"eff_1d_proj_{vr.name}"] = [
+                    self.target(name) for name in self.get_plot_names(f"eff_proj_{vr.name}")
+                ]
+
+        if "corr" in self.make_plots:
+            for vr in ["all"] + [variable_inst.name for variable_inst in self.nonaux_variable_insts]:
+                out[f"corr_{vr}"] = [self.target(name) for name in self.get_plot_names(f"corr_{vr}")]
+        return out
+
+    def create_branch_map(self):
+        return list(self.full_output())
+
+    def output(self):
+        return self.full_output()[self.branch_data]
+
+    def get_hists(self, h: hist.Hist, unc=""):
+        if unc:
+            unc += "_"
+        hs = [h[{"systematic": sys}].values() for sys in ["central", f"{unc}down", f"{unc}up"]]
+        # convert down and up variations to up and down errors
+        return [hs[0], *[np.abs(h - hs[0]) for h in hs]]
+
+    @law.decorator.log
+    def run(self):
+        import numpy as np
+
+        plot_process: od.Process = self.config_inst.get_process(self.processes[-1])
+        dummy_cat = od.Category(name=self.baseline_label)
+
+        def plot_1d(key: str, hists, vrs=None, **kwargs):
             vrs = self.nonaux_variable_insts if vrs is None else vrs
+
+            # exclude auxiliary baseline selection variables if requested
+            p_cat = self.baseline_cat(exclude=[vr.name for vr in vrs])
+
             fig, axes = self.call_plot_func(
-                self.plot_function_1d_line,
+                self.plot_function,
                 hists=hists,
                 config_inst=self.config_inst,
                 category_inst=p_cat,
@@ -439,92 +576,137 @@ class TriggerScaleFactors(
             for p in self.output()[key]:
                 p.dump(fig, formatter="mpl")
 
-        if "sf_1d" in self.make_plots:
-            # scale factor flat plot with stat errors
-            sf_flat = [scale_factors["nominal"].values(), *scale_factors_staterr["nominal"]]
-            plot_1d("sf_1d", {plot_process: sf_flat})
+        if "sf_1d" in self.branch_data:
+            scale_factors = self.input()["collection"][0]["sf"].load(formatter="pickle")
 
-            for aux_vr, aux_idx in self.aux_variable_insts.items():
-                ax_idx = scale_factors[aux_vr.name].axes.name.index(aux_vr.name)
-                cat = dummy_cat.copy_shallow()
-                if not isinstance(self.aux_variable_insts, int):
-                    cat.label += "\n" + self.aux_label
-                aux_bins = list(self.loop_variables(nonaux=False, aux=aux_vr, make_cat=True))
-                n_group = aux_vr.aux.get("group_bins", 3)
-                for i in range(0, len(aux_bins), n_group):
-                    suff = "" if len(aux_bins) <= n_group else f"_{i}:{i + n_group}"
-                    plot_1d("sf_1d_" + aux_vr.name + suff,
-                        {"nominal": sf_flat} | {
-                            cat.label: [
-                                scale_factors[aux_vr.name][idx].values(),
-                                *np.take(
-                                    scale_factors_staterr[aux_vr.name],
-                                    indices=tuple(idx.values())[0],
-                                    axis=ax_idx + 1,  # + 1 because first axis is error
-                                ),
-                            ]
-                            for idx, cat in aux_bins[i:i + n_group]
-                        },
-                        aux_selection=not isinstance(aux_idx, int),
-                    )
+            # scale factor flat plot with full errors
+            if self.branch_data == "sf_1d_full":
+                plot_1d("sf_1d_full", {plot_process: self.get_hists(scale_factors["nominal"])})
+                return
+                # scale factor flat plot with stat errors
+            sf_flat = self.get_hists(scale_factors["nominal"], unc="stat")
+            if self.branch_data == "sf_1d_stat":
+                plot_1d("sf_1d_stat", {plot_process: sf_flat})
+                return
 
-        if "eff_1d" in self.make_plots:
-            plot_1d("eff_1d", {dt: [x.values() for x in efficiencies[dt]] for dt in ["mc", "data"]})
+            # convert branch to aux variable and bin group
+            aux_vr, group = re.findall("^sf_1d_(.*?)_*([\d+:\d+]*)$", self.branch_data, re.DOTALL)[0]
+            i0, i1 = [int(x) for x in group.split(":")]
+            aux_bins = list(self.loop_variables(nonaux=False, aux=aux_vr))[i0:i1]
 
-        if "corr" in self.make_plots:
+            plot_1d(
+                self.branch_data,
+                {"nominal": sf_flat} | {
+                    cat.label: self.get_hists(scale_factors[aux_vr.name][idx]) for idx, cat in aux_bins
+                },
+            )
+
+        if "corr" in self.branch_data:
+            corr_bias = self.input()["collection"][0]["corr"].load(formatter="pickle")
+            get_arr = lambda h: [h.values(), np.sqrt(h.variances())]
             # correlation plot
             style_config = {"ax_cfg": {"ylim": (-0.1, 0.1)}}
-            plot_1d("corr_all", {plot_process: corr_bias["all"]}, style_config=style_config)
-            for vr in self.nonaux_variable_insts:
-                plot_1d(f"corr_{vr.name}", {plot_process: corr_bias[vr.name]}, vrs=[vr], style_config=style_config)
-
-        for vr in self.variable_insts:
-            suff = f"{vr.name}_proj"
-            data, mc = data_mc_keys(suff)
-            proj_kwargs = dict(
-                config_inst=self.config_inst,
-                variable_insts=[vr],
-            )
-            p_cat = dummy_cat.copy_shallow()
-            ll = vr.aux.get("lower_limit", None)
-            if not isinstance(self.aux_variable_insts.get(vr, None), int):
-                p_cat.label += "\n" + self.aux_label
-            if "eff_1d" in self.make_plots:
-                fig, axes = self.call_plot_func(
-                    self.plot_function_1d_line,
-                    hists={dt[:-len(suff) - 1]: [x.values() for x in efficiencies[dt]] for dt in [mc, data]},
-                    skip_ratio=False,
-                    category_inst=dummy_cat,
-                    **proj_kwargs,
+            if self.branch_data == "corr_all":
+                plot_1d(
+                    "corr_all",
+                    {plot_process: get_arr(corr_bias["all"])},
+                    style_config=style_config
                 )
-                if ll is not None:
-                    for ax in axes:
-                        ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
-                for p in self.output()[f"eff_proj_{vr.name}"]:
-                    p.dump(fig, formatter="mpl")
+                return
+            vr = re.findall("corr_(.*)", self.branch_data)
+            plot_1d(
+                f"corr_{vr}",
+                {plot_process: get_arr(corr_bias[vr])},
+                vrs=[self.config_inst.get_variable(vr)],
+                style_config=style_config
+            )
 
-            if "hist" in self.make_plots:
-                # first with only reference trigger
-                trig_cat = p_cat.copy_shallow()
-                trig_cat.label += "\n" + self.ref_trigger
-                idx = {ivr.name: self.aux_variable_insts.get(ivr, sum) for ivr in self.variable_insts if ivr != vr}
-                idx[self.ref_trigger_vr] = 1
-                label = "ref"
-                for _ in range(2):
-                    fig, axes = self.call_plot_func(
-                        self.plot_function_1d_hist,
-                        hists={p: histograms[p][idx].project(vr.name) for p in histograms},
-                        category_inst=trig_cat,
-                        **proj_kwargs,
-                        **self.get_hist1d_plot_parameter(),
-                    )
-                    if ll is not None:
-                        for ax in axes:
-                            ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
-                    for p in self.output()[f"proj_{label}_{vr.name}"]:
-                        p.dump(fig, formatter="mpl")
+        if "eff_1d" in self.branch_data:
+            efficiencies = self.input()["collection"][0]["eff"].load(formatter="pickle")
+            if self.branch_data == "eff_1d":
+                plot_1d("eff_1d", {dt: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys()})
 
-                    # repeat with trigger applied
-                    trig_cat.label += " & " + self.trigger
-                    idx[self.trigger_vr] = 1
-                    label = "trig"
+            vr = re.findall("eff_1d_proj_(.*)", self.branch_data)[0]
+            suff = f"{vr}_proj"
+
+            fig, axes = self.call_plot_func(
+                self.plot_function,
+                hists={dt[:-len(suff) - 1]: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys(suff)},
+                skip_ratio=False,
+                category_inst=self.baseline_cat(exclude=[vr]),
+                config_inst=self.config_inst,
+                variable_insts=[self.config_inst.get_variable(vr)],
+            )
+            if (ll := vr.aux.get("lower_limit", None)) is not None:
+                for ax in axes:
+                    ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
+            for p in self.output()[self.branch_data]:
+                p.dump(fig, formatter="mpl")
+
+
+class TriggerScaleFactorsHist(
+    TriggerScaleFactorsBase,
+    PlotBase1D,
+):
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
+        add_default_to_description=True,
+    )
+
+    baseline_label = TriggerScaleFactorsPlotBase.baseline_label.copy()
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    def full_output(self):
+        out = {}
+        for tr, vr in product(["ref", "trig"], self.variable_insts):
+            name = f"proj_{tr}_{vr.name}"
+            out[name] = [self.target(name) for name in self.get_plot_names(name)]
+        return out
+
+    def create_branch_map(self):
+        return list(self.full_output())
+
+    def output(self):
+        return self.full_output()[self.branch_data]
+
+    def get_plot_parameters(self):
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "legend_title", "Processes")
+        return params
+
+    @law.decorator.log
+    def run(self):
+        hist_name = self.tag_name + "_ref_" + self.ref_trigger.lower() + "_efficiencies"
+        histograms = self.read_hist(self.variable_insts, hist_name)
+
+        trig_label, vr = re.findall("proj_(.*?)_(.*?)", self.branch_data)[0]
+        vr = self.config_inst.get_variable(vr)
+
+        p_cat = od.Category(name=self.baseline_label)
+        if not isinstance(self.aux_variable_insts.get(vr, None), int):
+            p_cat.label += "\n" + self.aux_label
+
+        p_cat.label += "\n" + self.ref_trigger
+        # reduce all variables but the one considered
+        idx = {ivr.name: self.aux_variable_insts.get(ivr, sum) for ivr in self.variable_insts if ivr != vr}
+        idx[self.ref_trigger_vr] = 1
+        if trig_label == "trig":
+            p_cat.label += " & " + self.trigger
+            idx[self.trigger_vr] = 1
+
+        fig, axes = self.call_plot_func(
+            self.plot_function,
+            hists={p: histograms[p][idx].project(vr.name) for p in histograms},
+            category_inst=p_cat,
+            config_inst=self.config_inst,
+            variable_insts=[vr],
+            **self.get_plot_parameter(),
+        )
+        if (ll := vr.aux.get("lower_limit", None)) is not None:
+            for ax in axes:
+                ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
+        for p in self.output()[self.branch_data]:
+            p.dump(fig, formatter="mpl")
+
