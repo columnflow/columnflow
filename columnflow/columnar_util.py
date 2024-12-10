@@ -2671,17 +2671,7 @@ class DaskArrayReader(object):
 
         # open the file
         open_options = open_options or {}
-        open_options["split_row_groups"] = False
         self.dak_array = dak.from_parquet(path, **open_options)
-        if materialization_strategy == self.MaterializationStrategy.SLICES:
-            # NOTE: by calling the `persist` method, the dask array is directly materialized in memory
-            # to prevent that the dask array is materialized multiple times. This prevents us from
-            # loading data in a chunked manner, which is not ideal for large datasets, but at the
-            # moment we do not have a better solution.
-            # This fix should be removed once we find a solution to only materialize the data
-            # from the sliced array that is actually needed.
-            self.dak_array = self.dak_array.persist()
-
         self.path = path
 
         # strategy dependent attributes and setup
@@ -3353,6 +3343,7 @@ class ChunkedIOHandler(object):
 
         # default open options
         open_options = open_options or {}
+        open_options.setdefault("split_row_groups", True)  # preserve input file partitions
 
         # inject read_columns
         if read_columns and "columns" not in open_options:
