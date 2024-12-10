@@ -198,6 +198,7 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
             name=selected_counts.name,
         )
         eff_full.values()[:] = [efficiency.values(), *error]
+        eff_full.variances()[:] = 1
         return eff_full
 
 

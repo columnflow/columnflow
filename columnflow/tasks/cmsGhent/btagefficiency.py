@@ -121,6 +121,12 @@ class BTagEfficiencyPlot(
             _exclude={"branches"},
         )
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["BTagEfficiency"] = self.requires_from_branch()
+
+        return reqs
+
     def output(self):
         return [
             [
