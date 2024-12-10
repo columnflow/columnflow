@@ -18,7 +18,7 @@ from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMix
 
 
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.util import dev_sandbox, dict_add_strict, maybe_import, DotDict
+from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 
 np = maybe_import("numpy")
 hist = maybe_import("hist")
@@ -284,7 +284,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
                       f"for year {self.config_inst.x.year} "
                       f"(binned in {', '.join([vr.name for vr in self.nonaux_variable_insts])})",
                 storage=hist.storage.Weight(),
-            )
+            ),
         }
         for idx in self.loop_variables(aux=None):
             pf = sum_histograms["mc"][idx]
@@ -350,20 +350,20 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
 
 
 class TriggerScaleFactorsPlotBase(
-    TriggerScaleFactorsBase
+    TriggerScaleFactorsBase,
 ):
     exclude_index = True
 
     baseline_label = luigi.Parameter(
         default="",
-        description="Label for the baseline selection."
+        description="Label for the baseline selection.",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.var_bin_cats = {}  # for caching
 
-    def baseline_cat(self, add: od.Category=None, exclude: list[str]=tuple()):
+    def baseline_cat(self, add: od.Category = None, exclude: list[str] = tuple()):
         p_cat = od.Category(name=self.baseline_label)
         if add is not None and add.label:
             p_cat.label += "\n" + add.label
@@ -388,7 +388,7 @@ class TriggerScaleFactorsPlotBase(
                 self.var_bin_cats[cat_name] = od.Category(
                     name=cat_name,
                     selection=index,
-                    label=self.bin_label(index)
+                    label=self.bin_label(index),
                 )
             yield self.var_bin_cats[cat_name]
 
@@ -490,7 +490,7 @@ class TriggerScaleFactors1D(
         description=("which plots to make. Choose from:\n"
                     "\tcorr: correlation plots\n",
                     "\tsf_1d: 1d scale factor plots\n",
-                    "\teff_1d: 1d efficiency plots,\n",)
+                    "\teff_1d: 1d efficiency plots,\n"),
     )
 
     plot_function = PlotBase.plot_function.copy(
@@ -548,7 +548,7 @@ class TriggerScaleFactors1D(
         import numpy as np
 
         plot_process: od.Process = self.config_inst.get_process(self.processes[-1])
-        dummy_cat = od.Category(name=self.baseline_label)
+        od.Category(name=self.baseline_label)
 
         def plot_1d(key: str, hists, vrs=None, **kwargs):
             vrs = self.nonaux_variable_insts if vrs is None else vrs
@@ -590,7 +590,7 @@ class TriggerScaleFactors1D(
                 return
 
             # convert branch to aux variable and bin group
-            aux_vr, group = re.findall("^sf_1d_(.*?)_*([\d+:\d+]*)$", self.branch_data, re.DOTALL)[0]
+            aux_vr, group = re.findall("^sf_1d_(.*?)_*([\\d+:\\d+]*)$", self.branch_data, re.DOTALL)[0]
             i0, i1 = [int(x) for x in group.split(":")]
             aux_bins = list(self.loop_variables(nonaux=False, aux=aux_vr))[i0:i1]
 
@@ -610,7 +610,7 @@ class TriggerScaleFactors1D(
                 plot_1d(
                     "corr_all",
                     {plot_process: get_arr(corr_bias["all"])},
-                    style_config=style_config
+                    style_config=style_config,
                 )
                 return
             vr = re.findall("corr_(.*)", self.branch_data)
@@ -618,7 +618,7 @@ class TriggerScaleFactors1D(
                 f"corr_{vr}",
                 {plot_process: get_arr(corr_bias[vr])},
                 vrs=[self.config_inst.get_variable(vr)],
-                style_config=style_config
+                style_config=style_config,
             )
 
         if "eff_1d" in self.branch_data:
@@ -709,4 +709,3 @@ class TriggerScaleFactorsHist(
                 ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
         for p in self.output()[self.branch_data]:
             p.dump(fig, formatter="mpl")
-
