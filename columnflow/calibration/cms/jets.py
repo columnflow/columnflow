@@ -947,7 +947,6 @@ def jer_init(self: Calibrator) -> None:
         # register used MET columns
         self.uses |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
 
-
         # register produced MET columns
         self.produces |= {f"{self.met_name}.{var}" for var in (
             "pt", "phi", "pt_jer_up", "pt_jer_down", "phi_jer_up", "phi_jer_down",
