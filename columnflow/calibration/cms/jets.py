@@ -405,7 +405,6 @@ def jec(
         jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_all_levels = jetsum.pt
         jetsum_phi_all_levels = jetsum.phi
-        raw_met = events[self.raw_met_name]
         # propagate changes to MET, starting from jets corrected with subset of JEC levels
         # (recommendation is to propagate only L2 corrections and onwards)
         met_pt, met_phi = propagate_met(
@@ -413,8 +412,8 @@ def jec(
             jetsum_phi_subset_type1_met,
             jetsum_pt_all_levels,
             jetsum_phi_all_levels,
-            raw_met.pt,
-            raw_met.phi,
+            events[self.raw_met_name].pt,
+            events[self.raw_met_name].phi,
         )
         events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
         events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
@@ -503,8 +502,8 @@ def jec_init(self: Calibrator) -> None:
 
     # add MET variables
     if self.propagate_met:
-        self.uses |= {f"{self.raw_met_name}.{var}" for var in ("pt", "phi")}
-        self.produces |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
+        self.uses.add(f"{self.raw_met_name}.{{pt,phi}}")
+        self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
         # add shifted MET variables
         self.produces |= {
@@ -871,11 +870,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # met propagation
     if self.propagate_met:
-        met = events[self.met_name]
 
         # save unsmeared quantities
-        events = set_ak_column_f32(events, f"{self.met_name}.pt_unsmeared", met.pt)
-        events = set_ak_column_f32(events, f"{self.met_name}.phi_unsmeared", met.phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_unsmeared", events[self.met_name].pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_unsmeared", events[self.met_name].phi)
 
         # get pt and phi of all jets after correcting
         jetsum = events[jet_name].sum(axis=1)
@@ -888,8 +886,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             jetsum_phi_before,
             jetsum_pt_after,
             jetsum_phi_after,
-            met.pt,
-            met.phi,
+            events[self.met_name].pt,
+            events[self.met_name].phi,
         )
         events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
         events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
@@ -947,13 +945,10 @@ def jer_init(self: Calibrator) -> None:
     # register produced MET columns
     if self.propagate_met:
         # register used MET columns
-        self.uses |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
+        self.uses.add(f"{self.met_name}.{{pt,phi}}")
 
         # register produced MET columns
-        self.produces |= {f"{self.met_name}.{var}" for var in (
-            "pt", "phi", "pt_jer_up", "pt_jer_down", "phi_jer_up", "phi_jer_down",
-            "pt_unsmeared", "phi_unsmeared",
-        )}
+        self.produces.add(f"{self.met_name}.{{pt,phi}}{{,_jer_up,_jer_down,_unsmeared}}")
 
 
 @jer.requires

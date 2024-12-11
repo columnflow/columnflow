@@ -84,8 +84,8 @@ def met_phi_init(self: Calibrator) -> None:
     """
     Initialize the :py:attr:`met_pt_corrector` and :py:attr:`met_phi_corrector` attributes.
     """
-    self.uses |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
-    self.produces = {f"{self.met_name}.pt", f"{self.met_name}.phi"}
+    self.uses.add(f"{self.met_name}.{{pt,phi}}")
+    self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
 
 @met_phi.requires

@@ -175,14 +175,13 @@ def tec(
 
             # propagate changes to MET
             if self.propagate_met:
-                met = events[self.met_name]
                 met_pt_varied, met_phi_varied = propagate_met(
                     events.Tau.pt,
                     events.Tau.phi,
                     pt_varied,
                     events.Tau.phi,
-                    met.pt,
-                    met.phi,
+                    events[self.met_name].pt,
+                    events[self.met_name].phi,
                 )
                 events = set_ak_column_f32(events, f"{self.met_name}.pt_{postfix}", met_pt_varied)
                 events = set_ak_column_f32(events, f"{self.met_name}.phi_{postfix}", met_phi_varied)
@@ -196,14 +195,13 @@ def tec(
 
     # propagate changes to MET
     if self.propagate_met:
-        met = events[self.met_name]
         met_pt, met_phi = propagate_met(
             tau_sum_before.pt,
             tau_sum_before.phi,
             events.Tau.pt,
             events.Tau.phi,
-            met.pt,
-            met.phi,
+            events[self.met_name].pt,
+            events[self.met_name].phi,
         )
         events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
         events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
@@ -217,8 +215,8 @@ def tec_init(self: Calibrator) -> None:
 
     # add nominal met columns of propagating nominal tec
     if self.propagate_met:
-        self.uses |= {f"{self.met_name}.{var}" for var in ["pt", "phi"]}
-        self.produces |= {f"{self.met_name}.{var}" for var in ["pt", "phi"]}
+        self.uses.add(f"{self.met_name}.{{pt,phi}}")
+        self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
     # add columns with unceratinties if requested
     if self.with_uncertainties:
