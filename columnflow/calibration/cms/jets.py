@@ -236,6 +236,8 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
     jet_name="Jet",
     # name of the associated MET collection
     met_name="MET",
+    # name of the associated Raw MET collection
+    raw_met_name="RawMET",
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -403,7 +405,7 @@ def jec(
         jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_all_levels = jetsum.pt
         jetsum_phi_all_levels = jetsum.phi
-        raw_met = events[self.met_name]
+        raw_met = events[self.raw_met_name]
         # propagate changes to MET, starting from jets corrected with subset of JEC levels
         # (recommendation is to propagate only L2 corrections and onwards)
         met_pt, met_phi = propagate_met(
@@ -501,7 +503,7 @@ def jec_init(self: Calibrator) -> None:
 
     # add MET variables
     if self.propagate_met:
-        self.uses |= {f"Raw{self.met_name}.{var}" for var in ("pt", "phi")}
+        self.uses |= {f"{self.raw_met_name}.{var}" for var in ("pt", "phi")}
         self.produces |= {f"{self.met_name}.{var}" for var in ("pt", "phi")}
 
         # add shifted MET variables
