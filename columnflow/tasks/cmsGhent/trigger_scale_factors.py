@@ -59,7 +59,7 @@ class TriggerScaleFactorsBase(
 
     def get_default_variables(self, cfg: od.Config):
         trig = self.trigger[4:] if self.trigger.startswith("HLT.") else self.trigger
-        return cfg.x(f"analysis_triggers", dict()).get(trig, (None, None))[1]
+        return cfg.x("analysis_triggers", dict()).get(trig, (None, None))[1]
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -70,7 +70,7 @@ class TriggerScaleFactorsBase(
         cls.tag_name = f"hlt_{trig.lower()}"
         ref_trigger = params.get("ref_trigger")
         if not ref_trigger:
-            ref_trigger = config_inst.x(f"analysis_triggers", dict()).get(trig, (None, None))[0]
+            ref_trigger = config_inst.x("analysis_triggers", dict()).get(trig, (None, None))[0]
             assert ref_trigger is not None, "no default trigger specified in config.x.analysis_triggers"
         params["ref_trigger"] = ref_trigger
         params = super().resolve_param_values(params)
