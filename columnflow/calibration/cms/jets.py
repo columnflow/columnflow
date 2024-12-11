@@ -547,25 +547,27 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     .. code-block:: python
 
         cfg.x.jec = DotDict.wrap({
-            # campaign name for this JEC correctiono
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            # version of the corrections
-            "version": "V7",
-            # Type of jets that the corrections should be applied on
-            "jet_type": "AK4PFchs",
-            # relevant levels in the derivation process of the JEC
-            "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
-            # relevant levels in the derivation process of the Type 1 MET JEC
-            "levels_for_type1_met": ["L1FastJet"],
-            # names of the uncertainties to be applied
-            "uncertainty_sources": [
-                "Total",
-                "CorrelationGroupMPFInSitu",
-                "CorrelationGroupIntercalibration",
-                "CorrelationGroupbJES",
-                "CorrelationGroupFlavor",
-                "CorrelationGroupUncorrelated",
-            ],
+            "Jet": {
+                # campaign name for this JEC correctiono
+                "campaign": f"Summer19UL{year2}{jerc_postfix}",
+                # version of the corrections
+                "version": "V7",
+                # Type of jets that the corrections should be applied on
+                "jet_type": "AK4PFchs",
+                # relevant levels in the derivation process of the JEC
+                "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+                # relevant levels in the derivation process of the Type 1 MET JEC
+                "levels_for_type1_met": ["L1FastJet"],
+                # names of the uncertainties to be applied
+                "uncertainty_sources": [
+                    "Total",
+                    "CorrelationGroupMPFInSitu",
+                    "CorrelationGroupIntercalibration",
+                    "CorrelationGroupbJES",
+                    "CorrelationGroupFlavor",
+                    "CorrelationGroupUncorrelated",
+                ],
+            },
         })
 
     :param reqs: Requirement dictionary for this
@@ -982,9 +984,11 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     .. code-block:: python
 
         cfg.x.jer = DotDict.wrap({
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            "version": "JRV3",
-            "jet_type": "AK4PFchs",
+            "Jet": {
+                "campaign": f"Summer19UL{year2}{jerc_postfix}",
+                "version": "JRV3",
+                "jet_type": "AK4PFchs",
+            },
         })
 
     :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`
