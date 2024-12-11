@@ -24,9 +24,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 @producer(
     uses={"LHEPdfWeight"},
-    produces={
-        "pdf_weight", "pdf_weight_up", "pdf_weight_down",
-    },
+    produces={"pdf_weight{,_up,_down}"},
     # only run on mc
     mc_only=True,
 )

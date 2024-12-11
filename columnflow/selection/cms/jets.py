@@ -22,9 +22,8 @@ logger = law.logger.get_logger(__name__)
 
 @selector(
     uses={
-        "Jet.{pt,eta,phi,mass,jetId,chEmEF}",
+        "Jet.{pt,eta,phi,mass,jetId,chEmEF}", optional("Jet.puId"),
         "Muon.{pt,eta,phi,mass,isPFcand}",
-        optional("Jet.puId"),
     },
     produces={"Jet.veto_map_mask"},
     get_veto_map_file=(lambda self, external_files: external_files.jet_veto_map),
