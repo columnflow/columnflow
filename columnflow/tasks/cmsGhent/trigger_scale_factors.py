@@ -169,7 +169,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
         import hist
         import numpy as np
         import correctionlib.convert
-        from singletop.util.Koopman_test import koopman_confint
+        from columnflow.tasks.cmsGhent.Koopman_test import koopman_confint
 
         bindim = [variable_inst.n_bins for variable_inst in self.nonaux_variable_insts]
 
