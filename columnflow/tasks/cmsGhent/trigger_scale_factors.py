@@ -52,14 +52,11 @@ class TriggerScaleFactorsBase(
 
         # variable in which the nominal variables are binned
         self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
-        if not self.trigger.startswith("HLT."):
-            self.trigger_vr = "HLT." + self.trigger
-        if not self.ref_trigger_vr.startswith("HLT."):
-            self.ref_trigger_vr = "HLT." + self.ref_trigger
+        self.trigger_vr = "HLT." + self.trigger
+        self.ref_trigger_vr = "HLT." + self.ref_trigger
 
     def get_default_variables(self, cfg: od.Config):
-        trig = self.trigger[4:] if self.trigger.startswith("HLT.") else self.trigger
-        return cfg.x("analysis_triggers", dict()).get(trig, (None, None))[1]
+        return cfg.x("analysis_triggers", dict()).get(self.trigger, (None, None))[1]
 
     @classmethod
     def resolve_param_values(cls, params):
