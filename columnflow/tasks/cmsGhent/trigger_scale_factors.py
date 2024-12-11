@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import law
 from collections.abc import Iterator
+from collections import defaultdict
 import order as od
 from itertools import product
 import luigi
@@ -55,22 +56,24 @@ class TriggerScaleFactorsBase(
         self.trigger_vr = "HLT." + self.trigger
         self.ref_trigger_vr = "HLT." + self.ref_trigger
 
-    def get_default_variables(self, cfg: od.Config):
-        return cfg.x("analysis_triggers", dict()).get(self.trigger, (None, None))[1]
+    @classmethod
+    def get_default_variables(self, params):
+        if not (config_inst := params.get("config_inst")):
+            return params
+        return config_inst.x("analysis_triggers", dict()).get(params["trigger"], (None, None))[1]
 
     @classmethod
     def resolve_param_values(cls, params):
-        if not (trig := params.get("ref_trigger")):
-            return params
-        if not (config_inst := params.get("config_inst")):
+        if not (trig := params.get("trigger")):
             return params
         cls.tag_name = f"hlt_{trig.lower()}"
-        ref_trigger = params.get("ref_trigger")
-        if not ref_trigger:
+        params = super().resolve_param_values(params)
+        if not (config_inst := params.get("config_inst")):
+            return params
+        if not (ref_trigger := params.get("ref_trigger")):
             ref_trigger = config_inst.x("analysis_triggers", dict()).get(trig, (None, None))[0]
             assert ref_trigger is not None, "no default trigger specified in config.x.analysis_triggers"
         params["ref_trigger"] = ref_trigger
-        params = super().resolve_param_values(params)
         return params
 
     @property
@@ -111,7 +114,7 @@ class TriggerScaleFactorsBase(
             index = dict(zip(loop_vars, index))
             yield {vr.name: bn for vr, bn in index.items()}
 
-    def data_mc_keys(suff):
+    def data_mc_keys(self, suff):
         """
         get data and mc key with suffix (omitted if empty)
         """
@@ -249,7 +252,8 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
             return efficiencies[data][ct_idx] / efficiencies[mc][ct_idx].values()
 
         nom_centr_sf = calc_sf()
-        scale_factors: dict[str, dict[str, hist.Hist]] = {"nominal": {"central": nom_centr_sf}}
+        scale_factors: dict[str, dict[str, hist.Hist]] = defaultdict(dict)
+        scale_factors["nominal"] = {"central": nom_centr_sf}
 
         def up_down_dict(name, err):
             """convenience function"""
@@ -261,7 +265,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
             scale_factors[aux_vr.name]["central"] = sf_aux
             aux_idx = sf_aux.axes.name.index(aux_vr.name)
             dev = np.abs(sf_aux.values() - np.expand_dims(nom_centr_sf.values(), axis=aux_idx))
-            scale_factors["nominal"] |= up_down_dict(aux_vr.name, np.max(dev, axis=aux_idx, keepdims=True))
+            scale_factors["nominal"] |= up_down_dict(aux_vr.name, np.max(dev, axis=aux_idx))
 
         # koopman-based statistical error
         def calc_staterr(aux_vr: od.Variable = None):
@@ -281,7 +285,11 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
                 mc = sum_histograms[mc][t_idx]
                 inputs = [x.value for x in [data[1], data[sum], mc[1], mc[sum]]]
                 container[(..., *idx.values())] = koopman_confint(*inputs)
-            return dict(zip(["stat_down", "stat_down"], container))
+            out = {}
+            for dr, c in zip(["stat_down", "stat_up"], container):
+                out[dr] = scale_factors["nominal" if aux_vr is None else aux_vr.name]["central"].copy()
+                out[dr].values()[:] = c
+            return out
 
         scale_factors["nominal"] |= calc_staterr()
         for aux_vr in self.aux_variable_insts:
@@ -290,7 +298,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
         # bias in efficiency because of correlation
         corr_bias = {
             "all": hist.Hist(
-                *scale_factors["nominal"].axes,
+                *scale_factors["nominal"]["central"].axes,
                 name="correlation bias",
                 label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
                       f"for year {self.config_inst.x.year} "
@@ -298,6 +306,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
                 storage=hist.storage.Weight(),
             ),
         }
+
         for idx in self.loop_variables(aux=None):
             pf = sum_histograms["mc"][idx]
             corr_bias["all"][idx] = self.correlation_efficiency_bias(pf)
@@ -306,47 +315,67 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
         # correlation bias in 1D efficiencies
         for vr in self.nonaux_variable_insts:
             corr_bias[vr.name] = hist.Hist(
-                scale_factors["nominal"].axes[vr.name],
-                name="correlation bias",
+                scale_factors["nominal"]["central"].axes[vr.name],
+                name=f"correlation bias ({vr.name})",
                 label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
                       f"for year {self.config_inst.x.year} (binned in {vr.name})",
                 storage=hist.storage.Weight(),
             )
             # trigger must be along first axis!
             pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr, vr.name)
+
             for idx in range(vr.n_bins):
                 corr_bias[vr.name][idx] = self.correlation_efficiency_bias(pf[{vr.name: idx}])
 
             # broad cast projected hist back to nominal binning
             vr_idx = nom_centr_sf.axes.name.index(vr.name)
-            bias = np.expand_dims(corr_bias[vr.name][0], np.delete(np.arange(nom_centr_sf.ndim), vr_idx).tolist())
+            bias = np.expand_dims(corr_bias[vr.name], np.delete(np.arange(nom_centr_sf.ndim), vr_idx).tolist())
+            bias = bias.value
 
-            scale_factors["nominal"] |= up_down_dict("corr", bias * nom_centr_sf.values())
+            scale_factors["nominal"] |= up_down_dict("corr_" + vr.name, bias * nom_centr_sf.values())
+
+        # inclusive correlations
+        corr_bias["incl"] = hist.Hist(
+            name="correlation bias (incl)",
+            label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
+                  f"for year {self.config_inst.x.year} (inclusive)",
+            storage=hist.storage.Weight(),
+        )
+        pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr)
+        corr_bias["incl"][...] = self.correlation_efficiency_bias(pf)
+        scale_factors["nominal"] |= up_down_dict("corr_incl", corr_bias["incl"][...].value * nom_centr_sf.values())
 
         sf_hists = {}
         for sf_type, arrays in scale_factors.items():
-            ct = arrays.pop("central")
-            hst = hist.Hist(
-                hist.axis.StrCategory(["central", "down", "up", *arrays], name="systematic"),
-                *scale_factors["nominal"].axes,
-                name="scale_factors",
-                label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
-                      f"for year {self.config_inst.x.year}",
-                storage=hist.storage.Double(),
-            )
-            hst.values()[(idx := 0)] = ct
-            # add quadratic sum of all uncertainties
-            for dr in ["down", "up"]:
-                err = np.sqrt(sum([(h - ct).values() ** 2 for k, h in arrays.items() if dr in k]))
-                hst.values()[(idx := idx + 1)] = ct.values() - (-1) ** idx * err
+            try:
+                ct = arrays.pop("central")
+                hst = hist.Hist(
+                    hist.axis.StrCategory(["central", "down", "up", *arrays], name="systematic"),
+                    *ct.axes,
+                    name="scale_factors",
+                    label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
+                          f"for year {self.config_inst.x.year}",
+                    storage=hist.storage.Weight(),
+                )
+                hst.values()[(idx := 0)] = ct.values()
+                # add quadratic sum of all uncertainties
+                for dr in ["down", "up"]:
+                    variance = 0
+                    for err in [v.name for v in self.aux_variable_insts] + ["stat", "corr_incl"]:
+                        if f"{err}_{dr}" not in arrays:
+                            continue
+                        variance = variance + (arrays[f"{err}_{dr}"].values() - ct.values()) ** 2
+                    hst.values()[(idx := idx + 1)] = ct.values() - (-1) ** idx * np.sqrt(variance)
 
-            # add remaining uncertainties
-            hst.values()[idx:] = [h.values() for h in arrays.values()]
+                # add remaining uncertainties
+                hst.values()[idx + 1:] = [h.values() for h in arrays.values()]
 
-            # remove variances
-            hst.variances()[:] = 1
+                # remove variances
+                hst.variances()[:] = 1
 
-            sf_hists[sf_type] = hst
+                sf_hists[sf_type] = hst
+            except:
+                breakpoint()
 
         # save sf histograms
         self.output()["sf"].dump(sf_hists, formatter="pickle")
@@ -404,7 +433,8 @@ class TriggerScaleFactorsPlotBase(
                 )
             yield self.var_bin_cats[cat_name]
 
-    def bin_label(self, index: dict[od.Variable, int]):
+    def bin_label(self, index: dict[od.Variable | str, int]):
+        index = {self.config_inst.get_variable(vr): bn for vr, bn in index.items()}
         return "\n".join([
             f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
             for vr, bn in index.items()
@@ -428,7 +458,10 @@ class TriggerScaleFactors2D(
         add_default_to_description=True,
     )
 
-    reqs = Requirements(TriggerScaleFactors=TriggerScaleFactors)
+    reqs = Requirements(
+        TriggerScaleFactorsPlotBase.reqs,
+        TriggerScaleFactors=TriggerScaleFactors,
+    )
 
     def requires(self):
         return self.reqs.TriggerScaleFactors.req(
@@ -441,10 +474,10 @@ class TriggerScaleFactors2D(
         out = {}
         for sys in ["central", "down", "up"]:
             out |= {
-                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
+                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name + "_" + sys)]
                 for cat in self.loop_variables(nonaux=slice(2, None))
             } | {
-                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name)]
+                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name + "_" + sys)]
                 for aux_var in self.aux_variable_insts
                 for cat in self.loop_variables(nonaux=slice(2, None), aux=aux_var)
             }
@@ -470,7 +503,6 @@ class TriggerScaleFactors2D(
                 "annotate_cfg": {"bbox": dict(alpha=0.5, facecolor="white")},
             }
             p_cat = self.baseline_cat(add=cat, exclude=cat.name.split("__"))
-
             fig, _ = self.call_plot_func(
                 self.plot_function,
                 hists={plot_process: hist2d},
@@ -480,7 +512,7 @@ class TriggerScaleFactors2D(
                 style_config=style_config,
                 **self.get_plot_parameters(),
             )
-            for p in self.output()[sys][cat.name]:
+            for p in self.output():
                 p.dump(fig, formatter="mpl")
 
         scale_factors = self.input()["collection"][0]["sf"].load(formatter="pickle")
@@ -488,13 +520,16 @@ class TriggerScaleFactors2D(
         cat = self.var_bin_cats[cat_name]
         index = cat.selection | {"systematic": sys}
 
+        sf_key = "nominal"
+        if any(auxs := [v.name for v in self.aux_variable_insts if v.name in index]):
+            sf_key = auxs[0]
         # scale factor 2d plot
-        make_plot2d(scale_factors["nominal"][index], sys, cat)
+        make_plot2d(scale_factors[sf_key][index], sys, cat)
 
 
 class TriggerScaleFactors1D(
     TriggerScaleFactorsPlotBase,
-    PlotBase2D,
+    PlotBase1D,
 ):
     make_plots = law.CSVParameter(
         default=tuple(),
@@ -510,12 +545,24 @@ class TriggerScaleFactors1D(
         add_default_to_description=True,
     )
 
+    reqs = Requirements(
+        TriggerScaleFactorsPlotBase.reqs,
+        TriggerScaleFactors=TriggerScaleFactors,
+    )
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "all" in self.make_plots:
             self.make_plots = ("sf_1d", "eff_1d", "corr")
+
+    def requires(self):
+        return self.reqs.TriggerScaleFactors.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+        )
 
     def full_output(self):
         out = {}
@@ -553,7 +600,7 @@ class TriggerScaleFactors1D(
             unc += "_"
         hs = [h[{"systematic": sys}].values() for sys in ["central", f"{unc}down", f"{unc}up"]]
         # convert down and up variations to up and down errors
-        return [hs[0], *[np.abs(h - hs[0]) for h in hs]]
+        return [hs[0], *[np.abs(h - hs[0]) for h in hs[1:]]]
 
     @law.decorator.log
     def run(self):
@@ -585,7 +632,7 @@ class TriggerScaleFactors1D(
                     ll -= 0.5
                 for ax in axes:
                     ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
-            for p in self.output()[key]:
+            for p in self.output():
                 p.dump(fig, formatter="mpl")
 
         if "sf_1d" in self.branch_data:
@@ -604,12 +651,12 @@ class TriggerScaleFactors1D(
             # convert branch to aux variable and bin group
             aux_vr, group = re.findall("^sf_1d_(.*?)_*([\\d+:\\d+]*)$", self.branch_data, re.DOTALL)[0]
             i0, i1 = [int(x) for x in group.split(":")]
+            aux_vr = self.config_inst.get_variable(aux_vr)
             aux_bins = list(self.loop_variables(nonaux=False, aux=aux_vr))[i0:i1]
-
             plot_1d(
                 self.branch_data,
                 {"nominal": sf_flat} | {
-                    cat.label: self.get_hists(scale_factors[aux_vr.name][idx]) for idx, cat in aux_bins
+                    cat.label: self.get_hists(scale_factors[aux_vr.name][cat.selection]) for cat in aux_bins
                 },
             )
 
@@ -652,7 +699,7 @@ class TriggerScaleFactors1D(
             if (ll := vr.aux.get("lower_limit", None)) is not None:
                 for ax in axes:
                     ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
-            for p in self.output()[self.branch_data]:
+            for p in self.output():
                 p.dump(fig, formatter="mpl")
 
 
@@ -719,5 +766,5 @@ class TriggerScaleFactorsHist(
         if (ll := vr.aux.get("lower_limit", None)) is not None:
             for ax in axes:
                 ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
-        for p in self.output()[self.branch_data]:
+        for p in self.output():
             p.dump(fig, formatter="mpl")

@@ -11,7 +11,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, maybe_import
 
 from columnflow.tasks.framework.plotting import (
-    PlotBase, PlotBase1D, VariablePlotSettingMixin, ProcessPlotSettingMixin
+    PlotBase, PlotBase1D, VariablePlotSettingMixin, ProcessPlotSettingMixin,
 )
 
 from columnflow.types import Any
@@ -32,8 +32,10 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
     )
 
     @classmethod
-    def get_default_variables(cls, cfg: od.Config):
-        return cfg.x(f"default_{cls.tag_name}_variables", tuple())
+    def get_default_variables(cls, params):
+        if not (config_inst := params.get("config_inst")):
+            return params
+        return config_inst.x(f"default_{cls.tag_name}_variables", tuple())
 
     @classmethod
     def resolve_param_values(
@@ -61,7 +63,7 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
 
         if redo_default_variables:
             # when empty, use the config default
-            if default_variables := cls.get_default_variables(config_inst):
+            if default_variables := cls.get_default_variables(params):
                 params["variables"] = tuple(default_variables)
             elif cls.default_variables:
                 params["variables"] = tuple(cls.default_variables)
@@ -134,7 +136,7 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
         for dataset, inp in self.input().items():
             # map dataset to one of to requested processes
             dataset_process, xsec = self.get_process_xsec(dataset, self.config_inst)
-            processes = [p for p in process_insts if p.has_process(dataset_process)]
+            processes = [p for p in process_insts if p.has_process(dataset_process) or p == dataset_process]
             assert len(processes) == 1, \
                 f"process {dataset_process.name} of dataset {dataset} in multiple processes {processes}"
             process = processes[0]
@@ -260,7 +262,7 @@ class SelectionHistPlot(
         for variable_name in self.hist_variables:
             variable_inst = self.config_inst.get_variable(
                 variable_name,
-                default=od.Variable(variable_name)
+                default=od.Variable(variable_name),
             )
 
             fig, _ = self.call_plot_func(

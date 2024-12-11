@@ -3,11 +3,10 @@ from __future__ import annotations
 import law
 import order as od
 from collections import OrderedDict
-from itertools import product
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin
+    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D,
@@ -18,6 +17,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, dict_add_strict, DotDict, maybe_import
 
 hist = maybe_import("hist")
+
 
 class BTagEfficiencyBase:
     tag_name = "btag"
@@ -48,7 +48,6 @@ class BTagEfficiency(
         params = super().get_plot_parameters()
         dict_add_strict(params, "legend_title", "Processes")
         return params
-
 
     @law.decorator.log
     def run(self):
@@ -84,7 +83,6 @@ class BTagEfficiency(
 
         cset = correctionlib.schemav2.CorrectionSet(schema_version=2, description=description, corrections=[clibcorr])
         self.output()["json"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
-
 
 
 class BTagEfficiencyPlot(
@@ -152,8 +150,8 @@ class BTagEfficiencyPlot(
             # create a dummy histogram dict for plotting with the first process
             # TODO change process name to the relevant process group
             h = efficiency_hist[{
-                 self.flav_name: hist.loc(self.branch_data.flav),
-                 f"{self.tag_name}_wp": self.branch_data.wp,
+                self.flav_name: hist.loc(self.branch_data.flav),
+            f"{self.tag_name}_wp": self.branch_data.wp,
             }]
 
             h_sys = h[{"systematic": sys}]
