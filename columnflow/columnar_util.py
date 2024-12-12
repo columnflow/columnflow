@@ -2665,12 +2665,27 @@ class DaskArrayReader(object):
         self,
         path: str,
         open_options: dict | None = None,
-        materialization_strategy: MaterializationStrategy = MaterializationStrategy.SLICES,
+        materialization_strategy: MaterializationStrategy = MaterializationStrategy.PARTITIONS,
     ):
         super().__init__()
 
-        # open the file
         open_options = open_options or {}
+
+        # backwards compatibility: when row group splitting is enbaled (the default), detect whether
+        # the input file was written with support for that; a file does not support splitting in
+        # case nested nodes separated by "*.list.element.*" (rather than "*.list.item.*") are found
+        if open_options.get("split_row_groups"):
+            nodes = ak.ak_from_parquet.metadata(path)[0]
+            if any(".list.element." in node for node in nodes):
+                logger.warning(
+                    f"while reading input parquet file from {path}, 'split_row_groups' is enabled "
+                    "but the file does not support it; it was probably created with an older "
+                    "version of columnflow which did not make use of this feature; row group "
+                    "splitting will be disabled, potentially leading to suboptimal performance",
+                )
+                open_options["split_row_groups"] = False
+
+        # open the file
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
