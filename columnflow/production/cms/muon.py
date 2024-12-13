@@ -156,8 +156,7 @@ def muon_weights_setup(
 
 @muon_weights.init
 def muon_weights_init(self: Producer, **kwargs) -> None:
-    weight_name = self.weight_name
-    self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
+    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
 
 # custom muon weight that runs trigger SFs
