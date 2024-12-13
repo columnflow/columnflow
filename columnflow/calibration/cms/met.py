@@ -13,8 +13,9 @@ ak = maybe_import("awkward")
 
 
 @calibrator(
-    uses={"run", "PV.npvs", "MET.pt", "MET.phi"},
-    produces={"MET.pt", "MET.phi"},
+    uses={"run", "PV.npvs"},
+    # name of the MET collection to calibrate
+    met_name="MET",
     # function to determine the correction file
     get_met_file=(lambda self, external_files: external_files.met_phi_corr),
     # function to determine met correction config
@@ -49,17 +50,20 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     :param events: awkward array containing events to process
     """
+    # get Met columns
+    met = events[self.met_name]
+
     # copy the intial pt and phi values
-    corr_pt = np.array(events.MET.pt, dtype=np.float32)
-    corr_phi = np.array(events.MET.phi, dtype=np.float32)
+    corr_pt = np.array(met.pt, dtype=np.float32)
+    corr_phi = np.array(met.phi, dtype=np.float32)
 
     # select only events where MET pt is below the expected beam energy
-    mask = events.MET.pt < (0.5 * self.config_inst.campaign.ecm)
+    mask = met.pt < (0.5 * self.config_inst.campaign.ecm)
 
     # arguments for evaluation
     args = (
-        events.MET.pt[mask],
-        events.MET.phi[mask],
+        met.pt[mask],
+        met.phi[mask],
         ak.values_astype(events.PV.npvs[mask], np.float32),
         ak.values_astype(events.run[mask], np.float32),
     )
@@ -69,10 +73,19 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     corr_phi[mask] = self.met_phi_corrector.evaluate(*args)
 
     # save the corrected values
-    events = set_ak_column(events, "MET.pt", corr_pt, value_type=np.float32)
-    events = set_ak_column(events, "MET.phi", corr_phi, value_type=np.float32)
+    events = set_ak_column(events, f"{self.met_name}.pt", corr_pt, value_type=np.float32)
+    events = set_ak_column(events, f"{self.met_name}.phi", corr_phi, value_type=np.float32)
 
     return events
+
+
+@met_phi.init
+def met_phi_init(self: Calibrator) -> None:
+    """
+    Initialize the :py:attr:`met_pt_corrector` and :py:attr:`met_phi_corrector` attributes.
+    """
+    self.uses.add(f"{self.met_name}.{{pt,phi}}")
+    self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
 
 @met_phi.requires

@@ -39,9 +39,7 @@ class MuonSFConfig:
 
 
 @producer(
-    uses={
-        "Muon.pt", "Muon.eta",
-    },
+    uses={"Muon.{pt,eta}"},
     # produces in the init
     # only run on mc
     mc_only=True,

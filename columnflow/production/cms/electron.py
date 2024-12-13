@@ -46,9 +46,8 @@ class ElectronSFConfig:
 
 
 @producer(
-    uses={
-        "Electron.pt", "Electron.eta", "Electron.deltaEtaSC",
-    },
+    uses={"Electron.{pt,eta,deltaEtaSC}"},
+    produces={"electron_weight{,_up,_down}"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file

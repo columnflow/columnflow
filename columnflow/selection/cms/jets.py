@@ -22,9 +22,8 @@ logger = law.logger.get_logger(__name__)
 
 @selector(
     uses={
-        "Jet.{pt,eta,phi,mass,jetId,chEmEF}",
+        "Jet.{pt,eta,phi,mass,jetId,chEmEF}", optional("Jet.puId"),
         "Muon.{pt,eta,phi,mass,isPFcand}",
-        optional("Jet.puId"),
     },
     produces={"Jet.veto_map_mask"},
     get_veto_map_file=(lambda self, external_files: external_files.jet_veto_map),
@@ -75,24 +74,25 @@ def jet_veto_map(
 
     # for some reason, math.pi is not included in the ranges, so we need to subtract a small number
     pi = math.pi - 1e-10
-    phi_outside_range = np.abs(jet.phi) > pi
 
+    # values outside [-pi, pi] are not included, so we need to clip the phi values
+    phi_outside_range = abs(jet.phi) > pi
     if ak.any(phi_outside_range):
-        # values outside [-pi, pi] are not included, so we need to wrap the phi values
+        # warn in severe cases
+        if ak.any(severe := abs(jet_phi[phi_outside_range]) >= 3.15):
+            logger.warning(
+                f"found {ak.sum(severe)} jet(s) across {ak.sum(ak.any(severe, axis=1))} event(s) "
+                "with phi values outside [-pi, pi] that will be clipped",
+            )
         jet_phi = ak.where(
             np.abs(jet.phi) > pi,
             jet.phi - 2 * pi * np.sign(jet.phi),
             jet.phi,
         )
-        logger.warning(
-            f"Jet phi values {jet.phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]} outside [-pi, pi] "
-            f"({ak.sum(phi_outside_range)} in total) "
-            f"detected and set to {jet_phi[phi_outside_range][ak.any(phi_outside_range, axis=1)]}",
-        )
 
+    # values outside [-5.19, 5.19] are not included, so we need to clip the eta values
     eta_outside_range = np.abs(jet.eta) > 5.19
     if ak.any(eta_outside_range):
-        # values outside [-5.19, 5.19] are not included, so we need to clamp the eta values
         jet_eta = ak.where(
             np.abs(jet.eta) > 5.19,
             5.19 * np.sign(jet.eta),
