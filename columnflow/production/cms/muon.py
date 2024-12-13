@@ -19,7 +19,7 @@ ak = maybe_import("awkward")
 @dataclass
 class MuonSFConfig:
     correction: str
-    campaign: str
+    campaign: str = ""
 
     @classmethod
     def new(
@@ -29,12 +29,13 @@ class MuonSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
-        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+        if isinstance(obj, str):
+            return cls(obj)
+        if isinstance(obj, (list, tuple)):
             return cls(*obj)
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return cls(**obj)
-        else:
-            raise ValueError(f"cannot convert {obj} to MuonSFConfig")
+        raise ValueError(f"cannot convert {obj} to MuonSFConfig")
 
 
 @producer(
