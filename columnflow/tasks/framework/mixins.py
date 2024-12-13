@@ -1698,6 +1698,7 @@ class VariablesMixin(AnalysisTask):
 
     default_variables = None
     allow_empty_variables = False
+    allow_missing_variables = False
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -1738,13 +1739,21 @@ class VariablesMixin(AnalysisTask):
                     config_insts,
                     od.Variable,
                     "variable_groups",
+                    config_inst.x("variable_groups", {}),
+                    strict=not cls.allow_missing_variables,
                 )
 
                 # for each multi-variable, resolve each part separately and create the full
                 # combinatorics of all possibly pattern-resolved parts
                 for parts in multi_var_parts:
                     resolved_parts = [
-                        cls.find_config_objects_multi_container(part, config_insts, od.Variable, "variable_groups")
+                        cls.find_config_objects_multi_container(
+                            part,
+                            config_insts,
+                            od.Variable,
+                            "variable_groups",
+                            strict=not cls.allow_missing_variables,
+                        )
                         for part in parts
                     ]
                     variables.extend([

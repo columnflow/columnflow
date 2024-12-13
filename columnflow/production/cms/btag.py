@@ -61,9 +61,7 @@ class BTagSFConfig:
 
 
 @producer(
-    uses={
-        "Jet.hadronFlavour", "Jet.eta", "Jet.pt",
-    },
+    uses={"Jet.{pt,eta,hadronFlavour}"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
