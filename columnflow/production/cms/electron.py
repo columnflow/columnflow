@@ -46,7 +46,7 @@ class ElectronSFConfig:
 
 
 @producer(
-    uses={"Electron.{pt,eta,deltaEtaSC}"},
+    uses={"Electron.{pt,eta,phi,deltaEtaSC}"},
     # produces in the init
     # only run on mc
     mc_only=True,
@@ -55,7 +55,7 @@ class ElectronSFConfig:
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
     weight_name="electron_weight",
-    supported_versions=(1, 2),
+    supported_versions=(1, 2, 3),
 )
 def electron_weights(
     self: Producer,
@@ -99,13 +99,15 @@ def electron_weights(
         events.Electron.deltaEtaSC[electron_mask]
     ), axis=1)
     pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
+    phi = flat_np_view(events.Electron.phi[electron_mask], axis=1)
 
     variable_map = {
         "year": self.electron_config.campaign,
         "WorkingPoint": self.electron_config.working_point,
         "Path": self.electron_config.hlt_path,
-        "eta": sc_eta,
         "pt": pt,
+        "eta": sc_eta,
+        "phi": phi,
     }
 
     # loop over systematics
