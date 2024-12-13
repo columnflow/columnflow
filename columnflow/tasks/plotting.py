@@ -11,14 +11,13 @@ import law
 import luigi
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, MultiConfigTask
+from columnflow.tasks.framework.base import Requirements, MultiConfigTask, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     CategoriesMixin, ShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
-    PlotShiftMixin,
 )
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -226,7 +225,7 @@ class PlotVariablesBase(
 
 
 class PlotVariablesBaseSingleShift(
-    PlotShiftMixin,
+    ShiftTask,
     PlotVariablesBase,
 ):
 
@@ -292,7 +291,7 @@ class PlotVariablesBaseSingleShift(
         return parts
 
     def get_plot_shifts(self):
-        return [self.shift_inst]
+        return [self.local_shift_inst]
 
 
 class PlotVariables1D(

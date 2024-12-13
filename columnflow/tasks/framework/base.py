@@ -378,7 +378,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         upstream_shifts = set()
         for req in cls.reqs.values():
             upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
-
         return set(), upstream_shifts
 
     @classmethod
@@ -1100,8 +1099,6 @@ class MultiConfigTask(AnalysisTask):
 
         return parts
 
-    # function to resolve objects over multiple configs
-
 
 class ConfigTask(AnalysisTask):
 
@@ -1231,7 +1228,7 @@ class ConfigTask(AnalysisTask):
         return {Route(column)}
 
 
-class ShiftTask(ConfigTask):
+class ShiftTask(AnalysisTask):
 
     shift = luigi.Parameter(
         default="nominal",
@@ -1258,13 +1255,16 @@ class ShiftTask(ConfigTask):
         params = super().modify_param_values(params)
 
         # get params
-        config_inst = params.get("config_inst")
         requested_shift = params.get("shift")
         requested_local_shift = params.get("local_shift")
 
         # require that the config is set
-        if config_inst in (None, law.NO_STR):
+        if "config_insts" not in params:
             return params
+
+        config_insts = params.get("config_insts")
+        # TODO: loop over config insts
+        config_inst = config_insts[0]
 
         # require that the shift is set and known
         if requested_shift in (None, law.NO_STR):
@@ -1278,6 +1278,9 @@ class ShiftTask(ConfigTask):
 
         # determine the known shifts for this class
         shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
+
+        # if upstream_shifts:
+        #     print(cls.__name__, upstream_shifts)
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -1367,7 +1370,7 @@ class ShiftTask(ConfigTask):
         return parts
 
 
-class DatasetTask(ShiftTask):
+class DatasetTask(ShiftTask, ConfigTask):
 
     dataset = luigi.Parameter(
         default=default_dataset,
