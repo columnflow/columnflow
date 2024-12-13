@@ -46,7 +46,7 @@ class ElectronSFConfig:
 
 
 @producer(
-    uses={"Electron.{pt,eta,deltaEtaSC}"},
+    uses={"Electron.{pt,eta,phi,deltaEtaSC}"},
     # produces in the init
     # only run on mc
     mc_only=True,
@@ -55,7 +55,7 @@ class ElectronSFConfig:
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
     weight_name="electron_weight",
-    supported_versions=(1, 2),
+    supported_versions=(1, 2, 3),
 )
 def electron_weights(
     self: Producer,
@@ -99,13 +99,15 @@ def electron_weights(
         events.Electron.deltaEtaSC[electron_mask]
     ), axis=1)
     pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
+    phi = flat_np_view(events.Electron.phi[electron_mask], axis=1)
 
     variable_map = {
         "year": self.electron_config.campaign,
         "WorkingPoint": self.electron_config.working_point,
         "Path": self.electron_config.hlt_path,
-        "eta": sc_eta,
         "pt": pt,
+        "eta": sc_eta,
+        "phi": phi,
     }
 
     # loop over systematics
@@ -132,6 +134,12 @@ def electron_weights(
         events = set_ak_column(events, f"{self.weight_name}{postfix}", weight, value_type=np.float32)
 
     return events
+
+
+@electron_weights.init
+def electron_weights_init(self: Producer, **kwargs) -> None:
+    # add the product of nominal and up/down variations to produced columns
+    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
 
 @electron_weights.requires
@@ -164,12 +172,6 @@ def electron_weights_setup(
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
         raise Exception(f"unsupported electron sf corrector version {self.electron_sf_corrector.version}")
-
-
-@electron_weights.init
-def electron_weights_init(self: Producer, **kwargs) -> None:
-    weight_name = self.weight_name
-    self.produces |= {weight_name, f"{weight_name}_up", f"{weight_name}_down"}
 
 
 # custom electron weight that runs trigger SFs
