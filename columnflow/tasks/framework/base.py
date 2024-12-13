@@ -376,8 +376,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # get shifts from upstream dependencies, consider both their own and upstream shifts as one
         upstream_shifts = set()
-        for req in cls.reqs.values():
-            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
+        # for req in cls.reqs.values():
+        #     upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
         return set(), upstream_shifts
 
     @classmethod
