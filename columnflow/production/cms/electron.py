@@ -47,7 +47,7 @@ class ElectronSFConfig:
 
 @producer(
     uses={"Electron.{pt,eta,deltaEtaSC}"},
-    produces in the init
+    # produces in the init
     # only run on mc
     mc_only=True,
     # function to determine the correction file
