@@ -57,7 +57,13 @@ class BTagSFConfig:
         obj: BTagSFConfig | tuple[str, list[str]] | tuple[str, list[str], str],
     ) -> BTagSFConfig:
         # purely for backwards compatibility with the old tuple format
-        return obj if isinstance(obj, cls) else cls(*obj)
+        if isinstance(obj, cls):
+            return obj
+        if isinstance(obj, (list, tuple)) or isinstance(obj, tuple):
+            return cls(*obj)
+        if isinstance(obj, dict):
+            return cls(**obj)
+        raise ValueError(f"cannot convert {obj} to BTagSFConfig")
 
 
 @producer(
