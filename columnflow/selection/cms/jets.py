@@ -104,41 +104,36 @@ def jet_veto_map(
             f"detected and set to {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}",
         )
 
+    # evalute the veto map only for selected jets
     variable_map = {
-        "type": "jetvetomap",
+        "type": self.veto_map_name,
         "eta": jet_eta[jet_mask],
         "phi": jet_phi[jet_mask],
     }
     inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
+    # the map value is 0.0 for good jets, so define a mask that is True when a jet is vetoed
+    veto_mask_sel = self.veto_map(*inputs) != 0
 
-    # evalute the veto map only for selected jets
-    # (a map value of != 0 means the jet is vetoed)
-    veto_mask = jet_mask
-    flat_veto_mask = flat_np_view(veto_mask)
-    flat_veto_mask[flat_veto_mask] = ak.flatten(self.veto_map(*inputs) != 0)
-    # store the per-jet veto mask
-    events = set_ak_column(events, "Jet.veto_map_mask", veto_mask)
+    # optionally fold with negated mask
+    if self.negated_veto_map_name:
+        variable_map["type"] = self.negated_veto_map_name
+        inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
+        veto_mask_sel = veto_mask_sel & ~(self.veto_map(*inputs) != 0)
 
-    # create the selection result
+    # insert back into full jet mask in-place
+    flat_jet_mask = flat_np_view(jet_mask)
+    flat_jet_mask[flat_jet_mask] = ak.flatten(veto_mask_sel)
+
+    # store the per-jet veto mask for further processing
+    # note: to be consistent with conventions, the exported values should be True for passing jets
+    events = set_ak_column(events, "Jet.veto_map_mask", ~jet_mask)
+
+    # create the selection result, letting events pass if no jets are vetoed
     results = SelectionResult(
-        steps={"jet_veto_map": ~ak.any(veto_mask, axis=1)},
+        steps={"jet_veto_map": ~ak.any(jet_mask, axis=1)},
     )
 
     return events, results
-
-
-@jet_veto_map.init
-def jet_veto_map_init(self: Selector, **kwargs) -> None:
-    if getattr(self, "config_inst", None) is None:
-        return
-
-    if (
-        self.config_inst.campaign.x.year == 2023 and
-        self.config_inst.campaign.x.postfix.lower() == "bpix"
-    ):
-        # in postBPix, we need to run the veto map with type=jetvetomap_bpix and subtract this from
-        # the result of the nominal jet veto map
-        raise NotImplementedError("Jet Veto Map for 2023 postBPix not implemented yet")
 
 
 @jet_veto_map.requires
@@ -168,5 +163,16 @@ def jet_veto_map_setup(
     keys = list(correction_set.keys())
     if len(keys) != 1:
         raise ValueError(f"Expected exactly one correction in the file, got {len(keys)}")
-
     self.veto_map = correction_set[keys[0]]
+
+    # name of the veto map
+    self.veto_map_name = "jetvetomap"
+
+    # for the 2023 postBPix campaign, the additional negated bpix mask must be applied on top
+    # see https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps
+    self.negated_veto_map_name = ""
+    if (
+        self.config_inst.campaign.x.year == 2023 and
+        self.config_inst.campaign.x.postfix.lower() == "bpix"
+    ):
+        self.negated_veto_map_name = f"{self.veto_map_name}_bpix"
