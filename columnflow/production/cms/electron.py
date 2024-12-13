@@ -136,6 +136,12 @@ def electron_weights(
     return events
 
 
+@electron_weights.init
+def electron_weights_init(self: Producer, **kwargs) -> None:
+    # add the product of nominal and up/down variations to produced columns
+    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
+
+
 @electron_weights.requires
 def electron_weights_requires(self: Producer, reqs: dict) -> None:
     if "external_files" in reqs:
@@ -166,11 +172,6 @@ def electron_weights_setup(
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
         raise Exception(f"unsupported electron sf corrector version {self.electron_sf_corrector.version}")
-
-
-@electron_weights.init
-def electron_weights_init(self: Producer, **kwargs) -> None:
-    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
 
 # custom electron weight that runs trigger SFs

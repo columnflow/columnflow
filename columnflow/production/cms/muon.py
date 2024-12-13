@@ -122,6 +122,12 @@ def muon_weights(
     return events
 
 
+@muon_weights.init
+def muon_weights_init(self: Producer, **kwargs) -> None:
+    # add the product of nominal and up/down variations to produced columns
+    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
+
+
 @muon_weights.requires
 def muon_weights_requires(self: Producer, reqs: dict) -> None:
     if "external_files" in reqs:
@@ -152,11 +158,6 @@ def muon_weights_setup(
     # check versions
     if self.supported_versions and self.muon_sf_corrector.version not in self.supported_versions:
         raise Exception(f"unsupported muon sf corrector version {self.muon_sf_corrector.version}")
-
-
-@muon_weights.init
-def muon_weights_init(self: Producer, **kwargs) -> None:
-    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
 
 # custom muon weight that runs trigger SFs
