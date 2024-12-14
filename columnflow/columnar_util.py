@@ -2676,7 +2676,8 @@ class DaskArrayReader(object):
         # case nested nodes separated by "*.list.element.*" (rather than "*.list.item.*") are found
         if open_options.get("split_row_groups"):
             nodes = ak.ak_from_parquet.metadata(path)[0]
-            if any(".list.element." in node for node in nodes):
+            cre = re.compile(r"^.+\.list\.element(|\..+)$")
+            if any(map(cre.match, nodes)):
                 logger.warning(
                     f"while reading input parquet file from {path}, 'split_row_groups' is enabled "
                     "but the file does not support it; it was probably created with an older "
