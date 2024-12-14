@@ -234,6 +234,10 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
     },
     # name of the jet collection to calibrate
     jet_name="Jet",
+    # name of the associated MET collection
+    met_name="MET",
+    # name of the associated Raw MET collection
+    raw_met_name="RawMET",
     # custom uncertainty sources, defaults to config when empty
     uncertainty_sources=None,
     # toggle for propagation to MET
@@ -324,12 +328,13 @@ def jec(
     events = set_ak_column_f32(events, f"{jet_name}.pt_raw", events[jet_name].pt * (1 - events[jet_name].rawFactor))
     events = set_ak_column_f32(events, f"{jet_name}.mass_raw", events[jet_name].mass * (1 - events[jet_name].rawFactor))
 
-    def correct_jets(pt, area, eta, rho, evaluator_key="jec"):
+    def correct_jets(*, pt, eta, phi, area, rho, evaluator_key="jec"):
         # variable naming convention
         variable_map = {
             "JetA": area,
             "JetEta": eta,
             "JetPt": pt,
+            "JetPhi": phi,
             "Rho": ak.values_astype(rho, np.float32),
         }
 
@@ -351,8 +356,8 @@ def jec(
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
         events.fixedGridRhoFastjetAll
-        if "fixedGridRhoFastjetAll" in events.fields else
-        events.Rho.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields
+        else events.Rho.fixedGridRhoFastjetAll
     )
 
     # correct jets with only a subset of correction levels
@@ -362,6 +367,7 @@ def jec(
         jec_factors_subset_type1_met = correct_jets(
             pt=events[jet_name].pt_raw,
             eta=events[jet_name].eta,
+            phi=events[jet_name].phi,
             area=events[jet_name].area,
             rho=rho,
             evaluator_key="jec_subset_type1_met",
@@ -383,6 +389,7 @@ def jec(
     jec_factors = correct_jets(
         pt=events[jet_name].pt_raw,
         eta=events[jet_name].eta,
+        phi=events[jet_name].phi,
         area=events[jet_name].area,
         rho=rho,
         evaluator_key="jec",
@@ -401,7 +408,6 @@ def jec(
         jetsum = events[jet_name][met_prop_mask].sum(axis=1)
         jetsum_pt_all_levels = jetsum.pt
         jetsum_phi_all_levels = jetsum.phi
-
         # propagate changes to MET, starting from jets corrected with subset of JEC levels
         # (recommendation is to propagate only L2 corrections and onwards)
         met_pt, met_phi = propagate_met(
@@ -409,11 +415,11 @@ def jec(
             jetsum_phi_subset_type1_met,
             jetsum_pt_all_levels,
             jetsum_phi_all_levels,
-            events.RawMET.pt,
-            events.RawMET.phi,
+            events[self.raw_met_name].pt,
+            events[self.raw_met_name].phi,
         )
-        events = set_ak_column_f32(events, "MET.pt", met_pt)
-        events = set_ak_column_f32(events, "MET.phi", met_phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
     # variable naming conventions
     variable_map = {
@@ -461,10 +467,10 @@ def jec(
                 met_pt,
                 met_phi,
             )
-            events = set_ak_column_f32(events, f"MET.pt_jec_{name}_up", met_pt_up)
-            events = set_ak_column_f32(events, f"MET.pt_jec_{name}_down", met_pt_down)
-            events = set_ak_column_f32(events, f"MET.phi_jec_{name}_up", met_phi_up)
-            events = set_ak_column_f32(events, f"MET.phi_jec_{name}_down", met_phi_down)
+            events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_up", met_pt_up)
+            events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_down", met_pt_down)
+            events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_up", met_phi_up)
+            events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_down", met_phi_down)
 
     return events
 
@@ -478,16 +484,10 @@ def jec_init(self: Calibrator) -> None:
         sources = jec_cfg.uncertainty_sources
 
     # register used jet columns
-    self.uses |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "eta", "phi", "mass", "area", "rawFactor")
-    }
+    self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,area,rawFactor}}")
 
     # register produced jet columns
-    self.produces |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "mass", "rawFactor")
-    }
+    self.produces.add(f"{self.jet_name}.{{pt,mass,rawFactor}}")
 
     # add shifted jet variables
     self.produces |= {
@@ -499,12 +499,12 @@ def jec_init(self: Calibrator) -> None:
 
     # add MET variables
     if self.propagate_met:
-        self.uses |= {"RawMET.pt", "RawMET.phi"}
-        self.produces |= {"MET.pt", "MET.phi"}
+        self.uses.add(f"{self.raw_met_name}.{{pt,phi}}")
+        self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
         # add shifted MET variables
         self.produces |= {
-            f"MET.{shifted_var}_jec_{junc_name}_{junc_dir}"
+            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
             for shifted_var in ("pt", "phi")
             for junc_name in sources
             for junc_dir in ("up", "down")
@@ -544,25 +544,27 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     .. code-block:: python
 
         cfg.x.jec = DotDict.wrap({
-            # campaign name for this JEC correctiono
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            # version of the corrections
-            "version": "V7",
-            # Type of jets that the corrections should be applied on
-            "jet_type": "AK4PFchs",
-            # relevant levels in the derivation process of the JEC
-            "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
-            # relevant levels in the derivation process of the Type 1 MET JEC
-            "levels_for_type1_met": ["L1FastJet"],
-            # names of the uncertainties to be applied
-            "uncertainty_sources": [
-                "Total",
-                "CorrelationGroupMPFInSitu",
-                "CorrelationGroupIntercalibration",
-                "CorrelationGroupbJES",
-                "CorrelationGroupFlavor",
-                "CorrelationGroupUncorrelated",
-            ],
+            "Jet": {
+                # campaign name for this JEC correctiono
+                "campaign": f"Summer19UL{year2}{jerc_postfix}",
+                # version of the corrections
+                "version": "V7",
+                # Type of jets that the corrections should be applied on
+                "jet_type": "AK4PFchs",
+                # relevant levels in the derivation process of the JEC
+                "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+                # relevant levels in the derivation process of the Type 1 MET JEC
+                "levels_for_type1_met": ["L1FastJet"],
+                # names of the uncertainties to be applied
+                "uncertainty_sources": [
+                    "Total",
+                    "CorrelationGroupMPFInSitu",
+                    "CorrelationGroupIntercalibration",
+                    "CorrelationGroupbJES",
+                    "CorrelationGroupFlavor",
+                    "CorrelationGroupUncorrelated",
+                ],
+            },
         })
 
     :param reqs: Requirement dictionary for this
@@ -683,6 +685,8 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     jet_name="Jet",
     # name of the associated gen jet collection
     gen_jet_name="GenJet",
+    # name of the associated MET collection
+    met_name="MET",
     # toggle for propagation to MET
     propagate_met=True,
     # only run on mc
@@ -865,9 +869,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # met propagation
     if self.propagate_met:
+
         # save unsmeared quantities
-        events = set_ak_column_f32(events, "MET.pt_unsmeared", events.MET.pt)
-        events = set_ak_column_f32(events, "MET.phi_unsmeared", events.MET.phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_unsmeared", events[self.met_name].pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_unsmeared", events[self.met_name].phi)
 
         # get pt and phi of all jets after correcting
         jetsum = events[jet_name].sum(axis=1)
@@ -880,11 +885,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             jetsum_phi_before,
             jetsum_pt_after,
             jetsum_phi_after,
-            events.MET.pt,
-            events.MET.phi,
+            events[self.met_name].pt,
+            events[self.met_name].phi,
         )
-        events = set_ak_column_f32(events, "MET.pt", met_pt)
-        events = set_ak_column_f32(events, "MET.phi", met_phi)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
         # syst variations on top of corrected MET
         met_pt_up, met_phi_up = propagate_met(
@@ -903,10 +908,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             met_pt,
             met_phi,
         )
-        events = set_ak_column_f32(events, "MET.pt_jer_up", met_pt_up)
-        events = set_ak_column_f32(events, "MET.pt_jer_down", met_pt_down)
-        events = set_ak_column_f32(events, "MET.phi_jer_up", met_phi_up)
-        events = set_ak_column_f32(events, "MET.phi_jer_down", met_phi_down)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_up", met_pt_up)
+        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_down", met_pt_down)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_up", met_phi_up)
+        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_down", met_phi_down)
 
     return events
 
@@ -918,36 +923,21 @@ def jer_init(self: Calibrator) -> None:
     self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
 
     # register used jet columns
-    self.uses |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "eta", "phi", "mass", self.gen_jet_idx_column)
-    }
+    self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
 
     # register used gen jet columns
-    self.uses |= {
-        f"{self.gen_jet_name}.{column}"
-        for column in ("pt", "eta", "phi")
-    }
+    self.uses.add(f"{self.gen_jet_name}.{{pt,eta,phi}}")
 
     # register produced jet columns
-    self.produces |= {
-        f"{self.jet_name}.{column}{suffix}"
-        for column in ("pt", "mass")
-        for suffix in ("", "_unsmeared", "_jer_up", "_jer_down")
-    }
+    self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,_jer_up,_jer_down}}")
 
     # register produced MET columns
     if self.propagate_met:
         # register used MET columns
-        self.uses |= {
-            "MET.pt", "MET.phi",
-        }
+        self.uses.add(f"{self.met_name}.{{pt,phi}}")
 
         # register produced MET columns
-        self.produces |= {
-            "MET.pt", "MET.phi", "MET.pt_jer_up", "MET.pt_jer_down", "MET.phi_jer_up",
-            "MET.phi_jer_down", "MET.pt_unsmeared", "MET.phi_unsmeared",
-        }
+        self.produces.add(f"{self.met_name}.{{pt,phi}}{{,_jer_up,_jer_down,_unsmeared}}")
 
 
 @jer.requires
@@ -981,9 +971,11 @@ def jer_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     .. code-block:: python
 
         cfg.x.jer = DotDict.wrap({
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            "version": "JRV3",
-            "jet_type": "AK4PFchs",
+            "Jet": {
+                "campaign": f"Summer19UL{year2}{jerc_postfix}",
+                "version": "JRV3",
+                "jet_type": "AK4PFchs",
+            },
         })
 
     :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`

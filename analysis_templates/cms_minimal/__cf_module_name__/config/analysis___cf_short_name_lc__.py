@@ -193,7 +193,11 @@ cfg.x.luminosity = Number(41480, {
 
 # names of muon correction sets and working points
 # (used in the muon producer)
-cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}_UL")
+from columnflow.production.cms.muon import MuonSFConfig
+cfg.x.muon_sf_names = MuonSFConfig(
+    correction="NUM_TightRelIso_DEN_TightIDandIPCut",
+    campaign=f"{year}_UL",
+)
 
 # register shifts
 cfg.add_shift(name="nominal", id=0)
