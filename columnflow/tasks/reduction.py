@@ -232,7 +232,7 @@ class ReduceEvents(
 
         # some logs
         self.publish_message(
-            f"reduced {n_all} to {n_reduced} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
+            f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
         )
 
         # merge output files

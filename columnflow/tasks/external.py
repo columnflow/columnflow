@@ -112,7 +112,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
             )
 
-        self.logger.info(f"found {len(lfns)} lfn(s) for dataset {self.dataset}")
+        self.logger.info(f"found {len(lfns):_} lfn(s) for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
@@ -241,7 +241,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
-                logger.info(f"file {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
+                logger.info(f"lfn {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
 
                 # when the stat query took longer than some duration, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
@@ -272,7 +272,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                     )
                     break
             else:
-                raise Exception(f"LFN {lfn} not found at any remote fs {fs}")
+                raise Exception(f"lfn {lfn} not found at any remote fs {fs}")
 
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)

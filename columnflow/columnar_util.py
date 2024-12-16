@@ -6,10 +6,9 @@ Helpers and utilities for working with columnar libraries.
 
 from __future__ import annotations
 
-# __all__ = []
+__all__ = []
 
 import os
-import gc
 import re
 import math
 import time
@@ -2674,6 +2673,7 @@ class DaskArrayReader(object):
         # backwards compatibility: when row group splitting is enbaled (the default), detect whether
         # the input file was written with support for that; a file does not support splitting in
         # case nested nodes separated by "*.list.element.*" (rather than "*.list.item.*") are found
+        # (to be removed in the future)
         if open_options.get("split_row_groups"):
             nodes = ak.ak_from_parquet.metadata(path)[0]
             cre = re.compile(r"^.+\.list\.element(|\..+)$")
@@ -2699,7 +2699,7 @@ class DaskArrayReader(object):
             # mapping of partition indices to cache information (chunks still to be handled and a
             # cached array) that changes during the read process in _materialize_via_partitions
             self.partition_cache = {
-                p: DotDict(chunks=[], array=None)
+                p: DotDict(chunks=set(), array=None)
                 for p in range(self.dak_array.npartitions)
             }
 
@@ -2720,11 +2720,10 @@ class DaskArrayReader(object):
         return self.dak_array is None
 
     def close(self) -> None:
-        # free memory and perform an eager, overly cautious gc round
+        # free memory
         self.dak_array = None
         if getattr(self, "partition_cache", None):
             self.partition_cache.clear()
-        gc.collect()
 
     def materialize(self, *args, **kwargs) -> ak.Array:
         """
@@ -2802,7 +2801,7 @@ class DaskArrayReader(object):
                         if p_start >= _entry_stop > _entry_start:
                             break
                         partitions.append(p)
-                        self.partition_cache[p].chunks.append(_chunk_index)
+                        self.partition_cache[p].chunks.add(_chunk_index)
                     self.chunk_to_partitions[_chunk_index] = partitions
 
         # read partitions one at a time and store parts that make up the chunk for concatenation
@@ -2810,7 +2809,7 @@ class DaskArrayReader(object):
         for p in self.chunk_to_partitions[chunk_index]:
             # obtain the array
             with self.partition_locks[p]:
-                # remove this chunk for the list of chunks to be handled
+                # remove this chunk from the list of chunks to be handled
                 self.partition_cache[p].chunks.remove(chunk_index)
 
                 if self.partition_cache[p].array is None:
@@ -2833,8 +2832,8 @@ class DaskArrayReader(object):
         # construct the full array
         arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
 
+        # cleanup
         del parts
-        gc.collect()
 
         return arr
 
@@ -3431,7 +3430,6 @@ class ChunkedIOHandler(object):
 
         # reset some attributes
         del self.source_objects[:]
-        gc.collect()
         self.n_entries = None
 
         # open all sources and make sure they have the same number of entries
@@ -3442,7 +3440,11 @@ class ChunkedIOHandler(object):
             self.read_columns_list,
         )):
             # open the source
-            obj, n = source_handler.open(source, open_options=open_options, read_columns=read_columns)
+            obj, n = source_handler.open(
+                source,
+                open_options=open_options,
+                read_columns=(sorted(read_columns) if read_columns else read_columns),
+            )
             # check entries
             if i == 0:
                 self.n_entries = n
@@ -3468,9 +3470,8 @@ class ChunkedIOHandler(object):
         for (obj, source_handler) in zip(self.source_objects, self.source_handlers):
             source_handler.close(obj)
 
-        # just delete the file cache and reset some attributes
+        # delete the file cache
         del self.source_objects[:]
-        gc.collect()
 
     def queue(self, *args, **kwargs) -> None:
         """
@@ -3489,7 +3490,12 @@ class ChunkedIOHandler(object):
 
         # create a list of read functions
         read_funcs = [
-            partial(source_handler.read, obj, read_options=read_options, read_columns=read_columns)
+            partial(
+                source_handler.read,
+                obj,
+                read_options=read_options,
+                read_columns=(sorted(read_columns) if read_columns else read_columns),
+            )
             for obj, source_handler, read_options, read_columns in zip(
                 self.source_objects,
                 self.source_handlers,
@@ -3536,17 +3542,15 @@ class ChunkedIOHandler(object):
                 # find the first done result and remove it from the list
                 # this will do nothing in the first iteration
                 result_obj = no_result
-                for i, result in enumerate(list(results)):
-                    if not result.ready():
-                        continue
-
-                    result_obj = result.get()
-                    results.pop(i)
-                    break
+                for i, result in enumerate(results):
+                    if result.ready():
+                        result_obj = result.get()
+                        results.pop(i)
+                        break
 
                 # if no result was ready, sleep and try again
                 if results and result_obj == no_result:
-                    time.sleep(0.05)
+                    time.sleep(0.02)
                     continue
 
                 # immediately try to fill up the pool
@@ -3560,21 +3564,24 @@ class ChunkedIOHandler(object):
                         print(self.iter_message.format(pos=result_obj.chunk_pos))
 
                     # probably overly-cautious, but run garbage collection before and after
-                    gc.collect()
                     t1 = time.perf_counter()
                     try:
                         yield (result_obj.chunk, result_obj.chunk_pos)
                     finally:
                         duration = time.perf_counter() - t1
                         logger_perf.debug(
-                            f"processing of chunk {result_obj.chunk_pos.index} took " +
-                            law.util.human_duration(seconds=duration),
+                            f"processing of chunk {result_obj.chunk_pos.index} took "
+                            f"{law.util.human_duration(seconds=duration)}",
                         )
-                    gc.collect()
-        finally:
+                del result_obj
+            self.pool.close()
+        except:
             self.pool.terminate()
+            raise
+        finally:
             self.pool.join()
             self.pool = None
+            del results
 
     def __del__(self):
         """

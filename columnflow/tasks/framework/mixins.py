@@ -6,7 +6,6 @@ Lightweight mixins task classes.
 
 from __future__ import annotations
 
-import gc
 import time
 import itertools
 from collections import Counter
@@ -2412,7 +2411,7 @@ class ChunkedIOMixin(AnalysisTask):
         # iterate in the handler context
         with handler:
             self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
+            msg = f"iterate through {handler.n_entries:_} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes excluding IO
                 loop_durations = []
@@ -2434,9 +2433,8 @@ class ChunkedIOMixin(AnalysisTask):
             finally:
                 self.chunked_io = None
 
-        # eager, overly cautious gc
+        # eager cleanup
         del handler
-        gc.collect()
 
 
 class HistHookMixin(ConfigTask):
