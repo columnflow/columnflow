@@ -927,6 +927,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             "compression": "ZSTD",
             "compression_level": 1,
             "use_dictionary": dict_encoding,
+            # ensure that after merging, the resulting parquet structure is the same as that of the
+            # input files, e.g. do not switch from "*.list.item.*" to "*.list.element*." structures,
+            # see https://github.com/scikit-hep/awkward/issues/3331 and
+            # https://github.com/apache/arrow/issues/31731
+            "use_compliant_nested_type": False,
         }
 
 
