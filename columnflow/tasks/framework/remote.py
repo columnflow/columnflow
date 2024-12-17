@@ -600,7 +600,7 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
 
     exclude_params_branch = {
         "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
-        "htcondor_flavor", "htcondor_share_software",
+        "htcondor_disk", "htcondor_flavor", "htcondor_share_software",
     }
 
     # mapping of environment variables to render variables that are forwarded
