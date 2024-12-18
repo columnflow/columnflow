@@ -17,7 +17,7 @@ from columnflow.tasks.framework.remote import (
 from columnflow.util import expand_path
 
 
-class CrabWorkflow(AnalysisTask, law.cms.CrabWorkflow, RemoteWorkflowMixin):
+class CrabWorkflow(RemoteWorkflowMixin, law.cms.CrabWorkflow):
 
     # example for a parameter whose value is propagated to the crab job configuration
     crab_memory = law.BytesParameter(

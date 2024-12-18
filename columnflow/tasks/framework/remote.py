@@ -14,7 +14,7 @@ import law
 from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.tasks.framework.parameters import user_parameter_inst
-from columnflow.util import real_path
+from columnflow.util import UNSET, real_path
 
 
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
@@ -315,12 +315,31 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         self.transfer(bundle)
 
 
-class RemoteWorkflowMixin(object):
+class RemoteWorkflowMixin(AnalysisTask):
     """
     Mixin class for custom remote workflows adding common functionality.
     """
 
     skip_destination_info: bool = False
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # overwrite resources with config values when not specified (comparing to parameter default)
+        lookup_keys = self.get_config_lookup_keys(self)
+        resources_dict = self._get_cfg_resources_dict()
+        for attr, value in self._dfs_key_lookup(lookup_keys, resources_dict):
+            # attr must refer to an attribute coming from a valid parameter
+            if (
+                (orig_value := getattr(self, attr, UNSET)) is UNSET or
+                not isinstance((param_inst := getattr(self.__class__, attr, None)), luigi.Parameter)
+            ):
+                continue
+            # skip when the value was set manually
+            if orig_value != param_inst._default:
+                continue
+            # parse and set
+            setattr(self, attr, param_inst.parse(value))
 
     def add_bundle_requirements(
         self,
@@ -528,6 +547,11 @@ class RemoteWorkflowMixin(object):
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+_default_htcondor_memory = law.util.parse_bytes(
+    law.config.get_expanded_float("analysis", "htcondor_memory", law.NO_FLOAT),
+    input_unit="GB",
+    unit="GB",
+)
 _default_htcondor_disk = law.util.parse_bytes(
     law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
     input_unit="GB",
@@ -535,7 +559,7 @@ _default_htcondor_disk = law.util.parse_bytes(
 )
 
 
-class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkflowMixin):
+class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -567,11 +591,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         "empty default",
     )
     htcondor_memory = law.BytesParameter(
-        default=law.NO_FLOAT,
+        default=_default_htcondor_memory,
         unit="GB",
         significant=False,
         description="requested memory in GB; empty value leads to the cluster default setting; "
-        "empty default",
+        f"{'empty default' if _default_htcondor_memory <= 0 else 'default: ' + str(_default_htcondor_memory)}",
     )
     htcondor_disk = law.BytesParameter(
         default=_default_htcondor_disk,
@@ -598,6 +622,12 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         f"{_default_htcondor_share_software}",
     )
 
+    # parameters that should not be passed to a workflow required upstream
+    exclude_params_req_set = {
+        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory", "htcondor_disk",
+    }
+
+    # parameters that should not be passed from workflow to branches
     exclude_params_branch = {
         "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
         "htcondor_disk", "htcondor_flavor", "htcondor_share_software",
@@ -747,7 +777,7 @@ _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "max
 _default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
 
 
-class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
+class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -773,6 +803,10 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         f"maxwell; default: '{_default_slurm_flavor}'",
     )
 
+    # parameters that should not be passed to a workflow required upstream
+    exclude_params_req_set = {"max_runtime"}
+
+    # parameters that should not be passed from workflow to branches
     exclude_params_branch = {"max_runtime", "slurm_partition", "slurm_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
