@@ -114,7 +114,7 @@ class TriggerScaleFactorsBase(
             index = dict(zip(loop_vars, index))
             yield {vr.name: bn for vr, bn in index.items()}
 
-    def data_mc_keys(self, suff):
+    def data_mc_keys(self, suff=""):
         """
         get data and mc key with suffix (omitted if empty)
         """
@@ -130,7 +130,7 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
             "sf": self.target(f"{self.tag_name}_sf.pickle"),
             "eff": self.target(f"{self.tag_name}_eff.pickle"),
             "cnt": self.target(f"{self.tag_name}_counts.pickle"),
-            "corr": self.target(f"{self.tag_name}_counts.pickle"),
+            "corr": self.target(f"{self.tag_name}_corr.pickle"),
         }
         return out
 
@@ -343,39 +343,40 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
         )
         pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr)
         corr_bias["incl"][...] = self.correlation_efficiency_bias(pf)
+
+        # store correlations
+        self.output()["corr"].dump(corr_bias, formatter="pickle")
+
         scale_factors["nominal"] |= up_down_dict("corr_incl", corr_bias["incl"][...].value * nom_centr_sf.values())
 
         sf_hists = {}
         for sf_type, arrays in scale_factors.items():
-            try:
-                ct = arrays.pop("central")
-                hst = hist.Hist(
-                    hist.axis.StrCategory(["central", "down", "up", *arrays], name="systematic"),
-                    *ct.axes,
-                    name="scale_factors",
-                    label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
-                          f"for year {self.config_inst.x.year}",
-                    storage=hist.storage.Weight(),
-                )
-                hst.values()[(idx := 0)] = ct.values()
-                # add quadratic sum of all uncertainties
-                for dr in ["down", "up"]:
-                    variance = 0
-                    for err in [v.name for v in self.aux_variable_insts] + ["stat", "corr_incl"]:
-                        if f"{err}_{dr}" not in arrays:
-                            continue
-                        variance = variance + (arrays[f"{err}_{dr}"].values() - ct.values()) ** 2
-                    hst.values()[(idx := idx + 1)] = ct.values() - (-1) ** idx * np.sqrt(variance)
+            ct = arrays.pop("central")
+            hst = hist.Hist(
+                hist.axis.StrCategory(["central", "down", "up", *arrays], name="systematic"),
+                *ct.axes,
+                name="scale_factors",
+                label=f"trigger scale factors for {self.trigger} trigger with reference {self.ref_trigger} "
+                      f"for year {self.config_inst.x.year}",
+                storage=hist.storage.Weight(),
+            )
+            hst.values()[(idx := 0)] = ct.values()
+            # add quadratic sum of all uncertainties
+            for dr in ["down", "up"]:
+                variance = 0
+                for err in [v.name for v in self.aux_variable_insts] + ["stat", "corr_incl"]:
+                    if f"{err}_{dr}" not in arrays:
+                        continue
+                    variance = variance + (arrays[f"{err}_{dr}"].values() - ct.values()) ** 2
+                hst.values()[(idx := idx + 1)] = ct.values() - (-1) ** idx * np.sqrt(variance)
 
-                # add remaining uncertainties
-                hst.values()[idx + 1:] = [h.values() for h in arrays.values()]
+            # add remaining uncertainties
+            hst.values()[idx + 1:] = [h.values() for h in arrays.values()]
 
-                # remove variances
-                hst.variances()[:] = 1
+            # remove variances
+            hst.variances()[:] = 1
 
-                sf_hists[sf_type] = hst
-            except:
-                breakpoint()
+            sf_hists[sf_type] = hst
 
         # save sf histograms
         self.output()["sf"].dump(sf_hists, formatter="pickle")
@@ -672,7 +673,7 @@ class TriggerScaleFactors1D(
                     style_config=style_config,
                 )
                 return
-            vr = re.findall("corr_(.*)", self.branch_data)
+            vr = re.findall("corr_(.*)", self.branch_data)[0]
             plot_1d(
                 f"corr_{vr}",
                 {plot_process: get_arr(corr_bias[vr])},
@@ -683,20 +684,26 @@ class TriggerScaleFactors1D(
         if "eff_1d" in self.branch_data:
             efficiencies = self.input()["collection"][0]["eff"].load(formatter="pickle")
             if self.branch_data == "eff_1d":
-                plot_1d("eff_1d", {dt: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys()})
+                hists = {dt: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys()}
+                plot_1d("eff_1d", hists[::-1])  # reverse to mc data (first entry is denominator)
+                return
 
             vr = re.findall("eff_1d_proj_(.*)", self.branch_data)[0]
+            vr_inst = self.config_inst.get_variable(vr)
+
             suff = f"{vr}_proj"
+
+            hists = {dt[:-len(suff) - 1]: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys(suff)}
 
             fig, axes = self.call_plot_func(
                 self.plot_function,
-                hists={dt[:-len(suff) - 1]: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys(suff)},
+                hists=hists[::-1],
                 skip_ratio=False,
                 category_inst=self.baseline_cat(exclude=[vr]),
                 config_inst=self.config_inst,
-                variable_insts=[self.config_inst.get_variable(vr)],
+                variable_insts=[vr_inst],
             )
-            if (ll := vr.aux.get("lower_limit", None)) is not None:
+            if (ll := vr_inst.aux.get("lower_limit", None)) is not None:
                 for ax in axes:
                     ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
             for p in self.output():
