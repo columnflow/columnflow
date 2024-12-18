@@ -237,7 +237,7 @@ setup_columnflow() {
     export LAW_HOME="${LAW_HOME:-${CF_BASE}/.law}"
     export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${CF_BASE}/law.cfg}"
 
-    if which law &> /dev/null; then
+    if [ "${CF_LOCAL_ENV}" = "1" ] && which law &> /dev/null; then
         # source law's bash completion scipt
         source "$( law completion )" ""
 
@@ -867,7 +867,7 @@ cf_init_submodule() {
     local submodule_path="${2}"
 
     # do nothing in remote jobs
-    [ "$CF_REMOTE_ENV" = "1" ] && return "0"
+    [ "${CF_REMOTE_ENV}" = "1" ] && return "0"
 
     # do nothing when the path does not exist or it is not a submodule
     if [ ! -e "${base_path}/${submodule_path}" ]; then
