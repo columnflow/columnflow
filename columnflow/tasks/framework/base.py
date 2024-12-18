@@ -120,7 +120,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # TaskArrayFunctions that should be set via the analysis inst aux values
         analysis_inst_aux = (
             "default_calibrator", "default_selector", "default_producer", "default_ml_model",
-            "default_weight_producer",
+            "default_weight_producer", "default_inference_model", "default_categories", "default_variables",
         )
 
         # set defaults to the analysis inst if they are set in the config inst

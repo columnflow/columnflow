@@ -1583,12 +1583,13 @@ class InferenceModelMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
+        analysis_inst = params.get("analysis_inst")
         config_inst = params.get("config_inst")
-        if config_inst:
+        if analysis_inst and config_inst:
             params["inference_model"] = cls.resolve_config_default(
                 params,
                 params.get("inference_model"),
-                container=config_inst,
+                container=analysis_inst,
                 default_str="default_inference_model",
                 multiple=False,
             )
@@ -1641,9 +1642,10 @@ class CategoriesMixin(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_insts" not in params:
+        if "analysis_inst" not in params or "config_insts" not in params:
             return params
 
+        analysis_inst = params["analysis_inst"]
         config_insts = params["config_insts"]
 
         # TODO: cross-checks over multiple config insts
@@ -1652,8 +1654,8 @@ class CategoriesMixin(AnalysisTask):
         # resolve categories
         if "categories" in params:
             # when empty, use the config default
-            if not params["categories"] and config_inst.x("default_categories", ()):
-                params["categories"] = tuple(config_inst.x.default_categories)
+            if not params["categories"] and analysis_inst.x("default_categories", ()):
+                params["categories"] = tuple(analysis_inst.x.default_categories)
 
             # when still empty and default categories are defined, use them instead
             if not params["categories"] and cls.default_categories:
@@ -1703,9 +1705,10 @@ class VariablesMixin(AnalysisTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_insts" not in params:
+        if "analysis_inst" not in params or "config_insts" not in params:
             return params
 
+        analysis_inst = params["analysis_inst"]
         config_insts = params["config_insts"]
 
         # TODO: cross-checks over multiple config insts
@@ -1714,8 +1717,8 @@ class VariablesMixin(AnalysisTask):
         # resolve variables
         if "variables" in params:
             # when empty, use the config default
-            if not params["variables"] and config_inst.x("default_variables", ()):
-                params["variables"] = tuple(config_inst.x.default_variables)
+            if not params["variables"] and analysis_inst.x("default_variables", ()):
+                params["variables"] = tuple(analysis_inst.x.default_variables)
 
             # when still empty and default variables are defined, use them instead
             if not params["variables"] and cls.default_variables:
