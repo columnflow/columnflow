@@ -5,7 +5,7 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import Requirements
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin
+from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.tasks.selection import MergeSelectionStats
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, maybe_import
@@ -20,22 +20,14 @@ from columnflow.types import Any
 hist = maybe_import("hist")
 
 
-class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
-
-    tag_name = "tag"
-    exclude_index = True
-
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeSelectionStats=MergeSelectionStats,
-    )
-
+class CustomDefaultVariablesMixin(
+    VariablesMixin,
+):
     @classmethod
     def get_default_variables(cls, params):
         if not (config_inst := params.get("config_inst")):
             return params
-        return config_inst.x(f"default_{cls.tag_name}_variables", tuple())
+        return config_inst.x("default_variables", tuple())
 
     @classmethod
     def resolve_param_values(
@@ -72,6 +64,27 @@ class SelectionEfficiencyHistMixin(DatasetsProcessesMixin):
                                      f"in {cls.__class__} or config {config_inst.name}")
 
         return params
+
+
+class SelectionEfficiencyHistMixin(
+    DatasetsProcessesMixin,
+    CustomDefaultVariablesMixin,
+):
+
+    tag_name = "tag"
+    exclude_index = True
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeSelectionStats=MergeSelectionStats,
+    )
+
+    @classmethod
+    def get_default_variables(cls, params):
+        if not (config_inst := params.get("config_inst")):
+            return params
+        return config_inst.x(f"default_{cls.tag_name}_variables", tuple())
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

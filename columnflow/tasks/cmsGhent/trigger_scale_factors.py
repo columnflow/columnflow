@@ -10,12 +10,12 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin
+    CalibratorsMixin, SelectorMixin, DatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D, PlotBase1D,
 )
-from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin
+from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin, CustomDefaultVariablesMixin
 
 
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -24,8 +24,9 @@ from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 np = maybe_import("numpy")
 hist = maybe_import("hist")
 
+
 class TriggerScaleFactorsBase(
-    VariablesMixin,
+    CustomDefaultVariablesMixin,
     SelectorMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
@@ -53,12 +54,6 @@ class TriggerScaleFactorsBase(
         self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
         self.trigger_vr = "HLT." + self.trigger
         self.ref_trigger_vr = "HLT." + self.ref_trigger
-
-    @classmethod
-    def get_default_variables(self, params):
-        if not (config_inst := params.get("config_inst")):
-            return params
-        return config_inst.x("analysis_triggers", dict()).get(params["trigger"], (None, None))[1]
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -98,7 +93,7 @@ class TriggerScaleFactorsBase(
 
 
 class TriggerDatasetsMixin(
-    DatasetsProcessesMixin
+    DatasetsProcessesMixin,
 ):
     @property
     def datasets_repr(self):
@@ -120,6 +115,12 @@ class TriggerDatasetsMixin(
         name = f"trigger_{self.trigger}_ref_{self.ref_trigger}"
         parts.insert_before("datasets", "trigger", name)
         return parts
+
+    @classmethod
+    def get_default_variables(self, params):
+        if not (config_inst := params.get("config_inst")):
+            return params
+        return config_inst.x("analysis_triggers", dict()).get(params["trigger"], (None, None))[1]
 
 
 class TriggerScaleFactors(
@@ -403,30 +404,26 @@ class TriggerScaleFactors(
         self.output()["json"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
 
 
-class TriggerScaleFactorsPlotBase(
-    TriggerDatasetsMixin,
-    TriggerScaleFactorsBase,
-    VariablesMixin,
-    SelectorMixin,
-    CalibratorsMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
-):
-    exclude_index = True
+class TrigPlotLabelMixin():
 
     baseline_label = luigi.Parameter(
         default="",
         description="Label for the baseline selection.",
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.var_bin_cats = {}  # for caching
+    def bin_label(self, index: dict[od.Variable | str, int]):
+        index = {self.config_inst.get_variable(vr): bn for vr, bn in index.items()}
+        return "\n".join([
+            f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
+            for vr, bn in index.items()
+        ])
 
     def baseline_cat(self, add: od.Category = None, exclude: list[str] = tuple()):
         p_cat = od.Category(name=self.baseline_label)
         if add is not None and add.label:
             p_cat.label += "\n" + add.label
+        if not hasattr(self, "aux_variable_insts"):
+            return p_cat
         if aux_label := self.bin_label({
             v: i
             for v, i in self.aux_variable_insts.items()
@@ -434,6 +431,43 @@ class TriggerScaleFactorsPlotBase(
         }):
             p_cat.label += "\n" + aux_label
         return p_cat
+
+
+class TriggerScaleFactorsPlotBase(
+    TrigPlotLabelMixin,
+    TriggerDatasetsMixin,
+    TriggerScaleFactorsBase,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
+    exclude_index = True
+
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        TriggerScaleFactors=TriggerScaleFactors,
+    )
+
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["trig_sf"] = self.reqs.TriggerScaleFactors.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+        )
+        return reqs
+
+    def requires(self):
+        return self.reqs.TriggerScaleFactors.req(
+            self,
+            branch=-1,
+            _exclude={"branches"},
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.var_bin_cats = {}  # for caching
 
     def loop_variables(
         self,
@@ -452,13 +486,6 @@ class TriggerScaleFactorsPlotBase(
                 )
             yield self.var_bin_cats[cat_name]
 
-    def bin_label(self, index: dict[od.Variable | str, int]):
-        index = {self.config_inst.get_variable(vr): bn for vr, bn in index.items()}
-        return "\n".join([
-            f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
-            for vr, bn in index.items()
-        ])
-
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
@@ -476,18 +503,6 @@ class TriggerScaleFactors2D(
         default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
     )
-
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        TriggerScaleFactors=TriggerScaleFactors,
-    )
-
-    def requires(self):
-        return self.reqs.TriggerScaleFactors.req(
-            self,
-            branch=-1,
-            _exclude={"branches"},
-        )
 
     def full_output(self):
         out = {}
@@ -702,8 +717,8 @@ class TriggerScaleFactors1D(
         if "eff_1d" in self.branch_data:
             efficiencies = self.input()["collection"][0]["eff"].load(formatter="pickle")
             if self.branch_data == "eff_1d":
-                hists = {dt: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys()}
-                plot_1d("eff_1d", hists[::-1])  # reverse to mc data (first entry is denominator)
+                hists = {dt: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys()[::-1]}
+                plot_1d("eff_1d", hists)  # reverse to mc data (first entry is denominator)
                 return
 
             vr = re.findall("eff_1d_proj_(.*)", self.branch_data)[0]
@@ -711,11 +726,14 @@ class TriggerScaleFactors1D(
 
             suff = f"{vr}_proj"
 
-            hists = {dt[:-len(suff) - 1]: self.get_hists(efficiencies[dt]) for dt in self.data_mc_keys(suff)}
+            hists = {
+                dt[:-len(suff) - 1]: self.get_hists(efficiencies[dt])
+                for dt in self.data_mc_keys(suff)[::-1]
+            }
 
             fig, axes = self.call_plot_func(
                 self.plot_function,
-                hists=hists[::-1],
+                hists=hists,
                 skip_ratio=False,
                 category_inst=self.baseline_cat(exclude=[vr]),
                 config_inst=self.config_inst,
@@ -729,6 +747,7 @@ class TriggerScaleFactors1D(
 
 
 class TriggerScaleFactorsHist(
+    TrigPlotLabelMixin,
     TriggerScaleFactors,
     PlotBase1D,
 ):
@@ -765,12 +784,10 @@ class TriggerScaleFactorsHist(
         hist_name = self.tag_name + "_ref_" + self.ref_trigger.lower() + "_efficiencies"
         histograms = self.read_hist(self.variable_insts, hist_name)
 
-        trig_label, vr = re.findall("proj_(.*?)_(.*?)", self.branch_data)[0]
+        trig_label, vr = re.findall("proj_(.*?)_(.*?)$", self.branch_data)[0]
         vr = self.config_inst.get_variable(vr)
 
-        p_cat = od.Category(name=self.baseline_label)
-        if not isinstance(self.aux_variable_insts.get(vr, None), int):
-            p_cat.label += "\n" + self.aux_label
+        p_cat = self.baseline_cat(exclude=[vr])
 
         p_cat.label += "\n" + self.ref_trigger
         # reduce all variables but the one considered
@@ -786,8 +803,9 @@ class TriggerScaleFactorsHist(
             category_inst=p_cat,
             config_inst=self.config_inst,
             variable_insts=[vr],
-            **self.get_plot_parameter(),
+            **self.get_plot_parameters(),
         )
+
         if (ll := vr.aux.get("lower_limit", None)) is not None:
             for ax in axes:
                 ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
