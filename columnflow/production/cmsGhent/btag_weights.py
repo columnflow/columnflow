@@ -214,7 +214,7 @@ def fixed_wp_btag_weights(
         # only calculate up and down variations for nominal shift
         if self.local_shift_inst.is_nominal:
             for direction in ["up", "down"]:
-                for corr in ["",]:  # "correlated", "uncorrelated"]:
+                for corr in [""]:  # "correlated", "uncorrelated"]:
                     variation = direction if not corr else f"{direction}_{corr}"
                     events = add_weight(flavour_group, variation)
 
