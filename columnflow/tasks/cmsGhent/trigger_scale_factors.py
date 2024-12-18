@@ -10,7 +10,7 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, VariablesMixin, SelectorMixin,
+    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D, PlotBase1D,
@@ -24,9 +24,7 @@ from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 np = maybe_import("numpy")
 hist = maybe_import("hist")
 
-
 class TriggerScaleFactorsBase(
-    SelectionEfficiencyHistMixin,
     VariablesMixin,
     SelectorMixin,
     CalibratorsMixin,
@@ -66,7 +64,6 @@ class TriggerScaleFactorsBase(
     def resolve_param_values(cls, params):
         if not (trig := params.get("trigger")):
             return params
-        cls.tag_name = f"hlt_{trig.lower()}"
         params = super().resolve_param_values(params)
         if not (config_inst := params.get("config_inst")):
             return params
@@ -75,27 +72,6 @@ class TriggerScaleFactorsBase(
             assert ref_trigger is not None, "no default trigger specified in config.x.analysis_triggers"
         params["ref_trigger"] = ref_trigger
         return params
-
-    @property
-    def datasets_repr(self):
-        name = []
-        for dt_type in ["mc", "data"]:
-            datasets = [
-                dt_name for dt_name in self.datasets
-                if getattr(self.config_inst.get_dataset(dt_name), f"is_{dt_type}")
-            ]
-            assert datasets, f"could not find any datasets that are of type {dt_type}"
-            if len(datasets) == 1:
-                name.append(self.datasets[0])
-            else:
-                name.append(f"{len(datasets)}_{law.util.create_hash(sorted(datasets))}")
-        return "__".join(name)
-
-    def store_parts(self):
-        parts = super().store_parts()
-        name = f"trigger_{self.trigger}_ref_{self.ref_trigger}"
-        parts.insert_before("datasets", "trigger", name)
-        return parts
 
     def loop_variables(
         self,
@@ -121,8 +97,44 @@ class TriggerScaleFactorsBase(
         return [f"{dt_type}{'' if not suff else '_' + suff}" for dt_type in ["data", "mc"]]
 
 
-class TriggerScaleFactors(TriggerScaleFactorsBase):
+class TriggerDatasetsMixin(
+    DatasetsProcessesMixin
+):
+    @property
+    def datasets_repr(self):
+        name = []
+        for dt_type in ["mc", "data"]:
+            datasets = [
+                dt_name for dt_name in self.datasets
+                if getattr(self.config_inst.get_dataset(dt_name), f"is_{dt_type}")
+            ]
+            assert datasets, f"could not find any datasets that are of type {dt_type}"
+            if len(datasets) == 1:
+                name.append(self.datasets[0])
+            else:
+                name.append(f"{len(datasets)}_{law.util.create_hash(sorted(datasets))}")
+        return "__".join(name)
+
+    def store_parts(self):
+        parts = super().store_parts()
+        name = f"trigger_{self.trigger}_ref_{self.ref_trigger}"
+        parts.insert_before("datasets", "trigger", name)
+        return parts
+
+
+class TriggerScaleFactors(
+    TriggerDatasetsMixin,
+    SelectionEfficiencyHistMixin,
+    TriggerScaleFactorsBase,
+):
     exclude_index = False
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        if not (trig := params.get("trigger")):
+            return params
+        cls.tag_name = f"hlt_{trig.lower()}"
+        return super().resolve_param_values(params)
 
     def output(self):
         out = {
@@ -392,7 +404,13 @@ class TriggerScaleFactors(TriggerScaleFactorsBase):
 
 
 class TriggerScaleFactorsPlotBase(
+    TriggerDatasetsMixin,
     TriggerScaleFactorsBase,
+    VariablesMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
 ):
     exclude_index = True
 
@@ -460,7 +478,7 @@ class TriggerScaleFactors2D(
     )
 
     reqs = Requirements(
-        TriggerScaleFactorsPlotBase.reqs,
+        RemoteWorkflow.reqs,
         TriggerScaleFactors=TriggerScaleFactors,
     )
 
@@ -547,7 +565,7 @@ class TriggerScaleFactors1D(
     )
 
     reqs = Requirements(
-        TriggerScaleFactorsPlotBase.reqs,
+        RemoteWorkflow.reqs,
         TriggerScaleFactors=TriggerScaleFactors,
     )
 
@@ -711,7 +729,7 @@ class TriggerScaleFactors1D(
 
 
 class TriggerScaleFactorsHist(
-    TriggerScaleFactorsBase,
+    TriggerScaleFactors,
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
