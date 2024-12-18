@@ -228,11 +228,11 @@ class ReduceEvents(
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
+                self.chunked_io.queue(sorted_ak_to_parquet, (ak.to_packed(events), chunk.abspath))
 
         # some logs
         self.publish_message(
-            f"reduced {n_all} to {n_reduced} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
+            f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
         )
 
         # merge output files

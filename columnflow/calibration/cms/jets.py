@@ -328,12 +328,13 @@ def jec(
     events = set_ak_column_f32(events, f"{jet_name}.pt_raw", events[jet_name].pt * (1 - events[jet_name].rawFactor))
     events = set_ak_column_f32(events, f"{jet_name}.mass_raw", events[jet_name].mass * (1 - events[jet_name].rawFactor))
 
-    def correct_jets(pt, area, eta, rho, evaluator_key="jec"):
+    def correct_jets(*, pt, eta, phi, area, rho, evaluator_key="jec"):
         # variable naming convention
         variable_map = {
             "JetA": area,
             "JetEta": eta,
             "JetPt": pt,
+            "JetPhi": phi,
             "Rho": ak.values_astype(rho, np.float32),
         }
 
@@ -355,8 +356,8 @@ def jec(
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
         events.fixedGridRhoFastjetAll
-        if "fixedGridRhoFastjetAll" in events.fields else
-        events.Rho.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields
+        else events.Rho.fixedGridRhoFastjetAll
     )
 
     # correct jets with only a subset of correction levels
@@ -366,6 +367,7 @@ def jec(
         jec_factors_subset_type1_met = correct_jets(
             pt=events[jet_name].pt_raw,
             eta=events[jet_name].eta,
+            phi=events[jet_name].phi,
             area=events[jet_name].area,
             rho=rho,
             evaluator_key="jec_subset_type1_met",
@@ -387,6 +389,7 @@ def jec(
     jec_factors = correct_jets(
         pt=events[jet_name].pt_raw,
         eta=events[jet_name].eta,
+        phi=events[jet_name].phi,
         area=events[jet_name].area,
         rho=rho,
         evaluator_key="jec",
@@ -481,16 +484,10 @@ def jec_init(self: Calibrator) -> None:
         sources = jec_cfg.uncertainty_sources
 
     # register used jet columns
-    self.uses |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "eta", "phi", "mass", "area", "rawFactor")
-    }
+    self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,area,rawFactor}}")
 
     # register produced jet columns
-    self.produces |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "mass", "rawFactor")
-    }
+    self.produces.add(f"{self.jet_name}.{{pt,mass,rawFactor}}")
 
     # add shifted jet variables
     self.produces |= {
@@ -926,23 +923,13 @@ def jer_init(self: Calibrator) -> None:
     self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
 
     # register used jet columns
-    self.uses |= {
-        f"{self.jet_name}.{column}"
-        for column in ("pt", "eta", "phi", "mass", self.gen_jet_idx_column)
-    }
+    self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
 
     # register used gen jet columns
-    self.uses |= {
-        f"{self.gen_jet_name}.{column}"
-        for column in ("pt", "eta", "phi")
-    }
+    self.uses.add(f"{self.gen_jet_name}.{{pt,eta,phi}}")
 
     # register produced jet columns
-    self.produces |= {
-        f"{self.jet_name}.{column}{suffix}"
-        for column in ("pt", "mass")
-        for suffix in ("", "_unsmeared", "_jer_up", "_jer_down")
-    }
+    self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,_jer_up,_jer_down}}")
 
     # register produced MET columns
     if self.propagate_met:
