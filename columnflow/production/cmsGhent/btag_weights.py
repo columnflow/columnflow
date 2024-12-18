@@ -260,7 +260,7 @@ def fixed_wp_btag_weights_init(
             self.produces.update({
                 f"{self.weight_name}_{name}_{direction}" + ("" if not corr else f"_{corr}")
                 for direction in ["up", "down"]
-                for corr in ["", ]  # "correlated", self.config_inst.x.year]
+                for corr in [""]  # "correlated", self.config_inst.x.year]
             })
 
 
