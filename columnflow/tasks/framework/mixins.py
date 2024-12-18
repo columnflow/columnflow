@@ -1711,9 +1711,6 @@ class VariablesMixin(AnalysisTask):
         analysis_inst = params["analysis_inst"]
         config_insts = params["config_insts"]
 
-        # TODO: cross-checks over multiple config insts
-        config_inst = config_insts[0]
-
         # resolve variables
         if "variables" in params:
             # when empty, use the config default
@@ -1741,7 +1738,6 @@ class VariablesMixin(AnalysisTask):
                     config_insts,
                     od.Variable,
                     "variable_groups",
-                    config_inst.x("variable_groups", {}),
                     strict=not cls.allow_missing_variables,
                 )
 
@@ -1763,8 +1759,11 @@ class VariablesMixin(AnalysisTask):
                         for _parts in itertools.product(*resolved_parts)
                     ])
             else:
-                # fallback to using all known variables
-                variables = config_inst.variables.names()
+                # fallback to using all variables known to all configs
+                variables = sorted(set.union(*(set(
+                    config_inst.variables.names()
+                    for config_inst in config_insts
+                ))))
 
             # complain when no variables were found
             if not variables and not cls.allow_empty_variables:
