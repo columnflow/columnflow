@@ -151,7 +151,7 @@ class BTagEfficiencyPlot(
             # TODO change process name to the relevant process group
             h = efficiency_hist[{
                 self.flav_name: hist.loc(self.branch_data.flav),
-            f"{self.tag_name}_wp": self.branch_data.wp,
+                f"{self.tag_name}_wp": self.branch_data.wp,
             }]
 
             h_sys = h[{"systematic": sys}]
