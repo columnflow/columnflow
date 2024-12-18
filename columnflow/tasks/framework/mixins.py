@@ -115,7 +115,7 @@ class CalibratorMixin(AnalysisTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict[str, Any]) -> tuple[set[str], set[str]]:
+    def get_known_shifts(cls, params: dict[str, Any]) -> tuple[set[str], set[str]]:
         """
         Adds set of shifts that the current ``calibrator_inst`` registers to the
         set of known ``shifts`` and ``upstream_shifts``.
@@ -134,7 +134,7 @@ class CalibratorMixin(AnalysisTask):
             by the user at commandline level
         :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
         """
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the calibrator, update it and add its shifts
         calibrator_inst = params.get("calibrator_inst")
@@ -338,7 +338,6 @@ class CalibratorsMixin(AnalysisTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
     ) -> tuple[set[str], set[str]]:
         """
@@ -360,7 +359,7 @@ class CalibratorsMixin(AnalysisTask):
             by the user at commandline level
         :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
         """
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the calibrators, update them and add their shifts
         for calibrator_inst in params.get("calibrator_insts") or []:
@@ -536,7 +535,6 @@ class SelectorMixin(AnalysisTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
     ) -> tuple[set[str], set[str]]:
         """
@@ -557,7 +555,7 @@ class SelectorMixin(AnalysisTask):
             by the user at commandline level
         :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
         """
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the selector, update it and add its shifts
         selector_inst = params.get("selector_inst")
@@ -852,7 +850,7 @@ class ProducerMixin(AnalysisTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict[str, Any]) -> tuple[set[str], set[str]]:
+    def get_known_shifts(cls, params: dict[str, Any]) -> tuple[set[str], set[str]]:
         """
         Adds set of shifts that the current ``producer_inst`` registers to the
         set of known ``shifts`` and ``upstream_shifts``.
@@ -871,7 +869,7 @@ class ProducerMixin(AnalysisTask):
             by the user at commandline level
         :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
         """
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the producer, update it and add its shifts
         producer_inst = params.get("producer_inst")
@@ -1078,7 +1076,7 @@ class ProducersMixin(AnalysisTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict[str, Any]) -> tuple[set[str], set[str]]:
+    def get_known_shifts(cls, params: dict[str, Any]) -> tuple[set[str], set[str]]:
         """
         Adds set of all shifts that the list of ``producer_insts`` register to the
         set of known ``shifts`` and ``upstream_shifts``.
@@ -1098,7 +1096,7 @@ class ProducersMixin(AnalysisTask):
             by the user at commandline level
         :return: Tuple with updated sets of ``shifts`` and ``upstream_shifts``.
         """
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the producers, update them and add their shifts
         for producer_inst in params.get("producer_insts") or []:
@@ -1648,9 +1646,6 @@ class CategoriesMixin(AnalysisTask):
         analysis_inst = params["analysis_inst"]
         config_insts = params["config_insts"]
 
-        # TODO: cross-checks over multiple config insts
-        config_inst = config_insts[0]
-
         # resolve categories
         if "categories" in params:
             # when empty, use the config default
@@ -1662,11 +1657,11 @@ class CategoriesMixin(AnalysisTask):
                 params["categories"] = tuple(cls.default_categories)
 
             # resolve them
-            categories = cls.find_config_objects(
+            categories = cls.find_config_objects_multi_container(
                 params["categories"],
-                config_inst,
+                config_insts,
                 od.Category,
-                config_inst.x("category_groups", {}),
+                "category_groups",
                 deep=True,
             )
 
@@ -1888,8 +1883,8 @@ class DatasetsProcessesMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst, params):
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+    def get_known_shifts(cls, params):
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # add shifts of all datasets to upstream ones
         for dataset_inst in params.get("dataset_insts") or []:
@@ -2030,18 +2025,18 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
                 tuple(config_inst.get_dataset(d) for d in params["datasets"][i])
                 for i, config_inst in enumerate(config_insts)
             )
-            params["configs_vs_dataset_insts"] = dict(zip([c.name for c in config_insts], params["dataset_insts"]))
 
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst, params):
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+    def get_known_shifts(cls, params):
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # add shifts of all datasets to upstream ones
-        for dataset_inst in params.get("configs_vs_dataset_insts")[config_inst.name] or []:
-            if dataset_inst.is_mc:
-                upstream_shifts |= set(dataset_inst.info.keys())
+        for _dataset_insts in params["dataset_insts"]:
+            for dataset_inst in _dataset_insts:
+                if dataset_inst.is_mc:
+                    upstream_shifts |= set(dataset_inst.info.keys())
 
         return shifts, upstream_shifts
 
@@ -2197,10 +2192,9 @@ class WeightProducerMixin(AnalysisTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
     ) -> tuple[set[str], set[str]]:
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         # get the weight producer, update it and add its shifts
         weight_producer_inst = params.get("weight_producer_inst")

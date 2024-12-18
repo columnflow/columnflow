@@ -369,7 +369,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return empty_value
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(cls, params: dict) -> tuple[set[str], set[str]]:
         """
         Returns two sets of shifts in a tuple: shifts implemented by _this_ task, and dependent
         shifts that are implemented by upstream tasks.
@@ -1293,7 +1293,7 @@ class ShiftTask(AnalysisTask):
             raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
         # determine the known shifts for this class
-        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = cls.get_known_shifts(params)
 
         # if upstream_shifts:
         #     print(cls.__name__, upstream_shifts)
@@ -1406,9 +1406,9 @@ class DatasetTask(ShiftTask, ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(cls, params: dict) -> tuple[set[str], set[str]]:
         # dataset can have shifts, that are considered as upstream shifts
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        shifts, upstream_shifts = super().get_known_shifts(params)
 
         dataset_inst = params.get("dataset_inst")
         if dataset_inst:
