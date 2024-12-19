@@ -34,7 +34,7 @@ def my_plot1d_func(
     variable_settings: dict | None = None,
     example_param: str | float | bool | None = None,
     **kwargs,
-) -> tuple(plt.Figure, tuple(plt.Axis,)):
+) -> tuple[plt.Figure, tuple[plt.Axis,]]:
     """
     This is an exemplary custom plotting function.
 

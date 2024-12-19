@@ -96,8 +96,12 @@ class HistUtilTests(unittest.TestCase):
         # test with default axes
         histogram = create_hist_from_variables(*self.variable_examples, add_default_axes=True)
 
-        expected_default_axes = ("category", "process", "shift")
-        for axis in expected_default_axes:
+        expected_default_axes = {
+            "category": hist.axis.StrCategory,
+            "process": hist.axis.IntCategory,
+            "shift": hist.axis.StrCategory,
+        }
+        for axis, axis_type in expected_default_axes.items():
             self.assertIn(axis, histogram.axes.name)
             self.assertEqual(histogram.axes[axis].name, axis)
-            self.assertEqual(type(histogram.axes[axis]), hist.axis.IntCategory)
+            self.assertEqual(type(histogram.axes[axis]), axis_type)
