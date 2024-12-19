@@ -222,9 +222,9 @@ class CreateDatacards(
                             if p.id in h.axes["process"]
                         ],
                         "category": [
-                            hist.loc(c.id)
+                            hist.loc(c.name)
                             for c in leaf_category_insts
-                            if c.id in h.axes["category"]
+                            if c.name in h.axes["category"]
                         ],
                     }]
 
@@ -245,7 +245,7 @@ class CreateDatacards(
                 hists[proc_obj_name] = OrderedDict()
                 nominal_shift_inst = self.config_inst.get_shift("nominal")
                 hists[proc_obj_name]["nominal"] = h_proc[
-                    {"shift": hist.loc(nominal_shift_inst.id)}
+                    {"shift": hist.loc(nominal_shift_inst.name)}
                 ]
 
                 # per shift
@@ -259,7 +259,7 @@ class CreateDatacards(
                         for d in ["up", "down"]:
                             shift_inst = self.config_inst.get_shift(f"{param_obj.config_shift_source}_{d}")
                             hists[proc_obj_name][param_obj.name][d] = h_proc[
-                                {"shift": hist.loc(shift_inst.id)}
+                                {"shift": hist.loc(shift_inst.name)}
                             ]
 
             # forward objects to the datacard writer

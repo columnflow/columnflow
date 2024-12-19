@@ -28,6 +28,7 @@ from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
 from columnflow.hist_util import create_hist_from_variables
+from columnflow.config_util import get_category_name_columns
 
 
 class CreateCutflowHistograms(
@@ -147,7 +148,7 @@ class CreateCutflowHistograms(
                     read_columns.add(route)
                 else:
                     # for variable_inst with custom expressions, read columns declared via aux key
-                    read_columns |= {inp for inp in variable_inst.x("inputs", [])}
+                    read_columns |= {Route(inp) for inp in variable_inst.x("inputs", [])}
                 expressions[variable_inst.name] = expr
 
         # prepare columns to load
@@ -192,6 +193,7 @@ class CreateCutflowHistograms(
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
+            category_names = get_category_name_columns(category_ids, self.config_inst)
 
             for var_key, var_names in self.variable_tuples.items():
                 # helper to build the point for filling, except for the step which does
@@ -202,8 +204,7 @@ class CreateCutflowHistograms(
                     n_events = len(events) if mask is Ellipsis else ak.sum(mask)
                     point = {
                         "process": events.process_id[mask],
-                        "category": category_ids[mask],
-                        "shift": np.ones(n_events, dtype=np.int32) * self.global_shift_inst.id,
+                        "category": category_names[mask],
                         "weight": (
                             events.normalization_weight[mask]
                             if self.dataset_inst.is_mc
@@ -219,7 +220,10 @@ class CreateCutflowHistograms(
                 fill_hist(
                     histograms[var_key],
                     fill_data,
-                    fill_kwargs={"step": self.initial_step},
+                    fill_kwargs={
+                        "shift": self.global_shift_inst.name,
+                        "step": self.initial_step,
+                    },
                     last_edge_inclusive=self.last_edge_inclusive,
                 )
 
@@ -242,7 +246,10 @@ class CreateCutflowHistograms(
                     fill_hist(
                         histograms[var_key],
                         fill_data,
-                        fill_kwargs={"step": step},
+                        fill_kwargs={
+                            "shift": self.global_shift_inst.name,
+                            "step": step,
+                        },
                         last_edge_inclusive=self.last_edge_inclusive,
                     )
 
@@ -433,9 +440,9 @@ class PlotCutflow(
                 # selections
                 h = h[{
                     "category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ],
                 }]
                 # reductions
@@ -617,9 +624,9 @@ class PlotCutflowVariablesBase(
                 # selections
                 h = h[{
                     "category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ],
                 }]
                 # reductions

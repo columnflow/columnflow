@@ -89,9 +89,9 @@ def create_hist_from_variables(
 
     # default axes
     if add_default_axes:
-        histogram = histogram.IntCat([], name="category", growth=True)
+        histogram = histogram.StrCat([], name="category", growth=True)
         histogram = histogram.IntCat([], name="process", growth=True)
-        histogram = histogram.IntCat([], name="shift", growth=True)
+        histogram = histogram.StrCat([], name="shift", growth=True)
 
     # requested axes
     for variable_inst in variable_insts:

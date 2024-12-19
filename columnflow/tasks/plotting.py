@@ -184,14 +184,14 @@ class PlotVariablesBase(
                 # selections
                 h = h[{
                     "category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ],
                     "shift": [
-                        hist.loc(s.id)
+                        hist.loc(s.name)
                         for s in plot_shifts
-                        if s.id in h.axes["shift"]
+                        if s.name in h.axes["shift"]
                     ],
                 }]
                 # reductions
