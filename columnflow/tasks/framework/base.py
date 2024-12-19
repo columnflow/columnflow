@@ -1279,8 +1279,6 @@ class ShiftTask(AnalysisTask):
             return params
 
         config_insts = params.get("config_insts")
-        # TODO: loop over config insts
-        config_inst = config_insts[0]
 
         # require that the shift is set and known
         if requested_shift in (None, law.NO_STR):
@@ -1289,14 +1287,14 @@ class ShiftTask(AnalysisTask):
                 params["local_shift"] = law.NO_STR
                 return params
             raise Exception(f"no shift found in params: {params}")
-        if requested_shift not in config_inst.shifts:
-            raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
+        for config_inst in config_insts:
+            # require that shift exists in all configs
+            # NOTE: we might want to change this to allow shifts that are not in all configs
+            if requested_shift not in config_inst.shifts:
+                raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
         # determine the known shifts for this class
         shifts, upstream_shifts = cls.get_known_shifts(params)
-
-        # if upstream_shifts:
-        #     print(cls.__name__, upstream_shifts)
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -1314,8 +1312,17 @@ class ShiftTask(AnalysisTask):
                 params["local_shift"] = "nominal"
 
         # store references
-        params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-        params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+        params["global_shift_inst"] = config_insts[0].get_shift(params["shift"])
+        params["local_shift_inst"] = config_insts[0].get_shift(params["local_shift"])
+        if not cls.is_single_config:
+            params["global_shift_insts"] = {
+                config_inst: config_inst.get_shift(params["shift"])
+                for config_inst in config_insts
+            }
+            params["local_shift_insts"] = {
+                config_inst: config_inst.get_shift(params["local_shift"])
+                for config_inst in config_insts
+            }
 
         return params
 
@@ -1370,11 +1377,29 @@ class ShiftTask(AnalysisTask):
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
+        # NOTE: we might want to remove the local_shift_inst and global_shift_inst attributes
+        #       when using multi config, but at the moment they are still in use for the inits
+        #       of TaskArrayFunctions
         self.local_shift_inst = None
         self.global_shift_inst = None
+        if not self.is_single_config:
+            # store references to the shift instances per config
+            self.local_shift_insts = {}
+            self.global_shift_insts = {}
+
         if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
+
+            if not self.is_single_config:
+                self.global_shift_insts = {
+                    config_inst: config_inst.get_shift(self.shift)
+                    for config_inst in self.config_insts
+                }
+                self.local_shift_insts = {
+                    config_inst: config_inst.get_shift(self.local_shift)
+                    for config_inst in self.config_insts
+                }
 
     def store_parts(self):
         parts = super().store_parts()

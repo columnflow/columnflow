@@ -70,7 +70,7 @@ class PlotVariablesBase(
         return reqs
 
     @abstractmethod
-    def get_plot_shifts(self):
+    def get_plot_shifts(self, config_inst):
         return
 
     @property
@@ -82,25 +82,22 @@ class PlotVariablesBase(
     def run(self):
         import hist
 
-        # get the shifts to extract and plot
-        plot_shifts = law.util.make_list(self.get_plot_shifts())
-
         # prepare other config objects
         variable_tuple = self.variable_tuples[self.branch_data.variable]
         variable_insts = [
             self.config_inst.get_variable(var_name)
             for var_name in variable_tuple
         ]
-        category_inst = self.config_inst.get_category(self.branch_data.category)
-        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process copy
         hists: dict[od.Config, dict[od.Process, hist.Hist]] = {}
 
-        with self.publish_step(f"plotting {self.branch_data.variable} in {category_inst.name}"):
+        with self.publish_step(f"plotting {self.branch_data.variable} in {self.branch_data.category}"):
             for i, (config, dataset_dict) in enumerate(self.input().items()):
-
                 config_inst = self.analysis_inst.get_config(config)
+                category_inst = config_inst.get_category(self.branch_data.category)
+                leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+                plot_shifts = law.util.make_list(self.get_plot_shifts(config_inst))
                 processes = self.processes[i]
                 # copy process instances once so that their auxiliary data fields can be used as a storage
                 # for process-specific plot parameters later on in plot scripts without affecting the
@@ -290,8 +287,8 @@ class PlotVariablesBaseSingleShift(
             parts.insert_before("datasets", "shift", parts.pop("shift"))
         return parts
 
-    def get_plot_shifts(self):
-        return [self.local_shift_inst]
+    def get_plot_shifts(self, config_inst):
+        return [self.global_shift_insts[config_inst]]
 
 
 class PlotVariables1D(
@@ -441,9 +438,9 @@ class PlotVariablesBaseMultiShifts(
         parts.insert_before("datasets", "shifts", f"shifts_{self.shift_sources_repr}")
         return parts
 
-    def get_plot_shifts(self):
+    def get_plot_shifts(self, config_inst):
         return [
-            self.config_inst.get_shift(s) for s in [
+            config_inst.get_shift(s) for s in [
                 "nominal",
                 f"{self.branch_data.shift_source}_up",
                 f"{self.branch_data.shift_source}_down",

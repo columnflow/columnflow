@@ -2096,17 +2096,15 @@ class ShiftSourcesMixin(AnalysisTask):
 
         config_insts = params["config_insts"]
 
-        # TODO: we might have to resolve shifts per config
-        config_inst = config_insts[0]
-
         # resolve shift sources
         if "shift_sources" in params:
             # convert to full shift first to do the object finding
-            shifts = cls.find_config_objects(
+            # NOTE: at the moment, shifts need to be found in all configs to be considered
+            shifts = cls.find_config_objects_multi_container(
                 cls.expand_shift_sources(params["shift_sources"]),
-                config_inst,
+                config_insts,
                 od.Shift,
-                config_inst.x("shift_groups", {}),
+                "shift_groups",
             )
 
             # complain when no shifts were found
