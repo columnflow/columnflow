@@ -328,7 +328,7 @@ class RemoteWorkflowMixin(AnalysisTask):
         # overwrite resources with config values when not specified (comparing to parameter default)
         lookup_keys = self.get_config_lookup_keys(self)
         resources_dict = self._get_cfg_resources_dict()
-        for attr, value in self._dfs_key_lookup(lookup_keys, resources_dict):
+        for attr, value in self._dfs_key_lookup(lookup_keys, resources_dict, empty_value={}):
             # attr must refer to an attribute coming from a valid parameter
             if (
                 (orig_value := getattr(self, attr, UNSET)) is UNSET or
