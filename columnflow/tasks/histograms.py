@@ -21,6 +21,7 @@ from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 from columnflow.hist_util import create_hist_from_variables
+from columnflow.config_util import get_category_name_columns
 
 
 class CreateHistograms(
@@ -225,17 +226,17 @@ class CreateHistograms(
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
 
-                    # merge category ids
+                    # merge category ids and transform them into their name representation
                     category_ids = ak.concatenate(
                         [Route(c).apply(masked_events) for c in self.category_id_columns],
                         axis=-1,
                     )
+                    category_names = get_category_name_columns(category_ids, self.config_inst)
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
-                        "category": category_ids,
+                        "category": category_names,
                         "process": masked_events.process_id,
-                        "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
                         "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
@@ -255,6 +256,7 @@ class CreateHistograms(
                         histograms[var_key],
                         fill_data,
                         last_edge_inclusive=self.last_edge_inclusive,
+                        fill_kwargs={"shift": self.global_shift_inst.name},
                     )
 
         # merge output files
