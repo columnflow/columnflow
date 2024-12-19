@@ -43,6 +43,7 @@ setup___cf_short_name_lc__() {
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
     local orig="${PWD}"
+    local env_is_remote="$( [ "${CF_REMOTE_ENV}" = "1" ] && echo "true" || echo "false" )"
     local setup_name="${1:-default}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
@@ -70,7 +71,7 @@ setup___cf_short_name_lc__() {
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 
     # interactive setup
-    if [ "${CF_REMOTE_ENV}" != "1" ]; then
+    if ! ${env_is_remote}; then
         cf_setup_interactive_body() {
             # pre-export the CF_FLAVOR which will be cms
             export CF_FLAVOR="cms"
@@ -120,7 +121,9 @@ setup___cf_short_name_lc__() {
     # git hooks
     #
 
-    cf_setup_git_hooks || return "$?"
+    if ! ${env_is_remote}; then
+        cf_setup_git_hooks || return "$?"
+    fi
 
 
     #
@@ -130,7 +133,7 @@ setup___cf_short_name_lc__() {
     export LAW_HOME="${LAW_HOME:-${__cf_short_name_uc___BASE}/.law}"
     export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${__cf_short_name_uc___BASE}/law.cfg}"
 
-    if which law &> /dev/null; then
+    if ! ${env_is_remote} && which law &> /dev/null; then
         # source law's bash completion scipt
         source "$( law completion )" ""
 
