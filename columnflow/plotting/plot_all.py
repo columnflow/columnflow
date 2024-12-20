@@ -180,7 +180,7 @@ def draw_efficiency(
 
     # Extract histogram data
     values = h.values()
-    bins = h.axes[0].edges
+    bins = h.axes[0].centers
     norm = h_norm.values()
 
     efficiency = np.nan_to_num(values / norm)
@@ -220,7 +220,10 @@ def draw_efficiency(
     )
     errors = errors.T
 
-    ax.errorbar(x=bins[:-1], y=efficiency, yerr=errors, fmt="o-", label=kwargs["label"])
+    if kwargs.get("skip_errorbars", False):
+        errors = None
+
+    ax.errorbar(x=bins, y=efficiency, yerr=errors, fmt="o-", label=kwargs["label"])
 
     ax.set_xlabel("Bin")
     ax.set_ylabel("Counts")
