@@ -11,7 +11,7 @@ import law
 import luigi
 from scinum import Number
 
-from columnflow.tasks.framework.base import Requirements
+from columnflow.tasks.framework.base import Requirements, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin,
     DatasetsProcessesMixin, CategoriesMixin, WeightProducerMixin,
@@ -28,6 +28,7 @@ class CreateYieldTable(
     ProducersMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
+    ConfigTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -191,9 +192,9 @@ class CreateYieldTable(
                     leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
                     h_cat = h[{"category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 

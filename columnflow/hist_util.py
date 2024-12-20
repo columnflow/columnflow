@@ -89,9 +89,9 @@ def create_hist_from_variables(
 
     # default axes
     if add_default_axes:
-        histogram = histogram.IntCat([], name="category", growth=True)
+        histogram = histogram.StrCat([], name="category", growth=True)
         histogram = histogram.IntCat([], name="process", growth=True)
-        histogram = histogram.IntCat([], name="shift", growth=True)
+        histogram = histogram.StrCat([], name="shift", growth=True)
 
     # requested axes
     for variable_inst in variable_insts:
@@ -100,3 +100,29 @@ def create_hist_from_variables(
     histogram = histogram.Weight()
 
     return histogram
+
+
+def add_missing_shifts(
+    h: hist.Hist,
+    expected_shifts_bins: set[str],
+    str_axis: str = "shift",
+    nominal_bin: str = "nominal",
+) -> None:
+    """
+    Adds missing shift bins to a histogram *h*.
+    """
+    # get the set of bins that are missing in the histogram
+    shift_bins = set(h.axes[str_axis])
+    missing_shifts = set(expected_shifts_bins) - shift_bins
+    if missing_shifts:
+        nominal = h[{str_axis: hist.loc(nominal_bin)}]
+        for missing_shift in missing_shifts:
+            # for each missing shift, create the missing shift bin with an
+            # empty fill and then copy the nominal histogram into it
+            dummy_fill = [
+                ax[0] if ax.name != str_axis else missing_shift
+                for ax in h.axes
+            ]
+            h.fill(*dummy_fill, weight=0)
+            # TODO: this might skip overflow and underflow bins
+            h[{str_axis: hist.loc(missing_shift)}] = nominal.view()
