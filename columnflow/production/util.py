@@ -268,4 +268,4 @@ def delta_r_match_multiple(
 
     # return either index or four-vector or best match
     best_match = best_match_idxs if as_index else dst_lvs[best_match_idxs]
-    return best_match, dst_lvs
+    return best_match, dst_lvs_filtered
