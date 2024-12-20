@@ -33,6 +33,22 @@ def delta_r_matcher(
     **kwargs,
 ) -> ak.Array:
     """
+    Generic producer for delta-R matching between object collections.
+
+    Takes parameters *src_name* and *dst_name*, which should correspond to
+    the input columns to treat as the input collections for the matching. The
+    fields must be interpretable as Lorentz vectors, i.e. they need to have
+    subfields *pt*, *eta*, *phi* and *mass*.
+
+    For every object in the source collection (*src_name*), the closest object
+    in the destination collection (*dst_name*) in terms of the delta-R metric
+    is identified. The index of the matched object in the destination array is
+    stored in the event array in a new sub-column under the source collection.
+    The name of the output column is specified via the parameter
+    *output_idx_column*: ``"<src_name>.{output_idx_column}"``.
+
+    An optional *max_dr* parameter can be specified to limit the maximum
+    allowed delta-R distance for which a match is considered valid.
     """
     # check missing attributes
     missing_attrs = {
@@ -56,12 +72,10 @@ def delta_r_matcher(
 
     # perform matching
     best_match_idxs, _ = delta_r_match_multiple(dst_lvs, src_lvs, max_dr=self.max_dr, as_index=True)
-    best_match_lvs, _ = delta_r_match_multiple(dst_lvs, src_lvs, max_dr=self.max_dr)
 
     # store the index in the specified output column
     best_match_idxs = ak.fill_none(best_match_idxs, -1)
     events = set_ak_column(events, f"{self.src_name}.{self.output_column}", best_match_idxs, value_type=np.float32)
-    __import__("IPython").embed()
 
     # return the event array
     return events
