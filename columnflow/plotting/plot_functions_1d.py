@@ -173,12 +173,12 @@ def plot_shifted_variable(
         "up": "red",
         "down": "blue",
     }
-    for i, shift_id in enumerate(h_sum.axes["shift"]):
-        shift_inst = config_inst.get_shift(shift_id)
+    for i, shift_name in enumerate(h_sum.axes["shift"]):
+        shift_inst = config_inst.get_shift(shift_name)
 
-        h = h_sum[{"shift": hist.loc(shift_id)}]
+        h = h_sum[{"shift": hist.loc(shift_name)}]
         # assuming `nominal` always has shift id 0
-        ratio_norm = h_sum[{"shift": hist.loc(0)}].values()
+        ratio_norm = h_sum[{"shift": hist.loc("nominal")}].values()
 
         diff = sum(h.values()) / sum(ratio_norm) - 1
         label = shift_inst.label
