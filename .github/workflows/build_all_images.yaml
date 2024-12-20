@@ -1,0 +1,125 @@
+name: Build Docker Containers
+on:
+  # push:
+  workflow_dispatch:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: choice
+        default: "3.10"
+        options:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+  workflow_call:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: string
+        default: "3.10"
+
+jobs:
+  parse_env_vars:
+    name: "Initialize file manager"
+    runs-on: ubuntu-latest
+    outputs:
+      BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
+      BASE_FILE_HASH: ${{ steps.file_manager.outputs.BASE_FILE_HASH }}
+      BASE_DEV_HASH_FILES: ${{ steps.file_manager.outputs.BASE_DEV_HASH_FILES }}
+      BASE_DEV_FILE_HASH: ${{ steps.file_manager.outputs.BASE_DEV_FILE_HASH }}
+      COLUMNAR_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_HASH_FILES }}
+      COLUMNAR_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_FILE_HASH }}
+      COLUMNAR_DEV_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_DEV_HASH_FILES }}
+      COLUMNAR_DEV_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_DEV_FILE_HASH }}
+      ML_TF_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_HASH_FILES }}
+      ML_TF_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_FILE_HASH }}
+      ML_TF_DEV_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_DEV_HASH_FILES }}
+      ML_TF_DEV_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_DEV_FILE_HASH }}
+      DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
+      DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
+      TEST_DEV_HASH_FILES: ${{ steps.file_manager.outputs.TEST_DEV_HASH_FILES }}
+      TEST_DEV_FILE_HASH: ${{ steps.file_manager.outputs.TEST_DEV_FILE_HASH }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+    - uses: ./.github/actions/file_manager
+      id: file_manager
+      # name: "initialize file manager"
+
+  build_base_software:
+    uses: ./.github/workflows/build_docker_container.yaml
+    needs: [parse_env_vars]
+    permissions:
+      contents: read
+      packages: write
+    name: Build base software
+    with:
+      IMAGE_NAME: "software_base"
+      PUSH_IMAGE: true
+      PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
+      HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_HASH_FILES }}
+      HASH: ${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+      FORCE_PUSH_IMAGE: false
+    secrets: inherit
+  build_base_dev_software:
+      uses: ./.github/workflows/build_docker_container.yaml
+      needs: [parse_env_vars]
+      permissions:
+        contents: read
+        packages: write
+      name: Build base software
+      with:
+        IMAGE_NAME: "software_base_dev"
+        PUSH_IMAGE: true
+        PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
+        HASHFILES: ${{ needs.parse_env_vars.outputs.BASE_DEV_HASH_FILES }}
+        HASH: ${{ needs.parse_env_vars.outputs.BASE_DEV_FILE_HASH }}
+        FORCE_PUSH_IMAGE: false
+      secrets: inherit
+
+  
+  build_venvs:
+    needs: [parse_env_vars,build_base_software]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - exe_files: sandboxes/venv_columnar.sh
+          #   name: "columnar"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_FILE_HASH }}
+          # - exe_files: sandboxes/venv_columnar_dev.sh
+          #   name: "columnar_dev"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.COLUMNAR_DEV_FILE_HASH }}
+          # - exe_files: sandboxes/venv_ml_tf.sh
+          #   name: "ml_tf"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.ML_TF_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.ML_TF_FILE_HASH }}
+          # - exe_files: sandboxes/venv_docs_dev.sh
+          #   name: "docs_dev"
+          #   hashFiles: ${{ needs.parse_env_vars.outputs.DOCS_HASH_FILES }}
+          #   hash: ${{ needs.parse_env_vars.outputs.DOCS_FILE_HASH }}
+          - exe_files: sandboxes/venv_ml_tf.sh,sandboxes/venv_columnar_dev.sh
+            name: "testing_base"
+            hashFiles: ${{ needs.parse_env_vars.outputs.TEST_DEV_HASH_FILES }}
+            hash: ${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}
+    uses: ./.github/workflows/build_docker_container.yaml
+    with:
+      IMAGE_NAME: ${{ matrix.name }}
+      PUSH_IMAGE: true
+      PYVERSION: ${{ inputs.PYVERSION || 3.10 }}
+      BUILD_ARGS: |
+        exe_files=${{ matrix.exe_files }}
+        base=ghcr.io/${{ github.repository }}/software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}
+      HASHFILES: |
+        ${{ matrix.hashFiles }}
+      HASH: ${{ matrix.hash }}
+    secrets: inherit
