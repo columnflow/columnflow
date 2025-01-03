@@ -79,6 +79,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     version = luigi.Parameter(
         description="mandatory version that is encoded into output paths",
     )
+    notify_slack = law.slack.NotifySlackParameter(significant=False)
+    notify_mattermost = law.mattermost.NotifyMattermostParameter(significant=False)
 
     allow_empty_sandbox = True
     sandbox = None
@@ -93,8 +95,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     exclude_params_index = {"user"}
-    exclude_params_req = {"user"}
-    exclude_params_repr = {"user"}
+    exclude_params_req = {"user", "notify_slack", "notify_mattermost"}
+    exclude_params_repr = {"user", "notify_slack", "notify_mattermost"}
+    exclude_params_branch = {"user", "notify_slack", "notify_mattermost"}
+    exclude_params_workflow = {"user", "notify_slack", "notify_mattermost"}
 
     # cached and parsed sections of the law config for faster lookup
     _cfg_outputs_dict = None

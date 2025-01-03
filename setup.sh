@@ -338,6 +338,9 @@ cf_setup_common_variables() {
         cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
         cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
     fi
+
+    # notification variables
+    export CF_MATTERMOST_HOOK_URL="${CF_MATTERMOST_HOOK_URL:-}"
 }
 
 cf_show_banner() {

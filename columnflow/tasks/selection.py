@@ -108,6 +108,7 @@ class SelectEvents(
 
         return outputs
 
+    @law.decorator.notify
     @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False)
@@ -327,6 +328,7 @@ class MergeSelectionStats(
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs(inputs["collection"].targets.values())
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         return super().run()

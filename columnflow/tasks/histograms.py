@@ -110,6 +110,7 @@ class CreateHistograms(
     def output(self):
         return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
@@ -361,6 +362,7 @@ class MergeHistograms(
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs
@@ -452,6 +454,7 @@ class MergeShiftedHistograms(
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs

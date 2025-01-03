@@ -148,6 +148,7 @@ class PrepareMLEvents(
         }
         return outputs
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
@@ -334,6 +335,7 @@ class MergeMLStats(
     def trace_merge_inputs(self, inputs):
         return super().trace_merge_inputs(inputs["collection"].targets.values())
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         return super().run()
@@ -442,6 +444,7 @@ class MergeMLEvents(
         k = self.ml_model_inst.folds
         return {"mlevents": self.target(f"mlevents_f{self.fold}of{k}.parquet")}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         return super().run()
@@ -582,6 +585,7 @@ class MLTraining(
     def output(self):
         return self.ml_model_inst.output(self)
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -711,6 +715,7 @@ class MLEvaluation(
     def output(self):
         return {"mlcolumns": self.target(f"mlcolumns_{self.branch}.parquet")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output

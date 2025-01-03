@@ -86,6 +86,8 @@ class ReduceEvents(
     def output(self):
         return {"events": self.target(f"events_{self.branch}.parquet")}
 
+    @law.decorator.notify
+    @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
@@ -330,6 +332,8 @@ class MergeReductionStats(
     def output(self):
         return {"stats": self.target(f"stats_n{self.n_inputs}.json")}
 
+    @law.decorator.notify
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # structure for statistics to save
