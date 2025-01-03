@@ -341,6 +341,7 @@ cf_setup_common_variables() {
 
     # notification variables
     export CF_MATTERMOST_HOOK_URL="${CF_MATTERMOST_HOOK_URL:-}"
+    export CF_MATTERMOST_CHANNEL="${CF_MATTERMOST_CHANNEL:-None}"
 }
 
 cf_show_banner() {
