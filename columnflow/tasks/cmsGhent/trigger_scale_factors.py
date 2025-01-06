@@ -113,7 +113,9 @@ class TriggerDatasetsMixin(
     def store_parts(self):
         parts = super().store_parts()
         name = f"trigger_{self.trigger}_ref_{self.ref_trigger}"
+        parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         parts.insert_before("datasets", "trigger", name)
+        parts["task_family"] = TriggerScaleFactors.get_task_family()
         return parts
 
     @classmethod
@@ -751,6 +753,7 @@ class TriggerScaleFactorsHist(
     TriggerScaleFactors,
     PlotBase1D,
 ):
+
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
