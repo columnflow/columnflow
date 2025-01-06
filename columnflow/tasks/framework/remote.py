@@ -706,6 +706,14 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         # default lcg setup file
         remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
 
+        # batch name for display in condor_q
+        batch_name = self.task_family
+        if (config_name := getattr(self, "config", None)):
+            batch_name += f"_{config_name}"
+        if (dataset_name := getattr(self, "dataset", None)):
+            batch_name += f"_{dataset_name}"
+        config.custom_content.append(("batch_name", batch_name))
+
         # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
             cern_os = "el9"
