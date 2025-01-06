@@ -341,7 +341,7 @@ cf_setup_common_variables() {
 
     # notification variables
     export CF_MATTERMOST_HOOK_URL="${CF_MATTERMOST_HOOK_URL:-}"
-    export CF_MATTERMOST_CHANNEL="${CF_MATTERMOST_CHANNEL:-None}"
+    export CF_MATTERMOST_CHANNEL="${CF_MATTERMOST_CHANNEL:-}"
 }
 
 cf_show_banner() {
@@ -581,8 +581,8 @@ cf_setup_software_stack() {
         setopt globdots
     fi
 
-    # empty the PYTHONPATH
-    export PYTHONPATH=""
+    # empty the PYTHONPATH, except for specific customizable paths
+    export PYTHONPATH="${CF_INITIAL_PYTHONPATH:-}"
 
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes

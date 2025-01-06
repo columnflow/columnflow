@@ -552,12 +552,12 @@ class RemoteWorkflowMixin(AnalysisTask):
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 _default_htcondor_memory = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_memory", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_memory", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )
 _default_htcondor_disk = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_disk", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )

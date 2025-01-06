@@ -81,6 +81,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     )
     notify_slack = law.slack.NotifySlackParameter(significant=False)
     notify_mattermost = law.mattermost.NotifyMattermostParameter(significant=False)
+    notify_custom = law.NotifyCustomParameter(significant=False)
 
     allow_empty_sandbox = True
     sandbox = None
@@ -95,10 +96,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     exclude_params_index = {"user"}
-    exclude_params_req = {"user", "notify_slack", "notify_mattermost"}
-    exclude_params_repr = {"user", "notify_slack", "notify_mattermost"}
-    exclude_params_branch = {"user", "notify_slack", "notify_mattermost"}
-    exclude_params_workflow = {"user", "notify_slack", "notify_mattermost"}
+    exclude_params_req = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_repr = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_branch = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_workflow = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
 
     # cached and parsed sections of the law config for faster lookup
     _cfg_outputs_dict = None
@@ -174,6 +175,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def _structure_cfg_items(cls, items: list[tuple[str, Any]]) -> dict:
         if not items:
             return {}
+
+        # apply brace expansion to keys
+        items = sum((
+            [(_key, value) for _key in law.util.brace_expand(key)]
+            for key, value in items
+        ), [])
 
         # breakup keys at double underscores and create a nested dictionary
         items_dict = {}

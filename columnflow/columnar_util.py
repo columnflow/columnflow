@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import os
+import sys
 import re
 import math
 import time
@@ -1076,6 +1077,61 @@ def sorted_ak_to_root(
     f = uproot.recreate(path)
     f[tree_name] = {field: ak_array[field] for field in ak_array.fields}
     f.close()
+
+
+def sorted_indices_from_mask(
+    mask: ak.Array,
+    metric: ak.Array,
+    sort_axis: int = -1,
+    ascending: bool = True,
+) -> ak.Array:
+    """
+    Takes a boolean *mask* and converts it to an array of indices, sorted using a *metric* of equal
+    size along a *sort_axis* and, by default, in *ascending* order. Example:
+
+    .. code-block:: python
+
+        mask = [[True, False, False, True], ...]
+        metric = [[5.0, 1.0, 0.9, 4.1], ...]
+
+        sorted_indices_from_mask(mask, metric)
+        # -> [[3, 0], ...]
+
+    :param mask: The boolean mask.
+    :param metric: The metric to sort by.
+    :param sort_axis: The axis along which to sort.
+    :param ascending: Whether to sort in ascending order.
+    :return: An array of sorted indices.
+    """
+    indices = ak.argsort(metric, axis=sort_axis, ascending=ascending)
+    return indices[mask[indices]]
+
+
+def mask_from_indices(indices: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
+    """
+    Takes an array of *indices* and a *layout_array* and returns a boolean mask with the same shape
+    as *layout_array* where values at *indices* are set to *True*. Example:
+
+    .. code-block:: python
+
+        indices = [[2, 0], ...]
+        layout_array = [[x, y, z], ...]
+
+        mask_from_indices(indices, layout_array)
+        # -> [[True, False, True], ...]
+
+    :param indices: The indices to set to *True*.
+    :param layout_array: The layout array to use as a template.
+    :return: A boolean mask with the same shape as *layout_array*.
+    """
+    # create a flat mask starting with false
+    flat_mask = flat_np_view(ak.full_like(layout_array, False, dtype=bool))
+    # use offsets of the layout to create increasing indices
+    flat_indices = flat_np_view((indices + layout_array.layout.offsets.data[:-1, ..., None]))
+    # set the indices to true
+    flat_mask[flat_indices] = True
+    # layout the mask
+    return layout_ak_array(flat_mask, layout_array)
 
 
 def attach_behavior(
@@ -3562,6 +3618,7 @@ class ChunkedIOHandler(object):
                 if isinstance(result_obj, self.ReadResult):
                     if self.iter_message:
                         print(self.iter_message.format(pos=result_obj.chunk_pos))
+                        sys.stdout.flush()
 
                     # probably overly-cautious, but run garbage collection before and after
                     t1 = time.perf_counter()
