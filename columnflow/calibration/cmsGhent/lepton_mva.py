@@ -86,7 +86,7 @@ lepton_mva_inputs = {
 @calibrator(
     uses={lepton_mva_inputs_producer},
     produces={"Electron.mvaTOP", "Muon.mvaTOP"},
-    sandbox="bash::$SINGLETOP_BASE/sandboxes/venv_lepton_mva.sh",
+    sandbox="bash::$CF_BASE/sandboxes/venv_lepton_mva.sh",
 )
 def lepton_mva_producer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
