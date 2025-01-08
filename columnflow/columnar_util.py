@@ -1134,6 +1134,21 @@ def mask_from_indices(indices: np.array | ak.Array, layout_array: ak.Array) -> a
     return layout_ak_array(flat_mask, layout_array)
 
 
+def full_like(layout_array: ak.Array, value: Any, *, dtype: Any = None, **kwargs) -> ak.Array:
+    """
+    Creates an awkward array with the same layout as *layout_array* and fills it with a constant
+    *value* of type *dtype*. The difference to awkward's standalone ``ak.full_like`` is that all
+    original parameters (like docstrings, annotations, etc.) are removed from the layout of the
+    resulting array.
+
+    :param layout_array: The layout array to use as a template.
+    :param value: The value to fill the array with.
+    :param dtype: The data type of the array.
+    :return: An awkward array with the same layout as *layout_array* and filled with *value*.
+    """
+    return ak.without_parameters(ak.full_like(layout_array, value, dtype=dtype, **kwargs))
+
+
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
