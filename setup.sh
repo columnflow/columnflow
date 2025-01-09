@@ -347,7 +347,7 @@ cf_setup_common_variables() {
 cf_show_banner() {
     local no_utf8="$( [ "$1" = "1" ] && echo "true" || echo "false" )"
     if ! ${no_utf8}; then
-        local charmap="$( locale charmap | tr '[:upper:]' '[:lower:]' )"
+        local charmap="$( cf_lower_case "$( locale charmap )" )"
         no_utf8="$( [ "${charmap}" = "utf-8" ] && echo "false" || echo "true" )"
     fi
 
@@ -393,15 +393,15 @@ cf_setup_interactive_common_variables() {
     query CF_STORE_NAME "Relative path used in store paths (see next queries)" "cf_store"
     query CF_STORE_LOCAL "Default local output store" "\$CF_DATA/\$CF_STORE_NAME"
     query CF_WLCG_CACHE_ROOT "Local directory for caching remote files" "" "''"
-    export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo false || echo true )"
+    export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo "false" || echo "true" )"
     export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
 
-    query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "False"
-    [ "${CF_VENV_SETUP_MODE_UPDATE}" != "True" ] && export_and_save CF_VENV_SETUP_MODE "update"
+    query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "false"
+    [ "${CF_VENV_SETUP_MODE_UPDATE}" != "true" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
 
-    query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "True"
-    if [ "${CF_LOCAL_SCHEDULER}" != "True" ]; then
+    query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "true"
+    if [ "${CF_LOCAL_SCHEDULER}" != "true" ]; then
         query CF_SCHEDULER_HOST "Address of a central scheduler for law tasks" "127.0.0.1"
         query CF_SCHEDULER_PORT "Port of a central scheduler for law tasks" "8082"
     else
@@ -474,6 +474,9 @@ cf_setup_interactive() {
         local text="$2"
         local default="$3"
         local default_text="${4:-${default}}"
+        local default_lower="$( cf_lower_case "${default}" )"
+        local query_response
+        local query_response_lower
 
         # when the setup is the default one, use the default value when the env variable is empty,
         # otherwise, query interactively
@@ -488,9 +491,13 @@ cf_setup_interactive() {
 
             # repeat for boolean flags that were not entered correctly
             while true; do
-                ( [ "${default}" != "True" ] && [ "${default}" != "False" ] ) && break
-                ( [ "${query_response}" = "True" ] || [ "${query_response}" = "False" ] ) && break
-                printf "please enter either '$( cf_color default_bright True )' or '$( cf_color default_bright False )':  " query_response
+                ( [ "${default_lower}" != "true" ] && [ "${default_lower}" != "false" ] ) && break
+                query_response_lower="$( cf_lower_case "${query_response}" )"
+                if ( [ "${query_response_lower}" = "true" ] || [ "${query_response_lower}" = "false" ] ); then
+                    query_response="${query_response_lower}"
+                    break
+                fi
+                printf "please enter either '$( cf_color default_bright "true" )' or '$( cf_color default_bright "false" )':  " query_response
                 read query_response
                 [ "X${query_response}" = "X" ] && query_response="${default}"
             done
