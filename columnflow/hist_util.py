@@ -89,7 +89,8 @@ def create_hist_from_variables(
 
     # default axes
     if add_default_axes:
-        histogram = histogram.StrCat([], name="category", growth=True)
+        # NOTE: category axes are initialized as IntCat, but transformed to StrCat later on
+        histogram = histogram.IntCat([], name="category", growth=True)
         histogram = histogram.IntCat([], name="process", growth=True)
         histogram = histogram.StrCat([], name="shift", growth=True)
 
@@ -100,6 +101,22 @@ def create_hist_from_variables(
     histogram = histogram.Weight()
 
     return histogram
+
+
+def translate_hist_intcat_to_strcat(
+    h: hist.Hist,
+    axis_name: str,
+    id_map: dict[int, str],
+) -> hist.Hist:
+    out_axes = [
+        ax if ax.name != axis_name else hist.axis.StrCategory(
+            [id_map[v] for v in list(ax)],
+            name=ax.name,
+            label=ax.label,
+        )
+        for ax in h.axes
+    ]
+    return hist.Hist(*out_axes, storage=h.storage_type(), data=h.view(flow=True))
 
 
 def add_missing_shifts(

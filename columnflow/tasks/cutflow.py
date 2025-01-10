@@ -27,8 +27,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
 from columnflow.util import DotDict, dev_sandbox
-from columnflow.hist_util import create_hist_from_variables
-from columnflow.config_util import get_category_name_columns
+from columnflow.hist_util import create_hist_from_variables, translate_hist_intcat_to_strcat
 
 
 class CreateCutflowHistograms(
@@ -118,6 +117,12 @@ class CreateCutflowHistograms(
         # prepare inputs and outputs
         inputs = self.input()
 
+        # get IDs and names of all leaf categories
+        category_map = {
+            cat.id: cat.name
+            for cat in self.config_inst.get_leaf_categories()
+        }
+
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
@@ -193,7 +198,13 @@ class CreateCutflowHistograms(
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
-            category_names = get_category_name_columns(category_ids, self.config_inst)
+            unique_category_ids = np.unique(category_ids)
+            if any(cat_id not in category_map for cat_id in unique_category_ids):
+                undefined_category_ids = set(unique_category_ids) - set(category_map)
+                raise ValueError(
+                    f"Category ids {', '.join(undefined_category_ids)} in category id column "
+                    "are not defined as leaf categories in the config_inst",
+                )
 
             for var_key, var_names in self.variable_tuples.items():
                 # helper to build the point for filling, except for the step which does
@@ -204,7 +215,7 @@ class CreateCutflowHistograms(
                     n_events = len(events) if mask is Ellipsis else ak.sum(mask)
                     point = {
                         "process": events.process_id[mask],
-                        "category": category_names[mask],
+                        "category": category_ids[mask],
                         "weight": (
                             events.normalization_weight[mask]
                             if self.dataset_inst.is_mc
@@ -252,6 +263,13 @@ class CreateCutflowHistograms(
                         },
                         last_edge_inclusive=self.last_edge_inclusive,
                     )
+
+        # change category axis from int to str
+        histograms[var_key] = translate_hist_intcat_to_strcat(
+            histograms[var_key],
+            "category",
+            category_map,
+        )
 
         # dump the histograms
         for var_key in histograms.keys():

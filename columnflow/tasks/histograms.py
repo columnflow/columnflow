@@ -20,8 +20,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
-from columnflow.hist_util import create_hist_from_variables
-from columnflow.config_util import get_category_name_columns
+from columnflow.hist_util import create_hist_from_variables, translate_hist_intcat_to_strcat
 
 
 class CreateHistograms(
@@ -124,6 +123,12 @@ class CreateHistograms(
         # prepare inputs
         inputs = self.input()
 
+        # get IDs and names of all leaf categories
+        category_map = {
+            cat.id: cat.name
+            for cat in self.config_inst.get_leaf_categories()
+        }
+
         # declare output: dict of histograms
         histograms = {}
 
@@ -204,6 +209,19 @@ class CreateHistograms(
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
 
+                # merge category ids and check that they are defined as leaf categories
+                category_ids = ak.concatenate(
+                    [Route(c).apply(events) for c in self.category_id_columns],
+                    axis=-1,
+                )
+                unique_category_ids = np.unique(category_ids)
+                if any(cat_id not in category_map for cat_id in unique_category_ids):
+                    undefined_category_ids = set(unique_category_ids) - set(category_map)
+                    raise ValueError(
+                        f"Category ids {', '.join(undefined_category_ids)} in category id column "
+                        "are not defined as leaf categories in the config_inst",
+                    )
+
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
                     # get variable instances
@@ -216,6 +234,7 @@ class CreateHistograms(
                     # mask events and weights when selection expressions are found
                     masked_events = events
                     masked_weights = weight
+                    masked_category_ids = category_ids
                     for variable_inst in variable_insts:
                         sel = variable_inst.selection
                         if sel == "1":
@@ -225,17 +244,11 @@ class CreateHistograms(
                         mask = sel(masked_events)
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
-
-                    # merge category ids and transform them into their name representation
-                    category_ids = ak.concatenate(
-                        [Route(c).apply(masked_events) for c in self.category_id_columns],
-                        axis=-1,
-                    )
-                    category_names = get_category_name_columns(category_ids, self.config_inst)
+                        masked_category_ids = masked_category_ids[mask]
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
-                        "category": category_names,
+                        "category": masked_category_ids,
                         "process": masked_events.process_id,
                         "weight": masked_weights,
                     }
@@ -258,6 +271,13 @@ class CreateHistograms(
                         last_edge_inclusive=self.last_edge_inclusive,
                         fill_kwargs={"shift": self.global_shift_inst.name},
                     )
+
+        # change category axis from int to str
+        histograms[var_key] = translate_hist_intcat_to_strcat(
+            histograms[var_key],
+            "category",
+            category_map,
+        )
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
