@@ -273,12 +273,14 @@ class CreateHistograms(
                         fill_kwargs={"shift": self.global_shift_inst.name},
                     )
 
-        # change category axis from int to str
-        histograms[var_key] = translate_hist_intcat_to_strcat(
-            histograms[var_key],
-            "category",
-            category_map,
-        )
+            # change category axis from int to str
+
+        for var_key in self.variable_tuples.keys():
+            histograms[var_key] = translate_hist_intcat_to_strcat(
+                histograms[var_key],
+                "category",
+                category_map,
+            )
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
