@@ -68,6 +68,7 @@ class ProduceColumns(
 
         return outputs
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=False)
     @law.decorator.safe_output

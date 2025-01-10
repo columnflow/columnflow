@@ -84,6 +84,7 @@ class UniteColumns(
     def output(self):
         return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=True)
     @law.decorator.safe_output

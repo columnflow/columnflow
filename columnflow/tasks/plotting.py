@@ -77,6 +77,7 @@ class PlotVariablesBase(
     def config_inst(self):
         return self.config_insts[0]
 
+    @law.decorator.notify
     @law.decorator.log
     @view_output_plots
     def run(self):

@@ -58,6 +58,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -88,6 +89,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -227,6 +229,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -302,6 +305,7 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # create the bundle
@@ -548,12 +552,12 @@ class RemoteWorkflowMixin(AnalysisTask):
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 _default_htcondor_memory = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_memory", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_memory", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )
 _default_htcondor_disk = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_disk", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )
@@ -701,6 +705,14 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
         # default lcg setup file
         remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
+
+        # batch name for display in condor_q
+        batch_name = self.task_family
+        if (config_name := getattr(self, "config", None)):
+            batch_name += f"_{config_name}"
+        if (dataset_name := getattr(self, "dataset", None)):
+            batch_name += f"_{dataset_name}"
+        config.custom_content.append(("batch_name", batch_name))
 
         # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
@@ -905,3 +917,5 @@ class RemoteWorkflow(*remote_workflow_bases):
 
     # upstream requirements
     reqs = Requirements(*(cls.reqs for cls in remote_workflow_bases))
+
+    workflow_run_decorators = [law.decorator.notify]

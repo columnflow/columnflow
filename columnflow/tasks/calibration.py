@@ -83,6 +83,7 @@ class CalibrateEvents(
 
         return outputs
 
+    @law.decorator.notify
     @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False)

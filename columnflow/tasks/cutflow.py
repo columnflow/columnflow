@@ -106,6 +106,7 @@ class CreateCutflowHistograms(
             for var in self.variables
         }
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
@@ -384,6 +385,7 @@ class PlotCutflow(
             "plots": [self.target(name) for name in self.get_plot_names("cutflow")],
         }
 
+    @law.decorator.notify
     @law.decorator.log
     @view_output_plots
     def run(self):
@@ -563,6 +565,7 @@ class PlotCutflowVariablesBase(
     def run_postprocess(self, hists, category_inst, variable_insts):
         return
 
+    @law.decorator.notify
     @law.decorator.log
     @view_output_plots
     def run(self):

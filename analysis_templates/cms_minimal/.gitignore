@@ -21,7 +21,7 @@
 .env_*.sh.tmp
 .coverage
 coverage*.xml
-requirements_user.txt
+law_user.cfg
 __pycache__
 dist
 build

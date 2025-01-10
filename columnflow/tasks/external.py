@@ -86,6 +86,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.target(f"lfns_{h}.json")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         """
@@ -492,6 +493,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
