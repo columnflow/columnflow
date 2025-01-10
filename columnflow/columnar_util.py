@@ -1149,6 +1149,35 @@ def full_like(layout_array: ak.Array, value: Any, *, dtype: Any = None, **kwargs
     return ak.without_parameters(ak.full_like(layout_array, value, dtype=dtype, **kwargs))
 
 
+def fill_at(
+    ak_array: ak.Array,
+    where: ak.Array,
+    route: Route | str,
+    value: float | int,
+    *,
+    value_type: type | str | None = None,
+) -> ak.Array:
+    """
+    Fills a column identified through *route* in an *ak_array* with a *value* where a
+    corresponding *where* mask is *True*.
+
+    :param ak_array: The input array.
+    :param where: The boolean mask where to fill the value.
+    :param route: The route describing the column to fill.
+    :param value: The value to fill.
+    :param value_type: The data type of the value. Inferred from value if not set.
+    :return: A new array with the value filled at the specified route.
+    """
+    # cast to route
+    route = Route(route)
+
+    # create new values with selective values
+    new_values = ak.where(where, value, route.apply(ak_array))
+
+    # insert back
+    return set_ak_column(ak_array, route, new_values, value_type=value_type)
+
+
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
