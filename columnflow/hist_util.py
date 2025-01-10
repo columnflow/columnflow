@@ -113,6 +113,7 @@ def translate_hist_intcat_to_strcat(
             [id_map[v] for v in list(ax)],
             name=ax.name,
             label=ax.label,
+            growth=ax.traits.growth,
         )
         for ax in h.axes
     ]
