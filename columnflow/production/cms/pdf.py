@@ -89,9 +89,10 @@ def pdf_weights(
     # handle invalid number of weights when configured to raise
     if invalid_weights_action == "raise" and ak.any(invalid_mask):
         bad_values = ",".join(map(str, set(n_weights[invalid_mask])))
+        frac = ak.mean(invalid_mask)
         raise ValueError(
-            f"the number of LHEPdfWeights is expected to be 101 or 103, but also found values "
-            f"'{bad_values}' in dataset {self.dataset_inst.name}",
+            f"the number of LHEPdfWeights is expected to be 101 or 103, but also found numbers of "
+            f"'{bad_values}' in {frac * 100:.1f}% of events in dataset {self.dataset_inst.name}",
         )
 
     # write ones in case there are no weights at all
@@ -119,7 +120,8 @@ def pdf_weights(
         )
 
     # log a message if nominal != 1
-    pdf_weight_nominal = ak.where(invalid_mask, ones, events.LHEPdfWeight[:, 0])
+    pdf_weight_nominal = ak.fill_none(ak.pad_none(events.LHEPdfWeight, 1, axis=1), 1)
+    pdf_weight_nominal = ak.without_parameters(ak.values_astype(pdf_weight_nominal, np.float32))[:, 0]
     if ak.any(pdf_weight_nominal != 1):
         bad_values = ",".join(map(str, set(pdf_weight_nominal[pdf_weight_nominal != 1])))
         logger.debug(
