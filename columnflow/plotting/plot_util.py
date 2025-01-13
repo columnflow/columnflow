@@ -32,6 +32,7 @@ logger = law.logger.get_logger(__name__)
 
 label_options = {
     "wip": "Work in progress",
+    "int": "Internal",
     "pre": "Preliminary",
     "pw": "Private work (CMS data/simulation)",
     "pwip": "Private work in progress (CMS)",
