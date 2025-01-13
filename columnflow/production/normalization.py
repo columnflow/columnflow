@@ -150,7 +150,7 @@ def get_br_from_inclusive_dataset(
 
         # warn the user if the relative (statistical) error is large
         rel_unc = proc_br(sn.UP, unc=True, factor=True)
-        if rel_unc > 0.01:
+        if rel_unc > 0.05:
             logger.warning(
                 "large error on the branching ratio for process "
                 f"{inclusive_proc.get_process(proc_id).name} with process id {proc_id} "
@@ -242,12 +242,10 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 
     from columnflow.tasks.selection import MergeSelectionStats
     reqs["selection_stats"] = {
-        dataset.name: MergeSelectionStats.req(
+        dataset.name: MergeSelectionStats.req_different_branching(
             self.task,
             dataset=dataset.name,
-            tree_index=0,
-            branch=-1,
-            _exclude=MergeSelectionStats.exclude_params_forest_merge,
+            branch=-1 if self.task.is_workflow() else 0,
         )
         for dataset in self.stitching_datasets
     }
@@ -274,7 +272,7 @@ def normalization_weights_setup(
     selection_stats = {
         dataset: self.task.cached_value(
             key=f"selection_stats_{dataset}",
-            func=lambda: inp["collection"][0]["stats"].load(formatter="json"),
+            func=lambda: inp["stats"].load(formatter="json"),
         )
         for dataset, inp in inputs["selection_stats"].items()
     }
