@@ -47,14 +47,58 @@ hist = maybe_import("hist")
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
 
-#: Columns that are always required when opening a nano file with coffea.
-mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
-
 #: Empty-value definition in places where an integer number is expected but not present.
 EMPTY_INT = -99999
 
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
+
+#: Columns that are always required when opening a nano file with coffea.
+mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
+
+#: Information on behavior of certain collections to (re-)attach it via attach_behavior.
+default_coffea_collections = {
+    "Jet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "FatJet": {
+        "type_name": "FatJet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "SubJet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Muon": {
+        "type_name": "Muon",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Electron": {
+        "type_name": "Electron",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Tau": {
+        "type_name": "Tau",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "MET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "PuppiMET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+}
 
 
 class ItemEval(object):
@@ -1224,6 +1268,57 @@ def attach_behavior(
         with_name=type_name,
         behavior=behavior,
     )
+
+
+def attach_coffea_behavior(
+    ak_array: ak.Array,
+    collections: dict | Sequence | None = None,
+) -> ak.Array:
+    """
+    Add coffea's NanoEvents behavior to collections in an *ak_array*. When empty, *collections*
+    defaults to :py:attr:``default_coffea_collections``.
+
+    :param ak_array: The input array.
+    :param collections: The collections to attach behavior to.
+    :return: The array with the behavior attached.
+    """
+    # update or reduce collection info
+    _collections = default_coffea_collections
+    if isinstance(collections, dict):
+        _collections = _collections.copy()
+        _collections.update(collections)
+    elif isinstance(collections, (list, tuple)):
+        _collections = {
+            name: info
+            for name, info in _collections.items()
+            if name in collections
+        }
+
+    for name, info in _collections.items():
+        if not info:
+            continue
+
+        # get the collection to update
+        if name not in ak_array.fields:
+            continue
+        coll = ak_array[name]
+
+        # when a check_attr is defined, do nothing in case it already exists
+        if info.get("check_attr") and getattr(coll, info["check_attr"], None) is not None:
+            continue
+
+        # default infos
+        type_name = info.get("type_name") or name
+        skip_fields = info.get("skip_fields")
+
+        # apply the behavior
+        ak_array = set_ak_column(
+            ak_array,
+            name,
+            attach_behavior(coll, type_name, skip_fields=skip_fields),
+        )
+
+    return ak_array
 
 
 def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
