@@ -80,6 +80,8 @@ class SelectionEfficiencyHistMixin(
         MergeSelectionStats=MergeSelectionStats,
     )
 
+    sandbox = dev_sandbox("bash::$CF_BASE/sandboxes/venv_selection_eff.sh")
+
     @classmethod
     def get_default_variables(cls, params):
         if not (config_inst := params.get("config_inst")):
@@ -239,8 +241,6 @@ class SelectionHistPlot(
         default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
-
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def hist_variables(self):

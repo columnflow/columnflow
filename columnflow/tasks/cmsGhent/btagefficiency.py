@@ -25,8 +25,6 @@ class BTagEfficiencyBase:
     flavours = {0: "light", 4: "charm", 5: "bottom"}
     wps = ["L", "M", "T"]
 
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
 
 class BTagEfficiency(
     BTagEfficiencyBase,
@@ -100,6 +98,8 @@ class BTagEfficiencyPlot(
         add_default_to_description=True,
     )
 
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
     def store_parts(self):
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
@@ -139,6 +139,7 @@ class BTagEfficiencyPlot(
         ]
 
     def run(self):
+        import hist
         import numpy as np
 
         # variable_insts = list(map(self.config_inst.get_variable, self.variables))
@@ -167,7 +168,6 @@ class BTagEfficiencyPlot(
             )
 
             variable_insts = list(map(self.config_inst.get_variable, h_sys.axes.name))
-
             # custom styling:
             label_values = np.round(h_sys.values() * 100, decimals=1)
             style_config = {"plot2d_cfg": {"cmap": "PiYG", "labels": label_values}}
