@@ -153,14 +153,15 @@ bootstrap_slurm() {
 # Bootstrap function for crab jobs.
 bootstrap_crab() {
     # set env variables
-    export CF_ON_GRID="1"
-    export CF_REMOTE_ENV="1"
+    export CF_ON_GRID="true"
+    export CF_REMOTE_ENV="true"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
     export CF_STORE_NAME="{{cf_store_name}}"
+    export CF_STORE_LOCAL="${CF_DATA}/${CF_STORE_NAME}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
@@ -223,6 +224,9 @@ bootstrap_crab() {
     echo -e "\nsource repository setup ..."
     source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
     echo "done sourcing repository setup"
+
+    # log all CF variables for debugging
+    # python -c 'import os; print("\n".join(f"{k} = {v}" for k, v in os.environ.items() if k.startswith("CF_")))'
 
     # optional custom command after the setup is sourced
     {{cf_post_setup_command}}

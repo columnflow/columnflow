@@ -139,6 +139,8 @@ setup_columnflow() {
     #       "$HOME/.local", which can lead to encapsulation and debugging issues.
     #   GLOBUS_THREAD_MODEL
     #       Set to "none".
+    #   MYPROXY_SERVER
+    #       Set to "myproxy.cern.ch".
     #   VIRTUAL_ENV_DISABLE_PROMPT
     #       Set to "1" when not defined already, leading to virtual envs leaving the PS1 prompt
     #       variable unaltered.
@@ -412,6 +414,7 @@ cf_setup_interactive_common_variables() {
     query CF_FLAVOR "Flavor of the columnflow setup ('', 'cms')" "${CF_FLAVOR:-''}"
 
     if [ "${CF_FLAVOR}" = "cms" ]; then
+        query LAW_CMS_VO "virtual orgranistion" "cms"
         query CF_CRAB_STORAGE_ELEMENT "storage element for crab specific job outputs (e.g. T2_DE_DESY)" "''"
         query CF_CRAB_BASE_DIRECTORY "base directory on storage element for crab specific job outputs" "/store/user/\$CF_CERN_USER/cf_crab_outputs"
     fi
@@ -596,6 +599,11 @@ cf_setup_software_stack() {
     export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin"
     export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
 
+    # flavor specific paths
+    if [ ! -z "${CF_FLAVOR}" ]; then
+        [ -d "${CF_BASE}/bin/${CF_FLAVOR}" ] && export CF_PERSISTENT_PATH="${CF_PERSISTENT_PATH}:${CF_BASE}/bin/${CF_FLAVOR}"
+    fi
+
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
@@ -611,6 +619,7 @@ cf_setup_software_stack() {
     export PYTHONNOUSERSITE="${PYTHONNOUSERSITE:-1}"
     export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
     export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
+    export MYPROXY_SERVER="${MYPROXY_SERVER:-myproxy.cern.ch}"
     export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
     export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
     export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
