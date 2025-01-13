@@ -110,7 +110,7 @@ class HistUtilTests(unittest.TestCase):
         # Create a histogram with an integer category axis
         h = hist.Hist(
             hist.axis.IntCategory([1, 2, 3], name="category", label="Category Axis"),
-            storage=hist.storage.Double()
+            storage=hist.storage.Double(),
         )
 
         # Fill the histogram with some data

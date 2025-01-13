@@ -266,11 +266,12 @@ class CreateCutflowHistograms(
                     )
 
         # change category axis from int to str
-        histograms[var_key] = translate_hist_intcat_to_strcat(
-            histograms[var_key],
-            "category",
-            category_map,
-        )
+        for var_key in self.variable_tuples.keys():
+            histograms[var_key] = translate_hist_intcat_to_strcat(
+                histograms[var_key],
+                "category",
+                category_map,
+            )
 
         # dump the histograms
         for var_key in histograms.keys():
