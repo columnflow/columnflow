@@ -464,7 +464,7 @@ class MergeReducedEvents(
             "events": self.reqs.ReduceEvents.req_different_branching(
                 self,
                 workflow="local",
-                branches=((min(self.branch_data), max(self.branch_data)),),
+                branches=((min(self.branch_data), max(self.branch_data) + 1),),
                 _exclude={"branch"},
             ),
         }
