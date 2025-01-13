@@ -282,7 +282,7 @@ def fixed_wp_btag_weights_setup(
 
     # unpack the b-tagging efficiency
     correction_set_btag_eff_corr = correctionlib.CorrectionSet.from_file(
-        reqs["btag_efficiency"].output()["stats"].path,
+        reqs["btag_efficiency"].output()["json"].path,
     )
     if len(correction_set_btag_eff_corr.keys()) != 1:
         raise Exception("Expected exactly one type of btagging efficiencies")
