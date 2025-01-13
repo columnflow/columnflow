@@ -1017,7 +1017,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             wlcg_kwargs = kwargs.copy()
             wlcg_kwargs.setdefault("fs", wlcg_fs)
             wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
-            # TODO: add rule for falling back to wlcg target
+            # TODO: add rule for falling back to wlcg target?
             # create the local target
             local_kwargs = kwargs.copy()
             loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
@@ -1029,10 +1029,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 if isinstance(local_target, law.LocalFileTarget)
                 else law.MirroredDirectoryTarget
             )
+            # whether to wait for local synchrnoization (for debugging purposes)
+            local_sync = law.util.flag_to_bool(os.getenv("CF_MIRRORED_TARGET_LOCAL_SYNC", "true"))
+            # create and return the target
             return mirrored_target_cls(
                 path=local_target.abspath,
                 remote_target=wlcg_target,
                 local_target=local_target,
+                local_sync=local_sync,
             )
 
         raise Exception(f"cannot determine output location based on '{location}'")
@@ -1837,6 +1841,8 @@ def wrapper_factory(
     # create the class
     class Wrapper(*base_classes, law.WrapperTask):
 
+        exclude_params_repr_empty = set()
+
         if has_configs:
             configs = law.CSVParameter(
                 default=(default_config,),
@@ -1853,6 +1859,7 @@ def wrapper_factory(
                 "of the analysis; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_configs")
         if has_datasets:
             datasets = law.CSVParameter(
                 default=("*",),
@@ -1869,6 +1876,7 @@ def wrapper_factory(
                 "auxiliary data of the corresponding config; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_datasets")
         if has_shifts:
             shifts = law.CSVParameter(
                 default=("nominal",),
@@ -1885,6 +1893,7 @@ def wrapper_factory(
                 "of the corresponding config; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_shifts")
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)

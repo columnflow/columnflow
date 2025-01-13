@@ -187,6 +187,9 @@ def btag_weights(
     pt = flat_np_view(events.Jet.pt[jet_mask], axis=1)
     discr_flat = flat_np_view(discr[jet_mask], axis=1)
 
+    # fix edge cases where the discriminator is non-finite
+    discr_flat[~np.isfinite(discr_flat)] = 0
+
     # helper to create and store the weight
     def add_weight(syst_name, syst_direction, column_name):
         # define a mask that selects the correct flavor to assign to, depending on the systematic

@@ -31,6 +31,7 @@ def increment_stats(
     weight_map: dict[str, ak.Array | tuple[ak.Array, ak.Array]] | None = None,
     group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
     group_combinations: Sequence[tuple[str]] | None = None,
+    skip_func: Callable[[str, list[str]], bool] | None = None,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
     """
@@ -110,8 +111,14 @@ def increment_stats(
     In this case, *stats* will obtain additional fields, such as
     ``"sum_mc_weight_per_process_and_njet"`` and ``"sum_mc_weight_selected_per_process_and_njet"``,
     referring to nested dictionaries whose structure depends on the exact order of group names per
-    tuple.
+    tuple. To reduce the number of entries in the stats but still make use of this combinatorics
+    feature, a *skip_func* can be defined that receives the weight name and the names of the groups
+    of an entry. If the function returns *True*, the entry will be skipped.
     """
+    # default skip func
+    if skip_func is None:
+        skip_func = lambda weight_name, group_names: False
+
     # make values in group map unique
     unique_group_values = {
         group_name: np.unique(ak.flatten(group_data["values"], axis=None))
@@ -170,6 +177,10 @@ def increment_stats(
 
         # per group combination
         for group_names in group_combinations:
+            # optionally skip
+            if skip_func(weight_name, group_names):
+                continue
+
             group_key = f"{weight_name}_per_" + "_and_".join(group_names)
 
             # set the default structures

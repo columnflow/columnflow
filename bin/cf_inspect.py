@@ -75,6 +75,7 @@ if __name__ == "__main__":
 
     args = ap.parse_args()
 
+    print("file content loaded into variable 'objects'")
     objects = [
         load(fname) for fname in args.files
     ]
