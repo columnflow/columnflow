@@ -65,7 +65,7 @@ class PlotVariablesBase(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # reqs["merged_hists"] = self.requires_from_branch()
+        reqs["merged_hists"] = self.requires_from_branch()
 
         return reqs
 
