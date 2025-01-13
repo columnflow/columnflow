@@ -33,12 +33,13 @@ bootstrap_htcondor_standalone() {
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
     local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
 
-    # temporary fix for missing voms/x509 variables in the lcg setup
-    # (disabled in favor of the general software fix below which also sets these variables)
-    # export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
-    # export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
-    # export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
-    # export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    # fix for missing voms/x509 variables in the lcg setup of the naf
+    if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
+        export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
+        export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
+        export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+        export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    fi
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -51,25 +52,18 @@ bootstrap_htcondor_standalone() {
     else
         fetch_software="false"
         echo "found existing software at ${CF_SOFTWARE_BASE}"
-
-        # temporary fix on the NAF that suffers from a proliferation of python 2.7 packages being
-        # prepended to the general python path, and simultaneously missing libraries (e.g. json-c)
-        # in the alma9 lcg setup that stops gfal from working
-        if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
-            export PATH="$( filter_path_var "${PATH}" "python2\.7" )"
-            export PYTHONPATH="$( filter_path_var "${PYTHONPATH}" "python2\.7" )"
-            export MAMBA_ROOT_PREFIX="${CF_SOFTWARE_BASE}/conda"
-            export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
-            source "${CF_SOFTWARE_BASE}/conda/etc/profile.d/micromamba.sh" "" || return "$?"
-            micromamba activate || return "$?"
-        fi
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
     if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
-        ls "$( dirname "${lcg_setup}" )" &> /dev/null
-        if [ ! -f "${lcg_setup}" ]; then
+        # stat the setup file with a timeout to avoid hanging
+        timeout 20 stat "${lcg_setup}" &> /dev/null
+        local ret="$?"
+        if [ "${ret}" = "124" ]; then
+            >&2 echo "lcg setup file ${lcg_setup} not accessible, mount not responding after 20s"
+            return "1"
+        elif [ "${ret}" != "0" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"
             return "1"
         fi

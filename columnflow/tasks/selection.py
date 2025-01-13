@@ -245,7 +245,7 @@ class SelectEvents(
             )
 
         # save stats
-        outputs["stats"].dump(stats, indent=4, formatter="json")
+        outputs["stats"].dump(stats, formatter="json")
         outputs["hists"].dump(hists, formatter="pickle")
 
         # print some stats

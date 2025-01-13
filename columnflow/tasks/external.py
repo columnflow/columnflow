@@ -139,6 +139,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             shell=True,
             stdout=subprocess.PIPE,
             executable="/bin/bash",
+            kill_timeout=1,
         )
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
