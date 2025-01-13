@@ -286,7 +286,7 @@ class MergeSelectionStats(
     SelectorMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.tasks.ForestMerge,
+    law.LocalWorkflow,
     RemoteWorkflow,
 ):
     # flag that sets the *hists* output to optional if True
@@ -295,9 +295,6 @@ class MergeSelectionStats(
     # default sandbox, might be overwritten by selector function (needed to load hist objects)
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
-    # merge 25 stats files into 1 at every step of the merging cascade
-    merge_factor = 25
-
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
@@ -305,46 +302,38 @@ class MergeSelectionStats(
     )
 
     def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
+        # single branch without payload
+        return {0: None}
 
-    def merge_workflow_requires(self):
-        return self.reqs.SelectEvents.req_different_branching(self, _exclude={"branches"})
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["stats"] = self.reqs.SelectEvents.req_different_branching(self)
+        return reqs
 
-    def merge_requires(self, start_branch, end_branch):
-        return self.reqs.SelectEvents.req_different_branching(
-            self,
-            branches=((start_branch, end_branch),),
-            workflow="local",
-            _exclude={"branch"},
-        )
+    def requires(self):
+        return self.reqs.SelectEvents.req_different_branching(self, workflow="local", branch=-1)
 
-    def merge_output(self):
+    def output(self):
         return {
             "stats": self.target("stats.json"),
             "hists": self.target("hists.pickle", optional=self.selection_hists_optional),
         }
 
-    def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["collection"].targets.values())
-
     @law.decorator.notify
     @law.decorator.log
     def run(self):
-        return super().run()
-
-    def merge(self, inputs, output):
-        # merge input stats
-        merged_stats = defaultdict(float)
-        merged_hists = {}
-
         # check that hists are present for all inputs
+        inputs = list(self.input().collection.targets.values())
         hist_inputs_exist = [inp["hists"].exists() for inp in inputs]
         if any(hist_inputs_exist) and not all(hist_inputs_exist):
             logger.warning(
                 f"For dataset {self.dataset_inst.name}, cf.SelectEvents has produced hists for "
                 "some but not all files. Histograms will not be merged and an empty pickle file will be stored.",
             )
+
+        # merge input stats
+        merged_stats = defaultdict(float)
+        merged_hists = {}
 
         for inp in inputs:
             stats = inp["stats"].load(formatter="json", cache=False)
@@ -356,9 +345,10 @@ class MergeSelectionStats(
                 hists = inp["hists"].load(formatter="pickle", cache=False)
                 self.merge_counts(merged_hists, hists)
 
-        # write the output
-        output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
-        output["hists"].dump(merged_hists, formatter="pickle", cache=False)
+        # write the outputs
+        outputs = self.output()
+        outputs["stats"].dump(merged_stats, formatter="json", cache=False)
+        outputs["hists"].dump(merged_hists, formatter="pickle", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
