@@ -7,8 +7,8 @@
 # Bootstrap function for standalone htcondor jobs.
 bootstrap_htcondor_standalone() {
     # set env variables
-    export CF_REMOTE_ENV="1"
-    export CF_ON_HTCONDOR="1"
+    export CF_REMOTE_ENV="true"
+    export CF_ON_HTCONDOR="true"
     export CF_HTCONDOR_FLAVOR="{{cf_htcondor_flavor}}"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
@@ -129,8 +129,8 @@ bootstrap_htcondor_standalone() {
 # Bootstrap function for slurm jobs.
 bootstrap_slurm() {
     # set env variables
-    export CF_REMOTE_ENV="1"
-    export CF_ON_SLURM="1"
+    export CF_REMOTE_ENV="true"
+    export CF_ON_SLURM="true"
     export CF_SLURM_FLAVOR="{{cf_slurm_flavor}}"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
