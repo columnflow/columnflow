@@ -273,13 +273,34 @@ def plot_all(
     if not skip_legend:
         # resolve legend kwargs
         legend_kwargs = {
-            "ncol": 1,
+            "ncols": 1,
             "loc": "upper right",
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
 
         # retrieve the legend handles and their labels
         handles, labels = ax.get_legend_handles_labels()
+
+        # custom argument: entries_per_column
+        entries_per_col = legend_kwargs.pop("entries_per_column", None)
+        n_cols = legend_kwargs.get("ncols", 1)
+        if entries_per_col and n_cols > 1:
+            if isinstance(entries_per_col, (list, tuple)):
+                assert len(entries_per_col) == n_cols
+            else:
+                entries_per_col = [entries_per_col] * n_cols
+            # fill handles and labels with empty entries
+            max_entries = max(entries_per_col)
+            empty_handle = ax.plot([], label="", linestyle="None")[0]
+            for i, n in enumerate(entries_per_col):
+                for _ in range(max_entries - min(n, len(handles) - sum(entries_per_col[:i]))):
+                    handles.insert(i * max_entries + n, empty_handle)
+                    labels.insert(i * max_entries + n, "")
+
+        # custom hook to adjust handles and labels
+        update_handles_labels = legend_kwargs.pop("update_handles_labels", None)
+        if callable(update_handles_labels):
+            update_handles_labels(ax, handles, labels, n_cols)
 
         # assume all `StepPatch` objects are part of MC stack
         in_stack = [
@@ -289,13 +310,13 @@ def plot_all(
 
         # reverse order of entries that are part of the stack
         if any(in_stack):
-            def shuffle(entries, mask):
+            def revere_entries(entries, mask):
                 entries = np.array(entries, dtype=object)
                 entries[mask] = entries[mask][::-1]
                 return list(entries)
 
-            handles = shuffle(handles, in_stack)
-            labels = shuffle(labels, in_stack)
+            handles = revere_entries(handles, in_stack)
+            labels = revere_entries(labels, in_stack)
 
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)

@@ -256,7 +256,7 @@ def apply_process_settings(
             scale_factor_str = (
                 str(scale_factor)
                 if scale_factor < 1e5
-                else f"{scale_factor:.2e}".replace("+", "")
+                else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
             )
             proc_inst.label = inject_label(
                 proc_inst.label,
@@ -428,9 +428,10 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
-    cat_label = category_inst.label
-    if isinstance(cat_label, (list, tuple)):
-        cat_label = "\n".join(cat_label)
+    # get category labels, adding the variable selection label if any
+    cat_labels = law.util.make_list(category_inst.label)
+    if (var_cat_label := variable_inst.x("selection_label", None)) is not None:
+        cat_labels.append(var_cat_label)
 
     style_config = {
         "ax_cfg": {
@@ -446,7 +447,7 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": cat_label},
+        "annotate_cfg": {"text": "\n".join(cat_labels) or ""},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
