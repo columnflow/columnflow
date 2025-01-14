@@ -274,8 +274,9 @@ class PlotBase(ConfigTask):
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
             style_config = law.util.merge_dicts(custom_style_config, style_config)
             kwargs["style_config"] = style_config
-        # update defaults after application of general_settings
-        kwargs.setdefault("cms_label", "pw")
+
+        # update other defaults
+        kwargs.setdefault("cms_label", style_config.get("cms_label", "pw"))
 
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)

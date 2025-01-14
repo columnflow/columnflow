@@ -253,9 +253,14 @@ def apply_process_settings(
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
+            scale_factor_str = (
+                str(scale_factor)
+                if scale_factor < 1e5
+                else f"{scale_factor:.2e}".replace("+", "")
+            )
             proc_inst.label = inject_label(
                 proc_inst.label,
-                rf"$\times${scale_factor}",
+                rf"$\times${scale_factor_str}",
                 placeholder="SCALE",
                 before_parentheses=True,
             )
@@ -289,8 +294,12 @@ def apply_variable_settings(
                 hists[proc_inst] = h
 
         # overflow and underflow bins
-        overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
-        underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
+        overflow = getattr(var_inst, "overflow", None)
+        if overflow is None:
+            overflow = var_inst.x("overflow", False)
+        underflow = getattr(var_inst, "underflow", None)
+        if underflow is None:
+            underflow = var_inst.x("underflow", False)
 
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
@@ -419,10 +428,15 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
+    cat_label = category_inst.label
+    if isinstance(cat_label, (list, tuple)):
+        cat_label = "\n".join(cat_label)
+
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
+            # TODO: need to make bin width and unit configurable in future
+            "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False),
             "xlabel": variable_inst.get_full_x_title(),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
@@ -432,7 +446,7 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": category_inst.label},
+        "annotate_cfg": {"text": cat_label},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,

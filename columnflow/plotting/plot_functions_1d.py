@@ -281,6 +281,11 @@ def plot_cutflow(
     if not yscale:
         yscale = "linear"
 
+    # prepare category label
+    cat_label = category_inst.label
+    if isinstance(cat_label, (list, tuple)):
+        cat_label = "\n".join(map(str, cat_label))
+
     default_style_config = {
         "ax_cfg": {
             "ylabel": "Selection efficiency" if shape_norm else "Selection yield",
@@ -291,7 +296,7 @@ def plot_cutflow(
         "legend_cfg": {
             "loc": "upper right",
         },
-        "annotate_cfg": {"text": category_inst.label},
+        "annotate_cfg": {"text": cat_label},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
