@@ -7,8 +7,10 @@ Source: https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3#Scale_And_Smea
 
 from __future__ import annotations
 
+import abc
 import functools
 import itertools
+import law
 from dataclasses import dataclass, field
 
 from columnflow.calibration import Calibrator, calibrator
@@ -46,171 +48,225 @@ class EGammaCorrectionConfig:
         return obj
 
 
-@calibrator(
-    uses={
-        # nano columns
-        "nPhoton", "Photon.{seedGain,pt,superclusterEta,r9}", "run",
-        optional_column("Photon.rawPt"),
-    },
-    produces={
-        "Photon.pt",
-        optional_column("Photon.rawPt"),
-    },
+class egamma_scale_corrector(Calibrator):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._with_uncertainties = True
+
     # whether to produce also uncertainties
-    with_uncertainties=True,
-    # function to determine the correction file
-    get_photon_file=(lambda self, external_files: external_files.photon_ss),
-    # function to determine the tec config
-    get_pec_config=(lambda self: EGammaCorrectionConfig.new(self.config_inst.x.pec)),
+    @property
+    def with_uncertainties():
+        return self._with_uncertainties
+    
+    @with_uncertainties.setter
+    def with_uncertainties(self, value: bool):
+        self._with_uncertainties = value
+    
+    @property
+    @abc.abstractmethod
+    def source_field(self) -> set[str]:
+        """Fields required for the current calibrator."""
+        ...
 
-)
-def pec(
-    self: Calibrator,
-    events: ak.Array,
-    **kwargs,
-) -> ak.Array:
-    """
-    Calibrator for tau energy. Requires an external file in the config under ``tau_sf``, e.g.
+    @abc.abstractmethod
+    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFile:
+        """Function to retrieve the correction file from the external files.
 
-    .. code-block:: python
+        :param external_files: File target containing the files as requested
+            in the current config instance under ``config_inst.x.external_files``
+        """
+        ...
+    
+    @abc.abstractmethod
+    def get_scale_config(self) -> EGammaCorrectionConfig:
+        """Function to retrieve the configuration for the photon energy correction."""
+        ...
 
-        cfg.x.external_files = DotDict.wrap({
-            "tau_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-6ce37404/POG/TAU/2017_UL/tau.json.gz",  # noqa
-        })
+    def pre_call_hook(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+        """Function to run before the main call function.
 
-    and a :py:class:`TECConfig` configuration object named ``tec``,
+        This function can be used to perform operations and add columns if necessary.
 
-    .. code-block:: python
+        :param events: Awkward array containing the events
+        :return: The awkward array after the pre-call operations
+        """
+        return events
 
-        # run 3 example
-        from columnflow.calibration.cms.tau import TECConfig
+    def call_func(
+        self: Calibrator,
+        events: ak.Array,
+        **kwargs,
+    ) -> ak.Array:
+        """
+        Calibrator for photon and electron energy scales.
+        Requires an external file in the config under ``electronSS`` or ``photon_SS``,
+        e.g.
 
-        cfg.x.tec = TECConfig(
-            tagger="DeepTau2018v2p5",
-            corrector_kwargs={"wp": "Tight", "wp_VSe": "Tight"},
+        .. code-block:: python
+
+            cfg.x.external_files = DotDict.wrap({
+                "tau_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-6ce37404/POG/TAU/2017_UL/tau.json.gz",  # noqa
+            })
+
+        and a :py:class:`TECConfig` configuration object named ``tec``,
+
+        .. code-block:: python
+
+            # run 3 example
+            from columnflow.calibration.cms.tau import TECConfig
+
+            cfg.x.tec = TECConfig(
+                tagger="DeepTau2018v2p5",
+                corrector_kwargs={"wp": "Tight", "wp_VSe": "Tight"},
+            )
+
+        *get_tau_file* and *get_tec_config* can be adapted in a subclass in case they are stored
+        differently in the config.
+
+        Resources:
+        https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
+        """
+        # if there is a pre_call function, execute it
+        if hasattr(self, "pre_call_hook"):
+            events = self.pre_call_hook(events, **kwargs)
+        # from IPython import embed
+        # embed(header="entering photon energy calibration")
+        # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
+        if not "rawPt" in events[self.source_field].fields:
+            events = set_ak_column_f32(
+                events, f"{self.source_field}.rawPt", events[self.source_field].pt
+            )
+        # the correction tool only supports flat arrays, so convert inputs to flat np view first
+        # corrections are always applied to the raw pt - this is important if more than
+        # one correction is applied in a row
+        pt_eval = flat_np_view(events[self.source_field].rawPt, axis=1)
+
+        # the final corrections must be applied to the current pt though
+        pt_application = flat_np_view(events[self.source_field].pt, axis=1)
+
+        broadcasted_run = ak.broadcast_arrays(
+            events[self.source_field].pt, events.run
+        )
+        run = flat_np_view(broadcasted_run[1], axis=1)
+        gain = flat_np_view(events[self.source_field].seedGain, axis=1)
+        sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
+        r9 = flat_np_view(events[self.source_field].r9, axis=1)
+
+        # prepare arguments
+        # we use pt as et since there depends in linear (following the recoomendations)
+        # (energy is part of the LorentzVector behavior)
+        variable_map = {
+            "et": pt_eval,
+            "eta": sceta,
+            "gain": gain,
+            "r9": r9,
+            "run": run,
+            **self.scale_config.corrector_kwargs,
+        }
+        args = tuple(
+            variable_map[inp.name] for inp in self.scale_corrector.inputs
+            if inp.name in variable_map
         )
 
-    *get_tau_file* and *get_tec_config* can be adapted in a subclass in case they are stored
-    differently in the config.
+        # varied corrections are only applied to MC
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            scale_uncertainties = self.scale_corrector("total_uncertainty", *args)
+            scales_up = (1 + scale_uncertainties)
+            scales_down = (1 - scale_uncertainties)
 
-    Resources:
-    https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
-    https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
-    """
-    # fail when running on data
-    # from IPython import embed
-    # embed(header="entering photon energy calibration")
-    # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-    if not "rawPt" in events.Photon.fields:
-        events = set_ak_column_f32(events, "Photon.rawPt", events.Photon.pt)
-    # the correction tool only supports flat arrays, so convert inputs to flat np view first
-    # corrections are always applied to the raw pt - this is important if more than
-    # one correction is applied in a row
-    pt_eval = flat_np_view(events.Photon.rawPt, axis=1)
+            for (direction, scales) in [("up", scales_up), ("down", scales_down)]:
+                # copy pt and mass
+                pt_varied = ak_copy(events[self.source_field].pt)
+                pt_view = flat_np_view(pt_varied, axis=1)
 
-    # the final corrections must be applied to the current pt though
-    pt_application = flat_np_view(events.Photon.pt, axis=1)
+                # apply the scale variation
+                pt_view *= scales
 
-    broadcasted_run = ak.broadcast_arrays(events.Photon.pt, events.run)[1]
-    run = flat_np_view(broadcasted_run, axis=1)
-    gain = flat_np_view(events.Photon.seedGain, axis=1)
-    sceta = flat_np_view(events.Photon.superclusterEta, axis=1)
-    r9 = flat_np_view(events.Photon.r9, axis=1)
+                # save columns
+                postfix = f"scale_{direction}"
+                events = set_ak_column_f32(
+                    events, f"{self.source_field}.pt_{postfix}", pt_varied
+                )
 
-    # prepare arguments
-    # we use pt as et since there depends in linear (following the recoomendations)
-    # (energy is part of the LorentzVector behavior)
-    variable_map = {
-        "et": pt_eval,
-        "eta": sceta,
-        "gain": gain,
-        "r9": r9,
-        "run": run,
-        **self.pec_config.corrector_kwargs,
-    }
-    args = tuple(
-        variable_map[inp.name] for inp in self.pec_corrector.inputs
-        if inp.name in variable_map
-    )
+                
+        # apply the nominal correction
+        # note: changes are applied to the views and directly propagate to the original ak arrays
+        # and do not need to be inserted into the events chunk again
+        # EGamma energy correction is ONLY applied to DATA
+        if self.dataset_inst.is_data:
+            scales_nom = self.scale_corrector("total_correction", *args)
+            pt_application *= scales_nom
 
-    # varied corrections are only applied to MC
-    if self.with_uncertainties and self.dataset_inst.is_mc:
-        scale_uncertainties = self.pec_corrector("total_uncertainty", *args)
-        scales_up = (1 + scale_uncertainties)
-        scales_down = (1 - scale_uncertainties)
-
-        for (direction, scales) in [("up", scales_up), ("down", scales_down)]:
-            # copy pt and mass
-            pt_varied = ak_copy(events.Photon.pt)
-            pt_view = flat_np_view(pt_varied, axis=1)
-
-            # apply the scale variation
-            pt_view *= scales
-
-            # save columns
-            postfix = f"scale_{direction}"
-            events = set_ak_column_f32(events, f"Photon.pt_{postfix}", pt_varied)
-
-            
-    # apply the nominal correction
-    # note: changes are applied to the views and directly propagate to the original ak arrays
-    # and do not need to be inserted into the events chunk again
-    # EGamma energy correction is ONLY applied to DATA
-    if self.dataset_inst.is_data:
-        scales_nom = self.pec_corrector("total_correction", *args)
-        pt_application *= scales_nom
-
-    return events
+        return events
 
 
-@pec.init
-def pec_init(self: Calibrator) -> None:
-    self.pec_config: EGammaCorrectionConfig = self.get_pec_config()
-
-    # if we do not calculate uncertainties, this module
-    # should only run on observed DATA
-    self.data_only = not self.with_uncertainties
-    # add columns with unceratinties if requested
-    # photon scale _uncertainties_ are only available for MC
-    if self.with_uncertainties and self.dataset_inst.is_mc:
-        # also check if met propagation is enabled
-        src_fields = ["Photon.pt"]
-        
-        self.produces |= {
-            f"{field}_scale_{direction}"
-            for field, direction in itertools.product(
-                src_fields,
-                ["up", "down"],
-            )
+    def init_func(self: Calibrator) -> None:
+        self.uses={
+            # nano columns
+            f"n{self.source_field}", f"{self.source_field}.{{seedGain,pt,superclusterEta,r9}}",
+            "run",
+            optional_column(f"{self.source_field}.rawPt"),
         }
+        self.produces={
+            f"{self.source_field}.pt",
+            optional_column(f"{self.source_field}.rawPt"),
+        }
+        self.scale_config: EGammaCorrectionConfig = self.get_scale_config()
+
+        # if we do not calculate uncertainties, this module
+        # should only run on observed DATA
+        self.data_only = not self.with_uncertainties
+
+        # add columns with unceratinties if requested
+        # photon scale _uncertainties_ are only available for MC
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            src_fields = [f"{self.source_field}.pt"]            
+            self.produces |= {
+                f"{field}_scale_{direction}"
+                for field, direction in itertools.product(
+                    src_fields,
+                    ["up", "down"],
+                )
+            }
 
 
-@pec.requires
-def pec_requires(self: Calibrator, reqs: dict) -> None:
-    from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    def requires_func(self: Calibrator, reqs: dict) -> None:
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@pec.setup
-def pec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    bundle = reqs["external_files"]
+    def setup_func(
+        self: Calibrator,
+        reqs: dict,
+        inputs: dict,
+        reader_targets: InsertableDict
+    ) -> None:
+        bundle = reqs["external_files"]
 
-    # create the tec corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_photon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
-    # from IPython import embed
-    # embed(header="entering pec setup")
-    self.pec_corrector = correction_set[self.pec_config.correction_set]
+        # create the tec corrector
+        import correctionlib
+        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+        correction_set = correctionlib.CorrectionSet.from_string(
+            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
+        )
+        # from IPython import embed
+        # embed(header="entering pec setup")
+        self.scale_corrector = correction_set[self.scale_config.correction_set]
 
-    # check versions
-    assert self.pec_corrector.version in [0, 1, 2]
+        # check versions
+        assert self.scale_corrector.version in [0, 1, 2]
 
 
-pec_nominal = pec.derive("pec_nominal", cls_dict={"with_uncertainties": False})
-
+pec = egamma_scale_corrector.derive(
+    "pec", cls_dict={
+        "source_field": "Photon",
+        "with_uncertainties": True,
+        "get_correction_file": (lambda self, external_files: external_files.photon_ss),
+        "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.pec)),
+    }
+)
 
 @calibrator(
     uses={
