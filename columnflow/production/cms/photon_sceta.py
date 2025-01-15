@@ -22,7 +22,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 @producer(
     uses={"Photon.{phi,eta,isScEtaEB,isScEtaEE}", "PV.{x,y,z}"},
-    produces={"Photon.SCEta"},
+    produces={"Photon.superclusterEta"},
 )
 def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -97,6 +97,6 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     sctheta = np.atan(tg_sctheta)
     sctheta = ak.where(sctheta < 0, sctheta + np.pi, sctheta)
     tg_sctheta_over_2 = np.tan(sctheta / 2)
-    events =  set_ak_column_f32(events, "Photon.SCEta", -np.log(tg_sctheta_over_2))
+    events =  set_ak_column_f32(events, "Photon.superclusterEta", -np.log(tg_sctheta_over_2))
 
     return events
