@@ -100,3 +100,18 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events =  set_ak_column_f32(events, "Photon.superclusterEta", -np.log(tg_sctheta_over_2))
 
     return events
+
+@producer(
+    uses={"Electron.{eta,deltaEtaSC}",},
+    produces={"Photon.superclusterEta"},
+)
+def electron_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Returns the electron super cluster eta.
+    """
+
+    events = set_ak_column_f32(
+        events, "Electron.superclusterEta",
+        events.Electron.eta + events.Electron.deltaEtaSC
+    )
+    return events
