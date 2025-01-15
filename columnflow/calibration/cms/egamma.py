@@ -56,7 +56,7 @@ class egamma_scale_corrector(Calibrator):
 
     # whether to produce also uncertainties
     @property
-    def with_uncertainties():
+    def with_uncertainties(self) -> bool:
         return self._with_uncertainties
     
     @with_uncertainties.setter
@@ -65,7 +65,7 @@ class egamma_scale_corrector(Calibrator):
     
     @property
     @abc.abstractmethod
-    def source_field(self) -> set[str]:
+    def source_field(self) -> str:
         """Fields required for the current calibrator."""
         ...
 
@@ -203,13 +203,13 @@ class egamma_scale_corrector(Calibrator):
 
 
     def init_func(self: Calibrator) -> None:
-        self.uses={
+        self.uses |= {
             # nano columns
             f"n{self.source_field}", f"{self.source_field}.{{seedGain,pt,superclusterEta,r9}}",
             "run",
             optional_column(f"{self.source_field}.rawPt"),
         }
-        self.produces={
+        self.produces |= {
             f"{self.source_field}.pt",
             optional_column(f"{self.source_field}.rawPt"),
         }
@@ -268,203 +268,262 @@ pec = egamma_scale_corrector.derive(
     }
 )
 
-@calibrator(
-    uses={
-        # nano columns
-        "nPhoton", "Photon.{pt,superclusterEta,r9}", "run",
-        optional_column("Photon.rawPt"),
-    },
-    produces={
-        "Photon.pt",
-        optional_column("Photon.rawPt"),
-    },
+class egamma_resolution_corrector(Calibrator):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._with_uncertainties = True
+        # smearing of the energy resolution is only applied to MC
+        self.mc_only=True
+
+        # use deterministic seeds for random smearing and
+        # take the "index"-th random number per seed when not -1
+        self._deterministic_seed_index=-1
+
     # whether to produce also uncertainties
-    with_uncertainties=True,
-    # smearing of the energy resolution is only applied to MC
-    mc_only=True,
-    # use deterministic seeds for random smearing and
-    # take the "index"-th random number per seed when not -1
-    deterministic_seed_index=-1,
-    # function to determine the correction file
-    get_photon_file=(lambda self, external_files: external_files.photon_ss),
-    # function to determine the tec config
-    get_per_config=(lambda self: EGammaCorrectionConfig.new(self.config_inst.x.per)),
-)
-def per(
-    self: Calibrator,
-    events: ak.Array,
-    **kwargs,
-) -> ak.Array:
-    """
-    Calibrator for tau energy. Requires an external file in the config under ``tau_sf``, e.g.
+    @property
+    def with_uncertainties(self) -> bool:
+        return self._with_uncertainties
+    
+    @with_uncertainties.setter
+    def with_uncertainties(self, value: bool):
+        self._with_uncertainties = value
 
-    .. code-block:: python
+    @property
+    def deterministic_seed_index(self) -> int:
+        return self._deterministic_seed_index
+    
+    @deterministic_seed_index.setter
+    def deterministic_seed_index(self, value: int):
+        self._deterministic_seed_index = value
 
-        cfg.x.external_files = DotDict.wrap({
-            "tau_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-6ce37404/POG/TAU/2017_UL/tau.json.gz",  # noqa
-        })
+    @property
+    @abc.abstractmethod
+    def source_field(self) -> str:
+        """Fields required for the current calibrator."""
+        ...
 
-    and a :py:class:`TECConfig` configuration object named ``tec``,
+    @abc.abstractmethod
+    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFile:
+        """Function to retrieve the correction file from the external files.
 
-    .. code-block:: python
+        :param external_files: File target containing the files as requested
+            in the current config instance under ``config_inst.x.external_files``
+        """
+        ...
+    
+    @abc.abstractmethod
+    def get_resolution_config(self) -> EGammaCorrectionConfig:
+        """Function to retrieve the configuration for the photon energy correction."""
+        ...
 
-        # run 3 example
-        from columnflow.calibration.cms.tau import TECConfig
+    def pre_call_hook(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+        """Function to run before the main call function.
 
-        cfg.x.tec = TECConfig(
-            tagger="DeepTau2018v2p5",
-            corrector_kwargs={"wp": "Tight", "wp_VSe": "Tight"},
-        )
+        This function can be used to perform operations and add columns if necessary.
 
-    *get_tau_file* and *get_tec_config* can be adapted in a subclass in case they are stored
-    differently in the config.
+        :param events: Awkward array containing the events
+        :return: The awkward array after the pre-call operations
+        """
+        return events
 
-    Resources:
-    https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
-    https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
-    """
-    # fail when running on data
-    # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-    if not "rawPt" in events.Photon.fields:
-        events = set_ak_column_f32(events, "Photon.rawPt", events.Photon.pt)
+    def call_func(
+        self: Calibrator,
+        events: ak.Array,
+        **kwargs,
+    ) -> ak.Array:
+        """
+        Calibrator for tau energy. Requires an external file in the config under ``tau_sf``, e.g.
 
-    # the correction tool only supports flat arrays, so convert inputs to flat np view first
+        .. code-block:: python
 
-    sceta = flat_np_view(events.Photon.superclusterEta, axis=1)
-    r9 = flat_np_view(events.Photon.r9, axis=1)
+            cfg.x.external_files = DotDict.wrap({
+                "tau_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-6ce37404/POG/TAU/2017_UL/tau.json.gz",  # noqa
+            })
 
-    # prepare arguments
-    # we use pt as et since there depends in linear (following the recoomendations)
-    # (energy is part of the LorentzVector behavior)
-    variable_map = {
-        "eta": sceta,
-        "r9": r9,
-        **self.per_config.corrector_kwargs,
-    }
-    args = tuple(
-        variable_map[inp.name] for inp in self.per_corrector.inputs
-        if inp.name in variable_map
-    )
+        and a :py:class:`TECConfig` configuration object named ``tec``,
 
-    # calculate the smearing scale
-    rho = self.per_corrector("rho", *args)
+        .. code-block:: python
 
-    # -- stochastic smearing
-    # normally distributed random numbers according to EGamma resolution
+            # run 3 example
+            from columnflow.calibration.cms.tau import TECConfig
 
-    # varied corrections
-    if self.with_uncertainties and self.dataset_inst.is_mc:
-        rho_unc = self.per_corrector("err_rho", *args)
-        smearing_up = (
-            ak_random(
-                0, rho + rho_unc, events["Photon"].deterministic_seed,
-                rand_func=self.deterministic_normal
+            cfg.x.tec = TECConfig(
+                tagger="DeepTau2018v2p5",
+                corrector_kwargs={"wp": "Tight", "wp_VSe": "Tight"},
             )
-            if self.deterministic_seed_index >= 0
-            else ak_random(0, rho + rho_unc, rand_func=np.random.Generator(
-                np.random.SFC64(events.event.to_list())).normal,
+
+        *get_tau_file* and *get_tec_config* can be adapted in a subclass in case they are stored
+        differently in the config.
+
+        Resources:
+        https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
+        """
+        # if there is a pre_call function, execute it
+        if hasattr(self, "pre_call_hook"):
+            events = self.pre_call_hook(events, **kwargs)
+
+        # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
+        if not "rawPt" in events[self.source_field].fields:
+            events = set_ak_column_f32(
+                events, f"{self.source_field}.rawPt", events[self.source_field].pt
             )
-        )
 
-        smearing_down = (
-            ak_random(
-                0, rho - rho_unc, events["Photon"].deterministic_seed,
-                rand_func=self.deterministic_normal
-            )
-            if self.deterministic_seed_index >= 0
-            else ak_random(0, rho - rho_unc, rand_func=np.random.Generator(
-                np.random.SFC64(events.event.to_list())).normal,
-            )
-        )
+        # the correction tool only supports flat arrays, so convert inputs to flat np view first
 
-        for (direction, smear) in [("up", smearing_up), ("down", smearing_down)]:
-            # copy pt and mass
-            pt_varied = ak_copy(events.Photon.pt)
-            pt_view = flat_np_view(pt_varied, axis=1)
+        sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
+        r9 = flat_np_view(events[self.source_field].r9, axis=1)
 
-            # from IPython import embed
-            # embed(header=f"about to apply smearing for {direction} direction")
-            # apply the scale variation
-            # cast ak to numpy array for convenient usage of *=
-            pt_view *= smear.to_numpy()
-
-            # save columns
-            postfix = f"res_{direction}"
-            events = set_ak_column_f32(events, f"Photon.pt_{postfix}", pt_varied)
-
-            
-    # apply the nominal correction
-    # note: changes are applied to the views and directly propagate to the original ak arrays
-    # and do not need to be inserted into the events chunk again
-    # EGamma energy resolution correction is ONLY applied to MC
-    if self.dataset_inst.is_mc:
-        smearing = (
-            ak_random(0, rho, events["Photon"].deterministic_seed, rand_func=self.deterministic_normal)
-            if self.deterministic_seed_index >= 0
-            else ak_random(0, rho, rand_func=np.random.Generator(
-                np.random.SFC64(events.event.to_list())).normal,
-            )
-        )
-        # the final corrections must be applied to the current pt though
-        pt = flat_np_view(events.Photon.pt, axis=1)
-        pt *= smearing.to_numpy()
-
-    return events
-
-
-@per.init
-def per_init(self: Calibrator) -> None:
-    self.per_config: EGammaCorrectionConfig = self.get_per_config()
-
-    # add columns with unceratinties if requested
-    # photon scale _uncertainties_ are only available for MC
-    if self.with_uncertainties and self.dataset_inst.is_mc:
-        # also check if met propagation is enabled
-        src_fields = ["Photon.pt"]
-        
-        self.produces |= {
-            f"{field}_res_{direction}"
-            for field, direction in itertools.product(
-                src_fields,
-                ["up", "down"],
-            )
+        # prepare arguments
+        # we use pt as et since there depends in linear (following the recoomendations)
+        # (energy is part of the LorentzVector behavior)
+        variable_map = {
+            "eta": sceta,
+            "r9": r9,
+            **self.resolution_config.corrector_kwargs,
         }
+        args = tuple(
+            variable_map[inp.name] for inp in self.resolution_corrector.inputs
+            if inp.name in variable_map
+        )
+
+        # calculate the smearing scale
+        rho = self.resolution_corrector("rho", *args)
+
+        # -- stochastic smearing
+        # normally distributed random numbers according to EGamma resolution
+
+        # varied corrections
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            rho_unc = self.resolution_corrector("err_rho", *args)
+            smearing_up = (
+                ak_random(
+                    0, rho + rho_unc, events[self.source_field].deterministic_seed,
+                    rand_func=self.deterministic_normal
+                )
+                if self.deterministic_seed_index >= 0
+                else ak_random(0, rho + rho_unc, rand_func=np.random.Generator(
+                    np.random.SFC64(events.event.to_list())).normal,
+                )
+            )
+
+            smearing_down = (
+                ak_random(
+                    0, rho - rho_unc, events[self.source_field].deterministic_seed,
+                    rand_func=self.deterministic_normal
+                )
+                if self.deterministic_seed_index >= 0
+                else ak_random(0, rho - rho_unc, rand_func=np.random.Generator(
+                    np.random.SFC64(events.event.to_list())).normal,
+                )
+            )
+
+            for (direction, smear) in [("up", smearing_up), ("down", smearing_down)]:
+                # copy pt and mass
+                pt_varied = ak_copy(events[self.source_field].pt)
+                pt_view = flat_np_view(pt_varied, axis=1)
+
+                # from IPython import embed
+                # embed(header=f"about to apply smearing for {direction} direction")
+                # apply the scale variation
+                # cast ak to numpy array for convenient usage of *=
+                pt_view *= smear.to_numpy()
+
+                # save columns
+                postfix = f"res_{direction}"
+                events = set_ak_column_f32(
+                    events, f"{self.source_field}.pt_{postfix}", pt_varied
+                )
+
+                
+        # apply the nominal correction
+        # note: changes are applied to the views and directly propagate to the original ak arrays
+        # and do not need to be inserted into the events chunk again
+        # EGamma energy resolution correction is ONLY applied to MC
+        if self.dataset_inst.is_mc:
+            smearing = (
+                ak_random(0, rho, events[self.source_field].deterministic_seed, rand_func=self.deterministic_normal)
+                if self.deterministic_seed_index >= 0
+                else ak_random(0, rho, rand_func=np.random.Generator(
+                    np.random.SFC64(events.event.to_list())).normal,
+                )
+            )
+            # the final corrections must be applied to the current pt though
+            pt = flat_np_view(events[self.source_field].pt, axis=1)
+            pt *= smearing.to_numpy()
+
+        return events
+
+    def init_func(self: Calibrator) -> None:
+        self.uses |= {
+        # nano columns
+        f"n{self.source_field}", f"{self.source_field}.{{pt,superclusterEta,r9}}",
+        optional_column(f"{self.source_field}.rawPt"),
+        }
+        self.produces |= {
+            f"{self.source_field}.pt",
+            optional_column(f"{self.source_field}.rawPt"),
+        }
+        
+        self.resolution_config: EGammaCorrectionConfig = self.get_resolution_config()
+
+        # add columns with unceratinties if requested
+        # photon scale _uncertainties_ are only available for MC
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            # also check if met propagation is enabled
+            src_fields = [f"{self.source_field}.pt"]
+            
+            self.produces |= {
+                f"{field}_res_{direction}"
+                for field, direction in itertools.product(
+                    src_fields,
+                    ["up", "down"],
+                )
+            }
 
 
-@per.requires
-def per_requires(self: Calibrator, reqs: dict) -> None:
-    from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    def requires_func(self: Calibrator, reqs: dict) -> None:
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
-@per.setup
-def per_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    bundle = reqs["external_files"]
+    def setup_func(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+        bundle = reqs["external_files"]
 
-    # create the tec corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_photon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
-    self.per_corrector = correction_set[self.per_config.correction_set]
+        # create the tec corrector
+        import correctionlib
+        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+        correction_set = correctionlib.CorrectionSet.from_string(
+            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
+        )
+        self.resolution_corrector = correction_set[self.resolution_config.correction_set]
 
-    # check versions
-    assert self.per_corrector.version in [0, 1, 2]
+        # check versions
+        assert self.resolution_corrector.version in [0, 1, 2]
 
-    # use deterministic seeds for random smearing if requested
-    if self.deterministic_seed_index >= 0:
-        idx = self.deterministic_seed_index
-        bit_generator = np.random.SFC64
-        def deterministic_normal(loc, scale, seed):
-            return np.asarray([
-                np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1)[-1]
-                for _loc, _scale, _seed in zip(loc, scale, seed)
-            ])
-        self.deterministic_normal = deterministic_normal
+        # use deterministic seeds for random smearing if requested
+        if self.deterministic_seed_index >= 0:
+            idx = self.deterministic_seed_index
+            bit_generator = np.random.SFC64
+            def deterministic_normal(loc, scale, seed):
+                return np.asarray([
+                    np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1)[-1]
+                    for _loc, _scale, _seed in zip(loc, scale, seed)
+                ])
+            self.deterministic_normal = deterministic_normal
 
 
-per_nominal = per.derive("per_nominal", cls_dict={"with_uncertainties": False})
+per = egamma_resolution_corrector.derive(
+    "per", cls_dict={
+        "source_field": "Photon",
+        "with_uncertainties": True,
+        # function to determine the correction file
+        "get_correction_file": (lambda self, external_files: external_files.photon_ss),
+        # function to determine the tec config
+        "get_resolution_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.per)),
+    },
+)
 
 @calibrator(
     uses={per, pec},
