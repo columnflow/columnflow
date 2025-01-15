@@ -276,7 +276,7 @@ class PlotBase(ConfigTask):
             kwargs["style_config"] = style_config
 
         # update other defaults
-        kwargs.setdefault("cms_label", style_config.get("cms_label", "pw"))
+        kwargs.setdefault("cms_label", "pw")
 
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)

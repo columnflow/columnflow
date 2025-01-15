@@ -428,10 +428,8 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
-    # get category labels, adding the variable selection label if any
-    cat_labels = law.util.make_list(category_inst.label)
-    if (var_cat_label := variable_inst.x("selection_label", None)) is not None:
-        cat_labels.append(var_cat_label)
+    # build the label from category and optional variable selection labels
+    cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
 
     style_config = {
         "ax_cfg": {
@@ -447,7 +445,7 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": "\n".join(cat_labels) or ""},
+        "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
@@ -599,6 +597,24 @@ def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: 
         value = (maximum - minimum) * factor + minimum
 
     return value
+
+
+def join_labels(
+    *labels: str | list[str | None] | None,
+    inline_sep: str = ",",
+    multiline_sep: str = "\n",
+) -> str:
+    if not labels:
+        return ""
+
+    # the first label decides whether the overall label is inline or multiline
+    inline = isinstance(labels[0], str)
+
+    # collect parts
+    parts = sum(map(law.util.make_list, labels), [])
+
+    # join and return
+    return (inline_sep if inline else multiline_sep).join(filter(None, parts))
 
 
 def reduce_with(spec: str | float | callable, values: list[float]) -> float:

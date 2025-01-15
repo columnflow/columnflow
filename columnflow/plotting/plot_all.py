@@ -181,15 +181,15 @@ def plot_all(
     "cms_label_cfg": dict,
 
     :param plot_config: Dictionary that defines which plot methods will be called with which
-    key word arguments.
+        key word arguments.
     :param style_config: Dictionary that defines arguments on how to style the overall plot.
     :param skip_ratio: Optional bool parameter to not display the ratio plot.
     :param skip_legend: Optional bool parameter to not display the legend.
     :param cms_label: Optional string parameter to set the CMS label text.
     :param whitespace_fraction: Optional float parameter that defines the ratio of which
-    the plot will consist of whitespace for the legend and labels
+        the plot will consist of whitespace for the legend and labels
     :param magnitudes: Optional float parameter that defines the displayed ymin when plotting
-    with a logarithmic scale.
+        with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
     # available plot methods mapped to their names
@@ -282,8 +282,10 @@ def plot_all(
         handles, labels = ax.get_legend_handles_labels()
 
         # custom argument: entries_per_column
-        entries_per_col = legend_kwargs.pop("entries_per_column", None)
         n_cols = legend_kwargs.get("ncols", 1)
+        entries_per_col = legend_kwargs.pop("entries_per_column", None)
+        if callable(entries_per_col):
+            entries_per_col = entries_per_col(ax, handles, labels, n_cols)
         if entries_per_col and n_cols > 1:
             if isinstance(entries_per_col, (list, tuple)):
                 assert len(entries_per_col) == n_cols
@@ -345,6 +347,6 @@ def plot_all(
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
 
-    plt.tight_layout()
+    fig.tight_layout()
 
     return fig, axs
