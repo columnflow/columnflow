@@ -83,16 +83,6 @@ class egamma_scale_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def pre_call_hook(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-        """Function to run before the main call function.
-
-        This function can be used to perform operations and add columns if necessary.
-
-        :param events: Awkward array containing the events
-        :return: The awkward array after the pre-call operations
-        """
-        return events
-
     def call_func(
         self: Calibrator,
         events: ak.Array,
@@ -128,9 +118,7 @@ class egamma_scale_corrector(Calibrator):
         https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
         """
-        # if there is a pre_call function, execute it
-        if hasattr(self, "pre_call_hook"):
-            events = self.pre_call_hook(events, **kwargs)
+        
         # from IPython import embed
         # embed(header="entering photon energy calibration")
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
@@ -317,16 +305,6 @@ class egamma_resolution_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def pre_call_hook(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
-        """Function to run before the main call function.
-
-        This function can be used to perform operations and add columns if necessary.
-
-        :param events: Awkward array containing the events
-        :return: The awkward array after the pre-call operations
-        """
-        return events
-
     def call_func(
         self: Calibrator,
         events: ak.Array,
@@ -360,9 +338,6 @@ class egamma_resolution_corrector(Calibrator):
         https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
         """
-        # if there is a pre_call function, execute it
-        if hasattr(self, "pre_call_hook"):
-            events = self.pre_call_hook(events, **kwargs)
 
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if not "rawPt" in events[self.source_field].fields:
@@ -529,9 +504,9 @@ per = egamma_resolution_corrector.derive(
     uses={per, pec},
     produces={per, pec},
     with_uncertainties=True,
-    get_photon_file=None,
-    get_per_config=None,
-    get_pec_config=None,
+    get_correction_file=None,
+    get_scale_config=None,
+    get_resolution_config=None,
     deterministic_seed_index=-1,
 )
 def photons(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
@@ -561,13 +536,86 @@ def photons_init(self: Calibrator) -> None:
     self.deps_kwargs[per]["with_uncertainties"] = self.with_uncertainties
     
     self.deps_kwargs[per]["deterministic_seed_index"] = self.deterministic_seed_index
-    if self.get_photon_file is not None:
-        self.deps_kwargs[pec]["get_photon_file"] = self.get_photon_file
-        self.deps_kwargs[per]["get_photon_file"] = self.get_photon_file
+    if self.get_correction_file is not None:
+        self.deps_kwargs[pec]["get_correction_file"] = self.get_correction_file
+        self.deps_kwargs[per]["get_correction_file"] = self.get_correction_file
 
-    if self.get_per_config is not None:
-        self.deps_kwargs[per]["get_per_config"] = self.get_per_config
-    if self.get_pec_config is not None:
-        self.deps_kwargs[pec]["get_pec_config"] = self.get_pec_config
+    if self.get_resolution_config is not None:
+        self.deps_kwargs[per]["get_resolution_config"] = self.get_resolution_config
+    if self.get_scale_config is not None:
+        self.deps_kwargs[pec]["get_scale_config"] = self.get_scale_config
 
 photons_nominal = photons.derive("photons_nominal", cls_dict={"with_uncertainties": False})
+
+
+eer = egamma_resolution_corrector.derive(
+    "eer", cls_dict={
+        "source_field": "Electron",
+        # calculation of superclusterEta for electrons requires the deltaEtaSC
+        "uses": {"Electron.deltaEtaSC"},
+        "with_uncertainties": True,
+        # function to determine the correction file
+        "get_correction_file": (lambda self, external_files: external_files.electron_ss),
+        # function to determine the tec config
+        "get_resolution_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.eer)),
+    },
+)
+
+eec = egamma_scale_corrector.derive(
+    "eec", cls_dict={
+        "source_field": "Electron",
+        # calculation of superclusterEta for electrons requires the deltaEtaSC
+        "uses": {"Electron.deltaEtaSC"},
+        "with_uncertainties": True,
+        "get_correction_file": (lambda self, external_files: external_files.electron_ss),
+        "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.eec)),
+    }
+)
+
+
+@calibrator(
+    uses={eer, eec},
+    produces={eer, eec},
+    with_uncertainties=True,
+    get_correction_file=None,
+    get_scale_config=None,
+    get_resolution_config=None,
+    deterministic_seed_index=-1,
+)
+def electrons(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Calibrator for photons. This calibrator runs the energy scale and resolution calibrators
+    for photons.
+
+    Careful! Always apply resolution before scale corrections for MC.
+    """
+    if self.dataset_inst.is_mc:
+        events = self[eer](events, **kwargs)
+
+    if self.with_uncertainties or self.dataset_inst.is_data:
+        events = self[eec](events, **kwargs)
+
+    return events
+
+@electrons.init
+def electrons_init(self: Calibrator) -> None:
+    # forward argument to the producers
+
+    if not eec in self.deps_kwargs:
+        self.deps_kwargs[eec] = dict()
+    if not eer in self.deps_kwargs:
+        self.deps_kwargs[eer] = dict()
+    self.deps_kwargs[eec]["with_uncertainties"] = self.with_uncertainties
+    self.deps_kwargs[eer]["with_uncertainties"] = self.with_uncertainties
+    
+    self.deps_kwargs[eer]["deterministic_seed_index"] = self.deterministic_seed_index
+    if self.get_correction_file is not None:
+        self.deps_kwargs[eec]["get_correction_file"] = self.get_correction_file
+        self.deps_kwargs[eer]["get_correction_file"] = self.get_correction_file
+
+    if self.get_resolution_config is not None:
+        self.deps_kwargs[eer]["get_resolution_config"] = self.get_resolution_config
+    if self.get_scale_config is not None:
+        self.deps_kwargs[eec]["get_scale_config"] = self.get_scale_config
+
+electrons_nominal = photons.derive("electrons_nominal", cls_dict={"with_uncertainties": False})
