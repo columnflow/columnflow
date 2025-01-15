@@ -820,7 +820,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
     padded_gen_jets = ak.pad_none(
         events[gen_jet_name],
-        max_gen_jet_idx + 1 if max_gen_jet_idx is not None else 0,
+        0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
     )
 
     # gen jets that match the reconstructed jets
