@@ -119,9 +119,8 @@ class egamma_scale_corrector(Calibrator):
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
         """
         
-        # from IPython import embed
-        # embed(header="entering photon energy calibration")
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
+        
         if not "rawPt" in events[self.source_field].fields:
             events = set_ak_column_f32(
                 events, f"{self.source_field}.rawPt", events[self.source_field].pt
@@ -193,7 +192,7 @@ class egamma_scale_corrector(Calibrator):
     def init_func(self: Calibrator) -> None:
         self.uses |= {
             # nano columns
-            f"n{self.source_field}", f"{self.source_field}.{{seedGain,pt,superclusterEta,r9}}",
+            f"{self.source_field}.{{seedGain,pt,superclusterEta,r9}}",
             "run",
             optional_column(f"{self.source_field}.rawPt"),
         }
@@ -218,6 +217,7 @@ class egamma_scale_corrector(Calibrator):
                     ["up", "down"],
                 )
             }
+        
 
 
     def requires_func(self: Calibrator, reqs: dict) -> None:
@@ -239,8 +239,6 @@ class egamma_scale_corrector(Calibrator):
         correction_set = correctionlib.CorrectionSet.from_string(
             self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
         )
-        # from IPython import embed
-        # embed(header="entering pec setup")
         self.scale_corrector = correction_set[self.scale_config.correction_set]
 
         # check versions
@@ -342,7 +340,7 @@ class egamma_resolution_corrector(Calibrator):
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if not "rawPt" in events[self.source_field].fields:
             events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", events[self.source_field].pt
+                events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt)
             )
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
@@ -374,22 +372,22 @@ class egamma_resolution_corrector(Calibrator):
             rho_unc = self.resolution_corrector("err_rho", *args)
             smearing_up = (
                 ak_random(
-                    0, rho + rho_unc, events[self.source_field].deterministic_seed,
+                    1, rho + rho_unc, events[self.source_field].deterministic_seed,
                     rand_func=self.deterministic_normal
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(0, rho + rho_unc, rand_func=np.random.Generator(
+                else ak_random(1, rho + rho_unc, rand_func=np.random.Generator(
                     np.random.SFC64(events.event.to_list())).normal,
                 )
             )
 
             smearing_down = (
                 ak_random(
-                    0, rho - rho_unc, events[self.source_field].deterministic_seed,
+                    1, rho - rho_unc, events[self.source_field].deterministic_seed,
                     rand_func=self.deterministic_normal
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(0, rho - rho_unc, rand_func=np.random.Generator(
+                else ak_random(1, rho - rho_unc, rand_func=np.random.Generator(
                     np.random.SFC64(events.event.to_list())).normal,
                 )
             )
@@ -399,8 +397,6 @@ class egamma_resolution_corrector(Calibrator):
                 pt_varied = ak_copy(events[self.source_field].pt)
                 pt_view = flat_np_view(pt_varied, axis=1)
 
-                # from IPython import embed
-                # embed(header=f"about to apply smearing for {direction} direction")
                 # apply the scale variation
                 # cast ak to numpy array for convenient usage of *=
                 pt_view *= smear.to_numpy()
@@ -418,9 +414,9 @@ class egamma_resolution_corrector(Calibrator):
         # EGamma energy resolution correction is ONLY applied to MC
         if self.dataset_inst.is_mc:
             smearing = (
-                ak_random(0, rho, events[self.source_field].deterministic_seed, rand_func=self.deterministic_normal)
+                ak_random(1, rho, events[self.source_field].deterministic_seed, rand_func=self.deterministic_normal)
                 if self.deterministic_seed_index >= 0
-                else ak_random(0, rho, rand_func=np.random.Generator(
+                else ak_random(1, rho, rand_func=np.random.Generator(
                     np.random.SFC64(events.event.to_list())).normal,
                 )
             )
@@ -433,7 +429,7 @@ class egamma_resolution_corrector(Calibrator):
     def init_func(self: Calibrator) -> None:
         self.uses |= {
         # nano columns
-        f"n{self.source_field}", f"{self.source_field}.{{pt,superclusterEta,r9}}",
+        f"{self.source_field}.{{pt,superclusterEta,r9}}",
         optional_column(f"{self.source_field}.rawPt"),
         }
         self.produces |= {
