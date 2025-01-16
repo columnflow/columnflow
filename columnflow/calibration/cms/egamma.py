@@ -347,6 +347,7 @@ class egamma_resolution_corrector(Calibrator):
 
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
+        flat_seeds = flat_np_view(events[self.source_field].deterministic_seed, axis=1)
 
         # prepare arguments
         # we use pt as et since there depends in linear (following the recoomendations)
@@ -372,8 +373,8 @@ class egamma_resolution_corrector(Calibrator):
             rho_unc = self.resolution_corrector("err_rho", *args)
             smearing_up = (
                 ak_random(
-                    1, rho + rho_unc, events[self.source_field].deterministic_seed,
-                    rand_func=self.deterministic_normal
+                    1, rho + rho_unc, flat_seeds,
+                    rand_func=self.deterministic_normal_up
                 )
                 if self.deterministic_seed_index >= 0
                 else ak_random(1, rho + rho_unc, rand_func=np.random.Generator(
@@ -383,8 +384,8 @@ class egamma_resolution_corrector(Calibrator):
 
             smearing_down = (
                 ak_random(
-                    1, rho - rho_unc, events[self.source_field].deterministic_seed,
-                    rand_func=self.deterministic_normal
+                    1, rho - rho_unc, flat_seeds,
+                    rand_func=self.deterministic_normal_down
                 )
                 if self.deterministic_seed_index >= 0
                 else ak_random(1, rho - rho_unc, rand_func=np.random.Generator(
@@ -414,7 +415,7 @@ class egamma_resolution_corrector(Calibrator):
         # EGamma energy resolution correction is ONLY applied to MC
         if self.dataset_inst.is_mc:
             smearing = (
-                ak_random(1, rho, events[self.source_field].deterministic_seed, rand_func=self.deterministic_normal)
+                ak_random(1, rho, flat_seeds, rand_func=self.deterministic_normal)
                 if self.deterministic_seed_index >= 0
                 else ak_random(1, rho, rand_func=np.random.Generator(
                     np.random.SFC64(events.event.to_list())).normal,
@@ -477,12 +478,14 @@ class egamma_resolution_corrector(Calibrator):
         if self.deterministic_seed_index >= 0:
             idx = self.deterministic_seed_index
             bit_generator = np.random.SFC64
-            def deterministic_normal(loc, scale, seed):
+            def deterministic_normal(loc, scale, seed, idx_offset=0):
                 return np.asarray([
-                    np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1)[-1]
+                    np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1 + idx_offset)[-1]
                     for _loc, _scale, _seed in zip(loc, scale, seed)
                 ])
-            self.deterministic_normal = deterministic_normal
+            self.deterministic_normal = functools.partial(deterministic_normal, idx_offset=0)
+            self.deterministic_normal_up = functools.partial(deterministic_normal, idx_offset=1)
+            self.deterministic_normal_down = functools.partial(deterministic_normal, idx_offset=2)
 
 
 per = egamma_resolution_corrector.derive(
