@@ -817,7 +817,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
 
     # pad list of gen jets to prevent index error on match lookup
-    padded_gen_jets = ak.pad_none(events[gen_jet_name], ak.max(valid_gen_jet_idxs) + 1)
+    max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
+    padded_gen_jets = ak.pad_none(
+        events[gen_jet_name],
+        0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
+    )
 
     # gen jets that match the reconstructed jets
     matched_gen_jets = padded_gen_jets[valid_gen_jet_idxs]
