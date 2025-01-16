@@ -71,6 +71,7 @@ class PlotVariablesBase(
     def get_plot_shifts(self):
         return
 
+    @law.decorator.notify
     @law.decorator.log
     @view_output_plots
     def run(self):

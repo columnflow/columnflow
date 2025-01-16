@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import os
+import sys
 import re
 import math
 import time
@@ -46,14 +47,58 @@ hist = maybe_import("hist")
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
 
-#: Columns that are always required when opening a nano file with coffea.
-mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
-
 #: Empty-value definition in places where an integer number is expected but not present.
 EMPTY_INT = -99999
 
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
+
+#: Columns that are always required when opening a nano file with coffea.
+mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
+
+#: Information on behavior of certain collections to (re-)attach it via attach_behavior.
+default_coffea_collections = {
+    "Jet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "FatJet": {
+        "type_name": "FatJet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "SubJet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Muon": {
+        "type_name": "Muon",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Electron": {
+        "type_name": "Electron",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Tau": {
+        "type_name": "Tau",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "MET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "PuppiMET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+}
 
 
 class ItemEval(object):
@@ -1078,6 +1123,105 @@ def sorted_ak_to_root(
     f.close()
 
 
+def sorted_indices_from_mask(
+    mask: ak.Array,
+    metric: ak.Array,
+    sort_axis: int = -1,
+    ascending: bool = True,
+) -> ak.Array:
+    """
+    Takes a boolean *mask* and converts it to an array of indices, sorted using a *metric* of equal
+    size along a *sort_axis* and, by default, in *ascending* order. Example:
+
+    .. code-block:: python
+
+        mask = [[True, False, False, True], ...]
+        metric = [[5.0, 1.0, 0.9, 4.1], ...]
+
+        sorted_indices_from_mask(mask, metric)
+        # -> [[3, 0], ...]
+
+    :param mask: The boolean mask.
+    :param metric: The metric to sort by.
+    :param sort_axis: The axis along which to sort.
+    :param ascending: Whether to sort in ascending order.
+    :return: An array of sorted indices.
+    """
+    indices = ak.argsort(metric, axis=sort_axis, ascending=ascending)
+    return indices[mask[indices]]
+
+
+def mask_from_indices(indices: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
+    """
+    Takes an array of *indices* and a *layout_array* and returns a boolean mask with the same shape
+    as *layout_array* where values at *indices* are set to *True*. Example:
+
+    .. code-block:: python
+
+        indices = [[2, 0], ...]
+        layout_array = [[x, y, z], ...]
+
+        mask_from_indices(indices, layout_array)
+        # -> [[True, False, True], ...]
+
+    :param indices: The indices to set to *True*.
+    :param layout_array: The layout array to use as a template.
+    :return: A boolean mask with the same shape as *layout_array*.
+    """
+    # create a flat mask starting with false
+    flat_mask = flat_np_view(ak.full_like(layout_array, False, dtype=bool))
+    # use offsets of the layout to create increasing indices
+    flat_indices = flat_np_view((indices + layout_array.layout.offsets.data[:-1, ..., None]))
+    # set the indices to true
+    flat_mask[flat_indices] = True
+    # layout the mask
+    return layout_ak_array(flat_mask, layout_array)
+
+
+def full_like(layout_array: ak.Array, value: Any, *, dtype: Any = None, **kwargs) -> ak.Array:
+    """
+    Creates an awkward array with the same layout as *layout_array* and fills it with a constant
+    *value* of type *dtype*. The difference to awkward's standalone ``ak.full_like`` is that all
+    original parameters (like docstrings, annotations, etc.) are removed from the layout of the
+    resulting array.
+
+    :param layout_array: The layout array to use as a template.
+    :param value: The value to fill the array with.
+    :param dtype: The data type of the array.
+    :return: An awkward array with the same layout as *layout_array* and filled with *value*.
+    """
+    return ak.without_parameters(ak.full_like(layout_array, value, dtype=dtype, **kwargs))
+
+
+def fill_at(
+    ak_array: ak.Array,
+    where: ak.Array,
+    route: Route | str,
+    value: float | int,
+    *,
+    value_type: type | str | None = None,
+) -> ak.Array:
+    """
+    Fills a column identified through *route* in an *ak_array* with a *value* where a
+    corresponding *where* mask is *True*.
+
+    :param ak_array: The input array.
+    :param where: The boolean mask where to fill the value.
+    :param route: The route describing the column to fill.
+    :param value: The value to fill.
+    :param value_type: The data type of the value. Inferred from value if not set.
+    :return: A new array with the value filled at the specified route.
+    """
+    # cast to route
+    route = Route(route)
+
+    # create new values with selective values
+    new_values = ak.where(where, value, route.apply(ak_array))
+
+    # insert back
+    return set_ak_column(ak_array, route, new_values, value_type=value_type)
+
+
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
@@ -1124,6 +1268,57 @@ def attach_behavior(
         with_name=type_name,
         behavior=behavior,
     )
+
+
+def attach_coffea_behavior(
+    ak_array: ak.Array,
+    collections: dict | Sequence | None = None,
+) -> ak.Array:
+    """
+    Add coffea's NanoEvents behavior to collections in an *ak_array*. When empty, *collections*
+    defaults to :py:attr:``default_coffea_collections``.
+
+    :param ak_array: The input array.
+    :param collections: The collections to attach behavior to.
+    :return: The array with the behavior attached.
+    """
+    # update or reduce collection info
+    _collections = default_coffea_collections
+    if isinstance(collections, dict):
+        _collections = _collections.copy()
+        _collections.update(collections)
+    elif isinstance(collections, (list, tuple)):
+        _collections = {
+            name: info
+            for name, info in _collections.items()
+            if name in collections
+        }
+
+    for name, info in _collections.items():
+        if not info:
+            continue
+
+        # get the collection to update
+        if name not in ak_array.fields:
+            continue
+        coll = ak_array[name]
+
+        # when a check_attr is defined, do nothing in case it already exists
+        if info.get("check_attr") and getattr(coll, info["check_attr"], None) is not None:
+            continue
+
+        # default infos
+        type_name = info.get("type_name") or name
+        skip_fields = info.get("skip_fields")
+
+        # apply the behavior
+        ak_array = set_ak_column(
+            ak_array,
+            name,
+            attach_behavior(coll, type_name, skip_fields=skip_fields),
+        )
+
+    return ak_array
 
 
 def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
@@ -3562,6 +3757,7 @@ class ChunkedIOHandler(object):
                 if isinstance(result_obj, self.ReadResult):
                     if self.iter_message:
                         print(self.iter_message.format(pos=result_obj.chunk_pos))
+                        sys.stdout.flush()
 
                     # probably overly-cautious, but run garbage collection before and after
                     t1 = time.perf_counter()

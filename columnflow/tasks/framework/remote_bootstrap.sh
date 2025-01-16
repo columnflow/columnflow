@@ -7,8 +7,8 @@
 # Bootstrap function for standalone htcondor jobs.
 bootstrap_htcondor_standalone() {
     # set env variables
-    export CF_REMOTE_ENV="1"
-    export CF_ON_HTCONDOR="1"
+    export CF_REMOTE_ENV="true"
+    export CF_ON_HTCONDOR="true"
     export CF_HTCONDOR_FLAVOR="{{cf_htcondor_flavor}}"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
@@ -33,12 +33,13 @@ bootstrap_htcondor_standalone() {
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
     local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
 
-    # temporary fix for missing voms/x509 variables in the lcg setup
-    # (disabled in favor of the general software fix below which also sets these variables)
-    # export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
-    # export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
-    # export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
-    # export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    # fix for missing voms/x509 variables in the lcg setup of the naf
+    if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
+        export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
+        export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
+        export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+        export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+    fi
 
     # fallback to a default path when the externally given software base is empty or inaccessible
     local fetch_software="true"
@@ -51,25 +52,18 @@ bootstrap_htcondor_standalone() {
     else
         fetch_software="false"
         echo "found existing software at ${CF_SOFTWARE_BASE}"
-
-        # temporary fix on the NAF that suffers from a proliferation of python 2.7 packages being
-        # prepended to the general python path, and simultaneously missing libraries (e.g. json-c)
-        # in the alma9 lcg setup that stops gfal from working
-        if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
-            export PATH="$( filter_path_var "${PATH}" "python2\.7" )"
-            export PYTHONPATH="$( filter_path_var "${PYTHONPATH}" "python2\.7" )"
-            export MAMBA_ROOT_PREFIX="${CF_SOFTWARE_BASE}/conda"
-            export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
-            source "${CF_SOFTWARE_BASE}/conda/etc/profile.d/micromamba.sh" "" || return "$?"
-            micromamba activate || return "$?"
-        fi
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
     local skip_lcg_setup="true"
     if ${force_lcg_setup} || ! type gfal-ls &> /dev/null; then
-        ls "$( dirname "${lcg_setup}" )" &> /dev/null
-        if [ ! -f "${lcg_setup}" ]; then
+        # stat the setup file with a timeout to avoid hanging
+        timeout 20 stat "${lcg_setup}" &> /dev/null
+        local ret="$?"
+        if [ "${ret}" = "124" ]; then
+            >&2 echo "lcg setup file ${lcg_setup} not accessible, mount not responding after 20s"
+            return "1"
+        elif [ "${ret}" != "0" ]; then
             >&2 echo "lcg setup file ${lcg_setup} not existing"
             return "1"
         fi
@@ -135,8 +129,8 @@ bootstrap_htcondor_standalone() {
 # Bootstrap function for slurm jobs.
 bootstrap_slurm() {
     # set env variables
-    export CF_REMOTE_ENV="1"
-    export CF_ON_SLURM="1"
+    export CF_REMOTE_ENV="true"
+    export CF_ON_SLURM="true"
     export CF_SLURM_FLAVOR="{{cf_slurm_flavor}}"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
@@ -159,14 +153,15 @@ bootstrap_slurm() {
 # Bootstrap function for crab jobs.
 bootstrap_crab() {
     # set env variables
-    export CF_ON_GRID="1"
-    export CF_REMOTE_ENV="1"
+    export CF_ON_GRID="true"
+    export CF_REMOTE_ENV="true"
     export CF_CERN_USER="{{cf_cern_user}}"
     export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
     export CF_STORE_NAME="{{cf_store_name}}"
+    export CF_STORE_LOCAL="${CF_DATA}/${CF_STORE_NAME}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
     export CF_WLCG_TOOLS="{{wlcg_tools}}"
     export LAW_CONFIG_FILE="{{law_config_file}}"
@@ -229,6 +224,9 @@ bootstrap_crab() {
     echo -e "\nsource repository setup ..."
     source "${CF_REPO_BASE}/setup.sh" "" || return "$?"
     echo "done sourcing repository setup"
+
+    # log all CF variables for debugging
+    # python -c 'import os; print("\n".join(f"{k} = {v}" for k, v in os.environ.items() if k.startswith("CF_")))'
 
     # optional custom command after the setup is sourced
     {{cf_post_setup_command}}

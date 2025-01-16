@@ -24,6 +24,7 @@ from columnflow.plotting.plot_util import (
     get_position,
     get_profile_variations,
     blind_sensitive_bins,
+    join_labels,
 )
 
 hist = maybe_import("hist")
@@ -281,6 +282,9 @@ def plot_cutflow(
     if not yscale:
         yscale = "linear"
 
+    # build the label from category
+    cat_label = join_labels(category_inst.label)
+
     default_style_config = {
         "ax_cfg": {
             "ylabel": "Selection efficiency" if shape_norm else "Selection yield",
@@ -291,7 +295,7 @@ def plot_cutflow(
         "legend_cfg": {
             "loc": "upper right",
         },
-        "annotate_cfg": {"text": category_inst.label},
+        "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,

@@ -110,6 +110,7 @@ class CreateHistograms(
     def output(self):
         return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
@@ -119,6 +120,7 @@ class CreateHistograms(
         from columnflow.columnar_util import (
             Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
         )
+        from columnflow.columnar_util import attach_coffea_behavior
 
         # prepare inputs
         inputs = self.input()
@@ -196,6 +198,9 @@ class CreateHistograms(
                     remove_src=True,
                     missing_strategy=self.missing_column_alias_strategy,
                 )
+
+                # attach coffea behavior aiding functional variable expressions
+                events = attach_coffea_behavior(events)
 
                 # build the full event weight
                 if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
@@ -361,6 +366,7 @@ class MergeHistograms(
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs
@@ -452,6 +458,7 @@ class MergeShiftedHistograms(
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs

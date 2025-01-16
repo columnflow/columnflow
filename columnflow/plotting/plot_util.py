@@ -253,9 +253,14 @@ def apply_process_settings(
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
+            scale_factor_str = (
+                str(scale_factor)
+                if scale_factor < 1e5
+                else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+            )
             proc_inst.label = inject_label(
                 proc_inst.label,
-                rf"$\times${scale_factor}",
+                rf"$\times${scale_factor_str}",
                 placeholder="SCALE",
                 before_parentheses=True,
             )
@@ -289,8 +294,12 @@ def apply_variable_settings(
                 hists[proc_inst] = h
 
         # overflow and underflow bins
-        overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
-        underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
+        overflow = getattr(var_inst, "overflow", None)
+        if overflow is None:
+            overflow = var_inst.x("overflow", False)
+        underflow = getattr(var_inst, "underflow", None)
+        if underflow is None:
+            underflow = var_inst.x("underflow", False)
 
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
@@ -419,10 +428,14 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
+    # build the label from category and optional variable selection labels
+    cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
+
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
+            # TODO: need to make bin width and unit configurable in future
+            "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False),
             "xlabel": variable_inst.get_full_x_title(),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
@@ -432,7 +445,7 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": category_inst.label},
+        "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
@@ -584,6 +597,24 @@ def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: 
         value = (maximum - minimum) * factor + minimum
 
     return value
+
+
+def join_labels(
+    *labels: str | list[str | None] | None,
+    inline_sep: str = ",",
+    multiline_sep: str = "\n",
+) -> str:
+    if not labels:
+        return ""
+
+    # the first label decides whether the overall label is inline or multiline
+    inline = isinstance(labels[0], str)
+
+    # collect parts
+    parts = sum(map(law.util.make_list, labels), [])
+
+    # join and return
+    return (inline_sep if inline else multiline_sep).join(filter(None, parts))
 
 
 def reduce_with(spec: str | float | callable, values: list[float]) -> float:
