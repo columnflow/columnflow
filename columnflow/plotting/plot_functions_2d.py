@@ -144,14 +144,17 @@ def plot_2d(
             over=extreme_colors[1],
         )
 
+    # unit format on axes (could be configurable)
+    unit_format = "{title} [{unit}]"
+
     # setup style config
     # TODO: some kind of z-label is still missing
     default_style_config = {
         "ax_cfg": {
             "xlim": (variable_insts[0].x_min, variable_insts[0].x_max),
             "ylim": (variable_insts[1].x_min, variable_insts[1].x_max),
-            "xlabel": variable_insts[0].get_full_x_title(),
-            "ylabel": variable_insts[1].get_full_x_title(),
+            "xlabel": variable_insts[0].get_full_x_title(unit_format=unit_format),
+            "ylabel": variable_insts[1].get_full_x_title(unit_format=unit_format),
             "xscale": "log" if variable_insts[0].log_x else "linear",
             "yscale": "log" if variable_insts[1].log_x else "linear",
         },
