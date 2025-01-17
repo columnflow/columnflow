@@ -920,8 +920,13 @@ cf_cast_bool() {
 [ ! -z "${BASH_VERSION}" ] && export -f cf_cast_bool
 
 cf_export_bool() {
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local name="$1"
-    export "${name}"="$( cf_cast_bool "${!name}" )"
+    if ${shell_is_zsh}; then
+        export "${name}"="$( cf_cast_bool "${(P)name}" )"
+    else
+        export "${name}"="$( cf_cast_bool "${!name}" )"
+    fi
 }
 [ ! -z "${BASH_VERSION}" ] && export -f cf_export_bool
 

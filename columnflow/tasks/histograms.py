@@ -120,6 +120,7 @@ class CreateHistograms(
         from columnflow.columnar_util import (
             Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
         )
+        from columnflow.columnar_util import attach_coffea_behavior
 
         # prepare inputs
         inputs = self.input()
@@ -203,6 +204,9 @@ class CreateHistograms(
                     remove_src=True,
                     missing_strategy=self.missing_column_alias_strategy,
                 )
+
+                # attach coffea behavior aiding functional variable expressions
+                events = attach_coffea_behavior(events)
 
                 # build the full event weight
                 if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
