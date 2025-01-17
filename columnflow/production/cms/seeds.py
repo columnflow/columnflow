@@ -9,14 +9,16 @@ from __future__ import annotations
 import hashlib
 import abc
 
-import law
+import law  # type: ignore
+from law.util import InsertableDict  # type: ignore
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, primes, InsertableDict
+from columnflow.util import maybe_import, primes, MockModule
 from columnflow.columnar_util import Route, set_ak_column, optional_column as optional
+from columnflow.types import Callable, ModuleType, Any
 
-np = maybe_import("numpy")
-ak = maybe_import("awkward")
+np: ModuleType | Any = maybe_import("numpy")  # type: ignore
+ak: ModuleType | Any = maybe_import("awkward")  # type: ignore
 
 
 logger = law.logger.get_logger(__name__)
@@ -30,7 +32,7 @@ def create_seed(val: int, n_hex: int = 16) -> int:
 
 
 # store a vectorized version (only interface, not actually simd'ing)
-create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
+create_seed_vec: Callable | MockModule | Any = np.vectorize(create_seed, otypes=[np.uint64])
 
 
 @producer(
@@ -55,7 +57,7 @@ create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
         "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
     ])),
 )
-def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # type: ignore
     """
     Produces deterministic event seeds and stores them in *events* which is also returned.
 
@@ -136,7 +138,7 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
     return events
 
 
-@deterministic_event_seeds.init
+@deterministic_event_seeds.init  # type: ignore
 def deterministic_event_seeds_init(self: Producer) -> None:
     """
     Producer initialization that adds columns to the set of *used* columns based on the
@@ -147,7 +149,7 @@ def deterministic_event_seeds_init(self: Producer) -> None:
         self.uses.add(Route(column))
 
 
-@deterministic_event_seeds.setup
+@deterministic_event_seeds.setup  # type: ignore
 def deterministic_event_seeds_setup(
     self: Producer,
     reqs: dict,
@@ -158,10 +160,10 @@ def deterministic_event_seeds_setup(
     Setup function that defines conventions methods needed during the producer function.
     """
     # store primes in array
-    self.primes = np.array(primes, dtype=np.uint64)
+    self.primes = np.array(primes, dtype=np.uint64)  # type: ignore
 
     # helper to apply a route to an array with a silent failure that only issues a warning
-    def apply_route(ak_array: ak.Array, route: Route) -> ak.Array | None:
+    def apply_route(ak_array: ak.Array, route: Route) -> ak.Array | None:  # type: ignore
         try:
             return route.apply(ak_array)
         except ak.errors.FieldNotFoundError:
@@ -173,10 +175,11 @@ def deterministic_event_seeds_setup(
             )
             return None
 
-    self.apply_route = apply_route
+    self.apply_route = apply_route  # type: ignore
+
 
 class deterministic_object_seeds(Producer):
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._object_field: str
@@ -192,7 +195,7 @@ class deterministic_object_seeds(Producer):
     def prime_offset(self) -> int:
         ...
 
-    def call_func(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    def call_func(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # type: ignore
         """
         Produces deterministic seeds for each jet and stores them in *events* which is also returned.
         The jet seeds are based on the event seeds like the ones produced by
@@ -207,9 +210,12 @@ class deterministic_object_seeds(Producer):
         # create the seeds
         primes = self.primes[events.deterministic_seed % len(self.primes)]
         object_seed = events.deterministic_seed + (
-            primes * ak.values_astype(ak.local_index(events[self.object_field], axis=1) + self.primes[self.prime_offset], np.uint64)
+            primes * ak.values_astype(
+                ak.local_index(events[self.object_field], axis=1) + self.primes[self.prime_offset],
+                np.uint64,
+            )
         )
-        np_object_seed = np.asarray(ak.flatten(object_seed))
+        np_object_seed: np.Array[np.uint64] = np.asarray(ak.flatten(object_seed))
         np_object_seed[:] = create_seed_vec(np_object_seed)
 
         # store them
@@ -227,7 +233,6 @@ class deterministic_object_seeds(Producer):
         self.uses |= {f"{self.object_field}.pt"}
         self.produces |= {f"{self.object_field}.deterministic_seed"}
 
-    
     def setup_func(
         self: Producer,
         reqs: dict,
@@ -235,37 +240,45 @@ class deterministic_object_seeds(Producer):
         reader_targets: InsertableDict,
     ) -> None:
         # store primes in array
-        self.primes = np.array(primes, dtype=np.uint64)
+        self.primes = np.array(primes, dtype=np.uint64)  # type: ignore
 
-deterministic_jet_seeds = deterministic_object_seeds.derive( "deterministic_jet_seeds", cls_dict={
+
+deterministic_jet_seeds = deterministic_object_seeds.derive(
+    "deterministic_jet_seeds",
+    cls_dict={
         "object_field": "Jet",
         "prime_offset": 50,
-    }
+    },
 )
 
-deterministic_electron_seeds = deterministic_object_seeds.derive( "deterministic_electron_seeds", cls_dict={
+deterministic_electron_seeds = deterministic_object_seeds.derive(
+    "deterministic_electron_seeds",
+    cls_dict={
         "object_field": "Electron",
         "prime_offset": 60,
-    }
+    },
 )
 
-deterministic_photon_seeds = deterministic_object_seeds.derive( "deterministic_photon_seeds", cls_dict={
+deterministic_photon_seeds = deterministic_object_seeds.derive(
+    "deterministic_photon_seeds",
+    cls_dict={
         "object_field": "Photon",
         "prime_offset": 70,
-    }
+    },
 )
+
 
 @producer(
     uses={deterministic_event_seeds, deterministic_jet_seeds},
     produces={deterministic_event_seeds, deterministic_jet_seeds},
 )
-def deterministic_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def deterministic_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # type: ignore
     """
     Wrapper producer that invokes :py:func:`deterministic_event_seeds` and
     :py:func:`deterministic_jet_seeds`.
     """
     # create the event seeds
-    events = self[deterministic_event_seeds](events, **kwargs)
+    events = self[deterministic_event_seeds](events, **kwargs)  # type: ignore
 
     # create the jet seeds
     events = self[deterministic_jet_seeds](events, **kwargs)

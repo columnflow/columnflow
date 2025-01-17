@@ -58,11 +58,11 @@ class egamma_scale_corrector(Calibrator):
     @property
     def with_uncertainties(self) -> bool:
         return self._with_uncertainties
-    
+
     @with_uncertainties.setter
     def with_uncertainties(self, value: bool):
         self._with_uncertainties = value
-    
+
     @property
     @abc.abstractmethod
     def source_field(self) -> str:
@@ -77,7 +77,7 @@ class egamma_scale_corrector(Calibrator):
             in the current config instance under ``config_inst.x.external_files``
         """
         ...
-    
+
     @abc.abstractmethod
     def get_scale_config(self) -> EGammaCorrectionConfig:
         """Function to retrieve the configuration for the photon energy correction."""
@@ -118,12 +118,12 @@ class egamma_scale_corrector(Calibrator):
         https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
         """
-        
+
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-        
-        if not "rawPt" in events[self.source_field].fields:
+
+        if "rawPt" not in events[self.source_field].fields:
             events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", events[self.source_field].pt
+                events, f"{self.source_field}.rawPt", events[self.source_field].pt,
             )
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
         # corrections are always applied to the raw pt - this is important if more than
@@ -134,7 +134,7 @@ class egamma_scale_corrector(Calibrator):
         pt_application = flat_np_view(events[self.source_field].pt, axis=1)
 
         broadcasted_run = ak.broadcast_arrays(
-            events[self.source_field].pt, events.run
+            events[self.source_field].pt, events.run,
         )
         run = flat_np_view(broadcasted_run[1], axis=1)
         gain = flat_np_view(events[self.source_field].seedGain, axis=1)
@@ -174,10 +174,9 @@ class egamma_scale_corrector(Calibrator):
                 # save columns
                 postfix = f"scale_{direction}"
                 events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied
+                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
                 )
 
-                
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays
         # and do not need to be inserted into the events chunk again
@@ -187,7 +186,6 @@ class egamma_scale_corrector(Calibrator):
             pt_application *= scales_nom
 
         return events
-
 
     def init_func(self: Calibrator) -> None:
         self.uses |= {
@@ -209,7 +207,7 @@ class egamma_scale_corrector(Calibrator):
         # add columns with unceratinties if requested
         # photon scale _uncertainties_ are only available for MC
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            src_fields = [f"{self.source_field}.pt"]            
+            src_fields = [f"{self.source_field}.pt"]
             self.produces |= {
                 f"{field}_scale_{direction}"
                 for field, direction in itertools.product(
@@ -217,19 +215,16 @@ class egamma_scale_corrector(Calibrator):
                     ["up", "down"],
                 )
             }
-        
-
 
     def requires_func(self: Calibrator, reqs: dict) -> None:
         from columnflow.tasks.external import BundleExternalFiles
         reqs["external_files"] = BundleExternalFiles.req(self.task)
 
-
     def setup_func(
         self: Calibrator,
         reqs: dict,
         inputs: dict,
-        reader_targets: InsertableDict
+        reader_targets: InsertableDict,
     ) -> None:
         bundle = reqs["external_files"]
 
@@ -251,8 +246,9 @@ pec = egamma_scale_corrector.derive(
         "with_uncertainties": True,
         "get_correction_file": (lambda self, external_files: external_files.photon_ss),
         "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.pec)),
-    }
+    },
 )
+
 
 class egamma_resolution_corrector(Calibrator):
 
@@ -260,17 +256,17 @@ class egamma_resolution_corrector(Calibrator):
         super().__init__(*args, **kwargs)
         self._with_uncertainties = True
         # smearing of the energy resolution is only applied to MC
-        self.mc_only=True
+        self.mc_only = True
 
         # use deterministic seeds for random smearing and
         # take the "index"-th random number per seed when not -1
-        self._deterministic_seed_index=-1
+        self._deterministic_seed_index = -1
 
     # whether to produce also uncertainties
     @property
     def with_uncertainties(self) -> bool:
         return self._with_uncertainties
-    
+
     @with_uncertainties.setter
     def with_uncertainties(self, value: bool):
         self._with_uncertainties = value
@@ -278,7 +274,7 @@ class egamma_resolution_corrector(Calibrator):
     @property
     def deterministic_seed_index(self) -> int:
         return self._deterministic_seed_index
-    
+
     @deterministic_seed_index.setter
     def deterministic_seed_index(self, value: int):
         self._deterministic_seed_index = value
@@ -297,7 +293,7 @@ class egamma_resolution_corrector(Calibrator):
             in the current config instance under ``config_inst.x.external_files``
         """
         ...
-    
+
     @abc.abstractmethod
     def get_resolution_config(self) -> EGammaCorrectionConfig:
         """Function to retrieve the configuration for the photon energy correction."""
@@ -338,9 +334,9 @@ class egamma_resolution_corrector(Calibrator):
         """
 
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-        if not "rawPt" in events[self.source_field].fields:
+        if "rawPt" not in events[self.source_field].fields:
             events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt)
+                events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt),
             )
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
@@ -374,7 +370,7 @@ class egamma_resolution_corrector(Calibrator):
             smearing_up = (
                 ak_random(
                     1, rho + rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_up
+                    rand_func=self.deterministic_normal_up,
                 )
                 if self.deterministic_seed_index >= 0
                 else ak_random(1, rho + rho_unc, rand_func=np.random.Generator(
@@ -385,7 +381,7 @@ class egamma_resolution_corrector(Calibrator):
             smearing_down = (
                 ak_random(
                     1, rho - rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_down
+                    rand_func=self.deterministic_normal_down,
                 )
                 if self.deterministic_seed_index >= 0
                 else ak_random(1, rho - rho_unc, rand_func=np.random.Generator(
@@ -405,10 +401,9 @@ class egamma_resolution_corrector(Calibrator):
                 # save columns
                 postfix = f"res_{direction}"
                 events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied
+                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
                 )
 
-                
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays
         # and do not need to be inserted into the events chunk again
@@ -429,15 +424,15 @@ class egamma_resolution_corrector(Calibrator):
 
     def init_func(self: Calibrator) -> None:
         self.uses |= {
-        # nano columns
-        f"{self.source_field}.{{pt,superclusterEta,r9}}",
-        optional_column(f"{self.source_field}.rawPt"),
+            # nano columns
+            f"{self.source_field}.{{pt,superclusterEta,r9}}",
+            optional_column(f"{self.source_field}.rawPt"),
         }
         self.produces |= {
             f"{self.source_field}.pt",
             optional_column(f"{self.source_field}.rawPt"),
         }
-        
+
         self.resolution_config: EGammaCorrectionConfig = self.get_resolution_config()
 
         # add columns with unceratinties if requested
@@ -445,7 +440,7 @@ class egamma_resolution_corrector(Calibrator):
         if self.with_uncertainties and self.dataset_inst.is_mc:
             # also check if met propagation is enabled
             src_fields = [f"{self.source_field}.pt"]
-            
+
             self.produces |= {
                 f"{field}_res_{direction}"
                 for field, direction in itertools.product(
@@ -454,11 +449,9 @@ class egamma_resolution_corrector(Calibrator):
                 )
             }
 
-
     def requires_func(self: Calibrator, reqs: dict) -> None:
         from columnflow.tasks.external import BundleExternalFiles
         reqs["external_files"] = BundleExternalFiles.req(self.task)
-
 
     def setup_func(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
         bundle = reqs["external_files"]
@@ -499,6 +492,7 @@ per = egamma_resolution_corrector.derive(
     },
 )
 
+
 @calibrator(
     uses={per, pec},
     produces={per, pec},
@@ -523,17 +517,18 @@ def photons(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     return events
 
+
 @photons.init
 def photons_init(self: Calibrator) -> None:
     # forward argument to the producers
 
-    if not pec in self.deps_kwargs:
+    if pec not in self.deps_kwargs:
         self.deps_kwargs[pec] = dict()
-    if not per in self.deps_kwargs:
+    if per not in self.deps_kwargs:
         self.deps_kwargs[per] = dict()
     self.deps_kwargs[pec]["with_uncertainties"] = self.with_uncertainties
     self.deps_kwargs[per]["with_uncertainties"] = self.with_uncertainties
-    
+
     self.deps_kwargs[per]["deterministic_seed_index"] = self.deterministic_seed_index
     if self.get_correction_file is not None:
         self.deps_kwargs[pec]["get_correction_file"] = self.get_correction_file
@@ -543,6 +538,7 @@ def photons_init(self: Calibrator) -> None:
         self.deps_kwargs[per]["get_resolution_config"] = self.get_resolution_config
     if self.get_scale_config is not None:
         self.deps_kwargs[pec]["get_scale_config"] = self.get_scale_config
+
 
 photons_nominal = photons.derive("photons_nominal", cls_dict={"with_uncertainties": False})
 
@@ -568,7 +564,7 @@ eec = egamma_scale_corrector.derive(
         "with_uncertainties": True,
         "get_correction_file": (lambda self, external_files: external_files.electron_ss),
         "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.eec)),
-    }
+    },
 )
 
 
@@ -596,17 +592,18 @@ def electrons(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     return events
 
+
 @electrons.init
 def electrons_init(self: Calibrator) -> None:
     # forward argument to the producers
 
-    if not eec in self.deps_kwargs:
+    if eec not in self.deps_kwargs:
         self.deps_kwargs[eec] = dict()
-    if not eer in self.deps_kwargs:
+    if eer not in self.deps_kwargs:
         self.deps_kwargs[eer] = dict()
     self.deps_kwargs[eec]["with_uncertainties"] = self.with_uncertainties
     self.deps_kwargs[eer]["with_uncertainties"] = self.with_uncertainties
-    
+
     self.deps_kwargs[eer]["deterministic_seed_index"] = self.deterministic_seed_index
     if self.get_correction_file is not None:
         self.deps_kwargs[eec]["get_correction_file"] = self.get_correction_file
@@ -616,5 +613,6 @@ def electrons_init(self: Calibrator) -> None:
         self.deps_kwargs[eer]["get_resolution_config"] = self.get_resolution_config
     if self.get_scale_config is not None:
         self.deps_kwargs[eec]["get_scale_config"] = self.get_scale_config
+
 
 electrons_nominal = photons.derive("electrons_nominal", cls_dict={"with_uncertainties": False})
