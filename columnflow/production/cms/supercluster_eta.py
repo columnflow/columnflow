@@ -55,15 +55,8 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # typ
         R = 130
 
         # calculate the angle in the x-y plane
-        angle_x0_y0 = ak.ones_like(pv_x)
-        mask_x1 = pv_x > 0
-        angle_x0_y0 = ak.where(mask_x1, np.atan(pv_y / pv_x), angle_x0_y0)
-        mask_x2 = ~mask_x1 & (pv_x < 0)
-        angle_x0_y0 = ak.where(mask_x2, np.pi + np.atan(pv_y / pv_x), angle_x0_y0)
-        mask_y1 = ~mask_x1 & ~mask_x2 & (pv_y > 0)
-        angle_x0_y0 = ak.where(mask_y1, np.pi / 2, angle_x0_y0)
-        mask_y2 = ~mask_x1 & ~mask_x2 & ~mask_y1
-        angle_x0_y0 = ak.where(mask_y2, - np.pi / 2, angle_x0_y0)
+        # use numpy to account for the right quadrant
+        angle_x0_y0 = np.arctan2(pv_y, pv_x)
 
         alpha = angle_x0_y0 + (np.pi - events.Photon.phi)
         sin_beta = np.sqrt(np.square(pv_x) + np.square(pv_y)) / R * np.sin(alpha)
