@@ -6,15 +6,7 @@ Collection of general helpers and utilities.
 
 from __future__ import annotations
 
-__all__ = [
-    "UNSET",
-    "maybe_import", "import_plt", "import_ROOT", "import_file", "create_random_name", "expand_path",
-    "real_path", "ensure_dir", "wget", "call_thread", "call_proc", "ensure_proxy", "dev_sandbox",
-    "safe_div", "try_float", "try_complex", "try_int", "is_pattern", "is_regex", "pattern_matcher",
-    "dict_add_strict", "get_source_code",
-    "DotDict", "MockModule", "FunctionArgs", "ClassPropertyDescriptor", "classproperty",
-    "DerivableMeta", "Derivable",
-]
+__all__ = []
 
 import os
 import abc
@@ -145,6 +137,30 @@ def import_file(path: str, attr: str | None = None):
         return pkg[attr]
 
     return pkg
+
+
+def ipython_shell(
+    confirm_exit: bool = False,
+    pretty_print: bool = True,
+    banner: bool = False,
+) -> None:
+    """
+    Starts an IPython shell with configurable parameters.
+
+    :param confirm_exit: Whether to ask for confirmation before exiting the shell.
+    :param pretty_print: Whether to use pretty printing.
+    :param banner: Whether to display the IPython banner.
+    """
+    # set the config
+    from traitlets.config import Config
+    config = Config()
+    config.TerminalInteractiveShell.confirm_exit = confirm_exit
+    config.TerminalInteractiveShell.pretty_print = pretty_print
+
+    # start the shell
+    from IPython.terminal.embed import InteractiveShellEmbed
+    shell = InteractiveShellEmbed.instance(config=config, display_banner=banner)
+    shell()
 
 
 def create_random_name() -> str:

@@ -155,11 +155,10 @@ class CalibrateEvents(
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # merge output files
-        with output["columns"].localize("w") as outp:
-            sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
-            law.pyarrow.merge_parquet_task(
-                self, sorted_chunks, outp, local=True, writer_opts=self.get_parquet_writer_opts(),
-            )
+        sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
+        law.pyarrow.merge_parquet_task(
+            self, sorted_chunks, output["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+        )
 
 
 # overwrite class defaults
