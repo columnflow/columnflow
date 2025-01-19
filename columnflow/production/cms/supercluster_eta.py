@@ -38,10 +38,10 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # typ
     """  # noqa
 
     # tan(theta/2)
-    tg_theta_over_2 = np.exp(-events.Photon.eta)
+    tg_theta_over_2: ak.Array = np.exp(-events.Photon.eta)
 
     # tan(atan(tg_theta_over_2)*2)
-    tg_theta = 2 * tg_theta_over_2 / (1 - tg_theta_over_2 * tg_theta_over_2)
+    tg_theta: ak.Array = 2 * tg_theta_over_2 / (1 - tg_theta_over_2 * tg_theta_over_2)
 
     pv_x = events.PV.x
     pv_y = events.PV.y
@@ -49,46 +49,46 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # typ
 
     # array for the super cluster eta
     # if nothing is to be done, just copy original eta
-    tg_sctheta = events.Photon.eta
+    tg_sctheta: ak.Array = events.Photon.eta
     # barrel region
     if ak.any(events.Photon.isScEtaEB):
         R = 130
 
         # calculate the angle in the x-y plane
         # use numpy to account for the right quadrant
-        angle_x0_y0 = np.arctan2(pv_y, pv_x)
+        angle_x0_y0: np.Array = np.arctan2(pv_y, pv_x)
 
-        alpha = angle_x0_y0 + (np.pi - events.Photon.phi)
-        sin_beta = np.sqrt(np.square(pv_x) + np.square(pv_y)) / R * np.sin(alpha)
-        beta = abs(np.asin(sin_beta))
-        gamma = np.pi / 2 - alpha - beta
-        l = np.sqrt((
+        alpha: np.Array = angle_x0_y0 + (np.pi - events.Photon.phi)
+        sin_beta: np.Array = np.sqrt(np.square(pv_x) + np.square(pv_y)) / R * np.sin(alpha)
+        beta: np.Array = abs(np.asin(sin_beta))
+        gamma: np.Array = np.pi / 2 - alpha - beta
+        l: np.Array = np.sqrt((
             np.square(R) + np.square(pv_x) + np.square(pv_y) -
             2 * R * np.sqrt(np.square(pv_x) + np.square(pv_y)) * np.cos(gamma)
         ))
 
-        z0_zSC = l / tg_theta
+        z0_zSC: np.Array = l / tg_theta
         tg_sctheta = ak.where(
             events.Photon.isScEtaEB, R / (pv_z + z0_zSC), tg_sctheta,
         )
 
     # endcap
     if ak.any(events.Photon.isScEtaEE):
-        intersection_z = ak.where(events.Photon.eta > 0, 310, -310)
-        base = intersection_z - pv_z
-        r = base * tg_theta
+        intersection_z: ak.Array = ak.where(events.Photon.eta > 0, 310, -310)
+        base: ak.Array = intersection_z - pv_z
+        r: ak.Array = base * tg_theta
 
-        crystalX = pv_x + r * np.cos(events.Photon.phi)
-        crystalY = pv_y + r * np.sin(events.Photon.phi)
+        crystalX: ak.Array = pv_x + r * np.cos(events.Photon.phi)
+        crystalY: ak.Array = pv_y + r * np.sin(events.Photon.phi)
         tg_sctheta = ak.where(
             events.Photon.isScEtaEE,
             np.sqrt(np.square(crystalX) + np.square(crystalY)) / intersection_z,  # type: ignore
             tg_sctheta,
         )
 
-    sctheta = np.atan(tg_sctheta)
+    sctheta: ak.Array = np.atan(tg_sctheta)
     sctheta = ak.where(sctheta < 0, sctheta + np.pi, sctheta)
-    tg_sctheta_over_2 = np.tan(sctheta / 2)
+    tg_sctheta_over_2: ak.Array = np.tan(sctheta / 2)
     events = set_ak_column_f32(events, "Photon.superclusterEta", -np.log(tg_sctheta_over_2))
 
     return events
