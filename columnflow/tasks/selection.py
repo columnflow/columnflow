@@ -27,7 +27,7 @@ logger = law.logger.get_logger(__name__)
 default_create_selection_hists = law.config.get_expanded_bool(
     "analysis",
     "default_create_selection_hists",
-    False,
+    True,
 )
 
 
