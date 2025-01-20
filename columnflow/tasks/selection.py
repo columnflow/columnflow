@@ -24,9 +24,9 @@ ak = maybe_import("awkward")
 
 logger = law.logger.get_logger(__name__)
 
-default_selection_hists_optional = law.config.get_expanded_bool(
+default_create_selection_hists = law.config.get_expanded_bool(
     "analysis",
-    "default_selection_hists_optional",
+    "default_create_selection_hists",
     True,
 )
 
@@ -39,9 +39,6 @@ class SelectEvents(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # flag that sets the *hists* output to optional if True
-    selection_hists_optional = default_selection_hists_optional
-
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -58,6 +55,9 @@ class SelectEvents(
 
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
+
+    # whether histogram outputs should be created
+    create_selection_hists = default_create_selection_hists
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -99,8 +99,11 @@ class SelectEvents(
         outputs = {
             "results": self.target(f"results_{self.branch}.parquet"),
             "stats": self.target(f"stats_{self.branch}.json"),
-            "hists": self.target(f"hists_{self.branch}.pickle", optional=self.selection_hists_optional),
         }
+
+        # add histograms if requested
+        if self.create_selection_hists:
+            outputs["hists"] = self.target(f"hists_{self.branch}.pickle")
 
         # add additional columns in case the selector produces some
         if self.selector_inst.produced_columns:
@@ -246,7 +249,8 @@ class SelectEvents(
 
         # save stats
         outputs["stats"].dump(stats, formatter="json")
-        outputs["hists"].dump(hists, formatter="pickle")
+        if self.create_selection_hists:
+            outputs["hists"].dump(hists, formatter="pickle")
 
         # print some stats
         eff = safe_div(stats["num_events_selected"], stats["num_events"])
@@ -289,11 +293,11 @@ class MergeSelectionStats(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # flag that sets the *hists* output to optional if True
-    selection_hists_optional = default_selection_hists_optional
-
     # default sandbox, might be overwritten by selector function (needed to load hist objects)
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    # whether histogram outputs should be created
+    create_selection_hists = default_create_selection_hists
 
     # upstream requirements
     reqs = Requirements(
@@ -314,41 +318,29 @@ class MergeSelectionStats(
         return self.reqs.SelectEvents.req_different_branching(self, workflow="local", branch=-1)
 
     def output(self):
-        return {
-            "stats": self.target("stats.json"),
-            "hists": self.target("hists.pickle", optional=self.selection_hists_optional),
-        }
+        outputs = {"stats": self.target("stats.json")}
+        if self.create_selection_hists:
+            outputs["hists"] = self.target("hists.pickle")
+        return outputs
 
     @law.decorator.notify
     @law.decorator.log
     def run(self):
-        # check that hists are present for all inputs
-        inputs = list(self.input().collection.targets.values())
-        hist_inputs_exist = [inp["hists"].exists() for inp in inputs]
-        if any(hist_inputs_exist) and not all(hist_inputs_exist):
-            logger.warning(
-                f"For dataset {self.dataset_inst.name}, cf.SelectEvents has produced hists for "
-                "some but not all files. Histograms will not be merged and an empty pickle file will be stored.",
-            )
-
         # merge input stats
         merged_stats = defaultdict(float)
         merged_hists = {}
-
-        for inp in inputs:
+        for inp in self.input().collection.targets.values():
             stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
-
-        # merge hists only if all hists are present
-        if all(hist_inputs_exist):
-            for inp in inputs:
+            if self.create_selection_hists:
                 hists = inp["hists"].load(formatter="pickle", cache=False)
                 self.merge_counts(merged_hists, hists)
 
-        # write the outputs
+        # write outputs
         outputs = self.output()
         outputs["stats"].dump(merged_stats, formatter="json", cache=False)
-        outputs["hists"].dump(merged_hists, formatter="pickle", cache=False)
+        if self.create_selection_hists:
+            outputs["hists"].dump(merged_hists, formatter="pickle", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
