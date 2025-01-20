@@ -142,7 +142,6 @@ def get_datasets_from_process(
 
     and datasets existing for
 
-
     1. single top - s channel - t
     2. single top - s channel - tbar
     3. single top - t channel
@@ -343,11 +342,21 @@ def create_category_id(
     return h
 
 
-def add_category(config: od.Config, **kwargs) -> od.Category:
+def add_category(
+    config: od.Config,
+    parent: od.Config | od.Category | od.Channel | None = None,
+    **kwargs,
+) -> od.Category:
     """
     Creates a :py:class:`order.Category` instance by forwarding all *kwargs* to its constructor,
-    adds it to a :py:class:`order.Config` object *config* and returns it. When *kwargs* do not
-    contain a field *id*, :py:func:`create_category_id` is used to create one.
+    adds it to a *parent* object. such as a :py:class:`order.Config` or an other
+    :py:class:`order.Category`, and returns it. When *kwargs* do not contain a field *id*,
+    :py:func:`create_category_id` is used to create one.
+
+    :param config: :py:class:`order.Config` object for which the category is created.
+    :param parent: Parent object to which the category is added. If *None*, *config* is used.
+    :param kwargs: Keyword arguments forwarded to the category constructor.
+    :return: The newly created category instance.
     """
     if "name" not in kwargs:
         fields = ",".join(map(str, kwargs))
@@ -356,7 +365,10 @@ def add_category(config: od.Config, **kwargs) -> od.Category:
     if "id" not in kwargs:
         kwargs["id"] = create_category_id(config, kwargs["name"])
 
-    return config.add_category(**kwargs)
+    if parent is None:
+        parent = config
+
+    return parent.add_category(**kwargs)
 
 
 def create_category_combinations(

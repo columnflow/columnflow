@@ -143,7 +143,7 @@ def ipython_shell(
     confirm_exit: bool = False,
     pretty_print: bool = True,
     banner: bool = False,
-) -> None:
+):
     """
     Starts an IPython shell with configurable parameters.
 
@@ -159,8 +159,7 @@ def ipython_shell(
 
     # start the shell
     from IPython.terminal.embed import InteractiveShellEmbed
-    shell = InteractiveShellEmbed.instance(config=config, display_banner=banner)
-    shell()
+    return InteractiveShellEmbed.instance(config=config, display_banner=banner)
 
 
 def create_random_name() -> str:

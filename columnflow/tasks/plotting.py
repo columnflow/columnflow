@@ -316,11 +316,8 @@ class PlotVariablesBaseMultiShifts(
             for source in sorted(self.shift_sources)
         ]
 
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        return reqs
-
     def requires(self):
+        # TODO: for data, request MergeHistograms
         return {
             d: self.reqs.MergeShiftedHistograms.req(
                 self,
