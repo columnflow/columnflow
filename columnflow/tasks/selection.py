@@ -406,9 +406,7 @@ class MergeSelectionMasks(
         return law.tasks.ForestMerge.create_branch_map(self)
 
     def merge_workflow_requires(self):
-        reqs = {
-            "selection": self.reqs.SelectEvents.req(self, _exclude={"branches"}),
-        }
+        reqs = {"selection": self.reqs.SelectEvents.req_different_branching(self)}
 
         if self.dataset_inst.is_mc:
             reqs["normalization"] = self.norm_weight_producer.run_requires()
@@ -418,7 +416,7 @@ class MergeSelectionMasks(
     def merge_requires(self, start_branch, end_branch):
         reqs = {
             "selection": [
-                self.reqs.SelectEvents.req(self, branch=b)
+                self.reqs.SelectEvents.req_different_branching(self, branch=b)
                 for b in range(start_branch, end_branch)
             ],
         }
@@ -484,8 +482,8 @@ class MergeSelectionMasks(
         route_filter = RouteFilter(write_columns)
 
         for inp in inputs:
-            events = inp["columns"].load(formatter="awkward")
-            steps = inp["results"].load(formatter="awkward").steps
+            events = inp["columns"].load(formatter="awkward", cache=False)
+            steps = inp["results"].load(formatter="awkward", cache=False).steps
 
             # add normalization weight
             if self.dataset_inst.is_mc:
