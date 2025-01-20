@@ -415,7 +415,6 @@ class PlotBase2D(PlotBase):
 class ProcessPlotSettingMixin(
     PlotBase,
     DatasetsProcessesMixin,
-    PlotBase,
 ):
     """
     Mixin class for tasks creating plots where contributions of different processes are shown.
