@@ -343,23 +343,6 @@ def plot_all(
         if callable(update_handles_labels):
             update_handles_labels(ax, handles, labels, n_cols)
 
-        if kwargs.get("flip_stack", False):
-            # assume all `StepPatch` objects are part of MC stack
-            in_stack = [
-                isinstance(handle, mpl.patches.StepPatch)
-                for handle in handles
-            ]
-
-            # reverse order of entries that are part of the stack
-            if any(in_stack):
-                def revere_entries(entries, mask):
-                    entries = np.array(entries, dtype=object)
-                    entries[mask] = entries[mask][::-1]
-                    return list(entries)
-
-                handles = revere_entries(handles, in_stack)
-                labels = revere_entries(labels, in_stack)
-
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)
 

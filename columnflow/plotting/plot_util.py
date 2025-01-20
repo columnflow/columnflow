@@ -477,7 +477,6 @@ def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
     hide_errors: bool | None = None,
-    flip_stack: bool = False,
     **kwargs,
 ) -> OrderedDict:
     """
@@ -512,13 +511,6 @@ def prepare_stack_plot_config(
                 mc_colors.append(process_inst.color1)
                 mc_edgecolors.append(process_inst.color2)
                 mc_labels.append(process_inst.label)
-
-    # flip lists that constitute the mc stack
-    if mc_hists and flip_stack:
-        mc_hists = mc_hists[::-1]
-        mc_colors = mc_colors[::-1]
-        mc_edgecolors = mc_edgecolors[::-1]
-        mc_labels = mc_labels[::-1]
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
