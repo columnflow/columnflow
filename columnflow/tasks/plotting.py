@@ -26,15 +26,15 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
-    HistHookMixin,
-    VariablePlotSettingMixin,
-    ProcessPlotSettingMixin,
-    CategoriesMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
     MLModelsMixin,
     WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
+    CategoriesMixin,
+    ProcessPlotSettingMixin,
+    VariablePlotSettingMixin,
+    HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -62,9 +62,7 @@ class PlotVariablesBase(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
         reqs["merged_hists"] = self.requires_from_branch()
-
         return reqs
 
     @abstractmethod
@@ -193,8 +191,8 @@ class PlotVariablesBase(
 
 
 class PlotVariablesBaseSingleShift(
-    PlotVariablesBase,
     ShiftTask,
+    PlotVariablesBase,
 ):
     exclude_index = True
 
@@ -276,8 +274,8 @@ class PlotVariables2D(
 
 
 class PlotVariablesPerProcess2D(
-    law.WrapperTask,
     PlotVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"

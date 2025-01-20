@@ -201,19 +201,12 @@ class CalibratorMixin(ConfigTask):
         """
         return str(self.calibrator_inst)
 
-    def store_parts(self) -> law.util.InsertableDict[str, str]:
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        This method calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"calibrator": "calib__{self.calibrator}"}` before keyword ``version``.
-        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "calibrator", f"calib__{self.calibrator_repr}")
+        parts.insert_after("config", "calibrator", f"calib__{self.calibrator_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -421,22 +414,12 @@ class CalibratorsMixin(ConfigTask):
                 calibs_repr += f"__{law.util.create_hash([str(calib) for calib in self.calibrator_insts[5:]])}"
         return calibs_repr
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"calibrator": "calib__{HASH}"}` before keyword ``version``.
-        Here, ``HASH`` is the joint string of the first five calibrator names
-        + a hash created with :py:meth:`law.util.create_hash` based on
-        the list of calibrators, starting at its 5th element (i.e. ``self.calibrators[5:]``)
-        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "calibrators", f"calib__{self.calibrators_repr}")
+        parts.insert_after("config", "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -626,19 +609,12 @@ class SelectorMixin(ConfigTask):
         """
         return str(self.selector_inst)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"selector": "sel__{SELECTOR_NAME}"}` before keyword ``version``.
-        Here, ``SELECTOR_NAME`` is the name of the current ``selector_inst``.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "selector", f"sel__{self.selector_repr}")
+        parts.insert_after("config", "selector", f"sel__{self.selector_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -746,16 +722,7 @@ class SelectorStepsMixin(SelectorMixin):
 
     def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"selector": "__steps__LIST_OF_STEPS"}`, where ``LIST_OF_STEPS`` is the
-        sorted list of selector steps.
-        For more information, see e.g.
-        :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
 
@@ -939,20 +906,12 @@ class ProducerMixin(ConfigTask):
         """
         return str(self.producer_inst) if self.producer != law.NO_STR else "none"
 
-    def store_parts(self) -> law.util.InsertableDict[str, str]:
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"producer": "prod__{self.producer}"}` before keyword ``version``.
-        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        producer = f"prod__{self.producer_repr}"
-        parts.insert_before("version", "producer", producer)
+        parts.insert_after("config", "producer", f"prod__{self.producer_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -1156,23 +1115,12 @@ class ProducersMixin(ConfigTask):
                 prods_repr += f"__{law.util.create_hash([str(prod) for prod in self.producer_insts[5:]])}"
         return prods_repr
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Create parts to create the output path to store intermediary results
-        for the current :py:class:`~law.task.base.Task`.
-
-        Calls :py:meth:`store_parts` of the ``super`` class and inserts
-        `{"producers": "prod__{HASH}"}` before keyword ``version``.
-        Here, ``HASH`` is the joint string of the first five producer names
-        + a hash created with :py:meth:`law.util.create_hash` based on
-        the list of producers, starting at its 5th element (i.e. ``self.producers[5:]``)
-        For more information, see e.g. :py:meth:`~columnflow.tasks.framework.base.ConfigTask.store_parts`.
-
-        :return: Updated parts to create output path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_before("version", "producers", f"prod__{self.producers_repr}")
-
+        parts.insert_after("config", "producers", f"prod__{self.producers_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -1591,21 +1539,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
             parameters=self.ml_model_settings,
         )
 
-    def store_parts(self) -> law.util.InsertableDict[str, str]:
+    def store_parts(self) -> law.util.InsertableDict:
         """
-        Generate a dictionary of store parts for the current instance.
-
-        This method extends the base method to include additional parts related to machine learning
-        model configurations, calibrators, selectors, producers (CSP), and the ML model instance itself.
-        If the list of either of the CSPs is empty, the corresponding part is set to ``"none"``,
-        otherwise, the first two elements of the list are joined with ``"__"``.
-        If the list of either of the CSPs contains more than two elements, the part is extended
-        with the number of elements and a hash of the remaining elements, which is
-        created with :py:meth:`law.util.create_hash`.
-        The parts are represented as strings and are used to create unique identifiers for the
-        instance's output.
-
-        :return: An InsertableDict containing the store parts.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
 
@@ -1640,10 +1576,10 @@ class MLModelTrainingMixin(MLModelMixinBase):
             if len(fct_names) > 2:
                 part += f"_{n_fct_per_config}_{law.util.create_hash(fct_names[2:])}"
 
-            parts.insert_before("version", label, f"{label}__{part}")
+            parts.insert_after("config", label, f"{label}__{part}")
 
         if self.ml_model_inst:
-            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_repr}")
+            parts.insert_after("config", "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1705,10 +1641,13 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
             )
 
     def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
         parts = super().store_parts()
 
         if self.ml_model_inst:
-            parts.insert_before("version", "ml_model", f"ml__{self.ml_model_repr}")
+            parts.insert_after("config", "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1726,11 +1665,14 @@ class MLModelDataMixin(MLModelMixin):
     allow_empty_ml_model = False
 
     def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
         parts = super().store_parts()
 
         # replace the ml_model entry
         store_name = self.ml_model_inst.store_name or self.ml_model_repr
-        parts.insert_before("ml_model", "ml_data", f"ml__{store_name}")
+        parts.insert_after("config", "ml_data", f"ml__{store_name}")
         parts.pop("ml_model")
 
         return parts
@@ -1808,10 +1750,13 @@ class MLModelsMixin(ConfigTask):
         ]
 
     def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            parts.insert_before("version", "ml_models", f"ml__{self.ml_models_repr}")
+            parts.insert_after("config", "ml_models", f"ml__{self.ml_models_repr}")
 
         return parts
 
@@ -1874,9 +1819,14 @@ class InferenceModelMixin(ConfigTask):
         return str(self.inference_model)
 
     def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
         parts = super().store_parts()
+
         if self.inference_model != law.NO_STR:
-            parts.insert_before("version", "inf_model", f"inf__{self.inference_model_repr}")
+            parts.insert_after("config", "inf_model", f"inf__{self.inference_model_repr}")
+
         return parts
 
 
@@ -2318,9 +2268,12 @@ class WeightProducerMixin(ConfigTask):
     def weight_producer_repr(self) -> str:
         return str(self.weight_producer_inst)
 
-    def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
         parts = super().store_parts()
-        parts.insert_before("version", "weightprod", f"weight__{self.weight_producer_repr}")
+        parts.insert_after("config", "weightprod", f"weight__{self.weight_producer_repr}")
         return parts
 
 

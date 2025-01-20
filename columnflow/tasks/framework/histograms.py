@@ -12,8 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin,
-    ShiftSourcesMixin,
+    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
@@ -23,14 +22,14 @@ hist = maybe_import("hist")
 
 
 class HistogramsUserBase(
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    WeightProducerMixin,
+    MLModelsMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
     VariablesMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -136,8 +135,8 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    HistogramsUserBase,
     ShiftTask,
+    HistogramsUserBase,
 ):
 
     # upstream requirements
@@ -163,8 +162,8 @@ class HistogramsUserSingleShiftBase(
 
 
 class HistogramsUserMultiShiftBase(
-    HistogramsUserBase,
     ShiftSourcesMixin,
+    HistogramsUserBase,
 ):
     # upstream requirements
     reqs = Requirements(

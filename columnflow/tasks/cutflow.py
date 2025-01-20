@@ -29,11 +29,11 @@ from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateCutflowHistograms(
-    VariablesMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    ChunkedIOMixin,
     DatasetTask,
+    ChunkedIOMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -89,15 +89,11 @@ class CreateCutflowHistograms(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
-        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
-
+        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self)
         return reqs
 
     def requires(self):
-        return {
-            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
-        }
+        return {"selection": self.reqs.MergeSelectionMasks.req(self)}
 
     def output(self):
         return {
@@ -266,11 +262,11 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 
 class PlotCutflowBase(
+    ShiftTask,
+    CalibratorsMixin,
     SelectorStepsMixin,
     CategoriesMixin,
-    CalibratorsMixin,
     PlotBase,
-    ShiftTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -288,9 +284,9 @@ class PlotCutflowBase(
         CreateCutflowHistograms=CreateCutflowHistograms,
     )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        parts.insert_after("config", "plot", f"datasets_{self.datasets_repr}")
         return parts
 
 
@@ -472,9 +468,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
+    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
-    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -806,8 +802,8 @@ class PlotCutflowVariables2D(
 
 
 class PlotCutflowVariablesPerProcess2D(
-    law.WrapperTask,
     PlotCutflowVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"

@@ -756,7 +756,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
 
-        :return: Dictionary with parts to create a path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = law.util.InsertableDict()
 
