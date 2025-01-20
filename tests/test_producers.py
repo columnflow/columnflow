@@ -1,12 +1,11 @@
 import unittest
 
 from columnflow.util import maybe_import
-from columnflow.production.cms.supercluster_eta import photon_sceta, electron_sceta 
-
-import order as od
+from columnflow.production.cms.supercluster_eta import photon_sceta, electron_sceta
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+
 
 class SCEtaProducerTests(unittest.TestCase):
 
