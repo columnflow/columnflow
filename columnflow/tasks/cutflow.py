@@ -288,7 +288,7 @@ class PlotCutflowBase(
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_after(self.store_part_anchor, "plot", f"datasets_{self.datasets_repr}")
+        parts.insert_after(self.config_store_anchor, "plot", f"datasets_{self.datasets_repr}")
         return parts
 
 
