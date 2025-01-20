@@ -301,10 +301,9 @@ class MergeMLStats(
     SelectorMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.tasks.ForestMerge,
+    law.LocalWorkflow,
+    RemoteWorkflow,
 ):
-    # skip receiving some parameters via req
-    exclude_params_req_get = {"workflow"}
 
     # upstream requirements
     reqs = Requirements(
