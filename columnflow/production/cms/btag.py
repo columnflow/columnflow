@@ -57,15 +57,21 @@ class BTagSFConfig:
         obj: BTagSFConfig | tuple[str, list[str]] | tuple[str, list[str], str],
     ) -> BTagSFConfig:
         # purely for backwards compatibility with the old tuple format
-        return obj if isinstance(obj, cls) else cls(*obj)
+        if isinstance(obj, cls):
+            return obj
+        if isinstance(obj, (list, tuple)) or isinstance(obj, tuple):
+            return cls(*obj)
+        if isinstance(obj, dict):
+            return cls(**obj)
+        raise ValueError(f"cannot convert {obj} to BTagSFConfig")
 
 
 @producer(
-    uses={
-        "Jet.hadronFlavour", "Jet.eta", "Jet.pt",
-    },
+    uses={"Jet.{pt,eta,hadronFlavour}"},
     # only run on mc
     mc_only=True,
+    # configurable weight name
+    weight_name="btag_weight",
     # function to determine the correction file
     get_btag_file=(lambda self, external_files: external_files.btag_sf_corr),
     # function to determine the btag sf config
@@ -115,7 +121,7 @@ def btag_weights(
 
         - "ignore": the *jet_mask* is extended to exclude jets with b_score < 0
         - "remove": the scale factor is set to 0 for jets with b_score < 0, resulting in an overall
-            btag_weight of 0 for the event
+            btag weight of 0 for the event
         - "raise": an exception is raised
 
     The verbosity of the handling of jets with negative b-score can be
@@ -163,11 +169,11 @@ def btag_weights(
         if negative_b_score_action == "ignore":
             msg_func(
                 f"{msg} The *jet_mask* will be adjusted to exclude these jets, resulting in a "
-                "*btag_weight* of 1 for these jets.",
+                "btag weight of 1 for these jets.",
             )
         elif negative_b_score_action == "remove":
             msg_func(
-                f"{msg} The *btag_weight* will be set to 0 for these jets.",
+                f"{msg} The btag weight will be set to 0 for these jets.",
             )
         elif negative_b_score_action == "raise":
             raise Exception(msg)
@@ -180,6 +186,9 @@ def btag_weights(
     abs_eta = flat_np_view(abs(events.Jet.eta[jet_mask]), axis=1)
     pt = flat_np_view(events.Jet.pt[jet_mask], axis=1)
     discr_flat = flat_np_view(discr[jet_mask], axis=1)
+
+    # fix edge cases where the discriminator is non-finite
+    discr_flat[~np.isfinite(discr_flat)] = 0
 
     # helper to create and store the weight
     def add_weight(syst_name, syst_direction, column_name):
@@ -235,21 +244,21 @@ def btag_weights(
     shift_inst = self.global_shift_inst
     if shift_inst.is_nominal:
         # nominal weight and those of all method intrinsic uncertainties
-        events = add_weight("central", None, "btag_weight")
+        events = add_weight("central", None, self.weight_name)
         for syst_name, col_name in self.btag_uncs.items():
             for direction in ["up", "down"]:
                 name = col_name.format(year=self.config_inst.campaign.x.year)
                 events = add_weight(
                     syst_name,
                     direction,
-                    f"btag_weight_{name}_{direction}",
+                    f"{self.weight_name}_{name}_{direction}",
                 )
                 if syst_name in ["cferr1", "cferr2"]:
                     # for c flavor uncertainties, multiply the uncertainty with the nominal btag weight
                     events = set_ak_column(
                         events,
-                        f"btag_weight_{name}_{direction}",
-                        events.btag_weight * events[f"btag_weight_{name}_{direction}"],
+                        f"{self.weight_name}_{name}_{direction}",
+                        events[self.weight_name] * events[f"{self.weight_name}_{name}_{direction}"],
                         value_type=np.float32,
                     )
     elif self.shift_is_known_jec_source:
@@ -257,11 +266,11 @@ def btag_weights(
         events = add_weight(
             f"jes{'' if self.jec_source == 'Total' else self.jec_source}",
             shift_inst.direction,
-            f"btag_weight_jec_{self.jec_source}_{shift_inst.direction}",
+            f"{self.weight_name}_jec_{self.jec_source}_{shift_inst.direction}",
         )
     else:
         # any other shift, just produce the nominal weight
-        events = add_weight("central", None, "btag_weight")
+        events = add_weight("central", None, self.weight_name)
 
     return events
 
@@ -303,18 +312,18 @@ def btag_weights_init(self: Producer) -> None:
     # add uncertainty sources of the method itself
     if shift_inst.is_nominal:
         # nominal column
-        self.produces.add("btag_weight")
+        self.produces.add(self.weight_name)
         # all varied columns
         for col_name in self.btag_uncs.values():
             name = col_name.format(year=self.config_inst.campaign.x.year)
             for direction in ["up", "down"]:
-                self.produces.add(f"btag_weight_{name}_{direction}")
+                self.produces.add(f"{self.weight_name}_{name}_{direction}")
     elif self.shift_is_known_jec_source:
         # jec varied column
-        self.produces.add(f"btag_weight_jec_{self.jec_source}_{shift_inst.direction}")
+        self.produces.add(f"{self.weight_name}_jec_{self.jec_source}_{shift_inst.direction}")
     else:
         # only the nominal column
-        self.produces.add("btag_weight")
+        self.produces.add(self.weight_name)
 
 
 @btag_weights.requires

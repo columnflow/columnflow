@@ -21,7 +21,6 @@
 .env_*.sh.tmp
 .coverage
 coverage*.xml
-requirements_user.txt
 __pycache__
 dist
 build
@@ -37,3 +36,4 @@ data
 .mypy_cache
 .vscode
 .requirements
+.__afs*

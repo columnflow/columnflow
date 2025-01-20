@@ -193,7 +193,11 @@ cfg.x.luminosity = Number(41480, {
 
 # names of muon correction sets and working points
 # (used in the muon producer)
-cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}_UL")
+from columnflow.production.cms.muon import MuonSFConfig
+cfg.x.muon_sf_names = MuonSFConfig(
+    correction="NUM_TightRelIso_DEN_TightIDandIPCut",
+    campaign=f"{year}_UL",
+)
 
 # register shifts
 cfg.add_shift(name="nominal", id=0)
@@ -205,8 +209,9 @@ cfg.add_shift(name="tune_down", id=2, type="shape", tags={"disjoint_from_nominal
 
 # fake jet energy correction shift, with aliases flaged as "selection_dependent", i.e. the aliases
 # affect columns that might change the output of the event selection
-cfg.add_shift(name="jec_up", id=20, type="shape")
-cfg.add_shift(name="jec_down", id=21, type="shape")
+cfg.add_shift(name="jec_up", id=20, type="shape", tags={"jec"})
+cfg.add_shift(name="jec_down", id=21, type="shape", tags={"jec"})
+# add column aliases for shift jec
 add_shift_aliases(
     cfg,
     "jec",
@@ -221,6 +226,7 @@ add_shift_aliases(
 # event weights due to muon scale factors
 cfg.add_shift(name="mu_up", id=10, type="shape")
 cfg.add_shift(name="mu_down", id=11, type="shape")
+# add column aliases for shift mu
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files

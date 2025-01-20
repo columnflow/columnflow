@@ -119,6 +119,7 @@ class CreateYieldTable(
             "yields": self.target(f"yields__proc_{self.processes_repr}__cat_{self.categories_repr}{suffix}.json"),
         }
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         import hist
