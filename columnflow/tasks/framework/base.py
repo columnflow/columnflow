@@ -40,6 +40,7 @@ class Requirements(DotDict):
         instances and additional keyword arguments ``kwargs``, which are
         added.
         """
+
     def __init__(self, *others, **kwargs):
 
         super().__init__()
@@ -447,12 +448,18 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 lookup.extend(list(object_groups[name]))
             elif accept_patterns:
                 # must eventually be a pattern, perform an object traversal
-                # make this also viable for multi-dim variables for plotting/histograms
                 name_parts = name.split("-")
-                all_objects = get_all_object_names()
                 # match all name parts
-                if all([law.util.multi_match(n, all_objects) for n in name_parts]):
-                    object_names.append(name)
+                matches = [[] for _ in name_parts]
+                for i, n in enumerate(name_parts):
+                    for _name in sorted(get_all_object_names()):
+                        if law.util.multi_match(_name, n):
+                            matches[i].append(_name)
+                for matches_pair in itertools.product(*matches):
+                    object_names.append("-".join(matches_pair))
+                    if law.util.multi_match(_name, name):
+                        object_names.append(_name)
+
         return law.util.make_unique(object_names)
 
     @classmethod
@@ -873,16 +880,15 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             # get other options
             loc, wlcg_fs, store_parts_modifier = (location[1:] + [None, None, None])[:3]
             kwargs.setdefault("store_parts_modifier", store_parts_modifier)
-            # create the wlcg target
-            wlcg_kwargs = kwargs.copy()
-            wlcg_kwargs.setdefault("fs", wlcg_fs)
-            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
-            # TODO: add rule for falling back to wlcg target
             # create the local target
             local_kwargs = kwargs.copy()
             loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
             local_kwargs.setdefault(loc_key, loc)
             local_target = self.local_target(*path, **local_kwargs)
+            # create the wlcg target
+            wlcg_kwargs = kwargs.copy()
+            wlcg_kwargs.setdefault("fs", wlcg_fs)
+            wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
             # build the mirrored target from these two
             mirrored_target_cls = (
                 law.MirroredFileTarget

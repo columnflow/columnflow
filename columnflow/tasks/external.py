@@ -94,12 +94,16 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         :raises ValueError: If number of loaded LFNs does not correspond to number of LFNs specified
             in this ``dataset_info_inst``.
         """
-        # prepare the lfn getter
+        # prepare the lfn getter from config aux
         get_dataset_lfns = self.config_inst.x("get_dataset_lfns", None)
         msg = "via custom config function"
         if not callable(get_dataset_lfns):
-            get_dataset_lfns = self.get_dataset_lfns_dasgoclient
-            msg = "via dasgoclient"
+            # prepare the lfn getter from dataset aux
+            get_dataset_lfns = self.dataset_inst.x("get_dataset_lfns", None)
+            msg = "via custom dataset function"
+            if not callable(get_dataset_lfns):
+                get_dataset_lfns = self.get_dataset_lfns_dasgoclient
+                msg = "via dasgoclient"
 
         lfns = []
         for key in sorted(self.dataset_info_inst.keys):
@@ -256,7 +260,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
-                logger.info(f"file {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
+                logger.info(f"lfn {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
 
                 # when the stat query took longer than some duration, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
@@ -287,7 +291,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                     )
                     break
             else:
-                raise Exception(f"LFN {lfn} not found at any remote fs {fs}")
+                raise Exception(f"lfn {lfn} not found at any remote fs {fs}")
 
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
