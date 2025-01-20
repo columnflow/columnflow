@@ -89,11 +89,13 @@ class CreateCutflowHistograms(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self)
+        reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
         return reqs
 
     def requires(self):
-        return {"selection": self.reqs.MergeSelectionMasks.req(self)}
+        return {
+            "selection": self.reqs.MergeSelectionMasks.req(self, tree_index=0, branch=0),
+        }
 
     def output(self):
         return {
