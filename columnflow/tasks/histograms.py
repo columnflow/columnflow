@@ -433,6 +433,9 @@ class MergeShiftedHistograms(
         MergeHistograms=MergeHistograms,
     )
 
+    # the field in the store parts behind which the new part is inserted
+    store_part_anchor = "dataset"
+
     def create_branch_map(self):
         # create a dummy branch map so that this task could as a job
         return {0: None}
@@ -454,7 +457,7 @@ class MergeShiftedHistograms(
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
+        parts.insert_after(self.store_part_anchor, "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts
 
     def output(self):

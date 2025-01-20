@@ -990,6 +990,9 @@ class ConfigTask(AnalysisTask):
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
+    # the field in the store parts behind which the new part is inserted
+    store_part_anchor = "task_family"
+
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
@@ -1055,11 +1058,11 @@ class ConfigTask(AnalysisTask):
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the config name
-        parts.insert_after("task_family", "config", self.config_inst.name)
+        parts.insert_after(self.store_part_anchor, "config", self.config_inst.name)
 
         return parts
 
@@ -1120,6 +1123,9 @@ class ShiftTask(ConfigTask):
     exclude_params_remote_workflow = {"local_shift"}
 
     allow_empty_shift = False
+
+    # the field in the store parts behind which the new part is inserted
+    store_part_anchor = "config"
 
     @classmethod
     def modify_param_values(cls, params):
@@ -1230,12 +1236,12 @@ class ShiftTask(ConfigTask):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the shift name
         if self.global_shift_inst:
-            parts.insert_after("config", "shift", self.global_shift_inst.name)
+            parts.insert_after(self.store_part_anchor, "shift", self.global_shift_inst.name)
 
         return parts
 
@@ -1323,11 +1329,11 @@ class DatasetTask(ShiftTask):
         )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # insert the dataset
-        parts.insert_after("config", "dataset", self.dataset_inst.name)
+        parts.insert_after(self.store_part_anchor, "dataset", self.dataset_inst.name)
 
         return parts
 

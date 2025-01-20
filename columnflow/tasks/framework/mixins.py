@@ -206,7 +206,7 @@ class CalibratorMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "calibrator", f"calib__{self.calibrator_repr}")
+        parts.insert_after(self.store_part_anchor, "calibrator", f"calib__{self.calibrator_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -419,7 +419,7 @@ class CalibratorsMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "calibrators", f"calib__{self.calibrators_repr}")
+        parts.insert_after(self.store_part_anchor, "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -614,7 +614,7 @@ class SelectorMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "selector", f"sel__{self.selector_repr}")
+        parts.insert_after(self.store_part_anchor, "selector", f"sel__{self.selector_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -911,7 +911,7 @@ class ProducerMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "producer", f"prod__{self.producer_repr}")
+        parts.insert_after(self.store_part_anchor, "producer", f"prod__{self.producer_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -1120,7 +1120,7 @@ class ProducersMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "producers", f"prod__{self.producers_repr}")
+        parts.insert_after(self.store_part_anchor, "producers", f"prod__{self.producers_repr}")
         return parts
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -1576,10 +1576,10 @@ class MLModelTrainingMixin(MLModelMixinBase):
             if len(fct_names) > 2:
                 part += f"_{n_fct_per_config}_{law.util.create_hash(fct_names[2:])}"
 
-            parts.insert_after("config", label, f"{label}__{part}")
+            parts.insert_after(self.store_part_anchor, label, f"{label}__{part}")
 
         if self.ml_model_inst:
-            parts.insert_after("config", "ml_model", f"ml__{self.ml_model_repr}")
+            parts.insert_after(self.store_part_anchor, "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1647,7 +1647,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
         parts = super().store_parts()
 
         if self.ml_model_inst:
-            parts.insert_after("config", "ml_model", f"ml__{self.ml_model_repr}")
+            parts.insert_after(self.store_part_anchor, "ml_model", f"ml__{self.ml_model_repr}")
 
         return parts
 
@@ -1672,7 +1672,7 @@ class MLModelDataMixin(MLModelMixin):
 
         # replace the ml_model entry
         store_name = self.ml_model_inst.store_name or self.ml_model_repr
-        parts.insert_after("config", "ml_data", f"ml__{store_name}")
+        parts.insert_after(self.store_part_anchor, "ml_data", f"ml__{store_name}")
         parts.pop("ml_model")
 
         return parts
@@ -1756,7 +1756,7 @@ class MLModelsMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.ml_model_insts:
-            parts.insert_after("config", "ml_models", f"ml__{self.ml_models_repr}")
+            parts.insert_after(self.store_part_anchor, "ml_models", f"ml__{self.ml_models_repr}")
 
         return parts
 
@@ -1825,7 +1825,7 @@ class InferenceModelMixin(ConfigTask):
         parts = super().store_parts()
 
         if self.inference_model != law.NO_STR:
-            parts.insert_after("config", "inf_model", f"inf__{self.inference_model_repr}")
+            parts.insert_after(self.store_part_anchor, "inf_model", f"inf__{self.inference_model_repr}")
 
         return parts
 
@@ -2273,7 +2273,7 @@ class WeightProducerMixin(ConfigTask):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after("config", "weightprod", f"weight__{self.weight_producer_repr}")
+        parts.insert_after(self.store_part_anchor, "weightprod", f"weight__{self.weight_producer_repr}")
         return parts
 
 

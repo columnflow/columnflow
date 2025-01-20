@@ -48,7 +48,7 @@ class PlotVariablesBase(
         MergeHistograms=MergeHistograms,
     )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
@@ -243,7 +243,7 @@ class PlotVariablesBaseSingleShift(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if "shift" in parts:
             parts.insert_before("datasets", "shift", parts.pop("shift"))
@@ -346,7 +346,7 @@ class PlotVariablesBaseMultiShifts(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("datasets", "shifts", f"shifts_{self.shift_sources_repr}")
         return parts
