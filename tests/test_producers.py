@@ -9,10 +9,17 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 class SCEtaProducerTests(unittest.TestCase):
-    def __init__(self):
+
+    @classmethod
+    def setUpClass(self):
         self.photon_producer = photon_sceta()
         self.electron_producer = electron_sceta()
-        reference = ak.from_json('tests/data/supercluster_eta.json')
+        ref_data_path = ak.from_json("tests/data/supercluster_eta.json")
+
+        self.ref_data = ak.from_json(ref_data_path)
 
     def test_photon_sceta(self):
-        
+        foo = self.photon_producer(self.ref_data)
+        self.assertListEqual(
+            foo.Photon.superclusterEta.tolist(),
+            self.ref_data.Photon.superclusterEta.tolist())
