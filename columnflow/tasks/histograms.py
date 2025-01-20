@@ -24,12 +24,12 @@ from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateHistograms(
-    VariablesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
     ReducedEventsUser,
     ChunkedIOMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -287,13 +287,13 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    VariablesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -406,14 +406,14 @@ MergeHistogramsWrapper = wrapper_factory(
 
 
 class MergeShiftedHistograms(
-    VariablesMixin,
-    ShiftSourcesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    ShiftSourcesMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

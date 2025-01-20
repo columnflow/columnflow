@@ -30,10 +30,10 @@ default_keep_reduced_events = law.config.get_expanded("analysis", "default_keep_
 
 
 class ReduceEvents(
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    ChunkedIOMixin,
     DatasetTask,
+    ChunkedIOMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -259,9 +259,9 @@ ReduceEventsWrapper = wrapper_factory(
 
 
 class MergeReductionStats(
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -413,9 +413,9 @@ MergeReductionStatsWrapper = wrapper_factory(
 
 
 class MergeReducedEvents(
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -500,9 +500,9 @@ MergeReducedEventsWrapper = wrapper_factory(
 
 
 class ProvideReducedEvents(
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -638,9 +638,9 @@ ProvideReducedEventsWrapper = wrapper_factory(
 
 
 class ReducedEventsUser(
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
     law.BaseWorkflow,
 ):
     # upstream requirements

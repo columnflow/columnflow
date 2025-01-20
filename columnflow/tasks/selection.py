@@ -32,10 +32,10 @@ default_create_selection_hists = law.config.get_expanded_bool(
 
 
 class SelectEvents(
-    SelectorMixin,
-    CalibratorsMixin,
-    ChunkedIOMixin,
     DatasetTask,
+    ChunkedIOMixin,
+    CalibratorsMixin,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -287,9 +287,9 @@ SelectEventsWrapper = wrapper_factory(
 
 
 class MergeSelectionStats(
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -366,10 +366,10 @@ MergeSelectionStatsWrapper = wrapper_factory(
 
 
 class MergeSelectionMasks(
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
-    law.tasks.ForestMerge,
+    CalibratorsMixin,
+    SelectorMixin,
+    law.LocalWorkflow,
     RemoteWorkflow,
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))

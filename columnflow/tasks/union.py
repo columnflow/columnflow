@@ -17,10 +17,10 @@ from columnflow.util import dev_sandbox
 
 
 class UniteColumns(
-    MLModelsMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducersMixin,
+    MLModelsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

@@ -22,12 +22,12 @@ from columnflow.util import dev_sandbox, try_int
 
 
 class CreateYieldTable(
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    WeightProducerMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
-    WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

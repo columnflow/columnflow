@@ -17,9 +17,9 @@ from columnflow.util import dev_sandbox
 
 
 class ProduceColumns(
-    ProducerMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducerMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
