@@ -382,6 +382,9 @@ class MergeSelectionMasks(
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
+    # recursively merge 8 files into one
+    merge_factor = 8
+
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
@@ -399,25 +402,23 @@ class MergeSelectionMasks(
             )
 
     def create_branch_map(self):
-        # dummy branch map
-        return {0: None}
+        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
+        return law.tasks.ForestMerge.create_branch_map(self)
 
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["selection"] = self.reqs.SelectEvents.req_different_branching(self)
+    def merge_workflow_requires(self):
+        reqs = {"selection": self.reqs.SelectEvents.req_different_branching(self)}
 
         if self.dataset_inst.is_mc:
             reqs["normalization"] = self.norm_weight_producer.run_requires()
 
         return reqs
 
-    def requires(self):
+    def merge_requires(self, start_branch, end_branch):
         reqs = {
-            "selection": self.reqs.SelectEvents.req_different_branching(
-                self,
-                branch=-1,
-                workflow="local",
-            ),
+            "selection": [
+                self.reqs.SelectEvents.req_different_branching(self, branch=b)
+                for b in range(start_branch, end_branch)
+            ],
         }
 
         if self.dataset_inst.is_mc:
@@ -425,24 +426,41 @@ class MergeSelectionMasks(
 
         return reqs
 
-    def output(self):
+    def trace_merge_workflow_inputs(self, inputs):
+        return super().trace_merge_workflow_inputs(inputs["selection"])
+
+    def trace_merge_inputs(self, inputs):
+        return super().trace_merge_inputs(inputs["selection"])
+
+    def merge_output(self):
         return {"masks": self.target("masks.parquet")}
 
-    def run(self):
+    def merge(self, inputs, output):
+        # in the lowest (leaf) stage, zip selection results with additional columns first
+        if self.is_leaf():
+            # create a temp dir for saving intermediate files
+            tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+            tmp_dir.touch()
+            inputs = self.zip_results_and_columns(inputs, tmp_dir)
+        else:
+            inputs = [inp["masks"] for inp in inputs]
+
+        law.pyarrow.merge_parquet_task(
+            self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts(),
+        )
+
+    def zip_results_and_columns(self, inputs, tmp_dir):
         from columnflow.columnar_util import (
             Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
         )
 
-        # prepare inputs and outputs
-        inputs = self.input()
-        output = self.output()
-        coll = inputs["selection"].collection
+        chunks = []
 
         # setup the normalization weights producer
         if self.dataset_inst.is_mc:
             self.norm_weight_producer.run_setup(
-                self.requires()["normalization"],
-                inputs["normalization"],
+                self.requires()["forest_merge"]["normalization"],
+                self.input()["forest_merge"]["normalization"],
             )
 
         # define columns that will be written
@@ -463,16 +481,7 @@ class MergeSelectionMasks(
         write_columns |= set(map(Route, {"category_ids", "process_id", "normalization_weight"}))
         route_filter = RouteFilter(write_columns)
 
-        # create a temp dir for saving intermediate files
-        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
-        tmp_dir.touch()
-
-        # loop over inputs, zip selection results with additional columns, and save them
-        chunks = []
-        for i, inp in enumerate(self.iter_progress(coll.targets.values(), len(coll)), 1):
-            if i % 25 == 0 or i in (1, len(coll)):
-                print(f"loading selection result {i} / {len(coll)}")
-
+        for inp in inputs:
             events = inp["columns"].load(formatter="awkward", cache=False)
             steps = inp["results"].load(formatter="awkward", cache=False).steps
 
@@ -490,11 +499,7 @@ class MergeSelectionMasks(
             chunks.append(chunk)
             sorted_ak_to_parquet(out, chunk.abspath)
 
-        # merge and save
-        with self.publish_step("merging masks ..."):
-            law.pyarrow.merge_parquet_task(
-                self, chunks, output["masks"], writer_opts=self.get_parquet_writer_opts(),
-            )
+        return chunks
 
 
 MergeSelectionMasksWrapper = wrapper_factory(
