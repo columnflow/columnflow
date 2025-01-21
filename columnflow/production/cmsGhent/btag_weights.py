@@ -27,20 +27,20 @@ logger = law.logger.get_logger(__name__)
 
 
 def init_btag(self: Producer | WeightProducer, add_eff_vars=True):
-    if self.btag_config is None:
+    if not hasattr(self, "get_btag_config"):
         self.btag_config = self.config_inst.x(
             "btag_sf",
             BTagSFConfig(
                 correction_set="DeepJet",
+                sources=["uncorrelated", "correlated"],
                 jec_sources=[],
             ),
         )
         self.btag_config = BTagSFConfig.new(self.btag_config)
+    else:
+        self.btag_config = self.get_btag_config()
 
-    # setup requires the algorithm name
-    self.btag_algorithm = self.btag_config.correction_set
-    # self requires for btag column calculation
-    self.btag_descriminator = self.btag_config.discriminator
+    # update used columns
     self.uses.add(f"Jet.{self.btag_config.discriminator }")
 
     if add_eff_vars:
@@ -69,7 +69,7 @@ def setup_btag(self: Producer | WeightProducer, reqs: dict):
         bundle.files.btag_sf_corr.load(formatter="gzip").decode("utf-8"),
     )
 
-    btag_wp_corrector = correction_set_btag_wp_corr[f"{self.btag_algorithm}_wp_values"]
+    btag_wp_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_wp_values"]
     self.btag_wp_value = OrderedDict([(wp, btag_wp_corrector.evaluate(wp)) for wp in "LMT"])
     return correction_set_btag_wp_corr
 
@@ -80,8 +80,8 @@ def req_btag(self: Producer | WeightProducer, reqs: dict):
 
 
 @producer(
-    btag_config=None,
     produces={optional_column("Jet.btag_{LMT}")},
+    get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
 )
 def jet_btag(
     self: Producer,
@@ -92,7 +92,7 @@ def jet_btag(
 ) -> ak.Array:
 
     for wp in working_points:
-        tag = events.Jet[self.btag_descriminator] >= self.btag_wp_value[wp]
+        tag = events.Jet[self.btag_config.discriminator] >= self.btag_wp_value[wp]
         if jet_mask is not None:
             tag = tag & jet_mask
         events = set_ak_column(events, f"Jet.btag_{wp}", tag)
@@ -117,7 +117,7 @@ def jet_btag_requires(self: Producer, reqs: dict) -> None:
 
 @weight_producer(
     uses={"Jet.{pt,eta,hadronFlavour}", jet_btag},
-    btag_config=None,
+    get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
     mc_only=True,
     weight_name="btag_weight",
 )
@@ -136,7 +136,11 @@ def fixed_wp_btag_weights(
     jets = set_ak_column(jets, "abseta", abs(jets.eta))
 
     # helper to create and store the weight
-    def add_weight(flavour_group, syst_variation):
+    def add_weight(flavour_group, systematic, variation=None):
+
+        # variation as in correctionlib TODO: make flexible if naming scheme changes
+        syst_variation = systematic if not variation else f"{variation}_{systematic}"
+
         # define a mask that selects the correct flavor to assign to, depending on the systematic
         jet_mask = ak.full_like(jets.hadronFlavour, True)
         if flavour_group == "light":
@@ -153,13 +157,13 @@ def fixed_wp_btag_weights(
             next_wp = working_points[i] if wp != working_points[-1] else None
 
             if wp is None:
-                jet_mask = jet_mask & (~jets[f"btag_{next_wp}"])
+                jet_mask_wp = jet_mask & (~jets[f"btag_{next_wp}"])
             else:
-                jet_mask = jet_mask & jets[f"btag_{wp}"]
+                jet_mask_wp = jet_mask & jets[f"btag_{wp}"]
                 if next_wp is not None:
-                    jet_mask = jet_mask & (~jets[f"btag_{next_wp}"])
+                    jet_mask_wp = jet_mask_wp & (~jets[f"btag_{next_wp}"])
 
-            selected_jets = jets[jet_mask]
+            selected_jets = jets[jet_mask_wp]
             flat_input = ak.flatten(selected_jets, axis=1)
 
             # get efficiencies and scale factors for this and next working point
@@ -194,15 +198,22 @@ def fixed_wp_btag_weights(
             weight = weight * ak.prod(layout_ak_array(weight_flat, selected_jets.pt), axis=1, mask_identity=False)
 
         column_name = f"{self.weight_name}_{flavour_group}"
-        if syst_variation != "central":
-            column_name += "_" + syst_variation.replace("uncorrelated", str(self.config_inst.x.year))
+        if systematic != "central":
+            column_name += f"_{systematic}_{variation}"  # .replace("uncorrelated", str(self.config_inst.x.year))
 
-        if ak.any((weight == np.inf) | ak.is_none(ak.nan_to_none(weight)) | ak.any(weight < 0)):
+        if ak.any((weight == np.inf) | ak.is_none(ak.nan_to_none(weight))):
             weight = ak.nan_to_num(weight, nan=1.0, posinf=1.0, neginf=1.0)
             logger.warning_once(
-                "weight column has an infinite, Nan or negative value",
-                f"weight column events.{column_name} has an infinite, Nan or negative value and is set to 1." +
-                " Make sure the b-tagging efficiency is defined and physical in all bins!",
+                "weight column has an infinite or Nan value",
+                f"weight column events.{column_name} has \
+                {ak.sum((weight == np.inf) | ak.is_none(ak.nan_to_none(weight)))} infinite or Nan values \
+                and are set to 1. Make sure the b-tagging efficiency is defined and physical in all bins.",
+            )
+        elif ak.any(weight < 0):
+            weight = ak.nan_to_num(weight, nan=1.0, posinf=1.0, neginf=1.0)
+            logger.warning_once(
+                "weight column has a negative value",
+                f"weight column events.{column_name} has {ak.sum(weight < 0)} negative values and are set to 1.",
             )
 
         return set_ak_column(events, column_name, weight, value_type=np.float32)
@@ -214,9 +225,12 @@ def fixed_wp_btag_weights(
         # only calculate up and down variations for nominal shift
         if self.local_shift_inst.is_nominal:
             for direction in ["up", "down"]:
-                for corr in [""]:  # "correlated", "uncorrelated"]:
-                    variation = direction if not corr else f"{direction}_{corr}"
-                    events = add_weight(flavour_group, variation)
+                for corr in self.btag_config.sources:
+                    events = add_weight(
+                        flavour_group=flavour_group,
+                        systematic=corr,
+                        variation=direction,
+                    )
 
     # nominal weights:
     nominal = np.prod([events[f"{self.weight_name}_{fg}"] for fg in self.flavour_groups], axis=0)
@@ -258,9 +272,9 @@ def fixed_wp_btag_weights_init(
         self.produces.add(f"{self.weight_name}_{name}")
         if shift_inst.is_nominal:
             self.produces.update({
-                f"{self.weight_name}_{name}_{direction}" + ("" if not corr else f"_{corr}")
+                f"{self.weight_name}_{name}_" + (direction if not corr else f"{corr}_{direction}")
                 for direction in ["up", "down"]
-                for corr in [""]  # "correlated", self.config_inst.x.year]
+                for corr in self.btag_config.sources
             })
 
 
@@ -275,10 +289,10 @@ def fixed_wp_btag_weights_setup(
 
     # fix for change in nomenclature of deepJet scale factors for light hadronFlavour jets
     if self.config_inst.x.year <= 2018:
-        self.btag_sf_incl_corrector = correction_set_btag_wp_corr[f"{self.btag_algorithm}_incl"]
+        self.btag_sf_incl_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_incl"]
     else:
-        self.btag_sf_incl_corrector = correction_set_btag_wp_corr[f"{self.btag_algorithm}_light"]
-    self.btag_sf_comb_corrector = correction_set_btag_wp_corr[f"{self.btag_algorithm}_comb"]
+        self.btag_sf_incl_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_light"]
+    self.btag_sf_comb_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_comb"]
 
     # unpack the b-tagging efficiency
     correction_set_btag_eff_corr = correctionlib.CorrectionSet.from_file(
@@ -329,7 +343,7 @@ def fixed_wp_btag_weights_requires(self: Producer, reqs: dict) -> None:
 
 @producer(
     uses={"mc_weight", "Jet.{hadronFlavour,pt,eta}"},
-    btag_config=None,
+    get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
     # only run on mc
     mc_only=True,
 )
