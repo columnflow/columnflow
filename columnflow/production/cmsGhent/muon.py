@@ -154,9 +154,20 @@ def muon_weights_setup(
     # create the corrector
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+
+    file_path = self.get_muon_file(bundle.files)
+    if file_path.path.endswith(".gz"):
+        correction_set = correctionlib.CorrectionSet.from_string(
+            file_path.load(formatter="gzip").decode("utf-8"),
+        )
+    elif file_path.path.endswith(".json"):
+        correction_set = correctionlib.CorrectionSet.from_file(
+            file_path.path,
+        )
+    else:
+        raise Exception(
+            f"unsupported muon sf corrector file type: {file_path}",
+        )
 
     corrector_names = self.get_muon_config().keys()
     self.muon_sf_correctors = {corrector_name: correction_set[corrector_name] for corrector_name in corrector_names}
@@ -165,5 +176,5 @@ def muon_weights_setup(
     for corrector_name, muon_sf_corrector in self.muon_sf_correctors.items():
         if muon_sf_corrector.version not in (1, 2):
             raise Exception(
-                f"unsuppprted muon sf corrector version {muon_sf_corrector.version} of {corrector_name}",
+                f"unsupported muon sf corrector version {muon_sf_corrector.version} of {corrector_name}",
             )

@@ -157,9 +157,19 @@ def electron_weights_setup(
     # create the corrector
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    file_path = self.get_electron_file(bundle.files)
+    if file_path.path.endswith(".gz"):
+        correction_set = correctionlib.CorrectionSet.from_string(
+            file_path.load(formatter="gzip").decode("utf-8"),
+        )
+    elif file_path.path.endswith(".json"):
+        correction_set = correctionlib.CorrectionSet.from_file(
+            file_path.path,
+        )
+    else:
+        raise Exception(
+            f"unsupported muon sf corrector file type: {file_path}",
+        )
 
     corrector_names = self.get_electron_config().keys()
     self.electron_sf_correctors = {corrector_name: correction_set[corrector_name] for corrector_name in corrector_names}
