@@ -990,6 +990,10 @@ class ConfigTask(AnalysisTask):
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
+    # the field in the store parts behind which the new part is inserted
+    # added here for subclasses that typically refer to the store part added by _this_ class
+    config_store_anchor = "config"
+
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
@@ -1120,9 +1124,6 @@ class ShiftTask(ConfigTask):
     exclude_params_remote_workflow = {"local_shift"}
 
     allow_empty_shift = False
-
-    # the field in the store parts behind which the new part is inserted
-    config_store_anchor = "config"
 
     @classmethod
     def modify_param_values(cls, params):
