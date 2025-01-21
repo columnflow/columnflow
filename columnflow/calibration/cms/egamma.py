@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, classproperty
 from columnflow.columnar_util import (
     set_ak_column, flat_np_view, ak_copy, optional_column,
 )
@@ -50,18 +50,15 @@ class EGammaCorrectionConfig:
 
 class egamma_scale_corrector(Calibrator):
 
+    _with_uncertainties = True
+
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._with_uncertainties = True
+        super().__init__(*args, **kwargs)   
 
     # whether to produce also uncertainties
-    @property
-    def with_uncertainties(self) -> bool:
-        return self._with_uncertainties
-
-    @with_uncertainties.setter
-    def with_uncertainties(self, value: bool):
-        self._with_uncertainties = value
+    @classproperty
+    def with_uncertainties(cls: Calibrator) -> bool:
+        return cls._with_uncertainties
 
     @property
     @abc.abstractmethod
