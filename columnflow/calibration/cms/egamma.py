@@ -53,7 +53,7 @@ class egamma_scale_corrector(Calibrator):
     _with_uncertainties = True
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)   
+        super().__init__(*args, **kwargs)
 
     # whether to produce also uncertainties
     @classproperty
