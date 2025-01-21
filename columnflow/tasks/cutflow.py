@@ -650,7 +650,7 @@ class PlotCutflowVariables1D(
         "--per-plot parameter",
         allow_empty=True,
     )
-    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_stack"
     plot_function_steps = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     per_plot = luigi.ChoiceParameter(
@@ -719,6 +719,7 @@ class PlotCutflowVariables1D(
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),
                     variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=[self.global_shift_inst],
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
