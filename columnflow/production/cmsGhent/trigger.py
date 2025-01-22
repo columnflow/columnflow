@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from columnflow.selection import SelectionResult
 from columnflow.production import producer, Producer
-from columnflow.weight import WeightProducer, weight_producer
+from columnflow.weight import WeightProducer
 from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column, has_ak_column, Route, fill_hist
 
@@ -31,20 +31,20 @@ class TriggerSFConfig:
     ref_triggers: str | Iterable[str]
     variables: Iterable[str]
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
-    tag: str = None,
-    ref_tag: str = None,
+    tag: str = None
+    ref_tag: str = None
 
     def __post_init__(self):
 
         # reformat self.trigger to tuple
         if isinstance(self.triggers, str):
-            self.triggers = {self.triggers, }
+            self.triggers = {self.triggers}
         elif not isinstance(self.triggers, set):
             self.triggers = set(self.triggers)
 
         # reformat self.ref_trigger to tuple
         if isinstance(self.ref_triggers, str):
-            self.ref_triggers = {self.ref_triggers, }
+            self.ref_triggers = {self.ref_triggers}
         elif not isinstance(self.ref_triggers, set):
             self.ref_triggers = set(self.ref_triggers)
 
@@ -112,15 +112,15 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
                     expression=lambda events: np.any([events.HLT[trigger] for trigger in self.triggers], axis=0),
                     binning=(2, -0.5, 1.5),
                     x_labels=["FAIL", "PASS"],
-                    aux={"inputs": [f"HLT.{trigger}" for trigger in self.triggers]}
+                    aux={"inputs": [f"HLT.{trigger}" for trigger in self.triggers]},
                 ),
                 od.Variable(
                     self.ref_tag,
                     expression=lambda events: np.any([events.HLT[trigger] for trigger in self.ref_triggers], axis=0),
                     binning=(2, -0.5, 1.5),
                     x_labels=["FAIL", "PASS"],
-                    aux={"inputs": {f"HLT.{trigger}" for trigger in self.ref_triggers}}
-                )
+                    aux={"inputs": {f"HLT.{trigger}" for trigger in self.ref_triggers}},
+                ),
             ]
 
         self.uses.update({
@@ -292,11 +292,7 @@ def trigger_efficiency_hists(
         last_edge_inclusive=False,
     )
 
-
-ref_tag
-breakpoint()
-
-return events
+    return events
 
 
 @trigger_efficiency_hists.init
