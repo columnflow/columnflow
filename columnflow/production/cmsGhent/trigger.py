@@ -113,7 +113,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
                     binning=(2, -0.5, 1.5),
                     x_labels=["FAIL", "PASS"],
                     aux={"inputs": [f"HLT.{trigger}" for trigger in self.triggers]}
-                )
+                ),
                 od.Variable(
                     self.ref_tag,
                     expression=lambda events: np.any([events.HLT[trigger] for trigger in self.ref_triggers], axis=0),
