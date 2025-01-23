@@ -145,23 +145,21 @@ class HistogramsUserSingleShiftBase(
         MergeHistograms=MergeHistograms,
     )
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
+
     def requires(self):
         return {
-            d: self.reqs.MergeHistograms.req(
+            d: self.reqs.MergeHistograms.req_different_branching(
                 self,
                 dataset=d,
                 branch=-1,
-                _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
             for d in self.datasets
         }
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["merged_hists"] = self.requires_from_branch()
-
-        return reqs
 
 
 class HistogramsUserMultiShiftBase(
@@ -173,20 +171,18 @@ class HistogramsUserMultiShiftBase(
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
+
     def requires(self):
         return {
-            d: self.reqs.MergeShiftedHistograms.req(
+            d: self.reqs.MergeShiftedHistograms.req_different_branching(
                 self,
                 dataset=d,
                 branch=-1,
-                _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
             for d in self.datasets
         }
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["merged_hists"] = self.requires_from_branch()
-
-        return reqs

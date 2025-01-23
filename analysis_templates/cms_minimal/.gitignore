@@ -36,3 +36,4 @@ data
 .setups
 .mypy_cache
 .vscode
+.__afs*

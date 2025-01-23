@@ -92,18 +92,24 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     objects = [load(fname) for fname in args.files]
+    if len(objects) == 1:
+        objects = objects[0]
     print("file content loaded into variable 'objects'")
 
     # interpret data
     intepreted = objects
     if args.events:
-        events = objects[0]
-        print("events loaded from objects[0] into variable 'events'")
+        events = objects
         interpreted = events
+        print("events loaded from objects[0] into variable 'events'")
+
+        # preload common packages
+        import awkward as ak  # noqa
+        import numpy as np   # noqa
 
     # list content
     if args.list:
         list_content(interpreted)
 
     # start the ipython shell
-    ipython_shell()
+    ipython_shell()()
