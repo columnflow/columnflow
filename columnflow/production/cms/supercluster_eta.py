@@ -9,7 +9,6 @@ import functools
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
-from columnflow.types import Callable
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
