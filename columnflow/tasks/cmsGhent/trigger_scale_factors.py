@@ -197,7 +197,7 @@ class TriggerScaleFactors(
 
         return mult_bias - 1, var
 
-    @ law.decorator.log
+    @law.decorator.log
     def run(self):
         import hist
         import numpy as np

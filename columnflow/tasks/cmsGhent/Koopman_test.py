@@ -136,7 +136,7 @@ def koopman_confint(
     else:
         logger.warning(
             "couldn't find solution for confidence interval for (x / m) / (y / n) with "
-            f"x = {x}, m = {m}, y = {y}, n = {n}. Return 0, inf"
+            f"x = {x}, m = {m}, y = {y}, n = {n}. Return 0, inf",
         )
         return 0, np.inf
 
