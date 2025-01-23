@@ -23,6 +23,8 @@ from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 np = maybe_import("numpy")
 hist = maybe_import("hist")
 
+logger = law.logger.get_logger(__name__)
+
 
 class TriggerScaleFactorsBase(
     CustomDefaultVariablesMixin,
@@ -164,8 +166,12 @@ class TriggerScaleFactors(
 
         assert passfailmatrix.shape == (2, 2), "invalid pass-fail-matrix"
 
-        if np.all(np.abs(passfailmatrix) < 1e-9):
+        if np.any(np.sum(np.abs(passfailmatrix), axis=0) < 1e-9):
             return (np.nan,) * 2
+
+        if np.any(passfailmatrix < 0):
+            logger.warning("Pass-Fail matrix has negative counts. Negative counts are set to 0.")
+            passfailmatrix[passfailmatrix < 0] = 0
 
         trigger_values = np.array([0, 0, 1, 1])
         ref_trigger_values = np.array([0, 1, 0, 1])
@@ -191,7 +197,7 @@ class TriggerScaleFactors(
 
         return mult_bias - 1, var
 
-    @law.decorator.log
+    @ law.decorator.log
     def run(self):
         import hist
         import numpy as np
@@ -313,7 +319,7 @@ class TriggerScaleFactors(
                 *scale_factors["nominal"]["central"].axes,
                 name="correlation bias",
                 label=f"correlation bias for {self.trigger} trigger with reference {self.ref_trigger} "
-                      f"for year {self.config_inst.x.year} "
+                f"for year {self.config_inst.x.year} "
                       f"(binned in {', '.join([vr.name for vr in self.nonaux_variable_insts])})",
                 storage=hist.storage.Weight(),
             ),

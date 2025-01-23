@@ -30,6 +30,7 @@ class TriggerSFConfig:
     triggers: str | Iterable[str]
     ref_triggers: str | Iterable[str]
     variables: Iterable[str]
+    datasets: Iterable[str]
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
     tag: str = None
     ref_tag: str = None
@@ -47,6 +48,9 @@ class TriggerSFConfig:
             self.ref_triggers = {self.ref_triggers}
         elif not isinstance(self.ref_triggers, set):
             self.ref_triggers = set(self.ref_triggers)
+
+        if not isinstance(self.datasets, set):
+            self.datasets = set(self.datasets)
 
         if not self.tag:
             self.tag = self.triggers[0]
@@ -69,7 +73,6 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
                 datasets=None,
             ),
         )
-        self.trigger_config = TriggerSFConfig.new(self.trigger_config)
     else:
         self.trigger_config = self.get_trigger_config()
 
@@ -134,7 +137,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 @producer(
     get_sf_file=None,
     sf_name=lambda self: f"trig_sf_{self.tag}",
-    get_trigger_config=(lambda self: TriggerSFConfig.new(self.config_inst.x.trigger_sf)),
+    get_trigger_config=(lambda self: self.config_inst.x.trigger_sf),
 )
 def trigger_scale_factors(
     self: Producer,
@@ -228,7 +231,7 @@ def trigger_scale_factors_setup(
 @producer(
     # only run on mc
     get_no_trigger_selection=lambda self, results: results.x("event_no_trigger", None),
-    get_trigger_config=(lambda self: TriggerSFConfig.new(self.config_inst.x.trigger_sf)),
+    get_trigger_config=(lambda self: self.config_inst.x.trigger_sf),
     objects=None,
 )
 def trigger_efficiency_hists(
