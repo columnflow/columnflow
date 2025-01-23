@@ -457,8 +457,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                             matches[i].append(_name)
                 for matches_pair in itertools.product(*matches):
                     object_names.append("-".join(matches_pair))
-                    if law.util.multi_match(_name, name):
-                        object_names.append(_name)
 
         return law.util.make_unique(object_names)
 
