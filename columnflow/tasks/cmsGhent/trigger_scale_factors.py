@@ -7,7 +7,6 @@ from collections import defaultdict
 import order as od
 from itertools import product
 import luigi
-from dataclasses import dataclass, field
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
@@ -20,51 +19,9 @@ from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMix
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 
-from columnflow.types import Any, Iterable
 
 np = maybe_import("numpy")
 hist = maybe_import("hist")
-
-
-@dataclass
-class TriggerSFConfig:
-    triggers: str | Iterable[str]
-    ref_triggers: str | Iterable[str]
-    variables: Iterable[str]
-    datasets: Iterable[str]
-    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
-    tag: str = None
-    ref_tag: str = None
-
-    def __post_init__(self):
-
-        # reformat self.trigger to tuple
-        if isinstance(self.triggers, str):
-            self.triggers = {self.triggers}
-        elif not isinstance(self.triggers, set):
-            self.triggers = set(self.triggers)
-
-        # reformat self.ref_trigger to tuple
-        if isinstance(self.ref_triggers, str):
-            self.ref_triggers = {self.ref_triggers}
-        elif not isinstance(self.ref_triggers, set):
-            self.ref_triggers = set(self.ref_triggers)
-
-        if not isinstance(self.datasets, set):
-            self.datasets = set(self.datasets)
-
-        if not self.tag:
-            self.tag = self.triggers[0]
-        if not self.ref_tag:
-            self.ref_tag = self.ref_triggers[0]
-
-    @classmethod
-    def new(
-        cls,
-        obj: TriggerSFConfig | tuple[str, list[str]] | tuple[str, list[str], str],
-    ) -> TriggerSFConfig:
-        # purely for backwards compatibility with the old tuple format
-        return obj if isinstance(obj, cls) else cls(*obj)
 
 
 class TriggerScaleFactorsBase(

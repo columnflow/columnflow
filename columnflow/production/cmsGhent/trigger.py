@@ -8,6 +8,7 @@ from __future__ import annotations
 import law
 import order as od
 
+from dataclasses import dataclass, field, replace
 
 from columnflow.selection import SelectionResult
 from columnflow.production import producer, Producer
@@ -15,14 +16,46 @@ from columnflow.weight import WeightProducer
 from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column, has_ak_column, Route, fill_hist
 
+from columnflow.types import Any, Iterable
 from columnflow.tasks.cmsGhent.trigger_scale_factors import TriggerSFConfig
-
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 hist = maybe_import("hist")
 
 logger = law.logger.get_logger(__name__)
+
+
+@dataclass
+class TriggerSFConfig:
+    triggers: str | Iterable[str]
+    ref_triggers: str | Iterable[str]
+    variables: Iterable[str]
+    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
+    tag: str = None
+    ref_tag: str = None
+
+    def __post_init__(self):
+
+        # reformat self.trigger to tuple
+        if isinstance(self.triggers, str):
+            self.triggers = {self.triggers}
+        elif not isinstance(self.triggers, set):
+            self.triggers = set(self.triggers)
+
+        # reformat self.ref_trigger to tuple
+        if isinstance(self.ref_triggers, str):
+            self.ref_triggers = {self.ref_triggers}
+        elif not isinstance(self.ref_triggers, set):
+            self.ref_triggers = set(self.ref_triggers)
+
+        if not self.tag:
+            self.tag = self.triggers[0]
+        if not self.ref_tag:
+            self.ref_tag = self.ref_triggers[0]
+
+    def copy(self, **changes):
+        return replace(self, **changes)
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
