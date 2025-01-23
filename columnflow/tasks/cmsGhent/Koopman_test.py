@@ -1,4 +1,5 @@
 from __future__ import annotations
+import warnings
 import numpy as np
 from scipy.stats import chi2
 import scipy.optimize as opt
@@ -93,6 +94,18 @@ def koopman_confint(
     chival = chi2.ppf(1 - significance, 1)
     func = lambda th: U(x, m, y, n, th) - chival
 
+    # report negative values and set to zero
+    values = ["x", "m", "y", "n"]
+    for i, v in enumerate(values):
+        if (vv := eval(v)) < 0:
+            warnings.warn(
+                f"found negative count in calculating confindence interval for (x / m) / (y / n): {v} = {vv}"
+            )
+            vv = 0
+        values[i] = vv
+
+    x, m, y, n = values
+
     # check whether either x or y is (practically) zero
     zx = np.abs(x) < 1e-13
     zy = np.abs(y) < 1e-13
@@ -118,7 +131,12 @@ def koopman_confint(
         except:
             pass
     else:
-        raise RuntimeError(f"couldn't find first solution starting from {first_attempts}")
+        return 0, np.inf
+        warnings.warn(
+            "couldn't find solution for confidence interval for (x / m) / (y / n) with "
+            f"x = {x}, m = {m}, y = {y}, n = {n}"
+        )
+
     # if x is zero, apply lower limit of zero, and upper limit the found solution
     if zx:
         return 0, first_root
@@ -176,6 +194,7 @@ def plottest(x, m, y, n, significance=0.317):
     try:
         thdn, thup = koopman_confint(x, m, y, n, significance)
     except:
+        print("no solution found")
         thdn, thup = (np.nan,) * 2
     plt.plot(tests, U(x, m, y, n, tests) - chival)
     plt.axhline(0)
@@ -186,5 +205,6 @@ def plottest(x, m, y, n, significance=0.317):
 
 
 if __name__ == "__main__":
-    inputs = (2., 4., 1868.42938397, 1944.50654402)
+    inputs = (1, 8, 0.0, -.1774)
+    koopman_confint(*inputs)
     plottest(*inputs)
