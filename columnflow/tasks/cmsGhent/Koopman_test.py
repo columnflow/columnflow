@@ -102,7 +102,7 @@ def koopman_confint(
     for i, v in enumerate(values):
         if (vv := eval(v)) < 0:
             warnings.warn(
-                f"found negative count in calculating confindence interval for (x / m) / (y / n): {v} = {vv}"
+                f"found negative count in calculating confindence interval for (x / m) / (y / n): {v} = {vv}",
             )
             vv = 0
         values[i] = vv
