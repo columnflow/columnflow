@@ -66,7 +66,7 @@ def init_btag(self: Producer | WeightProducer, add_eff_vars=True):
 def setup_btag(self: Producer | WeightProducer, reqs: dict):
     bundle = reqs["external_files"]
     correction_set_btag_wp_corr = correctionlib.CorrectionSet.from_string(
-        bundle.files.btag_sf_corr.load(formatter="gzip").decode("utf-8"),
+        self.get_btag_sf(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
     btag_wp_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_wp_values"]
@@ -118,6 +118,10 @@ def jet_btag_requires(self: Producer, reqs: dict) -> None:
 @weight_producer(
     uses={"Jet.{pt,eta,hadronFlavour}", jet_btag},
     get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
+    get_btag_sf=lambda self, external_files: external_files.btag_sf_corr,
+    get_btag_eff=lambda self, external_files: external_files.get("btag_sf_eff", {}),
+        # Return a dict mapping dataset groups to efficiencies.
+        # Missing dataset groups are calculated with the BTagEfficiency task
     mc_only=True,
     weight_name="btag_weight",
 )
@@ -300,9 +304,7 @@ def fixed_wp_btag_weights_init(
             "example: config.x.btag_dataset_groups = {'ttx': ['ttztollnunu_m10_amcatnlo','tt_sl_powheg']}",
         )
 
-    self.has_external_efficiencies = self.dataset_group in (self.config_inst.x.external_files.btag_eff or [])
-
-
+    self.has_external_efficiencies = self.dataset_group in self.get_btag_eff(self.config_inst.x.external_files)
 
 
 @fixed_wp_btag_weights.setup
@@ -323,7 +325,7 @@ def fixed_wp_btag_weights_setup(
 
     # unpack the b-tagging efficiency
     if self.has_external_efficiencies:
-        file = reqs["external_files"].files.btag_eff[self.dataset_group]
+        file = self.get_btag_eff(reqs["external_files"].files)[self.dataset_group]
     else:
         file = reqs["btag_efficiency"].output()["json"]
 
