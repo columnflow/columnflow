@@ -7,22 +7,64 @@ from collections import defaultdict
 import order as od
 from itertools import product
 import luigi
+from dataclasses import dataclass, field
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, DatasetsProcessesMixin,
+    CalibratorsMixin, SelectorMixin, DatasetsMixin, DatasetsProcessesMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D, PlotBase1D,
 )
 from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin, CustomDefaultVariablesMixin
-
-
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, dict_add_strict, maybe_import
 
+from columnflow.types import Any, Iterable
+
 np = maybe_import("numpy")
 hist = maybe_import("hist")
+
+
+@dataclass
+class TriggerSFConfig:
+    triggers: str | Iterable[str]
+    ref_triggers: str | Iterable[str]
+    variables: Iterable[str]
+    datasets: Iterable[str]
+    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
+    tag: str = None
+    ref_tag: str = None
+
+    def __post_init__(self):
+
+        # reformat self.trigger to tuple
+        if isinstance(self.triggers, str):
+            self.triggers = {self.triggers}
+        elif not isinstance(self.triggers, set):
+            self.triggers = set(self.triggers)
+
+        # reformat self.ref_trigger to tuple
+        if isinstance(self.ref_triggers, str):
+            self.ref_triggers = {self.ref_triggers}
+        elif not isinstance(self.ref_triggers, set):
+            self.ref_triggers = set(self.ref_triggers)
+
+        if not isinstance(self.datasets, set):
+            self.datasets = set(self.datasets)
+
+        if not self.tag:
+            self.tag = self.triggers[0]
+        if not self.ref_tag:
+            self.ref_tag = self.ref_triggers[0]
+
+    @classmethod
+    def new(
+        cls,
+        obj: TriggerSFConfig | tuple[str, list[str]] | tuple[str, list[str], str],
+    ) -> TriggerSFConfig:
+        # purely for backwards compatibility with the old tuple format
+        return obj if isinstance(obj, cls) else cls(*obj)
 
 
 class TriggerScaleFactorsBase(
@@ -52,8 +94,6 @@ class TriggerScaleFactorsBase(
 
         # variable in which the nominal variables are binned
         self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
-        self.trigger_vr = "HLT." + self.trigger
-        self.ref_trigger_vr = "HLT." + self.ref_trigger
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -93,7 +133,7 @@ class TriggerScaleFactorsBase(
 
 
 class TriggerDatasetsMixin(
-    DatasetsProcessesMixin,
+    DatasetsMixin,
 ):
     @property
     def datasets_repr(self):
@@ -238,9 +278,9 @@ class TriggerScaleFactors(
             sum_histograms[h_key] = sum_histograms[h_key][idx]
 
             # counts that pass both triggers
-            selected_counts = sum_histograms[h_key][{self.ref_trigger_vr: 1, self.trigger_vr: 1}]
+            selected_counts = sum_histograms[h_key][{self.ref_trigger: 1, self.trigger: 1}]
             # counts that pass reference triggers
-            incl = sum_histograms[h_key][{self.ref_trigger_vr: 1, self.trigger_vr: sum}]
+            incl = sum_histograms[h_key][{self.ref_trigger: 1, self.trigger: sum}]
             # calculate efficiency
             efficiencies[h_key] = self.efficiency(selected_counts, incl)
 
@@ -295,7 +335,7 @@ class TriggerScaleFactors(
             container = np.ones((2, *container_dim))
             for idx in self.loop_variables(aux=aux_vr):
                 data, mc = self.data_mc_keys("" if aux_vr is None else aux_vr.name)
-                t_idx = idx | {self.ref_trigger_vr: 1}
+                t_idx = idx | {self.trigger: 1}
                 data = sum_histograms[data][t_idx]
                 mc = sum_histograms[mc][t_idx]
                 inputs = [x.value for x in [data[1], data[sum], mc[1], mc[sum]]]
@@ -337,7 +377,7 @@ class TriggerScaleFactors(
                 storage=hist.storage.Weight(),
             )
             # trigger must be along first axis!
-            pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr, vr.name)
+            pf = sum_histograms["mc"].project(self.trigger, self.ref_trigger, vr.name)
 
             for idx in range(vr.n_bins):
                 corr_bias[vr.name][idx] = self.correlation_efficiency_bias(pf[{vr.name: idx}])
@@ -356,7 +396,7 @@ class TriggerScaleFactors(
                   f"for year {self.config_inst.x.year} (inclusive)",
             storage=hist.storage.Weight(),
         )
-        pf = sum_histograms["mc"].project(self.trigger_vr, self.ref_trigger_vr)
+        pf = sum_histograms["mc"].project(self.trigger, self.ref_trigger)
         corr_bias["incl"][...] = self.correlation_efficiency_bias(pf)
 
         # store correlations
@@ -795,10 +835,10 @@ class TriggerScaleFactorsHist(
         p_cat.label += "\n" + self.ref_trigger
         # reduce all variables but the one considered
         idx = {ivr.name: self.aux_variable_insts.get(ivr, sum) for ivr in self.variable_insts if ivr != vr}
-        idx[self.ref_trigger_vr] = 1
+        idx[self.ref_trigger] = 1
         if trig_label == "trig":
             p_cat.label += " & " + self.trigger
-            idx[self.trigger_vr] = 1
+            idx[self.trigger] = 1
 
         fig, axes = self.call_plot_func(
             self.plot_function,

@@ -5,7 +5,7 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import Requirements
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.tasks.framework.mixins import DatasetsMixin, VariablesMixin
 from columnflow.tasks.selection import MergeSelectionStats
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, maybe_import
@@ -67,7 +67,7 @@ class CustomDefaultVariablesMixin(
 
 
 class SelectionEfficiencyHistMixin(
-    DatasetsProcessesMixin,
+    DatasetsMixin,
     CustomDefaultVariablesMixin,
 ):
 
@@ -146,15 +146,11 @@ class SelectionEfficiencyHistMixin(
             name = f"{self.tag_name}_efficiencies"
         # histogram for the tagged and all jets (combine all datasets)
 
-        process_insts = list(map(self.config_inst.get_process, self.processes))
         histograms = {}
         for dataset, inp in self.input().items():
             # map dataset to one of to requested processes
-            dataset_process, xsec = self.get_process_xsec(dataset, self.config_inst)
-            processes = [p for p in process_insts if p.has_process(dataset_process) or p == dataset_process]
-            assert len(processes) == 1, \
-                f"process {dataset_process.name} of dataset {dataset} in multiple processes {processes}"
-            process = processes[0]
+            _, xsec = self.get_process_xsec(dataset, self.config_inst)
+            dataset_inst = self.config_inst.get_dataset(dataset)
 
             h_in = inp["collection"][0]["hists"].load(formatter="pickle")[name]
             for variable_inst in variable_insts:
@@ -171,17 +167,17 @@ class SelectionEfficiencyHistMixin(
                 ]):
                     h_in = use_flow_bins(h_in, variable_inst.name, *flows)
 
-            if process.is_mc:
+            if dataset_inst.is_mc:
                 norm = inp["collection"][0]["stats"].load()["sum_mc_weight"]
                 h_in = h_in * xsec / norm * self.config_inst.x.luminosity.nominal
 
-            histograms[process] = histograms.get(process, 0) + h_in
+            histograms[dataset_inst] = histograms.get(dataset_inst, 0) + h_in
 
         if not histograms:
             raise Exception(
                 "no histograms found to plot; possible reasons:\n" +
                 "  - requested variable requires columns that were missing during histogramming\n" +
-                "  - selected --processes did not match any value on the process axis of the input histogram",
+                "  - selected --datasets did not match any value on the process axis of the input histogram",
             )
 
         return histograms

@@ -8,7 +8,6 @@ from __future__ import annotations
 import law
 import order as od
 
-from dataclasses import dataclass, field
 
 from columnflow.selection import SelectionResult
 from columnflow.production import producer, Producer
@@ -16,50 +15,14 @@ from columnflow.weight import WeightProducer
 from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column, has_ak_column, Route, fill_hist
 
-from columnflow.types import Any, Iterable
+from columnflow.tasks.cmsGhent.trigger_scale_factors import TriggerSFConfig
+
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 hist = maybe_import("hist")
 
 logger = law.logger.get_logger(__name__)
-
-
-@dataclass
-class TriggerSFConfig:
-    triggers: str | Iterable[str]
-    ref_triggers: str | Iterable[str]
-    variables: Iterable[str]
-    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
-    tag: str = None
-    ref_tag: str = None
-
-    def __post_init__(self):
-
-        # reformat self.trigger to tuple
-        if isinstance(self.triggers, str):
-            self.triggers = {self.triggers}
-        elif not isinstance(self.triggers, set):
-            self.triggers = set(self.triggers)
-
-        # reformat self.ref_trigger to tuple
-        if isinstance(self.ref_triggers, str):
-            self.ref_triggers = {self.ref_triggers}
-        elif not isinstance(self.ref_triggers, set):
-            self.ref_triggers = set(self.ref_triggers)
-
-        if not self.tag:
-            self.tag = self.triggers[0]
-        if not self.ref_tag:
-            self.ref_tag = self.ref_triggers[0]
-
-    @classmethod
-    def new(
-        cls,
-        obj: TriggerSFConfig | tuple[str, list[str]] | tuple[str, list[str], str],
-    ) -> TriggerSFConfig:
-        # purely for backwards compatibility with the old tuple format
-        return obj if isinstance(obj, cls) else cls(*obj)
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
@@ -71,6 +34,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
                 triggers=None,  # TODO fix the default values
                 ref_triggers=None,
                 variables=None,
+                datasets=None
             ),
         )
         self.trigger_config = TriggerSFConfig.new(self.trigger_config)
@@ -82,6 +46,8 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 
     self.ref_triggers = self.trigger_config.ref_triggers
     self.ref_tag = self.trigger_config.ref_tag
+
+    self.datasets = self.trigger_config.datasets
 
     self.tag_name = f"hlt_{self.tag.lower()}_ref_{self.ref_tag.lower()}"
 
@@ -134,9 +100,9 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 
 
 @producer(
-    trigger="SingleElectron",
-    get_sf_file=lambda self, external_files: external_files.trigger_sf[self.trigger],
-    sf_name=lambda self: f"trig_sf_{self.trigger}",
+    get_sf_file=None,
+    sf_name=lambda self: f"trig_sf_{self.tag}",
+    get_trigger_config=(lambda self: TriggerSFConfig.new(self.config_inst.x.trigger_sf)),
 )
 def trigger_scale_factors(
     self: Producer,
@@ -171,32 +137,30 @@ def trigger_scale_factors(
 
 @trigger_scale_factors.init
 def trigger_scale_factors_init(self: Producer):
-    eff_bin_vars = list(map(
-        self.config_inst.get_variable,
-        self.config_inst.x.analysis_triggers[self.trigger][1],
-    ))
+    init_trigger(self, add_eff_vars=True, add_hists=False)
 
-    self.variable_insts = [vr for vr in eff_bin_vars if not vr.x("auxiliary", False)]
-
-    self.uses = {
-        inp
-        for variable_inst in self.variable_insts
-        for inp in (
-            [variable_inst.expression]
-            if isinstance(variable_inst.expression, str)
-            else variable_inst.x("inputs", [])
-        )
-    }
     self.produces = {self.sf_name() + suff for suff in ["", "_down", "_up"]}
 
 
 @trigger_scale_factors.requires
 def trigger_scale_factors_requires(self: Producer, reqs: dict) -> None:
-    if "external_files" in reqs:
-        return
 
-    from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    if self.get_sf_file:
+        if "external_files" in reqs:
+            return
+
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(self.task)
+    else:
+        from columnflow.tasks.cmsGhent.trigger_scale_factors import TriggerScaleFactors
+
+        reqs["trigger_scalefactor"] = TriggerScaleFactors.req(
+            self.task,
+            datasets=self.datasets,
+            variables=self.variables,
+            trigger=self.tag,
+            ref_trigger=self.ref_tag,
+        )
 
 
 @trigger_scale_factors.setup
@@ -206,14 +170,22 @@ def trigger_scale_factors_setup(
     inputs: dict,
     reader_targets,
 ) -> None:
-    bundle = reqs["external_files"]
 
     # create the corrector
     import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_file(
-        self.get_sf_file(bundle.files).path,
-    )
+
+    if self.get_sf_file:
+        bundle = reqs["external_files"]
+        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+        correction_set = correctionlib.CorrectionSet.from_file(
+            self.get_sf_file(bundle.files).path,
+        )
+    else:
+        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+        correction_set = correctionlib.CorrectionSet.from_file(
+            reqs["btag_efficiency"].output()["json"].path,
+        )
+
     self.sf_corrector = correction_set["scale_factors"]
 
 
