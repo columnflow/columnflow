@@ -4,7 +4,6 @@
 Tasks to be implemented: MergeSelectionMasks, PlotCutflow
 """
 
-import functools
 from collections import OrderedDict
 from abc import abstractmethod
 
@@ -74,13 +73,14 @@ class CreateCutflowHistograms(
     # strategy for handling selector steps not defined by selectors
     missing_selector_step_strategy = luigi.ChoiceParameter(
         significant=False,
-        default=law.config.get_default("analysis", "missing_selector_step_strategy", "error"),
-        choices=("error", "skip", "dummy"),
-        description="how to handle selector steps that are not defined by the selector; if 'error', an "
-        "exception will be thrown; if 'skip', the selector step will be ignored; if 'dummy' the "
-        "output histogram will contain an entry for the step identical to the previous one; the "
-        "default can be configured via the law config entry *missing_selector_step_strategy* in "
-        "the *analysis* section; if no default is specified there, 'error' is assumed",
+        default=law.config.get_default("analysis", "missing_selector_step_strategy", "raise"),
+        choices=("raise", "ignore", "dummy"),
+        description="how to handle selector steps that are not defined by the selector; if "
+        "'raise', an exception will be thrown; if 'ignore', the selector step will be ignored; if "
+        "'dummy' the output histogram will contain an entry for the step identical to the previous "
+        "one; the default can be configured via the law config entry "
+        "*missing_selector_step_strategy* in the *analysis* section; if no default is specified "
+        "there, 'raise' is assumed",
     )
 
     def create_branch_map(self):
@@ -112,7 +112,8 @@ class CreateCutflowHistograms(
     def run(self):
         import numpy as np
         import awkward as ak
-        from columnflow.columnar_util import Route, add_ak_aliases, fill_hist
+        from columnflow.columnar_util import Route, add_ak_aliases, has_ak_column
+        from columnflow.hist_util import fill_hist
 
         # prepare inputs and outputs
         inputs = self.input()
@@ -133,6 +134,9 @@ class CreateCutflowHistograms(
         # define steps
         steps = self.selector_steps
 
+        # empty float array to use when input files have no entries
+        empty_f32 = ak.Array(np.array([], dtype=np.float32))
+
         # prepare expressions
         expressions = {}
         for var_key, var_names in self.variable_tuples.items():
@@ -143,11 +147,14 @@ class CreateCutflowHistograms(
                 expr = variable_inst.expression
                 if isinstance(expr, str):
                     route = Route(expr)
-                    expr = functools.partial(route.apply, null_value=variable_inst.null_value)
+                    def expr(events):
+                        if len(events) == 0 and not has_ak_column(events, route):
+                            return empty_f32
+                        return route.apply(events, null_value=variable_inst.null_value)
                     read_columns.add(route)
                 else:
                     # for variable_inst with custom expressions, read columns declared via aux key
-                    read_columns |= {inp for inp in variable_inst.x("inputs", [])}
+                    read_columns |= set(variable_inst.x("inputs", []))
                 expressions[variable_inst.name] = expr
 
         # prepare columns to load
@@ -164,7 +171,7 @@ class CreateCutflowHistograms(
                     histograms[var_key] = create_hist_from_variables(
                         self.steps_variable,
                         *variable_insts,
-                        add_default_axes=True,
+                        int_cat_axes=("category", "process", "shift"),
                     )
 
         for arr, pos in self.iter_chunked_io(
@@ -227,11 +234,11 @@ class CreateCutflowHistograms(
                 mask = True
                 for step in steps:
                     if step not in arr.steps.fields:
-                        if self.missing_selector_step_strategy == "error":
+                        if self.missing_selector_step_strategy == "raise":
                             raise ValueError(
                                 f"step '{step}' is not defined by selector {self.selector}",
                             )
-                        if self.missing_selector_step_strategy == "skip":
+                        if self.missing_selector_step_strategy == "ignore":
                             continue
                     else:
                         # incrementally update the mask
@@ -342,7 +349,7 @@ class PlotCutflow(
                 branch=0,
                 dataset=d,
                 variables=(self.variable,),
-                missing_selector_step_strategy="skip",
+                missing_selector_step_strategy="ignore",
             )
             for d in self.datasets
         }
@@ -376,7 +383,7 @@ class PlotCutflow(
 
         # prepare config objects
         category_inst = self.config_inst.get_category(self.branch_data)
-        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        leaf_category_insts = [category_inst] + (category_inst.get_leaf_categories() or [])
         sub_process_insts = {
             proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
@@ -390,10 +397,10 @@ class PlotCutflow(
                 dataset_inst = self.config_inst.get_dataset(dataset)
                 h_in = inp[self.variable].load(formatter="pickle")
 
-                # sanity checks
-                n_shifts = len(h_in.axes["shift"])
-                if n_shifts != 1:
+                # select shift
+                if (n_shifts := len(h_in.axes["shift"])) != 1:
                     raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
+                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.id)}]
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -560,7 +567,7 @@ class PlotCutflowVariablesBase(
             for var_name in variable_tuple
         ]
         category_inst = self.config_inst.get_category(self.branch_data.category)
-        leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+        leaf_category_insts = [category_inst] + (category_inst.get_leaf_categories() or [])
         sub_process_insts = {
             process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
             for process_inst in process_insts
@@ -574,10 +581,10 @@ class PlotCutflowVariablesBase(
                 dataset_inst = self.config_inst.get_dataset(dataset)
                 h_in = inp[self.branch_data.variable].load(formatter="pickle")
 
-                # sanity checks
-                n_shifts = len(h_in.axes["shift"])
-                if n_shifts != 1:
+                # select shift
+                if (n_shifts := len(h_in.axes["shift"])) != 1:
                     raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
+                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.id)}]
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -684,13 +691,15 @@ class PlotCutflowVariables1D(
         }
 
     def run_postprocess(self, hists, category_inst, variable_insts):
+        import hist
+
         # resolve plot function
         if self.plot_function == law.NO_STR:
             self.plot_function = (
-                self.plot_function_processes if self.per_plot == "processes" else self.plot_function_steps
+                self.plot_function_processes
+                if self.per_plot == "processes"
+                else self.plot_function_steps
             )
-
-        import hist
 
         if len(variable_insts) != 1:
             raise Exception(f"task {self.task_family} is only viable for single variables")

@@ -431,18 +431,21 @@ def prepare_style_config(
     # build the label from category and optional variable selection labels
     cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
 
+    # unit format on axes (could be configurable)
+    unit_format = "{title} [{unit}]"
+
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
             # TODO: need to make bin width and unit configurable in future
-            "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False),
-            "xlabel": variable_inst.get_full_x_title(),
+            "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
+            "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
-            "xlabel": variable_inst.get_full_x_title(),
+            "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
         },
         "legend_cfg": {},
         "annotate_cfg": {"text": cat_label or ""},

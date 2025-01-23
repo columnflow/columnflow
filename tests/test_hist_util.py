@@ -94,7 +94,10 @@ class HistUtilTests(unittest.TestCase):
         self.assertEqual(histogram, histogram_manually)
 
         # test with default axes
-        histogram = create_hist_from_variables(*self.variable_examples, add_default_axes=True)
+        histogram = create_hist_from_variables(
+            *self.variable_examples,
+            int_cat_axes=("category", "process", "shift"),
+        )
 
         expected_default_axes = ("category", "process", "shift")
         for axis in expected_default_axes:

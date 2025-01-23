@@ -301,13 +301,9 @@ class MergeMLStats(
     SelectorMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.tasks.ForestMerge,
+    law.LocalWorkflow,
+    RemoteWorkflow,
 ):
-    # recursively merge 20 files into one
-    merge_factor = 20
-
-    # skip receiving some parameters via req
-    exclude_params_req_get = {"workflow"}
 
     # upstream requirements
     reqs = Requirements(
@@ -315,40 +311,35 @@ class MergeMLStats(
     )
 
     def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
+        # dummy branch map
+        return {0: None}
 
-    def merge_workflow_requires(self):
-        return self.reqs.PrepareMLEvents.req(self, _exclude={"branches"})
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["events"] = self.reqs.PrepareMLEvents.req_different_branching(self)
+        return reqs
 
-    def merge_requires(self, start_branch, end_branch):
-        return self.reqs.PrepareMLEvents.req(
+    def requires(self):
+        return self.reqs.PrepareMLEvents.req_different_branching(
             self,
-            branches=((start_branch, end_branch),),
+            branch=-1,
             workflow="local",
-            _exclude={"branch"},
         )
 
-    def merge_output(self):
+    def output(self):
         return {"stats": self.target("stats.json")}
-
-    def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["collection"].targets.values())
 
     @law.decorator.notify
     @law.decorator.log
     def run(self):
-        return super().run()
-
-    def merge(self, inputs, output):
         # merge input stats
         merged_stats = defaultdict(float)
-        for inp in inputs:
+        for inp in self.input().collection.targets.values():
             stats = inp["stats"].load(formatter="json", cache=False)
             self.merge_counts(merged_stats, stats)
 
         # write the output
-        output["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
+        self.output()["stats"].dump(merged_stats, indent=4, formatter="json", cache=False)
 
     @classmethod
     def merge_counts(cls, dst: dict, src: dict) -> dict:
@@ -532,7 +523,7 @@ class MLTraining(
                     calibrators=_calibrators,
                     selector=_selector,
                     producers=_producers,
-                    tree_index=-1)
+                )
                 for dataset_inst in dataset_insts
             }
             for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
