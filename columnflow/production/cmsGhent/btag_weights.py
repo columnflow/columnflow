@@ -82,6 +82,7 @@ def req_btag(self: Producer | WeightProducer, reqs: dict):
 @producer(
     produces={optional_column("Jet.btag_{LMT}")},
     get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
+    get_btag_sf=lambda self, external_files: external_files.btag_sf_corr,
 )
 def jet_btag(
     self: Producer,
@@ -120,8 +121,8 @@ def jet_btag_requires(self: Producer, reqs: dict) -> None:
     get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
     get_btag_sf=lambda self, external_files: external_files.btag_sf_corr,
     get_btag_eff=lambda self, external_files: external_files.get("btag_sf_eff", {}),
-        # Return a dict mapping dataset groups to efficiencies.
-        # Missing dataset groups are calculated with the BTagEfficiency task
+    # Return a dict mapping dataset groups to efficiencies.
+    # Missing dataset groups are calculated with the BTagEfficiency task
     mc_only=True,
     weight_name="btag_weight",
 )
