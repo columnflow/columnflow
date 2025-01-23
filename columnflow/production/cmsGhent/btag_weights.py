@@ -277,6 +277,33 @@ def fixed_wp_btag_weights_init(
                 for corr in self.btag_config.sources
             })
 
+    # determine to which btag_dataset_group the dataset belongs.
+    # btag efficiency will be calculated for the btag_dataset_group
+    # default value of datasets to calculate the efficiency is the dataset of the produce task
+    self.datasets = [self.dataset_inst.name]
+    self.dataset_group = self.dataset_inst.processes.names()[0]
+
+    if hasattr(self.config_inst.x, "btag_dataset_groups"):
+        for btag_group in self.config_inst.x.btag_dataset_groups:
+            # check if dataset is in data group
+            if self.dataset_inst.name in self.config_inst.x.btag_dataset_groups[btag_group]:
+                self.datasets = self.config_inst.x.btag_dataset_groups[btag_group]
+                if btag_group in self.config_inst.processes.names():
+                    self.dataset_group = btag_group  # only for plotting text
+                break
+    else:
+        logger.warning_once(
+            "no default btagging efficiency dataset groups defined in config",
+            "Config does not have an attribute 'x.btag_dataset_groups' that provides  \
+            default groupings of datasets for b-tagging efficiency calculation.\n"
+            f"The dataset {self.dataset_inst.name} is used to calculate but defining one is recommended.\n"
+            "example: config.x.btag_dataset_groups = {'ttx': ['ttztollnunu_m10_amcatnlo','tt_sl_powheg']}",
+        )
+
+    self.has_external_efficiencies = self.dataset_group in (self.config_inst.x.external_files.btag_eff or [])
+
+
+
 
 @fixed_wp_btag_weights.setup
 def fixed_wp_btag_weights_setup(
@@ -295,50 +322,37 @@ def fixed_wp_btag_weights_setup(
     self.btag_sf_comb_corrector = correction_set_btag_wp_corr[f"{self.btag_config.correction_set}_comb"]
 
     # unpack the b-tagging efficiency
-    correction_set_btag_eff_corr = correctionlib.CorrectionSet.from_file(
-        reqs["btag_efficiency"].output()["json"].path,
-    )
-    if len(correction_set_btag_eff_corr.keys()) != 1:
-        raise Exception("Expected exactly one type of btagging efficiencies")
+    if self.has_external_efficiencies:
+        file = reqs["external_files"].files.btag_eff[self.dataset_group]
+    else:
+        file = reqs["btag_efficiency"].output()["json"]
 
-    corrector_name = list(correction_set_btag_eff_corr.keys())[0]
-    self.btag_eff_corrector = correction_set_btag_eff_corr[corrector_name]
+    if file.path.endswith(".json.gz"):
+        corr_set_btag_eff_corr = correctionlib.CorrectionSet.from_string(file.load(formatter="gzip").decode("utf-8"))
+    elif file.path.endswith(".json"):
+        corr_set_btag_eff_corr = correctionlib.CorrectionSet.from_file(file.path)
+    else:
+        raise AssertionError(f"{file} should be json or json.gz")
+
+    if len(corr_set_btag_eff_corr.keys()) != 1:
+        raise Exception(f"Expected exactly one type of btagging efficiencies. Found more in provided file {file}.")
+
+    corrector_name = list(corr_set_btag_eff_corr.keys())[0]
+    self.btag_eff_corrector = corr_set_btag_eff_corr[corrector_name]
 
 
 @fixed_wp_btag_weights.requires
 def fixed_wp_btag_weights_requires(self: Producer, reqs: dict) -> None:
     req_btag(self, reqs)
 
-    from columnflow.tasks.cmsGhent.btagefficiency import BTagEfficiency
-
-    # require btag efficiency to be ran for the btag_dataset_group
-    # default value of datasets to calculate the efficiency is the dataset of the produce task
-    datasets = [self.dataset_inst.name]
-    process = self.dataset_inst.processes.names()[0]
-
-    if hasattr(self.config_inst.x, "btag_dataset_groups"):
-        for btag_group in self.config_inst.x.btag_dataset_groups:
-            # check if dataset is in data group
-            if self.dataset_inst.name in self.config_inst.x.btag_dataset_groups[btag_group]:
-                datasets = self.config_inst.x.btag_dataset_groups[btag_group]
-                if btag_group in self.config_inst.processes.names():
-                    process = btag_group  # only for plotting text
-                break
-    else:
-        logger.warning_once(
-            "no default btagging efficiency dataset groups defined in config",
-            "Config does not have an attribute 'x.btag_dataset_groups' that provides  \
-            default groupings of datasets for b-tagging efficiency calculation.\n"
-            f"The dataset {self.dataset_inst.name} is used to calculate but defining one is recommended.\n"
-            "example: config.x.btag_dataset_groups = {'ttx': ['ttztollnunu_m10_amcatnlo','tt_sl_powheg']}",
+    if not self.has_external_efficiencies:
+        from columnflow.tasks.cmsGhent.btagefficiency import BTagEfficiency
+        reqs["btag_efficiency"] = BTagEfficiency.req(
+            self.task,
+            datasets=self.datasets,
+            variables=self.variables,
+            processes=self.dataset_group,
         )
-
-    reqs["btag_efficiency"] = BTagEfficiency.req(
-        self.task,
-        datasets=datasets,
-        variables=self.variables,
-        processes=process,
-    )
 
 
 @producer(
