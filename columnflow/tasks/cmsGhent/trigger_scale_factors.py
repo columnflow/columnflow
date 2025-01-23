@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorMixin, DatasetsMixin, DatasetsProcessesMixin,
+    CalibratorsMixin, SelectorMixin, DatasetsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D, PlotBase1D,

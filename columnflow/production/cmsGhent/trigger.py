@@ -34,7 +34,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
                 triggers=None,  # TODO fix the default values
                 ref_triggers=None,
                 variables=None,
-                datasets=None
+                datasets=None,
             ),
         )
         self.trigger_config = TriggerSFConfig.new(self.trigger_config)
