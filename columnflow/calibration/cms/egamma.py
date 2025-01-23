@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random
-from columnflow.util import maybe_import, InsertableDict, classproperty
+from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import (
     set_ak_column, flat_np_view, ak_copy, optional_column,
 )
@@ -34,31 +34,14 @@ class EGammaCorrectionConfig:
     correction_set: str = "Scale"
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
 
-    @classmethod
-    def new(
-        cls,
-        obj: EGammaCorrectionConfig | tuple[str] | dict[str, str],
-    ) -> EGammaCorrectionConfig:
-        # purely for backwards compatibility with the old tuple format that accepted the two
-        # working point values
-        if isinstance(obj, tuple) and len(obj) == 2:
-            obj = dict(zip(["wp", "wp_VSe"], obj))
-        if isinstance(obj, dict):
-            return cls(corrector_kwargs=obj)
-        return obj
-
 
 class egamma_scale_corrector(Calibrator):
 
-    _with_uncertainties = True
+    with_uncertainties = True
+    """Switch to control whether uncertainties are calculated."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-    # whether to produce also uncertainties
-    @classproperty
-    def with_uncertainties(cls: Calibrator) -> bool:
-        return cls._with_uncertainties
 
     @property
     @abc.abstractmethod
@@ -195,7 +178,7 @@ class egamma_scale_corrector(Calibrator):
             f"{self.source_field}.pt",
             optional_column(f"{self.source_field}.rawPt"),
         }
-        self.scale_config: EGammaCorrectionConfig = self.get_scale_config()
+        self.scale_config = self.get_scale_config()
 
         # if we do not calculate uncertainties, this module
         # should only run on observed DATA
@@ -237,44 +220,18 @@ class egamma_scale_corrector(Calibrator):
         assert self.scale_corrector.version in [0, 1, 2]
 
 
-pec = egamma_scale_corrector.derive(
-    "pec", cls_dict={
-        "source_field": "Photon",
-        "with_uncertainties": True,
-        "get_correction_file": (lambda self, external_files: external_files.photon_ss),
-        "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.pec)),
-    },
-)
-
-
 class egamma_resolution_corrector(Calibrator):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._with_uncertainties = True
-        # smearing of the energy resolution is only applied to MC
-        self.mc_only = True
+    with_uncertainties = True
+    """Switch to control whether uncertainties are calculated."""
 
-        # use deterministic seeds for random smearing and
-        # take the "index"-th random number per seed when not -1
-        self._deterministic_seed_index = -1
+    # smearing of the energy resolution is only applied to MC
+    mc_only = True
 
-    # whether to produce also uncertainties
-    @property
-    def with_uncertainties(self) -> bool:
-        return self._with_uncertainties
-
-    @with_uncertainties.setter
-    def with_uncertainties(self, value: bool):
-        self._with_uncertainties = value
-
-    @property
-    def deterministic_seed_index(self) -> int:
-        return self._deterministic_seed_index
-
-    @deterministic_seed_index.setter
-    def deterministic_seed_index(self, value: int):
-        self._deterministic_seed_index = value
+    deterministic_seed_index = -1
+    """ use deterministic seeds for random smearing and
+    take the "index"-th random number per seed when not -1
+    """
 
     @property
     @abc.abstractmethod
@@ -430,7 +387,7 @@ class egamma_resolution_corrector(Calibrator):
             optional_column(f"{self.source_field}.rawPt"),
         }
 
-        self.resolution_config: EGammaCorrectionConfig = self.get_resolution_config()
+        self.resolution_config = self.get_resolution_config()
 
         # add columns with unceratinties if requested
         # photon scale _uncertainties_ are only available for MC
@@ -478,6 +435,15 @@ class egamma_resolution_corrector(Calibrator):
             self.deterministic_normal_down = functools.partial(deterministic_normal, idx_offset=2)
 
 
+pec = egamma_scale_corrector.derive(
+    "pec", cls_dict={
+        "source_field": "Photon",
+        "with_uncertainties": True,
+        "get_correction_file": (lambda self, external_files: external_files.photon_ss),
+        "get_scale_config": (lambda self: self.config_inst.x.pec),
+    },
+)
+
 per = egamma_resolution_corrector.derive(
     "per", cls_dict={
         "source_field": "Photon",
@@ -485,7 +451,7 @@ per = egamma_resolution_corrector.derive(
         # function to determine the correction file
         "get_correction_file": (lambda self, external_files: external_files.photon_ss),
         # function to determine the tec config
-        "get_resolution_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.per)),
+        "get_resolution_config": (lambda self: self.config_inst.x.per),
     },
 )
 
@@ -549,7 +515,7 @@ eer = egamma_resolution_corrector.derive(
         # function to determine the correction file
         "get_correction_file": (lambda self, external_files: external_files.electron_ss),
         # function to determine the tec config
-        "get_resolution_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.eer)),
+        "get_resolution_config": (lambda self: self.config_inst.x.eer),
     },
 )
 
@@ -560,7 +526,7 @@ eec = egamma_scale_corrector.derive(
         "uses": {"Electron.deltaEtaSC"},
         "with_uncertainties": True,
         "get_correction_file": (lambda self, external_files: external_files.electron_ss),
-        "get_scale_config": (lambda self: EGammaCorrectionConfig.new(self.config_inst.x.eec)),
+        "get_scale_config": (lambda self: self.config_inst.x.eec),
     },
 )
 

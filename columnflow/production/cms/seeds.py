@@ -9,16 +9,14 @@ from __future__ import annotations
 import hashlib
 import abc
 
-import law  # type: ignore
-from law.util import InsertableDict  # type: ignore
+import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, primes, MockModule
+from columnflow.util import maybe_import, primes, InsertableDict
 from columnflow.columnar_util import Route, set_ak_column, optional_column as optional
-from columnflow.types import Callable, ModuleType, Any
 
-np: ModuleType | Any = maybe_import("numpy")  # type: ignore
-ak: ModuleType | Any = maybe_import("awkward")  # type: ignore
+np = maybe_import("numpy")
+ak = maybe_import("awkward")
 
 
 logger = law.logger.get_logger(__name__)
@@ -32,7 +30,7 @@ def create_seed(val: int, n_hex: int = 16) -> int:
 
 
 # store a vectorized version (only interface, not actually simd'ing)
-create_seed_vec: Callable | MockModule | Any = np.vectorize(create_seed, otypes=[np.uint64])
+create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
 
 
 @producer(
@@ -215,7 +213,7 @@ class deterministic_object_seeds(Producer):
                 np.uint64,
             )
         )
-        np_object_seed: np.Array[np.uint64] = np.asarray(ak.flatten(object_seed))
+        np_object_seed = np.asarray(ak.flatten(object_seed))
         np_object_seed[:] = create_seed_vec(np_object_seed)
 
         # store them
