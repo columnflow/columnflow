@@ -17,7 +17,6 @@ from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column, has_ak_column, Route, fill_hist
 
 from columnflow.types import Any, Iterable
-from columnflow.tasks.cmsGhent.trigger_scale_factors import TriggerSFConfig
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
