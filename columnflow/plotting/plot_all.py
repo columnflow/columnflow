@@ -157,78 +157,27 @@ def draw_errorbars(
     ax.errorbar(**defaults)
 
 
-def binom_int(num, den, confint=0.68):
-    """
-    calculates clopper-pearson error
-    """
-    from scipy.stats import beta
-    quant = (1 - confint) / 2.
-    low = beta.ppf(quant, num, den - num + 1)
-    high = beta.ppf(1 - quant, num + 1, den - num)
-    return (np.nan_to_num(low), np.where(np.isnan(high), 1, high))
-
-
-def draw_efficiency(
+def draw_custom_errorbars(
     ax: plt.Axes,
     h: hist.Hist,
-    h_norm: hist.Hist,
+    y: np.ndarray = 1.0,
+    xerr: np.ndarray = None,
+    yerr: np.ndarray = None,
     **kwargs,
 ) -> None:
     """
-    Draw efficiency plot with error bars.
+    Wrapper for matplotlib.pyplot.errorbar to plot custom error bars.
     """
-
-    # Extract histogram data
-    values = h.values()
-    bins = h.axes[0].centers
-    norm = h_norm.values()
-
-    efficiency = np.nan_to_num(values / norm)
-
-    if np.any(efficiency > 1):
-        logger.warning(
-            f"Some efficiencies for {kwargs['label']} are greater than 1, errorbars are capped at zero",
-        )
-    elif np.any(efficiency < 0):
-        logger.warning(
-            f"Some efficiencies for {kwargs['label']} are less than 0, errorbars are capped at zero",
-        )
-
-    # getting error bars
-    # To calculate the errorbars, using weighted histograms results in heavily overestimated errors
-    # assuming the weights are constant for each bin, we can calculate scale factors to scale the hist values
-    # back to the total number of MC events. This still overstimates the errors, but is a better approximation
-    h_scale = np.nan_to_num(h.values() / h.variances(), nan=1)
-    h_norm_scale = np.nan_to_num(h_norm.values() / h_norm.variances(), nan=1)
-
-    band_low, band_high = binom_int(values * h_scale, norm * h_norm_scale)
-    error_low = np.asarray(efficiency - band_low)
-    error_high = np.asarray(band_high - efficiency)
-
-    # removing large errors in empty bins
-    error_low[error_low == 1] = 0
-    error_high[error_high == 1] = 0
-
-    # removing negative errors
-    error_low[error_low < 0] = 0
-    error_high[error_high < 0] = 0
-
-    # stacking errors
-    errors = np.concatenate(
-        (error_low.reshape(error_low.shape[0], 1), error_high.reshape(error_high.shape[0], 1)),
-        axis=1,
-    )
-    errors = errors.T
-
-    if kwargs.get("skip_errorbars", False):
-        errors = None
-
-    ax.errorbar(x=bins, y=efficiency, yerr=errors, fmt="o-", label=kwargs["label"])
-
-    ax.set_xlabel("Bin")
-    ax.set_ylabel("Counts")
-    ax.set_ylim(0, 1)
-    ax.legend()
+    defaults = {
+        "x": h.axes[0].centers,
+        "y": y,
+        "xerr": xerr,
+        "yerr": yerr,
+        "fmt": "o-",
+        "elinewidth": 1,
+    }
+    defaults.update(kwargs)
+    ax.errorbar(**defaults)
 
 
 def draw_hist_twin(
@@ -289,7 +238,7 @@ def plot_all(
         func.__name__: func
         for func in [
             draw_error_bands, draw_stack, draw_hist, draw_profile, draw_hist_twin,
-            draw_errorbars, draw_efficiency,
+            draw_errorbars, draw_custom_errorbars,
         ]
     }
 
