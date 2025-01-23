@@ -95,7 +95,7 @@ def photon_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={"Electron.{pt,phi,eta,deltaEtaSC}"},
-    produces={"Photon.superclusterEta"},
+    produces={"Electron.superclusterEta"},
 )
 def electron_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # type: ignore
     """
