@@ -13,7 +13,7 @@ from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
 from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
-from columnflow.util import DotDict, dict_add_strict
+from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
 
 class PlotBase(AnalysisTask):
@@ -243,8 +243,7 @@ class PlotBase(AnalysisTask):
 
         # call the plot function and debug
         plot()
-        from IPython import embed
-        embed(header=msg)
+        ipython_shell()(header=msg)
 
         return ret
 

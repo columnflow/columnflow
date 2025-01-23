@@ -40,7 +40,6 @@ maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
-hist = maybe_import("hist")
 
 
 # loggers
@@ -1353,61 +1352,6 @@ def ak_copy(ak_array: ak.Array) -> ak.Array:
     removed.
     """
     return layout_ak_array(np.array(ak.flatten(ak_array)), ak_array)
-
-
-def fill_hist(
-    h: hist.Hist,
-    data: ak.Array | np.array | dict[str, ak.Array | np.array],
-    *,
-    last_edge_inclusive: bool | None = None,
-    fill_kwargs: dict[str, Any] | None = None,
-) -> None:
-    """
-    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If
-    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
-    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
-    and depends on the variable axis type. In this case, shifting is applied to all continuous,
-    non-circular axes.
-    """
-    if fill_kwargs is None:
-        fill_kwargs = {}
-
-    # helper to decide whether the variable axis qualifies for shifting the last bin
-    def allows_shift(ax) -> bool:
-        return ax.traits.continuous and not ax.traits.circular
-
-    # determine the axis names, figure out which which axes the last bin correction should be done
-    axis_names = []
-    correct_last_bin_axes = []
-    for ax in h.axes:
-        axis_names.append(ax.name)
-        # include values hitting last edge?
-        if not len(ax.widths) or not isinstance(ax, hist.axis.Variable):
-            continue
-        if (last_edge_inclusive is None and allows_shift(ax)) or last_edge_inclusive:
-            correct_last_bin_axes.append(ax)
-
-    # check data
-    if not isinstance(data, dict):
-        if len(axis_names) != 1:
-            raise ValueError("got multi-dimensional hist but only one dimensional data")
-        data = {axis_names[0]: data}
-    else:
-        for name in axis_names:
-            if name not in data and name not in fill_kwargs:
-                raise ValueError(f"missing data for histogram axis '{name}'")
-
-    # correct last bin values
-    for ax in correct_last_bin_axes:
-        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
-        if np.any(right_egde_mask):
-            data[ax.name] = ak.copy(data[ax.name])
-            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
-
-    # fill
-    arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
 
 
 class RouteFilter(object):

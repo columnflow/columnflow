@@ -99,7 +99,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     exclude_params_index = {"user"}
     exclude_params_req = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
     exclude_params_repr = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
-    exclude_params_branch = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_branch = {"user"}
     exclude_params_workflow = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
 
     # cached and parsed sections of the law config for faster lookup

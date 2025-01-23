@@ -20,16 +20,16 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
-from columnflow.hist_util import create_hist_from_variables, translate_hist_intcat_to_strcat
+from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
 
 class CreateHistograms(
-    VariablesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
     ReducedEventsUser,
     ChunkedIOMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -108,7 +108,7 @@ class CreateHistograms(
 
     @workflow_condition.output
     def output(self):
-        return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
+        return {"hists": self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")}
 
     @law.decorator.notify
     @law.decorator.log
@@ -118,9 +118,9 @@ class CreateHistograms(
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import (
-            Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
+            Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior,
         )
-        from columnflow.columnar_util import attach_coffea_behavior
+        from columnflow.hist_util import fill_hist
 
         # prepare inputs
         inputs = self.input()
@@ -234,7 +234,9 @@ class CreateHistograms(
 
                     if var_key not in histograms:
                         # create the histogram in the first chunk
-                        histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
+                        histograms[var_key] = create_columnflow_hist(
+                            *variable_insts,
+                        )
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
@@ -245,7 +247,9 @@ class CreateHistograms(
                         if sel == "1":
                             continue
                         if not callable(sel):
-                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                            raise ValueError(
+                                f"invalid selection '{sel}', for now only callables are supported",
+                            )
                         mask = sel(masked_events)
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
@@ -305,13 +309,13 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    VariablesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -385,7 +389,7 @@ class MergeHistograms(
 
     def output(self):
         return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"hist__{variable_name}.pickle")
+            variable_name: self.target(f"hist__var_{variable_name}.pickle")
             for variable_name in self.variables
         })}
 
@@ -424,14 +428,14 @@ MergeHistogramsWrapper = wrapper_factory(
 
 
 class MergeShiftedHistograms(
-    VariablesMixin,
-    ShiftSourcesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    ShiftSourcesMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -470,7 +474,7 @@ class MergeShiftedHistograms(
             for shift in ["nominal"] + self.shifts
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts

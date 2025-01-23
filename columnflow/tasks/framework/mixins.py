@@ -639,7 +639,7 @@ class SelectorMixin(AnalysisTask):
         parts.insert_before("version", "selector", f"sel__{self.selector_repr}")
         return parts
 
-    def find_keep_columns(self: AnalysisTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_SELECTOR:
@@ -1198,17 +1198,16 @@ class ProducersMixin(AnalysisTask):
 
 class MLModelMixinBase(AnalysisTask):
     """
-    Base Mixin to include a machine learning applications into tasks.
+    Base mixin to include a machine learning application into tasks.
 
     Inheriting from this mixin will allow a task to instantiate and access a
-    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*,
-    which is an input parameter for this task.
+    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*, which is an input parameter
+    for this task.
     """
 
     ml_model = luigi.Parameter(
         description="the name of the ML model to be applied",
     )
-
     ml_model_settings = SettingsParameter(
         default=DotDict(),
         description="settings passed to the init function of the ML model",
@@ -1226,7 +1225,8 @@ class MLModelMixinBase(AnalysisTask):
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         """
-        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level via CLI.
+        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level
+        via CLI.
 
         This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line.
         If it is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary.
@@ -2204,14 +2204,14 @@ class WeightProducerMixin(AnalysisTask):
 
         return shifts, upstream_shifts
 
-    def __init__(self: WeightProducerMixin, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # cache for weight producer inst
         self._weight_producer_inst = None
 
     @property
-    def weight_producer_inst(self: WeightProducerMixin) -> WeightProducer:
+    def weight_producer_inst(self) -> WeightProducer:
         if self._weight_producer_inst is None:
             self._weight_producer_inst = self.get_weight_producer_inst(
                 self.weight_producer,
@@ -2230,7 +2230,7 @@ class WeightProducerMixin(AnalysisTask):
         return self._weight_producer_inst
 
     @property
-    def weight_producer_repr(self: WeightProducerMixin) -> str:
+    def weight_producer_repr(self) -> str:
         return str(self.weight_producer_inst)
 
     def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
