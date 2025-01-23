@@ -4,6 +4,9 @@ import numpy as np
 from scipy.stats import chi2
 import scipy.optimize as opt
 import matplotlib.pyplot as plt
+import law
+
+logger = law.logger.get_logger(__name__)
 
 
 def prob1(x, m, y, n, th0):
@@ -131,11 +134,11 @@ def koopman_confint(
         except:
             pass
     else:
-        return 0, np.inf
-        warnings.warn(
+        logger.warning(
             "couldn't find solution for confidence interval for (x / m) / (y / n) with "
-            f"x = {x}, m = {m}, y = {y}, n = {n}"
+            f"x = {x}, m = {m}, y = {y}, n = {n}. Return 0, inf"
         )
+        return 0, np.inf
 
     # if x is zero, apply lower limit of zero, and upper limit the found solution
     if zx:
