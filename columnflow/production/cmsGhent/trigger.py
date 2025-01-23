@@ -34,6 +34,7 @@ class TriggerSFConfig:
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
     tag: str = None
     ref_tag: str = None
+    aux: dict = None
 
     def __post_init__(self):
 
@@ -57,33 +58,22 @@ class TriggerSFConfig:
         if not self.ref_tag:
             self.ref_tag = self.ref_triggers[0]
 
+        if self.aux is None:
+            self.aux = {}
+
+        self.x = DotDict(self.aux)
+
     def copy(self, **changes):
         return replace(self, **changes)
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
-
-    if not hasattr(self, "get_trigger_config"):
-        self.trigger_config = self.config_inst.x(
-            "trigger_sf",
-            TriggerSFConfig(
-                triggers=None,  # TODO fix the default values
-                ref_triggers=None,
-                variables=None,
-                datasets=None,
-            ),
-        )
-    else:
-        self.trigger_config = self.get_trigger_config()
-
+    self.trigger_config = self.get_trigger_config()
     self.triggers = self.trigger_config.triggers
     self.tag = self.trigger_config.tag
-
     self.ref_triggers = self.trigger_config.ref_triggers
     self.ref_tag = self.trigger_config.ref_tag
-
     self.datasets = self.trigger_config.datasets
-
     self.tag_name = f"hlt_{self.tag.lower()}_ref_{self.ref_tag.lower()}"
 
     if add_eff_vars:
