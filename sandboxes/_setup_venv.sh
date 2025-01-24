@@ -148,7 +148,7 @@ setup_venv() {
 
     # prepend persistent path fragments to priotize packages in the outer env
     export CF_VENV_PYTHONPATH="${install_path}/lib/python${pyv}/site-packages"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
+    export PYTHONPATH="${CF_INITIAL_PYTHONPATH}:${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
 
 
