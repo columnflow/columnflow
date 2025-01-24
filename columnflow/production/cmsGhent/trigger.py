@@ -127,7 +127,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 @producer(
     get_sf_file=None,
     sf_name=lambda self: f"trig_sf_{self.tag}",
-    get_trigger_config=(lambda self: self.config_inst.x.trigger_sf),
+    get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
 )
 def trigger_scale_factors(
     self: Producer,
@@ -221,7 +221,7 @@ def trigger_scale_factors_setup(
 @producer(
     # only run on mc
     get_no_trigger_selection=lambda self, results: results.x("event_no_trigger", None),
-    get_trigger_config=(lambda self: self.config_inst.x.trigger_sf),
+    get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
     objects=None,
 )
 def trigger_efficiency_hists(
