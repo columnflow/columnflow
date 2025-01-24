@@ -361,6 +361,7 @@ def fixed_wp_btag_weights_requires(self: Producer, reqs: dict) -> None:
 @producer(
     uses={"mc_weight", "Jet.{hadronFlavour,pt,eta}"},
     get_btag_config=(lambda self: BTagSFConfig.new(self.config_inst.x.btag_sf)),
+    get_btag_sf=lambda self, external_files: external_files.btag_sf_corr,
     # only run on mc
     mc_only=True,
 )
