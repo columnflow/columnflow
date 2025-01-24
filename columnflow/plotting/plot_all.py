@@ -6,9 +6,15 @@ Example plot function.
 
 from __future__ import annotations
 
+__all__ = []
+
 from columnflow.types import Sequence
 from columnflow.util import maybe_import, try_float
-from columnflow.plotting.plot_util import get_position, get_cms_label
+from columnflow.plotting.plot_util import (
+    get_position,
+    get_cms_label,
+    remove_label_placeholders,
+)
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -175,6 +181,7 @@ def plot_all(
     "ratio_kwargs": dict (optional),
 
     The *style_config* expects fields (all optional):
+    "gridspec_cfg": dict,
     "ax_cfg": dict,
     "rax_cfg": dict,
     "legend_cfg": dict,
@@ -192,37 +199,43 @@ def plot_all(
         with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
-    # available plot methods mapped to their names
+    # general mplhep style
+    plt.style.use(mplhep.style.CMS)
+
+    # setup figure and axes
+    rax = None
+    grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
+    grid_spec |= style_config.get("gridspec_cfg", {})
+    if not skip_ratio:
+        grid_spec |= {"height_ratios": [3, 1], "hspace": 0}
+        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
+        (ax, rax) = axs
+    else:
+        fig, ax = plt.subplots(gridspec_kw=grid_spec)
+        axs = (ax,)
+
+    # invoke all plots methods
     plot_methods = {
         func.__name__: func
         for func in [draw_error_bands, draw_stack, draw_hist, draw_profile, draw_errorbars]
     }
-
-    plt.style.use(mplhep.style.CMS)
-
-    rax = None
-    if not skip_ratio:
-        fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
-        (ax, rax) = axs
-    else:
-        fig, ax = plt.subplots()
-        axs = (ax,)
-
     for key, cfg in plot_config.items():
+        # check if required fields are present
         if "method" not in cfg:
             raise ValueError(f"no method given in plot_cfg entry {key}")
-        method = cfg["method"]
-
         if "hist" not in cfg:
             raise ValueError(f"no histogram(s) given in plot_cfg entry {key}")
-        hist = cfg["hist"]
-        kwargs = cfg.get("kwargs", {})
-        plot_methods[method](ax, hist, **kwargs)
 
+        # invoke the method
+        method = cfg["method"]
+        h = cfg["hist"]
+        plot_methods[method](ax, h, **cfg.get("kwargs", {}))
+
+        # repeat for ratio axes if configured
         if not skip_ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            plot_methods[method](rax, hist, **cfg["ratio_kwargs"])
+            plot_methods[method](rax, h, **cfg.get("ratio_kwargs", {}))
 
     # axis styling
     ax_kwargs = {
@@ -241,17 +254,26 @@ def plot_all(
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
 
-    # ax configs that can not be handled by `ax.set`
-    minorxticks = ax_kwargs.pop("minorxticks", None)
-    minoryticks = ax_kwargs.pop("minoryticks", None)
+    # some settings cannot be handled by ax.set
+    xminorticks = ax_kwargs.pop("xminorticks", ax_kwargs.pop("minorxticks", None))
+    yminorticks = ax_kwargs.pop("yminorticks", ax_kwargs.pop("minoryticks", None))
+    xloc = ax_kwargs.pop("xloc", None)
+    yloc = ax_kwargs.pop("yloc", None)
 
+    # set all values
     ax.set(**ax_kwargs)
 
-    if minorxticks is not None:
-        ax.set_xticks(minorxticks, minor=True)
-    if minoryticks is not None:
-        ax.set_xticks(minoryticks, minor=True)
+    # set manual configs
+    if xminorticks is not None:
+        ax.set_xticks(xminorticks, minor=True)
+    if yminorticks is not None:
+        ax.set_xticks(yminorticks, minor=True)
+    if xloc is not None:
+        ax.set_xlabel(ax.get_xlabel(), loc=xloc)
+    if yloc is not None:
+        ax.set_ylabel(ax.get_ylabel(), loc=yloc)
 
+    # ratio plot
     if not skip_ratio:
         # hard-coded line at 1
         rax.axhline(y=1.0, linestyle="dashed", color="gray")
@@ -262,11 +284,25 @@ def plot_all(
             "yscale": "linear",
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
+
+        # some settings cannot be handled by ax.set
+        xloc = rax_kwargs.pop("xloc", None)
+        yloc = rax_kwargs.pop("yloc", None)
+
+        # set all values
         rax.set(**rax_kwargs)
 
+        # set manual configs
+        if xloc is not None:
+            rax.set_xlabel(rax.get_xlabel(), loc=xloc)
+        if yloc is not None:
+            rax.set_ylabel(rax.get_ylabel(), loc=yloc)
+
+        # remove x-label from main axis
         if "xlabel" in rax_kwargs:
             ax.set_xlabel("")
 
+    # label alignment
     fig.align_labels()
 
     # legend
@@ -277,6 +313,9 @@ def plot_all(
             "loc": "upper right",
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
+
+        if "title" in legend_kwargs:
+            legend_kwargs["title"] = remove_label_placeholders(legend_kwargs["title"])
 
         # retrieve the legend handles and their labels
         handles, labels = ax.get_legend_handles_labels()
@@ -303,22 +342,6 @@ def plot_all(
         update_handles_labels = legend_kwargs.pop("update_handles_labels", None)
         if callable(update_handles_labels):
             update_handles_labels(ax, handles, labels, n_cols)
-
-        # assume all `StepPatch` objects are part of MC stack
-        in_stack = [
-            isinstance(handle, mpl.patches.StepPatch)
-            for handle in handles
-        ]
-
-        # reverse order of entries that are part of the stack
-        if any(in_stack):
-            def revere_entries(entries, mask):
-                entries = np.array(entries, dtype=object)
-                entries[mask] = entries[mask][::-1]
-                return list(entries)
-
-            handles = revere_entries(handles, in_stack)
-            labels = revere_entries(labels, in_stack)
 
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)
@@ -347,6 +370,7 @@ def plot_all(
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
 
+    # finalization
     fig.tight_layout()
 
     return fig, axs

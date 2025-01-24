@@ -6,6 +6,8 @@ Example plot functions for one-dimensional plots.
 
 from __future__ import annotations
 
+__all__ = []
+
 from collections import OrderedDict
 
 import law
@@ -14,7 +16,7 @@ from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
-    prepare_plot_config,
+    prepare_stack_plot_config,
     prepare_style_config,
     remove_residual_axis,
     apply_variable_settings,
@@ -46,13 +48,12 @@ def plot_variable_per_process(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
-    hide_errors: bool | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
     """
-    TODO.
+    TODO: misleading function name, it should somehow contain "stack" and not "per_proceess"
     """
     remove_residual_axis(hists, "shift")
 
@@ -65,11 +66,7 @@ def plot_variable_per_process(
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
 
-    plot_config = prepare_plot_config(
-        hists,
-        shape_norm=shape_norm,
-        hide_errors=hide_errors,
-    )
+    plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
 
     default_style_config = prepare_style_config(
         config_inst, category_inst, variable_inst, density, shape_norm, yscale,
@@ -243,7 +240,6 @@ def plot_cutflow(
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
-    hide_errors: bool | None = None,
     process_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
@@ -257,11 +253,7 @@ def plot_cutflow(
     hists = hists_merge_cutflow_steps(hists)
 
     # setup plotting config
-    plot_config = prepare_plot_config(
-        hists,
-        shape_norm=shape_norm,
-        hide_errors=hide_errors,
-    )
+    plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
 
     if shape_norm:
         # switch normalization to normalizing to `initial step` bin
