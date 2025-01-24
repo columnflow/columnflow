@@ -6,7 +6,7 @@ Source: https://twiki.cern.ch/twiki/bin/view/CMS/EgammaNanoAOD#How_to_get_photon
 import law
 import functools
 
-from columnflow.production import Producer, producer
+from columnflow.production import producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
@@ -22,7 +22,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
     uses={"Electron.{pt,phi,eta,deltaEtaSC}"},
     produces={"Electron.superclusterEta"},
 )
-def electron_sceta(self: Producer, events: ak.Array, **kwargs) -> ak.Array:  # type: ignore
+def electron_sceta(self, events: ak.Array, **kwargs) -> ak.Array:
     """
     Returns the electron super cluster eta.
     """
