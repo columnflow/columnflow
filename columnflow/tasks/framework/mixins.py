@@ -1262,6 +1262,7 @@ class MLModelMixinBase(AnalysisTask):
         :param kwargs: Additional keyword arguments to forward to the :py:class:`~columnflow.ml.MLModel` instance.
         :return: :py:class:`~columnflow.ml.MLModel` instance.
         """
+
         ml_model_inst: MLModel = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
 
         if requested_configs:
@@ -1503,8 +1504,8 @@ class MLModelsMixin(AnalysisTask):
         params = super().resolve_param_values(params)
 
         analysis_inst = params.get("analysis_inst")
-        config_insts = params.get("config_insts")
-        if analysis_inst and config_insts:
+
+        if analysis_inst:
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 params,
@@ -1520,7 +1521,7 @@ class MLModelsMixin(AnalysisTask):
                     MLModelMixinBase.get_ml_model_inst(
                         ml_model,
                         analysis_inst,
-                        requested_configs=config_insts,
+                        requested_configs=[params["config"]] if cls.is_single_config else params["configs"],
                     )
                     for ml_model in params["ml_models"]
                 ]
@@ -1536,17 +1537,24 @@ class MLModelsMixin(AnalysisTask):
 
         return super().req_params(inst, **kwargs)
 
+    @property
+    def ml_model_insts(self) -> list[MLModel]:
+        if self._ml_model_insts is None:
+            self._ml_model_insts = [
+                MLModelMixinBase.get_ml_model_inst(
+                    ml_model,
+                    self.analysis_inst,
+                    requested_configs=[self.config] if self.is_single_config else self.configs,
+                )
+                for ml_model in self.ml_models
+            ]
+        return self._ml_model_insts
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # get the ML model instances
-        self.ml_model_insts = [
-            MLModelMixinBase.get_ml_model_inst(
-                ml_model,
-                self.analysis_inst,
-                requested_configs=self.config_insts,
-            )
-            for ml_model in self.ml_models
-        ]
+
+        # cache for ml model insts
+        self._ml_model_insts = None
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
