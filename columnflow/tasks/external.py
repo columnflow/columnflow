@@ -86,6 +86,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.target(f"lfns_{h}.json")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         """
@@ -119,7 +120,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
             )
 
-        self.logger.info(f"found {len(lfns)} lfn(s) for dataset {self.dataset}")
+        self.logger.info(f"found {len(lfns):_} lfn(s) for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
@@ -157,6 +158,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             shell=True,
             stdout=subprocess.PIPE,
             executable="/bin/bash",
+            kill_timeout=1,
         )
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
@@ -511,6 +513,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):

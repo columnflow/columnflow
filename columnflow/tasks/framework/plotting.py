@@ -13,7 +13,7 @@ from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
 from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
-from columnflow.util import DotDict, dict_add_strict
+from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
 
 class PlotBase(ConfigTask):
@@ -241,8 +241,7 @@ class PlotBase(ConfigTask):
 
         # call the plot function and debug
         plot()
-        from IPython import embed
-        embed(header=msg)
+        ipython_shell()(header=msg)
 
         return ret
 
@@ -274,7 +273,8 @@ class PlotBase(ConfigTask):
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
             style_config = law.util.merge_dicts(custom_style_config, style_config)
             kwargs["style_config"] = style_config
-        # update defaults after application of general_settings
+
+        # update other defaults
         kwargs.setdefault("cms_label", "pw")
 
         # resolve blinding_threshold

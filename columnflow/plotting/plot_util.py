@@ -6,6 +6,8 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+__all__ = []
+
 import re
 import operator
 import functools
@@ -14,23 +16,15 @@ from collections import OrderedDict
 import law
 import order as od
 import scinum as sn
-from typing import Tuple
 
-from columnflow.util import maybe_import, try_int, try_complex, try_float
-from columnflow.types import Iterable, Any, Callable, Sequence, Union
+from columnflow.util import maybe_import, try_int, try_complex
+from columnflow.types import Iterable, Any, Callable
 
 math = maybe_import("math")
 hist = maybe_import("hist")
 np = maybe_import("numpy")
-npt = maybe_import("numpy.typing")
-np = maybe_import("numpy")
 plt = maybe_import("matplotlib.pyplot")
-mpl = maybe_import("matplotlib")
 mplhep = maybe_import("mplhep")
-mticker = maybe_import("matplotlib.ticker")
-
-
-FigAxesType = Tuple[plt.Figure, Union[npt.NDArray[plt.Axes], Sequence[plt.Axes], plt.Axes]]
 
 
 logger = law.logger.get_logger(__name__)
@@ -171,6 +165,59 @@ def apply_settings(
                     inst.set_aux(key, value)
 
 
+def hists_merge_cutflow_steps(
+    hists: dict,
+) -> dict:
+    """
+    Make 'step' axis uniform among a set of histograms. Takes a dict of 1D histogram
+    objects with a single 'step' axis of type *StrCategory*, computes the full list of possible
+    'step' values across all histograms, and returns a dict of histograms whose 'step' axis
+    has a corresponding, uniform structure. The values and variances inserted for missing 'step'
+    are taken from the previous existing step.
+    """
+    # return immediately if fewer than two hists to merge
+    if len(hists) < 2:
+        return hists
+
+    # get histogram instances
+    hist_insts = list(hists.values())
+
+    # validate inputs
+    if any(h.ndim != 1 for h in hist_insts):
+        raise ValueError(
+            "cannot merge cutflow steps: histograms must be one-dimensional",
+        )
+
+    # ensure step structure is uniform by taking a linear
+    # combination with only one nonzero coefficient
+    hist_insts_merged = []
+    for coeffs in np.eye(len(hist_insts)):
+        hist_row = sum(
+            h * coeff
+            for h, coeff in zip(hist_insts, coeffs)
+        )
+        hist_insts_merged.append(hist_row)
+
+    # fill missing entries from preceding steps
+    merged_steps = list(hist_insts_merged[0].axes[0])
+    for hist_inst, hist_inst_merged in zip(hist_insts, hist_insts_merged):
+        last_step = merged_steps[0]
+        for merged_step in merged_steps[1:]:
+            if merged_step not in hist_inst.axes[0]:
+                hist_inst_merged[merged_step] = hist_inst_merged[last_step]
+            else:
+                last_step = merged_step
+
+    # put merged hists into dict
+    hists = {
+        k: h
+        for k, h in zip(hists, hist_insts_merged)
+    }
+
+    # return
+    return hists
+
+
 def apply_process_settings(
     hists: dict,
     process_settings: dict | None = None,
@@ -205,20 +252,29 @@ def apply_process_settings(
         if scale_factor == "stack":
             # compute the scale factor and round
             scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
-        if try_float(scale_factor):
-            scale_factor = float(scale_factor)
+        if try_int(scale_factor):
+            scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
+            scale_factor_str = (
+                str(scale_factor)
+                if scale_factor < 1e5
+                else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+            )
             proc_inst.label = inject_label(
                 proc_inst.label,
-                rf"$\times${scale_factor:.2g}",
+                rf"$\times${scale_factor_str}",
                 placeholder="SCALE",
                 before_parentheses=True,
             )
 
         # remove remaining placeholders
-        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
+        proc_inst.label = remove_label_placeholders(proc_inst.label)
 
     return hists
+
+
+def remove_label_placeholders(label: str) -> str:
+    return re.sub("__[A-Z0-9]+__", "", label)
 
 
 def apply_variable_settings(
@@ -242,9 +298,14 @@ def apply_variable_settings(
                 rebin_factor = int(rebin_factor)
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
+
         # overflow and underflow bins
-        overflow = getattr(var_inst, "overflow", False) or var_inst.x("overflow", False)
-        underflow = getattr(var_inst, "underflow", False) or var_inst.x("underflow", False)
+        overflow = getattr(var_inst, "overflow", None)
+        if overflow is None:
+            overflow = var_inst.x("overflow", False)
+        underflow = getattr(var_inst, "underflow", None)
+        if underflow is None:
+            underflow = var_inst.x("underflow", False)
 
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
@@ -373,20 +434,27 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
+    # build the label from category and optional variable selection labels
+    cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
+
+    # unit format on axes (could be configurable)
+    unit_format = "{title} [{unit}]"
+
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            "ylabel": variable_inst.get_full_y_title(bin_width="" if density else None),
-            "xlabel": variable_inst.get_full_x_title(),
+            # TODO: need to make bin width and unit configurable in future
+            "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
+            "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
-            "xlabel": variable_inst.get_full_x_title(),
+            "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": category_inst.label},
+        "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
             "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
@@ -394,38 +462,33 @@ def prepare_style_config(
     }
 
     # disable minor ticks based on variable_inst
-    if variable_inst.discrete_x:
-        # TODO: options for very large ranges, or non-uniform discrete x
-        tx = np.ceil(np.arange(*xlim))
-        style_config["ax_cfg"]["xticks"] = tx
+    axis_type = variable_inst.x("axis_type", "variable")
+    if variable_inst.discrete_x or "int" in axis_type:
+        # remove the "xscale" attribute since it messes up the bin edges
+        style_config["ax_cfg"].pop("xscale")
         style_config["ax_cfg"]["minorxticks"] = []
-
-        # add custom bin labels if specified and same amount of x ticks
-        if x_labels := variable_inst.x_labels:
-            if len(x_labels) == len(tx):
-                style_config["ax_cfg"]["xticklabels"] = x_labels
-
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
 
     return style_config
 
 
-def prepare_plot_config(
+def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
     hide_errors: bool | None = None,
+    **kwargs,
 ) -> OrderedDict:
     """
     Prepares a plot config with one entry to create plots containing a stack of
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
     """
-
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
     data_hists, data_hide_errors = [], []
+    data_label = None
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
@@ -435,6 +498,8 @@ def prepare_plot_config(
         if process_inst.is_data:
             data_hists.append(h)
             data_hide_errors.append(proc_hide_errors)
+            if data_label is None:
+                data_label = process_inst.label
         elif process_inst.is_mc:
             if getattr(process_inst, "unstack", False):
                 line_hists.append(h)
@@ -452,9 +517,7 @@ def prepare_plot_config(
         h_data = sum(data_hists[1:], data_hists[0].copy())
     if mc_hists:
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
-        # reverse hists when building MC stack so that the
-        # first process is on top
-        h_mc_stack = hist.Stack(*mc_hists[::-1])
+        h_mc_stack = hist.Stack(*mc_hists)
 
     # setup plotting configs
     plot_config = OrderedDict()
@@ -467,10 +530,10 @@ def prepare_plot_config(
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": mc_norm,
-                "label": mc_labels[::-1],
-                "color": mc_colors[::-1],
-                "edgecolor": mc_edgecolors[::-1],
-                "linewidth": [(0 if c is None else 1) for c in mc_colors[::-1]],
+                "label": mc_labels,
+                "color": mc_colors,
+                "edgecolor": mc_edgecolors,
+                "linewidth": [(0 if c is None else 1) for c in mc_colors],
             },
         }
 
@@ -515,7 +578,7 @@ def prepare_plot_config(
             "hist": h_data,
             "kwargs": {
                 "norm": data_norm,
-                "label": "Data",
+                "label": data_label or "Data",
             },
         }
 
@@ -541,6 +604,24 @@ def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: 
         value = (maximum - minimum) * factor + minimum
 
     return value
+
+
+def join_labels(
+    *labels: str | list[str | None] | None,
+    inline_sep: str = ",",
+    multiline_sep: str = "\n",
+) -> str:
+    if not labels:
+        return ""
+
+    # the first label decides whether the overall label is inline or multiline
+    inline = isinstance(labels[0], str)
+
+    # collect parts
+    parts = sum(map(law.util.make_list, labels), [])
+
+    # join and return
+    return (inline_sep if inline else multiline_sep).join(filter(None, parts))
 
 
 def reduce_with(spec: str | float | callable, values: list[float]) -> float:
@@ -688,186 +769,6 @@ def get_profile_variations(h_in: hist.Hist, axis: int = 1) -> dict[str, hist.His
     h_down[...] = h_view
 
     return {"nominal": h_nom, "up": h_up, "down": h_down}
-
-
-def fix_cbar_minor_ticks(cbar: mpl.colorbar.Colorbar):
-    if isinstance(cbar.norm, mpl.colors.SymLogNorm):
-        _scale = cbar.ax.yaxis._scale
-        _scale.subs = [2, 3, 4, 5, 6, 7, 8, 9]
-        cbar.ax.yaxis.set_minor_locator(
-            mticker.SymmetricalLogLocator(_scale.get_transform(), subs=_scale.subs),
-        )
-        cbar.ax.yaxis.set_minor_formatter(
-            mticker.LogFormatterSciNotation(_scale.base),
-        )
-
-
-def prepare_plot_config_2d(
-    hists: OrderedDict | dict,
-    shape_norm: bool = False,
-    zscale: str = "linear",
-    # z axis range
-    zlim: tuple | None = None,
-    # how to handle bins with values outside the z range
-    extremes: str = "",
-    # colors to use for marking out-of-bounds values
-    extreme_colors: tuple[str] | None = None,
-    colormap: str = "",
-):
-    # add all processes into 1 histogram
-    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
-    if shape_norm:
-        h_sum = h_sum / h_sum.sum().value
-
-    # mask bins without any entries (variance == 0)
-    h_view = h_sum.view()
-    h_view.value[h_view.variance == 0] = np.nan
-
-    # check h_sum value range
-    vmin, vmax = np.nanmin(h_sum.values()), np.nanmax(h_sum.values())
-    vmin, vmax = [0 if np.isnan(x) else x for x in [vmin, vmax]]
-
-    # default to full z range
-    if zlim is None:
-        zlim = ("min", "max")
-
-    # resolve string specifiers like "min", "max", etc.
-    zlim = tuple(reduce_with(lim, h_sum.values()) for lim in zlim)
-
-    # if requested, hide or clip bins outside specified plot range
-    if extremes == "hide":
-        h_view.value[h_view.value < zlim[0]] = np.nan
-        h_view.value[h_view.value > zlim[1]] = np.nan
-    elif extremes == "clip":
-        h_view.value[h_view.value < zlim[0]] = zlim[0]
-        h_view.value[h_view.value > zlim[1]] = zlim[1]
-
-    # update h_sum values from view
-    h_sum[...] = h_view
-
-    # choose appropriate colorbar normalization
-    # based on scale type and h_sum content
-
-    # log scale (turning linear for low values)
-    if zscale == "log":
-        # use SymLogNorm to correctly handle both positive and negative values
-        cbar_norm = mpl.colors.SymLogNorm(
-            vmin=zlim[0],
-            vmax=zlim[1],
-            # TODO: better heuristics?
-            linscale=1.0,
-            linthresh=max(0.05 * min(abs(zlim[0]), abs(zlim[1])), 1e-3),
-        )
-
-    # linear scale
-    else:
-        cbar_norm = mpl.colors.Normalize(
-            vmin=zlim[0],
-            vmax=zlim[1],
-        )
-
-    # obtain colormap
-    cmap = plt.get_cmap(colormap or "Blues")
-
-    # use dark and light gray to mark extreme values
-    if extremes == "color":
-        # choose light/dark order depending on the
-        # lightness of first/last colormap color
-        if not extreme_colors:
-            extreme_colors = ["#444444", "#bbbbbb"]
-            if sum(cmap(0.0)[:3]) > sum(cmap(1.0)[:3]):
-                extreme_colors = extreme_colors[::-1]
-
-        # copy if colormap with extreme colors set
-        cmap = cmap.with_extremes(
-            under=extreme_colors[0],
-            over=extreme_colors[1],
-        )
-
-    # decide at which ends of the colorbar to draw symbols
-    # indicating that there are values outside the range
-    if extremes == "hide":
-        extend = "neither"
-    elif vmax > zlim[1] and vmin < zlim[0]:
-        extend = "both"
-    elif vmin < zlim[0]:
-        extend = "min"
-    elif vmax > zlim[1]:
-        extend = "max"
-    else:
-        extend = "neither"
-
-    return {
-        "hist": h_sum,
-        "kwargs": {
-            "norm": cbar_norm,
-            "cmap": cmap,
-            "cbar": True,
-            "cbarextend": True,
-            # "labels": True,  # this enables displaying numerical values for each bin, but needs some optimization
-        },
-        "cbar_kwargs": {
-            "extend": extend,
-        },
-    }
-
-
-def prepare_style_config_2d(
-    config_inst: od.Config,
-    category_inst: od.Category,
-    process_insts: list[od.Process],
-    variable_insts: list[od.Variable],
-    cms_label: str = "",
-) -> dict:
-    # setup style config
-    # TODO: some kind of z-label is still missing
-
-    style_config = {
-        "ax_cfg": {
-            "xticks": {
-                "minor": {"ticks": []} if variable_insts[0].discrete_x else {},
-                "major": {},
-            },
-            "yticks": {
-                "minor": {"ticks": []} if variable_insts[1].discrete_x else {},
-                "major": {},
-            },
-            "xlim": (variable_insts[0].x_min, variable_insts[0].x_max),
-            "ylim": (variable_insts[1].x_min, variable_insts[1].x_max),
-            "xlabel": variable_insts[0].get_full_x_title(),
-            "ylabel": variable_insts[1].get_full_x_title(),
-            "xscale": "log" if variable_insts[0].log_x else "linear",
-            "yscale": "log" if variable_insts[1].log_x else "linear",
-        },
-        "legend_cfg": {
-            "title": "Process" if len(process_insts) == 1 else "Processes",
-            "handles": [mpl.lines.Line2D([0], [0], lw=0) for _ in process_insts],  # dummy handle
-            "labels": [proc_inst.label for proc_inst in process_insts],
-            "ncol": 1,
-            "loc": "upper right",
-        },
-        "annotate_cfg": {
-            "text": category_inst.label,
-            "xy": (0.05, 0.95),
-            "xycoords": "axes fraction",
-            "color": "black",
-            "fontsize": 22,
-            "horizontalalignment": "left",
-            "verticalalignment": "top",
-        },
-    }
-
-    # cms label
-    if cms_label != "skip":
-        style_config["cms_label_cfg"] = {
-            # "ax": ax,  # need to add ax later !!
-            "lumi": 0.001 * config_inst.x.luminosity.get("nominal"),  # pb -> fb
-            "llabel": label_options.get(cms_label, cms_label),
-            "fontsize": 22,
-            "data": False,
-        }
-
-    return style_config
 
 
 def blind_sensitive_bins(

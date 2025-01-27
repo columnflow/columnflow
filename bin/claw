@@ -25,9 +25,16 @@ action() {
     if [ -z "${sandbox}" ]; then
         sandbox="venv_columnar_dev"
     fi
+<<<<<<< HEAD
     # echo "sandbox '${sandbox}'"
 
     # run the command
     cf_sandbox "${sandbox}" law "$@"
+=======
+
+    # run the command
+    local law_args="${@:1}"
+    cf_sandbox "${sandbox}" law "${law_args//\*/\"\*\"}"
+>>>>>>> master
 }
 action "$@"

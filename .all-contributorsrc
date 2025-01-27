@@ -137,6 +137,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "JulesVandenbroeck",
+      "name": "JulesVandenbroeck",
+      "avatar_url": "https://avatars.githubusercontent.com/u/93740577?v=4",
+      "profile": "https://github.com/JulesVandenbroeck",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

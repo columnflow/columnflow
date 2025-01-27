@@ -6,7 +6,6 @@ Lightweight mixins task classes.
 
 from __future__ import annotations
 
-import gc
 import time
 import itertools
 from collections import Counter
@@ -217,7 +216,7 @@ class CalibratorMixin(ConfigTask):
         parts.insert_before("version", "calibrator", f"calib__{self.calibrator_repr}")
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -440,7 +439,7 @@ class CalibratorsMixin(ConfigTask):
         parts.insert_before("version", "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -642,7 +641,7 @@ class SelectorMixin(ConfigTask):
         parts.insert_before("version", "selector", f"sel__{self.selector_repr}")
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_SELECTOR:
@@ -958,7 +957,7 @@ class ProducerMixin(ConfigTask):
         parts.insert_before("version", "producer", producer)
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -1178,7 +1177,7 @@ class ProducersMixin(ConfigTask):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Finds the columns to keep based on the *collection*.
 
@@ -1202,17 +1201,16 @@ class ProducersMixin(ConfigTask):
 
 class MLModelMixinBase(AnalysisTask):
     """
-    Base Mixin to include a machine learning applications into tasks.
+    Base mixin to include a machine learning application into tasks.
 
     Inheriting from this mixin will allow a task to instantiate and access a
-    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*,
-    which is an input parameter for this task.
+    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*, which is an input parameter
+    for this task.
     """
 
     ml_model = luigi.Parameter(
         description="the name of the ML model to be applied",
     )
-
     ml_model_settings = SettingsParameter(
         default=DotDict(),
         description="settings passed to the init function of the ML model",
@@ -1230,7 +1228,8 @@ class MLModelMixinBase(AnalysisTask):
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         """
-        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level via CLI.
+        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level
+        via CLI.
 
         This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line.
         If it is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary.
@@ -1611,6 +1610,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :return: An InsertableDict containing the store parts.
         """
         parts = super().store_parts()
+
         # since MLTraining is no CalibratorsMixin, SelectorMixin, ProducerMixin, ConfigTask,
         # all these parts are missing in the `store_parts`
 
@@ -1714,7 +1714,7 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_ML_EVALUATION and self.ml_model_inst:
@@ -1817,7 +1817,7 @@ class MLModelsMixin(ConfigTask):
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         columns = super().find_keep_columns(collection)
 
         if collection == ColumnCollection.ALL_FROM_ML_EVALUATION:
@@ -1952,6 +1952,7 @@ class VariablesMixin(ConfigTask):
 
     default_variables = None
     allow_empty_variables = False
+    allow_missing_variables = False
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -1989,6 +1990,7 @@ class VariablesMixin(ConfigTask):
                     config_inst,
                     od.Variable,
                     config_inst.x("variable_groups", {}),
+                    strict=not cls.allow_missing_variables,
                 )
 
                 # for each multi-variable, resolve each part separately and create the full
@@ -2000,6 +2002,7 @@ class VariablesMixin(ConfigTask):
                             config_inst,
                             od.Variable,
                             config_inst.x("variable_groups", {}),
+                            strict=not cls.allow_missing_variables,
                         )
                         for part in parts
                     ]
@@ -2288,14 +2291,14 @@ class WeightProducerMixin(ConfigTask):
 
         return shifts, upstream_shifts
 
-    def __init__(self: WeightProducerMixin, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # cache for weight producer inst
         self._weight_producer_inst = None
 
     @property
-    def weight_producer_inst(self: WeightProducerMixin) -> WeightProducer:
+    def weight_producer_inst(self) -> WeightProducer:
         if self._weight_producer_inst is None:
             self._weight_producer_inst = self.get_weight_producer_inst(
                 self.weight_producer,
@@ -2314,7 +2317,7 @@ class WeightProducerMixin(ConfigTask):
         return self._weight_producer_inst
 
     @property
-    def weight_producer_repr(self: WeightProducerMixin) -> str:
+    def weight_producer_repr(self) -> str:
         return str(self.weight_producer_inst)
 
     def store_parts(self: WeightProducerMixin) -> law.util.InsertableDict[str, str]:
@@ -2411,7 +2414,7 @@ class ChunkedIOMixin(AnalysisTask):
         # iterate in the handler context
         with handler:
             self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries} events in {handler.n_chunks} chunks ..."
+            msg = f"iterate through {handler.n_entries:_} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes excluding IO
                 loop_durations = []
@@ -2433,9 +2436,8 @@ class ChunkedIOMixin(AnalysisTask):
             finally:
                 self.chunked_io = None
 
-        # eager, overly cautious gc
+        # eager cleanup
         del handler
-        gc.collect()
 
 
 class HistHookMixin(ConfigTask):

@@ -24,28 +24,28 @@ m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
-env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "0"))
+env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "false"))
 
 #: Boolean denoting whether the environment is in a remote job (based on ``CF_REMOTE_ENV``).
-env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_ENV", "0"))
+env_is_remote = law.util.flag_to_bool(os.getenv("CF_REMOTE_ENV", "false"))
 
 #: Boolean denoting whether the environment is in a remote job on the WLCG (based on ``CF_ON_GRID``).
-env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "0"))
+env_is_grid = law.util.flag_to_bool(os.getenv("CF_ON_GRID", "false"))
 
 #: Boolean denoting whether the environment is in a remote job on a HTCondor cluster (based on ``CF_ON_HTCONDOR``).
-env_is_htcondor = law.util.flag_to_bool(os.getenv("CF_ON_HTCONDOR", "0"))
+env_is_htcondor = law.util.flag_to_bool(os.getenv("CF_ON_HTCONDOR", "false"))
 
 #: Boolean denoting whether the environment is in a remote job on a Slurm cluster (based on ``CF_ON_SLURM``).
-env_is_slurm = law.util.flag_to_bool(os.getenv("CF_ON_SLURM", "0"))
+env_is_slurm = law.util.flag_to_bool(os.getenv("CF_ON_SLURM", "false"))
 
 #: Boolean denoting whether the environment is in a CI env (based on ``CF_CI_ENV``).
-env_is_ci = law.util.flag_to_bool(os.getenv("CF_CI_ENV", "0"))
+env_is_ci = law.util.flag_to_bool(os.getenv("CF_CI_ENV", "false"))
 
 #: Boolean denoting whether the environment is in a readthedocs env (based on ``CF_RTD_ENV``, or ``READTHEDOCS``).
-env_is_rtd = law.util.flag_to_bool(os.getenv("CF_RTD_ENV" if "CF_RTD" in os.environ else "READTHEDOCS", "0"))
+env_is_rtd = law.util.flag_to_bool(os.getenv("CF_RTD_ENV" if "CF_RTD" in os.environ else "READTHEDOCS", "false"))
 
 #: Boolean denoting whether the environment is used for development (based on ``CF_DEV``).
-env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "0"))
+env_is_dev = not env_is_remote and law.util.flag_to_bool(os.getenv("CF_DEV", "false"))
 
 #: String refering to the "flavor" of the cf setup.
 flavor = os.getenv("CF_FLAVOR")
@@ -55,7 +55,7 @@ if isinstance(flavor, str):
 # load contrib packages
 law.contrib.load(
     "arc", "awkward", "git", "htcondor", "numpy", "pyarrow", "telegram", "root", "slurm", "tasks",
-    "wlcg", "matplotlib",
+    "wlcg", "matplotlib", "slack", "mattermost",
 )
 
 # load flavor specific contrib packages
