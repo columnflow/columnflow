@@ -178,9 +178,11 @@ class PlotVariablesBase(
                 hists = hists[self.config_inst.name]
                 process_insts = list(hists.keys())
 
-            # axis selections and reductions, including sorting by process order
+            # when processes are added during hist hook, they need to be added to the process list
+            processes_ordered = [p for sub_procs in self.processes for p in sub_procs] + [p.name for p in process_insts]
+
             _hists = OrderedDict()
-            for process_inst in sorted(hists, key=process_insts.index):
+            for process_inst in sorted(hists, key=lambda proc: processes_ordered.index(proc.name)):
                 h = hists[process_inst]
                 # selections
                 h = h[{
