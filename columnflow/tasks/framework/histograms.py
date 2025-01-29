@@ -9,7 +9,7 @@ from __future__ import annotations
 import law
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     VariablesMixin, DatasetsProcessesMixin, CategoriesMixin,
@@ -136,8 +136,9 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    HistogramsUserBase,
     ShiftTask,
+    HistogramsUserBase,
+    ConfigTask,
 ):
 
     # upstream requirements
@@ -163,8 +164,9 @@ class HistogramsUserSingleShiftBase(
 
 
 class HistogramsUserMultiShiftBase(
-    HistogramsUserBase,
     ShiftSourcesMixin,
+    HistogramsUserBase,
+    ConfigTask,
 ):
     # upstream requirements
     reqs = Requirements(
