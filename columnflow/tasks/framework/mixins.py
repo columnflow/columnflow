@@ -708,12 +708,12 @@ class SelectorStepsMixin(SelectorMixin):
         params = super().resolve_param_values(params)
 
         # apply selector_steps_groups and default_selector_steps from config
-        config_inst = params.get("config_inst")
-        if config_inst:
+        analysis_inst = params.get("analysis_inst")
+        if analysis_inst:
             params["selector_steps"] = cls.resolve_config_default_and_groups(
                 params,
                 params.get("selector_steps"),
-                container=config_inst,
+                container=analysis_inst,
                 default_str="default_selector_steps",
                 groups_str="selector_step_groups",
             )
