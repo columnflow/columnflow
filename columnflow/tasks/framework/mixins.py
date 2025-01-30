@@ -2022,6 +2022,16 @@ class DatasetsProcessesMixin(ConfigTask):
         brace_expand=True,
         parse_empty=True,
     )
+    hide_processes = law.CSVParameter(
+        default=(),
+        description="comma-separated process names or patterns filtering processes that will be "
+        "loaded but hidden in the plot; useful for loading histograms and process them within hist "
+        "hooks but not showing the original ones (such as data for data-driven methods while still "
+        "blinded); can also be the key of a mapping defined in the 'process_groups' auxiliary data "
+        "of the config; empty default",
+        brace_expand=True,
+        parse_empty=True,
+    )
 
     allow_empty_datasets = False
     allow_empty_processes = False
@@ -2081,6 +2091,17 @@ class DatasetsProcessesMixin(ConfigTask):
 
             params["datasets"] = tuple(datasets)
             params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
+
+        # resolve hide processes
+        if params.get("hide_processes"):
+            hide_processes = cls.find_config_objects(
+                params["hide_processes"],
+                config_inst,
+                od.Process,
+                config_inst.x("process_groups", {}),
+                deep=True,
+            )
+            params["hide_processes"] = tuple(hide_processes)
 
         return params
 

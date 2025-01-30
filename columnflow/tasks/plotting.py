@@ -102,6 +102,7 @@ class PlotVariablesBase(
             process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
             for process_inst in process_insts
         }
+        hide_processes = list(map(self.config_inst.get_process, self.hide_processes))
 
         # histogram data per process copy
         hists = {}
@@ -147,6 +148,22 @@ class PlotVariablesBase(
 
             # update histograms using custom hooks
             hists = self.invoke_hist_hooks(hists)
+
+            # potentially remove histograms for specific processes after hooks were applied
+            if hide_processes:
+                def hide(process_inst: od.Process) -> bool:
+                    return any(
+                        (
+                            process_inst == hide_process_inst or
+                            hide_process_inst.has_process(process_inst, deep=True)
+                        )
+                        for hide_process_inst in hide_processes
+                    )
+                hists = {
+                    process_inst: h
+                    for process_inst, h in hists.items()
+                    if not hide(process_inst)
+                }
 
             # add new processes to the end of the list
             for process_inst in hists:
