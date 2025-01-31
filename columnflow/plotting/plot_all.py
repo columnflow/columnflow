@@ -315,6 +315,7 @@ def plot_all(
         fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
         (ax, rax) = axs
     else:
+        grid_spec.pop("height_ratios", None)
         fig, ax = plt.subplots(gridspec_kw=grid_spec)
         axs = (ax,)
 
