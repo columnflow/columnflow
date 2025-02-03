@@ -86,6 +86,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         h = law.util.create_hash(list(sorted(self.dataset_info_inst.keys)))
         return self.target(f"lfns_{h}.json")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         """
@@ -112,7 +113,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 f"for dataset {self.dataset_inst.name} ({self.dataset_info_inst.n_files})",
             )
 
-        self.logger.info(f"found {len(lfns)} lfn(s) for dataset {self.dataset}")
+        self.logger.info(f"found {len(lfns):_} lfn(s) for dataset {self.dataset}")
 
         tmp = law.LocalFileTarget(is_tmp=True)
         tmp.dump(lfns, indent=4, formatter="json")
@@ -138,6 +139,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             shell=True,
             stdout=subprocess.PIPE,
             executable="/bin/bash",
+            kill_timeout=1,
         )
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
@@ -156,6 +158,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         fs: str | Sequence[str] | None = None,
         lfn_indices: list[int] | None = None,
         eager_lookup: bool | int = 1,
+        skip_fallback: bool = False,
     ) -> None:
         """
         Generator function that reduces the boilerplate code for looping over files referred to by
@@ -169,6 +172,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         :param fs: Name of the local or remote file system where the LFNs are located, defaults to None
         :param lfn_indices: List of indices of LFNs that are processed by this *task* instance, defaults to None
         :param eager_lookup: Look at the next fs if stat takes too long, defaults to 1
+        :param skip_fallback: Skip the fallback mechanism to fetch the LFN, defaults to False
         :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not
             a task analyzing a single branch in the task tree
         :raises Exception: If current task is not complete as indicated with ``self.complete()``
@@ -222,15 +226,24 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 is_local = law.target.file.get_scheme(fs_base) in (None, "file")
                 logger.debug(f"fs {selected_fs} is {'local' if is_local else 'remote'}")
                 target_cls = law.LocalFileTarget if is_local else law.wlcg.WLCGFileTarget
+                logger.debug(f"checking fs {selected_fs} for lfn {lfn}")
+
+                # try an optional fallback to pre-emptively fetch the lfn if necessary
+                if not is_local and not skip_fallback:
+                    input_file, input_stat, is_tmp = self._fetch_lfn_fallback(lfn, selected_fs)
+                    if input_file:
+                        if is_tmp:
+                            input_file.is_tmp = True
+                        task.publish_message(f"using fs {selected_fs} via pre-emptive fetch")
+                        break
 
                 # measure the time required to perform the stat query
-                logger.debug(f"checking fs {selected_fs} for lfn {lfn}")
                 input_file = target_cls(lfn.lstrip(os.sep) if is_local else lfn, fs=selected_fs)
                 t1 = time.perf_counter()
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
-                logger.info(f"file {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
+                logger.info(f"lfn {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
 
                 # when the stat query took longer than some duration, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
@@ -261,13 +274,81 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                     )
                     break
             else:
-                raise Exception(f"LFN {lfn} not found at any remote fs {fs}")
+                raise Exception(f"lfn {lfn} not found at any remote fs {fs}")
 
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
             task.publish_message(f"lfn {lfn}, size is {input_size}")
 
             yield (lfn_index, input_file)
+
+    def _fetch_lfn_fallback(
+        self,
+        lfn: str,
+        selected_fs: str,
+        force: bool = False,
+    ) -> tuple[law.LocalFileTarget | None, os.stat_result | None, bool]:
+        """
+        Fetches an *lfn* via fallback mechanisms. Currently, only ``xrdcp`` for remote file systems
+        *selected_fs* with `root://` bases is supported. Unless *force* is *True*, no fallbacks are
+        performed in case they are not necessary in the first place (determined by the availability
+        of the ``gfal2`` package).
+
+        :param lfn: Logical file name to fetch.
+        :param selected_fs: Name of the file system to fetch the LFN from. When remote, its *base*
+            or *base_filecopy* should use the `root://` protocol.
+        :param force: When *True*, forces the fallback to be performed, defaults to *False*.
+        :return: Tuple of the fetched file, its stat, and a flag indicating whether the file is
+            temporary. *None*'s are returned when the file was not fetched.
+        """
+        # check if the file needs to be fetched in the first place
+        no_result = None, None, False
+        if not force:
+            # when gfal2 is available, no need to fetch
+            try:
+                import gfal2  # noqa: F401
+                return no_result
+            except ImportError:
+                pass
+
+        # get the base uri and check if the protocol is supported
+        base = (
+            law.config.get_expanded(selected_fs, "base_filecopy", None) or
+            law.config.get_expanded(selected_fs, "base")
+        )
+        scheme = law.target.file.get_scheme(base)
+        if scheme != "root":
+            raise NotImplementedError(f"fetching lfn via {scheme}:// is not supported")
+        uri = base + lfn
+
+        # if the corresponding fs has a cache and the lfn is already in there, return it
+        # (no need to perform in/validation checks via mtime for lfns)
+        wlcg_fs = law.wlcg.WLCGFileSystem(selected_fs)
+        if wlcg_fs.cache and lfn in wlcg_fs.cache:
+            destination = law.LocalFileTarget(wlcg_fs.cache.cache_path(lfn))
+            return destination, destination.stat(), False
+
+        # fetch the file into a temporary location first
+        destination = law.LocalFileTarget(is_tmp="root")
+        cmd = f"xrdcp -f {uri} {destination.abspath}"
+        code = law.util.interruptable_popen(cmd, shell=True, executable="/bin/bash")[0]
+        if code != 0:
+            logger.warning(f"xrdcp failed for {uri}")
+            return no_result
+
+        # when there is a cache, move the file there
+        stat = destination.stat()
+        if wlcg_fs.cache:
+            with wlcg_fs.cache.lock(lfn):
+                wlcg_fs.cache.allocate(stat.st_size)
+                clfn = law.LocalFileTarget(wlcg_fs.cache.cache_path(lfn))
+                destination.move_to_local(clfn)
+            return clfn, stat, False
+
+        # here, the destination will be temporary, but set its tmp flag to False to prevent its
+        # deletion when this method goes out of scope, and set the decision for later use instead
+        destination.is_tmp = False
+        return destination, stat, True
 
 
 GetDatasetLFNsWrapper = wrapper_factory(
@@ -413,6 +494,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -426,7 +508,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # helper function to fetch generic files
         def fetch_file(src, counter=[0]):
-            dst = os.path.join(tmp_dir.path, self.create_unique_basename(src))
+            dst = os.path.join(tmp_dir.abspath, self.create_unique_basename(src))
             src = src[0] if isinstance(src, tuple) else src
             if src.startswith(("http://", "https://")):
                 # download via wget

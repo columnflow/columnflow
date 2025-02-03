@@ -35,6 +35,9 @@ action() {
     # test_inference
     echo
     bash "${this_dir}/run_test" test_inference "${cf_dir}/sandboxes/venv_columnar${dev}.sh"
+    # test_hist_util
+    echo
+    bash "${this_dir}/run_test" test_hist_util "${cf_dir}/sandboxes/venv_columnar${dev}.sh"
     ret="$?"
     [ "${gret}" = "0" ] && gret="${ret}"
 

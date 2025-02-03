@@ -25,7 +25,7 @@ logger = law.logger.get_logger(__name__)
 
 @producer(
     uses={"Pileup.nTrueInt"},
-    produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
+    produces={"pu_weight{,_minbias_xs_up,_minbias_xs_down}"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -101,7 +101,7 @@ def pu_weight_setup(
 
 @producer(
     uses={"Pileup.nTrueInt"},
-    produces={"pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"},
+    produces={"pu_weight{,_minbias_xs_up,_minbias_xs_down}"},
     # only run on mc
     mc_only=True,
 )

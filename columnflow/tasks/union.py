@@ -84,6 +84,7 @@ class UniteColumns(
     def output(self):
         return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=True)
     @law.decorator.safe_output
@@ -122,11 +123,11 @@ class UniteColumns(
         read_columns = {Route(c) for c in read_columns}
 
         # iterate over chunks of events and diffs
-        files = [inputs["events"]["events"].path]
+        files = [inputs["events"]["events"].abspath]
         if self.producer_insts:
-            files.extend([inp["columns"].path for inp in inputs["producers"]])
+            files.extend([inp["columns"].abspath for inp in inputs["producers"]])
         if self.ml_model_insts:
-            files.extend([inp["mlcolumns"].path for inp in inputs["ml"]])
+            files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -150,9 +151,9 @@ class UniteColumns(
             chunk = tmp_dir.child(f"file_{pos.index}.{self.file_type}", type="f")
             output_chunks[pos.index] = chunk
             if self.file_type == "parquet":
-                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
             else:  # root
-                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.path))
+                self.chunked_io.queue(sorted_ak_to_root, (events, chunk.abspath))
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

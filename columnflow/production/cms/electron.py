@@ -6,6 +6,8 @@ Electron related event weights.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
@@ -14,19 +16,46 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
+@dataclass
+class ElectronSFConfig:
+    correction: str
+    campaign: str
+    working_point: str = ""
+    hlt_path: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.working_point and not self.hlt_path:
+            raise ValueError("either working_point or hlt_path must be set")
+        if self.working_point and self.hlt_path:
+            raise ValueError("only one of working_point or hlt_path must be set")
+
+    @classmethod
+    def new(
+        cls,
+        obj: ElectronSFConfig | tuple[str, str, str],
+    ) -> ElectronSFConfig:
+        # purely for backwards compatibility with the old tuple format
+        if isinstance(obj, cls):
+            return obj
+        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+            return cls(*obj)
+        elif isinstance(obj, dict):
+            return cls(**obj)
+        else:
+            raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
+
+
 @producer(
-    uses={
-        "Electron.pt", "Electron.eta", "Electron.deltaEtaSC",
-    },
-    produces={
-        "electron_weight", "electron_weight_up", "electron_weight_down",
-    },
+    uses={"Electron.{pt,eta,phi,deltaEtaSC}"},
+    # produces in the init
     # only run on mc
     mc_only=True,
     # function to determine the correction file
     get_electron_file=(lambda self, external_files: external_files.electron_sf),
     # function to determine the electron weight config
-    get_electron_config=(lambda self: self.config_inst.x.electron_sf_names),
+    get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
+    weight_name="electron_weight",
+    supported_versions=(1, 2, 3),
 )
 def electron_weights(
     self: Producer,
@@ -52,7 +81,11 @@ def electron_weights(
 
     .. code-block:: python
 
-        cfg.x.electron_sf_names = ("UL-Electron-ID-SF", "2017", "wp80iso")
+        cfg.x.electron_sf_names = ElectronSFConfig(
+            correction="UL-Electron-ID-SF",
+            campaign="2017",
+            working_point="wp80iso",  # for trigger weights use hlt_path instead
+        )
 
     *get_electron_config* can be adapted in a subclass in case it is stored differently in the
     config.
@@ -66,6 +99,16 @@ def electron_weights(
         events.Electron.deltaEtaSC[electron_mask]
     ), axis=1)
     pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
+    phi = flat_np_view(events.Electron.phi[electron_mask], axis=1)
+
+    variable_map = {
+        "year": self.electron_config.campaign,
+        "WorkingPoint": self.electron_config.working_point,
+        "Path": self.electron_config.hlt_path,
+        "pt": pt,
+        "eta": sc_eta,
+        "phi": phi,
+    }
 
     # loop over systematics
     for syst, postfix in [
@@ -73,7 +116,13 @@ def electron_weights(
         ("sfup", "_up"),
         ("sfdown", "_down"),
     ]:
-        sf_flat = self.electron_sf_corrector(self.year, syst, self.wp, sc_eta, pt)
+        # get the inputs for this type of variation
+        variable_map_syst = {
+            **variable_map,
+            "ValType": syst,
+        }
+        inputs = [variable_map_syst[inp.name] for inp in self.electron_sf_corrector.inputs]
+        sf_flat = self.electron_sf_corrector(*inputs)
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
@@ -82,9 +131,15 @@ def electron_weights(
         weight = ak.prod(sf, axis=1, mask_identity=False)
 
         # store it
-        events = set_ak_column(events, f"electron_weight{postfix}", weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", weight, value_type=np.float32)
 
     return events
+
+
+@electron_weights.init
+def electron_weights_init(self: Producer, **kwargs) -> None:
+    # add the product of nominal and up/down variations to produced columns
+    self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
 
 @electron_weights.requires
@@ -111,11 +166,20 @@ def electron_weights_setup(
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
-    corrector_name, self.year, self.wp = self.get_electron_config()
-    self.electron_sf_corrector = correction_set[corrector_name]
+    self.electron_config: ElectronSFConfig = self.get_electron_config()
+    self.electron_sf_corrector = correction_set[self.electron_config.correction]
 
     # check versions
-    if self.electron_sf_corrector.version not in (2,):
-        raise Exception(
-            f"unsuppprted electron sf corrector version {self.electron_sf_corrector.version}",
-        )
+    if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
+        raise Exception(f"unsupported electron sf corrector version {self.electron_sf_corrector.version}")
+
+
+# custom electron weight that runs trigger SFs
+electron_trigger_weights = electron_weights.derive(
+    "electron_trigger_weights",
+    cls_dict={
+        "get_electron_file": (lambda self, external_files: external_files.electron_trigger_sf),
+        "get_electron_config": (lambda self: self.config_inst.x.electron_trigger_sf_names),
+        "weight_name": "electron_trigger_weight",
+    },
+)

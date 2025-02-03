@@ -31,6 +31,7 @@ def increment_stats(
     weight_map: dict[str, ak.Array | tuple[ak.Array, ak.Array]] | None = None,
     group_map: dict[str, dict[str, ak.Array | Callable]] | None = None,
     group_combinations: Sequence[tuple[str]] | None = None,
+    skip_func: Callable[[str, list[str]], bool] | None = None,
     **kwargs,
 ) -> tuple[ak.Array, SelectionResult]:
     """
@@ -110,8 +111,14 @@ def increment_stats(
     In this case, *stats* will obtain additional fields, such as
     ``"sum_mc_weight_per_process_and_njet"`` and ``"sum_mc_weight_selected_per_process_and_njet"``,
     referring to nested dictionaries whose structure depends on the exact order of group names per
-    tuple.
+    tuple. To reduce the number of entries in the stats but still make use of this combinatorics
+    feature, a *skip_func* can be defined that receives the weight name and the names of the groups
+    of an entry. If the function returns *True*, the entry will be skipped.
     """
+    # default skip func
+    if skip_func is None:
+        skip_func = lambda weight_name, group_names: False
+
     # make values in group map unique
     unique_group_values = {
         group_name: np.unique(ak.flatten(group_data["values"], axis=None))
@@ -148,15 +155,15 @@ def increment_stats(
                     f"but found a sequence: {obj}",
                 )
             if len(obj) == 1:
-                weights = obj[0]
+                weights = ak.values_astype(obj[0], np.float64)
             elif len(obj) == 2:
-                weights, weight_mask = obj
+                weights, weight_mask = ak.values_astype(obj[0], np.float64), obj[1]
             else:
                 raise Exception(f"cannot interpret as weights and optional mask: '{obj}'")
         elif op == self.NUM:
             weight_mask = obj
         else:  # SUM
-            weights = obj
+            weights = ak.values_astype(obj, np.float64)
 
         # when mask is an Ellipsis, it cannot be AND joined to other masks, so convert to true mask
         if weight_mask is Ellipsis:
@@ -170,6 +177,10 @@ def increment_stats(
 
         # per group combination
         for group_names in group_combinations:
+            # optionally skip
+            if skip_func(weight_name, group_names):
+                continue
+
             group_key = f"{weight_name}_per_" + "_and_".join(group_names)
 
             # set the default structures
