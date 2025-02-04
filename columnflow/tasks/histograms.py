@@ -24,12 +24,12 @@ from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_t
 
 
 class CreateHistograms(
-    ReducedEventsUser,
-    ChunkedIOMixin,
-    ProducersMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
     VariablesMixin,
+    WeightProducerMixin,
+    MLModelsMixin,
+    ProducersMixin,
+    ChunkedIOMixin,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
