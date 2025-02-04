@@ -230,11 +230,6 @@ class CreateDatacards(
                             for p in sub_process_insts
                             if p.id in h.axes["process"]
                         ],
-                        # "category": [
-                        #     hist.loc(c.id)
-                        #     for c in leaf_category_insts
-                        #     if c.id in h.axes["category"]
-                        # ],
                     }]
 
                     # axis reductions
