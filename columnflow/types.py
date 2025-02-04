@@ -7,8 +7,6 @@ packages.
 
 from __future__ import annotations
 
-__all__ = []
-
 # warn when imported while _in_ this directory
 import os
 thisdir = os.path.dirname(os.path.abspath(__file__))

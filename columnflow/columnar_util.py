@@ -6,8 +6,6 @@ Helpers and utilities for working with columnar libraries.
 
 from __future__ import annotations
 
-__all__ = []
-
 import os
 import sys
 import re

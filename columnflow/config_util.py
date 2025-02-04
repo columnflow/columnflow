@@ -6,8 +6,6 @@ Collection of general helpers and utilities.
 
 from __future__ import annotations
 
-__all__ = []
-
 import re
 import itertools
 from collections import OrderedDict
