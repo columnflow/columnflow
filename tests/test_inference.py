@@ -1,6 +1,7 @@
 import unittest
 from columnflow.inference import (
-    InferenceModel, ParameterType, ParameterTransformation, ParameterTransformations
+    InferenceModel, ParameterType, ParameterTransformation, ParameterTransformations,
+    FlowStrategy,
 )
 from columnflow.util import DotDict
 
@@ -56,6 +57,7 @@ class TestInferenceModel(unittest.TestCase):
             ("config_variable", "test_config_variable"),
             ("config_data_datasets", ["dataset1", "dataset2"]),
             ("data_from_processes", ["process1", "process2"]),
+            ('flow_strategy', FlowStrategy.warn),
             ("mc_stats", (10, 0.1)),
             ("empty_bin_value", 1e-4),
             ("processes", []),
@@ -201,51 +203,36 @@ class TestInferenceModel(unittest.TestCase):
         # Assert the result
         self.assertEqual(result, expected_result)
     
-    def test_require_shapes_for_parameter_shape_type_with_rate_transformation(self):
-        param_obj = {
-            "type": ParameterType(is_shape=True, is_rate=False),
-            "transformations": ParameterTransformations(any_from_rate=True, any_from_shape=False),
+    def test_require_shapes_for_parameter_shape(self):
+        # No shape is required if the parameter type is a rate
+        types = [ParameterType.rate_gauss, ParameterType.rate_uniform, ParameterType.rate_unconstrained]
+        for t in types:
+            with self.subTest(t=t):
+                param_obj = DotDict.wrap({
+                    "type": t,
+                    "transformations": ParameterTransformations([ParameterTransformation.effect_from_rate]),
+                    "name": "test_param"
+                })
+                result = InferenceModel.require_shapes_for_parameter(param_obj)
+                self.assertFalse(result)
+
+                # if the transformation is shape-based expect True
+                param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
+                result = InferenceModel.require_shapes_for_parameter(param_obj)
+                self.assertTrue(result)
+        
+        # No shape is required if the transformation is from a rate
+        param_obj = DotDict.wrap({
+            "type": ParameterType.shape,
+            "transformations": ParameterTransformations([ParameterTransformation.effect_from_rate]),
             "name": "test_param"
-        }
+        })
         result = InferenceModel.require_shapes_for_parameter(param_obj)
         self.assertFalse(result)
-
-    def test_require_shapes_for_parameter_shape_type_without_rate_transformation(self):
-        param_obj = {
-            "type": ParameterType(is_shape=True, is_rate=False),
-            "transformations": ParameterTransformations(any_from_rate=False, any_from_shape=False),
-            "name": "test_param"
-        }
+        
+        param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
         result = InferenceModel.require_shapes_for_parameter(param_obj)
         self.assertTrue(result)
-
-    def test_require_shapes_for_parameter_rate_type_with_shape_transformation(self):
-        param_obj = {
-            "type": ParameterType(is_shape=False, is_rate=True),
-            "transformations": ParameterTransformations(any_from_rate=False, any_from_shape=True),
-            "name": "test_param"
-        }
-        result = InferenceModel.require_shapes_for_parameter(param_obj)
-        self.assertTrue(result)
-
-    def test_require_shapes_for_parameter_rate_type_without_shape_transformation(self):
-        param_obj = {
-            "type": ParameterType(is_shape=False, is_rate=True),
-            "transformations": ParameterTransformations(any_from_rate=False, any_from_shape=False),
-            "name": "test_param"
-        }
-        result = InferenceModel.require_shapes_for_parameter(param_obj)
-        self.assertFalse(result)
-
-    def test_require_shapes_for_parameter_unsupported_type(self):
-        param_obj = {
-            "type": ParameterType(is_shape=False, is_rate=False),
-            "transformations": ParameterTransformations(any_from_rate=False, any_from_shape=False),
-            "name": "test_param"
-        }
-        with self.assertRaises(Exception) as context:
-            InferenceModel.require_shapes_for_parameter(param_obj)
-        self.assertIn("shape requirement cannot be evaluated", str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()
