@@ -253,7 +253,7 @@ class CreateDatacards(
 
                 # save histograms in hist_hook format
                 hist_hook_hists[process_inst] = h_proc
-            
+
             # now apply hist hook
             hist_hook_hists = self.invoke_hist_hooks(hist_hook_hists)
 
@@ -261,11 +261,10 @@ class CreateDatacards(
             if cat_obj.config_data_datasets:
                 cat_processes.append(DotDict({"name": "data"}))
 
-            
             # after application of hist hooks, we can proceed with the datacard creation
             for proc_obj in cat_processes:
                 # obtain process information from inference model and config again
-                
+
                 proc_obj_name = proc_obj.name
                 if proc_obj_name == "data":
                     proc_obj = None
@@ -313,7 +312,6 @@ class CreateDatacards(
                             hists[proc_obj_name][param_obj.name][d] = h_proc[
                                 {"shift": hist.loc(shift_inst.id)}
                             ]
-            
 
             # forward objects to the datacard writer
             outputs = self.output()

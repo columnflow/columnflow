@@ -5,6 +5,7 @@ from columnflow.inference import (
 )
 from columnflow.util import DotDict
 
+
 class TestInferenceModel(unittest.TestCase):
 
     def test_process_spec(self):
@@ -39,7 +40,7 @@ class TestInferenceModel(unittest.TestCase):
 
         # Assert the result
         self.assertEqual(result, expected_result)
-    
+
     def test_category_spec(self):
         # Test data
         name = "test_category"
@@ -57,7 +58,7 @@ class TestInferenceModel(unittest.TestCase):
             ("config_variable", "test_config_variable"),
             ("config_data_datasets", ["dataset1", "dataset2"]),
             ("data_from_processes", ["process1", "process2"]),
-            ('flow_strategy', FlowStrategy.warn),
+            ("flow_strategy", FlowStrategy.warn),
             ("mc_stats", (10, 0.1)),
             ("empty_bin_value", 1e-4),
             ("processes", []),
@@ -147,7 +148,7 @@ class TestInferenceModel(unittest.TestCase):
             ("type", ParameterType.rate_gauss),
             ("transformations", ParameterTransformations([
                 ParameterTransformation.centralize,
-                ParameterTransformation.symmetrize
+                ParameterTransformation.symmetrize,
             ])),
             ("config_shift_source", "test_shift_source"),
             ("effect", 1.5),
@@ -164,7 +165,7 @@ class TestInferenceModel(unittest.TestCase):
 
         # Assert the result
         self.assertEqual(result, expected_result)
-    
+
     def test_parameter_group_spec(self):
         # Test data
         name = "test_group"
@@ -202,7 +203,7 @@ class TestInferenceModel(unittest.TestCase):
 
         # Assert the result
         self.assertEqual(result, expected_result)
-    
+
     def test_require_shapes_for_parameter_shape(self):
         # No shape is required if the parameter type is a rate
         types = [ParameterType.rate_gauss, ParameterType.rate_uniform, ParameterType.rate_unconstrained]
@@ -211,7 +212,7 @@ class TestInferenceModel(unittest.TestCase):
                 param_obj = DotDict.wrap({
                     "type": t,
                     "transformations": ParameterTransformations([ParameterTransformation.effect_from_rate]),
-                    "name": "test_param"
+                    "name": "test_param",
                 })
                 result = InferenceModel.require_shapes_for_parameter(param_obj)
                 self.assertFalse(result)
@@ -220,19 +221,20 @@ class TestInferenceModel(unittest.TestCase):
                 param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
                 result = InferenceModel.require_shapes_for_parameter(param_obj)
                 self.assertTrue(result)
-        
+
         # No shape is required if the transformation is from a rate
         param_obj = DotDict.wrap({
             "type": ParameterType.shape,
             "transformations": ParameterTransformations([ParameterTransformation.effect_from_rate]),
-            "name": "test_param"
+            "name": "test_param",
         })
         result = InferenceModel.require_shapes_for_parameter(param_obj)
         self.assertFalse(result)
-        
+
         param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
         result = InferenceModel.require_shapes_for_parameter(param_obj)
         self.assertTrue(result)
+
 
 if __name__ == "__main__":
     unittest.main()
