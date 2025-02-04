@@ -254,8 +254,6 @@ class CreateDatacards(
                 # save histograms in hist_hook format
                 hist_hook_hists[process_inst] = h_proc
             
-            from IPython import embed
-            embed(header="before hist hook invokation")
             # now apply hist hook
             hist_hook_hists = self.invoke_hist_hooks(hist_hook_hists)
 
