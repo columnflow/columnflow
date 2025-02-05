@@ -7,13 +7,12 @@ from __future__ import annotations
 
 from functools import partial
 
-from columnflow.types import Sequence, Union
+from columnflow.types import Iterable, Sequence, Union
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import attach_coffea_behavior as attach_coffea_behavior_fn
 
 ak = maybe_import("awkward")
-np = maybe_import("numpy")
 coffea = maybe_import("coffea")
 
 
@@ -48,7 +47,7 @@ def attach_coffea_behavior(
 # general awkward array functions
 #
 
-def ak_extract_fields(arr, fields, **kwargs):
+def ak_extract_fields(arr: ak.Array, fields: list[str], **kwargs):
     """
     Build an array containing only certain `fields` of an input array `arr`,
     preserving behaviors.
@@ -82,7 +81,7 @@ lv_energy = partial(_lv_base, fields=["pt", "eta", "phi", "energy"], with_name="
 lv_energy.__doc__ = """Construct a `PtEtaPhiELorentzVectorArray` from an input array."""
 
 
-def lv_sum(lv_arrays):
+def lv_sum(lv_arrays: Iterable[ak.Array]):
     """
     Return the sum of identically-structured arrays containing Lorentz vectors.
     """
@@ -124,7 +123,7 @@ def delta_r_match(
     (if *as_index* is false), or the index to be applied to *dst_lvs* in order
     to obtain the best match (if *as_index* is true). The second tuple
     entry, *dst_lvs_filtered*, is a view of *dst_lvs* with the best matches
-    removed, and can be used for subsequent matching. If *return_indices* is true.
+    removed, and can be used for subsequent matching.
     """
     # calculate delta_r for all possible src-dst pairs
     delta_r = ak.singletons(src_lv).metric_table(dst_lvs)
@@ -142,7 +141,7 @@ def delta_r_match(
     dst_lvs_filtered = ak.mask(dst_lvs, keep)
     dst_lvs_filtered = ak.where(ak.is_none(dst_lvs_filtered, axis=0), [[]], dst_lvs_filtered)
 
-    # return either index or four-vector or best match
+    # return either index or four-vector of best match
     best_match = best_match_dst_idx if as_index else ak.firsts(dst_lvs[best_match_dst_idx])
     return best_match, dst_lvs_filtered
 
@@ -187,6 +186,6 @@ def delta_r_match_multiple(
     # remove padding to make result index-compatible with input
     best_match_idxs = best_match_idxs[src_lvs_idx]
 
-    # return either index or four-vector or best match
+    # return either index or four-vector of best match
     best_match = best_match_idxs if as_index else dst_lvs[best_match_idxs]
     return best_match, dst_lvs_filtered
