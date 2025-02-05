@@ -13,11 +13,7 @@ from dataclasses import dataclass, field
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import (
-    set_ak_column, remove_ak_column, attach_behavior, EMPTY_FLOAT, get_ak_routes, remove_ak_column,
-    optional_column as optional,
-)
-from columnflow.types import Sequence
+from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -33,13 +29,13 @@ logger = law.logger.get_logger(__name__)
 
 @dataclass
 class DrellYanConfig:
-    """
-    Configuration class for Drell-Yan reweighting.
-    """
+    era: str
+    correction: str
+    unc_correction: str
 
-    # campaign config
-    era: str = field(default="2022preEE_NLO")
-    correction_set: str = "DY_pTll_reweighting"
+    def __post_init__(self) -> None:
+        if not self.era or not self.correction or not self.unc_correction:
+            raise ValueError("Campaign era, correction  and unc_correction must be set")
 
 
 @producer(
@@ -92,19 +88,34 @@ def get_gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
 )
 def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Drell-Yan reweighting using correctionlib.
+    Creates Drell-Yan weights using the correctionlib. Requires an external file in the config under
+    ``dy_sf``:
+
+    .. code-block:: python
+
+        cfg.x.external_files = DotDict.wrap({
+            "dy_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v1.json.gz",  # noqa
+        })
+
+    *get_dy_file* can be adapted in a subclass in case it is stored differently in the external files.
+
+    The campaign era and name of the correction set should be given as an auxiliary entry in the config:
+
+    .. code-block:: python
+
+        cfg.x.dy_config = DrellYanConfig(
+            era="2022preEE_NLO",
+            correction="DY_pTll_reweighting",
+            unc_correction="DY_pTll_reweighting_N_uncertainty",
+        )
+
+    *get_dy_config* can be adapted in a subclass in case it is stored differently in the config.
     """
-
-    # get campaign era
-    era = self.dy_config.era
-
-    # get the gen dilepton
-    gen_dilepton = events.gen_dilepton.pt
 
     # map the variable names from the corrector to our columns
     variable_map = {
-        "era": era,
-        "ptll": gen_dilepton.pt,
+        "era": self.dy_config.era,
+        "ptll": events.gen_dilepton.pt,
     }
 
     for column_name, syst in (
@@ -158,59 +169,10 @@ def dy_weights_setup(
         self.get_dy_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
-    self.dy_config: DrellYanConfig = self.get_dy_config()
     # check
     if len(correction_set.keys()) != 1:
         raise Exception("Expected exactly one type of Drell-Yan correction")
 
-    # index of available correctors:
-    # [0] DY_pTll_reweighting
-    # [1] DY_pTll_reweighting_N_uncertainty
-    corrector_name = self.dy_config.correction_set
-    self.dy_corrector = correction_set[corrector_name]
-
-
-# @producer(
-#     uses={"Pileup.nTrueInt"},
-#     produces={"dy_weights"},
-#     # only run on mc
-#     mc_only=True,
-# )
-# def dy_weights_from_columnflow(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-#     # compute the indices for looking up weights
-#     indices = # events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
-#     max_bin = len(self.dy_weights) - 1
-#     indices[indices > max_bin] = max_bin
-
-#     # save the weights
-#     events = set_ak_column_f32(events, "dy_weight", self.dy_weights.nominal[indices])
-#     # events = set_ak_column_f32(events, "dy_weight_up", self.dy_weight.up[indices])
-#     # events = set_ak_column_f32(events, "dy_weight_down", self.dy_weight.down[indices])
-
-#     return events
-
-
-# @dy_weights_from_columnflow.requires
-# def dy_weights_from_columnflow_requires(self: Producer, reqs: dict) -> None:
-#     """
-#     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
-#     """
-#     if "dy_weights" in reqs:
-#         return
-
-#     from columnflow.tasks.cms.external import CreatePileupWeights
-#     reqs["dy_weights"] = CreatePileupWeights.req(self.task)
-
-
-# @dy_weights_from_columnflow.setup
-# def dy_weights_from_columnflow_setup(
-#     self: Producer,
-#     reqs: dict,
-#     inputs: dict,
-#     reader_targets: InsertableDict,
-# ) -> None:
-#     """
-#     Loads the Drell-Yan weights added through the requirements and saves them in the
-#     py:attr:`dy_weights` attribute for simpler access in the actual callable.
-#     """
-#     self.dy_weights = ak.zip(inputs["dy_weights"].load(formatter="json"))
+    self.dy_config: DrellYanConfig = self.get_dy_config()
+    self.dy_corrector = correction_set[self.dy_config.correction]
+    self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
