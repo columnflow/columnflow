@@ -102,8 +102,8 @@ def lv_sum(lv_arrays: Iterable[ak.Array]):
 #
 
 def delta_r_match(
-    dst_lvs: ak.Array,
     src_lv: ak.Array,
+    dst_lvs: ak.Array,
     max_dr: float | None = None,
     as_index: bool = False,
 ):
@@ -147,8 +147,8 @@ def delta_r_match(
 
 
 def delta_r_match_multiple(
-    dst_lvs: ak.Array,
     src_lvs: ak.Array,
+    dst_lvs: ak.Array,
     max_dr: float | None = None,
     as_index: bool = False,
 ):
@@ -173,8 +173,8 @@ def delta_r_match_multiple(
     dst_lvs_filtered = dst_lvs
     for i in range(max_num):
         best_match_dst_idx, dst_lvs_filtered = delta_r_match(
-            dst_lvs_filtered,
             src_lvs[:, i],
+            dst_lvs_filtered,
             max_dr=max_dr,
             as_index=True,
         )

@@ -71,7 +71,7 @@ def delta_r_matcher(
     dst_lvs = lv_mass(dst)
 
     # perform matching
-    best_match_idxs, _ = delta_r_match_multiple(dst_lvs, src_lvs, max_dr=self.max_dr, as_index=True)
+    best_match_idxs, _ = delta_r_match_multiple(src_lvs, dst_lvs, max_dr=self.max_dr, as_index=True)
 
     # store the index in the specified output column
     best_match_idxs = ak.fill_none(best_match_idxs, -1)
