@@ -170,8 +170,8 @@ def dy_weights_setup(
     )
 
     # check
-    if len(correction_set.keys()) != 1:
-        raise Exception("Expected exactly one type of Drell-Yan correction")
+    if len(correction_set.keys()) != 2:
+        raise Exception("Expected exactly two types of Drell-Yan correction")
 
     self.dy_config: DrellYanConfig = self.get_dy_config()
     self.dy_corrector = correction_set[self.dy_config.correction]
