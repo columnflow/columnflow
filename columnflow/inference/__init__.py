@@ -1605,14 +1605,14 @@ class InferenceModel(Derivable):
         category: str | Sequence[str] | None = None,
     ) -> bool:
         """
-    Sets the scale attribute of all processes whose names match *process*, optionally in all
-    categories whose names match *category*, to *scale*.
+        Sets the scale attribute of all processes whose names match *process*, optionally in all
+        categories whose names match *category*, to *scale*.
 
-    :param scale: The scale value to set for the matching processes.
-    :param process: A string, pattern, or sequence of them to match process names.
-    :param category: A string, pattern, or sequence of them to match category names.
-    :returns: *True* if at least one process was found and scaled, *False* otherwise.
-    """
+        :param scale: The scale value to set for the matching processes.
+        :param process: A string, pattern, or sequence of them to match process names.
+        :param category: A string, pattern, or sequence of them to match category names.
+        :returns: *True* if at least one process was found and scaled, *False* otherwise.
+        """
         found = False
         for _, process in self.iter_processes(process=process, category=category):
             process.scale = float(scale)

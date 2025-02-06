@@ -252,7 +252,7 @@ class CreateDatacards(
             # now apply hist hook
             hist_hook_hists = self.invoke_hist_hooks(hist_hook_hists)
 
-            cat_processes = cat_obj.processes
+            cat_processes = list(cat_obj.processes)
             if cat_obj.config_data_datasets:
                 cat_processes.append(DotDict({"name": "data"}))
 
