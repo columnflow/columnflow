@@ -30,7 +30,6 @@ import luigi
 from columnflow import env_is_dev, env_is_remote
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
-
 #: Placeholder for an unset value.
 UNSET = object()
 
@@ -453,6 +452,15 @@ def try_int(i: Any) -> bool:
         return True
     except (ValueError, TypeError):
         return False
+
+
+def maybe_int(i: Any) -> Any:
+    """
+    Returns *i* as an integer if it is a whole number, and as a float otherwise.
+    """
+    if isinstance(i, (int, bool)) or (isinstance(i, float) and i.is_integer()):
+        return int(i)
+    return i
 
 
 def is_pattern(s: str) -> bool:
