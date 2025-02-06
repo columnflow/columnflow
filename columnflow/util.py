@@ -454,6 +454,15 @@ def try_int(i: Any) -> bool:
         return False
 
 
+def maybe_int(i: Any) -> Any:
+    """
+    Returns *i* as an integer if it is a whole number, and as a float otherwise.
+    """
+    if isinstance(i, (int, bool)) or (isinstance(i, float) and i.is_integer()):
+        return int(i)
+    return i
+
+
 def is_pattern(s: str) -> bool:
     """
     Returns *True* if a string *s* contains pattern characters such as "*" or "?", and *False*

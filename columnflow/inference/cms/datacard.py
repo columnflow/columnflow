@@ -16,7 +16,7 @@ from columnflow.types import Sequence, Any
 from columnflow.inference import (
     InferenceModel, ParameterType, ParameterTransformation, FlowStrategy,
 )
-from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div
+from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
 
 np = maybe_import("np")
 hist = maybe_import("hist")
@@ -104,7 +104,7 @@ class DatacardWriter(object):
             blocks.observations = [
                 ("bin", list(rates)),
                 ("observation", [
-                    int(round(_rates["data"], self.rate_precision))
+                    maybe_int(round(_rates["data"], self.rate_precision))
                     for _rates in rates.values()
                 ]),
             ]
@@ -557,11 +557,22 @@ class DatacardWriter(object):
 
             elif cat_obj.data_from_processes:
                 # fake data from processes
-                h_data = [hists[proc_name]["nominal"] for proc_name in cat_obj.data_from_processes]
+                h_data = []
+                for proc_name in cat_obj.data_from_processes:
+                    if proc_name not in hists:
+                        logger.warning(
+                            f"process '{proc_name}' not found in histograms for created fake data, "
+                            "skipping",
+                        )
+                        continue
+                    h_data.append(hists[proc_name]["nominal"])
+                if not h_data:
+                    proc_str = ",".join(map(str, cat_obj.data_from_processes))
+                    raise Exception(f"no requested process '{proc_str}' found to create fake data")
                 h_data = sum(h_data[1:], h_data[0].copy())
                 data_name = data_pattern.format(category=cat_name)
                 out_file[data_name] = h_data
-                _rates["data"] = int(round(h_data.sum().value))
+                _rates["data"] = float(h_data.sum().value)
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
 

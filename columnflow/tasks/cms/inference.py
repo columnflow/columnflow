@@ -170,7 +170,7 @@ class CreateDatacards(
 
     def output(self):
         cat_obj = self.branch_data
-        basename = lambda name, ext: f"{name}__cat_{cat_obj.name}__var_{cat_obj.config_variable}.{ext}"
+        basename = lambda name, ext: f"{name}__{cat_obj.name}__{cat_obj.config_variable}.{ext}"
 
         return {
             "card": self.target(basename("datacard", "txt")),
