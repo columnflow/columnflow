@@ -7,18 +7,21 @@ Tasks related to the creation of datacards for inference purposes.
 from collections import OrderedDict, defaultdict
 
 import law
+import order as od
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
+    HistHookMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from columnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox, DotDict
 from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
+    HistHookMixin,
     InferenceModelMixin,
     MLModelsMixin,
     ProducersMixin,
@@ -57,7 +60,12 @@ class CreateDatacards(
                 )
             ]
 
-        # if not, check the config
+        # if the proc object is dynamic, it is calculated and the fly (e.g. via a hist hook)
+        # and doesn't have any additional requirements
+        if proc_obj.is_dynamic:
+            return []
+
+        # otherwise, check the config
         return [
             dataset_inst.name
             for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
@@ -144,7 +152,7 @@ class CreateDatacards(
                 )
                 for dataset in self.get_mc_datasets(proc_obj)
             }
-            for proc_obj in cat_obj.processes
+            for proc_obj in cat_obj.processes if not proc_obj.is_dynamic
         }
         if cat_obj.config_data_datasets:
             reqs["data"] = {
@@ -185,9 +193,11 @@ class CreateDatacards(
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process
-        hists = OrderedDict()
+        hists: OrderedDict[str, OrderedDict[str, hist.Hist]] = OrderedDict()
+        hist_hook_hists: dict[od.Process, hist.Hist] = dict()
 
         with self.publish_step(f"extracting {variable_inst.name} in {category_inst.name} ..."):
+            # loop over processes and forward them to any possible hist hooks
             for proc_obj_name, inp in inputs.items():
                 if proc_obj_name == "data":
                     proc_obj = None
@@ -220,15 +230,11 @@ class CreateDatacards(
                             for p in sub_process_insts
                             if p.id in h.axes["process"]
                         ],
-                        "category": [
-                            hist.loc(c.id)
-                            for c in leaf_category_insts
-                            if c.id in h.axes["category"]
-                        ],
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum}]
+                    # h = h[{"process": sum, "category": sum}]
+                    h = h[{"process": sum}]
 
                     # add the histogram for this dataset
                     if h_proc is None:
@@ -239,6 +245,47 @@ class CreateDatacards(
                 # there must be a histogram
                 if h_proc is None:
                     raise Exception(f"no histograms found for process '{process_inst.name}'")
+
+                # save histograms in hist_hook format
+                hist_hook_hists[process_inst] = h_proc
+
+            # now apply hist hook
+            hist_hook_hists = self.invoke_hist_hooks(hist_hook_hists)
+
+            cat_processes = list(cat_obj.processes)
+            if cat_obj.config_data_datasets:
+                cat_processes.append(DotDict({"name": "data"}))
+
+            # after application of hist hooks, we can proceed with the datacard creation
+            for proc_obj in cat_processes:
+                # obtain process information from inference model and config again
+
+                proc_obj_name = proc_obj.name
+                if proc_obj_name == "data":
+                    proc_obj = None
+                    process_inst = self.config_inst.get_process("data")
+                else:
+                    process_inst = self.config_inst.get_process(proc_obj.config_process)
+
+                h_proc = hist_hook_hists.get(process_inst, None)
+                if h_proc is None:
+                    self.logger.warning(
+                        f"Found no histogram for process '{proc_obj_name}'. "
+                        "Please check the configuration of the process in the "
+                        f"inference model '{self.inference_model}' "
+                        f"and make sure that the process instance {process_inst.name} "
+                        "is added in dynamic steps such as hist hooks!",
+                    )
+                    continue
+                # select relevant category
+                h_proc = h_proc[{
+                    "category": [
+                        hist.loc(c.id)
+                        for c in leaf_category_insts
+                        if c.id in h_proc.axes["category"]
+                    ],
+                }]
+                h_proc = h_proc[{"category": sum}]
 
                 # create the nominal hist
                 hists[proc_obj_name] = OrderedDict()

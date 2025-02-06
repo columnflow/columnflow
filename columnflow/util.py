@@ -30,7 +30,6 @@ import luigi
 from columnflow import env_is_dev, env_is_remote
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
-
 #: Placeholder for an unset value.
 UNSET = object()
 
