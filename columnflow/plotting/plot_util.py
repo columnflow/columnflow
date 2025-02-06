@@ -6,6 +6,8 @@ Some utils for plot functions.
 
 from __future__ import annotations
 
+__all__ = []
+
 import re
 import operator
 import functools
@@ -266,9 +268,13 @@ def apply_process_settings(
             )
 
         # remove remaining placeholders
-        proc_inst.label = re.sub("__[A-Z0-9]+__", "", proc_inst.label)
+        proc_inst.label = remove_label_placeholders(proc_inst.label)
 
     return hists
+
+
+def remove_label_placeholders(label: str) -> str:
+    return re.sub("__[A-Z0-9]+__", "", label)
 
 
 def apply_variable_settings(
@@ -467,17 +473,17 @@ def prepare_style_config(
     return style_config
 
 
-def prepare_plot_config(
+def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
     hide_errors: bool | None = None,
+    **kwargs,
 ) -> OrderedDict:
     """
     Prepares a plot config with one entry to create plots containing a stack of
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
     """
-
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
@@ -511,9 +517,7 @@ def prepare_plot_config(
         h_data = sum(data_hists[1:], data_hists[0].copy())
     if mc_hists:
         h_mc = sum(mc_hists[1:], mc_hists[0].copy())
-        # reverse hists when building MC stack so that the
-        # first process is on top
-        h_mc_stack = hist.Stack(*mc_hists[::-1])
+        h_mc_stack = hist.Stack(*mc_hists)
 
     # setup plotting configs
     plot_config = OrderedDict()
@@ -526,10 +530,10 @@ def prepare_plot_config(
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": mc_norm,
-                "label": mc_labels[::-1],
-                "color": mc_colors[::-1],
-                "edgecolor": mc_edgecolors[::-1],
-                "linewidth": [(0 if c is None else 1) for c in mc_colors[::-1]],
+                "label": mc_labels,
+                "color": mc_colors,
+                "edgecolor": mc_edgecolors,
+                "linewidth": [(0 if c is None else 1) for c in mc_colors],
             },
         }
 
