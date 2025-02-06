@@ -35,7 +35,7 @@ def muon_weights(
     muon_mask: ak.Array | type(Ellipsis) = Ellipsis,
     var_map: dict(ak.Array) = dict(),
     syst_key: str = "scale_factors",
-    postfixes: list(list(str)) = [("nominal", ""), ("systup", "_up"), ("systdown", "_down"),],
+    postfixes: list(list(str)) = [("nominal", ""), ("systup", "_up"), ("systdown", "_down")],
     **kwargs,
 ) -> ak.Array:
     """
