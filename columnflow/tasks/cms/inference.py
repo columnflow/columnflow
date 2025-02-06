@@ -169,8 +169,14 @@ class CreateDatacards(
         return reqs
 
     def output(self):
+        hooks_repr = self.hist_hooks_repr
         cat_obj = self.branch_data
-        basename = lambda name, ext: f"{name}__{cat_obj.name}__{cat_obj.config_variable}.{ext}"
+
+        def basename(name: str, ext: str) -> str:
+            parts = [name, cat_obj.name, cat_obj.config_variable]
+            if hooks_repr:
+                parts.append(f"hooks_{hooks_repr}")
+            return f"{'__'.join(map(str, parts))}.{ext}"
 
         return {
             "card": self.target(basename("datacard", "txt")),
