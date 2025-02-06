@@ -327,7 +327,7 @@ class MergeHistograms(
     remove_previous = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, remove particlar input histograms after merging; default: False",
+        description="when True, remove particular input histograms after merging; default: False",
     )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -356,7 +356,7 @@ class MergeHistograms(
 
         # optional dynamic behavior: determine not yet created variables and require only those
         if self.only_missing:
-            missing = self.output().count(existing=False, keys=True)[1]
+            missing = self.output()["hists"].count(existing=False, keys=True)[1]
             variables = sorted(missing, key=variables.index)
 
         return variables
