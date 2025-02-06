@@ -9,7 +9,7 @@ import functools
 
 import law
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
