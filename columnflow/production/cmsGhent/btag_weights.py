@@ -354,7 +354,6 @@ def fixed_wp_btag_weights_requires(self: Producer, reqs: dict) -> None:
             self.task,
             datasets=self.datasets,
             variables=self.variables,
-            processes=self.dataset_group,
         )
 
 
