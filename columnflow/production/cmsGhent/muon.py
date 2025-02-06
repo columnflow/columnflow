@@ -33,6 +33,9 @@ def muon_weights(
     self: Producer,
     events: ak.Array,
     muon_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    var_map: dict(ak.Array) = dict(),
+    syst_key: str = "scale_factors",
+    postfixes: list(list(str)) = [("nominal", ""), ("systup", "_up"), ("systdown", "_down"),],
     **kwargs,
 ) -> ak.Array:
     """
@@ -75,15 +78,12 @@ def muon_weights(
     variable_map = {
         "pt": flat_np_view(events.Muon.pt, axis=1),
         "eta": flat_np_view(events.Muon.eta, axis=1),
+        "abseta": abs(flat_np_view(events.Muon.eta, axis=1)),
         "phi": flat_np_view(events.Muon.phi, axis=1),
-    }
+    } | var_map
 
     # loop over systematics
-    for syst, postfix in [
-        ("nominal", ""),
-        ("systup", "_up"),
-        ("systdown", "_down"),
-    ]:
+    for syst, postfix in postfixes:
 
         # initialize weights (take the weights if already applied once)
         # TODO might be dangerous if the electron_weight is applied multiple times
@@ -113,7 +113,7 @@ def muon_weights(
                 # add year, WorkingPoint, and ValType to inputs
                 inputs |= {
                     "year": year,
-                    "scale_factors": syst,
+                    syst_key: syst,
                 }
 
                 inputs = [
@@ -171,10 +171,3 @@ def muon_weights_setup(
 
     corrector_names = self.get_muon_config().keys()
     self.muon_sf_correctors = {corrector_name: correction_set[corrector_name] for corrector_name in corrector_names}
-
-    # check versions
-    for corrector_name, muon_sf_corrector in self.muon_sf_correctors.items():
-        if muon_sf_corrector.version not in (1, 2):
-            raise Exception(
-                f"unsupported muon sf corrector version {muon_sf_corrector.version} of {corrector_name}",
-            )

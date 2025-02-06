@@ -33,6 +33,9 @@ def electron_weights(
     self: Producer,
     events: ak.Array,
     electron_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    var_map: dict(ak.Array) = dict(),
+    syst_key: str = "ValType",
+    postfixes: list(list(str)) = [("sf", ""), ("sfup", "_up"), ("sfdown", "_down")],
     **kwargs,
 ) -> ak.Array:
     """
@@ -77,15 +80,15 @@ def electron_weights(
             events.Electron.eta +
             events.Electron.deltaEtaSC
         ), axis=1),
+        "abseta": abs(flat_np_view((
+            events.Electron.eta +
+            events.Electron.deltaEtaSC
+        ), axis=1)),
         "phi": flat_np_view(events.Electron.phi, axis=1),
-    }
+    } | var_map
 
     # loop over systematics
-    for syst, postfix in [
-        ("sf", ""),
-        ("sfup", "_up"),
-        ("sfdown", "_down"),
-    ]:
+    for syst, postfix in postfixes:
 
         # initialize weights (take the weights if already applied once)
         # TODO might be dangerous if the electron_weight is applied multiple times
@@ -116,7 +119,7 @@ def electron_weights(
                 inputs |= {
                     "year": year,
                     "WorkingPoint": wp,
-                    "ValType": syst,
+                    syst_key: syst,
                 }
 
                 inputs = [
@@ -173,10 +176,3 @@ def electron_weights_setup(
 
     corrector_names = self.get_electron_config().keys()
     self.electron_sf_correctors = {corrector_name: correction_set[corrector_name] for corrector_name in corrector_names}
-
-    # check versions
-    for corrector_name, electron_sf_corrector in self.electron_sf_correctors.items():
-        if electron_sf_corrector.version not in (2, 3):
-            raise Exception(
-                f"unsuppprted electron sf corrector version {electron_sf_corrector.version} of {corrector_name}",
-            )
