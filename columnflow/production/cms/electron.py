@@ -163,9 +163,16 @@ def electron_weights_setup(
     # create the corrector
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    extension = self.get_electron_file(bundle.files).ext()
+    if extension == "json":
+        correction_set = correctionlib.CorrectionSet.from_file(
+            self.get_electron_file(bundle.files).abspath,
+        )
+    else:
+        correction_set = correctionlib.CorrectionSet.from_string(
+            self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
+        )
+
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
 

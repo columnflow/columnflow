@@ -149,9 +149,16 @@ def muon_weights_setup(
     # create the corrector
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    extension = self.get_muon_file(bundle.files).ext()
+    if extension == "json":
+        correction_set = correctionlib.CorrectionSet.from_file(
+            self.get_muon_file(bundle.files).abspath,
+        )
+    else:
+        correction_set = correctionlib.CorrectionSet.from_string(
+            self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
+        )
+
     self.muon_config: MuonSFConfig = self.get_muon_config()
     self.muon_sf_corrector = correction_set[self.muon_config.correction]
 
