@@ -10,7 +10,9 @@ from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.columnar_util import (
+    set_ak_column, flat_np_view, layout_ak_array, load_correction_set,
+)
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -146,12 +148,9 @@ def muon_weights_setup(
 ) -> None:
     bundle = reqs["external_files"]
 
-    # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_muon_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    # load the corrector
+    correction_set = load_correction_set(self.get_muon_file(bundle.files))
+
     self.muon_config: MuonSFConfig = self.get_muon_config()
     self.muon_sf_corrector = correction_set[self.muon_config.correction]
 
