@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, load_correction_set
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
@@ -160,16 +160,8 @@ def electron_weights_setup(
 ) -> None:
     bundle = reqs["external_files"]
 
-    # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    e_file = self.get_electron_file(bundle.files)
-    if e_file.ext() == "json":
-        correction_set = correctionlib.CorrectionSet.from_file(e_file.abspath)
-    else:
-        correction_set = correctionlib.CorrectionSet.from_string(
-            e_file.load(formatter="gzip").decode("utf-8"),
-        )
+    # load the corrector
+    correction_set = load_correction_set(self.get_electron_file(bundle.files))
 
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
