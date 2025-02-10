@@ -37,12 +37,11 @@ class ElectronSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
-        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+        if isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
             return cls(*obj)
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return cls(**obj)
-        else:
-            raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
+        raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
 
 
 @producer(
@@ -111,11 +110,7 @@ def electron_weights(
     }
 
     # loop over systematics
-    for syst, postfix in [
-        ("sf", ""),
-        ("sfup", "_up"),
-        ("sfdown", "_down"),
-    ]:
+    for syst, postfix in zip(self.sf_variations, ["", "_up", "_down"]):
         # get the inputs for this type of variation
         variable_map_syst = {
             **variable_map,
@@ -165,6 +160,12 @@ def electron_weights_setup(
 
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
+
+    # the ValType key accepts different arguments for efficiencies and scale factors
+    if self.electron_config.correction.endswith("Eff"):
+        self.sf_variations = ["nom", "up", "down"]
+    else:
+        self.sf_variations = ["sf", "systup", "systdown"]
 
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
