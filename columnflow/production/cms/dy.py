@@ -118,22 +118,27 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         "ptll": events.gen_dilepton.pt,
     }
 
-    for column_name, syst in (
-        ("dy_weight", "nom"),
+    # initializing the list of weight variations
+    weights_list = [("dy_weight", "nom")]
 
-        # skip systematics for now TODO
-        # possible values : nom, down1, down2, down3, down4, down5, down6, down7, down8, down9, down10, up1, up2, up3, up4, up5, up6, up7, up8, up9, up10
-        # ("dy_weight_up", "up1"),
-        # ("dy_weight_down", "down1"),
-    ):
-        # get the inputs for this type of variation
+    # determining the number of uncertainties (dependent on the era)
+    inputs_unc = [variable_map[inp.name] for inp in self.dy_unc_corrector.inputs]
+    dy_n_unc = int(self.dy_unc_corrector.evaluate(*inputs_unc))
+
+    # appending the respective number of uncertainties to the weight list
+    for i in range(1, dy_n_unc + 1):
+        for shift in ("up", "down"):
+            tmp_tuple = (f"dy_weight_{shift}{i}", f"{shift}{i}")
+            weights_list.append(tmp_tuple)
+
+    # calculating all weights and saving them to event evcolumns
+    for column_name, syst in weights_list:
         variable_map_syst = {**variable_map, "syst": syst}
-        inputs = [variable_map_syst[inp.name] for inp in self.dy_corrector.inputs]
 
-        # evaluate and store the produced column
+        # evaluate dy weight and store the produced column
+        inputs = [variable_map_syst[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight = self.dy_corrector.evaluate(*inputs)
         events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
-
     return events
 
 
