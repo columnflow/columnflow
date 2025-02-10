@@ -111,11 +111,7 @@ def electron_weights(
     }
 
     # loop over systematics
-    for syst, postfix in [
-        ("sf", ""),
-        ("sfup", "_up"),
-        ("sfdown", "_down"),
-    ]:
+    for syst, postfix in self.sf_and_postfix:
         # get the inputs for this type of variation
         variable_map_syst = {
             **variable_map,
@@ -165,6 +161,20 @@ def electron_weights_setup(
 
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
+
+    # the ValType key accepts different arguments for efficiencies and scale factors
+    if self.electron_config.correction.endswith("Eff"):
+        self.sf_and_postfix = [
+            ("nom", ""),
+            ("up", "_up"),
+            ("down", "_down"),
+        ]
+    else:
+        self.sf_and_postfix = [
+            ("sf", ""),
+            ("systup", "_up"),
+            ("systdown", "_down"),
+        ]
 
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
