@@ -539,23 +539,8 @@ class DatacardWriter(object):
                         safe_div(integral(h_up), integral(h_nom)),
                     )
 
-            # dedicated data handling
-            if cat_obj.config_data_datasets:
-                if "data" not in hists:
-                    raise Exception(
-                        f"the inference model '{self.inference_model_inst.name}' is configured to "
-                        f"use real data in category '{cat_name}' but no histogram named 'data' "
-                        "exists",
-                    )
-
-                # simply save the data histogram
-                h_data = hists["data"]["nominal"].copy()
-                data_name = data_pattern.format(category=cat_name)
-                handle_flow(cat_obj, h_data, data_name)
-                out_file[data_name] = h_data
-                _rates["data"] = h_data.sum().value
-
-            elif cat_obj.data_from_processes:
+            # data handling, first checking if data should be faked, then if real data exists
+            if cat_obj.data_from_processes:
                 # fake data from processes
                 h_data = []
                 for proc_name in cat_obj.data_from_processes:
@@ -573,6 +558,21 @@ class DatacardWriter(object):
                 data_name = data_pattern.format(category=cat_name)
                 out_file[data_name] = h_data
                 _rates["data"] = float(h_data.sum().value)
+
+            elif cat_obj.config_data_datasets:
+                if "data" not in hists:
+                    raise Exception(
+                        f"the inference model '{self.inference_model_inst.name}' is configured to "
+                        f"use real data in category '{cat_name}' but no histogram named 'data' "
+                        "exists",
+                    )
+
+                # simply save the data histogram
+                h_data = hists["data"]["nominal"].copy()
+                data_name = data_pattern.format(category=cat_name)
+                handle_flow(cat_obj, h_data, data_name)
+                out_file[data_name] = h_data
+                _rates["data"] = h_data.sum().value
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
 
