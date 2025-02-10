@@ -372,6 +372,7 @@ def plot_all(
     ax.set(**ax_kwargs)
 
     # set manual configs
+    # rotate ticks if necessary
     if xminorticks is not None:
         ax.set_xticks(xminorticks, minor=True)
     if yminorticks is not None:
@@ -380,6 +381,14 @@ def plot_all(
         ax.set_xlabel(ax.get_xlabel(), loc=xloc)
     if yloc is not None:
         ax.set_ylabel(ax.get_ylabel(), loc=yloc)
+    if "equal_distant_ticks_label" in kwargs:
+        pos, label = kwargs["equal_distant_ticks_label"]
+        ax.set_xticks(pos)
+        ax.set_xticklabels(np.round(label, 3))
+    if "rotate_ticks" in kwargs:
+        x_rotation, y_rotation = map(float, kwargs["rotate_ticks"].split(","))
+        rax.tick_params(axis="x", labelrotation=x_rotation)
+        ax.tick_params(axis="y", labelrotation=y_rotation)
 
     # ratio plot
     if not skip_ratio:
@@ -403,6 +412,7 @@ def plot_all(
         # set manual configs
         if xloc is not None:
             rax.set_xlabel(rax.get_xlabel(), loc=xloc)
+
         if yloc is not None:
             rax.set_ylabel(rax.get_ylabel(), loc=yloc)
 
@@ -491,5 +501,4 @@ def plot_all(
 
     # finalization
     fig.tight_layout()
-
     return fig, axs

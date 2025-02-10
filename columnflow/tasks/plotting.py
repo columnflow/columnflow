@@ -192,7 +192,6 @@ class PlotVariablesBase(
                 # store
                 _hists[process_inst] = h
             hists = _hists
-
             # call the plot function
             fig, _ = self.call_plot_func(
                 self.plot_function,

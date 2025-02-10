@@ -29,6 +29,7 @@ from columnflow.plotting.plot_util import (
     blind_sensitive_bins,
     join_labels,
     check_nominal_shift,
+    equal_distant_bin_width,
 )
 
 hist = maybe_import("hist")
@@ -58,7 +59,6 @@ def plot_variable_stack(
     """
     check_nominal_shift(shift_insts)
     variable_inst = variable_insts[0]
-
     # process-based settings (styles and attributes)
     hists = apply_process_settings(hists, process_settings)
     # variable-based settings (rebinning, slicing, flow handling)
@@ -72,6 +72,9 @@ def plot_variable_stack(
     # density scaling per bin
     if density:
         hists = apply_density(hists, density)
+    # optional scaling of bin width to be equal
+    if "equal_bin_width" in kwargs:
+        hists, kwargs["equal_distant_ticks_label"] = equal_distant_bin_width(hists, variable_inst)
     # remove shift axis of histograms that are not to be stacked
     unstacked_hists = {
         proc_inst: h
@@ -95,7 +98,6 @@ def plot_variable_stack(
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
-
     return plot_all(plot_config, style_config, **kwargs)
 
 

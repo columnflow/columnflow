@@ -309,6 +309,11 @@ class PlotBase1D(PlotBase):
         description="string parameter to define the y-axis scale of the plot in the upper panel; "
         "choices: NO_STR,linear,log; no default",
     )
+    rotate_ticks = luigi.OptionalStrParameter(
+        default="0,90",
+        significant=False,
+        description="The number of degree to rotate the x and y ticks, separated by comma); ",
+    )
     shape_norm = law.OptionalBoolParameter(
         default=None,
         significant=False,
@@ -321,6 +326,12 @@ class PlotBase1D(PlotBase):
         description="when True, no error bands for statistical uncertainty histograms are drawn; "
         "default: None",
     )
+    equal_bin_width = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, bin widths are set to equal width; "
+        "default: None",
+    )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
@@ -330,6 +341,8 @@ class PlotBase1D(PlotBase):
         dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         dict_add_strict(params, "hide_stat_errors", self.hide_stat_errors)
+        dict_add_strict(params, "equal_bin_width", self.equal_bin_width)
+        dict_add_strict(params, "rotate_ticks", self.rotate_ticks)
         return params
 
 
