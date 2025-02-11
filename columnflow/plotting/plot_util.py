@@ -422,6 +422,7 @@ def prepare_style_config(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
+    xtick_rotation: float | None = None,
 ) -> dict:
     """
     small helper function that sets up a default style config based on the instances
@@ -434,6 +435,8 @@ def prepare_style_config(
         variable_inst.x("x_min", variable_inst.x_min),
         variable_inst.x("x_max", variable_inst.x_max),
     )
+    if xtick_rotation is None:
+        xtick_rotation = 0
 
     # build the label from category and optional variable selection labels
     cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
@@ -449,10 +452,12 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
+            "xtick_rotation": xtick_rotation,
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
+            "xtick_rotation": xtick_rotation,
         },
         "legend_cfg": {},
         "annotate_cfg": {"text": cat_label or ""},

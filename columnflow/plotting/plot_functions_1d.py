@@ -90,10 +90,15 @@ def plot_variable_stack(
         shift_insts=shift_insts,
         **kwargs,
     )
-
     # prepare and update the style config
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+        config_inst,
+        category_inst,
+        variable_inst,
+        density,
+        shape_norm,
+        yscale,
+        kwargs.get("rotate_xticks", None),
     )
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
@@ -150,7 +155,13 @@ def plot_variable_variants(
 
     # setup style config
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+        config_inst,
+        category_inst,
+        variable_inst,
+        density,
+        shape_norm,
+        yscale,
+        kwargs.get("tick_rotation", 0),
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
@@ -240,7 +251,13 @@ def plot_shifted_variable(
         yscale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_inst, density, shape_norm, yscale,
+        config_inst,
+        category_inst,
+        variable_inst,
+        density,
+        shape_norm,
+        yscale,
+        kwargs.get("tick_rotation", 0),
     )
     default_style_config["rax_cfg"]["ylim"] = (0.25, 1.75)
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
@@ -427,7 +444,12 @@ def plot_profile(
                     plot_cfg[key]["yerr"] = None
 
     default_style_config = prepare_style_config(
-        config_inst, category_inst, variable_insts[0], density=density, yscale=yscale,
+        config_inst,
+        category_inst,
+        variable_insts[0],
+        density=density,
+        yscale=yscale,
+        tick_rotation=kwargs.get("tick_rotation", 0),
     )
 
     default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"
