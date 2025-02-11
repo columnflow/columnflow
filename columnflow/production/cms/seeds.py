@@ -7,6 +7,7 @@ Methods related to creating event and object seeds.
 from __future__ import annotations
 
 import hashlib
+import abc
 
 import law
 
@@ -54,7 +55,7 @@ create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
         "Jet.nConstituents", "Jet.nElectrons", "Jet.nMuons",
     ])),
 )
-def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def deterministic_event_seeds(self, events: ak.Array, **kwargs) -> ak.Array:
     """
     Produces deterministic event seeds and stores them in *events* which is also returned.
 
@@ -136,7 +137,7 @@ def deterministic_event_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.
 
 
 @deterministic_event_seeds.init
-def deterministic_event_seeds_init(self: Producer) -> None:
+def deterministic_event_seeds_init(self) -> None:
     """
     Producer initialization that adds columns to the set of *used* columns based on the
     *event_columns*, *object_count_columns*, and *object_columns* lists.
@@ -148,7 +149,7 @@ def deterministic_event_seeds_init(self: Producer) -> None:
 
 @deterministic_event_seeds.setup
 def deterministic_event_seeds_setup(
-    self: Producer,
+    self,
     reqs: dict,
     inputs: dict,
     reader_targets: InsertableDict,
@@ -175,58 +176,109 @@ def deterministic_event_seeds_setup(
     self.apply_route = apply_route
 
 
-@producer(
-    uses={"Jet.pt"},
-    produces={"Jet.deterministic_seed"},
+class deterministic_object_seeds(Producer):
+
+    @property
+    @abc.abstractmethod
+    def object_field(self) -> str:
+        ...
+
+    @property
+    @abc.abstractmethod
+    def prime_offset(self) -> int:
+        ...
+
+    def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
+        """Base class to produce object-specific random seeds.
+
+        Produces deterministic seeds for each object in :py:attr:`object_field`
+        and stores them in *events* which is also returned.
+        The object-specific seeds are based on the event seeds like the ones produced by
+        :py:func:`deterministic_event_seeds` which is not called by this producer for the purpose of
+        of modularity. The strategy for producing seeds is identical.
+
+        :param events: The events array.
+        :return: The events array with the object seeds stored in *object_field.deterministic_seed*.
+
+        .. note::
+
+            The object seeds depend on the position of the particular object in the event. It is up to the
+            user to bring them into the desired order before invoking this producer.
+        """
+        # create the seeds
+        primes = self.primes[events.deterministic_seed % len(self.primes)]
+        object_seed = events.deterministic_seed + (
+            primes * ak.values_astype(
+                ak.local_index(events[self.object_field], axis=1) + self.primes[self.prime_offset],
+                np.uint64,
+            )
+        )
+        np_object_seed = np.asarray(ak.flatten(object_seed))
+        np_object_seed[:] = create_seed_vec(np_object_seed)
+
+        # store them
+        events = set_ak_column(events, f"{self.object_field}.deterministic_seed", object_seed, value_type=np.uint64)
+
+        # uniqueness test across all jets in the chunk for debugging
+        # n_objects = ak.sum(ak.num(events[self.object_field], axis=1))
+        # n_seeds = len(set(np_object_seed))
+        # match_text = "yes" if n_jets == n_seeds else "NO !!!"
+        # print(f"{self.object_field}: {n_jets}, unique seeds: {n_seeds}, match: {match_text}")
+
+        return events
+
+    def init_func(self) -> None:
+        self.uses |= {f"{self.object_field}.pt"}
+        self.produces |= {f"{self.object_field}.deterministic_seed"}
+
+    def setup_func(
+        self,
+        reqs: dict,
+        inputs: dict,
+        reader_targets: InsertableDict,
+    ) -> None:
+        """Setup before entering the event chunk loop.
+
+        Saves the :py:attr:`~columnflow.util.primes` in an numpy array for later use.
+
+        :param reqs: Resolved requirements (not used).
+        :param inputs: Dictionary for inputs (not used).
+        :param reader_targets: Dictionary for additional column to retrieve (not used).
+        """
+        # store primes in array
+        self.primes = np.array(primes, dtype=np.uint64)
+
+
+deterministic_jet_seeds = deterministic_object_seeds.derive(
+    "deterministic_jet_seeds",
+    cls_dict={
+        "object_field": "Jet",
+        "prime_offset": 50,
+    },
 )
-def deterministic_jet_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-    """
-    Produces deterministic seeds for each jet and stores them in *events* which is also returned.
-    The jet seeds are based on the event seeds like the ones produced by
-    :py:func:`deterministic_event_seeds` which is not called by this producer for the purpose of
-    of modularity. The strategy for producing seeds is identical.
 
-    .. note::
+deterministic_electron_seeds = deterministic_object_seeds.derive(
+    "deterministic_electron_seeds",
+    cls_dict={
+        "object_field": "Electron",
+        "prime_offset": 60,
+    },
+)
 
-        The jet seeds depend on the position of the particular jet in the event. It is up to the
-        user to bring them into the desired order before invoking this producer.
-    """
-    # create the seeds
-    primes = self.primes[events.deterministic_seed % len(self.primes)]
-    jet_seed = events.deterministic_seed + (
-        primes * ak.values_astype(ak.local_index(events.Jet, axis=1) + self.primes[50], np.uint64)
-    )
-    np_jet_seed = np.asarray(ak.flatten(jet_seed))
-    np_jet_seed[:] = create_seed_vec(np_jet_seed)
-
-    # store them
-    events = set_ak_column(events, "Jet.deterministic_seed", jet_seed, value_type=np.uint64)
-
-    # uniqueness test across all jets in the chunk for debugging
-    # n_jets = ak.sum(ak.num(events.Jet, axis=1))
-    # n_seeds = len(set(np_jet_seed))
-    # match_text = "yes" if n_jets == n_seeds else "NO !!!"
-    # print(f"jets: {n_jets}, unique seeds: {n_seeds}, match: {match_text}")
-
-    return events
-
-
-@deterministic_jet_seeds.setup
-def deterministic_jet_seeds_setup(
-    self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
-) -> None:
-    # store primes in array
-    self.primes = np.array(primes, dtype=np.uint64)
+deterministic_photon_seeds = deterministic_object_seeds.derive(
+    "deterministic_photon_seeds",
+    cls_dict={
+        "object_field": "Photon",
+        "prime_offset": 70,
+    },
+)
 
 
 @producer(
     uses={deterministic_event_seeds, deterministic_jet_seeds},
     produces={deterministic_event_seeds, deterministic_jet_seeds},
 )
-def deterministic_seeds(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def deterministic_seeds(self, events: ak.Array, **kwargs) -> ak.Array:
     """
     Wrapper producer that invokes :py:func:`deterministic_event_seeds` and
     :py:func:`deterministic_jet_seeds`.

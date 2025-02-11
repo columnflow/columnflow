@@ -455,7 +455,7 @@ class MergeReducedEvents(
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
-        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self)
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),))
         return reqs
 
     def requires(self):
