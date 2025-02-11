@@ -21,13 +21,13 @@ from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
-    HistHookMixin,
-    InferenceModelMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
     CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    InferenceModelMixin,
+    HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
