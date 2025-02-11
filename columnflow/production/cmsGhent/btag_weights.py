@@ -87,12 +87,12 @@ def req_btag(self: Producer | WeightProducer, reqs: dict):
 def jet_btag(
     self: Producer,
     events: ak.Array,
-    working_points: Iterable[str],
+    working_points: Iterable[str] = None,
     jet_mask: ak.Array[bool] = None,
     **kwargs,
 ) -> ak.Array:
 
-    for wp in working_points:
+    for wp in working_points or self.btag_wp_value:
         tag = events.Jet[self.btag_config.discriminator] >= self.btag_wp_value[wp]
         if jet_mask is not None:
             tag = tag & jet_mask
