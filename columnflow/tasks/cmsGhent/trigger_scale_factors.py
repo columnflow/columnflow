@@ -104,7 +104,7 @@ class TriggerDatasetsMixin(
             ]
             assert datasets, f"could not find any datasets that are of type {dt_type}"
             if len(datasets) == 1:
-                name.append(self.datasets[0])
+                name.append(datasets[0])
             else:
                 name.append(f"{len(datasets)}_{law.util.create_hash(sorted(datasets))}")
         return "__".join(name)
@@ -120,8 +120,11 @@ class TriggerDatasetsMixin(
     @classmethod
     def get_default_variables(self, params):
         if not (config_inst := params.get("config_inst")):
-            return params
-        return config_inst.x("analysis_triggers", dict()).get(params["trigger"], (None, None))[1]
+            return []
+        
+        if (trigger_sf_cfg := config_inst.x("trigger_sf", None)) is None:
+            return []
+        return trigger_sf_cfg.variables
 
 
 class TriggerScaleFactors(
@@ -347,8 +350,13 @@ class TriggerScaleFactors(
 
             # broad cast projected hist back to nominal binning
             vr_idx = nom_centr_sf.axes.name.index(vr.name)
-            bias = np.expand_dims(corr_bias[vr.name], np.delete(np.arange(nom_centr_sf.ndim), vr_idx).tolist())
-            bias = bias.value
+            bias = np.expand_dims(
+                corr_bias[vr.name].values(), 
+                np.delete(
+                    np.arange(nom_centr_sf.ndim), # add length one axis for all nominal dimension
+                    vr_idx  # except at the axis index of the current variable
+                ).tolist()
+            )
 
             scale_factors["nominal"] |= up_down_dict("corr_" + vr.name, bias * nom_centr_sf.values())
 
