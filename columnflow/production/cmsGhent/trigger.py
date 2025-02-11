@@ -53,14 +53,9 @@ class TriggerSFConfig:
         if not isinstance(self.datasets, set):
             self.datasets = set(self.datasets)
 
-        if not self.tag:
-            self.tag = self.triggers[0]
-        if not self.ref_tag:
-            self.ref_tag = self.ref_triggers[0]
-
-        if self.aux is None:
-            self.aux = {}
-
+        self.tag = self.tag or "trig"
+        self.ref_tag = self.ref_tag or "ref"
+        self.aux = self.aux or {}        
         self.x = DotDict(self.aux)
 
     def copy(self, **changes):
