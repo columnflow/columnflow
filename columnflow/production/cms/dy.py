@@ -112,7 +112,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     *get_dy_config* can be adapted in a subclass in case it is stored differently in the config.
     """
 
-    # map the variable names from the corrector to our columns
+    # map the input variable names from the corrector to our columns
     variable_map = {
         "era": self.dy_config.era,
         "ptll": events.gen_dilepton.pt,
@@ -131,14 +131,17 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             tmp_tuple = (f"dy_weight_{shift}{i}", f"{shift}{i}")
             weights_list.append(tmp_tuple)
 
-    # calculating all weights and saving them to event evcolumns
+    # preparing the input variables for the corrector
     for column_name, syst in weights_list:
         variable_map_syst = {**variable_map, "syst": syst}
 
-        # evaluate dy weight and store the produced column
+        # evaluating dy weights given a certain era, ptll array and sytematic shift
         inputs = [variable_map_syst[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight = self.dy_corrector.evaluate(*inputs)
+
+        # save the weights in a new column
         events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
+
     return events
 
 
@@ -162,22 +165,25 @@ def dy_weights_setup(
     reader_targets: InsertableDict,
 ) -> None:
     """
-    Loads the Drell-Yan calculator from the external files bundle and saves them in the
-    py:attr:`dy_corrector` attribute for simpler access in the actual callable.
+    Loads the Drell-Yan weight calculator from the external files bundle and saves them in the
+    py:attr:`dy_corrector` attribute for simpler access in the actual callable. The number of uncertainties
+    is calculated, per era, by another correcter in the external file and is saved in the
+    py:attr:`dy_unc_corrector` attribute.
     """
     bundle = reqs["external_files"]
 
-    # create the corrector
+    # import all correctors from the external file
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_dy_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
-    # check
+    # check number of fetched correctors
     if len(correction_set.keys()) != 2:
         raise Exception("Expected exactly two types of Drell-Yan correction")
 
+    # create the weight and uncertainty correctors
     self.dy_config: DrellYanConfig = self.get_dy_config()
     self.dy_corrector = correction_set[self.dy_config.correction]
     self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
