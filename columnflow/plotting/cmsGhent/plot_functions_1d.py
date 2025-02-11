@@ -260,7 +260,7 @@ def plot_1d_line(
         elif len(data) in [2, 3]:
             data, *err = np.reshape(data, (len(data), -1))
         else:
-            data = np.flatten(data)
+            data = np.array(data).flatten()
             err = [np.zeros_like(data)]
         if len(err) == 1:
             err = np.concatenate([err, err], axis=0)
