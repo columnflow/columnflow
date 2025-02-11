@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, load_correction_set
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
@@ -37,12 +37,11 @@ class ElectronSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
-        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+        if isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
             return cls(*obj)
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return cls(**obj)
-        else:
-            raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
+        raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
 
 
 @producer(
@@ -111,11 +110,7 @@ def electron_weights(
     }
 
     # loop over systematics
-    for syst, postfix in [
-        ("sf", ""),
-        ("sfup", "_up"),
-        ("sfdown", "_down"),
-    ]:
+    for syst, postfix in zip(self.sf_variations, ["", "_up", "_down"]):
         # get the inputs for this type of variation
         variable_map_syst = {
             **variable_map,
@@ -160,14 +155,17 @@ def electron_weights_setup(
 ) -> None:
     bundle = reqs["external_files"]
 
-    # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    # load the corrector
+    correction_set = load_correction_set(self.get_electron_file(bundle.files))
+
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
+
+    # the ValType key accepts different arguments for efficiencies and scale factors
+    if self.electron_config.correction.endswith("Eff"):
+        self.sf_variations = ["nom", "up", "down"]
+    else:
+        self.sf_variations = ["sf", "systup", "systdown"]
 
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:

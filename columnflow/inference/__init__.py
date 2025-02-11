@@ -205,6 +205,7 @@ class InferenceModel(Derivable):
                 is_signal: True
                 config_mc_datasets: [hh_ggf]
                 scale: 1.0
+                is_dynamic: False
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -223,6 +224,7 @@ class InferenceModel(Derivable):
                 config_process: ttbar
                 config_mc_datasets: [tt_sl, tt_dl, tt_fh]
                 scale: 1.0
+                is_dynamic: False
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -405,6 +407,8 @@ class InferenceModel(Derivable):
         :param config_process: The name of the source process in the config to use.
         :param config_mc_datasets: List of names or patterns of MC datasets in the config to use.
         :param scale: A float value to scale the process, defaulting to 1.0.
+        :param is_dynamic: A boolean flag deciding whether this process is dynamic, i.e., whether it
+            is created on-the-fly.
         :returns: A dictionary representing the process.
         """
         return DotDict([
@@ -413,8 +417,8 @@ class InferenceModel(Derivable):
             ("config_process", str(config_process) if config_process else None),
             ("config_mc_datasets", list(map(str, config_mc_datasets or []))),
             ("scale", float(scale)),
-            ("parameters", []),
             ("is_dynamic", bool(is_dynamic)),
+            ("parameters", []),
         ])
 
     @classmethod
