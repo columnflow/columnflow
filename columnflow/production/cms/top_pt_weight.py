@@ -4,6 +4,10 @@
 Column producers related to top quark pt reweighting.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 import law
 
 from columnflow.production import Producer, producer
@@ -15,6 +19,19 @@ np = maybe_import("numpy")
 
 
 logger = law.logger.get_logger(__name__)
+
+
+@dataclass
+class TopPtWeightConfig:
+    params: dict[str, float]
+    pt_max: float = 500.0
+
+    @classmethod
+    def new(cls, obj: TopPtWeightConfig | dict[str, float]) -> TopPtWeightConfig:
+        # backward compatibility only
+        if isinstance(obj, cls):
+            return obj
+        return cls(params=obj)
 
 
 @producer(
@@ -69,10 +86,24 @@ def gen_parton_top_skip(self: Producer, **kwargs) -> bool:
     return self.dataset_inst.is_data or not self.dataset_inst.has_tag(self.require_dataset_tag)
 
 
+def get_top_pt_weight_config(self: Producer) -> TopPtWeightConfig:
+    if self.config_inst.has_aux("top_pt_reweighting_params"):
+        logger.info_once(
+            "deprecated_top_pt_weight_config",
+            "the config aux field 'top_pt_reweighting_params' is deprecated and will be removed in "
+            "a future release, please use 'top_pt_weight' instead",
+        )
+        params = self.config_inst.x.top_pt_reweighting_params
+    else:
+        params = self.config_inst.x.top_pt_weight
+
+    return TopPtWeightConfig.new(params)
+
+
 @producer(
     uses={"GenPartonTop.pt"},
     produces={"top_pt_weight{,_up,_down}"},
-    get_top_pt_config=(lambda self: self.config_inst.x.top_pt_reweighting_params),
+    get_top_pt_weight_config=get_top_pt_weight_config,
     # skip the producer unless the datasets has this specified tag (no skip check performed when none)
     require_dataset_tag="is_ttbar",
 )
@@ -103,9 +134,6 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     :param events: awkward array containing events to process
     """
-    # get SF function parameters from config
-    params = self.get_top_pt_config()
-
     # check the number of gen tops
     if ak.any((n_tops := ak.num(events.GenPartonTop, axis=1)) != 2):
         raise Exception(
@@ -113,12 +141,14 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             f"counts of {','.join(map(str, sorted(set(n_tops))))}",
         )
 
-    # clamp top pT < 500 GeV
-    pt_clamped = ak.where(events.GenPartonTop.pt > 500.0, 500.0, events.GenPartonTop.pt)
+    # clamp top pt
+    top_pt = events.GenPartonTop.pt
+    if self.cfg.pt_max >= 0.0:
+        top_pt = ak.where(top_pt > self.cfg.pt_max, self.cfg.pt_max, top_pt)
 
     for variation in ("", "_up", "_down"):
         # evaluate SF function
-        sf = np.exp(params[f"a{variation}"] + params[f"b{variation}"] * pt_clamped)
+        sf = np.exp(self.cfg.params[f"a{variation}"] + self.cfg.params[f"b{variation}"] * top_pt)
 
         # compute weight from SF product for top and anti-top
         weight = np.sqrt(np.prod(sf, axis=1))
@@ -127,6 +157,12 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         events = set_ak_column(events, f"top_pt_weight{variation}", ak.fill_none(weight, 1.0))
 
     return events
+
+
+@top_pt_weight.init
+def top_pt_weight_init(self: Producer) -> None:
+    # store the top pt weight config
+    self.cfg = self.get_top_pt_weight_config()
 
 
 @top_pt_weight.skip
