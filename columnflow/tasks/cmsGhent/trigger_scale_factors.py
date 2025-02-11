@@ -506,7 +506,6 @@ class TriggerScaleFactorsPlotBase(
         super().__init__(*args, **kwargs)
         self.var_bin_cats = {}  # for caching
         self.process_inst = self.config_inst.get_process(self.process)
-            
 
     def loop_variables(
         self,
@@ -836,7 +835,7 @@ class TriggerScaleFactorsHist(
 
         fig, axes = self.call_plot_func(
             self.plot_function,
-            hists={p: histograms[p][idx].project(vr.name) for p in histograms},
+            hists={p.processes.get_first(): histograms[p][idx].project(vr.name) for p in histograms},
             category_inst=p_cat,
             config_inst=self.config_inst,
             variable_insts=[vr],
