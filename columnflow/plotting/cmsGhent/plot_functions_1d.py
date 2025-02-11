@@ -19,6 +19,8 @@ plt = maybe_import("matplotlib.pyplot")
 np = maybe_import("numpy")
 mtrans = maybe_import("matplotlib.transforms")
 mplhep = maybe_import("mplhep")
+math = maybe_import("math")
+hist = maybe_import("hist")
 
 
 def plot_multi_variables(
@@ -236,3 +238,73 @@ def plot_roc(
     fig, axs = plot_all(plot_config, style_config, **kwargs)
     axs[0].axline((0, 0), slope=1, ls="--", color="k")
     return fig, axs
+
+
+def plot_1d_line(
+    hists: OrderedDict,
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
+    style_config: dict | None = None,
+    yscale: str | None = "",
+    **kwargs,
+) -> plt.Figure:
+    """
+    TODO.
+    """
+    n_bins = math.prod([v.n_bins for v in variable_insts])
+
+    def flatten_data(data: hist.Hist | np.ndarray):
+        if isinstance(data, hist.Hist):
+            data, err = data.values(), [np.sqrt(data.variances())]
+        elif len(data) in [2, 3]:
+            data, *err = np.reshape(data, (len(data), -1))
+        else:
+            data = np.flatten(data)
+            err = [np.zeros_like(data)]
+        if len(err) == 1:
+            err = np.concatenate([err, err], axis=0)
+        return np.array([data, *np.abs(err)])
+
+    if len(variable_insts) > 1:
+        name = " x ".join([v.x_title for v in variable_insts])
+        variable_inst = od.Variable(
+            name=name,
+            binning=(int(n_bins), -0.5, n_bins - 0.5),
+            discrete_x=True,
+            x_title=name,
+        )
+    else:
+        variable_inst = variable_insts[0]
+
+    x_data = np.array(variable_inst.bin_edges)
+    x_data = (x_data[1:] + x_data[:-1]) / 2
+
+    plot_config = {}
+    ref, ref_name = None, None
+    for h_name, h in hists.items():
+        h_name = h_name.label if isinstance(h_name, od.Process) else h_name
+        plot_config[h_name] = {
+            "method": lambda ax, h, norm, **kwargs: ax.errorbar(x_data, h[0] / norm, h[1:] / norm, **kwargs),
+            "hist": flatten_data(h),
+            "kwargs": {
+                "norm": 1,
+                "label": h_name,
+            },
+        }
+        if ref is None:
+            ref_name = h_name
+            ref = plot_config[h_name]["hist"][0]
+        if not kwargs.get("skip_ratio", True):
+            plot_config[h_name]["ratio_kwargs"] = {
+                "norm": ref,
+            }
+
+    default_style_config = prepare_style_config(config_inst, category_inst, variable_inst, yscale=yscale)
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config["rax_cfg"]["ylabel"] = f"ratio to {ref_name}"
+
+    return plot_all(plot_config, style_config, **kwargs)
+
+
+

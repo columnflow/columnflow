@@ -461,6 +461,30 @@ class TriggerScaleFactorsPlotBase(
         RemoteWorkflow.reqs,
         TriggerScaleFactors=TriggerScaleFactors,
     )
+    
+    process = luigi.Parameter(
+        default=None, 
+        description="process to represent MC",
+        significant=False,
+    )
+
+    @classmethod
+    def resolve_param_values(
+        cls,
+        params: law.util.InsertableDict[str, Any],
+    ) -> law.util.InsertableDict[str, Any]:
+        params = super().resolve_param_values(params)
+        
+        if (config_inst := params.get("config_inst")) and (datasets := params.get("datasets")):
+            if params.get("process") is None:
+                for dataset in datasets:
+                    dataset_inst = config_inst.get_dataset(dataset)
+                    if dataset_inst.is_mc:
+                        params["process"] = dataset_inst.processes.get_first().name
+                        continue
+        return params
+                
+            
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -481,6 +505,8 @@ class TriggerScaleFactorsPlotBase(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.var_bin_cats = {}  # for caching
+        self.process_inst = self.config_inst.get_process(self.process)
+            
 
     def loop_variables(
         self,
@@ -541,8 +567,6 @@ class TriggerScaleFactors2D(
         import hist
         import numpy as np
 
-        plot_process: od.Process = self.config_inst.get_process(self.processes[-1])
-
         def make_plot2d(hist2d: hist.Hist, sys: str, cat: od.Category):
             label_values = np.round(hist2d.values(), decimals=2)
             style_config = {
@@ -552,7 +576,7 @@ class TriggerScaleFactors2D(
             p_cat = self.baseline_cat(add=cat, exclude=cat.name.split("__"))
             fig, _ = self.call_plot_func(
                 self.plot_function,
-                hists={plot_process: hist2d},
+                hists={self.process_inst: hist2d},
                 config_inst=self.config_inst,
                 category_inst=p_cat,
                 variable_insts=[var_inst.copy_shallow() for var_inst in self.nonaux_variable_insts[:2]],
@@ -579,7 +603,7 @@ class TriggerScaleFactors1D(
     PlotBase1D,
 ):
     make_plots = law.CSVParameter(
-        default=tuple(),
+        default=("corr", "sf_1d", "eff_1d"),
         significant=False,
         description=("which plots to make. Choose from:\n"
                     "\tcorr: correlation plots\n",
@@ -588,7 +612,7 @@ class TriggerScaleFactors1D(
     )
 
     plot_function = PlotBase.plot_function.copy(
-        default="singletop.plotting.plot_1d_line",
+        default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_1d_line",
         add_default_to_description=True,
     )
 
@@ -653,7 +677,6 @@ class TriggerScaleFactors1D(
     def run(self):
         import numpy as np
 
-        plot_process: od.Process = self.config_inst.get_process(self.processes[-1])
         od.Category(name=self.baseline_label)
 
         def plot_1d(key: str, hists, vrs=None, **kwargs):
@@ -687,12 +710,12 @@ class TriggerScaleFactors1D(
 
             # scale factor flat plot with full errors
             if self.branch_data == "sf_1d_full":
-                plot_1d("sf_1d_full", {plot_process: self.get_hists(scale_factors["nominal"])})
+                plot_1d("sf_1d_full", {self.process_inst: self.get_hists(scale_factors["nominal"])})
                 return
                 # scale factor flat plot with stat errors
             sf_flat = self.get_hists(scale_factors["nominal"], unc="stat")
             if self.branch_data == "sf_1d_stat":
-                plot_1d("sf_1d_stat", {plot_process: sf_flat})
+                plot_1d("sf_1d_stat", {self.process_inst: sf_flat})
                 return
 
             # convert branch to aux variable and bin group
@@ -715,14 +738,14 @@ class TriggerScaleFactors1D(
             if self.branch_data == "corr_all":
                 plot_1d(
                     "corr_all",
-                    {plot_process: get_arr(corr_bias["all"])},
+                    {self.process_inst: get_arr(corr_bias["all"])},
                     style_config=style_config,
                 )
                 return
             vr = re.findall("corr_(.*)", self.branch_data)[0]
             plot_1d(
                 f"corr_{vr}",
-                {plot_process: get_arr(corr_bias[vr])},
+                {self.process_inst: get_arr(corr_bias[vr])},
                 vrs=[self.config_inst.get_variable(vr)],
                 style_config=style_config,
             )
