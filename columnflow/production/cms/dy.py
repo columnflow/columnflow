@@ -36,7 +36,7 @@ class DrellYanConfig:
 )
 def get_gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Reconstruct the di-lepton pair from generator level info.
+    Reconstruct the di-lepton pair from generator level info. This considers only visible final-state particles. In addition it provides the four-momenta of all leptons (including neutrinos) from the hard process.
     """
 
     # get the absolute pdg id (to account for anti-particles) and status of the particles
@@ -50,18 +50,21 @@ def get_gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
         # tau
         ((pdg_id == 15) & (status == 2))
     )
-    # also include neutrinos
+    
     lepton_all_mask = (
-        # e, mu
-        (((pdg_id == 11) | (pdg_id == 13)) & (status == 1)) |
-        # tau
-        ((pdg_id == 15) & (status == 2)) |
-        # neutrinos
-        ((pdg_id == 12) | (pdg_id == 14) | (pdg_id == 16)) & (status == 1)
+        # e, mu, taus, neutrinos
+        ((pdg_id >= 11) & (pdg_id <= 16) & (status == 1))
     )
+
     # only consider leptons from hard process (i.e. from the matrix element)
     mask_vis = ak.mask(events.GenPart, lepton_vis_mask).hasFlags("fromHardProcess")
-    mask_all = ak.mask(events.GenPart, lepton_all_mask).hasFlags("fromHardProcess")
+    # only consider leptons from hard process and all tau decay products
+    # status flag bit 8: fromHardProcess
+    # status flag bit 10: isDirectHardProcessTauDecayProduct
+    mask_all = (
+        ak.mask(events.GenPart, lepton_all_mask).hasFlags("fromHardProcess") |
+        ak.mask(events.GenPart, ak.ones_like(pdg_id, dtype=bool)).hasFlags("isDirectHardProcessTauDecayProduct")
+    )
 
     # fill the mask with False if it is None and extract the gen leptons
     mask_vis = ak.fill_none(mask_vis, False)
@@ -83,13 +86,13 @@ def get_gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={get_gen_dilepton.PRODUCES},
-    produces={"dy_weight"},
+    produces={"dy_weight", "dy_weight_up", "dy_weight_down"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_dy_file=(lambda self, external_files: external_files.dy_sf),
+    get_dy_weight_file=(lambda self, external_files: external_files.dy_sf),
     # function to load the config
-    get_dy_config=(lambda self: self.config_inst.x.dy_config),
+    get_dy_weight_config=(lambda self: self.config_inst.x.dy_weight_config),
 )
 def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -102,24 +105,24 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             "dy_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v1.json.gz",  # noqa
         })
 
-    *get_dy_file* can be adapted in a subclass in case it is stored differently in the external files.
+    *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
 
     The campaign era and name of the correction set should be given as an auxiliary entry in the config:
 
     .. code-block:: python
 
-        cfg.x.dy_config = DrellYanConfig(
+        cfg.x.dy_weight_config = DrellYanConfig(
             era="2022preEE_NLO",
             correction="DY_pTll_reweighting",
             unc_correction="DY_pTll_reweighting_N_uncertainty",
         )
 
-    *get_dy_config* can be adapted in a subclass in case it is stored differently in the config.
+    *get_dy_weight_config* can be adapted in a subclass in case it is stored differently in the config.
     """
 
     # map the input variable names from the corrector to our columns
     variable_map = {
-        "era": self.dy_config.era,
+        "era": self.dy_weight_config.era,
         "ptll": events.gen_dilepton_vis.pt,
     }
 
@@ -181,7 +184,7 @@ def dy_weights_setup(
     import correctionlib
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
     correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_dy_file(bundle.files).load(formatter="gzip").decode("utf-8"),
+        self.get_dy_weight_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
     # check number of fetched correctors
@@ -189,9 +192,9 @@ def dy_weights_setup(
         raise Exception("Expected exactly two types of Drell-Yan correction")
 
     # create the weight and uncertainty correctors
-    self.dy_config: DrellYanConfig = self.get_dy_config()
-    self.dy_corrector = correction_set[self.dy_config.correction]
-    self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
+    self.dy_weight_config: DrellYanConfig = self.get_dy_weight_config()
+    self.dy_corrector = correction_set[self.dy_weight_config.correction]
+    self.dy_unc_corrector = correction_set[self.dy_weight_config.unc_correction]
 
 #
 # Helper functions for kinematics.
@@ -240,31 +243,28 @@ def GetMETfromU(upara, uperp, full_pt, full_phi, vis_pt, vis_phi):
     return met_pt, met_phi
 
 def GetH(METpt, METphi, FullVPt, FullVPhi, VisVPt, VisVPhi):
-  METx,METy = GetXYfromPTPHI(METpt,METphi)
-  VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
-  Hx = -METx - VisVx
-  Hy = -METy - VisVy
-  Hpt,Hphi = GetPTPHIfromXY(Hx,Hy)
-  Hpara,Hperp = GetXYfromPTPHI(Hpt, Hphi-FullVPhi)
-  return Hpara,Hperp
+    METx,METy = GetXYfromPTPHI(METpt,METphi)
+    VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
+    Hx = -METx - VisVx
+    Hy = -METy - VisVy
+    Hpt,Hphi = GetPTPHIfromXY(Hx,Hy)
+    Hpara,Hperp = GetXYfromPTPHI(Hpt, Hphi-FullVPhi)
+    return Hpara,Hperp
 
 def GetMETfromH(Hpara, Hperp, FullVPt, FullVPhi, VisVPt, VisVPhi):
-  VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
-  Hpt,HphiMinusFullVPhi = GetPTPHIfromXY(Hpara,Hperp)
-  Hphi = HphiMinusFullVPhi + FullVPhi
-  Hx,Hy = GetXYfromPTPHI(Hpt,Hphi)
-  METx = -Hx - VisVx
-  METy = -Hy - VisVy
-  METpt,METphi = GetPTPHIfromXY(METx,METy)
-  return METpt,METphi
+    VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
+    Hpt,HphiMinusFullVPhi = GetPTPHIfromXY(Hpara,Hperp)
+    Hphi = HphiMinusFullVPhi + FullVPhi
+    Hx,Hy = GetXYfromPTPHI(Hpt,Hphi)
+    METx = -Hx - VisVx
+    METy = -Hy - VisVy
+    METpt,METphi = GetPTPHIfromXY(METx,METy)
+    return METpt,METphi
 
 
-#
-# The recoil corrections producer.
-#
 @producer(
     uses={
-        # PuppiMET information
+        # PuppiMET information # TODO: should this be configurable for Run 2 and Run 3 default MET?
         "PuppiMET.{pt,phi}",
         # Number of jets (as a per-event scalar)
         "Jet.{pt,phi,eta,mass}",
