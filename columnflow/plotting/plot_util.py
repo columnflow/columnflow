@@ -824,3 +824,34 @@ def blind_sensitive_bins(
     hists = law.util.merge_dicts(signals, backgrounds, data)
 
     return hists
+
+
+def equal_distant_bin_width(histograms: OrderedDict, variable_inst: od.Variable) -> OrderedDict:
+    """Takes an OrderedDict of histograms, and rebins to bins with equal width.
+    The yield is not changed but copied to the rebinned histogram.
+
+    :param histograms: OrderedDict of histograms
+    :param variable_inst: od.Variable instance
+
+    :return: OrderedDict of histograms with equal bin widths, but unchanged yield
+    """
+
+    hists = {}
+    # take first histogram to extract old binning
+    edges = list(histograms.values())[0].axes[variable_inst.name].edges
+    # new bins take lower and upper edge of old bins, and are equally spaced
+    bins = np.linspace(edges[0], edges[-1], len(edges))
+    x_ticks = [bins, edges]
+
+    for process, h in histograms.items():
+        # create new histogram with equal bin widths
+        label = h.label
+        axes = (
+            [h.axes[axis] for axis in h.axes.name if axis not in variable_inst.name] +
+            [hist.axis.Variable(bins, name=variable_inst.name, label=label)]
+        )
+        new_hist = hist.Hist(*axes, storage=hist.storage.Weight())
+        # copy yield to new histogram and save it
+        np.copyto(dst=new_hist.view(), src=h.view(), casting="same_kind")
+        hists[process] = new_hist
+    return hists, x_ticks
