@@ -306,7 +306,7 @@ def plot_all(
         if yloc is not None:
             rax.set_ylabel(rax.get_ylabel(), loc=yloc)
         if x_rotation:
--            rax.tick_params(axis="x", labelrotation=x_rotation)
+            rax.tick_params(axis="x", labelrotation=x_rotation)
         # remove x-label from main axis
         if "xlabel" in rax_kwargs:
             ax.set_xlabel("")

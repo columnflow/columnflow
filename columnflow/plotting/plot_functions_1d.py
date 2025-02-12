@@ -66,7 +66,7 @@ def plot_variable_per_process(
     hists = apply_density_to_hists(hists, density)
     # replace hist with version that has the same binning space between bins
     if "equal_bin_width" in kwargs:
-        hists, kwargs["equal_distant_ticks_label"] = equal_distant_bin_width(hists, variable_inst)
+        hists, kwargs["equal_distant_ticks_label"] = equal_distance_bin_width(hists, variable_inst)
 
     plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
 
