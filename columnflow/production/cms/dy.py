@@ -273,12 +273,12 @@ def GetMETfromH(Hpara, Hperp, FullVPt, FullVPhi, VisVPt, VisVPhi):
         get_gen_dilepton.PRODUCES,
     },
     produces={
-        "PuppiMET.pt_recoil", "PuppiMET.phi_recoil",
+        "pt_recoil", "phi_recoil",
         # TODO: figure out how to better provide outputs in style of columnflow
-        "PuppiMET.pt_recoil_RespUp", "PuppiMET.phi_recoil_RespUp",
-        "PuppiMET.pt_recoil_RespDown", "PuppiMET.phi_recoil_RespDown",
-        "PuppiMET.pt_recoil_ResolUp", "PuppiMET.phi_recoil_ResolUp",
-        "PuppiMET.pt_recoil_ResolDown", "PuppiMET.phi_recoil_ResolDown",
+        "pt_recoil_RespUp", "phi_recoil_RespUp",
+        "pt_recoil_RespDown", "phi_recoil_RespDown",
+        "pt_recoil_ResolUp", "phi_recoil_ResolUp",
+        "pt_recoil_ResolDown", "phi_recoil_ResolDown",
     },
     mc_only=True,
     # function to determine the recoil correction file from external files
@@ -331,8 +331,8 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     # 3) Recompute the corrected MET from the corrected U components.
     met_pt_corr, met_phi_corr = GetMETfromU(upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi)
-    events = set_ak_column(events, "PuppiMET.pt_recoil", met_pt_corr, value_type=np.float32)
-    events = set_ak_column(events, "PuppiMET.phi_recoil", met_phi_corr, value_type=np.float32)
+    events = set_ak_column(events, "pt_recoil", met_pt_corr, value_type=np.float32)
+    events = set_ak_column(events, "phi_recoil", met_phi_corr, value_type=np.float32)
 
     #-------------------------------------------------------------------------
     # Recoil uncertainty variations:
@@ -348,8 +348,8 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         hpara_var = self.recoil_unc_corrector.evaluate(self.dy_recoil_config.era, njet, events.gen_dilepton_all.pt, "Hpara", hpara, syst)
         hperp_var = self.recoil_unc_corrector.evaluate(self.dy_recoil_config.era, njet, events.gen_dilepton_all.pt, "Hperp", hperp, syst)
         met_pt_var, met_phi_var = GetMETfromH(hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi)
-        events = set_ak_column(events, f"PuppiMET.pt_recoil_{syst}", met_pt_var, value_type=np.float32)
-        events = set_ak_column(events, f"PuppiMET.phi_recoil_{syst}", met_phi_var, value_type=np.float32)
+        events = set_ak_column(events, f"pt_recoil_{syst}", met_pt_var, value_type=np.float32)
+        events = set_ak_column(events, f"phi_recoil_{syst}", met_phi_var, value_type=np.float32)
 
     return events
 
