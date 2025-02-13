@@ -127,7 +127,7 @@ class LeptonWeightConfig:
 def lepton_weights(
     self: Producer,
     events: ak.Array,
-    mask: ak.Array = Ellipsis,
+    mask: ak.Array = None,
     **kwargs,
 ) -> ak.Array:
     """
