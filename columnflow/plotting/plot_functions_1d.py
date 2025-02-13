@@ -77,7 +77,7 @@ def plot_variable_per_process(
         density,
         shape_norm,
         yscale,
-        kwargs.get("rotate_xticks", None),
+        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
@@ -132,7 +132,6 @@ def plot_variable_variants(
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None
-
     # setup style config
     default_style_config = prepare_style_config(
         config_inst,
@@ -141,7 +140,7 @@ def plot_variable_variants(
         density,
         shape_norm,
         yscale,
-        kwargs.get("rotate_xticks", None),
+        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
@@ -233,7 +232,7 @@ def plot_shifted_variable(
         density,
         shape_norm,
         yscale,
-        kwargs.get("rotate_xticks", None),
+        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
     default_style_config["rax_cfg"]["ylim"] = (0.25, 1.75)
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
@@ -421,7 +420,7 @@ def plot_profile(
         variable_insts[0],
         density=density,
         yscale=yscale,
-        tick_rotation=kwargs.get("rotate_xticks", None),
+        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
 
     default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"

@@ -421,6 +421,7 @@ def prepare_style_config(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
+    **kwargs: Any,
 ) -> dict:
     """
     small helper function that sets up a default style config based on the instances
@@ -448,6 +449,7 @@ def prepare_style_config(
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
+            "xtick_rotation": kwargs.get("xtick_rotation", None),
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
