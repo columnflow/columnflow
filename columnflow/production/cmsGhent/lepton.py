@@ -72,8 +72,8 @@ class LeptonWeightConfig:
     def copy(self, /, **changes):
         return dataclasses.replace(self, **changes)
 
-    @classmethod
-    def input(cls, func: Callable[[ak.Array], dict[ak.Array]] = None, uses: set = None) -> None:
+
+    def input(self, func: Callable[[ak.Array], dict[ak.Array]] = None, uses: set = None) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`input_func`
         which is used to calculate the input to the correctionlib corrector object.
@@ -87,14 +87,14 @@ class LeptonWeightConfig:
         The decorator does not return the wrapped function.
         """
         def decorator(func: Callable[[ak.Array], dict[ak.Array]]):
-            cls.input_func = func
-            cls.uses = cls.uses | uses
+            self.input_func = func
+            if uses:
+                self.uses = self.uses | uses
 
         return decorator(func) if func else decorator
 
 
-    @classmethod
-    def mask(cls, func: Callable[[ak.Array], ak.Array] = None, uses: set = None) -> None:
+    def mask(self, func: Callable[[ak.Array], ak.Array] = None, uses: set = None) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`mask_func`
         which is used to calculate the mask that should be applied to the lepton
@@ -108,8 +108,8 @@ class LeptonWeightConfig:
         """
 
         def decorator(func: Callable[[ak.Array], dict[ak.Array]]):
-            cls.mask_func = func
-            cls.uses = cls.uses | uses
+            self.mask_func = func
+            self.uses = self.uses | uses
 
         return decorator(func) if func else decorator
 
@@ -190,7 +190,7 @@ def lepton_weights(
 def lepton_weights_init(self: Producer) -> None:
     if callable(self.lepton_config):
         self.lepton_config = self.lepton_config()
-    for key, value in dataclasses.asdict(self.wp_config).items():
+    for key, value in dataclasses.asdict(self.lepton_config).items():
         if not hasattr(self, key):
             setattr(self, key, value)
     self.uses |= self.lepton_config.uses
@@ -233,7 +233,7 @@ def lepton_weights_setup(
             f"unsupported muon sf corrector file type: {file_path}",
         )
 
-    self.lepton_sf_corrector = correction_set[self.correction_set]
+    self.corrector = correction_set[self.correction_set]
 
 
 # example config for electron
@@ -288,8 +288,16 @@ ElectronMVATOPWeightConfig = LeptonWeightConfig(
     get_sf_file=lambda bundle: bundle.lepton_mva.sf,
     input_pars=dict(working_point="Tight"),
     syst_key="systematic",
-    systematics=dict(central="") | {"{d}_{s}": "{s}_{d}" for s in ["stat", "syst"] for d in ["up", "down"]}
+    systematics=dict(central="") | {f"{d}_{s}": f"{s}_{d}" for s in ["stat", "syst"] for d in ["up", "down"]}
 )
+
+
+@ElectronMVATOPWeightConfig.input(uses={"Electron.{pt,eta}"})
+def electron_mva_input(events):
+    return {
+        "pt": events.Electron.pt,
+        "abseta": events.Electron.eta,
+    }
 
 electron_mva_weights = lepton_weights.derive(
     "electron_mva_weights",
@@ -302,7 +310,17 @@ MuonMVATOPWeightConfig = ElectronMVATOPWeightConfig.copy(
     correction_set="sf_Muon",
 )
 
+
+@MuonMVATOPWeightConfig.input(uses={"Muon.{pt,eta}"})
+def muon_mva_input(events):
+    return {
+        "pt": events.Muon.pt,
+        "abseta": events.Muon.eta,
+    }
+
 muon_mva_weights = lepton_weights.derive(
     "muon_mva_weights",
     cls_dict=dict(lepton_config=MuonMVATOPWeightConfig)
 )
+
+

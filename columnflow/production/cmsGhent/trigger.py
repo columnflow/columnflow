@@ -55,7 +55,7 @@ class TriggerSFConfig:
 
         self.tag = self.tag or "trig"
         self.ref_tag = self.ref_tag or "ref"
-        self.aux = self.aux or {}        
+        self.aux = self.aux or {}
         self.x = DotDict(self.aux)
 
     def copy(self, **changes):
@@ -135,6 +135,8 @@ def trigger_scale_factors(
     selected_events = events[event_mask]
     if len(selected_events) > 0:
         for variable_inst in self.variable_insts:
+            if variable_inst.x("auxiliary", False) is not False:
+                continue
             # prepare the expression
             expr = variable_inst.expression
             if isinstance(expr, str):
@@ -203,7 +205,7 @@ def trigger_scale_factors_setup(
     else:
         correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
         correction_set = correctionlib.CorrectionSet.from_file(
-            reqs["btag_efficiency"].output()["json"].path,
+            reqs["trigger_scalefactor"].output()["json"].path,
         )
 
     self.sf_corrector = correction_set["scale_factors"]
