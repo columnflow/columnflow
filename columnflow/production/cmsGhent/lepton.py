@@ -190,6 +190,7 @@ def lepton_weights_init(self: Producer) -> None:
         if not hasattr(self, key):
             setattr(self, key, value)
     self.uses |= self.lepton_config.uses
+    self.produces |= {f"{self.weight_name}{postfix}" for postfix in self.systematics.values()}
 
 
 @lepton_weights.requires
@@ -303,7 +304,7 @@ electron_mva_weights = lepton_weights.derive(
 
 
 MuonMVATOPWeightConfig = ElectronMVATOPWeightConfig.copy(
-    weight_name="weight_mun_mva",
+    weight_name="weight_muon_mva",
     correction_set="sf_Muon",
 )
 
