@@ -24,6 +24,7 @@ logger = law.logger.get_logger(__name__)
 @dataclass
 class DrellYanConfig:
     era: str
+    era: str
     correction: str
     unc_correction: str
 
