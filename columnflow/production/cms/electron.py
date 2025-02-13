@@ -165,7 +165,7 @@ def electron_weights_setup(
     if self.electron_config.correction.endswith("Eff"):
         self.sf_variations = ["nom", "up", "down"]
     else:
-        self.sf_variations = ["sf", "systup", "systdown"]
+        self.sf_variations = ["sf", "sfup", "sfdown"]
 
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
