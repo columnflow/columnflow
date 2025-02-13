@@ -59,15 +59,21 @@ class LeptonWeightConfig:
 
         self.input_pars = {"year": str(self.year)} | (self.input_pars or {})
 
-        systs = dict()
-        for s in self.systematics:
-            if isinstance(s, str):
-                systs[s] = f"_{s}"
-            elif isinstance(s, Sequence) and len(s) == 2:
-                systs[s[0]] = f"_{s[1]}" if s[1] else ""
-            else:
-                AssertionError(f"provided illegal systematics for {self}")
-        self.systematics = systs
+        if not isinstance(self.systematics, dict):
+            systs = dict()
+            for s in self.systematics:
+                if isinstance(s, str):
+                    systs[s] = f"_{s}"
+                elif isinstance(s, Sequence) and len(s) == 2:
+                    systs[s[0]] = f"_{s[1]}" if s[1] else ""
+                else:
+                    AssertionError(f"provided illegal systematics for {self}")
+            self.systematics = systs
+        else:
+            self.systematics = {
+                s: ("_" if ss else "") + ss.lstrip("_")
+                for s, ss in self.systematics.items()
+            }
 
     def copy(self, /, **changes):
         return dataclasses.replace(self, **changes)
