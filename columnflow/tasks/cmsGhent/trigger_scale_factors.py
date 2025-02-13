@@ -8,6 +8,7 @@ import order as od
 from itertools import product
 import luigi
 
+from columnflow.types import Any
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorMixin, DatasetsMixin,
@@ -121,7 +122,7 @@ class TriggerDatasetsMixin(
     def get_default_variables(self, params):
         if not (config_inst := params.get("config_inst")):
             return []
-        
+
         if (trigger_sf_cfg := config_inst.x("trigger_sf", None)) is None:
             return []
         return trigger_sf_cfg.variables
@@ -351,11 +352,11 @@ class TriggerScaleFactors(
             # broad cast projected hist back to nominal binning
             vr_idx = nom_centr_sf.axes.name.index(vr.name)
             bias = np.expand_dims(
-                corr_bias[vr.name].values(), 
+                corr_bias[vr.name].values(),
                 np.delete(
-                    np.arange(nom_centr_sf.ndim), # add length one axis for all nominal dimension
-                    vr_idx  # except at the axis index of the current variable
-                ).tolist()
+                    np.arange(nom_centr_sf.ndim),  # add length one axis for all nominal dimension
+                    vr_idx,  # except at the axis index of the current variable
+                ).tolist(),
             )
 
             scale_factors["nominal"] |= up_down_dict("corr_" + vr.name, bias * nom_centr_sf.values())
@@ -461,9 +462,9 @@ class TriggerScaleFactorsPlotBase(
         RemoteWorkflow.reqs,
         TriggerScaleFactors=TriggerScaleFactors,
     )
-    
+
     process = luigi.Parameter(
-        default=None, 
+        default=None,
         description="process to represent MC",
         significant=False,
     )
@@ -474,7 +475,7 @@ class TriggerScaleFactorsPlotBase(
         params: law.util.InsertableDict[str, Any],
     ) -> law.util.InsertableDict[str, Any]:
         params = super().resolve_param_values(params)
-        
+
         if (config_inst := params.get("config_inst")) and (datasets := params.get("datasets")):
             if params.get("process") is None:
                 for dataset in datasets:
@@ -483,8 +484,6 @@ class TriggerScaleFactorsPlotBase(
                         params["process"] = dataset_inst.processes.get_first().name
                         continue
         return params
-                
-            
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

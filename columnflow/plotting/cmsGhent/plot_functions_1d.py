@@ -305,6 +305,3 @@ def plot_1d_line(
     style_config["rax_cfg"]["ylabel"] = f"ratio to {ref_name}"
 
     return plot_all(plot_config, style_config, **kwargs)
-
-
-
