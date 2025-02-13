@@ -127,7 +127,7 @@ class LeptonWeightConfig:
 def lepton_weights(
     self: Producer,
     events: ak.Array,
-    mask: ak.Array = None,
+    mask: ak.Array = Ellipsis,
     **kwargs,
 ) -> ak.Array:
     """
@@ -152,9 +152,9 @@ def lepton_weights(
     """
 
     variable_map = self.input_func(events)
-    if self.mask_func or mask:
+    if self.mask_func or mask is not None:
         if self.mask_func:
-            mask = mask & self.mask_func(events)
+            mask = (mask or True) & self.mask_func(events)
         assert mask.ndim == 2, f"unexpected mask dimension {mask.ndim}"
         variable_map = {
             key: value[mask] if value.ndim == 2 else value
