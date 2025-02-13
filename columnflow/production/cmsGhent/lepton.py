@@ -260,7 +260,7 @@ def electron_reco_input(events):
 
 
 @ElectronRecoBelow20WeightConfig.mask(uses={"Electron.pt"})
-def electron_reco_mask(events):
+def electron_recobelow20_mask(events):
     return events.Electron.pt < 20
 
 
@@ -277,7 +277,7 @@ ElectronRecoAbove20WeightConfig = ElectronRecoBelow20WeightConfig.copy(
 )
 
 @ElectronRecoAbove20WeightConfig.mask(uses={"Electron.pt"})
-def electron_reco_mask(events):
+def electron_recoabove20_mask(events):
     return events.Electron.pt > 20
 
 electron_recoabove20_weights = lepton_weights.derive(
