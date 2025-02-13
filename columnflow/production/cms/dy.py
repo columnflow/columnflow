@@ -103,6 +103,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
         cfg.x.dy_weight_config = DrellYanConfig(
             era="2022preEE_NLO",
+            order="NLO",
             correction="DY_pTll_reweighting",
             unc_correction="DY_pTll_reweighting_N_uncertainty",
         )
@@ -113,6 +114,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # map the input variable names from the corrector to our columns
     variable_map = {
         "era": self.dy_config.era,
+        "order": self.dy_config.order,
         "ptll": events.gen_dilepton.pt,
     }
 
