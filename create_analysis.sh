@@ -278,8 +278,8 @@ create_analysis() {
         git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}Ghentanalysis/cmsdb.git" modules/cmsdb
     fi
     if [ "${cf_analysis_flavor}" = "ghent_template" ]; then
-        git submodule add -b "${fetch_normtag_branch}" "${gh_prefix}CMS-LUMI-POG/Normtags.git" modules/Normtags
-        git submodule add -b "${fetch_cmsdb_branch}" "${gl_prefix}Ghentanalysis/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_normtag_branch}" "${gl_prefix}CMS-LUMI-POG/Normtags.git" modules/Normtags
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}Ghentanalysis/cmsdb.git" modules/cmsdb
     fi
 
     git submodule update --init --recursive
