@@ -302,7 +302,7 @@ class TriggerScaleFactors(
             container = np.ones((2, *container_dim))
             for idx in self.loop_variables(aux=aux_vr):
                 data, mc = self.data_mc_keys("" if aux_vr is None else aux_vr.name)
-                t_idx = idx | {self.trigger: 1}
+                t_idx = idx | {self.ref_trigger: 1}  # efficiency calculated in events passing reference
                 data = sum_histograms[data][t_idx]
                 mc = sum_histograms[mc][t_idx]
                 inputs = [x.value for x in [data[1], data[sum], mc[1], mc[sum]]]
