@@ -19,6 +19,7 @@ create_analysis() {
     local exec_dir="$( pwd )"
     local fetch_cf_branch="GhentAnalysis/master"
     local fetch_cmsdb_branch="GhentAnalysis/master"
+    local fetch_normtag_branch="master"
     local verbose="${CF_CREATE_ANALYSIS_VERBOSE:-false}"
     local debug="${CF_CREATE_ANALYSIS_DEBUG:-false}"
     ${debug} && verbose="true"
@@ -259,26 +260,26 @@ create_analysis() {
 
     echo_color cyan "setup submodules"
 
-    local gh_prefix_github="https://github.com/"
-    local gh_prefix_gitlab="https://gitlab.cern.ch/"
+    local gh_prefix="https://github.com/"
+    local gl_prefix="https://gitlab.cern.ch/"
 
 
-    $( str_lc "${cf_use_ssh}" ) && gh_prefix_github="git@github.com:"
-    $( str_lc "${cf_use_ssh}" ) && gh_prefix_gitlab="ssh://git@gitlab.cern.ch:7999/"
+    $( str_lc "${cf_use_ssh}" ) && gh_prefix="git@github.com:"
+    $( str_lc "${cf_use_ssh}" ) && gl_prefix="ssh://git@gitlab.cern.ch:7999/"
 
 
     mkdir -p modules
     if ${debug}; then
         ln -s "${this_dir}" modules/columnflow
     else
-        git submodule add -b "${fetch_cf_branch}" "${gh_prefix_github}GhentAnalysis/columnflow.git" modules/columnflow
+        git submodule add -b "${fetch_cf_branch}" "${gh_prefix}GhentAnalysis/columnflow.git" modules/columnflow
     fi
     if [ "${cf_analysis_flavor}" = "cms_minimal" ]; then
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
     if [ "${cf_analysis_flavor}" = "ghent_template" ]; then
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_github}CMS-LUMI-POG/Normtags.git" modules/Normtags
-        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix_gitlab}ghentanalysis/cmsdb.git" modules/cmsdb
+        git submodule add -b "${fetch_cmsdb_branch}" "${gh_prefix}CMS-LUMI-POG/Normtags.git" modules/Normtags
+        git submodule add -b "${fetch_normtag_branch}" "${gl_prefix}ghentanalysis/cmsdb.git" modules/cmsdb
     fi
 
     git submodule update --init --recursive
