@@ -301,7 +301,7 @@ def muon_mva_input(events):
     # only run on mc
     mc_only=True,
     # lepton config bundle, function to determine the location of a list of LeptonWeightConfig's
-    lepton_configs=lambda self: self.config_inst.x.lepton_weight_configs
+    lepton_configs=lambda self: self.config_inst.x.lepton_weight_configs,
 )
 def bundle_lepton_weights(
     self: Producer,
