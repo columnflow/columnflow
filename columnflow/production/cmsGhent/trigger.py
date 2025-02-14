@@ -293,5 +293,37 @@ def trigger_efficiency_hists_init(self: Producer):
 
     init_trigger(self)
     
+
+@producer(
+    # only run on mc
+    mc_only=True,
+    # lepton config bundle, function to determine the location of a list of LeptonWeightConfig's
+    trigger_configs=lambda self: self.config_inst.x.trigger_sfs,
+    config_naming=lambda self, cfg: config.sf_name
+)
+def bundle_trigger_weights(
+    self: Producer,
+    events: ak.Array,
+    **kwargs,
+) -> ak.Array:
+
+    for trigger_weight_producer in self.uses:
+        events = self[trigger_weight_producer](events, **kwargs)
+
+    return events
+
+
+@bundle_trigger_weights.init
+def bundle_trigger_weights_init(self: Producer) -> None:
+
+    trigger_configs = self.trigger_configs()
+    for config in trigger_configs:
+        self.uses.add(trigger_scale_factors.derive(
+            self.config_naming(config),
+            cls_dict=dict(lepton_config=config),
+        ))
+
+    self.produces |= self.uses
+    
     
 
