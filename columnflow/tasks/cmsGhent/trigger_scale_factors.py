@@ -332,7 +332,7 @@ class TriggerScaleFactors(
         for idx in self.loop_variables(aux=None):
             pf = sum_histograms["mc"][idx]
             corr_bias["all"][idx] = self.correlation_efficiency_bias(pf)
-            scale_factors["nominal"] |= up_down_dict("corr", corr_bias["all"].values() * nom_centr_sf.values())
+        scale_factors["nominal"] |= up_down_dict("corr", corr_bias["all"].values() * nom_centr_sf.values())
 
         # correlation bias in 1D efficiencies
         for vr in self.nonaux_variable_insts:
