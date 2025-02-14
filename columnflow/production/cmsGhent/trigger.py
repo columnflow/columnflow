@@ -39,9 +39,11 @@ class TriggerSFConfig:
     aux: dict = None
     objects = None  # list of objects used in the calculation: derived from the variables if None
 
-    # get function
+    # functions
     get_sf_file = None
     get_no_trigger_selection = lambda self, results: results.x("event_no_trigger", None)
+    event_mask_func = None
+    event_mask_uses = None
 
     def __post_init__(self):
 
@@ -62,9 +64,30 @@ class TriggerSFConfig:
 
         self.aux = self.aux or {}
         self.x = DotDict(self.aux)
+        self.event_mask_uses = self.event_mask_uses or set()
 
     def copy(self, **changes):
         return replace(self, **changes)
+
+
+    def event_mask(self, func: Callable[[ak.Array], ak.Array] = None, uses: set = None) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`mask_func`
+        which is used to calculate the mask that should be applied to the lepton
+
+        The function should accept one positional argument:
+
+            - *events*, an awkward array from which the inouts are calculate
+
+
+        The decorator does not return the wrapped function.
+        """
+
+        def decorator(func: Callable[[ak.Array], dict[ak.Array]]):
+            self.event_mask_func = func
+            self.event_mask_uses = self.event_mask_uses | event_mask_uses
+
+        return decorator(func) if func else decorator
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
@@ -128,12 +151,18 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 def trigger_scale_factors(
     self: Producer,
     events: ak.Array,
-    event_mask: ak.Array,
+    event_mask: ak.Array = None,
     **kwargs,
 ):
     inputs = []
     sf = {vr: np.ones(len(events)) for vr in ["central", "down", "up"]}
-    selected_events = events[event_mask]
+
+    selected_events = events
+    if event_mask or self.event_mask_func:
+        if self.event_mask_func:
+            event_mask = (event_mask or True) & self.event_mask_func(events)
+        selected_events = selected_events[event_mask]
+
     if len(selected_events) > 0:
         for variable_inst in self.variable_insts:
             if variable_inst.x("auxiliary", False) is not False:
@@ -161,7 +190,7 @@ def trigger_scale_factors(
 @trigger_scale_factors.init
 def trigger_scale_factors_init(self: Producer):
     init_trigger(self, add_eff_vars=True, add_hists=False)
-
+    self.uses |= self.event_mask_uses
     self.produces = {self.sf_name() + suff for suff in ["", "_down", "_up"]}
 
 
