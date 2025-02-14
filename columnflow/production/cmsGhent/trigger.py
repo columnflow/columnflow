@@ -68,7 +68,8 @@ class TriggerSFConfig:
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
-    self.trigger_config = self.get_trigger_config() if callable(self.get_trigger_config) else self.get_trigger_config
+    if callable(self.trigger_config):
+        self.trigger_config = self.get_trigger_config() 
 
     for key, value in dataclasses.asdict(self.trigger_config).items():
         if not hasattr(self, key):
@@ -121,7 +122,8 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 
 
 @producer(
-    get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
+    mc_only=True,
+    trigger_config=lambda self: self.config_inst.x.trigger_sf,
 )
 def trigger_scale_factors(
     self: Producer,
@@ -216,7 +218,7 @@ def trigger_scale_factors_setup(
 
 @producer(
     # only run on mc
-    get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
+    trigger_config=lambda self: self.config_inst.x.trigger_sf,
 )
 def trigger_efficiency_hists(
     self: Producer,
