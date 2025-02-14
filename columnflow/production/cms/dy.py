@@ -29,8 +29,8 @@ class DrellYanConfig:
     unc_correction: str
 
     def __post_init__(self) -> None:
-        if not self.era or not self.correction or not self.unc_correction:
-            raise ValueError("Campaign era, correction  and unc_correction must be set")
+        if not self.era or not self.order or not self.correction or not self.unc_correction:
+            raise ValueError("Incomplete dy_weight_config: missing era, order, correction or unc_correction.")  # noqa
 
 
 @producer(
