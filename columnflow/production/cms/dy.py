@@ -140,7 +140,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # map the input variable names from the corrector to our columns
     variable_map = {
         "era": self.dy_weight_config.era,
-        "ptll": events.gen_dilepton_vis.pt,
+        "ptll": events.gen_dilepton_pt,
     }
 
     # initializing the list of weight variations
