@@ -32,9 +32,16 @@ class TriggerSFConfig:
     variables: Iterable[str]
     datasets: Iterable[str]
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
-    tag: str = None
-    ref_tag: str = None
+    
+    tag: str = "trig"
+    ref_tag: str = "ref"
+    sf_name: str = f"trig_sf",
     aux: dict = None
+    objects = None  # list of objects used in the calculation: derived from the variables if None
+
+    # get function
+    get_sf_file = None
+    get_no_trigger_selection = lambda self, results: results.x("event_no_trigger", None)
 
     def __post_init__(self):
 
@@ -53,8 +60,6 @@ class TriggerSFConfig:
         if not isinstance(self.datasets, set):
             self.datasets = set(self.datasets)
 
-        self.tag = self.tag or "trig"
-        self.ref_tag = self.ref_tag or "ref"
         self.aux = self.aux or {}
         self.x = DotDict(self.aux)
 
@@ -63,20 +68,16 @@ class TriggerSFConfig:
 
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
-    self.trigger_config = self.get_trigger_config()
-    self.triggers = self.trigger_config.triggers
-    self.tag = self.trigger_config.tag
-    self.ref_triggers = self.trigger_config.ref_triggers
-    self.ref_tag = self.trigger_config.ref_tag
-    self.datasets = self.trigger_config.datasets
+    self.trigger_config = self.get_trigger_config() if callable(self.get_trigger_config) else self.get_trigger_config
+
+    for key, value in dataclasses.asdict(self.trigger_config).items():
+        if not hasattr(self, key):
+            setattr(self, key, value)
+            
     self.tag_name = f"hlt_{self.tag.lower()}_ref_{self.ref_tag.lower()}"
 
     if add_eff_vars:
-
-        # add variables to bin trigger efficiency
-        self.variables = self.trigger_config.variables
         self.variable_insts = list(map(self.config_inst.get_variable, self.variables))
-
         eff_bin_vars_inputs = {
             inp
             for variable_inst in self.variable_insts
@@ -120,8 +121,6 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
 
 
 @producer(
-    get_sf_file=None,
-    sf_name=lambda self: f"trig_sf_{self.tag}",
     get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
 )
 def trigger_scale_factors(
@@ -217,9 +216,7 @@ def trigger_scale_factors_setup(
 
 @producer(
     # only run on mc
-    get_no_trigger_selection=lambda self, results: results.x("event_no_trigger", None),
     get_trigger_config=lambda self: self.config_inst.x.trigger_sf,
-    objects=None,
 )
 def trigger_efficiency_hists(
     self: Producer,
@@ -295,3 +292,6 @@ def trigger_efficiency_hists_init(self: Producer):
         self.uses.add("mc_weight")
 
     init_trigger(self)
+    
+    
+
