@@ -51,11 +51,9 @@ class LeptonWeightConfig:
     mask_func: Callable[[ak.Array], ak.Array] = None
 
     def __post_init__(self):
-        if self.aux is None:
-            self.aux = dict()
+        self.aux = self.aux or dict()
         self.x = DotDict(self.aux)
-        if self.uses is None:
-            self.uses = set()
+        self.uses = self.uses or set()
 
         self.input_pars = {"year": str(self.year)} | (self.input_pars or {})
 
@@ -93,8 +91,7 @@ class LeptonWeightConfig:
         """
         def decorator(func: Callable[[ak.Array], dict[ak.Array]]):
             self.input_func = func
-            if uses:
-                self.uses = self.uses | uses
+            self.uses = self.uses | uses
 
         return decorator(func) if func else decorator
 
