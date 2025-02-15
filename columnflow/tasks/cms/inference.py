@@ -11,8 +11,8 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
-    HistHookMixin, WeightProducerMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, InferenceModelMixin,
+    HistHookMixin, WeightProducerClassMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
@@ -21,11 +21,11 @@ from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    # MLModelsMixin,
+    WeightProducerClassMixin,
     InferenceModelMixin,
     HistHookMixin,
     law.LocalWorkflow,

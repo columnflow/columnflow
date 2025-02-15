@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+#: Location of the documentation.
+docs_url = os.getenv("CF_DOCS_URL", "https://columnflow.readthedocs.io/en/latest")
+
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
 env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "false"))
 

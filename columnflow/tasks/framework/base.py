@@ -14,6 +14,7 @@ import inspect
 import functools
 import collections
 import copy
+from dataclasses import dataclass, field
 
 import luigi
 import law
@@ -57,6 +58,13 @@ class BaseTask(law.Task):
 
     # container for upstream requirements for convenience
     reqs = Requirements()
+
+    def get_params_dict(self) -> dict[str, Any]:
+        return {
+            attr: getattr(self, attr)
+            for attr, param in self.get_params()
+            if isinstance(param, luigi.Parameter)
+        }
 
 
 class OutputLocation(enum.Enum):
@@ -107,13 +115,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     _cfg_resources_dict = None
 
     @classmethod
-    def modify_param_values(cls, params: dict) -> dict:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
         params = cls.resolve_param_values(params)
         return params
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
             params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
@@ -163,7 +171,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
-            cls.task_family != law.parser.root_task().task_family
+            cls.task_family != law.parser.root_task_cls().task_family
         ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
@@ -321,14 +329,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         keys = law.util.InsertableDict()
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the analysis name
-        analysis = get("analysis")
+        analysis = (
+            inst_or_params.get("analysis")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "analysis", None)
+        )
         if analysis not in {law.NO_STR, None, ""}:
             keys["analysis"] = analysis
 
@@ -380,55 +386,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return empty_value
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
-        """
-        Returns two sets of shifts in a tuple: shifts implemented by _this_ task, and dependent
-        shifts that are implemented by upstream tasks.
-        """
-        # get shifts from upstream dependencies, consider both their own and upstream shifts as one
-        upstream_shifts = set()
-        for req in cls.reqs.values():
-            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
-
-        return set(), upstream_shifts
-
-    @classmethod
-    def get_array_function_kwargs(
-        cls,
-        task: AnalysisTask | None = None,
-        **params,
-    ) -> dict[str, Any]:
-        if task:
-            analysis_inst = task.analysis_inst
-        elif "analysis_inst" in params:
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        if "analysis_inst" in params:
             analysis_inst = params["analysis_inst"]
         else:
             analysis_inst = cls.get_analysis_inst(params["analysis"])
 
-        return {
-            "task": task,
-            "analysis_inst": analysis_inst,
-        }
-
-    @classmethod
-    def get_calibrator_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_selector_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_weight_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
+        return {"analysis_inst": analysis_inst}
 
     @classmethod
     def find_config_objects(
@@ -584,7 +548,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     inference_model = task_params.get("inference_model", None)
 
                     # if inference model is not set, assume it's the container default
-                    if inference_model in (None, "NO_STR"):
+                    if inference_model in {None, "NO_STR"}:
                         inference_model = container.x.default_inference_model
 
                     # get the default_ml_model from the inference_model_inst
@@ -749,6 +713,19 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if key not in self._cached_values:
             self._cached_values[key] = func()
         return self._cached_values[key]
+
+    def reset_sandbox(self, sandbox: str) -> None:
+        """
+        Resets the sandbox to a new *sandbox* value.
+        """
+        # do nothing if the value actualy does not change
+        if self.sandbox == sandbox:
+            return
+
+        # change it and rebuild the sandbox inst when already initialized
+        self.sandbox = sandbox
+        if self._sandbox_initialized:
+            self._initialize_sandbox(force=True)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -1027,26 +1004,22 @@ class ConfigTask(AnalysisTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the config name in front of the task family
-        config = get("config")
+        config = (
+            inst_or_params.get("config")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "config", None)
+        )
         if config not in {law.NO_STR, None, ""}:
             keys.insert_before("task_family", "config", config)
 
         return keys
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        kwargs = super().get_array_function_dict(params)
 
-        if task:
-            kwargs["config_inst"] = task.config_inst
-        elif "config_inst" in params:
+        if "config_inst" in params:
             kwargs["config_inst"] = params["config_inst"]
         elif "config" in params and "analysis_inst" in kwargs:
             kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
@@ -1108,6 +1081,12 @@ class ConfigTask(AnalysisTask):
         return {Route(column)}
 
 
+@dataclass
+class TaskShifts:
+    local: set[str] = field(default_factory=set)
+    upstream: set[str] = field(default_factory=set)
+
+
 class ShiftTask(ConfigTask):
 
     shift = luigi.Parameter(
@@ -1126,83 +1105,66 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        """
-        When "config" and "shift" are set, this method evaluates them to set the global shift.
-        For that, it takes the shifts stored in the config instance and compares it with those
-        defined by this class.
-        """
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
+        if (config_inst := params.get("config_inst")):
+            params = cls.resolve_shifts(config_inst, params)
+        return params
 
-        # get params
-        config_inst = params.get("config_inst")
-        requested_shift = params.get("shift")
-        requested_local_shift = params.get("local_shift")
-
-        # require that the config is set
-        if config_inst in (None, law.NO_STR):
-            return params
-
+    @classmethod
+    def resolve_shifts(cls, config_inst: od.Config, params: dict) -> dict:
         # require that the shift is set and known
-        if requested_shift in (None, law.NO_STR):
-            if cls.allow_empty_shift:
-                params["shift"] = law.NO_STR
-                params["local_shift"] = law.NO_STR
-                return params
-            raise Exception(f"no shift found in params: {params}")
+        if (requested_shift := params.get("shift")) in (None, law.NO_STR):
+            if not cls.allow_empty_shift:
+                raise Exception(f"no shift found in params: {params}")
+            params["shift"] = law.NO_STR
+            params["local_shift"] = law.NO_STR
+            return params
         if requested_shift not in config_inst.shifts:
             raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
-
-        # determine the known shifts for this class
-        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
         # shift       -> the requested shift if implemented by this task
         #                or an upsteam task (== global shift), else nominal
-        if requested_local_shift in (None, law.NO_STR):
-            if requested_shift in shifts:
+        if params.get("local_shift") in {None, law.NO_STR}:
+            # determine the known shifts for this class
+            shifts = TaskShifts()
+            cls.get_known_shifts(config_inst, params, shifts)
+            # check cases
+            if requested_shift in shifts.local:
                 params["shift"] = requested_shift
                 params["local_shift"] = requested_shift
-            elif requested_shift in upstream_shifts:
+            elif requested_shift in shifts.upstream:
                 params["shift"] = requested_shift
                 params["local_shift"] = "nominal"
             else:
                 params["shift"] = "nominal"
                 params["local_shift"] = "nominal"
 
-        # store references
-        params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-        params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+        # store references if not already done
+        if not params.get("global_shift_inst") or not params.get("local_shift_inst"):
+            params["global_shift_inst"] = config_inst.get_shift(params["shift"])
+            params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
 
         return params
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
-        params = super().resolve_param_values(params)
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
+        """
+        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
+        by _this_ task, and dependent shifts that are implemented by upstream tasks.
 
-        # set default shift
-        if params.get("shift") in (None, law.NO_STR):
-            params["shift"] = "nominal"
-
-        return params
-
-    @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
-
-        if task:
-            if task.local_shift_inst:
-                kwargs["local_shift_inst"] = task.local_shift_inst
-            if task.global_shift_inst:
-                kwargs["global_shift_inst"] = task.global_shift_inst
-        else:
-            if "local_shift_inst" in params:
-                kwargs["local_shift_inst"] = params["local_shift_inst"]
-            if "global_shift_inst" in params:
-                kwargs["global_shift_inst"] = params["global_shift_inst"]
-
-        return kwargs
+        :param config_inst: Config instance.
+        :param params: Dictionary of task parameters.
+        :param shifts: TaskShifts object to adjust.
+        """
+        return None
 
     @classmethod
     def get_config_lookup_keys(
@@ -1211,15 +1173,13 @@ class ShiftTask(ConfigTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the (global) shift name
-        shift = get("shift")
-        if shift not in {law.NO_STR, None, ""}:
+        shift = (
+            inst_or_params.get("shift")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "shift", None)
+        )
+        if shift not in (law.NO_STR, None, ""):
             keys["shift"] = shift
 
         return keys
@@ -1264,21 +1224,23 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
         # dataset can have shifts, that are considered as upstream shifts
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        super().get_known_shifts(config_inst, params, shifts)
 
-        dataset_inst = params.get("dataset_inst")
-        if dataset_inst:
+        if (dataset_inst := params.get("dataset_inst")):
             if dataset_inst.is_data:
                 # clear all shifts for data
-                shifts.clear()
-                upstream_shifts.clear()
+                shifts.local.clear()
+                shifts.upstream.clear()
             else:
                 # extend with dataset variations for mc
-                upstream_shifts |= set(dataset_inst.info.keys())
-
-        return shifts, upstream_shifts
+                shifts.upstream |= set(dataset_inst.info.keys())
 
     @classmethod
     def get_config_lookup_keys(
@@ -1287,26 +1249,22 @@ class DatasetTask(ShiftTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the dataset name before the shift name
-        dataset = get("dataset")
+        dataset = (
+            inst_or_params.get("dataset")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "dataset", None)
+        )
         if dataset not in {law.NO_STR, None, ""}:
             keys.insert_before("shift", "dataset", dataset)
 
         return keys
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        kwargs = super().get_array_function_dict(params)
 
-        if task:
-            kwargs["dataset_inst"] = task.dataset_inst
-        elif "dataset_inst" in params:
+        if "dataset_inst" in params:
             kwargs["dataset_inst"] = params["dataset_inst"]
         elif "dataset" in params and "config_inst" in kwargs:
             kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])

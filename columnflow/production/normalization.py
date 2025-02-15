@@ -13,8 +13,9 @@ import order as od
 import scinum as sn
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
@@ -194,7 +195,6 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     `<weight_name>_inclusive_only`. This weight resembles the normalization weight for the
     inclusive dataset, as if it were unstitched and should therefore only be applied, when using the
     inclusive dataset as a standalone dataset.
-
     """
     # read the process id column
     process_id = np.asarray(events.process_id)
@@ -228,7 +228,12 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
 
 
 @normalization_weights.requires
-def normalization_weights_requires(self: Producer, reqs: dict) -> None:
+def normalization_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     """
     Adds the requirements needed by the underlying py:attr:`task` to access selection stats into
     *reqs*.
@@ -243,9 +248,9 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
     from columnflow.tasks.selection import MergeSelectionStats
     reqs["selection_stats"] = {
         dataset.name: MergeSelectionStats.req_different_branching(
-            self.task,
+            task,
             dataset=dataset.name,
-            branch=-1 if self.task.is_workflow() else 0,
+            branch=-1 if task.is_workflow() else 0,
         )
         for dataset in self.stitching_datasets
     }
@@ -256,9 +261,11 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 @normalization_weights.setup
 def normalization_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Sets up objects required by the computation of normalization weights and stores them as instance
@@ -270,7 +277,7 @@ def normalization_weights_setup(
     """
     # load the selection stats
     selection_stats = {
-        dataset: self.task.cached_value(
+        dataset: task.cached_value(
             key=f"selection_stats_{dataset}",
             func=lambda: inp["stats"].load(formatter="json"),
         )
@@ -314,7 +321,7 @@ def normalization_weights_setup(
     process_weight_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
     if self.allow_stitching and self.get_xsecs_from_inclusive_dataset:
         inclusive_dataset = self.inclusive_dataset
-        logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
+        logger.debug(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # extract branching ratios from inclusive dataset(s)
         inclusive_proc = inclusive_dataset.processes.get_first()
@@ -360,13 +367,10 @@ def normalization_weights_setup(
 
 
 @normalization_weights.init
-def normalization_weights_init(self: Producer) -> None:
+def normalization_weights_init(self: Producer, **kwargs) -> None:
     """
     Initializes the normalization weights producer by setting up the normalization weight column.
     """
-    if getattr(self, "dataset_inst", None) is None:
-        return
-
     self.produces.add(self.weight_name)
     if self.allow_stitching:
         self.stitching_datasets = self.get_stitching_datasets()

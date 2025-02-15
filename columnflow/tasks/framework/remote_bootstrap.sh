@@ -35,10 +35,12 @@ bootstrap_htcondor_standalone() {
 
     # fix for missing voms/x509 variables in the lcg setup of the naf
     if [[ "${CF_HTCONDOR_FLAVOR}" = naf* ]]; then
+        echo "setting up X509 variables for ${CF_HTCONDOR_FLAVOR}"
         export X509_CERT_DIR="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
         export X509_VOMS_DIR="/cvmfs/grid.cern.ch/etc/grid-security/vomsdir"
         export X509_VOMSES="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
         export VOMS_USERCONF="/cvmfs/grid.cern.ch/etc/grid-security/vomses"
+        export CAPATH="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
     fi
 
     # fallback to a default path when the externally given software base is empty or inaccessible

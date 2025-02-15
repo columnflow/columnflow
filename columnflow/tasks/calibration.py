@@ -7,7 +7,7 @@ Tasks related to calibrating events.
 import luigi
 import law
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -16,13 +16,18 @@ from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 ak = maybe_import("awkward")
 
 
-class CalibrateEvents(
-    DatasetTask,
-    ChunkedIOMixin,
+class _CalibrateEvents(
     CalibratorMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`CalibrateEvents`.
+    """
+
+
+class CalibrateEvents(_CalibrateEvents):
     """
     Task to apply calibrations to objects, e.g. leptons and jets.
 
@@ -40,9 +45,7 @@ class CalibrateEvents(
         GetDatasetLFNs=GetDatasetLFNs,
     )
 
-    # register sandbox and shifts found in the chosen calibrator to this task
-    register_calibrator_sandbox = True
-    register_calibrator_shifts = True
+    invokes_calibrator = True
 
     def workflow_requires(self) -> dict:
         """
@@ -56,7 +59,9 @@ class CalibrateEvents(
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(
+            self.calibrator_inst.run_requires(task=self),
+        ))
 
         return reqs
 
@@ -67,7 +72,9 @@ class CalibrateEvents(
         reqs = {"lfns": self.reqs.GetDatasetLFNs.req(self)}
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires()))
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(
+            self.calibrator_inst.run_requires(task=self),
+        ))
 
         return reqs
 
@@ -102,8 +109,13 @@ class CalibrateEvents(
         output_chunks = {}
 
         # run the calibrator setup
-        calibrator_reqs = self.calibrator_inst.run_requires()
-        reader_targets = self.calibrator_inst.run_setup(calibrator_reqs, luigi.task.getpaths(calibrator_reqs))
+        self._array_function_post_init()
+        calibrator_reqs = self.calibrator_inst.run_requires(task=self)
+        reader_targets = self.calibrator_inst.run_setup(
+            task=self,
+            reqs=calibrator_reqs,
+            inputs=luigi.task.getpaths(calibrator_reqs),
+        )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -140,7 +152,7 @@ class CalibrateEvents(
                 events = update_ak_array(events, *cols)
 
                 # just invoke the calibration function
-                events = self.calibrator_inst(events)
+                events = self.calibrator_inst(events, task=self)
 
                 # remove columns
                 events = route_filter(events)
@@ -153,6 +165,9 @@ class CalibrateEvents(
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[(lfn_index, pos.index)] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
+
+        # teardown the calibrator
+        self.calibrator_inst.run_teardown(task=self)
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

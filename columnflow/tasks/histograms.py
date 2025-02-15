@@ -9,30 +9,42 @@ from __future__ import annotations
 import luigi
 import law
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+# from columnflow.tasks.framework.mixins import (
+#     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
+#     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
+# )
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
+    CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin,
+    ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
+    WeightProducerClassMixin, WeightProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
-from columnflow.tasks.ml import MLEvaluation
+# from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 from columnflow.hist_util import create_hist_from_variables
 
 
-class CreateHistograms(
+class _CreateHistograms(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
-    MLModelsMixin,
+    # MLModelsMixin,
     WeightProducerMixin,
+    ChunkedIOMixin,
     VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`CreateHistograms`.
+    """
+
+
+class CreateHistograms(_CreateHistograms):
+
     last_edge_inclusive = last_edge_inclusive_inst
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -42,19 +54,12 @@ class CreateHistograms(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProduceColumns=ProduceColumns,
-        MLEvaluation=MLEvaluation,
+        # MLEvaluation=MLEvaluation,
     )
 
-    # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
-
-    # names of columns that contain category ids
-    # (might become a parameter at some point)
     category_id_columns = {"category_ids"}
-
-    # register sandbox and shifts found in the chosen weight producer to this task
-    register_weight_producer_sandbox = True
-    register_weight_producer_shifts = True
+    invokes_weight_producer = True
 
     @law.util.classproperty
     def mandatory_columns(cls) -> set[str]:
@@ -69,18 +74,24 @@ class CreateHistograms(
         if not self.pilot:
             if self.producer_insts:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    self.reqs.ProduceColumns.req(
+                        self,
+                        producer=producer_inst.cls_name,
+                        producer_inst=producer_inst,
+                    )
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            if self.ml_model_insts:
-                reqs["ml"] = [
-                    self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
-                    for ml_model_inst in self.ml_model_insts
-                ]
+            # if self.ml_model_insts:
+            #     reqs["ml"] = [
+            #         self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+            #         for ml_model_inst in self.ml_model_insts
+            #     ]
 
             # add weight_producer dependent requirements
-            reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
+            reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
+                self.weight_producer_inst.run_requires(task=self),
+            ))
 
         return reqs
 
@@ -89,18 +100,24 @@ class CreateHistograms(
 
         if self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        if self.ml_model_insts:
-            reqs["ml"] = [
-                self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
-                for ml_model_inst in self.ml_model_insts
-            ]
+        # if self.ml_model_insts:
+        #     reqs["ml"] = [
+        #         self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+        #         for ml_model_inst in self.ml_model_insts
+        #     ]
 
         # add weight_producer dependent requirements
-        reqs["weight_producer"] = law.util.make_unique(law.util.flatten(self.weight_producer_inst.run_requires()))
+        reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
+            self.weight_producer_inst.run_requires(task=self),
+        ))
 
         return reqs
 
@@ -128,9 +145,20 @@ class CreateHistograms(
         # declare output: dict of histograms
         histograms = {}
 
-        # run the weight_producer setup
-        producer_reqs = self.weight_producer_inst.run_requires()
-        reader_targets = self.weight_producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
+        # run the weight_producer setup when not skipping
+        skip_weight_producer = (
+            callable(self.weight_producer_inst.skip_func) and
+            not self.weight_producer_inst.skip_func()
+        )
+        reader_targets = {}
+        if not skip_weight_producer:
+            self._array_function_post_init()
+            producer_reqs = self.weight_producer_inst.run_requires(task=self)
+            reader_targets = self.weight_producer_inst.run_setup(
+                task=self,
+                reqs=producer_reqs,
+                inputs=luigi.task.getpaths(producer_reqs),
+            )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -170,8 +198,8 @@ class CreateHistograms(
         file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
-        if self.ml_model_insts:
-            file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
+        # if self.ml_model_insts:
+        #     file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
 
         # prepare inputs for localization
         with law.localize_file_targets(
@@ -203,8 +231,8 @@ class CreateHistograms(
                 events = attach_coffea_behavior(events)
 
                 # build the full event weight
-                if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
-                    events, weight = self.weight_producer_inst(events)
+                if not skip_weight_producer:
+                    events, weight = self.weight_producer_inst(events, task=self)
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
 
@@ -267,6 +295,10 @@ class CreateHistograms(
                         last_edge_inclusive=self.last_edge_inclusive,
                     )
 
+        # teardown the weight producer
+        if not skip_weight_producer:
+            self.weight_producer_inst.run_teardown(task=self)
+
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
 
@@ -278,7 +310,6 @@ CreateHistograms.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inp
     add_default_to_description=True,
 )
 
-
 CreateHistogramsWrapper = wrapper_factory(
     base_cls=AnalysisTask,
     require_cls=CreateHistograms,
@@ -286,17 +317,23 @@ CreateHistogramsWrapper = wrapper_factory(
 )
 
 
-class MergeHistograms(
-    DatasetTask,
+class _MergeHistograms(
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
     ProducersMixin,
-    MLModelsMixin,
+    # MLModelsMixin,
     WeightProducerMixin,
     VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeHistograms`.
+    """
+
+
+class MergeHistograms(_MergeHistograms):
+
     only_missing = luigi.BoolParameter(
         default=False,
         description="when True, identify missing variables first and only require histograms of "
@@ -405,27 +442,28 @@ MergeHistogramsWrapper = wrapper_factory(
 )
 
 
-class MergeShiftedHistograms(
-    DatasetTask,
-    ShiftSourcesMixin,
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
+class _MergeShiftedHistograms(
+    DatasetShiftSourcesMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    # MLModelsMixin,
+    WeightProducerClassMixin,
     VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeShiftedHistograms`.
+    """
+
+
+class MergeShiftedHistograms(_MergeShiftedHistograms):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
-    # disable the shift parameter
-    shift = None
-    effective_shift = None
-    allow_empty_shift = True
-
-    # allow only running on nominal
-    allow_empty_shift_sources = True
+    # use the MergeHistograms task to validate shift sources against the requested dataset
+    shift_validation_task_cls = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(
@@ -434,7 +472,7 @@ class MergeShiftedHistograms(
     )
 
     def create_branch_map(self):
-        # create a dummy branch map so that this task could as a job
+        # create a dummy branch map so that this task can run as a job
         return {0: None}
 
     def workflow_requires(self):
@@ -452,16 +490,13 @@ class MergeShiftedHistograms(
             for shift in ["nominal"] + self.shifts
         }
 
-    def store_parts(self) -> law.util.InsertableDict:
-        parts = super().store_parts()
-        parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
-        return parts
-
     def output(self):
-        return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"shifted_hist__{variable_name}.pickle")
-            for variable_name in self.variables
-        })}
+        return {
+            "hists": law.SiblingFileCollection({
+                variable_name: self.target(f"hists__{variable_name}.pickle")
+                for variable_name in self.variables
+            }),
+        }
 
     @law.decorator.notify
     @law.decorator.log

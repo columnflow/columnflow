@@ -11,22 +11,21 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, DatasetsProcessesShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
 
-ak = maybe_import("awkward")
 hist = maybe_import("hist")
 
 
 class HistogramsUserBase(
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    WeightProducerClassMixin,
+    # MLModelsMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
     VariablesMixin,
@@ -138,7 +137,6 @@ class HistogramsUserSingleShiftBase(
     ShiftTask,
     HistogramsUserBase,
 ):
-
     # upstream requirements
     reqs = Requirements(
         MergeHistograms=MergeHistograms,
@@ -162,9 +160,12 @@ class HistogramsUserSingleShiftBase(
 
 
 class HistogramsUserMultiShiftBase(
-    ShiftSourcesMixin,
+    DatasetsProcessesShiftSourcesMixin,
     HistogramsUserBase,
 ):
+    # use the MergeHistograms task to validate shift sources against the requested dataset
+    shift_validation_task_cls = MergeHistograms
+
     # upstream requirements
     reqs = Requirements(
         MergeShiftedHistograms=MergeShiftedHistograms,

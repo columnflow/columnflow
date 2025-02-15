@@ -13,25 +13,30 @@ from scinum import Number
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin,
-    DatasetsProcessesMixin, CategoriesMixin, WeightProducerMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    DatasetsProcessesMixin, CategoriesMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms
 from columnflow.util import dev_sandbox, try_int
 
 
-class CreateYieldTable(
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
-    WeightProducerMixin,
+class _CreateYieldTable(
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    WeightProducerClassMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    """
+    Base classes for :py:class:`CreateYieldTable`.
+    """
+
+
+class CreateYieldTable(_CreateYieldTable):
 
     table_format = luigi.Parameter(
         default="fancy_grid",
@@ -63,15 +68,17 @@ class CreateYieldTable(
         description="Adds a suffix to the output name of the yields table; empty default",
     )
 
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
 
-    # dummy branch map
     def create_branch_map(self):
-        return [0]
+        # dummy branch map
+        return {0: None}
 
     def requires(self):
         return {

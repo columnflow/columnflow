@@ -13,8 +13,8 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CategoriesMixin, DatasetsProcessesShiftSourcesMixin, HistHookMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -26,11 +26,11 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    # MLModelsMixin,
+    WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,
     VariablePlotSettingMixin,
@@ -40,13 +40,13 @@ class PlotVariablesBase(
 ):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
-    exclude_index = True
-
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
+
+    exclude_index = True
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -288,8 +288,8 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
+    DatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
-    ShiftSourcesMixin,
 ):
     legend_title = luigi.Parameter(
         default=law.NO_STR,
@@ -297,6 +297,9 @@ class PlotVariablesBaseMultiShifts(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+
+    # use the MergeHistograms task to validate shift sources against the requested dataset
+    shift_validation_task_cls = MergeHistograms
 
     exclude_index = True
 

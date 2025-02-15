@@ -25,7 +25,7 @@ logger = law.logger.get_logger(__name__)
 @producer(
     produces={"category_ids"},
     # custom function to skip categorizers
-    skip_category=(lambda self, task, category_inst: False),
+    skip_category=(lambda self, category_inst: False),
 )
 def category_ids(
     self: Producer,
@@ -63,17 +63,14 @@ def category_ids(
 
 
 @category_ids.init
-def category_ids_init(self: Producer) -> None:
-    if not self.inst_dict.get("task"):
-        return
-
+def category_ids_init(self: Producer, **kwargs) -> None:
     # store a mapping from leaf category to categorizer classes for faster lookup
     self.categorizer_map = defaultdict(list)
 
     # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
         # check if skipped
-        if self.skip_category(self.inst_dict["task"], cat_inst):
+        if self.skip_category(cat_inst):
             continue
 
         # treat all selections as lists of categorizers

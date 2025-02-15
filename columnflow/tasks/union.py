@@ -8,22 +8,30 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
+# from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import ProducersMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
-from columnflow.tasks.ml import MLEvaluation
+# from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 
 
-class UniteColumns(
+class _UniteColumns(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
-    MLModelsMixin,
+    # MLModelsMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`UniteColumns`.
+    """
+
+
+class UniteColumns(_UniteColumns):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     file_type = luigi.ChoiceParameter(
@@ -37,7 +45,7 @@ class UniteColumns(
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProduceColumns=ProduceColumns,
-        MLEvaluation=MLEvaluation,
+        # MLEvaluation=MLEvaluation,
     )
 
     def workflow_requires(self):
@@ -49,15 +57,19 @@ class UniteColumns(
         if not self.pilot:
             if self.producer_insts:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    self.reqs.ProduceColumns.req(
+                        self,
+                        producer=producer_inst.cls_name,
+                        producer_inst=producer_inst,
+                    )
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            if self.ml_model_insts:
-                reqs["ml"] = [
-                    self.reqs.MLEvaluation.req(self, ml_model=m)
-                    for m in self.ml_models
-                ]
+            # if self.ml_model_insts:
+            #     reqs["ml"] = [
+            #         self.reqs.MLEvaluation.req(self, ml_model=m)
+            #         for m in self.ml_models
+            #     ]
 
         return reqs
 
@@ -66,15 +78,19 @@ class UniteColumns(
 
         if self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        if self.ml_model_insts:
-            reqs["ml"] = [
-                self.reqs.MLEvaluation.req(self, ml_model=m)
-                for m in self.ml_models
-            ]
+        # if self.ml_model_insts:
+        #     reqs["ml"] = [
+        #         self.reqs.MLEvaluation.req(self, ml_model=m)
+        #         for m in self.ml_models
+        #     ]
 
         return reqs
 
@@ -126,8 +142,9 @@ class UniteColumns(
         files = [inputs["events"]["events"].abspath]
         if self.producer_insts:
             files.extend([inp["columns"].abspath for inp in inputs["producers"]])
-        if self.ml_model_insts:
-            files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
+        # if self.ml_model_insts:
+        #     files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
+
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -177,7 +194,6 @@ UniteColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.
     default=UniteColumns.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
-
 
 UniteColumnsWrapper = wrapper_factory(
     base_cls=AnalysisTask,

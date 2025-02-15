@@ -24,11 +24,11 @@ from functools import wraps
 from collections import OrderedDict
 
 import law
-from law.util import InsertableDict  # noqa
 import luigi
 
-from columnflow import env_is_dev, env_is_remote
+from columnflow import env_is_dev, env_is_remote, docs_url
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
+
 
 #: Placeholder for an unset value.
 UNSET = object()
@@ -159,6 +159,13 @@ def ipython_shell(
     # start the shell
     from IPython.terminal.embed import InteractiveShellEmbed
     return InteractiveShellEmbed.instance(config=config, display_banner=banner)
+
+
+def get_docs_url(*parts: str) -> str:
+    """
+    Returns a URL pointing to the documentation of a particular page defined by *parts*.
+    """
+    return "/".join([docs_url, *(str(part).strip("/") for part in parts)])
 
 
 def create_random_name() -> str:

@@ -13,14 +13,13 @@ from collections import OrderedDict, defaultdict
 import law
 import luigi
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
-)
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.types import Any
 
 ak = maybe_import("awkward")
 
@@ -29,14 +28,20 @@ ak = maybe_import("awkward")
 default_keep_reduced_events = law.config.get_expanded("analysis", "default_keep_reduced_events")
 
 
-class ReduceEvents(
-    DatasetTask,
-    ChunkedIOMixin,
+class _ReduceEvents(
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`ReduceEvents`.
+    """
+
+
+class ReduceEvents(_ReduceEvents):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -60,7 +65,11 @@ class ReduceEvents(
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
@@ -76,7 +85,11 @@ class ReduceEvents(
         return {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ],
@@ -103,6 +116,9 @@ class ReduceEvents(
         lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
+
+        # finalize init of dependent task array functions
+        self._array_function_post_init()
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -258,13 +274,18 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(
-    DatasetTask,
+class _MergeReductionStats(
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeReductionStats`.
+    """
+
+
+class MergeReductionStats(_MergeReductionStats):
 
     n_inputs = luigi.IntParameter(
         default=10,
@@ -288,12 +309,12 @@ class MergeReductionStats(
     )
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         # check for the default merged size
         if "merged_size" in params:
-            if params["merged_size"] in (None, law.NO_FLOAT):
+            if params["merged_size"] in {None, law.NO_FLOAT}:
                 merged_size = 512.0
                 if "config_inst" in params:
                     merged_size = params["config_inst"].x("reduced_file_size", merged_size)
@@ -412,13 +433,18 @@ MergeReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(
-    DatasetTask,
+class _MergeReducedEvents(
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeReducedEvents`.
+    """
+
+
+class MergeReducedEvents(_MergeReducedEvents):
 
     keep_reduced_events = luigi.BoolParameter(
         default=default_keep_reduced_events,
@@ -499,13 +525,18 @@ MergeReducedEventsWrapper = wrapper_factory(
 )
 
 
-class ProvideReducedEvents(
-    DatasetTask,
+class _ProvideReducedEvents(
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`ProvideReducedEvents`.
+    """
+
+
+class ProvideReducedEvents(_ProvideReducedEvents):
 
     skip_merging = luigi.BoolParameter(
         default=False,
@@ -638,9 +669,8 @@ ProvideReducedEventsWrapper = wrapper_factory(
 
 
 class ReducedEventsUser(
-    DatasetTask,
     CalibratorsMixin,
-    SelectorStepsMixin,
+    SelectorMixin,
     law.BaseWorkflow,
 ):
     # upstream requirements
