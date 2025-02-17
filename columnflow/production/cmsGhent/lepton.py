@@ -319,7 +319,7 @@ def bundle_lepton_weights_init(self: Producer) -> None:
     lepton_configs = self.lepton_configs()
     for config in lepton_configs:
         self.uses.add(lepton_weights.derive(
-            self.confog_naming(config),
+            self.config_naming(config),
             cls_dict=dict(lepton_config=config),
         ))
 
