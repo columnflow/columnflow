@@ -41,7 +41,7 @@ class TriggerSFConfig:
 
     # functions
     get_sf_file = None
-    get_no_trigger_selection = lambda self, results: results.x("event_no_trigger", None)
+    get_no_trigger_selection = lambda results: results.x("event_no_trigger", None)
     event_mask_func = None
     event_mask_uses = None
 
