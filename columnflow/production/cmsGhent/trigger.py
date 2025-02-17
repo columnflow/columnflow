@@ -8,7 +8,7 @@ from __future__ import annotations
 import law
 import order as od
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, replace, asdict
 
 from columnflow.selection import SelectionResult
 from columnflow.production import producer, Producer
@@ -94,7 +94,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
     if callable(self.trigger_config):
         self.trigger_config = self.trigger_config() 
 
-    for key, value in dataclasses.asdict(self.trigger_config).items():
+    for key, value in asdict(self.trigger_config).items():
         if not hasattr(self, key):
             setattr(self, key, value)
             
