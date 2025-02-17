@@ -113,7 +113,7 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
         }
 
         if add_hists:
-            if self.objects is None:
+            if not hasattr(self, "objects"):
                 self.objects = {inp.split(".")[0] for inp in eff_bin_vars_inputs if "." in inp}
 
             # add variable to bin measured trigger PASS / FAIL
