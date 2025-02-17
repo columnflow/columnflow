@@ -92,7 +92,7 @@ class TriggerSFConfig:
 
 def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
     if callable(self.trigger_config):
-        self.trigger_config = self.get_trigger_config() 
+        self.trigger_config = self.trigger_config() 
 
     for key, value in dataclasses.asdict(self.trigger_config).items():
         if not hasattr(self, key):
