@@ -351,7 +351,7 @@ def bundle_trigger_weights_init(self: Producer) -> None:
     for config in trigger_configs:
         self.uses.add(trigger_scale_factors.derive(
             self.config_naming(config),
-            cls_dict=dict(lepton_config=config),
+            cls_dict=dict(trigger_config=config),
         ))
 
     self.produces |= self.uses
