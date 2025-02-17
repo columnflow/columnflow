@@ -35,7 +35,7 @@ class TriggerSFConfig:
     
     tag: str = "trig"
     ref_tag: str = "ref"
-    sf_name: str = f"trig_sf",
+    sf_name: str = f"trig_sf"
     aux: dict = None
     objects = None  # list of objects used in the calculation: derived from the variables if None
 
