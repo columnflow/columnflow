@@ -182,7 +182,7 @@ def trigger_scale_factors(
         for vr in sf:
             sf[vr][event_mask] = self.sf_corrector.evaluate(vr, *inputs)
     for vr in sf:
-        name = self.sf_name() + ("" if vr == "central" else ("_" + vr))
+        name = self.sf_name + ("" if vr == "central" else ("_" + vr))
         events = set_ak_column(events, name, sf[vr])
     return events
 
@@ -191,7 +191,7 @@ def trigger_scale_factors(
 def trigger_scale_factors_init(self: Producer):
     init_trigger(self, add_eff_vars=True, add_hists=False)
     self.uses |= self.event_mask_uses
-    self.produces = {self.sf_name() + suff for suff in ["", "_down", "_up"]}
+    self.produces = {self.sf_name + suff for suff in ["", "_down", "_up"]}
 
 
 @trigger_scale_factors.requires
