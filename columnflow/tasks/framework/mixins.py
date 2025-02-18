@@ -580,6 +580,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         Return a string representation of the selector instance.
         """
         sel_repr = str(self.selector_inst)
+        # add representation of steps only if this class does not invoke the selector itself
         if not self.invokes_selector:
             steps = self.selector_steps
             if steps and not self.selector_steps_order_sensitive:
