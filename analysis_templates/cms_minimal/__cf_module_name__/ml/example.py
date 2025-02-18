@@ -45,17 +45,34 @@ class ExampleModel(MLModel):
         }
 
     def uses(self, config_inst: od.Config) -> set[Route | str]:
-        return {
-            "Jet.pt", "Muon.pt",
-        }
+        return {"Jet.pt", "Muon.pt"}
 
     def produces(self, config_inst: od.Config) -> set[Route | str]:
-        return {
-            f"{self.cls_name}.ouptut",
-        }
+        return {f"{self.cls_name}.ouptut"}
+
+    def training_calibrators(
+        self,
+        config_inst: od.Config,
+        requested_calibrators: list[str],
+    ) -> list[str]:
+        return ["example"]
+
+    def training_selectors(
+        self,
+        config_inst: od.Config,
+        requested_selectors: list[str],
+    ) -> list[str]:
+        return ["example"]
+
+    def training_producers(
+        self,
+        config_inst: od.Config,
+        requested_producers: list[str],
+    ) -> list[str]:
+        return ["example"]
 
     def output(self, task: law.Task) -> law.FileSystemDirectoryTarget:
-        return task.target(f"mlmodel_f{task.branch}of{self.folds}", dir=True)
+        return task.target(f"mlmodel_f{task.branch}of{self.folds}.keras")
 
     def open_model(self, target: law.FileSystemDirectoryTarget) -> tf.keras.models.Model:
         return target.load(formatter="tf_keras_model")

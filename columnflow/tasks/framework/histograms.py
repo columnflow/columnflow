@@ -9,7 +9,7 @@ from __future__ import annotations
 import law
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
     VariablesMixin, DatasetsProcessesMixin, CategoriesMixin,
@@ -136,8 +136,9 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    HistogramsUserBase,
     ShiftTask,
+    HistogramsUserBase,
+    ConfigTask,
 ):
 
     # upstream requirements
@@ -145,48 +146,45 @@ class HistogramsUserSingleShiftBase(
         MergeHistograms=MergeHistograms,
     )
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
+
     def requires(self):
         return {
-            d: self.reqs.MergeHistograms.req(
+            d: self.reqs.MergeHistograms.req_different_branching(
                 self,
                 dataset=d,
                 branch=-1,
-                _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
             for d in self.datasets
         }
 
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["merged_hists"] = self.requires_from_branch()
-
-        return reqs
-
 
 class HistogramsUserMultiShiftBase(
-    HistogramsUserBase,
     ShiftSourcesMixin,
+    HistogramsUserBase,
+    ConfigTask,
 ):
     # upstream requirements
     reqs = Requirements(
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
 
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["merged_hists"] = self.requires_from_branch()
+        return reqs
+
     def requires(self):
         return {
-            d: self.reqs.MergeShiftedHistograms.req(
+            d: self.reqs.MergeShiftedHistograms.req_different_branching(
                 self,
                 dataset=d,
                 branch=-1,
-                _exclude={"branches"},
                 _prefer_cli={"variables"},
             )
             for d in self.datasets
         }
-
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        reqs["merged_hists"] = self.requires_from_branch()
-
-        return reqs

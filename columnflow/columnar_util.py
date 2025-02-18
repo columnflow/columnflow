@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import os
+import sys
 import re
 import math
 import time
@@ -18,7 +19,7 @@ import threading
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
-from collections import namedtuple, OrderedDict, deque
+from collections import namedtuple, OrderedDict, deque, defaultdict
 
 import law
 import order as od
@@ -39,21 +40,64 @@ maybe_import("coffea.nanoevents")
 maybe_import("coffea.nanoevents.methods.base")
 maybe_import("coffea.nanoevents.methods.nanoaod")
 pq = maybe_import("pyarrow.parquet")
-hist = maybe_import("hist")
 
 
 # loggers
 logger = law.logger.get_logger(__name__)
 logger_perf = law.logger.get_logger(f"{__name__}-perf")
 
-#: Columns that are always required when opening a nano file with coffea.
-mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
-
 #: Empty-value definition in places where an integer number is expected but not present.
 EMPTY_INT = -99999
 
 #: Empty-value definition in places where a float number is expected but not present.
 EMPTY_FLOAT = -99999.0
+
+#: Columns that are always required when opening a nano file with coffea.
+mandatory_coffea_columns = {"run", "luminosityBlock", "event"}
+
+#: Information on behavior of certain collections to (re-)attach it via attach_behavior.
+default_coffea_collections = {
+    "Jet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "FatJet": {
+        "type_name": "FatJet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "SubJet": {
+        "type_name": "Jet",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Muon": {
+        "type_name": "Muon",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Electron": {
+        "type_name": "Electron",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "Tau": {
+        "type_name": "Tau",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "MET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+    "PuppiMET": {
+        "type_name": "MissingET",
+        "check_attr": "metric_table",
+        "skip_fields": "*Idx*G",
+    },
+}
 
 
 class ItemEval(object):
@@ -1078,6 +1122,105 @@ def sorted_ak_to_root(
     f.close()
 
 
+def sorted_indices_from_mask(
+    mask: ak.Array,
+    metric: ak.Array,
+    sort_axis: int = -1,
+    ascending: bool = True,
+) -> ak.Array:
+    """
+    Takes a boolean *mask* and converts it to an array of indices, sorted using a *metric* of equal
+    size along a *sort_axis* and, by default, in *ascending* order. Example:
+
+    .. code-block:: python
+
+        mask = [[True, False, False, True], ...]
+        metric = [[5.0, 1.0, 0.9, 4.1], ...]
+
+        sorted_indices_from_mask(mask, metric)
+        # -> [[3, 0], ...]
+
+    :param mask: The boolean mask.
+    :param metric: The metric to sort by.
+    :param sort_axis: The axis along which to sort.
+    :param ascending: Whether to sort in ascending order.
+    :return: An array of sorted indices.
+    """
+    indices = ak.argsort(metric, axis=sort_axis, ascending=ascending)
+    return indices[mask[indices]]
+
+
+def mask_from_indices(indices: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
+    """
+    Takes an array of *indices* and a *layout_array* and returns a boolean mask with the same shape
+    as *layout_array* where values at *indices* are set to *True*. Example:
+
+    .. code-block:: python
+
+        indices = [[2, 0], ...]
+        layout_array = [[x, y, z], ...]
+
+        mask_from_indices(indices, layout_array)
+        # -> [[True, False, True], ...]
+
+    :param indices: The indices to set to *True*.
+    :param layout_array: The layout array to use as a template.
+    :return: A boolean mask with the same shape as *layout_array*.
+    """
+    # create a flat mask starting with false
+    flat_mask = flat_np_view(ak.full_like(layout_array, False, dtype=bool))
+    # use offsets of the layout to create increasing indices
+    flat_indices = flat_np_view((indices + layout_array.layout.offsets.data[:-1, ..., None]))
+    # set the indices to true
+    flat_mask[flat_indices] = True
+    # layout the mask
+    return layout_ak_array(flat_mask, layout_array)
+
+
+def full_like(layout_array: ak.Array, value: Any, *, dtype: Any = None, **kwargs) -> ak.Array:
+    """
+    Creates an awkward array with the same layout as *layout_array* and fills it with a constant
+    *value* of type *dtype*. The difference to awkward's standalone ``ak.full_like`` is that all
+    original parameters (like docstrings, annotations, etc.) are removed from the layout of the
+    resulting array.
+
+    :param layout_array: The layout array to use as a template.
+    :param value: The value to fill the array with.
+    :param dtype: The data type of the array.
+    :return: An awkward array with the same layout as *layout_array* and filled with *value*.
+    """
+    return ak.without_parameters(ak.full_like(layout_array, value, dtype=dtype, **kwargs))
+
+
+def fill_at(
+    ak_array: ak.Array,
+    where: ak.Array,
+    route: Route | str,
+    value: float | int,
+    *,
+    value_type: type | str | None = None,
+) -> ak.Array:
+    """
+    Fills a column identified through *route* in an *ak_array* with a *value* where a
+    corresponding *where* mask is *True*.
+
+    :param ak_array: The input array.
+    :param where: The boolean mask where to fill the value.
+    :param route: The route describing the column to fill.
+    :param value: The value to fill.
+    :param value_type: The data type of the value. Inferred from value if not set.
+    :return: A new array with the value filled at the specified route.
+    """
+    # cast to route
+    route = Route(route)
+
+    # create new values with selective values
+    new_values = ak.where(where, value, route.apply(ak_array))
+
+    # insert back
+    return set_ak_column(ak_array, route, new_values, value_type=value_type)
+
+
 def attach_behavior(
     ak_array: ak.Array,
     type_name: str,
@@ -1126,6 +1269,57 @@ def attach_behavior(
     )
 
 
+def attach_coffea_behavior(
+    ak_array: ak.Array,
+    collections: dict | Sequence | None = None,
+) -> ak.Array:
+    """
+    Add coffea's NanoEvents behavior to collections in an *ak_array*. When empty, *collections*
+    defaults to :py:attr:``default_coffea_collections``.
+
+    :param ak_array: The input array.
+    :param collections: The collections to attach behavior to.
+    :return: The array with the behavior attached.
+    """
+    # update or reduce collection info
+    _collections = default_coffea_collections
+    if isinstance(collections, dict):
+        _collections = _collections.copy()
+        _collections.update(collections)
+    elif isinstance(collections, (list, tuple)):
+        _collections = {
+            name: info
+            for name, info in _collections.items()
+            if name in collections
+        }
+
+    for name, info in _collections.items():
+        if not info:
+            continue
+
+        # get the collection to update
+        if name not in ak_array.fields:
+            continue
+        coll = ak_array[name]
+
+        # when a check_attr is defined, do nothing in case it already exists
+        if info.get("check_attr") and getattr(coll, info["check_attr"], None) is not None:
+            continue
+
+        # default infos
+        type_name = info.get("type_name") or name
+        skip_fields = info.get("skip_fields")
+
+        # apply the behavior
+        ak_array = set_ak_column(
+            ak_array,
+            name,
+            attach_behavior(coll, type_name, skip_fields=skip_fields),
+        )
+
+    return ak_array
+
+
 def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> ak.Array:
     """
     Takes a *data_array* and structures its contents into the same structure as *layout_array*, with
@@ -1158,61 +1352,6 @@ def ak_copy(ak_array: ak.Array) -> ak.Array:
     removed.
     """
     return layout_ak_array(np.array(ak.flatten(ak_array)), ak_array)
-
-
-def fill_hist(
-    h: hist.Hist,
-    data: ak.Array | np.array | dict[str, ak.Array | np.array],
-    *,
-    last_edge_inclusive: bool | None = None,
-    fill_kwargs: dict[str, Any] | None = None,
-) -> None:
-    """
-    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If
-    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
-    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
-    and depends on the variable axis type. In this case, shifting is applied to all continuous,
-    non-circular axes.
-    """
-    if fill_kwargs is None:
-        fill_kwargs = {}
-
-    # helper to decide whether the variable axis qualifies for shifting the last bin
-    def allows_shift(ax) -> bool:
-        return ax.traits.continuous and not ax.traits.circular
-
-    # determine the axis names, figure out which which axes the last bin correction should be done
-    axis_names = []
-    correct_last_bin_axes = []
-    for ax in h.axes:
-        axis_names.append(ax.name)
-        # include values hitting last edge?
-        if not len(ax.widths) or not isinstance(ax, hist.axis.Variable):
-            continue
-        if (last_edge_inclusive is None and allows_shift(ax)) or last_edge_inclusive:
-            correct_last_bin_axes.append(ax)
-
-    # check data
-    if not isinstance(data, dict):
-        if len(axis_names) != 1:
-            raise ValueError("got multi-dimensional hist but only one dimensional data")
-        data = {axis_names[0]: data}
-    else:
-        for name in axis_names:
-            if name not in data and name not in fill_kwargs:
-                raise ValueError(f"missing data for histogram axis '{name}'")
-
-    # correct last bin values
-    for ax in correct_last_bin_axes:
-        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
-        if np.any(right_egde_mask):
-            data[ax.name] = ak.copy(data[ax.name])
-            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
-
-    # fill
-    arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
 
 
 class RouteFilter(object):
@@ -1655,6 +1794,9 @@ class ArrayFunction(Derivable):
                         f"to set: {e.args[0]}",
                     )
                     raise e
+
+                # remove keyword from further processing
+                kwargs.pop(attr)
             else:
                 try:
                     deps = set(law.util.make_list(getattr(self.__class__, attr)))
@@ -1669,11 +1811,15 @@ class ArrayFunction(Derivable):
             # also register a set for storing instances, filled in create_dependencies
             setattr(self, f"{attr}_instances", set())
 
+        # set all other keyword arguments as instance attributes
+        for attr, value in kwargs.items():
+            setattr(self, attr, value)
+
         # dictionary of dependency class to instance, set in create_dependencies
         self.deps = DotDict()
 
         # dictionary of keyword arguments mapped to dependenc classes to be forwarded to their init
-        self.deps_kwargs = DotDict()
+        self.deps_kwargs = defaultdict(dict)  # TODO: avoid using `defaultdict`
 
         # deferred part of the initialization
         if deferred_init:
@@ -1738,8 +1884,15 @@ class ArrayFunction(Derivable):
             self.init_func()
 
         # instantiate dependencies again, but only perform updates
-        self.create_dependencies(instance_cache, only_update=True)
+        # self.create_dependencies(instance_cache, only_update=True)
 
+        # NOTE: the above does not correctly propagate `deps_kwargs` to the dependencies.
+        # As a workaround, instantiate all dependencies fully a second time by
+        # invalidating the instance cache and setting `only_update` to False
+        instance_cache = {}
+        self.create_dependencies(instance_cache, only_update=False)
+
+        # NOTE: return value currently not being used anywhere -> remove?
         return instance_cache
 
     def create_dependencies(
@@ -3572,6 +3725,7 @@ class ChunkedIOHandler(object):
                 if isinstance(result_obj, self.ReadResult):
                     if self.iter_message:
                         print(self.iter_message.format(pos=result_obj.chunk_pos))
+                        sys.stdout.flush()
 
                     # probably overly-cautious, but run garbage collection before and after
                     t1 = time.perf_counter()

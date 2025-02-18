@@ -80,6 +80,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     version = luigi.Parameter(
         description="mandatory version that is encoded into output paths",
     )
+    notify_slack = law.slack.NotifySlackParameter(significant=False)
+    notify_mattermost = law.mattermost.NotifyMattermostParameter(significant=False)
+    notify_custom = law.NotifyCustomParameter(significant=False)
 
     allow_empty_sandbox = True
     sandbox = None
@@ -94,8 +97,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     default_output_location = "config"
 
     exclude_params_index = {"user"}
-    exclude_params_req = {"user"}
-    exclude_params_repr = {"user"}
+    exclude_params_req = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_repr = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
+    exclude_params_branch = {"user"}
+    exclude_params_workflow = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
 
     # cached and parsed sections of the law config for faster lookup
     _cfg_outputs_dict = None
@@ -122,7 +127,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # TaskArrayFunctions that should be set via the analysis inst aux values
         analysis_inst_aux = (
-            "default_calibrator", "default_selector", "default_producer", "default_ml_model",
+            "default_calibrator", "default_selector", "default_selector_steps",
+            "default_producer", "default_ml_model",
             "default_weight_producer", "default_inference_model", "default_categories", "default_variables",
         )
 
@@ -203,6 +209,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def _structure_cfg_items(cls, items: list[tuple[str, Any]]) -> dict:
         if not items:
             return {}
+
+        # apply brace expansion to keys
+        items = sum((
+            [(_key, value) for _key in law.util.brace_expand(key)]
+            for key, value in items
+        ), [])
 
         # breakup keys at double underscores and create a nested dictionary
         items_dict = {}
@@ -1006,7 +1018,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             wlcg_kwargs = kwargs.copy()
             wlcg_kwargs.setdefault("fs", wlcg_fs)
             wlcg_target = self.wlcg_target(*path, **wlcg_kwargs)
-            # TODO: add rule for falling back to wlcg target
+            # TODO: add rule for falling back to wlcg target?
             # create the local target
             local_kwargs = kwargs.copy()
             loc_key = "fs" if (loc and law.config.has_section(loc)) else "store"
@@ -1018,10 +1030,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 if isinstance(local_target, law.LocalFileTarget)
                 else law.MirroredDirectoryTarget
             )
+            # whether to wait for local synchrnoization (for debugging purposes)
+            local_sync = law.util.flag_to_bool(os.getenv("CF_MIRRORED_TARGET_LOCAL_SYNC", "true"))
+            # create and return the target
             return mirrored_target_cls(
                 path=local_target.abspath,
                 remote_target=wlcg_target,
                 local_target=local_target,
+                local_sync=local_sync,
             )
 
         raise Exception(f"cannot determine output location based on '{location}'")
@@ -1826,6 +1842,8 @@ def wrapper_factory(
     # create the class
     class Wrapper(*base_classes, law.WrapperTask):
 
+        exclude_params_repr_empty = set()
+
         if has_configs:
             configs = law.CSVParameter(
                 default=(default_config,),
@@ -1842,6 +1860,7 @@ def wrapper_factory(
                 "of the analysis; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_configs")
         if has_datasets:
             datasets = law.CSVParameter(
                 default=("*",),
@@ -1858,6 +1877,7 @@ def wrapper_factory(
                 "auxiliary data of the corresponding config; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_datasets")
         if has_shifts:
             shifts = law.CSVParameter(
                 default=("nominal",),
@@ -1874,6 +1894,7 @@ def wrapper_factory(
                 "of the corresponding config; empty default",
                 brace_expand=True,
             )
+            exclude_params_repr_empty.add("skip_shifts")
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)

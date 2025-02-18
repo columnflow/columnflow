@@ -12,9 +12,7 @@ from columnflow.tasks.framework.histograms import (
 )
 
 
-class InspectHistograms(
-    HistogramsUserSingleShiftBase,
-):
+class InspectHistograms(HistogramsUserSingleShiftBase):
     """
     Task to inspect histograms of a single shift after Reduction, Production and MLEvaluation.
     """
@@ -45,9 +43,7 @@ class InspectHistograms(
             embed()
 
 
-class InspectShiftedHistograms(
-    HistogramsUserMultiShiftBase,
-):
+class InspectShiftedHistograms(HistogramsUserMultiShiftBase):
     """
     Task to inspect histograms of multiple shifts after Reduction, Production and MLEvaluation.
     """

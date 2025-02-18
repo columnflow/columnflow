@@ -20,8 +20,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
-from columnflow.hist_util import create_hist_from_variables
-from columnflow.config_util import get_category_name_columns
+from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
 
 class CreateHistograms(
@@ -29,8 +28,8 @@ class CreateHistograms(
     WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
-    ReducedEventsUser,
     ChunkedIOMixin,
+    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -109,8 +108,9 @@ class CreateHistograms(
 
     @workflow_condition.output
     def output(self):
-        return {"hists": self.target(f"histograms__vars_{self.variables_repr}__{self.branch}.pickle")}
+        return {"hists": self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")}
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
@@ -118,11 +118,18 @@ class CreateHistograms(
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import (
-            Route, update_ak_array, add_ak_aliases, has_ak_column, fill_hist,
+            Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior,
         )
+        from columnflow.hist_util import fill_hist
 
         # prepare inputs
         inputs = self.input()
+
+        # get IDs and names of all leaf categories
+        category_map = {
+            cat.id: cat.name
+            for cat in self.config_inst.get_leaf_categories()
+        }
 
         # declare output: dict of histograms
         histograms = {}
@@ -198,11 +205,27 @@ class CreateHistograms(
                     missing_strategy=self.missing_column_alias_strategy,
                 )
 
+                # attach coffea behavior aiding functional variable expressions
+                events = attach_coffea_behavior(events)
+
                 # build the full event weight
                 if hasattr(self.weight_producer_inst, "skip_func") and not self.weight_producer_inst.skip_func():
                     events, weight = self.weight_producer_inst(events)
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
+
+                # merge category ids and check that they are defined as leaf categories
+                category_ids = ak.concatenate(
+                    [Route(c).apply(events) for c in self.category_id_columns],
+                    axis=-1,
+                )
+                unique_category_ids = np.unique(ak.flatten(category_ids))
+                if any(cat_id not in category_map for cat_id in unique_category_ids):
+                    undefined_category_ids = set(unique_category_ids) - set(category_map)
+                    raise ValueError(
+                        f"Category ids {', '.join(undefined_category_ids)} in category id column "
+                        "are not defined as leaf categories in the config_inst",
+                    )
 
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
@@ -211,31 +234,30 @@ class CreateHistograms(
 
                     if var_key not in histograms:
                         # create the histogram in the first chunk
-                        histograms[var_key] = create_hist_from_variables(*variable_insts, add_default_axes=True)
+                        histograms[var_key] = create_columnflow_hist(
+                            *variable_insts,
+                        )
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
                     masked_weights = weight
+                    masked_category_ids = category_ids
                     for variable_inst in variable_insts:
                         sel = variable_inst.selection
                         if sel == "1":
                             continue
                         if not callable(sel):
-                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                            raise ValueError(
+                                f"invalid selection '{sel}', for now only callables are supported",
+                            )
                         mask = sel(masked_events)
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
-
-                    # merge category ids and transform them into their name representation
-                    category_ids = ak.concatenate(
-                        [Route(c).apply(masked_events) for c in self.category_id_columns],
-                        axis=-1,
-                    )
-                    category_names = get_category_name_columns(category_ids, self.config_inst)
+                        masked_category_ids = masked_category_ids[mask]
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
-                        "category": category_names,
+                        "category": masked_category_ids,
                         "process": masked_events.process_id,
                         "weight": masked_weights,
                     }
@@ -259,6 +281,14 @@ class CreateHistograms(
                         fill_kwargs={"shift": self.global_shift_inst.name},
                     )
 
+        # change category axis from int to str
+        for var_key in self.variable_tuples.keys():
+            histograms[var_key] = translate_hist_intcat_to_strcat(
+                histograms[var_key],
+                "category",
+                category_map,
+            )
+
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
 
@@ -279,13 +309,13 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
-    VariablesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -297,7 +327,7 @@ class MergeHistograms(
     remove_previous = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, remove particlar input histograms after merging; default: False",
+        description="when True, remove particular input histograms after merging; default: False",
     )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -326,7 +356,7 @@ class MergeHistograms(
 
         # optional dynamic behavior: determine not yet created variables and require only those
         if self.only_missing:
-            missing = self.output().count(existing=False, keys=True)[1]
+            missing = self.output()["hists"].count(existing=False, keys=True)[1]
             variables = sorted(missing, key=variables.index)
 
         return variables
@@ -359,10 +389,11 @@ class MergeHistograms(
 
     def output(self):
         return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"hist__{variable_name}.pickle")
+            variable_name: self.target(f"hist__var_{variable_name}.pickle")
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs
@@ -397,14 +428,14 @@ MergeHistogramsWrapper = wrapper_factory(
 
 
 class MergeShiftedHistograms(
-    VariablesMixin,
-    ShiftSourcesMixin,
-    WeightProducerMixin,
-    MLModelsMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     DatasetTask,
+    ShiftSourcesMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelsMixin,
+    WeightProducerMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -443,7 +474,7 @@ class MergeShiftedHistograms(
             for shift in ["nominal"] + self.shifts
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_after("dataset", "shift_sources", f"shifts_{self.shift_sources_repr}")
         return parts
@@ -454,6 +485,7 @@ class MergeShiftedHistograms(
             for variable_name in self.variables
         })}
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # preare inputs and outputs

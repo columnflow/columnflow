@@ -4,9 +4,12 @@
 Base classes and tools for working with remote tasks and targets.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import math
+from dataclasses import dataclass
 
 import luigi
 import law
@@ -58,6 +61,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -88,6 +92,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -227,6 +232,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -302,6 +308,7 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # create the bundle
@@ -313,6 +320,19 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
 
         # transfer the bundle and mark the task as complete
         self.transfer(bundle)
+
+
+@dataclass
+class SchedulerMessageHandler:
+    attr: str
+    param: luigi.Parameter | None = None
+
+    def __post_init__(self):
+        if not re.match(r"^[a-zA-Z0-9_]+$", self.attr):
+            raise ValueError(
+                f"invalid {self.__class__.__name__} attribute '{self.attr}', must only contain "
+                "alphanumeric characters and underscores",
+            )
 
 
 class RemoteWorkflowMixin(AnalysisTask):
@@ -340,6 +360,9 @@ class RemoteWorkflowMixin(AnalysisTask):
                 continue
             # parse and set
             setattr(self, attr, param_inst.parse(value))
+
+        # container to store scheduler message handlers
+        self._scheduler_message_handlers: dict[str, SchedulerMessageHandler] = {}
 
     def add_bundle_requirements(
         self,
@@ -544,16 +567,51 @@ class RemoteWorkflowMixin(AnalysisTask):
 
         return info
 
+    def add_message_handler(self, *args, **kwargs) -> None:
+        # obtain the handler
+        if len(args) == 1 and isinstance(args[0], SchedulerMessageHandler) and not kwargs:
+            handler = args[0]
+        else:
+            handler = SchedulerMessageHandler(*args, **kwargs)
+
+        # check if there is a parameter with that attribute
+        param = getattr(self.__class__, handler.attr, None)
+        if param is None:
+            raise ValueError(f"no parameter found for attribute '{handler.attr}'")
+        handler.param = param
+
+        # register it (potentially overwriting)
+        self._scheduler_message_handlers[handler.attr] = handler
+
+    def handle_scheduler_message(self, msg, _attr_value=None):
+        attr, value = _attr_value or (None, None)
+
+        # go through handlers and find match
+        if attr is None:
+            for handler in self._scheduler_message_handlers.values():
+                m = re.match(rf"^\s*({handler.attr})\s*(\=|\:)\s*(.*)\s*$", str(msg))
+                if not m:
+                    continue
+                attr = handler.attr
+                try:
+                    parsed = handler.param.parse(m.group(3))
+                    value = handler.param.serialize(parsed)
+                except ValueError as e:
+                    value = e
+                break
+
+        return super().handle_scheduler_message(msg, (attr, value))
+
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
 _default_htcondor_memory = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_memory", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_memory", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )
 _default_htcondor_disk = law.util.parse_bytes(
-    law.config.get_expanded_float("analysis", "htcondor_disk", law.NO_FLOAT),
+    law.config.get_expanded("analysis", "htcondor_disk", law.NO_FLOAT),
     input_unit="GB",
     unit="GB",
 )
@@ -658,6 +716,14 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         # cached BundleRepo requirement to avoid race conditions during checksum calculation
         self.bundle_repo_req = self.reqs.BundleRepo.req(self)
 
+        # add scheduler message handlers
+        self.add_message_handler("max_runtime")
+        self.add_message_handler("htcondor_logs")
+        self.add_message_handler("htcondor_cpus")
+        self.add_message_handler("htcondor_gpus")
+        self.add_message_handler("htcondor_memory")
+        self.add_message_handler("htcondor_disk")
+
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
 
@@ -701,6 +767,15 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
         # default lcg setup file
         remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
+
+        # batch name for display in condor_q
+        batch_name = self.task_family
+        info = self.htcondor_destination_info({})
+        if "config" in info:
+            batch_name += f"_{info['config']}"
+        if "dataset" in info:
+            batch_name += f"_{info['dataset']}"
+        config.custom_content.append(("batch_name", batch_name))
 
         # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
@@ -905,3 +980,5 @@ class RemoteWorkflow(*remote_workflow_bases):
 
     # upstream requirements
     reqs = Requirements(*(cls.reqs for cls in remote_workflow_bases))
+
+    workflow_run_decorators = [law.decorator.notify]

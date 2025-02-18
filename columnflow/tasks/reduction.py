@@ -86,6 +86,8 @@ class ReduceEvents(
     def output(self):
         return {"events": self.target(f"events_{self.branch}.parquet")}
 
+    @law.decorator.notify
+    @law.decorator.log
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
@@ -330,6 +332,8 @@ class MergeReductionStats(
     def output(self):
         return {"stats": self.target(f"stats_n{self.n_inputs}.json")}
 
+    @law.decorator.notify
+    @law.decorator.log
     @law.decorator.safe_output
     def run(self):
         # structure for statistics to save
@@ -412,7 +416,7 @@ class MergeReducedEvents(
     SelectorStepsMixin,
     CalibratorsMixin,
     DatasetTask,
-    law.tasks.ForestMerge,
+    law.LocalWorkflow,
     RemoteWorkflow,
 ):
 
@@ -423,8 +427,6 @@ class MergeReducedEvents(
         f"removed after successful merging; default: {default_keep_reduced_events}",
     )
 
-    max_merge_factor = 50
-
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -433,22 +435,6 @@ class MergeReducedEvents(
         MergeReductionStats=MergeReductionStats,
         ReduceEvents=ReduceEvents,
     )
-
-    @property
-    def merge_factor(self) -> int:
-        """
-        Defines the number of inputs to be merged per output at any point in the merging forest.
-        Required by law.tasks.ForestMerge.
-        """
-        # return as many inputs as leafs are present to create the output of this tree, capped at 50
-        return min(self.file_merging, self.max_merge_factor)
-
-    def is_sandboxed(self):
-        # when the task is a merge forest, consider it sandboxed
-        if self.is_forest():
-            return True
-
-        return super().is_sandboxed()
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
@@ -463,54 +449,40 @@ class MergeReducedEvents(
 
     @workflow_condition.create_branch_map
     def create_branch_map(self):
-        # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
-        return law.tasks.ForestMerge.create_branch_map(self)
+        # forward to super class (DatasetTask)
+        return super().create_branch_map()
 
-    def merge_workflow_requires(self):
-        return {
-            "stats": self.reqs.MergeReductionStats.req_different_branching(self),
-            "events": self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),)),
-        }
+    def workflow_requires(self):
+        reqs = super().workflow_requires()
+        reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self)
+        return reqs
 
-    def merge_requires(self, start_branch, end_branch):
+    def requires(self):
         return {
             "stats": self.reqs.MergeReductionStats.req_different_branching(self, branch=0),
             "events": self.reqs.ReduceEvents.req_different_branching(
                 self,
-                branches=((start_branch, end_branch),),
                 workflow="local",
+                branches=((min(self.branch_data), max(self.branch_data) + 1),),
                 _exclude={"branch"},
             ),
         }
 
-    def trace_merge_workflow_inputs(self, inputs):
-        return super().trace_merge_workflow_inputs(inputs["events"])
-
-    def trace_merge_inputs(self, inputs):
-        return super().trace_merge_inputs(inputs["events"]["collection"].targets.values())
-
-    def reduced_dummy_output(self):
-        # mark the dummy output as a placeholder for the ForestMerge task
-        dummy = super().reduced_dummy_output()
-        self._mark_merge_output_placeholder(dummy)
-        return dummy
-
     @workflow_condition.output
     def output(self):
-        return super().output()
+        return {
+            "events": self.target(f"events_{self.branch}.parquet"),
+        }
 
-    def merge_output(self):
-        # use the branch_map defined in DatasetTask to compute the number of files after merging
-        n_merged = len(DatasetTask.create_branch_map(self))
-        return law.SiblingFileCollection([
-            {"events": self.target(f"events_{i}.parquet")}
-            for i in range(n_merged)
-        ])
+    def run(self):
+        # prepare inputs and output
+        inputs = [inp["events"] for inp in self.input()["events"].collection.targets.values()]
+        output = self.output()["events"]
 
-    def merge(self, inputs, output):
-        inputs = [inp["events"] for inp in inputs]
+        # merge
         law.pyarrow.merge_parquet_task(
-            self, inputs, output["events"], writer_opts=self.get_parquet_writer_opts(),
+            self, inputs, output, writer_opts=self.get_parquet_writer_opts(),
         )
 
         # optionally remove initial inputs
@@ -540,7 +512,6 @@ class ProvideReducedEvents(
         description="bypass MergedReducedEvents and directly require ReduceEvents with same "
         "workflow branching; default: False",
     )
-
     force_merging = luigi.BoolParameter(
         default=False,
         description="force requiring MergedReducedEvents, regardless of the merging factor "
@@ -559,7 +530,6 @@ class ProvideReducedEvents(
     def _resolve_workflow_parameters(cls, params):
         # always fallback to local workflows
         params["effective_workflow"] = "local"
-
         return super()._resolve_workflow_parameters(params)
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
@@ -580,18 +550,6 @@ class ProvideReducedEvents(
         return self.reqs.ReduceEvents.req(self, **params)
 
     def _req_merged_reduced_events(self, **params) -> law.Task:
-        if self.is_workflow():
-            # require the full merging forest
-            params["tree_index"] = -1
-            params["branch"] = 0
-        else:
-            # require a single merging tree identified by the tree_index via a local workflow
-            _exclude = law.util.make_set(params.pop("_exclude", None) or set())
-            _exclude |= {"branch"}
-            params["_exclude"] = _exclude
-            params["tree_index"] = self.branch
-            params["workflow"] = "local"
-
         return self.reqs.MergeReducedEvents.req(self, **params)
 
     def workflow_requires(self):
