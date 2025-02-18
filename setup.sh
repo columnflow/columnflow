@@ -210,6 +210,8 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
+    # flag to recompile dependencies or not
+    export CF_FORCE_COMPILE_ENV="${CF_FORCE_COMPILE_ENV:-False}"
 
     #
     # common variables
@@ -224,7 +226,6 @@ setup_columnflow() {
 
     cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
 
-
     #
     # git hooks
     #
@@ -233,7 +234,6 @@ setup_columnflow() {
     if ${CF_LOCAL_ENV}; then
         cf_setup_git_hooks || return "$?"
     fi
-
 
     #
     # law setup
@@ -286,6 +286,12 @@ cf_setup_common_variables() {
     # detect environments
     cf_detect_envs || return "$?"
 
+    export CF_REQ_OUTPUT_DIR="${CF_REQ_OUTPUT_DIR:-${CF_BASE}/.requirements}"
+    # flag to clean up temporary files for different environments
+    export CF_CLEAN_TEMP_ENV_FILES="${CF_CLEAN_TEMP_ENV_FILES:-False}"
+
+    mkdir -p "${CF_REQ_OUTPUT_DIR}"
+
     # lang defaults
     if ${CF_RTD_ENV}; then
         export LANGUAGE="${READTHEDOCS_LANGUAGE:-en}"
@@ -294,6 +300,7 @@ cf_setup_common_variables() {
     elif ${CF_ON_GRID}; then
         : # not supported on grid
     else
+        # change to legacy definition C?
         export LANGUAGE="${LANGUAGE:-en_US.UTF-8}"
         export LANG="${LANG:-en_US.UTF-8}"
         export LC_ALL="${LC_ALL:-en_US.UTF-8}"
@@ -397,9 +404,12 @@ cf_setup_interactive_common_variables() {
     export_and_save CF_WLCG_USE_CACHE "$( [ -z "${CF_WLCG_CACHE_ROOT}" ] && echo "false" || echo "true" )"
     export_and_save CF_WLCG_CACHE_CLEANUP "${CF_WLCG_CACHE_CLEANUP:-false}"
 
+    query CF_PYVERSION "Python version for software stack" "3.9"
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "false"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "true" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
+
+    query CF_FORCE_COMPILE_ENV "Force recompilation of conda dependencies" "false"
 
     query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "true"
     if [ "${CF_LOCAL_SCHEDULER}" != "true" ]; then
@@ -581,8 +591,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="3.9"
-    local conda_arch="${CF_CONDA_ARCH:-linux-64}"
+    local pyv="${CF_PYVERSION:-3.9}"
     local ret
 
     # zsh options
@@ -606,6 +615,7 @@ cf_setup_software_stack() {
 
     # prepend them
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
+
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
@@ -643,9 +653,19 @@ cf_setup_software_stack() {
         #
         # conda / micromamba setup
         #
+        # identify platform
+        local system=""
+        case "$OSTYPE" in
+            linux*) case `uname -m` in
+                x86_64*) system="linux-64" ;;
+                aarch64*) system="linux-aarch64" ;;
+            esac ;;
+            darwin*) system="osx-$(uname -m)" ;;
+            *) cf_color red "unknown platform"; return 1 ;;
+         esac
 
-        # not needed in CI or RTD jobs
-        if ! ${CF_CI_ENV} && ! ${CF_RTD_ENV}; then
+        # not needed in RTD jobs
+        if ! ${CF_RTD_ENV}; then
             # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
@@ -653,7 +673,7 @@ cf_setup_software_stack() {
                 cf_color magenta "installing conda with micromamba interface at ${CF_CONDA_BASE}"
 
                 mkdir -p "${CF_CONDA_BASE}/etc/profile.d"
-                curl -Ls "https://micro.mamba.pm/api/micromamba/${conda_arch}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
+                curl -Ls "https://micro.mamba.pm/api/micromamba/${system}/latest" | tar -xvj -C "${CF_CONDA_BASE}" "bin/micromamba" > /dev/null
                 2>&1 "${CF_CONDA_BASE}/bin/micromamba" shell hook -y --root-prefix "$PWD" &> micromamba.sh
                 ret="$?"
                 if [ "${ret}" != "0" ]; then
@@ -661,7 +681,10 @@ cf_setup_software_stack() {
                     return "${ret}"
                 fi
                 # make the setup file relocatable
-                sed -i -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                sed -i.bak -r "s|${CF_CONDA_BASE}|\$\{MAMBA_ROOT_PREFIX\}|" "micromamba.sh" || return "$?"
+                if [ -f "micromamba.sh.bak" ]; then
+                    rm "micromamba.sh.bak"
+                fi
                 mv "micromamba.sh" "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh"
                 cat << EOF > "${CF_CONDA_BASE}/.mambarc"
 changeps1: false
@@ -676,25 +699,60 @@ EOF
             micromamba activate || return "$?"
             echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
 
+            # configure path to conda environment file
+            export CONDA_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_${system}_py${pyv}.yml"
+
             # install packages
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
-                micromamba install \
-                    libgcc \
-                    bash \
-                    zsh \
-                    "python=${pyv}" \
-                    git \
-                    git-lfs \
-                    gfal2 \
-                    gfal2-util \
-                    python-gfal2 \
-                    myproxy \
-                    conda-pack \
-                    || return "$?"
-                micromamba clean --yes --all
 
+                cf_color cyan "building micromamba command"
+                
+                # if the environment file does not exist or recompilation is requested, created the file again
+                if [ ! -f $CONDA_ENV_FILE ] || [[ "${CF_FORCE_COMPILE_ENV}" != "False" ]]; then
+
+                    local CONDA_UNLOCKED_ENV_FILE="${CF_REQ_OUTPUT_DIR}/environment_py${pyv}.unlocked.yaml"
+                    local CONDA_ENV_FILE_TEMPLATE="${CF_REQ_OUTPUT_DIR}/environment_{platform}_py${pyv}"
+                    # first, install unidep into conda environment
+                    micromamba install unidep[toml] python=${pyv} conda-lock || return "$?"
+
+                    # first, create a merged environment file from pyproject.toml without any locks
+                    # to properly control the name of the unlocked file
+                    args=(
+                        unidep merge --overwrite-pin "python=${pyv}" 
+                        -o ${CONDA_UNLOCKED_ENV_FILE}
+                        -d $CF_BASE
+                    )
+                    echo "${args[@]}"
+                    "${args[@]}" || return "$?"
+                    
+                    # then call conda-lock lock directly to generate file with locked package versions
+                    # NB: the '--lockfile' option doesn't work properly, so use
+                    #     '--filename-template' to generate the file with the correct name
+                    args=(
+                        conda-lock lock -f ${CONDA_UNLOCKED_ENV_FILE}
+                         --micromamba -k env -p $system
+                         --filename-template ${CONDA_ENV_FILE_TEMPLATE}
+                    )
+                    
+                    echo "${args[@]}"
+                    "${args[@]}" || return "$?"
+                    
+                    # resulting environment.yaml file contains environment name
+                    # which we do not use, so delete the name
+                    # sed -i.bak '/^name:/d' $CONDA_ENV_FILE || return "$?"
+                    # if [ -f $CONDA_ENV_FILE.bak ]; then
+                    #     rm $CONDA_ENV_FILE.bak
+                    # fi
+                    cat $CONDA_ENV_FILE
+                fi
+                
+                micromamba install -f $CONDA_ENV_FILE || return "$?"
+                if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
+                    rm ${CONDA_ENV_FILE}
+                fi
+                micromamba clean --yes --all
                 # add a file to conda/activate.d that handles the gfal setup transparently with conda-pack
                 cat << EOF > "${CF_CONDA_BASE}/etc/conda/activate.d/gfal_activate.sh"
 export GFAL_CONFIG_DIR="\${CONDA_PREFIX}/etc/gfal2.d"
@@ -707,6 +765,9 @@ EOF
                 echo
             fi
         fi
+
+        # introduce sanity check for requested python version (pyv) vs python version in conda environment
+        
 
         #
         # venv setup
@@ -735,6 +796,7 @@ EOF
 
         # source the dev sandbox
         source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
+
         ret="$?"
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"
