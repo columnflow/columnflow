@@ -85,7 +85,7 @@ class TriggerSFConfig:
 
         def decorator(func: Callable[[ak.Array], dict[ak.Array]]):
             self.event_mask_func = func
-            self.event_mask_uses = self.event_mask_uses | event_mask_uses
+            self.event_mask_uses = self.event_mask_uses | uses
 
         return decorator(func) if func else decorator
 
