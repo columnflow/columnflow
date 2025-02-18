@@ -29,11 +29,11 @@ from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateCutflowHistograms(
-    VariablesMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
-    ChunkedIOMixin,
     DatasetTask,
+    ChunkedIOMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -89,9 +89,7 @@ class CreateCutflowHistograms(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
         reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
-
         return reqs
 
     def requires(self):
@@ -266,11 +264,11 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 
 class PlotCutflowBase(
+    ShiftTask,
+    CalibratorsMixin,
     SelectorStepsMixin,
     CategoriesMixin,
-    CalibratorsMixin,
     PlotBase,
-    ShiftTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -288,9 +286,9 @@ class PlotCutflowBase(
         CreateCutflowHistograms=CreateCutflowHistograms,
     )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        parts.insert_after(self.config_store_anchor, "plot", f"datasets_{self.datasets_repr}")
         return parts
 
 
@@ -472,9 +470,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
+    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
-    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -652,7 +650,7 @@ class PlotCutflowVariables1D(
         "--per-plot parameter",
         allow_empty=True,
     )
-    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_stack"
     plot_function_steps = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     per_plot = luigi.ChoiceParameter(
@@ -721,6 +719,7 @@ class PlotCutflowVariables1D(
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),
                     variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=[self.global_shift_inst],
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
@@ -806,8 +805,8 @@ class PlotCutflowVariables2D(
 
 
 class PlotCutflowVariablesPerProcess2D(
-    law.WrapperTask,
     PlotCutflowVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"

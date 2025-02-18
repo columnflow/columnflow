@@ -756,7 +756,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
 
-        :return: Dictionary with parts to create a path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = law.util.InsertableDict()
 
@@ -990,6 +990,10 @@ class ConfigTask(AnalysisTask):
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
+    # the field in the store parts behind which the new part is inserted
+    # added here for subclasses that typically refer to the store part added by _this_ class
+    config_store_anchor = "config"
+
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
@@ -1055,7 +1059,7 @@ class ConfigTask(AnalysisTask):
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the config name
@@ -1230,12 +1234,12 @@ class ShiftTask(ConfigTask):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the shift name
         if self.global_shift_inst:
-            parts.insert_after("config", "shift", self.global_shift_inst.name)
+            parts.insert_after(self.config_store_anchor, "shift", self.global_shift_inst.name)
 
         return parts
 
@@ -1323,11 +1327,11 @@ class DatasetTask(ShiftTask):
         )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # insert the dataset
-        parts.insert_after("config", "dataset", self.dataset_inst.name)
+        parts.insert_after(self.config_store_anchor, "dataset", self.dataset_inst.name)
 
         return parts
 

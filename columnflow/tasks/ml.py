@@ -35,10 +35,10 @@ ak = maybe_import("awkward")
 
 
 class PrepareMLEvents(
-    MLModelDataMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -296,13 +296,12 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLStats(
-    MLModelDataMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.LocalWorkflow,
-    RemoteWorkflow,
 ):
 
     # upstream requirements
@@ -365,11 +364,11 @@ MergeMLStatsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    MLModelDataMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -589,10 +588,10 @@ class MLTraining(
 
 
 class MLEvaluation(
-    MLModelMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducersMixin,
+    MLModelMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -854,11 +853,11 @@ MLEvaluationWrapper = wrapper_factory(
 
 
 class MergeMLEvaluation(
-    MLModelMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -914,11 +913,11 @@ MergeMLEvaluationWrapper = wrapper_factory(
 
 class PlotMLResultsBase(
     ProcessPlotSettingMixin,
-    CategoriesMixin,
-    MLModelMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
     CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelMixin,
+    CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

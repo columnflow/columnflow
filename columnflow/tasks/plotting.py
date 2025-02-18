@@ -4,6 +4,7 @@
 Tasks to plot different types of histograms.
 """
 
+import itertools
 from collections import OrderedDict
 from abc import abstractmethod
 
@@ -26,15 +27,15 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
-    HistHookMixin,
-    VariablePlotSettingMixin,
-    ProcessPlotSettingMixin,
-    CategoriesMixin,
+    CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
     MLModelsMixin,
     WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
+    CategoriesMixin,
+    ProcessPlotSettingMixin,
+    VariablePlotSettingMixin,
+    HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -48,7 +49,7 @@ class PlotVariablesBase(
         MergeHistograms=MergeHistograms,
     )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
@@ -62,9 +63,7 @@ class PlotVariablesBase(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
         reqs["merged_hists"] = self.requires_from_branch()
-
         return reqs
 
     @abstractmethod
@@ -103,6 +102,7 @@ class PlotVariablesBase(
             process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
             for process_inst in process_insts
         }
+        hide_processes = list(map(self.config_inst.get_process, self.hide_processes))
 
         # histogram data per process copy
         hists = {}
@@ -149,6 +149,22 @@ class PlotVariablesBase(
             # update histograms using custom hooks
             hists = self.invoke_hist_hooks(hists)
 
+            # potentially remove histograms for specific processes after hooks were applied
+            if hide_processes:
+                def hide(process_inst: od.Process) -> bool:
+                    return any(
+                        (
+                            process_inst == hide_process_inst or
+                            hide_process_inst.has_process(process_inst, deep=True)
+                        )
+                        for hide_process_inst in hide_processes
+                    )
+                hists = {
+                    process_inst: h
+                    for process_inst, h in hists.items()
+                    if not hide(process_inst)
+                }
+
             # add new processes to the end of the list
             for process_inst in hists:
                 if process_inst not in process_insts:
@@ -184,6 +200,7 @@ class PlotVariablesBase(
                 config_inst=self.config_inst,
                 category_inst=category_inst.copy_shallow(),
                 variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                shift_insts=plot_shifts,
                 **self.get_plot_parameters(),
             )
 
@@ -193,16 +210,10 @@ class PlotVariablesBase(
 
 
 class PlotVariablesBaseSingleShift(
-    PlotVariablesBase,
     ShiftTask,
+    PlotVariablesBase,
 ):
     exclude_index = True
-
-    # upstream requirements
-    reqs = Requirements(
-        PlotVariablesBase.reqs,
-        MergeHistograms=MergeHistograms,
-    )
 
     def create_branch_map(self):
         return [
@@ -245,7 +256,7 @@ class PlotVariablesBaseSingleShift(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if "shift" in parts:
             parts.insert_before("datasets", "shift", parts.pop("shift"))
@@ -260,7 +271,7 @@ class PlotVariables1D(
     PlotBase1D,
 ):
     plot_function = PlotBase.plot_function.copy(
-        default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
+        default="columnflow.plotting.plot_functions_1d.plot_variable_stack",
         add_default_to_description=True,
     )
 
@@ -276,8 +287,8 @@ class PlotVariables2D(
 
 
 class PlotVariablesPerProcess2D(
-    law.WrapperTask,
     PlotVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"
@@ -300,26 +311,34 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
+    # whether this task creates a single plot combining all shifts or one plot per shift
+    combine_shifts = True
+
     exclude_index = True
 
     # upstream requirements
     reqs = Requirements(
         PlotVariablesBase.reqs,
+        MergeHistograms=MergeHistograms,
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
 
     def create_branch_map(self):
-        return [
-            DotDict({"category": cat_name, "variable": var_name, "shift_source": source})
-            for var_name in sorted(self.variables)
-            for cat_name in sorted(self.categories)
-            for source in sorted(self.shift_sources)
-        ]
+        seqs = [self.categories, self.variables]
+        keys = ["category", "variable"]
+        if not self.combine_shifts:
+            seqs.append(self.shift_sources)
+            keys.append("shift_source")
+        return [DotDict(zip(keys, vals)) for vals in itertools.product(*seqs)]
 
     def requires(self):
-        # TODO: for data, request MergeHistograms
+        req_cls = lambda dataset_name: (
+            self.reqs.MergeShiftedHistograms
+            if self.config_inst.get_dataset(dataset_name).is_mc
+            else self.reqs.MergeHistograms
+        )
         return {
-            d: self.reqs.MergeShiftedHistograms.req(
+            d: req_cls(d).req(
                 self,
                 dataset=d,
                 branch=-1,
@@ -332,35 +351,38 @@ class PlotVariablesBaseMultiShifts(
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
 
+        # process, category and variable representations
         parts["processes"] = f"proc_{self.processes_repr}"
-        parts["shift_source"] = f"unc_{self.branch_data.shift_source}"
         parts["category"] = f"cat_{self.branch_data.category}"
         parts["variable"] = f"var_{self.branch_data.variable}"
 
-        hooks_repr = self.hist_hooks_repr
-        if hooks_repr:
+        # shift source or sources
+        parts["shift_source"] = (
+            f"shifts_{self.shift_sources_repr}"
+            if self.combine_shifts
+            else f"shift_{self.branch_data.shift_source}"
+        )
+
+        # hooks
+        if (hooks_repr := self.hist_hooks_repr):
             parts["hook"] = f"hooks_{hooks_repr}"
 
         return parts
 
     def output(self):
-        return {
-            "plots": [self.target(name) for name in self.get_plot_names("plot")],
-        }
-
-    def store_parts(self):
-        parts = super().store_parts()
-        parts.insert_before("datasets", "shifts", f"shifts_{self.shift_sources_repr}")
-        return parts
+        return {"plots": [self.target(name) for name in self.get_plot_names("plot")]}
 
     def get_plot_shifts(self):
-        return [
-            self.config_inst.get_shift(s) for s in [
-                "nominal",
-                f"{self.branch_data.shift_source}_up",
-                f"{self.branch_data.shift_source}_down",
-            ]
-        ]
+        # only to be called by branch tasks
+        if self.is_workflow():
+            raise Exception("calls to get_plots_shifts are forbidden for workflow tasks")
+
+        # gather sources, expand to names (with up/down)
+        sources = self.shift_sources if self.combine_shifts else [self.branch_data.shift_source]
+        names = sum(([f"{source}_up", f"{source}_down"] for source in sources), [])
+
+        # extract from config
+        return list(map(self.config_inst.get_shift, ["nominal"] + names))
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
@@ -374,21 +396,34 @@ class PlotShiftedVariables1D(
     PlotVariablesBaseMultiShifts,
 ):
     plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.plot_functions_1d.plot_variable_stack",
+        add_default_to_description=True,
+    )
+
+
+class PlotShiftedVariablesPerShift1D(
+    PlotBase1D,
+    PlotVariablesBaseMultiShifts,
+):
+    # this tasks creates one plot per shift
+    combine_shifts = False
+
+    plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_shifted_variable",
         add_default_to_description=True,
     )
 
 
-class PlotShiftedVariablesPerProcess1D(law.WrapperTask):
+class PlotShiftedVariablesPerShiftAndProcess1D(law.WrapperTask):
 
     # upstream requirements
     reqs = Requirements(
-        PlotShiftedVariables1D.reqs,
-        PlotShiftedVariables1D=PlotShiftedVariables1D,
+        PlotShiftedVariablesPerShift1D.reqs,
+        PlotShiftedVariablesPerShift1D=PlotShiftedVariablesPerShift1D,
     )
 
     def requires(self):
         return {
-            process: self.reqs.PlotShiftedVariables1D.req(self, processes=(process,))
+            process: self.reqs.PlotShiftedVariablesPerShift1D.req(self, processes=(process,))
             for process in self.processes
         }

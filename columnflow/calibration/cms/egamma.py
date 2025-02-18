@@ -186,8 +186,8 @@ class egamma_scale_corrector(Calibrator):
 
         # add columns with unceratinties if requested
         # photon scale _uncertainties_ are only available for MC
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
+        if getattr(self, "dataset_inst", None) is not None:
+            if self.with_uncertainties and self.dataset_inst.is_mc:
                 self.produces |= {f"{self.source_field}.pt_scale_{{up,down}}"}
 
     def requires_func(self, reqs: dict) -> None:
@@ -411,8 +411,8 @@ class egamma_resolution_corrector(Calibrator):
         }
 
         # add columns with unceratinties if requested
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
+        if getattr(self, "dataset_inst", None) is not None:
+            if self.with_uncertainties and self.dataset_inst.is_mc:
                 self.produces |= {f"{self.source_field}.pt_res_{{up,down}}"}
 
     def requires_func(self, reqs: dict) -> None:
