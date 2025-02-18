@@ -87,6 +87,7 @@ typehints_defaults = "comma"
 autodoc_default_options = {
     "member-order": "bysource",
     "show-inheritance": True,
+    "ignore-module-all": True,
 }
 
 autosectionlabel_prefix_document = True
@@ -99,7 +100,7 @@ intersphinx_aliases = {
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "coffea": ("https://coffeateam.github.io/coffea", None),
+    "coffea": ("https://coffea-hep.readthedocs.io/en/latest/", None),
     "law": ("https://law.readthedocs.io/en/latest/", None),
     "order": ("https://python-order.readthedocs.io/en/latest/", None),
     "ak": ("https://awkward-array.org/doc/main", None),
