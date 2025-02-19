@@ -11,8 +11,7 @@ import getpass
 import luigi
 import law
 
-from columnflow.columnar_util import TaskArrayFunction
-from columnflow.util import try_float, try_complex, DotDict
+from columnflow.util import try_float, try_complex, DotDict, Derivable
 from columnflow.types import Iterable, Any
 
 
@@ -38,15 +37,16 @@ last_edge_inclusive_inst = law.OptionalBoolParameter(
 )
 
 
-class TaskArrayFunctionParameter(luigi.Parameter):
+class DerivableInstParameter(luigi.Parameter):
     """
-    Parameter that can be used to pass the instance of a task array function. This class does not
-    implement parameter value parsing.
+    Parameter that can be used to pass the instance of a :py:class:`Derivable` subclass.
+
+    This class does not implement parameter value parsing.
     """
 
     @classmethod
     def _serialize(cls, x: Any) -> str:
-        if isinstance(x, TaskArrayFunction):
+        if isinstance(x, Derivable):
             return x.cls_name
         return str(x)
 
@@ -54,16 +54,17 @@ class TaskArrayFunctionParameter(luigi.Parameter):
         return self._serialize(x)
 
 
-class TaskArrayFunctionsParameter(luigi.Parameter):
+class DerivableInstsParameter(luigi.Parameter):
     """
-    Parameter that can be used to pass multiple instances of a task array functions. This class does
-    not implement parameter value parsing.
+    Parameter that can be used to pass multiple instances of a :py:class:`Derivable` subclass.
+
+    This class does not implement parameter value parsing.
     """
 
     def serialize(self, x: Any) -> str:
         """"""
         if isinstance(x, (list, tuple)):
-            return ",".join(TaskArrayFunctionParameter._serialize(v) for v in x)
+            return ",".join(DerivableInstParameter._serialize(v) for v in x)
         return str(x)
 
 

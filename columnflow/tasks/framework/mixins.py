@@ -19,7 +19,7 @@ from columnflow.tasks.framework.base import (
     AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT,
 )
 from columnflow.tasks.framework.parameters import (
-    SettingsParameter, TaskArrayFunctionParameter, TaskArrayFunctionsParameter,
+    SettingsParameter, DerivableInstParameter, DerivableInstsParameter,
 )
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -38,6 +38,10 @@ logger = law.logger.get_logger(__name__)
 
 
 class ArrayFunctionInstanceMixin(DatasetTask):
+
+    # def __init__(self, *args, **kwargs) -> None:
+    #     super().__init__(*args, **kwargs)
+    #     self._array_function_post_init()
 
     def _array_function_post_init(self, **kwargs) -> None:
         """
@@ -118,7 +122,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
     Mixin to include and access a single :py:class:`~columnflow.calibration.Calibrator` instance.
     """
 
-    calibrator_inst = TaskArrayFunctionParameter(
+    calibrator_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -285,7 +289,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
     Mixin to include multiple :py:class:`~columnflow.calibration.Calibrator` instances into tasks.
     """
 
-    calibrator_insts = TaskArrayFunctionsParameter(
+    calibrator_insts = DerivableInstsParameter(
         default=(),
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -430,16 +434,17 @@ class SelectorClassMixin(ConfigTask):
             )
 
             # apply selector_steps_groups and default_selector_steps from config
-            params["selector_steps"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("selector_steps"),
-                container=config_inst,
-                default_str="default_selector_steps",
-                groups_str="selector_step_groups",
-            )
+            if "selector_steps" in params:
+                params["selector_steps"] = cls.resolve_config_default_and_groups(
+                    params,
+                    params.get("selector_steps"),
+                    container=config_inst,
+                    default_str="default_selector_steps",
+                    groups_str="selector_step_groups",
+                )
 
         # sort selector steps when the order does not matter
-        if not cls.selector_steps_order_sensitive and "selector_steps" in params:
+        if "selector_steps" in params and not cls.selector_steps_order_sensitive:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))
 
         return params
@@ -498,7 +503,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
     Mixin to include and access a single :py:class:`~columnflow.selection.Selector` instance.
     """
 
-    selector_inst = TaskArrayFunctionParameter(
+    selector_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -676,7 +681,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
     Mixin to include and access a single :py:class:`~columnflow.production.Producer` instance.
     """
 
-    producer_inst = TaskArrayFunctionParameter(
+    producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -843,7 +848,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
     Mixin to include multiple :py:class:`~columnflow.production.Producer` instances into tasks.
     """
 
-    producer_insts = TaskArrayFunctionsParameter(
+    producer_insts = DerivableInstsParameter(
         default=(),
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -1650,7 +1655,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
     Mixin to include and access a single :py:class:`~columnflow.weight.WeightProducer` instance.
     """
 
-    weight_producer_inst = TaskArrayFunctionParameter(
+    weight_producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
@@ -1790,19 +1795,46 @@ class InferenceModelClassMixin(ConfigTask):
 
 class InferenceModelMixin(InferenceModelClassMixin):
 
+    inference_model_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+
+    exclude_params_index = {"inference_model_inst"}
+    exclude_params_repr = {"inference_model_inst"}
+    exclude_params_sandbox = {"inference_model_inst"}
+    exclude_params_remote_workflow = {"inference_model_inst"}
+
     @classmethod
-    def get_inference_model_inst(
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        # add the weight producer instance
+        if (config_inst := params.get("config_inst")) and not params.get("inference_model_inst"):
+            params["inference_model_inst"] = cls.build_inference_model_inst(
+                params["inference_model"],
+                config_inst,
+            )
+
+        return params
+
+    @classmethod
+    def build_inference_model_inst(
         cls,
         inference_model: str,
         config_inst: od.Config,
+        params: dict[str, Any] | None = None,
     ) -> InferenceModel:
-        return InferenceModel.get_cls(inference_model)(config_inst)
+        """
+        Instantiate and return the :py:class:`~columnflow.inference.InferenceModel` instance.
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # get the inference model instance
-        self.inference_model_inst = self.get_inference_model_inst(self.inference_model, self.config_inst)
+        :param inference_model: Name of the inference model class to instantiate.
+        :param config_inst: The configuration instance.
+        :param params: Arguments forwarded to the inference model constructor.
+        :return: The inference model instance.
+        """
+        inference_model_cls = InferenceModel.get_cls(inference_model)
+        return inference_model_cls(config_inst, **(params or {}))
 
 
 class CategoriesMixin(ConfigTask):

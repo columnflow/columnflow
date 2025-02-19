@@ -45,6 +45,9 @@ class _SelectEvents(
 
 class SelectEvents(_SelectEvents):
 
+    # disable selector steps
+    selector_steps = None
+
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
