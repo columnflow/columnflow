@@ -7,7 +7,6 @@ Lightweight mixins task classes.
 from __future__ import annotations
 
 import time
-import copy
 import itertools
 from collections import Counter
 
