@@ -10,13 +10,13 @@ import law
 import luigi
 
 from columnflow.types import Any, Callable
-from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import DatasetsProcessesMixin, VariablesMixin
+from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
+from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
 
-class PlotBase(ConfigTask):
+class PlotBase(AnalysisTask):
     """
     Base class for all plotting tasks.
     """
@@ -85,11 +85,13 @@ class PlotBase(ConfigTask):
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve general_settings
+        # NOTE: we currently assume that general_settings defaults and groups are the same for all
+        # config instances
         if "general_settings" in params:
             settings = params["general_settings"]
             # when empty and default general_settings are defined, use them instead
@@ -254,6 +256,8 @@ class PlotBase(ConfigTask):
             if value is None:
                 kwargs.pop(key)
 
+        config_inst = self.config_insts[0]
+
         # set items of general_settings in kwargs if corresponding key is not yet present
         general_settings = kwargs.get("general_settings", {})
         for key, value in general_settings.items():
@@ -262,9 +266,9 @@ class PlotBase(ConfigTask):
         # resolve custom_style_config
         custom_style_config = kwargs.get("custom_style_config", None)
         if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = self.config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+            custom_style_config = config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
 
-        groups = self.config_inst.x("custom_style_config_groups", {})
+        groups = config_inst.x("custom_style_config_groups", {})
         if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
             custom_style_config = groups[custom_style_config]
 
@@ -280,7 +284,7 @@ class PlotBase(ConfigTask):
         # resolve blinding_threshold
         blinding_threshold = kwargs.get("blinding_threshold", None)
         if blinding_threshold is None:
-            blinding_threshold = self.config_inst.x("default_blinding_threshold", None)
+            blinding_threshold = config_inst.x("default_blinding_threshold", None)
         kwargs["blinding_threshold"] = blinding_threshold
 
         return kwargs
@@ -413,8 +417,9 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
+    # TODO: could add back MultiConfigDatasetsProcessesMixin if it works with both ConfigTask and MultiConfigTask
     PlotBase,
-    DatasetsProcessesMixin,
+    # DatasetsProcessesMixin,
 ):
     """
     Mixin class for tasks creating plots where contributions of different processes are shown.
@@ -434,11 +439,13 @@ class ProcessPlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve process_settings
+        # NOTE: we currently assume that process_settings defaults and groups are the same for all
+        # config instances
         if "process_settings" in params:
             settings = params["process_settings"]
             # when empty and default process_settings are defined, use them instead
@@ -488,11 +495,13 @@ class VariablePlotSettingMixin(
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        if "config_inst" not in params:
+        if "config_insts" not in params:
             return params
-        config_inst = params["config_inst"]
+        config_inst = params["config_insts"][0]
 
         # resolve variable_settings
+        # NOTE: we currently assume that variable_settings defaults and groups are the same for all
+        # config instances
         if "variable_settings" in params:
             settings = params["variable_settings"]
             # when empty and default variable_settings are defined, use them instead

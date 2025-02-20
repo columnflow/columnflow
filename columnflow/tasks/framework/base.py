@@ -43,6 +43,7 @@ class Requirements(DotDict):
         instances and additional keyword arguments ``kwargs``, which are
         added.
         """
+
     def __init__(self, *others, **kwargs):
 
         super().__init__()
@@ -114,10 +115,43 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     _cfg_versions_dict = None
     _cfg_resources_dict = None
 
+    is_single_config = None
+
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
         params = cls.resolve_param_values(params)
+        return params
+
+    @classmethod
+    def switch_to_analysis_inst_aux(cls, params: dict):
+        """
+        This function switches the default values from the config insts to the analysis inst to help
+        with the transition to the MultiConfigTask, for which the defaults need to be set in the
+        analysis inst.
+        """
+        if "config_insts" not in params:
+            return params
+
+        # TaskArrayFunctions that should be set via the analysis inst aux values
+        analysis_inst_aux = (
+            "default_calibrator", "default_selector", "default_selector_steps",
+            "default_producer", "default_ml_model",
+            "default_weight_producer", "default_inference_model", "default_categories", "default_variables",
+        )
+
+        # set defaults to the analysis inst if they are set in the config inst
+        # (assuming defaults are the same in all configs)
+        config_inst = params.get("config_insts")[0]
+        for default in analysis_inst_aux:
+            if config_inst.has_aux(default) and not params["analysis_inst"].has_aux(default):
+                law.logger.get_logger(cls.task_family).warning(
+                    f"The {default} aux value is set in the config, but not in the analysis. "
+                    "It is recommended to set this value in the analysis instead. The value in the "
+                    f"analysis inst will be set to '{config_inst.x(default)}'.",
+                )
+                params["analysis_inst"].set_aux(default, config_inst.x(default))
+
         return params
 
     @classmethod
@@ -471,6 +505,61 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             raise ValueError(f"names/patterns did not yield any matches: {missing_str}")
 
         return law.util.make_unique(object_names)
+
+    @classmethod
+    def find_config_objects_multi_container(
+        cls,
+        names: Sequence[str],
+        containers: Sequence[od.UniqueObject],
+        object_cls: od.UniqueObjectMeta,
+        object_groups: dict[str, list] | None = None,
+        check_missing: bool = True,
+        **kwargs,
+    ) -> [str]:
+        """
+        Returns all names of objects of type *object_cls* known to all *containers* (e.g.
+        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names* using the
+        *find_config_objects* method. The method is called for each container and the results
+        are intersected to find the objects that are defined in all containers.
+        When an object is not defined in all containers and *check_missing* is *True*,
+        a warning is issued.
+
+        :param cls: The current class.
+        :param objects: The objects to resolve.
+        :param containers: The containers to search for the objects.
+        :param object_cls: The class of the objects to search for.
+        :param object_groups: The object groups to search for.
+        :param check_missing: Whether to issue warnings for objects that are not defined in all
+            containers.
+        :param kwargs: Additional keyword arguments passed to the *find_config_objects* method.
+        :return: A list of object names that are defined in all containers.
+        """
+        outp = None
+        all_obj = set()
+        config_obj = dict()
+        for _container in containers:
+            config_obj[_container] = set(cls.find_config_objects(
+                names,
+                _container,
+                object_cls,
+                _container.x(object_groups, {}),
+                **kwargs,
+            ))
+            all_obj |= config_obj[_container]
+
+            if outp:
+                outp &= config_obj[_container]
+            else:
+                outp = config_obj[_container]
+
+            # warnings for objects not defined in all configs
+            if check_missing and len(all_obj - config_obj[_container]) != 0:
+                for obj in (all_obj - config_obj[_container]):
+                    law.logger.get_logger(cls.task_family).warning(
+                        f"The object {object_cls} with name {obj} is not defined "
+                        f"in the config {_container.name}.",
+                    )
+        return list(outp)
 
     @classmethod
     def resolve_config_default(
@@ -960,6 +1049,100 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         }
 
 
+class MultiConfigTask(AnalysisTask):
+
+    configs = law.CSVParameter(
+        default=(default_config,),
+        description="comma-separated names of analysis config to use; default: ('{default_config}',)",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    config_order_dependent = False
+
+    is_single_config = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # store a reference to the config instances
+        self.config_insts = tuple(self.analysis_inst.get_config(config) for config in self.configs)
+
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """Resolve the parameter values for the given parameters.
+
+        This method retrieves the parameters and resolves the ML model instance, configs,
+        calibrators, selector, and producers. It also calls the model's setup hook.
+
+        :param params: A dictionary of parameters that may contain the analysis instance and ML model.
+        :return: A dictionary containing the resolved parameters.
+        :raises Exception: If the ML model instance received configs to define training configs,
+            but did not define any.
+        """
+        params = super().resolve_param_values(params)
+
+        # if not params.get("configs"):
+        #     raise Exception("No configs have been requested.")
+
+        # store a reference to the config inst
+        if "config_insts" not in params and "analysis_inst" in params and "configs" in params:
+            params["config_insts"] = tuple([
+                params["analysis_inst"].get_config(config)
+                for config in params["configs"]
+            ])
+
+        # for backwards compatibility, we automatically switch the defaults from config to analysis inst
+        params = cls.switch_to_analysis_inst_aux(params)
+
+        return params
+
+    @classmethod
+    def get_array_function_kwargs(cls, task=None, **params):
+        kwargs = super().get_array_function_kwargs(task=task, **params)
+
+        if task:
+            kwargs["config_insts"] = task.config_insts
+        elif "config_insts" in params:
+            kwargs["config_insts"] = params["config_insts"]
+        elif "configs" in params and "analysis_inst" in kwargs:
+            kwargs["config_insts"] = tuple([
+                kwargs["analysis_inst"].get_config(config)
+                for config in params["configs"]
+            ])
+
+        if not kwargs.get("config_insts"):
+            raise Exception(f"Did not manage to resolve config instances from task {task.cls_family}")
+
+        if "config_insts" in kwargs:
+            # for simplicity, we assign the first config as config_inst, but this might be stupid to do...
+            kwargs["config_inst"] = kwargs["config_insts"][0]
+
+        return kwargs
+
+    def store_parts(self) -> law.util.InsertableDict[str, str]:
+        """Generate a dictionary of store parts for the current instance.
+
+        This method extends the base method to include the configs parameter.
+
+        :return: An InsertableDict containing the store parts.
+        """
+        parts = super().store_parts()
+
+        configs = self.configs
+        if not self.config_order_dependent:
+            configs = sorted(configs)
+
+        configs_repr = "__".join(configs[:5])
+
+        if len(configs) > 5:
+            configs_repr += f"_{law.util.create_hash(configs[5:])}"
+
+        parts.insert_after("task_family", "configs", configs_repr)
+
+        return parts
+
+
 class ConfigTask(AnalysisTask):
 
     config = luigi.Parameter(
@@ -970,6 +1153,7 @@ class ConfigTask(AnalysisTask):
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
     config_store_anchor = "config"
+    is_single_config = True
 
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
@@ -978,6 +1162,10 @@ class ConfigTask(AnalysisTask):
         # store a reference to the config inst
         if "config_inst" not in params and "analysis_inst" in params and "config" in params:
             params["config_inst"] = params["analysis_inst"].get_config(params["config"])
+            params["config_insts"] = [params["config_inst"]]
+
+        # for backwards compatibility, we automatically switch the defaults from config to analysis inst
+        params = cls.switch_to_analysis_inst_aux(params)
 
         return params
 
@@ -1031,6 +1219,7 @@ class ConfigTask(AnalysisTask):
 
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
+        self.config_insts = [self.config_inst]
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -1188,8 +1377,16 @@ class ShiftTask(ConfigTask):
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
+        # NOTE: we might want to remove the local_shift_inst and global_shift_inst attributes
+        #       when using multi config, but at the moment they are still in use for the inits
+        #       of TaskArrayFunctions
         self.local_shift_inst = None
         self.global_shift_inst = None
+        if not self.is_single_config:
+            # store references to the shift instances per config
+            self.local_shift_insts = {}
+            self.global_shift_insts = {}
+
         if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
@@ -1204,7 +1401,7 @@ class ShiftTask(ConfigTask):
         return parts
 
 
-class DatasetTask(ShiftTask):
+class DatasetTask(ShiftTask, ConfigTask):
 
     dataset = luigi.Parameter(
         default=default_dataset,

@@ -6,8 +6,10 @@ __all__ = ["HistUtilTests"]
 import unittest
 
 from columnflow.util import maybe_import
-from columnflow.hist_util import add_hist_axis, create_hist_from_variables
-
+from columnflow.hist_util import (
+    add_hist_axis, create_hist_from_variables, create_columnflow_hist,
+    translate_hist_intcat_to_strcat,
+)
 import order as od
 
 np = maybe_import("numpy")
@@ -93,14 +95,48 @@ class HistUtilTests(unittest.TestCase):
 
         self.assertEqual(histogram, histogram_manually)
 
-        # test with default axes
-        histogram = create_hist_from_variables(
-            *self.variable_examples,
-            int_cat_axes=("category", "process", "shift"),
-        )
+        # test with default categorical axes
+        histogram = create_columnflow_hist(*self.variable_examples)
 
-        expected_default_axes = ("category", "process", "shift")
-        for axis in expected_default_axes:
+        expected_default_axes = {
+            "category": hist.axis.IntCategory,
+            "process": hist.axis.IntCategory,
+            "shift": hist.axis.StrCategory,
+        }
+        for axis, axis_type in expected_default_axes.items():
             self.assertIn(axis, histogram.axes.name)
             self.assertEqual(histogram.axes[axis].name, axis)
-            self.assertEqual(type(histogram.axes[axis]), hist.axis.IntCategory)
+            self.assertEqual(type(histogram.axes[axis]), axis_type)
+
+    def test_translate_hist_intcat_to_strcat(self):
+        # Create a histogram with an integer category axis
+        h = hist.Hist(
+            hist.axis.IntCategory([1, 2, 3], name="category", label="Category Axis"),
+            storage=hist.storage.Double(),
+        )
+
+        # Fill the histogram with some data
+        h.fill(category=[1, 2, 2, 3, 3, 3])
+
+        # Define the mapping from integer to string categories
+        id_map = {1: "one", 2: "two", 3: "three"}
+
+        # Call the function to translate the axis
+        translated_h = translate_hist_intcat_to_strcat(h, "category", id_map)
+
+        # Validate the new histogram
+        # Check that the axis has been correctly translated
+        self.assertEqual(len(translated_h.axes), len(h.axes), "The number of axes should remain the same.")
+        str_axis = translated_h.axes[0]
+        self.assertIsInstance(str_axis, hist.axis.StrCategory, "The axis should be of type StrCategory.")
+        self.assertEqual(str_axis.name, "category", "The axis name should remain unchanged.")
+        self.assertEqual(str_axis.label, "Category Axis", "The axis label should remain unchanged.")
+
+        # Check the string categories
+        expected_categories = ["one", "two", "three"]
+        self.assertEqual(list(str_axis), expected_categories, "The categories should match the expected string values.")
+
+        # Check the data
+        self.assertEqual(translated_h.sum(), h.sum(), "The total sum of data should remain unchanged.")
+        for original, translated in zip(h.values(flow=True), translated_h.values(flow=True)):
+            self.assertEqual(original, translated, "The data values should remain unchanged.")

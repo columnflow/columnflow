@@ -9,7 +9,7 @@ from __future__ import annotations
 import law
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, DatasetsProcessesShiftSourcesMixin,
@@ -115,14 +115,14 @@ class HistogramsUserBase(
                 if p.id in h.axes["process"]
             ],
             "category": [
-                hist.loc(c.id)
+                hist.loc(c.name)
                 for c in leaf_category_insts
-                if c.id in h.axes["category"]
+                if c.name in h.axes["category"]
             ],
             "shift": [
-                hist.loc(s.id)
+                hist.loc(s.name)
                 for s in shift_insts
-                if s.id in h.axes["shift"]
+                if s.name in h.axes["shift"]
             ],
         }]
 
@@ -134,6 +134,7 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
+    ConfigTask,
     ShiftTask,
     HistogramsUserBase,
 ):

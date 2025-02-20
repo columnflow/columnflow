@@ -81,7 +81,7 @@ class PrepareMLEvents(
             # producer has already been cached
             return self._preparation_producer_inst
 
-        producer = self.ml_model_inst.preparation_producer(self.config_inst)
+        producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested
@@ -502,21 +502,13 @@ class MLTraining(
                         self,
                         config=config_inst.name,
                         dataset=dataset_inst.name,
-                        calibrators=_calibrators,
-                        selector=_selector,
-                        producers=_producers,
                         fold=fold,
                         tree_index=-1)
                     for fold in range(self.ml_model_inst.folds)
                 ]
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
         reqs["stats"] = {
             config_inst.name: {
@@ -524,18 +516,10 @@ class MLTraining(
                     self,
                     config=config_inst.name,
                     dataset=dataset_inst.name,
-                    calibrators=_calibrators,
-                    selector=_selector,
-                    producers=_producers,
                 )
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
 
         # ml model requirements
@@ -554,9 +538,6 @@ class MLTraining(
                         self,
                         config=config_inst.name,
                         dataset=dataset_inst.name,
-                        calibrators=_calibrators,
-                        selector=_selector,
-                        producers=_producers,
                         fold=f,
                     )
                     for f in range(self.ml_model_inst.folds)
@@ -564,13 +545,9 @@ class MLTraining(
                 ]
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
+        # TODO: stats reqs missing here
 
         # ml model requirements
         reqs["model"] = self.ml_model_inst.requires(self)
@@ -634,7 +611,7 @@ class MLEvaluation(
         producer = None
         if self.ml_model_inst.preparation_producer_in_ml_evaluation:
             # only consider preparation_producer in MLEvaluation if requested by model
-            producer = self.ml_model_inst.preparation_producer(self.config_inst)
+            producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested
@@ -661,9 +638,6 @@ class MLEvaluation(
         reqs["models"] = self.reqs.MLTraining.req_different_branching(
             self,
             configs=(self.config_inst.name,),
-            calibrators=(self.calibrators,),
-            selectors=(self.selector,),
-            producers=(self.producers,),
         )
 
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
@@ -686,9 +660,6 @@ class MLEvaluation(
             "models": self.reqs.MLTraining.req_different_branching(
                 self,
                 configs=(self.config_inst.name,),
-                calibrators=(self.calibrators,),
-                selectors=(self.selector,),
-                producers=(self.producers,),
                 branch=-1,
             ),
             "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
