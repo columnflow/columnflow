@@ -21,12 +21,12 @@ from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
-    ConfigTask,
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
     # MLModelsMixin,
     WeightProducerClassMixin,
+    ConfigTask,
     InferenceModelMixin,
     HistHookMixin,
     law.LocalWorkflow,

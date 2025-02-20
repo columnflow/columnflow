@@ -22,7 +22,7 @@ from columnflow.util import dev_sandbox, try_int
 
 
 class _CreateYieldTable(
-    ConfigTask,
+    # ConfigTask,
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,

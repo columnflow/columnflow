@@ -134,7 +134,7 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    ConfigTask,
+    # ConfigTask,
     ShiftTask,
     HistogramsUserBase,
 ):

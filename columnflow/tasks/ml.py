@@ -15,12 +15,14 @@ from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelDataMixin,
     MLModelTrainingMixin,
     MLModelMixin,
     ChunkedIOMixin,
     CategoriesMixin,
-    SelectorStepsMixin,
 )
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -36,9 +38,9 @@ ak = maybe_import("awkward")
 
 class PrepareMLEvents(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
     MLModelDataMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -300,7 +302,6 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLStats(
-    DatasetTask,
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
@@ -369,7 +370,6 @@ MergeMLStatsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    DatasetTask,
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
@@ -571,9 +571,9 @@ class MLTraining(
 
 class MLEvaluation(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
     MLModelMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -835,9 +835,9 @@ MLEvaluationWrapper = wrapper_factory(
 
 class MergeMLEvaluation(
     DatasetTask,
-    CalibratorsMixin,
-    SelectorMixin,
-    ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
@@ -894,9 +894,9 @@ MergeMLEvaluationWrapper = wrapper_factory(
 
 class PlotMLResultsBase(
     ProcessPlotSettingMixin,
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelMixin,
     CategoriesMixin,
     law.LocalWorkflow,
