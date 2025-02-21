@@ -1327,7 +1327,7 @@ class MLModelsMixin(AnalysisTask):
         return columns
 
 
-class WeightProducerClassMixin(ConfigTask):
+class WeightProducerClassMixin(AnalysisTask):
     """
     Mixin to include and access single :py:class:`~columnflow.weight.WeightProducer` class.
     """
@@ -2147,6 +2147,25 @@ class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMix
             cls.shift_validation_task_cls.modify_param_values(_params)
             if _params["global_shift_inst"].source == source:
                 return True
+
+        return False
+
+
+class MultiConfigDatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, MultiConfigDatasetsProcessesMixin):
+
+    @classmethod
+    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
+        if not cls.shift_validation_task_cls:
+            return True
+
+        # run the task's parameter validation using the up shift and all configs and datasets
+        for i, config in enumerate(params["configs"]):
+            datasets = params["datasets"][i]
+            for dataset in datasets:
+                _params = params | {"config": config, "shift": f"{source}_up", "dataset": dataset}
+                cls.shift_validation_task_cls.modify_param_values(_params)
+                if _params["global_shift_inst"].source == source:
+                    return True
 
         return False
 
