@@ -150,7 +150,7 @@ class CreateHistograms(_CreateHistograms):
         # run the weight_producer setup when not skipping
         skip_weight_producer = (
             callable(self.weight_producer_inst.skip_func) and
-            not self.weight_producer_inst.skip_func()
+            self.weight_producer_inst.skip_func()
         )
         reader_targets = {}
         if not skip_weight_producer:
