@@ -12,6 +12,7 @@ from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import has_ak_column, Route, fill_hist
 import columnflow.production.cmsGhent.trigger.util as util
 from columnflow.selection import SelectionResult
+import order as od
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
