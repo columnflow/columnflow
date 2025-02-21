@@ -174,7 +174,6 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
@@ -189,7 +188,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         calibrator_shifts = params["calibrator_inst"].all_shifts
         (shifts.local if cls.invokes_calibrator else shifts.upstream).update(calibrator_shifts)
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -344,14 +343,12 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -359,7 +356,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         for calibrator_inst in params["calibrator_insts"]:
             shifts.upstream |= calibrator_inst.all_shifts
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def _array_function_post_init(self, **kwargs) -> None:
         super()._array_function_post_init(**kwargs)
@@ -551,14 +548,12 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -566,7 +561,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         selector_shifts = params["selector_inst"].all_shifts
         (shifts.local if cls.invokes_selector else shifts.upstream).update(selector_shifts)
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -733,14 +728,12 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -748,7 +741,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         producer_shifts = params["producer_inst"].all_shifts
         (shifts.local if cls.invokes_producer else shifts.upstream).update(producer_shifts)
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -903,14 +896,12 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -918,7 +909,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         for producer_inst in params["producer_insts"]:
             shifts.upstream |= producer_inst.all_shifts
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def _array_function_post_init(self, **kwargs) -> None:
         super()._array_function_post_init(**kwargs)
@@ -1465,14 +1456,12 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -1480,7 +1469,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         weight_producer_shifts = params["weight_producer_inst"].all_shifts
         (shifts.local if cls.invokes_weight_producer else shifts.upstream).update(weight_producer_shifts)
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -1847,14 +1836,12 @@ class DatasetsProcessesMixin(ConfigTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -1863,7 +1850,7 @@ class DatasetsProcessesMixin(ConfigTask):
             if dataset_inst.is_mc:
                 shifts.upstream |= set(dataset_inst.info.keys())
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     @property
     def datasets_repr(self) -> str:
@@ -2001,19 +1988,16 @@ class MultiConfigDatasetsProcessesMixin(AnalysisTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         # add shifts of all datasets to upstream ones
-        # TODO: dataset_insts is a list of datasets per config, but we have a single config as input
-        # something does not match here
         for _dataset_insts in params["dataset_insts"]:
             for dataset_inst in _dataset_insts:
                 if dataset_inst.is_mc:
                     shifts.upstream |= set(dataset_inst.info.keys())
 
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
     def get_multi_config_objects_repr(self, names: Sequence[Sequence[str]]):
         """

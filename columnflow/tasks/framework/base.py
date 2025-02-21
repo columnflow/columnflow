@@ -1319,7 +1319,7 @@ class ShiftTask(ConfigTask):
         if params.get("local_shift") in {None, law.NO_STR}:
             # determine the known shifts for this class
             shifts = TaskShifts()
-            cls.get_known_shifts(config_inst, params, shifts)
+            cls.get_known_shifts(params, shifts)
             # check cases
             if requested_shift in shifts.local:
                 params["shift"] = requested_shift
@@ -1341,7 +1341,6 @@ class ShiftTask(ConfigTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
@@ -1349,7 +1348,6 @@ class ShiftTask(ConfigTask):
         Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
         by _this_ task, and dependent shifts that are implemented by upstream tasks.
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -1423,12 +1421,11 @@ class DatasetTask(ShiftTask, ConfigTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         # dataset can have shifts, that are considered as upstream shifts
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
         if (dataset_inst := params.get("dataset_inst")):
             if dataset_inst.is_data:

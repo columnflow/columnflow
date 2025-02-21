@@ -10,10 +10,6 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-# from columnflow.tasks.framework.mixins import (
-#     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-#     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
-# )
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin,
     ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
