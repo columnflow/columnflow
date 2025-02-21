@@ -10,7 +10,7 @@ import law
 from columnflow.production import producer, Producer
 from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column, has_ak_column, Route
-from columnflow.production.cmsGhent.trigger.util import init_trigger
+import columnflow.production.cmsGhent.trigger.util as util
 
 
 np = maybe_import("numpy")
@@ -40,9 +40,9 @@ def trigger_scale_factors(
         selected_events = selected_events[event_mask]
 
     if len(selected_events) > 0:
-        for variable_inst in self.variable_insts:
-            if variable_inst.x("auxiliary", False) is not False:
-                continue
+        for variable in self.main_variables:
+            variable_inst = self.trigger_config.get_variable(variable)
+
             # prepare the expression
             expr = variable_inst.expression
             if isinstance(expr, str):
@@ -65,7 +65,8 @@ def trigger_scale_factors(
 
 @trigger_scale_factors.init
 def trigger_scale_factors_init(self: Producer):
-    init_trigger(self, add_eff_vars=True, add_hists=False)
+    util.init_trigger_config(self)
+    util.init_uses_variables(self)
     self.uses |= self.event_mask_uses
     self.produces = {self.sf_name + suff for suff in ["", "_down", "_up"]}
 

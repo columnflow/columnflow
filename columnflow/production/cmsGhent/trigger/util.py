@@ -138,7 +138,7 @@ def correlation_efficiency_bias(passfailhist):
     return mult_bias - 1, var
 
 
-def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=True):
+def init_trigger_config(self: Producer | WeightProducer):
     if callable(self.trigger_config):
         self.trigger_config = self.trigger_config()
 
@@ -146,45 +146,12 @@ def init_trigger(self: Producer | WeightProducer, add_eff_vars=True, add_hists=T
         if not hasattr(self, key):
             setattr(self, key, value)
 
-    if add_eff_vars:
-        self.variable_insts = list(map(self.config_inst.get_variable, self.variables))
-        eff_bin_vars_inputs = {
-            inp
-            for variable_inst in self.variable_insts
-            for inp in (
-                [variable_inst.expression]
-                if isinstance(variable_inst.expression, str)
-                else variable_inst.x("inputs", [])
-            )
-        }
-
-        if add_hists:
-            if not hasattr(self, "objects"):
-                self.objects = {inp.split(".")[0] for inp in eff_bin_vars_inputs if "." in inp}
-
-            # add variable to bin measured trigger PASS / FAIL
-            self.variable_insts += [
-                od.Variable(
-                    self.tag,
-                    expression=lambda events: np.any([events.HLT[trigger] for trigger in self.triggers], axis=0),
-                    binning=(2, -0.5, 1.5),
-                    x_labels=["FAIL", "PASS"],
-                    aux={"inputs": [f"HLT.{trigger}" for trigger in self.triggers]},
-                ),
-                od.Variable(
-                    self.ref_tag,
-                    expression=lambda events: np.any([events.HLT[trigger] for trigger in self.ref_triggers], axis=0),
-                    binning=(2, -0.5, 1.5),
-                    x_labels=["FAIL", "PASS"],
-                    aux={"inputs": {f"HLT.{trigger}" for trigger in self.ref_triggers}},
-                ),
-            ]
-
-        self.uses.update({
-            inp
-            for variable_inst in self.variable_insts
-            for inp in (
-                [variable_inst.expression] if isinstance(variable_inst.expression, str) else variable_inst.x("inputs",
-                                                                                                             [])
-            )
-        })
+def init_uses_variables(self: Producer | WeightProducer):
+    self.uses.update({
+        inp
+        for variable_inst in self.variables
+        for inp in (
+            [variable_inst.expression] if isinstance(variable_inst.expression, str) else variable_inst.x("inputs",
+                                                                                                         [])
+        )
+    })

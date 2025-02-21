@@ -10,7 +10,7 @@ import law
 from columnflow.production import producer, Producer
 from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import has_ak_column, Route, fill_hist
-from columnflow.production.cmsGhent.trigger.util import init_trigger
+import columnflow.production.cmsGhent.trigger.util as util
 from columnflow.selection import SelectionResult
 
 np = maybe_import("numpy")
@@ -58,7 +58,7 @@ def trigger_efficiency_hists(
     }
 
     # loop over variables in which the efficiency is binned
-    for var_inst in self.variable_insts:
+    for var_inst in self.variables:
         expr = var_inst.expression
         if isinstance(expr, str):
             route = Route(expr)
@@ -97,8 +97,39 @@ def trigger_efficiency_hists_init(self: Producer):
     if hasattr(self, "dataset_inst") and self.dataset_inst.is_mc:
         self.uses.add("mc_weight")
 
-    init_trigger(self)
+    util.init_trigger_config(self)
 
+    eff_bin_vars_inputs = {
+        inp
+        for variable_inst in self.variables
+        for inp in (
+            [variable_inst.expression]
+            if isinstance(variable_inst.expression, str)
+            else variable_inst.x("inputs", [])
+        )
+    }
+    if getattr(self, "objects", None) is None:
+        self.objects = {inp.split(".")[0] for inp in eff_bin_vars_inputs if "." in inp}
+
+    # add variable to bin measured trigger PASS / FAIL
+    self.variables = self.variables + (
+        od.Variable(
+            self.tag,
+            expression=lambda events: np.any([events.HLT[trigger] for trigger in self.triggers], axis=0),
+            binning=(2, -0.5, 1.5),
+            x_labels=["FAIL", "PASS"],
+            aux={"inputs": [f"HLT.{trigger}" for trigger in self.triggers]},
+        ),
+        od.Variable(
+            self.ref_tag,
+            expression=lambda events: np.any([events.HLT[trigger] for trigger in self.ref_triggers], axis=0),
+            binning=(2, -0.5, 1.5),
+            x_labels=["FAIL", "PASS"],
+            aux={"inputs": {f"HLT.{trigger}" for trigger in self.ref_triggers}},
+        ),
+    )
+
+    util.init_uses_variables(self)
 
 @producer(
     # only run on mc

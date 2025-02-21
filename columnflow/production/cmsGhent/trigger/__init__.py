@@ -69,13 +69,14 @@ class TriggerSFConfig:
         if self.config_name is None:
             self.config_name = f"hlt_{self.tag.lower()}_ref_{self.ref_tag.lower()}"
 
+        self.variables = tuple(self.variables)
         for v in self.variables:
             red = v.x("reduce", sum) 
             assert red is sum or isinstance(red, slice) and red.step is sum or isinstance(red, int), (
                 f"invalid reduce method {red} for variable {v}"
             ) 
         self._var_mapping = {v.name: v for v in self.variables}
-        self.variable_names = list(self._var_mapping)
+        self.variable_names = tuple(self._var_mapping)
         if self.main_variables is None:
             self.main_variables = self.variable_names 
         self.main_variables = sorted(self.main_variables, key=self.variable_names.index)
