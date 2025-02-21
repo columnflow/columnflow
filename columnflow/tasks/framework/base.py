@@ -1276,7 +1276,7 @@ class TaskShifts:
     upstream: set[str] = field(default_factory=set)
 
 
-class ShiftTask(ConfigTask):
+class ShiftTask(AnalysisTask):
 
     shift = luigi.Parameter(
         default="nominal",
@@ -1296,12 +1296,12 @@ class ShiftTask(ConfigTask):
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
-        if (config_inst := params.get("config_inst")):
-            params = cls.resolve_shifts(config_inst, params)
+        if (config_insts := params.get("config_insts")):
+            params = cls.resolve_shifts(config_insts, params)
         return params
 
     @classmethod
-    def resolve_shifts(cls, config_inst: od.Config, params: dict) -> dict:
+    def resolve_shifts(cls, config_insts: list[od.Config], params: dict) -> dict:
         # require that the shift is set and known
         if (requested_shift := params.get("shift")) in (None, law.NO_STR):
             if not cls.allow_empty_shift:
@@ -1309,8 +1309,10 @@ class ShiftTask(ConfigTask):
             params["shift"] = law.NO_STR
             params["local_shift"] = law.NO_STR
             return params
-        if requested_shift not in config_inst.shifts:
-            raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
+
+        for config_inst in config_insts:
+            if requested_shift not in config_inst.shifts:
+                raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -1333,8 +1335,20 @@ class ShiftTask(ConfigTask):
 
         # store references if not already done
         if not params.get("global_shift_inst") or not params.get("local_shift_inst"):
-            params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-            params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+            # assign shift from first config (TODO: should not be used in MultiConfig tasks)
+            params["global_shift_inst"] = config_insts[0].get_shift(params["shift"])
+            params["local_shift_inst"] = config_insts[0].get_shift(params["local_shift"])
+
+            # for MultiConfigTasks, assign shift inst per config
+            if not cls.is_single_config:
+                params["global_shift_insts"] = {
+                    config_inst: config_inst.get_shift(params["shift"])
+                    for config_inst in config_insts
+                }
+                params["local_shift_insts"] = {
+                    config_inst: config_inst.get_shift(params["local_shift"])
+                    for config_inst in config_insts
+                }
 
         return params
 
@@ -1388,6 +1402,16 @@ class ShiftTask(ConfigTask):
         if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
+
+            if not self.is_single_config:
+                self.global_shift_insts = {
+                    config_inst: config_inst.get_shift(self.shift)
+                    for config_inst in self.config_insts
+                }
+                self.local_shift_insts = {
+                    config_inst: config_inst.get_shift(self.local_shift)
+                    for config_inst in self.config_insts
+                }
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
