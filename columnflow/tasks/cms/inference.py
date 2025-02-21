@@ -9,7 +9,7 @@ from collections import OrderedDict, defaultdict
 import law
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, InferenceModelMixin,
     HistHookMixin, WeightProducerClassMixin,
@@ -26,6 +26,7 @@ class CreateDatacards(
     ProducerClassesMixin,
     # MLModelsMixin,
     WeightProducerClassMixin,
+    ConfigTask,
     InferenceModelMixin,
     HistHookMixin,
     law.LocalWorkflow,
@@ -282,9 +283,9 @@ class CreateDatacards(
                 # select relevant category
                 h_proc = h_proc[{
                     "category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h_proc.axes["category"]
+                        if c.name in h_proc.axes["category"]
                     ],
                 }][{"category": sum}]
 

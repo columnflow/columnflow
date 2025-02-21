@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __all__ = []
 
+import functools
 import law
 import order as od
 
@@ -146,17 +147,22 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
 
 def create_hist_from_variables(
     *variable_insts,
-    int_cat_axes: tuple[str] | None = None,
+    categorical_axes: tuple(tuple(str, str)) | None = None,
     weight: bool = True,
 ) -> hist.Hist:
     histogram = hist.Hist.new
 
-    # integer category axes
-    if int_cat_axes:
-        for name in int_cat_axes:
-            histogram = histogram.IntCat([], name=name, growth=True)
+    # additional category axes
+    if categorical_axes:
+        for name, axis_type in categorical_axes:
+            if axis_type in ("intcategory", "intcat"):
+                histogram = histogram.IntCat([], name=name, growth=True)
+            elif axis_type in ("strcategory", "strcat"):
+                histogram = histogram.StrCat([], name=name, growth=True)
+            else:
+                raise ValueError(f"unknown axis type '{axis_type}' in argument 'categorical_axes'")
 
-    # requested axes
+    # requested axes from variables
     for variable_inst in variable_insts:
         histogram = add_hist_axis(histogram, variable_inst)
 
@@ -165,3 +171,55 @@ def create_hist_from_variables(
         histogram = histogram.Weight()
 
     return histogram
+
+
+create_columnflow_hist = functools.partial(create_hist_from_variables, categorical_axes=(
+    # axes that are used in columnflow tasks per default
+    # (NOTE: "category" axis is filled as int, but transformed to str afterwards)
+    ("category", "intcat"),
+    ("process", "intcat"),
+    ("shift", "strcat"),
+))
+
+
+def translate_hist_intcat_to_strcat(
+    h: hist.Hist,
+    axis_name: str,
+    id_map: dict[int, str],
+) -> hist.Hist:
+    out_axes = [
+        ax if ax.name != axis_name else hist.axis.StrCategory(
+            [id_map[v] for v in list(ax)],
+            name=ax.name,
+            label=ax.label,
+            growth=ax.traits.growth,
+        )
+        for ax in h.axes
+    ]
+    return hist.Hist(*out_axes, storage=h.storage_type(), data=h.view(flow=True))
+
+
+def add_missing_shifts(
+    h: hist.Hist,
+    expected_shifts_bins: set[str],
+    str_axis: str = "shift",
+    nominal_bin: str = "nominal",
+) -> None:
+    """
+    Adds missing shift bins to a histogram *h*.
+    """
+    # get the set of bins that are missing in the histogram
+    shift_bins = set(h.axes[str_axis])
+    missing_shifts = set(expected_shifts_bins) - shift_bins
+    if missing_shifts:
+        nominal = h[{str_axis: hist.loc(nominal_bin)}]
+        for missing_shift in missing_shifts:
+            # for each missing shift, create the missing shift bin with an
+            # empty fill and then copy the nominal histogram into it
+            dummy_fill = [
+                ax[0] if ax.name != str_axis else missing_shift
+                for ax in h.axes
+            ]
+            h.fill(*dummy_fill, weight=0)
+            # TODO: this might skip overflow and underflow bins
+            h[{str_axis: hist.loc(missing_shift)}] = nominal.view()
