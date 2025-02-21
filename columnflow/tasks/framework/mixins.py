@@ -37,6 +37,18 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
+class ArrayFunctionClassMixin(AnalysisTask):
+
+    def array_function_cls_repr(self, array_function) -> None:
+        """
+        Central definition of how to obtain representation of array function from the name
+
+        :param array_function: name of the array function (NOTE: change to class?)
+        :return: sring representation of the array function
+        """
+        return str(array_function)
+
+
 class ArrayFunctionInstanceMixin(DatasetTask):
 
     # def __init__(self, *args, **kwargs) -> None:
@@ -49,8 +61,11 @@ class ArrayFunctionInstanceMixin(DatasetTask):
         """
         return None
 
+    def array_function_inst_repr(self, array_function_inst) -> None:
+        return str(array_function_inst)
 
-class CalibratorClassMixin(AnalysisTask):
+
+class CalibratorClassMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access single :py:class:`~columnflow.calibration.Calibrator` class.
     """
@@ -88,7 +103,7 @@ class CalibratorClassMixin(AnalysisTask):
         """
         Return a string representation of the calibrator class.
         """
-        return str(self.calibrator)
+        return self.array_function_cls_repr(self.calibrator, Calibrator)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -206,7 +221,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         """
         Return a string representation of the calibrator instance.
         """
-        return str(self.calibrator_inst)
+        return self.array_function_inst_repr(self.calibrator_inst)
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -223,7 +238,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         return columns
 
 
-class CalibratorClassesMixin(AnalysisTask):
+class CalibratorClassesMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access multiple :py:class:`~columnflow.calibration.Calibrator` classes.
     """
@@ -268,7 +283,7 @@ class CalibratorClassesMixin(AnalysisTask):
         """
         calibs_repr = "none"
         if self.calibrators:
-            reprs = list(map(str, self.calibrators))
+            reprs = list(map(self.array_function_cls_repr, self.calibrators))
             calibs_repr = "__".join(reprs[:5])
             if len(reprs) > 5:
                 calibs_repr += f"__{law.util.create_hash(reprs[5:])}"
@@ -370,7 +385,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         """
         calibs_repr = "none"
         if self.calibrators:
-            reprs = list(map(str, self.calibrator_insts))
+            reprs = list(map(self.array_function_inst_repr, self.calibrator_insts))
             calibs_repr = "__".join(reprs[:5])
             if len(reprs) > 5:
                 calibs_repr += f"__{law.util.create_hash(reprs[5:])}"
@@ -394,7 +409,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         return columns
 
 
-class SelectorClassMixin(AnalysisTask):
+class SelectorClassMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access single :py:class:`~columnflow.selection.Selector` class.
     """
@@ -460,7 +475,7 @@ class SelectorClassMixin(AnalysisTask):
         """
         Return a string representation of the selector class.
         """
-        sel_repr = str(self.selector)
+        sel_repr = self.array_function_cls_repr(self.selector)
         steps = self.selector_steps
         if steps and not self.selector_steps_order_sensitive:
             steps = sorted(steps)
@@ -579,7 +594,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         """
         Return a string representation of the selector instance.
         """
-        sel_repr = str(self.selector_inst)
+        sel_repr = self.array_function_inst_repr(self.selector_inst)
         # add representation of steps only if this class does not invoke the selector itself
         if not self.invokes_selector:
             steps = self.selector_steps
@@ -604,7 +619,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         return columns
 
 
-class ProducerClassMixin(AnalysisTask):
+class ProducerClassMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access single :py:class:`~columnflow.production.Producer` class.
     """
@@ -642,7 +657,7 @@ class ProducerClassMixin(AnalysisTask):
         """
         Return a string representation of the producer class.
         """
-        return str(self.producer)
+        return self.array_function_cls_repr(self.producer)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -759,7 +774,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         """
         Return a string representation of the producer instance.
         """
-        return str(self.producer_inst)
+        return self.array_function_inst_repr(self.producer_inst)
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -776,7 +791,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         return columns
 
 
-class ProducerClassesMixin(AnalysisTask):
+class ProducerClassesMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access multiple :py:class:`~columnflow.production.Producer` classes.
     """
@@ -821,7 +836,7 @@ class ProducerClassesMixin(AnalysisTask):
         """
         prods_repr = "none"
         if self.producers:
-            reprs = list(map(str, self.producers))
+            reprs = list(map(self.array_function_cls_repr, self.producers))
             prods_repr = "__".join(reprs[:5])
             if len(reprs) > 5:
                 prods_repr += f"__{law.util.create_hash(reprs[5:])}"
@@ -923,7 +938,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         """
         prods_repr = "none"
         if self.producers:
-            reprs = list(map(str, self.producer_insts))
+            reprs = list(map(self.array_function_inst_repr, self.producer_insts))
             prods_repr = "__".join(reprs[:5])
             if len(reprs) > 5:
                 prods_repr += f"__{law.util.create_hash(reprs[5:])}"
@@ -1327,7 +1342,7 @@ class MLModelsMixin(AnalysisTask):
         return columns
 
 
-class WeightProducerClassMixin(AnalysisTask):
+class WeightProducerClassMixin(ArrayFunctionClassMixin):
     """
     Mixin to include and access single :py:class:`~columnflow.weight.WeightProducer` class.
     """
@@ -1365,7 +1380,7 @@ class WeightProducerClassMixin(AnalysisTask):
         """
         Return a string representation of the weight producer class.
         """
-        return str(self.weight_producer)
+        return self.array_function_cls_repr(self.weight_producer)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -1487,7 +1502,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         """
         Return a string representation of the weight producer instance.
         """
-        return str(self.weight_producer_inst)
+        return self.array_function_inst_repr(self.weight_producer_inst)
 
 
 class InferenceModelClassMixin(AnalysisTask):
