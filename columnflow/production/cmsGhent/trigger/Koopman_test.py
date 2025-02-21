@@ -1,10 +1,14 @@
 from __future__ import annotations
 import warnings
-import numpy as np
-from scipy.stats import chi2
-import scipy.optimize as opt
-import matplotlib.pyplot as plt
+
 import law
+
+from columnflow.util import maybe_import
+
+np = maybe_import("numpy")
+opt = maybe_import("scipy.optimize")
+plt = maybe_import("matplotlib.pyplot")
+stats = maybe_import("scipy.stats")
 
 logger = law.logger.get_logger(__name__)
 
@@ -94,7 +98,7 @@ def koopman_confint(
     """
 
     # equation to solve: U = (1 - significance) percentile of the chi2 distribution with one dof
-    chival = chi2.ppf(1 - significance, 1)
+    chival = stats.chi2.ppf(1 - significance, 1)
     func = lambda th: U(x, m, y, n, th) - chival
 
     # report negative values and set to zero
@@ -191,7 +195,7 @@ def koopman_confint(
 
 def plottest(x, m, y, n, significance=0.317):
     """ test Koopman intervals with plot showing U as a function of theta and the found solutions """
-    chival = chi2.ppf(1 - significance, 1)
+    chival = stats.chi2.ppf(1 - significance, 1)
     tests = np.linspace(0, 10, 10000)
 
     try:
