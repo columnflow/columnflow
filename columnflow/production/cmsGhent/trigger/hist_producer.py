@@ -77,7 +77,7 @@ def trigger_efficiency_hists(
     if f"{self.config_name}_efficiencies" not in hists:
         histogram = hist.Hist.new
         # add variables for binning the efficiency
-        for var_inst in self.variable:
+        for var_inst in self.variables:
             histogram = histogram.Var(
                 var_inst.bin_edges,
                 name=var_inst.name,
