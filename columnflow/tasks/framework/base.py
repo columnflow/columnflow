@@ -1060,6 +1060,9 @@ class MultiConfigTask(AnalysisTask):
 
     config_order_dependent = False
 
+    # the field in the store parts behind which the new part is inserted
+    # added here for subclasses that typically refer to the store part added by _this_ class
+    config_store_anchor = "configs"
     is_single_config = False
 
     def __init__(self, *args, **kwargs):

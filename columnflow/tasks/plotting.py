@@ -13,7 +13,7 @@ import law
 import luigi
 import order as od
 
-from columnflow.tasks.framework.base import Requirements, MultiConfigTask, ShiftTask
+from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     CategoriesMixin, DatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
@@ -29,7 +29,7 @@ from columnflow.hist_util import add_missing_shifts
 
 
 class PlotVariablesBase(
-    MultiConfigTask,
+    # MultiConfigTask,
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,

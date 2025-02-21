@@ -11,7 +11,7 @@ import law
 import luigi
 from scinum import Number
 
-from columnflow.tasks.framework.base import Requirements, ConfigTask
+from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     DatasetsProcessesMixin, CategoriesMixin,

@@ -1865,7 +1865,7 @@ class DatasetsProcessesMixin(ConfigTask):
         return f"{len(self.processes)}_{law.util.create_hash(self.processes)}"
 
 
-class MultiConfigDatasetsProcessesMixin(AnalysisTask):
+class MultiConfigDatasetsProcessesMixin(MultiConfigTask):
     # NOTE: changed from CSV to MultiCSVParameter, might break things
     # where self.dataset or self.dataset_inst is used
     datasets = law.MultiCSVParameter(
