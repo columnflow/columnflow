@@ -38,10 +38,6 @@ logger = law.logger.get_logger(__name__)
 
 class ArrayFunctionInstanceMixin(DatasetTask):
 
-    # def __init__(self, *args, **kwargs) -> None:
-    #     super().__init__(*args, **kwargs)
-    #     self._array_function_post_init()
-
     def _array_function_post_init(self, **kwargs) -> None:
         """
         Post-initialization method for all known task array functions.
@@ -65,13 +61,13 @@ class CalibratorClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrator"] = cls.resolve_config_default(
-                params,
-                params.get("calibrator"),
-                container=config_inst,
+                param=params.get("calibrator"),
+                task_params=params,
+                container=container,
                 default_str="default_calibrator",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -178,7 +174,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -244,13 +240,14 @@ class CalibratorClassesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default classes if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrators"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("calibrators"),
-                container=config_inst,
+                param=params.get("calibrators"),
+                task_params=params,
+                container=container,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
+                multi_strategy="same",
             )
 
         return params
@@ -348,7 +345,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -422,28 +419,29 @@ class SelectorClassMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             # resolve the default class if necessary
             params["selector"] = cls.resolve_config_default(
-                params,
-                params.get("selector"),
-                container=config_inst,
+                param=params.get("selector"),
+                task_params=params,
+                container=container,
                 default_str="default_selector",
-                multiple=False,
+                multi_strategy="same",
             )
 
             # apply selector_steps_groups and default_selector_steps from config
             if "selector_steps" in params:
                 params["selector_steps"] = cls.resolve_config_default_and_groups(
-                    params,
-                    params.get("selector_steps"),
-                    container=config_inst,
+                    param=params.get("selector_steps"),
+                    task_params=params,
+                    container=container,
                     default_str="default_selector_steps",
                     groups_str="selector_step_groups",
+                    multi_strategy="same",
                 )
 
         # sort selector steps when the order does not matter
-        if "selector_steps" in params and not cls.selector_steps_order_sensitive:
+        if params.get("selector_steps") and not cls.selector_steps_order_sensitive:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))
 
         return params
@@ -555,7 +553,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -584,6 +582,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         Return a string representation of the selector instance.
         """
         sel_repr = str(self.selector_inst)
+
         # add representation of steps only if this class does not invoke the selector itself
         if not self.invokes_selector:
             steps = self.selector_steps
@@ -591,6 +590,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
                 steps = sorted(steps)
             if steps:
                 sel_repr += "__steps_" + "_".join(steps)
+
         return sel_repr
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -624,13 +624,13 @@ class ProducerClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["producer"] = cls.resolve_config_default(
-                params,
-                params.get("producer"),
-                container=config_inst,
+                param=params.get("producer"),
+                task_params=params,
+                container=container,
                 default_str="default_producer",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -737,7 +737,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -803,13 +803,14 @@ class ProducerClassesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default classes if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["producers"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("producers"),
-                container=config_inst,
+                param=params.get("producers"),
+                task_params=params,
+                container=container,
                 default_str="default_producer",
                 groups_str="producer_groups",
+                multi_strategy="same",
             )
 
         return params
@@ -907,7 +908,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -1201,7 +1202,6 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
 #                 selectors[i],
 #                 container=config_inst,
 #                 default_str="default_selector",
-#                 multiple=False,
 #             )
 #             for i, config_inst in enumerate(ml_model_inst.config_insts)
 #         )
@@ -1420,7 +1420,6 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
 #                 params.get("ml_model"),
 #                 container=config_inst,
 #                 default_str="default_ml_model",
-#                 multiple=False,
 #             )
 
 #             # initialize it once to trigger its set_config hook which might, in turn,
@@ -1598,13 +1597,13 @@ class WeightProducerClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["weight_producer"] = cls.resolve_config_default(
-                params,
-                params.get("weight_producer"),
-                container=config_inst,
+                param=params.get("weight_producer"),
+                task_params=params,
+                container=container,
                 default_str="default_weight_producer",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -1716,7 +1715,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -1760,13 +1759,13 @@ class InferenceModelClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["inference_model"] = cls.resolve_config_default(
-                params,
-                params.get("inference_model"),
-                container=config_inst,
+                param=params.get("inference_model"),
+                task_params=params,
+                container=container,
                 default_str="default_inference_model",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -1805,36 +1804,51 @@ class InferenceModelMixin(InferenceModelClassMixin):
     exclude_params_remote_workflow = {"inference_model_inst"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
-        # add the weight producer instance
-        if (config_inst := params.get("config_inst")) and not params.get("inference_model_inst"):
-            params["inference_model_inst"] = cls.build_inference_model_inst(
-                params["inference_model"],
-                config_inst,
-            )
-
-        return params
-
-    @classmethod
     def build_inference_model_inst(
         cls,
         inference_model: str,
-        config_inst: od.Config,
-        params: dict[str, Any] | None = None,
+        config_insts: list[od.Config],
+        **kwargs,
     ) -> InferenceModel:
         """
         Instantiate and return the :py:class:`~columnflow.inference.InferenceModel` instance.
 
         :param inference_model: Name of the inference model class to instantiate.
-        :param config_inst: The configuration instance.
-        :param params: Arguments forwarded to the inference model constructor.
+        :param config_insts: List of configuration objects that are passed to the inference model constructor.
+        :param kwargs: Additional keywork arguments forwarded to the inference model constructor.
         :return: The inference model instance.
         """
         inference_model_cls = InferenceModel.get_cls(inference_model)
-        return inference_model_cls(config_inst, **(params or {}))
+        return inference_model_cls(config_insts, **kwargs)
 
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        # add the inference model instance
+        if not params.get("inference_model_inst") and params.get("inference_model"):
+            if cls.has_single_config():
+                if (config_inst := params.get("config_inst")):
+                    params["inference_model_inst"] = cls.build_inference_model_inst(
+                        params["inference_model"],
+                        [config_inst],
+                    )
+            elif (config_insts := params.get("config_insts")):
+                params["inference_model_inst"] = cls.build_inference_model_inst(
+                    params["inference_model"],
+                    config_insts,
+                )
+
+        return params
+
+
+
+
+
+
+
+
+# TODO: adjust mixins below for multi config operations!
 
 class CategoriesMixin(ConfigTask):
 
@@ -2084,7 +2098,7 @@ class DatasetsProcessesMixin(ConfigTask):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -2201,7 +2215,7 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
     effective_shift = None
     allow_empty_shift = True
 
-    # allow only running on nominal
+    # allow empty sources, i.e., using only nominal
     allow_empty_shift_sources = True
 
 
@@ -2345,7 +2359,7 @@ class HistHookMixin(ConfigTask):
         "default: empty",
     )
 
-    def invoke_hist_hooks(self, hists: dict) -> dict:
+    def invoke_hist_hooks(self, config_inst: od.Config, hists: dict) -> dict:
         """
         Invoke hooks to update histograms before plotting.
         """
@@ -2357,7 +2371,7 @@ class HistHookMixin(ConfigTask):
                 continue
 
             # get the hook from the config instance
-            hooks = self.config_inst.x("hist_hooks", {})
+            hooks = config_inst.x("hist_hooks", {})
             if hook not in hooks:
                 raise KeyError(
                     f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of config",
@@ -2377,7 +2391,7 @@ class HistHookMixin(ConfigTask):
         """
         Return a string representation of the hist hooks.
         """
-        hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
+        hooks = [hook for hook in self.hist_hooks if hook not in {None, "", law.NO_STR}]
 
         hooks_repr = "__".join(hooks[:5])
         if len(hooks) > 5:

@@ -35,6 +35,8 @@ class _CreateYieldTable(
     Base classes for :py:class:`CreateYieldTable`.
     """
 
+    single_config = True
+
 
 class CreateYieldTable(_CreateYieldTable):
 
