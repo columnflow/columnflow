@@ -26,6 +26,9 @@ version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 #: Location of the documentation.
 docs_url = os.getenv("CF_DOCS_URL", "https://columnflow.readthedocs.io/en/latest")
 
+#: Location of release notes.
+release_url = os.getenv("CF_RELEASE_URL", "https://github.com/columnflow/columnflow/releases/tag")
+
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
 env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "false"))
 

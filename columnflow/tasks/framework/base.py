@@ -37,12 +37,13 @@ RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
-    """General class for requirements of different tasks.
+    """
+    Container for task-level requirements of different tasks.
 
-        Can be initialized with other :py:class:`~columnflow.util.DotDict`
-        instances and additional keyword arguments ``kwargs``, which are
-        added.
-        """
+    Can be initialized with other :py:class:`Requirement` instances and additional keyword arguments ``kwargs``,
+    which are added.
+    """
+
     def __init__(self, *others, **kwargs):
 
         super().__init__()
@@ -50,6 +51,27 @@ class Requirements(DotDict):
         # add others and kwargs
         for reqs in others + (kwargs,):
             self.update(reqs)
+
+
+class OutputLocation(enum.Enum):
+    """
+    Output location flag.
+    """
+
+    config = "config"
+    local = "local"
+    wlcg = "wlcg"
+    wlcg_mirrored = "wlcg_mirrored"
+
+
+@dataclass
+class TaskShifts:
+    """
+    Container for *local* and *upstream* shifts at a point in the task graph.
+    """
+
+    local: set[str] = field(default_factory=set)
+    upstream: set[str] = field(default_factory=set)
 
 
 class BaseTask(law.Task):
@@ -65,17 +87,6 @@ class BaseTask(law.Task):
             for attr, param in self.get_params()
             if isinstance(param, luigi.Parameter)
         }
-
-
-class OutputLocation(enum.Enum):
-    """
-    Output location flag.
-    """
-
-    config = "config"
-    local = "local"
-    wlcg = "wlcg"
-    wlcg_mirrored = "wlcg_mirrored"
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -298,7 +309,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         keys: law.util.InsertableDict,
     ) -> str | None:
         # try to lookup the version in the analysis's auxiliary data
-        analysis_inst = params.get("analysis_inst") or getattr(inst, "analysis_inst", None)
+        analysis_inst = getattr(inst, "analysis_inst", None)
         if analysis_inst:
             version = cls._dfs_key_lookup(keys, analysis_inst.x("versions", {}))
             if version:
@@ -1465,22 +1476,23 @@ def wrapper_factory(
     attributes: dict | None = None,
     docs: str | None = None,
 ) -> law.task.base.Register:
-    """Factory function creating wrapper task classes, inheriting from *base_cls* and
-    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
-    Unless *cls_name* is defined, the name of the created class defaults to the name of
-    *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
-    given.
+    """
+    Factory function creating wrapper task classes, inheriting from *base_cls* and
+    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*. Unless
+    *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus "Wrapper".
+    Additional *attributes* are added as class-level members when given.
 
-    The instances of *require_cls* to be required in the
-    :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
-    These parameters can be enabled through the string sequence *enable*, which currently accepts:
+    The instances of *require_cls* to be required in the :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be
+    controlled by task parameters. These parameters can be enabled through the string sequence *enable*, which currently
+    accepts:
 
         - ``configs``, ``skip_configs``
         - ``shifts``, ``skip_shifts``
         - ``datasets``, ``skip_datasets``
 
-    This allows to easily build wrapper tasks that loop over (combinations of) parameters that are
-    either defined in the analysis or config, which would otherwise lead to mostly redundant code.
+    This allows to easily build wrapper tasks that loop over (combinations of) parameters that are either defined in the
+    analysis or config, which would otherwise lead to mostly redundant code.
+
     Example:
 
     .. code-block:: python
@@ -1497,38 +1509,30 @@ def wrapper_factory(
         # this allows to run (e.g.)
         # law run MyTaskWrapper --datasets st_* --skip-datasets *_tbar
 
-    When building the requirements, the full combinatorics of parameters is considered. However,
-    certain conditions apply depending on enabled features. For instance, in order to use the
-    "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
-    list of config instances known to an analysis), *require_cls* must be at least a
-    :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-    explicitly not.
+    When building the requirements, the full combinatorics of parameters is considered. However, certain conditions
+    apply depending on enabled features. For instance, in order to use the "configs" feature (adding a parameter
+    "--configs" to the created class, allowing to loop over a list of config instances known to an analysis),
+    *require_cls* must be at least a :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas
+    *base_cls* must explicitly not.
 
     :param base_cls: Base class for this wrapper
     :param require_cls: :py:class:`~law.task.base.Task` class to be wrapped
-    :param enable: Enable these parameters to control the wrapped
-        :py:class:`~law.task.base.Task` class instance.
-        Currently allowed parameters are: "configs", "skip_configs",
-        "shifts", "skip_shifts", "datasets", "skip_datasets"
-    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the
-        name of the :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
-    :param attributes: Add these attributes as class-level members of the
-        new :py:class:`~law.task.base.WrapperTask` class
-    :param docs: Manually set the documentation string `__doc__` of the new
-        :py:class:`~law.task.base.WrapperTask` class instance
-    :raises ValueError: If a parameter provided with `enable` is not in the list
-        of known parameters
-    :raises TypeError: If any parameter in `enable` is incompatible with the
-        :py:class:`~law.task.base.WrapperTask` class instance or the inheritance
-        structure of corresponding classes
-    :raises ValueError: when `configs` are enabled but not found in the analysis
-        config instance
-    :raises ValueError: when `shifts` are enabled but not found in the analysis
-        config instance
-    :raises ValueError: when `datasets` are enabled but not found in the analysis
-        config instance
-    :return: The new :py:class:`~law.task.base.WrapperTask` for the
-        :py:class:`~law.task.base.Task` class `required_cls`
+    :param enable: Enable these parameters to control the wrapped :py:class:`~law.task.base.Task` class instance.
+        Currently allowed parameters are: "configs", "skip_configs", "shifts", "skip_shifts", "datasets",
+        "skip_datasets"
+    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the name of the
+        :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
+    :param attributes: Add these attributes as class-level members of the new :py:class:`~law.task.base.WrapperTask`
+        class
+    :param docs: Manually set the documentation string `__doc__` of the new :py:class:`~law.task.base.WrapperTask` class
+        instance
+    :raises ValueError: If a parameter provided with `enable` is not in the list of known parameters
+    :raises TypeError: If any parameter in `enable` is incompatible with the :py:class:`~law.task.base.WrapperTask`
+        class instance or the inheritance structure of corresponding classes
+    :raises ValueError: when `configs` are enabled but not found in the analysis config instance
+    :raises ValueError: when `shifts` are enabled but not found in the analysis config instance
+    :raises ValueError: when `datasets` are enabled but not found in the analysis config instance
+    :return: The new :py:class:`~law.task.base.WrapperTask` for the :py:class:`~law.task.base.Task` class `required_cls`
     """
     # check known features
     known_features = [
@@ -1585,58 +1589,60 @@ def wrapper_factory(
     class Wrapper(*base_classes, law.WrapperTask):
 
         exclude_params_repr_empty = set()
+        exclude_params_req_set = set()
 
         if has_configs:
             configs = law.CSVParameter(
                 default=(default_config,),
-                description="names or name patterns of configs to use; can also be the key of a "
-                "mapping defined in the 'config_groups' auxiliary data of the analysis; "
-                f"default: {default_config}",
+                description="names or name patterns of configs to use; can also be the key of a mapping defined in the "
+                f"'config_groups' auxiliary data of the analysis; default: {default_config}",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("configs")
         if has_skip_configs:
             skip_configs = law.CSVParameter(
                 default=(),
-                description="names or name patterns of configs to skip after evaluating --configs; "
-                "can also be the key of a mapping defined in the 'config_groups' auxiliary data "
-                "of the analysis; empty default",
+                description="names or name patterns of configs to skip after evaluating --configs; can also be the key "
+                "of a mapping defined in the 'config_groups' auxiliary data of the analysis; empty default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_configs")
+            exclude_params_req_set.add("skip_configs")
         if has_datasets:
             datasets = law.CSVParameter(
                 default=("*",),
-                description="names or name patterns of datasets to use; can also be the key of a "
-                "mapping defined in the 'dataset_groups' auxiliary data of the corresponding "
-                "config; default: ('*',)",
+                description="names or name patterns of datasets to use; can also be the key of a mapping defined in "
+                "the 'dataset_groups' auxiliary data of the corresponding config; default: ('*',)",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("datasets")
         if has_skip_datasets:
             skip_datasets = law.CSVParameter(
                 default=(),
-                description="names or name patterns of datasets to skip after evaluating "
-                "--datasets; can also be the key of a mapping defined in the 'dataset_groups' "
-                "auxiliary data of the corresponding config; empty default",
+                description="names or name patterns of datasets to skip after evaluating --datasets; can also be the "
+                "key of a mapping defined in the 'dataset_groups' auxiliary data of the corresponding config; empty "
+                "default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_datasets")
+            exclude_params_req_set.add("skip_datasets")
         if has_shifts:
             shifts = law.CSVParameter(
                 default=("nominal",),
-                description="names or name patterns of shifts to use; can also be the key of a "
-                "mapping defined in the 'shift_groups' auxiliary data of the corresponding "
-                "config; default: ('nominal',)",
+                description="names or name patterns of shifts to use; can also be the key of a mapping defined in the "
+                "'shift_groups' auxiliary data of the corresponding config; default: ('nominal',)",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("shifts")
         if has_skip_shifts:
             skip_shifts = law.CSVParameter(
                 default=(),
-                description="names or name patterns of shifts to skip after evaluating --shifts; "
-                "can also be the key of a mapping defined in the 'shift_groups' auxiliary data "
-                "of the corresponding config; empty default",
+                description="names or name patterns of shifts to skip after evaluating --shifts; can also be the key "
+                "of a mapping defined in the 'shift_groups' auxiliary data of the corresponding config; empty default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_shifts")
+            exclude_params_req_set.add("skip_shifts")
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -1672,9 +1678,7 @@ def wrapper_factory(
                     self.analysis_inst.x("config_groups", {}),
                 )
                 if not configs:
-                    raise ValueError(
-                        f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
-                    )
+                    raise ValueError(f"no configs found in analysis {self.analysis_inst} matching {self.configs}")
                 if self.wrapper_has_skip_configs:
                     skip_configs = self.find_config_objects(
                         self.skip_configs,
@@ -1685,8 +1689,7 @@ def wrapper_factory(
                     configs = [c for c in configs if c not in skip_configs]
                     if not configs:
                         raise ValueError(
-                            f"no configs found in analysis {self.analysis_inst} after skipping "
-                            f"{self.skip_configs}",
+                            f"no configs found in analysis {self.analysis_inst} after skipping {self.skip_configs}",
                         )
                 config_insts = list(map(self.analysis_inst.get_config, sorted(configs)))
             else:
@@ -1708,9 +1711,7 @@ def wrapper_factory(
                         config_inst.x("shift_groups", {}),
                     )
                     if not shifts:
-                        raise ValueError(
-                            f"no shifts found in config {config_inst} matching {self.shifts}",
-                        )
+                        raise ValueError(f"no shifts found in config {config_inst} matching {self.shifts}")
                     if self.wrapper_has_skip_shifts:
                         skip_shifts = self.find_config_objects(
                             self.skip_shifts,
@@ -1720,10 +1721,7 @@ def wrapper_factory(
                         )
                         shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
-                        raise ValueError(
-                            f"no shifts found in config {config_inst} after skipping "
-                            f"{self.skip_shifts}",
-                        )
+                        raise ValueError(f"no shifts found in config {config_inst} after skipping {self.skip_shifts}")
                     # move "nominal" to the front if present
                     shifts = sorted(shifts)
                     if "nominal" in shifts:
@@ -1739,10 +1737,7 @@ def wrapper_factory(
                         config_inst.x("dataset_groups", {}),
                     )
                     if not datasets:
-                        raise ValueError(
-                            f"no datasets found in config {config_inst} matching "
-                            f"{self.datasets}",
-                        )
+                        raise ValueError(f"no datasets found in config {config_inst} matching {self.datasets}")
                     if self.wrapper_has_skip_datasets:
                         skip_datasets = self.find_config_objects(
                             self.skip_datasets,
@@ -1753,8 +1748,7 @@ def wrapper_factory(
                         datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
                             raise ValueError(
-                                f"no datasets found in config {config_inst} after skipping "
-                                f"{self.skip_datasets}",
+                                f"no datasets found in config {config_inst} after skipping {self.skip_datasets}",
                             )
                     prod_sequences.append(sorted(datasets))
 
@@ -1763,14 +1757,7 @@ def wrapper_factory(
 
             return params
 
-        def requires(self) -> Requirements:
-            """Collect requirements defined by the underlying ``require_cls``
-            of the :py:class:`~law.task.base.WrapperTask` depending on optional
-            additional parameters.
-
-            :return: Requirements for the :py:class:`~law.task.base.WrapperTask`
-                instance.
-            """
+        def requires(self) -> dict:
             # build all requirements based on the parameter space
             reqs = {}
 
@@ -1802,7 +1789,7 @@ def wrapper_factory(
     Wrapper.__module__ = module.__name__
 
     # overwrite __name__
-    Wrapper.__name__ = cls_name or require_cls.__name__ + "Wrapper"
+    Wrapper.__name__ = cls_name or f"{require_cls.__name__}Wrapper"
 
     # set docs
     if docs:
