@@ -7,6 +7,7 @@ Generic tools and base tasks that are defined along typical objects in an analys
 from __future__ import annotations
 
 import os
+import abc
 import enum
 import importlib
 import itertools
@@ -486,151 +487,149 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     @classmethod
     def resolve_config_default(
         cls,
+        *,
+        param: Any,
         task_params: dict[str, Any],
-        param: str | tuple[str] | None,
-        container: str | od.AuxDataMixin = "config_inst",
+        container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
         default_str: str | None = None,
-        multiple: bool = False,
-    ) -> str | tuple | Any | None:
+        multi_strategy: str = "first",
+    ) -> Any:
         """
         Resolves a given parameter value *param*, checks if it should be placed with a default value
         when empty, and in this case, does the actual default value resolution.
 
         This resolution is triggered only in case *param* refers to :py:attr:`RESOLVE_DEFAULT`, a
-        1-tuple containing this attribute, or *None*, If so, the default is identified via the
+        1-tuple containing this attribute, or *None*. If so, the default is identified via the
         *default_str* from an :py:class:`order.AuxDataMixin` *container* and points to an auxiliary
         that can be either a string or a function. In the latter case, it is called with the task
         class, the container instance, and all task parameters. Note that when no *container* is
         given, *param* is returned unchanged.
 
-        When *multiple* is *True*, a tuple is returned. If *multiple* is *False* and the resolved
-        parameter is an iterable, the first entry is returned.
+        *container* can also refer to a sequence of :py:class:`order.AuxDataMixin` objects. If this
+        is the case, the default resolution is performed for all of them and the resulting values
+        can be handled with three different strategies, controlled via *multi_strategy*:
+
+            - ``"first"``: The first resolved value is returned.
+            - ``"same"``: The resolved values are forced to be identical and an exception is
+                raised if they differ. The first resolved value is returned.
+            - ``"all"``: The resolved values are returned as a tuple.
 
         Example:
 
         .. code-block:: python
 
-            def resolve_param_values(params):
-                params["producer"] = AnalysisTask.resolve_config_default(
-                    params,
-                    params.get("producer"),
-                    container=params["config_inst"]
-                    default_str="default_producer",
-                    multiple=True,
-                )
-
+            # assuming this is your config
             config_inst = od.Config(
-                id=0,
+                id=1,
                 name="my_config",
-                aux={"default_producer": ["my_producer_1", "my_producer_2"]},
+                aux={
+                "default_selector": "my_selector",
+            },
             )
 
+            # and these are the task parameters
             params = {
                 "config_inst": config_inst,
-                "producer": RESOLVE_DEFAULT,
             }
-            resolve_param_values(params)  # sets params["producer"] to ("my_producer_1", "my_producer_2")
 
-            params = {
-                "config_inst": config_inst,
-                "producer": "some_other_producer",
-            }
-            resolve_param_values(params)  # sets params["producer"] to "some_other_producer"
+            AnalysisTask.resolve_config_default(
+                param=RESOLVE_DEFAULT,
+                task_params=params,
+                container=config_inst,  # <-- same as passing the "config_inst" key of params
+                default_str="default_selector",
+            )
+            # -> "my_selector"
 
         Example where the default points to a function:
 
         .. code-block:: python
 
-            def resolve_param_values(params):
-                params["ml_model"] = AnalysisTask.resolve_config_default(
-                    params,
-                    params.get("ml_model"),
-                    container=params["config_inst"]
-                    default_str="default_ml_model",
-                    multiple=True,
-                )
-
-            # a function that chooses the ml_model based on an attibute that is set in an inference_model
-            def default_ml_model(task_cls, container, task_params):
-                default_ml_model = None
-
-                # check if task is using an inference model
-                if "inference_model" in task_params.keys():
-                    inference_model = task_params.get("inference_model", None)
-
-                    # if inference model is not set, assume it's the container default
-                    if inference_model in {None, "NO_STR"}:
-                        inference_model = container.x.default_inference_model
-
-                    # get the default_ml_model from the inference_model_inst
-                    inference_model_inst = columnflow.inference.InferenceModel._subclasses[inference_model]
-                    default_ml_model = getattr(inference_model_inst, "ml_model_name", default_ml_model)
-
-                    return default_ml_model
-
-                return default_ml_model
+            def default_selector(task_cls, config_inst, task_params) -> str:
+                # determine the selector based on dynamic conditions
+                return "my_other_selector
 
             config_inst = od.Config(
-                id=0,
+                id=1,
                 name="my_config",
-                aux={"default_ml_model": default_ml_model},
+                aux={
+                    "default_selector": default_selector,  # <-- function
+                },
             )
 
-            @inference_model(ml_model_name="default_ml_model")
-            def my_inference_model(self):
-                # some inference model implementation
-                ...
-
-            params = {"config_inst": config_inst, "ml_model": None, "inference_model": "my_inference_model"}
-            resolve_param_values(params)  # sets params["ml_model"] to "my_ml_model"
-
-            params = {"config_inst": config_inst, "ml_model": "some_ml_model", "inference_model": "my_inference_model"}
-            resolve_param_values(params)  # sets params["ml_model"] to "some_ml_model"
+           AnalysisTask.resolve_config_default(
+                param=RESOLVE_DEFAULT,
+                task_params=params,
+                container=config_inst,
+                default_str="default_selector",
+            )
+            # -> "my_other_selector"
         """
+        if multi_strategy not in (strategies := {"first", "same", "all"}):
+            raise ValueError(
+                f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}",
+            )
+
         # check if the parameter value is to be resolved
         resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
 
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
-        if law.is_no_param(param) or resolve_default or param == "" or param == ():
+        if law.is_no_param(param) or resolve_default or param == "":
             param = None
+
+        # get the container inst (typically a config_inst or analysis_inst)
+        if isinstance(container, str):
+            container = task_params.get(container)
+            if not container:
+                return param
 
         # actual resolution
         if resolve_default:
-            # get the container inst (mostly a config_inst or analysis_inst)
-            if isinstance(container, str):
-                container = task_params.get(container)
+            params = []
+            containers = law.util.make_list(container)
+            for _container in containers:
+                _param = param
+                # expand default when container is set
+                if _container and default_str:
+                    _param = _container.x(default_str, None)
+                    # allow default to be a function, taking task parameters as input
+                    if isinstance(_param, Callable):
+                        _param = _param(cls, _container, task_params)
+                params.append(_param)
+        else:
+            params = [param]
 
-            # expand default when container is set
-            if container and default_str:
-                param = container.x(default_str, None) if default_str else None
-
-                # allow default to be a function, taking task parameters as input
-                if isinstance(param, Callable):
-                    param = param(cls, container, task_params)
-
-        # when still empty, return an empty value
-        if param is None:
-            return () if multiple else None
-
-        # return either a tuple or the first param, based on the *multiple*
-        param = law.util.make_tuple(param)
-        return param if multiple else (param[0] if param else None)
+        # handle values
+        if not isinstance(container, (list, tuple)):
+            return params[0]
+        if multi_strategy == "first":
+            return params[0]
+        if multi_strategy == "all":
+            return params
+        # check that values are identical
+        if len(set(params)) == 1:
+            return params[0]
+        default_str_repr = f" for '{default_str}'" if default_str else ""
+        raise ValueError(
+            f"multiple default values found{default_str_repr} in {containers}: {params}",
+        )
 
     @classmethod
     def resolve_config_default_and_groups(
         cls,
+        *,
+        param: Any,
         task_params: dict[str, Any],
-        param: str | tuple[str] | None,
-        container: str | od.AuxDataMixin = "config_inst",
+        container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
+        groups_str: str,
         default_str: str | None = None,
-        groups_str: str | None = None,
-    ) -> tuple[str]:
+        multi_strategy: str = "first",
+        debug=False,
+    ) -> Any:
         """
         This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a
-        parameter value *param* is empty and should be replaced with a default value. See the
-        referenced method for documentation on *task_params*, *param*, *container* and
-        *default_str*.
+        parameter value *param* is empty and should be replaced with a default value. All arguments
+        except for *groups_str* are forwarded to this method.
 
         What this method does in addition is that it checks if the values contained in *param*
         (after default value resolution) refers to a group of values identified via the *groups_str*
@@ -642,65 +641,109 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         .. code-block:: python
 
+            # assuming this is your config
             config_inst = od.Config(
-                id=0,
+                id=1,
                 name="my_config",
                 aux={
-                    "default_producer": ["features_1", "my_producer_group"],
-                    "producer_groups": {"my_producer_group": ["features_2", "features_3"]},
+                    "default_producer": "my_producers",
+                    "producer_groups": {
+                        "my_producers": ["producer_1", "producer_2"],
+                        "my_other_producers": ["my_producers", "producer_3", "producer_4"],
+                    },
                 },
             )
 
-            params = {"producer": RESOLVE_DEFAULT}
+            # and these are the task parameters
+            params = {
+                "config_inst": config_inst,
+            }
 
             AnalysisTask.resolve_config_default_and_groups(
-                params,
-                params.get("producer"),
-                container=config_inst,
+                param=RESOLVE_DEFAULT,
+                task_params=params,
+                container=config_inst,  # <-- same as passing the "config_inst" key of params
                 default_str="default_producer",
                 groups_str="producer_groups",
             )
-            # -> ("features_1", "features_2", "features_3")
+            # -> ["producer_1", "producer_2"]
+
+        Example showing recursive group expansion:
+
+        .. code-block:: python
+
+            # assuming config_inst and params are the same as above
+
+            AnalysisTask.resolve_config_default_and_groups(
+                param="my_other_producers",  # <-- points to a group that contains another group
+                task_params=params,
+                container=config_inst,
+                default_str="default_producer",  # <-- not used as param is set explicitly
+                groups_str="producer_groups",
+            )
+            # -> ["producer_1", "producer_2", "producer_3", "producer_4"]
         """
+        if multi_strategy not in (strategies := {"first", "same", "all"}):
+            raise ValueError(
+                f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}",
+            )
+
+        # get the container
+        if isinstance(container, str):
+            container = task_params.get(container, None)
+        if not container:
+            return param
+        containers = law.util.make_list(container)
+
         # resolve the parameter
         param = cls.resolve_config_default(
-            task_params=task_params,
             param=param,
-            container=container,
+            task_params=task_params,
+            container=containers,
             default_str=default_str,
-            multiple=True,
+            multi_strategy="all",
         )
         if not param:
             return param
 
-        # get the container inst and return if it's not set
-        if isinstance(container, str):
-            container = task_params.get(container, None)
-
-        if not container:
-            return param
-
         # expand groups recursively
-        if groups_str and container.x(groups_str, {}):
-            param_groups = container.x(groups_str)
-            values = []
-            lookup = law.util.make_list(param)
+        values = []
+        for _container, _param in zip(containers, param):
+            if not (param_groups := _container.x(groups_str, {})):
+                values.append(law.util.make_tuple(_param))
+                continue
+            lookup = collections.deque(law.util.make_list(_param))
             handled_groups = set()
+            _values = []
             while lookup:
-                value = lookup.pop(0)
+                value = lookup.popleft()
                 if value in param_groups:
                     if value in handled_groups:
                         raise Exception(
                             f"definition of '{groups_str}' contains circular references involving "
                             f"group '{value}'",
                         )
-                    lookup = law.util.make_list(param_groups[value]) + lookup
+                    lookup.extendleft(law.util.make_list(param_groups[value]))
                     handled_groups.add(value)
                 else:
-                    values.append(value)
-            param = values
+                    _values.append(value)
+            values.append(tuple(_values))
 
-        return law.util.make_tuple(param)
+        # handle values
+        if not isinstance(container, (list, tuple)):
+            return values[0]
+        if multi_strategy == "first":
+            return values[0]
+        if multi_strategy == "all":
+            return values
+        # check that values are identical
+        if len(set(values)) == 1:
+            return values[0]
+        default_str_repr = f" for '{default_str}'" if default_str else ""
+        raise ValueError(
+            f"multiple default values found{default_str_repr} after expanding groups "
+            f"'{groups_str}' in {containers}: {values}",
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -977,18 +1020,84 @@ class ConfigTask(AnalysisTask):
         default=default_config,
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
+    configs = law.CSVParameter(
+        default=(default_config,),
+        description=f"names of analysis configs to use; default: '{default_config}'",
+        brace_expand=True,
+    )
 
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
     config_store_anchor = "config"
 
     @classmethod
+    def modify_task_attributes(cls) -> None:
+        """
+        Hook that is called by law's task register meta class right after subclass creation to update class-level
+        attributes.
+        """
+        super().modify_task_attributes()
+
+        # single/multi config adjustments in case the switch has been specified
+        if isinstance(cls.single_config, bool):
+            attr = "configs" if cls.single_config else "config"
+            if getattr(cls, attr, law.no_value) != law.no_value:
+                setattr(cls, attr, None)
+
+    @abc.abstractproperty
+    def single_config(cls) -> bool:
+        # flag that should be set to True or False by classes that should be instantiated
+        # (this is wrapped into an abstract instance property as a safe-guard against instantiation of a misconfigured
+        # subclass, but when actually specified, this is to be realized as a boolean class attribute or property)
+        ...
+
+    @classmethod
+    def has_single_config(cls) -> bool:
+        """
+        Returns whether the class is configured to use a single config.
+
+        :raises AttributeError: When the class does not specify the *single_config* attribute.
+        :return: *True* if the class uses a single config, *False* otherwise.
+        """
+        single_config = cls.single_config
+        if not isinstance(single_config, bool):
+            raise AttributeError(f"unspecified 'single_config' attribute in {cls}: {single_config}")
+        return single_config
+
+    @classmethod
+    def ensure_single_config(cls, value: bool, attr: str) -> None:
+        if cls.single_config != value:
+            s = "multiple configs" if value else "a single config"
+            raise Exception(f"cannot access attribute '{attr}' when task '{cls}' has {s}")
+
+    @classmethod
+    def _get_config_container(cls, params: dict[str, Any]) -> od.Config | list[od.Config] | None:
+        """
+        Extracts the single or multiple config instances from task parameters *params*, or *None* if neither is found.
+
+        :param params: Dictionary of task parameters.
+        :return: The config instance(s) or *None*.
+        """
+        if cls.has_single_config():
+            if (config_inst := params.get("config_inst")):
+                return config_inst
+        elif (config_insts := params.get("config_insts")):
+            return config_insts
+        return None
+
+    @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
 
-        # store a reference to the config inst
-        if "config_inst" not in params and "analysis_inst" in params and "config" in params:
-            params["config_inst"] = params["analysis_inst"].get_config(params["config"])
+        if (analysis_inst := params.get("analysis_inst")):
+            # store a reference to the config inst(s)
+            if cls.has_single_config():
+                if "config_inst" not in params and "config" in params:
+                    params["config_inst"] = analysis_inst.get_config(params["config"])
+                    params["config_insts"] = [params["config_inst"]]
+            else:
+                if "config_insts" not in params and "configs" in params:
+                    params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
         return params
 
@@ -1000,9 +1109,8 @@ class ConfigTask(AnalysisTask):
         keys: law.util.InsertableDict,
     ) -> str | None:
         # try to lookup the version in the config's auxiliary data
-        config_inst = params.get("config_inst") or getattr(inst, "config_inst", None)
-        if config_inst:
-            version = cls._dfs_key_lookup(keys, config_inst.x("versions", {}))
+        if isinstance(inst, ConfigTask) and inst.has_single_config():
+            version = cls._dfs_key_lookup(keys, inst.config_inst.x("versions", {}))
             if version:
                 return version
 
@@ -1028,6 +1136,8 @@ class ConfigTask(AnalysisTask):
 
     @classmethod
     def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        cls.ensure_single_config(True, "get_array_function_dict")
+
         kwargs = super().get_array_function_dict(params)
 
         if "config_inst" in params:
@@ -1040,18 +1150,27 @@ class ConfigTask(AnalysisTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # store a reference to the config instance
-        self.config_inst = self.analysis_inst.get_config(self.config)
+        # store a reference to the config instances
+        self.config_insts = [
+            self.analysis_inst.get_config(config)
+            for config in ([self.config] if self.has_single_config() else self.configs)
+        ]
+        if self.has_single_config():
+            self.config_inst = self.config_insts[0]
+
+    @property
+    def config_repr(self) -> str:
+        return "__".join(config_inst.name for config_inst in self.config_insts)
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the config name
-        parts.insert_after("task_family", "config", self.config_inst.name)
+        parts.insert_after("task_family", "config", self.config_repr)
 
         return parts
 
-    def find_keep_columns(self: ConfigTask, collection: ColumnCollection) -> set[Route]:
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
         Returns a set of :py:class:`Route` objects describing columns that should be kept given a
         type of column *collection*.
@@ -1067,7 +1186,7 @@ class ConfigTask(AnalysisTask):
         return columns
 
     def _expand_keep_column(
-        self: ConfigTask,
+        self,
         column:
             ColumnCollection | Route | str |
             Sequence[str | int | slice | type(Ellipsis) | list | tuple],
@@ -1092,12 +1211,6 @@ class ConfigTask(AnalysisTask):
         return {Route(column)}
 
 
-@dataclass
-class TaskShifts:
-    local: set[str] = field(default_factory=set)
-    upstream: set[str] = field(default_factory=set)
-
-
 class ShiftTask(ConfigTask):
 
     shift = luigi.Parameter(
@@ -1118,47 +1231,116 @@ class ShiftTask(ConfigTask):
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
-        if (config_inst := params.get("config_inst")):
-            params = cls.resolve_shifts(config_inst, params)
+        params = cls.resolve_shifts(params)
         return params
 
     @classmethod
-    def resolve_shifts(cls, config_inst: od.Config, params: dict) -> dict:
+    def resolve_shifts(cls, params: dict[str, Any]) -> dict:
+        if cls.has_single_config():
+            if (config_inst := params.get("config_inst")):
+                # evaluate shifts
+                shifts = cls._resolve_shifts(config_inst, params)
+                if shifts is None:
+                    raise ValueError(f"shift {params['shift']} unknown to config {config_inst}")
+
+                # store parameters
+                params["shift"], params["local_shift"] = shifts
+
+                # store references to shift instances
+                if (
+                    params["shift"] != law.NO_STR and
+                    params["local_shift"] != law.NO_STR and
+                    (not params.get("global_shift_inst") or not params.get("local_shift_inst"))
+                ):
+                    params["global_shift_inst"] = config_inst.get_shift(params["shift"])
+                    params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+
+        else:
+            if (config_insts := params.get("config_insts")):
+                configs_repr = lambda: ", ".join(map(repr, config_insts))
+                empty_pair = (law.NO_STR, law.NO_STR)
+                nominal_pair = ("nominal", "nominal")
+                # evaluate shifts per config
+                shifts = {
+                    config_inst: cls._resolve_shifts(config_inst, params)
+                    for config_inst in config_insts
+                }
+                unique_shifts = set(shifts.values())
+                # when one shift pair is empty, all must be empty
+                if len(unique_shifts) > 1 and empty_pair in unique_shifts:
+                    raise ValueError(
+                        f"found invalid combination of resolved shifts {unique_shifts} in configs "
+                        f"{configs_repr()}",
+                    )
+                # at least one shift pair must be known
+                unique_shifts = set(shifts.values())
+                if unique_shifts == {None}:
+                    configs_repr = ", ".join(map(repr, config_insts))
+                    raise ValueError(f"shift {params['shift']} unknown to configs {configs_repr()}")
+                # fill unknown shifts with the nominal one
+                if None in unique_shifts:
+                    shifts = {
+                        config_inst: _shifts or nominal_pair
+                        for config_inst, _shifts in shifts.items()
+                    }
+                    unique_shifts = set(shifts.values())
+
+                # determine the overall shift pair for this multi-config task and store parameters
+                non_nominal_shifts = unique_shifts - {nominal_pair}
+                if len(non_nominal_shifts) > 1:
+                    raise ValueError(
+                        f"found multiple different shift pairs {non_nominal_shifts} in configs "
+                        f"{configs_repr()}",
+                    )
+                params["shift"], params["local_shift"] = (
+                    non_nominal_shifts.pop()
+                    if non_nominal_shifts
+                    else nominal_pair
+                )
+
+                # store references to shift instances
+                if (
+                    params["shift"] != law.NO_STR and
+                    params["local_shift"] != law.NO_STR and
+                    (not params.get("global_shift_insts") or not params.get("local_shift_insts"))
+                ):
+                    params["global_shift_insts"] = {}
+                    params["local_shift_insts"] = {}
+                    for config_inst, (gs, ls) in shifts.items():
+                        params["global_shift_insts"][config_inst] = config_inst.get_shift(gs)
+                        params["local_shift_insts"][config_inst] = config_inst.get_shift(ls)
+
+        return params
+
+    @classmethod
+    def _resolve_shifts(cls, config_inst: od.Config, params: dict) -> tuple[str, str] | None:
         # require that the shift is set and known
         if (requested_shift := params.get("shift")) in (None, law.NO_STR):
             if not cls.allow_empty_shift:
                 raise Exception(f"no shift found in params: {params}")
-            params["shift"] = law.NO_STR
-            params["local_shift"] = law.NO_STR
-            return params
+            return (law.NO_STR, law.NO_STR)
         if requested_shift not in config_inst.shifts:
-            raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
+            return None
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
         # shift       -> the requested shift if implemented by this task
         #                or an upsteam task (== global shift), else nominal
-        if params.get("local_shift") in {None, law.NO_STR}:
+        global_shift = requested_shift
+        if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
             # determine the known shifts for this class
             shifts = TaskShifts()
             cls.get_known_shifts(config_inst, params, shifts)
             # check cases
             if requested_shift in shifts.local:
-                params["shift"] = requested_shift
-                params["local_shift"] = requested_shift
+                local_shift = requested_shift
             elif requested_shift in shifts.upstream:
-                params["shift"] = requested_shift
-                params["local_shift"] = "nominal"
+                local_shift = "nominal"
             else:
-                params["shift"] = "nominal"
-                params["local_shift"] = "nominal"
+                global_shift = "nominal"
+                local_shift = "nominal"
 
-        # store references if not already done
-        if not params.get("global_shift_inst") or not params.get("local_shift_inst"):
-            params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-            params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
-
-        return params
+        return global_shift, local_shift
 
     @classmethod
     def get_known_shifts(
@@ -1199,23 +1381,39 @@ class ShiftTask(ConfigTask):
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
-        self.local_shift_inst = None
-        self.global_shift_inst = None
+        self.global_shift_insts = None
+        self.local_shift_insts = None
         if self.shift not in (None, law.NO_STR) and self.local_shift not in (None, law.NO_STR):
-            self.global_shift_inst = self.config_inst.get_shift(self.shift)
-            self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
+            get = lambda c, s: c.get_shift(s if s in c.shifts else "nominal")
+            self.global_shift_insts = {
+                config_inst: get(config_inst, self.shift)
+                for config_inst in self.config_insts
+            }
+            self.local_shift_insts = {
+                config_inst: get(config_inst, self.local_shift)
+                for config_inst in self.config_insts
+            }
+        if self.has_single_config():
+            self.global_shift_inst = None
+            self.local_shift_inst = None
+            if self.global_shift_insts:
+                self.global_shift_inst = self.global_shift_insts[self.config_inst]
+                self.local_shift_inst = self.local_shift_insts[self.config_inst]
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the shift name
-        if self.global_shift_inst:
-            parts.insert_after(self.config_store_anchor, "shift", self.global_shift_inst.name)
+        if self.global_shift_insts:
+            parts.insert_after(self.config_store_anchor, "shift", self.shift)
 
         return parts
 
 
 class DatasetTask(ShiftTask):
+
+    # all dataset tasks are meant to work for a single config
+    single_config = True
 
     dataset = luigi.Parameter(
         default=default_dataset,
