@@ -21,11 +21,7 @@ coffea = maybe_import("coffea")
     subjet_name="SubJet",
     output_column="msoftdrop",
 )
-def msoftdrop(
-    self: Producer,
-    events: ak.Array,
-    **kwargs,
-) -> ak.Array:
+def msoftdrop(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Recalculates the softdrop mass for a given jet collection by computing the four-vector
     sum of the corresponding subjets.
@@ -85,7 +81,7 @@ def msoftdrop(
 @msoftdrop.init
 def msoftdrop_init(self: Producer, **kwargs) -> None:
     """
-    Dynamically add `uses` and `produces`
+    Dynamically add `uses` and `produces`.
     """
     # input columns
     self.uses |= {

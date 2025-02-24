@@ -12,10 +12,10 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import (
-    Requirements, AnalysisTask, DatasetTask, ShiftTask, wrapper_factory, RESOLVE_DEFAULT,
+    Requirements, AnalysisTask, wrapper_factory, RESOLVE_DEFAULT,
 )
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -28,15 +28,21 @@ from columnflow.util import DotDict, dev_sandbox
 from columnflow.hist_util import create_hist_from_variables
 
 
-class CreateCutflowHistograms(
-    VariablesMixin,
-    SelectorStepsMixin,
+class _CreateCutflowHistograms(
     CalibratorsMixin,
+    SelectorMixin,
     ChunkedIOMixin,
-    DatasetTask,
+    VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`CreateCutflowHistograms`.
+    """
+
+
+class CreateCutflowHistograms(_CreateCutflowHistograms):
+
     # overwrite selector steps to use default resolution
     selector_steps = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -45,32 +51,6 @@ class CreateCutflowHistograms(
         brace_expand=True,
         parse_empty=True,
     )
-
-    steps_variable = od.Variable(
-        name="step",
-        aux={"axis_type": "strcategory"},
-    )
-
-    last_edge_inclusive = last_edge_inclusive_inst
-
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
-    selector_steps_order_sensitive = True
-
-    initial_step = "Initial"
-
-    default_variables = ("event", "cf_*")
-
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeSelectionMasks=MergeSelectionMasks,
-    )
-
-    # strategy for handling missing source columns when adding aliases on event chunks
-    missing_column_alias_strategy = "original"
-
-    # strategy for handling selector steps not defined by selectors
     missing_selector_step_strategy = luigi.ChoiceParameter(
         significant=False,
         default=law.config.get_default("analysis", "missing_selector_step_strategy", "raise"),
@@ -83,15 +63,27 @@ class CreateCutflowHistograms(
         "there, 'raise' is assumed",
     )
 
+    steps_variable = od.Variable(name="step", aux={"axis_type": "strcategory"})
+    last_edge_inclusive = last_edge_inclusive_inst
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    selector_steps_order_sensitive = True
+    initial_step = "Initial"
+    default_variables = ("event", "cf_*")
+    missing_column_alias_strategy = "original"
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeSelectionMasks=MergeSelectionMasks,
+    )
+
     def create_branch_map(self):
         # dummy branch map
         return [None]
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
         reqs["selection"] = self.reqs.MergeSelectionMasks.req(self, tree_index=0, _exclude={"branches"})
-
         return reqs
 
     def requires(self):
@@ -266,11 +258,10 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 
 
 class PlotCutflowBase(
-    SelectorStepsMixin,
-    CategoriesMixin,
     CalibratorsMixin,
+    SelectorMixin,
+    CategoriesMixin,
     PlotBase,
-    ShiftTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -279,7 +270,6 @@ class PlotCutflowBase(
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     exclude_index = True
-
     selector_steps_order_sensitive = True
 
     # upstream requirements
@@ -288,19 +278,25 @@ class PlotCutflowBase(
         CreateCutflowHistograms=CreateCutflowHistograms,
     )
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_before("version", "plot", f"datasets_{self.datasets_repr}")
+        parts.insert_after(self.config_store_anchor, "plot", f"datasets_{self.datasets_repr}")
         return parts
 
 
-class PlotCutflow(
+class _PlotCutflow(
     PlotCutflowBase,
     PlotBase1D,
     ProcessPlotSettingMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`PlotCutflow`.
+    """
+
+
+class PlotCutflow(_PlotCutflow):
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_cutflow",
         add_default_to_description=True,
@@ -472,9 +468,9 @@ PlotCutflowWrapper = wrapper_factory(
 
 
 class PlotCutflowVariablesBase(
+    PlotCutflowBase,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
-    PlotCutflowBase,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -642,10 +638,17 @@ class PlotCutflowVariablesBase(
             )
 
 
-class PlotCutflowVariables1D(
+class _PlotCutflowVariables1D(
     PlotCutflowVariablesBase,
     PlotBase1D,
 ):
+    """
+    Base classes for :py:class:`PlotCutflowVariables1D`.
+    """
+
+
+class PlotCutflowVariables1D(_PlotCutflowVariables1D):
+
     plot_function = PlotBase.plot_function.copy(
         default=law.NO_STR,
         description=PlotBase.plot_function.description + "; the default is resolved based on the "
@@ -754,10 +757,17 @@ class PlotCutflowVariables1D(
                     outp.dump(fig, formatter="mpl")
 
 
-class PlotCutflowVariables2D(
+class _PlotCutflowVariables2D(
     PlotCutflowVariablesBase,
     PlotBase2D,
 ):
+    """
+    Base classes for :py:class:`PlotCutflowVariables2D`.
+    """
+
+
+class PlotCutflowVariables2D(_PlotCutflowVariables2D):
+
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
@@ -806,8 +816,8 @@ class PlotCutflowVariables2D(
 
 
 class PlotCutflowVariablesPerProcess2D(
-    law.WrapperTask,
     PlotCutflowVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"

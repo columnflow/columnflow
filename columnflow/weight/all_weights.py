@@ -12,10 +12,7 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-@weight_producer(
-    # only run on mc
-    mc_only=True,
-)
+@weight_producer()
 def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
     """
     WeightProducer that combines all event weights from the *event_weights* aux entry from either
@@ -40,8 +37,9 @@ def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
             if not dataset_inst.has_tag("skip_pdf"):
                 dataset_inst.x.event_weights["pdf_weight"] = get_shifts_from_sources(config, "pdf")
     """
-    # build the full event weight
     weight = ak.Array(np.ones(len(events)))
+
+    # build the full event weight
     if self.dataset_inst.is_mc and len(events):
         # multiply weights from global config `event_weights` aux entry
         for column in self.config_inst.x.event_weights:
@@ -56,15 +54,16 @@ def all_weights(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
                     f"missing_dataset_weight_{column}",
                     f"weight '{column}' for dataset {self.dataset_inst.name} not found",
                 )
+
     return events, weight
 
 
 @all_weights.init
 def all_weights_init(self: WeightProducer) -> None:
-    if not getattr(self, "dataset_inst", None):
-        return
-
     weight_columns = set()
+
+    if self.dataset_inst.is_data:
+        return
 
     # add used weight columns and declare shifts that the produced event weight depends on
     if self.config_inst.has_aux("event_weights"):

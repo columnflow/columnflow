@@ -35,10 +35,10 @@ ak = maybe_import("awkward")
 
 
 class PrepareMLEvents(
-    MLModelDataMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -256,23 +256,27 @@ class PrepareMLEvents(
                     output_chunks[f][pos.index] = chunk
                     self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.abspath))
 
-            # merge output files of all folds
-            for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
-                sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
-                law.pyarrow.merge_parquet_task(
-                    self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
-                )
+        # teardown the optional producer
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_teardown(task=self)
 
-            # save stats
-            if not getattr(stats, "num_fold_events", None):
-                stats["num_fold_events"] = num_fold_events
-            outputs["stats"].dump(stats, indent=4, formatter="json")
+        # merge output files of all folds
+        for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
+            sorted_chunks = [_output_chunks[key] for key in sorted(_output_chunks)]
+            law.pyarrow.merge_parquet_task(
+                self, sorted_chunks, output, local=True, writer_opts=self.get_parquet_writer_opts(),
+            )
 
-            # some logs
-            self.publish_message(f"total events: {n_events}")
-            for f, n in num_fold_events.items():
-                r = 100 * safe_div(n, n_events)
-                self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
+        # save stats
+        if not getattr(stats, "num_fold_events", None):
+            stats["num_fold_events"] = num_fold_events
+        outputs["stats"].dump(stats, indent=4, formatter="json")
+
+        # some logs
+        self.publish_message(f"total events: {n_events}")
+        for f, n in num_fold_events.items():
+            r = 100 * safe_div(n, n_events)
+            self.publish_message(f"fold {' ' if f < 10 else ''}{f}: {n} ({r:.2f}%)")
 
 
 # overwrite class defaults
@@ -296,11 +300,11 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLStats(
-    MLModelDataMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -365,11 +369,11 @@ MergeMLStatsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    MLModelDataMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelDataMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -589,10 +593,10 @@ class MLTraining(
 
 
 class MLEvaluation(
-    MLModelMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
     ReducedEventsUser,
+    ChunkedIOMixin,
+    ProducersMixin,
+    MLModelMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -619,6 +623,7 @@ class MLEvaluation(
 
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
+        # TODO: potentially reset
 
     @property
     def preparation_producer_inst(self):
@@ -826,6 +831,10 @@ class MLEvaluation(
                 output_chunks[pos.index] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
+        # teardown the optional producer
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_teardown(task=self)
+
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(
@@ -854,11 +863,11 @@ MLEvaluationWrapper = wrapper_factory(
 
 
 class MergeMLEvaluation(
-    MLModelMixin,
-    ProducersMixin,
-    SelectorMixin,
-    CalibratorsMixin,
     DatasetTask,
+    CalibratorsMixin,
+    SelectorMixin,
+    ProducersMixin,
+    MLModelMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
@@ -914,11 +923,11 @@ MergeMLEvaluationWrapper = wrapper_factory(
 
 class PlotMLResultsBase(
     ProcessPlotSettingMixin,
-    CategoriesMixin,
-    MLModelMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
     CalibratorsMixin,
+    SelectorStepsMixin,
+    ProducersMixin,
+    MLModelMixin,
+    CategoriesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):

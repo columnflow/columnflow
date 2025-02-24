@@ -39,11 +39,6 @@ class WeightProducer(TaskArrayFunction):
         :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose ``is_mc``
         (``is_data``) attribute is *False*.
 
-        When *nominal_only* is *True* or *shifts_only* is set, the producer is skipped and not
-        considered by other calibrators, selectors and producers in case they are evaluated on a
-        :py:class:`order.Shift` (using the :py:attr:`global_shift_inst` attribute) whose name does
-        not match.
-
         All additional *kwargs* are added as class members of the new subclasses.
 
         :param func: Function to be wrapped and integrated into new :py:class:`WeightProducer`
@@ -90,13 +85,12 @@ class WeightProducer(TaskArrayFunction):
                         )
 
                 if "skip_func" not in cls_dict:
-                    def skip_func(self):
+                    def skip_func(self, **kwargs) -> bool:
                         # check mc_only and data_only
-                        if getattr(self, "dataset_inst", None):
-                            if mc_only and not self.dataset_inst.is_mc:
-                                return True
-                            if data_only and not self.dataset_inst.is_data:
-                                return True
+                        if mc_only and not self.dataset_inst.is_mc:
+                            return True
+                        if data_only and not self.dataset_inst.is_data:
+                            return True
 
                         # in all other cases, do not skip
                         return False

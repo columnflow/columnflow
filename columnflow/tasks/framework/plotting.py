@@ -413,8 +413,8 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
-    DatasetsProcessesMixin,
     PlotBase,
+    DatasetsProcessesMixin,
 ):
     """
     Mixin class for tasks creating plots where contributions of different processes are shown.
@@ -467,8 +467,8 @@ class ProcessPlotSettingMixin(
 
 
 class VariablePlotSettingMixin(
-        VariablesMixin,
-        PlotBase,
+    PlotBase,
+    VariablesMixin,
 ):
     """
     Mixin class for tasks creating plots for multiple variables.

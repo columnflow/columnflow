@@ -14,6 +14,7 @@ import inspect
 import functools
 import collections
 import copy
+from dataclasses import dataclass, field
 
 import luigi
 import law
@@ -36,12 +37,13 @@ RESOLVE_DEFAULT = "DEFAULT"
 
 
 class Requirements(DotDict):
-    """General class for requirements of different tasks.
+    """
+    Container for task-level requirements of different tasks.
 
-        Can be initialized with other :py:class:`~columnflow.util.DotDict`
-        instances and additional keyword arguments ``kwargs``, which are
-        added.
-        """
+    Can be initialized with other :py:class:`Requirement` instances and additional keyword arguments ``kwargs``,
+    which are added.
+    """
+
     def __init__(self, *others, **kwargs):
 
         super().__init__()
@@ -49,14 +51,6 @@ class Requirements(DotDict):
         # add others and kwargs
         for reqs in others + (kwargs,):
             self.update(reqs)
-
-
-class BaseTask(law.Task):
-
-    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
-
-    # container for upstream requirements for convenience
-    reqs = Requirements()
 
 
 class OutputLocation(enum.Enum):
@@ -68,6 +62,31 @@ class OutputLocation(enum.Enum):
     local = "local"
     wlcg = "wlcg"
     wlcg_mirrored = "wlcg_mirrored"
+
+
+@dataclass
+class TaskShifts:
+    """
+    Container for *local* and *upstream* shifts at a point in the task graph.
+    """
+
+    local: set[str] = field(default_factory=set)
+    upstream: set[str] = field(default_factory=set)
+
+
+class BaseTask(law.Task):
+
+    task_namespace = law.config.get_expanded("analysis", "cf_task_namespace", "cf")
+
+    # container for upstream requirements for convenience
+    reqs = Requirements()
+
+    def get_params_dict(self) -> dict[str, Any]:
+        return {
+            attr: getattr(self, attr)
+            for attr, param in self.get_params()
+            if isinstance(param, luigi.Parameter)
+        }
 
 
 class AnalysisTask(BaseTask, law.SandboxTask):
@@ -107,13 +126,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     _cfg_resources_dict = None
 
     @classmethod
-    def modify_param_values(cls, params: dict) -> dict:
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
         params = cls.resolve_param_values(params)
         return params
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
             params["analysis_inst"] = cls.get_analysis_inst(params["analysis"])
@@ -163,7 +182,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
-            cls.task_family != law.parser.root_task().task_family
+            cls.task_family != law.parser.root_task_cls().task_family
         ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
@@ -290,7 +309,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         keys: law.util.InsertableDict,
     ) -> str | None:
         # try to lookup the version in the analysis's auxiliary data
-        analysis_inst = params.get("analysis_inst") or getattr(inst, "analysis_inst", None)
+        analysis_inst = getattr(inst, "analysis_inst", None)
         if analysis_inst:
             version = cls._dfs_key_lookup(keys, analysis_inst.x("versions", {}))
             if version:
@@ -321,14 +340,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         keys = law.util.InsertableDict()
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the analysis name
-        analysis = get("analysis")
+        analysis = (
+            inst_or_params.get("analysis")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "analysis", None)
+        )
         if analysis not in {law.NO_STR, None, ""}:
             keys["analysis"] = analysis
 
@@ -380,55 +397,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return empty_value
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
-        """
-        Returns two sets of shifts in a tuple: shifts implemented by _this_ task, and dependent
-        shifts that are implemented by upstream tasks.
-        """
-        # get shifts from upstream dependencies, consider both their own and upstream shifts as one
-        upstream_shifts = set()
-        for req in cls.reqs.values():
-            upstream_shifts |= set.union(*(req.get_known_shifts(config_inst, params) or (set(),)))
-
-        return set(), upstream_shifts
-
-    @classmethod
-    def get_array_function_kwargs(
-        cls,
-        task: AnalysisTask | None = None,
-        **params,
-    ) -> dict[str, Any]:
-        if task:
-            analysis_inst = task.analysis_inst
-        elif "analysis_inst" in params:
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        if "analysis_inst" in params:
             analysis_inst = params["analysis_inst"]
         else:
             analysis_inst = cls.get_analysis_inst(params["analysis"])
 
-        return {
-            "task": task,
-            "analysis_inst": analysis_inst,
-        }
-
-    @classmethod
-    def get_calibrator_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_selector_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
-
-    @classmethod
-    def get_weight_producer_kwargs(cls, *args, **kwargs) -> dict[str, Any]:
-        # implemented here only for simplified mro control
-        return cls.get_array_function_kwargs(*args, **kwargs)
+        return {"analysis_inst": analysis_inst}
 
     @classmethod
     def find_config_objects(
@@ -584,7 +559,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     inference_model = task_params.get("inference_model", None)
 
                     # if inference model is not set, assume it's the container default
-                    if inference_model in (None, "NO_STR"):
+                    if inference_model in {None, "NO_STR"}:
                         inference_model = container.x.default_inference_model
 
                     # get the default_ml_model from the inference_model_inst
@@ -750,13 +725,26 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             self._cached_values[key] = func()
         return self._cached_values[key]
 
+    def reset_sandbox(self, sandbox: str) -> None:
+        """
+        Resets the sandbox to a new *sandbox* value.
+        """
+        # do nothing if the value actualy does not change
+        if self.sandbox == sandbox:
+            return
+
+        # change it and rebuild the sandbox inst when already initialized
+        self.sandbox = sandbox
+        if self._sandbox_initialized:
+            self._initialize_sandbox(force=True)
+
     def store_parts(self) -> law.util.InsertableDict:
         """
         Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
         For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
         keys can be used by subclassing tasks to overwrite values.
 
-        :return: Dictionary with parts to create a path to store intermediary results.
+        :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = law.util.InsertableDict()
 
@@ -990,6 +978,10 @@ class ConfigTask(AnalysisTask):
         description=f"name of the analysis config to use; default: '{default_config}'",
     )
 
+    # the field in the store parts behind which the new part is inserted
+    # added here for subclasses that typically refer to the store part added by _this_ class
+    config_store_anchor = "config"
+
     @classmethod
     def resolve_param_values(cls, params: dict) -> dict:
         params = super().resolve_param_values(params)
@@ -1023,26 +1015,22 @@ class ConfigTask(AnalysisTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the config name in front of the task family
-        config = get("config")
+        config = (
+            inst_or_params.get("config")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "config", None)
+        )
         if config not in {law.NO_STR, None, ""}:
             keys.insert_before("task_family", "config", config)
 
         return keys
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        kwargs = super().get_array_function_dict(params)
 
-        if task:
-            kwargs["config_inst"] = task.config_inst
-        elif "config_inst" in params:
+        if "config_inst" in params:
             kwargs["config_inst"] = params["config_inst"]
         elif "config" in params and "analysis_inst" in kwargs:
             kwargs["config_inst"] = kwargs["analysis_inst"].get_config(params["config"])
@@ -1055,7 +1043,7 @@ class ConfigTask(AnalysisTask):
         # store a reference to the config instance
         self.config_inst = self.analysis_inst.get_config(self.config)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the config name
@@ -1104,6 +1092,12 @@ class ConfigTask(AnalysisTask):
         return {Route(column)}
 
 
+@dataclass
+class TaskShifts:
+    local: set[str] = field(default_factory=set)
+    upstream: set[str] = field(default_factory=set)
+
+
 class ShiftTask(ConfigTask):
 
     shift = luigi.Parameter(
@@ -1122,83 +1116,66 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def modify_param_values(cls, params):
-        """
-        When "config" and "shift" are set, this method evaluates them to set the global shift.
-        For that, it takes the shifts stored in the config instance and compares it with those
-        defined by this class.
-        """
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
+        if (config_inst := params.get("config_inst")):
+            params = cls.resolve_shifts(config_inst, params)
+        return params
 
-        # get params
-        config_inst = params.get("config_inst")
-        requested_shift = params.get("shift")
-        requested_local_shift = params.get("local_shift")
-
-        # require that the config is set
-        if config_inst in (None, law.NO_STR):
-            return params
-
+    @classmethod
+    def resolve_shifts(cls, config_inst: od.Config, params: dict) -> dict:
         # require that the shift is set and known
-        if requested_shift in (None, law.NO_STR):
-            if cls.allow_empty_shift:
-                params["shift"] = law.NO_STR
-                params["local_shift"] = law.NO_STR
-                return params
-            raise Exception(f"no shift found in params: {params}")
+        if (requested_shift := params.get("shift")) in (None, law.NO_STR):
+            if not cls.allow_empty_shift:
+                raise Exception(f"no shift found in params: {params}")
+            params["shift"] = law.NO_STR
+            params["local_shift"] = law.NO_STR
+            return params
         if requested_shift not in config_inst.shifts:
             raise ValueError(f"shift {requested_shift} unknown to {config_inst}")
-
-        # determine the known shifts for this class
-        shifts, upstream_shifts = cls.get_known_shifts(config_inst, params)
 
         # actual shift resolution: compare the requested shift to known ones
         # local_shift -> the requested shift if implemented by the task itself, else nominal
         # shift       -> the requested shift if implemented by this task
         #                or an upsteam task (== global shift), else nominal
-        if requested_local_shift in (None, law.NO_STR):
-            if requested_shift in shifts:
+        if params.get("local_shift") in {None, law.NO_STR}:
+            # determine the known shifts for this class
+            shifts = TaskShifts()
+            cls.get_known_shifts(config_inst, params, shifts)
+            # check cases
+            if requested_shift in shifts.local:
                 params["shift"] = requested_shift
                 params["local_shift"] = requested_shift
-            elif requested_shift in upstream_shifts:
+            elif requested_shift in shifts.upstream:
                 params["shift"] = requested_shift
                 params["local_shift"] = "nominal"
             else:
                 params["shift"] = "nominal"
                 params["local_shift"] = "nominal"
 
-        # store references
-        params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-        params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+        # store references if not already done
+        if not params.get("global_shift_inst") or not params.get("local_shift_inst"):
+            params["global_shift_inst"] = config_inst.get_shift(params["shift"])
+            params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
 
         return params
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
-        params = super().resolve_param_values(params)
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
+        """
+        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
+        by _this_ task, and dependent shifts that are implemented by upstream tasks.
 
-        # set default shift
-        if params.get("shift") in (None, law.NO_STR):
-            params["shift"] = "nominal"
-
-        return params
-
-    @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
-
-        if task:
-            if task.local_shift_inst:
-                kwargs["local_shift_inst"] = task.local_shift_inst
-            if task.global_shift_inst:
-                kwargs["global_shift_inst"] = task.global_shift_inst
-        else:
-            if "local_shift_inst" in params:
-                kwargs["local_shift_inst"] = params["local_shift_inst"]
-            if "global_shift_inst" in params:
-                kwargs["global_shift_inst"] = params["global_shift_inst"]
-
-        return kwargs
+        :param config_inst: Config instance.
+        :param params: Dictionary of task parameters.
+        :param shifts: TaskShifts object to adjust.
+        """
+        return None
 
     @classmethod
     def get_config_lookup_keys(
@@ -1207,15 +1184,13 @@ class ShiftTask(ConfigTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the (global) shift name
-        shift = get("shift")
-        if shift not in {law.NO_STR, None, ""}:
+        shift = (
+            inst_or_params.get("shift")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "shift", None)
+        )
+        if shift not in (law.NO_STR, None, ""):
             keys["shift"] = shift
 
         return keys
@@ -1230,12 +1205,12 @@ class ShiftTask(ConfigTask):
             self.global_shift_inst = self.config_inst.get_shift(self.shift)
             self.local_shift_inst = self.config_inst.get_shift(self.local_shift)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # add the shift name
         if self.global_shift_inst:
-            parts.insert_after("config", "shift", self.global_shift_inst.name)
+            parts.insert_after(self.config_store_anchor, "shift", self.global_shift_inst.name)
 
         return parts
 
@@ -1260,21 +1235,23 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
-    def get_known_shifts(cls, config_inst: od.Config, params: dict) -> tuple[set[str], set[str]]:
+    def get_known_shifts(
+        cls,
+        config_inst: od.Config,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
         # dataset can have shifts, that are considered as upstream shifts
-        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+        super().get_known_shifts(config_inst, params, shifts)
 
-        dataset_inst = params.get("dataset_inst")
-        if dataset_inst:
+        if (dataset_inst := params.get("dataset_inst")):
             if dataset_inst.is_data:
                 # clear all shifts for data
-                shifts.clear()
-                upstream_shifts.clear()
+                shifts.local.clear()
+                shifts.upstream.clear()
             else:
                 # extend with dataset variations for mc
-                upstream_shifts |= set(dataset_inst.info.keys())
-
-        return shifts, upstream_shifts
+                shifts.upstream |= set(dataset_inst.info.keys())
 
     @classmethod
     def get_config_lookup_keys(
@@ -1283,26 +1260,22 @@ class DatasetTask(ShiftTask):
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        get = (
-            inst_or_params.get
-            if isinstance(inst_or_params, dict)
-            else lambda attr: (getattr(inst_or_params, attr, None))
-        )
-
         # add the dataset name before the shift name
-        dataset = get("dataset")
+        dataset = (
+            inst_or_params.get("dataset")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "dataset", None)
+        )
         if dataset not in {law.NO_STR, None, ""}:
             keys.insert_before("shift", "dataset", dataset)
 
         return keys
 
     @classmethod
-    def get_array_function_kwargs(cls, task=None, **params):
-        kwargs = super().get_array_function_kwargs(task=task, **params)
+    def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        kwargs = super().get_array_function_dict(params)
 
-        if task:
-            kwargs["dataset_inst"] = task.dataset_inst
-        elif "dataset_inst" in params:
+        if "dataset_inst" in params:
             kwargs["dataset_inst"] = params["dataset_inst"]
         elif "dataset" in params and "config_inst" in kwargs:
             kwargs["dataset_inst"] = kwargs["config_inst"].get_dataset(params["dataset"])
@@ -1323,11 +1296,11 @@ class DatasetTask(ShiftTask):
         )
         self.dataset_info_inst = self.dataset_inst.get_info(key)
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
 
         # insert the dataset
-        parts.insert_after("config", "dataset", self.dataset_inst.name)
+        parts.insert_after(self.config_store_anchor, "dataset", self.dataset_inst.name)
 
         return parts
 
@@ -1503,22 +1476,23 @@ def wrapper_factory(
     attributes: dict | None = None,
     docs: str | None = None,
 ) -> law.task.base.Register:
-    """Factory function creating wrapper task classes, inheriting from *base_cls* and
-    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*.
-    Unless *cls_name* is defined, the name of the created class defaults to the name of
-    *require_cls* plus "Wrapper". Additional *attributes* are added as class-level members when
-    given.
+    """
+    Factory function creating wrapper task classes, inheriting from *base_cls* and
+    :py:class:`~law.task.base.WrapperTask`, that do nothing but require multiple instances of *require_cls*. Unless
+    *cls_name* is defined, the name of the created class defaults to the name of *require_cls* plus "Wrapper".
+    Additional *attributes* are added as class-level members when given.
 
-    The instances of *require_cls* to be required in the
-    :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be controlled by task parameters.
-    These parameters can be enabled through the string sequence *enable*, which currently accepts:
+    The instances of *require_cls* to be required in the :py:meth:`~.wrapper_factory.Wrapper.requires()` method can be
+    controlled by task parameters. These parameters can be enabled through the string sequence *enable*, which currently
+    accepts:
 
         - ``configs``, ``skip_configs``
         - ``shifts``, ``skip_shifts``
         - ``datasets``, ``skip_datasets``
 
-    This allows to easily build wrapper tasks that loop over (combinations of) parameters that are
-    either defined in the analysis or config, which would otherwise lead to mostly redundant code.
+    This allows to easily build wrapper tasks that loop over (combinations of) parameters that are either defined in the
+    analysis or config, which would otherwise lead to mostly redundant code.
+
     Example:
 
     .. code-block:: python
@@ -1535,38 +1509,30 @@ def wrapper_factory(
         # this allows to run (e.g.)
         # law run MyTaskWrapper --datasets st_* --skip-datasets *_tbar
 
-    When building the requirements, the full combinatorics of parameters is considered. However,
-    certain conditions apply depending on enabled features. For instance, in order to use the
-    "configs" feature (adding a parameter "--configs" to the created class, allowing to loop over a
-    list of config instances known to an analysis), *require_cls* must be at least a
-    :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas *base_cls* must
-    explicitly not.
+    When building the requirements, the full combinatorics of parameters is considered. However, certain conditions
+    apply depending on enabled features. For instance, in order to use the "configs" feature (adding a parameter
+    "--configs" to the created class, allowing to loop over a list of config instances known to an analysis),
+    *require_cls* must be at least a :py:class:`ConfigTask` accepting "--config" (mind the singular form), whereas
+    *base_cls* must explicitly not.
 
     :param base_cls: Base class for this wrapper
     :param require_cls: :py:class:`~law.task.base.Task` class to be wrapped
-    :param enable: Enable these parameters to control the wrapped
-        :py:class:`~law.task.base.Task` class instance.
-        Currently allowed parameters are: "configs", "skip_configs",
-        "shifts", "skip_shifts", "datasets", "skip_datasets"
-    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the
-        name of the :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
-    :param attributes: Add these attributes as class-level members of the
-        new :py:class:`~law.task.base.WrapperTask` class
-    :param docs: Manually set the documentation string `__doc__` of the new
-        :py:class:`~law.task.base.WrapperTask` class instance
-    :raises ValueError: If a parameter provided with `enable` is not in the list
-        of known parameters
-    :raises TypeError: If any parameter in `enable` is incompatible with the
-        :py:class:`~law.task.base.WrapperTask` class instance or the inheritance
-        structure of corresponding classes
-    :raises ValueError: when `configs` are enabled but not found in the analysis
-        config instance
-    :raises ValueError: when `shifts` are enabled but not found in the analysis
-        config instance
-    :raises ValueError: when `datasets` are enabled but not found in the analysis
-        config instance
-    :return: The new :py:class:`~law.task.base.WrapperTask` for the
-        :py:class:`~law.task.base.Task` class `required_cls`
+    :param enable: Enable these parameters to control the wrapped :py:class:`~law.task.base.Task` class instance.
+        Currently allowed parameters are: "configs", "skip_configs", "shifts", "skip_shifts", "datasets",
+        "skip_datasets"
+    :param cls_name: Name of the wrapper instance. If :py:attr:`None`, defaults to the name of the
+        :py:class:`~law.task.base.WrapperTask` class + `"Wrapper"`
+    :param attributes: Add these attributes as class-level members of the new :py:class:`~law.task.base.WrapperTask`
+        class
+    :param docs: Manually set the documentation string `__doc__` of the new :py:class:`~law.task.base.WrapperTask` class
+        instance
+    :raises ValueError: If a parameter provided with `enable` is not in the list of known parameters
+    :raises TypeError: If any parameter in `enable` is incompatible with the :py:class:`~law.task.base.WrapperTask`
+        class instance or the inheritance structure of corresponding classes
+    :raises ValueError: when `configs` are enabled but not found in the analysis config instance
+    :raises ValueError: when `shifts` are enabled but not found in the analysis config instance
+    :raises ValueError: when `datasets` are enabled but not found in the analysis config instance
+    :return: The new :py:class:`~law.task.base.WrapperTask` for the :py:class:`~law.task.base.Task` class `required_cls`
     """
     # check known features
     known_features = [
@@ -1623,58 +1589,60 @@ def wrapper_factory(
     class Wrapper(*base_classes, law.WrapperTask):
 
         exclude_params_repr_empty = set()
+        exclude_params_req_set = set()
 
         if has_configs:
             configs = law.CSVParameter(
                 default=(default_config,),
-                description="names or name patterns of configs to use; can also be the key of a "
-                "mapping defined in the 'config_groups' auxiliary data of the analysis; "
-                f"default: {default_config}",
+                description="names or name patterns of configs to use; can also be the key of a mapping defined in the "
+                f"'config_groups' auxiliary data of the analysis; default: {default_config}",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("configs")
         if has_skip_configs:
             skip_configs = law.CSVParameter(
                 default=(),
-                description="names or name patterns of configs to skip after evaluating --configs; "
-                "can also be the key of a mapping defined in the 'config_groups' auxiliary data "
-                "of the analysis; empty default",
+                description="names or name patterns of configs to skip after evaluating --configs; can also be the key "
+                "of a mapping defined in the 'config_groups' auxiliary data of the analysis; empty default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_configs")
+            exclude_params_req_set.add("skip_configs")
         if has_datasets:
             datasets = law.CSVParameter(
                 default=("*",),
-                description="names or name patterns of datasets to use; can also be the key of a "
-                "mapping defined in the 'dataset_groups' auxiliary data of the corresponding "
-                "config; default: ('*',)",
+                description="names or name patterns of datasets to use; can also be the key of a mapping defined in "
+                "the 'dataset_groups' auxiliary data of the corresponding config; default: ('*',)",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("datasets")
         if has_skip_datasets:
             skip_datasets = law.CSVParameter(
                 default=(),
-                description="names or name patterns of datasets to skip after evaluating "
-                "--datasets; can also be the key of a mapping defined in the 'dataset_groups' "
-                "auxiliary data of the corresponding config; empty default",
+                description="names or name patterns of datasets to skip after evaluating --datasets; can also be the "
+                "key of a mapping defined in the 'dataset_groups' auxiliary data of the corresponding config; empty "
+                "default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_datasets")
+            exclude_params_req_set.add("skip_datasets")
         if has_shifts:
             shifts = law.CSVParameter(
                 default=("nominal",),
-                description="names or name patterns of shifts to use; can also be the key of a "
-                "mapping defined in the 'shift_groups' auxiliary data of the corresponding "
-                "config; default: ('nominal',)",
+                description="names or name patterns of shifts to use; can also be the key of a mapping defined in the "
+                "'shift_groups' auxiliary data of the corresponding config; default: ('nominal',)",
                 brace_expand=True,
             )
+            exclude_params_req_set.add("shifts")
         if has_skip_shifts:
             skip_shifts = law.CSVParameter(
                 default=(),
-                description="names or name patterns of shifts to skip after evaluating --shifts; "
-                "can also be the key of a mapping defined in the 'shift_groups' auxiliary data "
-                "of the corresponding config; empty default",
+                description="names or name patterns of shifts to skip after evaluating --shifts; can also be the key "
+                "of a mapping defined in the 'shift_groups' auxiliary data of the corresponding config; empty default",
                 brace_expand=True,
             )
             exclude_params_repr_empty.add("skip_shifts")
+            exclude_params_req_set.add("skip_shifts")
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -1710,9 +1678,7 @@ def wrapper_factory(
                     self.analysis_inst.x("config_groups", {}),
                 )
                 if not configs:
-                    raise ValueError(
-                        f"no configs found in analysis {self.analysis_inst} matching {self.configs}",
-                    )
+                    raise ValueError(f"no configs found in analysis {self.analysis_inst} matching {self.configs}")
                 if self.wrapper_has_skip_configs:
                     skip_configs = self.find_config_objects(
                         self.skip_configs,
@@ -1723,8 +1689,7 @@ def wrapper_factory(
                     configs = [c for c in configs if c not in skip_configs]
                     if not configs:
                         raise ValueError(
-                            f"no configs found in analysis {self.analysis_inst} after skipping "
-                            f"{self.skip_configs}",
+                            f"no configs found in analysis {self.analysis_inst} after skipping {self.skip_configs}",
                         )
                 config_insts = list(map(self.analysis_inst.get_config, sorted(configs)))
             else:
@@ -1746,9 +1711,7 @@ def wrapper_factory(
                         config_inst.x("shift_groups", {}),
                     )
                     if not shifts:
-                        raise ValueError(
-                            f"no shifts found in config {config_inst} matching {self.shifts}",
-                        )
+                        raise ValueError(f"no shifts found in config {config_inst} matching {self.shifts}")
                     if self.wrapper_has_skip_shifts:
                         skip_shifts = self.find_config_objects(
                             self.skip_shifts,
@@ -1758,10 +1721,7 @@ def wrapper_factory(
                         )
                         shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
-                        raise ValueError(
-                            f"no shifts found in config {config_inst} after skipping "
-                            f"{self.skip_shifts}",
-                        )
+                        raise ValueError(f"no shifts found in config {config_inst} after skipping {self.skip_shifts}")
                     # move "nominal" to the front if present
                     shifts = sorted(shifts)
                     if "nominal" in shifts:
@@ -1777,10 +1737,7 @@ def wrapper_factory(
                         config_inst.x("dataset_groups", {}),
                     )
                     if not datasets:
-                        raise ValueError(
-                            f"no datasets found in config {config_inst} matching "
-                            f"{self.datasets}",
-                        )
+                        raise ValueError(f"no datasets found in config {config_inst} matching {self.datasets}")
                     if self.wrapper_has_skip_datasets:
                         skip_datasets = self.find_config_objects(
                             self.skip_datasets,
@@ -1791,8 +1748,7 @@ def wrapper_factory(
                         datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
                             raise ValueError(
-                                f"no datasets found in config {config_inst} after skipping "
-                                f"{self.skip_datasets}",
+                                f"no datasets found in config {config_inst} after skipping {self.skip_datasets}",
                             )
                     prod_sequences.append(sorted(datasets))
 
@@ -1801,14 +1757,7 @@ def wrapper_factory(
 
             return params
 
-        def requires(self) -> Requirements:
-            """Collect requirements defined by the underlying ``require_cls``
-            of the :py:class:`~law.task.base.WrapperTask` depending on optional
-            additional parameters.
-
-            :return: Requirements for the :py:class:`~law.task.base.WrapperTask`
-                instance.
-            """
+        def requires(self) -> dict:
             # build all requirements based on the parameter space
             reqs = {}
 
@@ -1840,7 +1789,7 @@ def wrapper_factory(
     Wrapper.__module__ = module.__name__
 
     # overwrite __name__
-    Wrapper.__name__ = cls_name or require_cls.__name__ + "Wrapper"
+    Wrapper.__name__ = cls_name or f"{require_cls.__name__}Wrapper"
 
     # set docs
     if docs:

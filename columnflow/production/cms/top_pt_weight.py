@@ -49,22 +49,18 @@ def gen_parton_top(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @gen_parton_top.init
-def gen_parton_top_init(self: Producer) -> bool:
+def gen_parton_top_init(self: Producer, **kwargs) -> bool:
     for col in self.produced_top_columns:
         self.uses.add(f"GenPart.{col}")
         self.produces.add(f"GenPartonTop.{col}")
 
 
 @gen_parton_top.skip
-def gen_parton_top_skip(self: Producer) -> bool:
+def gen_parton_top_skip(self: Producer, **kwargs) -> bool:
     """
     Custom skip function that checks whether the dataset is a MC simulation containing top
     quarks in the first place.
     """
-    # never skip when there is not dataset
-    if not getattr(self, "dataset_inst", None):
-        return False
-
     return self.dataset_inst.is_data or not self.dataset_inst.has_tag("has_top")
 
 
@@ -129,12 +125,8 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @top_pt_weight.skip
-def top_pt_weight_skip(self: Producer) -> bool:
+def top_pt_weight_skip(self: Producer, **kwargs) -> bool:
     """
     Skip if running on anything except ttbar MC simulation.
     """
-    # never skip when there is no dataset
-    if not getattr(self, "dataset_inst", None):
-        return False
-
     return self.dataset_inst.is_data or not self.dataset_inst.has_tag("is_ttbar")
