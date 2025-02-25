@@ -86,9 +86,8 @@ def trigger_scale_factors_requires(self: Producer, reqs: dict) -> None:
         reqs["trigger_scalefactor"] = TriggerScaleFactors.req(
             self.task,
             datasets=self.datasets,
-            variables=self.variables,
-            trigger=self.tag,
-            ref_trigger=self.ref_tag,
+            variables=self.trigger_config.variable_names,
+            trigger_config=self.trigger_config,
         )
 
 
