@@ -1131,13 +1131,13 @@ class ConfigTask(AnalysisTask):
             raise Exception(msg)
 
     @classmethod
-    def config_mode(self) -> str:
+    def config_mode(cls) -> str:
         """
         Returns a string representation of this task's config mode.
 
         :return: "single" if the task has a single config, "multi" otherwise.
         """
-        return "single" if self.has_single_config() else "multi"
+        return "single" if cls.has_single_config() else "multi"
 
     @classmethod
     def _get_config_container(cls, params: dict[str, Any]) -> od.Config | list[od.Config] | None:
