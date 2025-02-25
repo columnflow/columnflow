@@ -31,7 +31,7 @@ DatacardHists = dict[str, ProcHists]  # category name -> hists
 class DatacardWriter(object):
     """
     Generic writer for combine datacards using a instance of an :py:class:`InferenceModel` *inference_model_inst* and a
-    four-fold nested dictionary "category -> config -> process -> shift -> hist".
+    four-fold nested dictionary "category -> process -> config -> shift -> hist".
 
     *rate_precision* and *effect_precision* control the number of digits of values for measured rates and parameter
     effects. They are used in case the category and parameter objects of the inference model are configured with
