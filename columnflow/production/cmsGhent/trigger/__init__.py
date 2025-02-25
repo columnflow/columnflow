@@ -13,8 +13,8 @@ from columnflow.util import maybe_import, DotDict
 from columnflow.production.cmsGhent.trigger.util import reduce_hist, collect_hist
 from columnflow.types import Any, Iterable, Callable
 
-from columnflow.production.cmsGhent.trigger.hist_producer import bundle_trigger_histograms, trigger_efficiency_hists # noqa
-from columnflow.production.cmsGhent.trigger.sf_producer import bundle_trigger_weights, trigger_scale_factors # noqa
+from columnflow.production.cmsGhent.trigger.hist_producer import bundle_trigger_histograms, trigger_efficiency_hists  # noqa
+from columnflow.production.cmsGhent.trigger.sf_producer import bundle_trigger_weights, trigger_scale_factors  # noqa
 
 
 np = maybe_import("numpy")
@@ -34,7 +34,7 @@ class TriggerSFConfig:
 
     tag: str = "trig"
     ref_tag: str = "ref"
-    sf_name: str = f"trig_sf"
+    sf_name: str = "trig_sf"
     aux: dict = field(default_factory=dict)
     objects: list[str] = None  # list of objects used in the calculation: derived from the variables if None
     config_name: str = None
@@ -71,14 +71,14 @@ class TriggerSFConfig:
 
         self.variables = tuple(self.variables)
         for v in self.variables:
-            red = v.x("reduce", sum) 
+            red = v.x("reduce", sum)
             assert red is sum or isinstance(red, slice) and red.step is sum or isinstance(red, int), (
                 f"invalid reduce method {red} for variable {v}"
-            ) 
+            )
         self._var_mapping = {v.name: v for v in self.variables}
         self.variable_names = tuple(self._var_mapping)
         if self.main_variables is None:
-            self.main_variables = self.variable_names 
+            self.main_variables = self.variable_names
         self.main_variables = sorted(self.main_variables, key=self.variable_names.index)
 
         uncertainties, self.uncertainties = self.uncertainties, []
@@ -112,8 +112,8 @@ class TriggerSFConfig:
 
     def uncertainty(
         self,
-        func: Callable =None,
-        variables: Collection[str]=None,
+        func: Callable = None,
+        variables: Collection[str] = None,
         collect_mc_data=True,
         stat=False,
         skip=False,
@@ -152,8 +152,3 @@ class TriggerSFConfig:
     @property
     def stat_unc(self):
         return self._stat_func
-
-
-
-
-

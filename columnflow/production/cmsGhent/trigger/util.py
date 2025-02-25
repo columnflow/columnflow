@@ -57,12 +57,13 @@ def collect_hist(histograms: dict[od.Dataset, Hist]) -> dict[str, Hist]:
 def syst_hist(
     axes: Sequence[hist.axis.AxisProtocol],
     syst_name: str = "",
-    arrays: np.ndarray | tuple[np.ndarray, np.ndarray] = None
+    arrays: np.ndarray | tuple[np.ndarray, np.ndarray] = None,
 ) -> Hist:
     if syst_name == "central":
         variations = [syst_name]
     else:
-        variations =[f"{syst_name}_{dr}" if syst_name else dr for dr in [od.Shift.DOWN, od.Shift.UP]]
+        variations = [f"{syst_name}_{dr}" if syst_name else dr for dr in [od.Shift.DOWN, od.Shift.UP]]
+
     h = Hist(
         hist.axis.StrCategory(variations, name="systematic", growth=True),
         *[ax for ax in axes if ax.name != "systematic"],
@@ -78,7 +79,7 @@ def calculate_efficiency(
     histogram: Hist,
     trigger: str,
     reference: str,
-    eff_func: Callable[[Hist, Hist], Hist] = lambda sel, tot: sel / tot.values()
+    eff_func: Callable[[Hist, Hist], Hist] = lambda sel, tot: sel / tot.values(),
 ):
     # counts that pass both triggers
     selected_counts = histogram[{reference: 1, trigger: 1}]
@@ -145,6 +146,7 @@ def init_trigger_config(self: Producer | WeightProducer):
     for key, value in asdict(self.trigger_config).items():
         if not hasattr(self, key):
             setattr(self, key, value)
+
 
 def init_uses_variables(self: Producer | WeightProducer):
     self.uses.update({

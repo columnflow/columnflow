@@ -53,7 +53,7 @@ class TriggerScaleFactorsBase(
             else:
                 AssertionError(
                     f"could not find trigger config {trigger_config}.\n"
-                    f"The available trigger config in 'config.x.trigger_sf' is {config_inst.x.trigger_sf.config_name}"
+                    f"The available trigger config in 'config.x.trigger_sf' is {config_inst.x.trigger_sf.config_name}",
                 )
         elif hasattr(config_inst.x, "trigger_sfs"):
             for cfg in config_inst.x.trigger_sfs:
@@ -61,7 +61,7 @@ class TriggerScaleFactorsBase(
                     return cfg
             AssertionError(
                 f"could not find trigger config {trigger_config}.\n"
-                "Available: " + ", ".join([cfg.config_name for cfg in config_inst.x.trigger_sfs])
+                "Available: " + ", ".join([cfg.config_name for cfg in config_inst.x.trigger_sfs]),
             )
 
     def __init__(self, *args, **kwargs):
@@ -88,7 +88,7 @@ class TriggerScaleFactorsBase(
         tcfg = self.trigger_config_inst
         for var in tcfg.variable_names:
             # 1d efficiencies and sf
-            yield var,
+            yield var
 
             # fully binned efficiency in  main variables with additional variables
             if var in tcfg.main_variables[1:] or len(tcfg.main_variables) == len(tcfg.variables) == 1:
