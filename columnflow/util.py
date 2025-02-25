@@ -9,6 +9,8 @@ from __future__ import annotations
 __all__ = []
 
 import os
+import io
+import re
 import abc
 import uuid
 import queue
@@ -16,8 +18,8 @@ import threading
 import subprocess
 import importlib
 import fnmatch
-import re
 import inspect
+import pprint
 import multiprocessing
 import multiprocessing.pool
 from functools import wraps
@@ -159,6 +161,20 @@ def ipython_shell(
     # start the shell
     from IPython.terminal.embed import InteractiveShellEmbed
     return InteractiveShellEmbed.instance(config=config, display_banner=banner)
+
+
+def prettify(obj: Any, **kwargs) -> str:
+    """
+    Prettifies the string repserentation of an object *obj* and returns it.
+
+    :param obj: Object to prettify.
+    :param kwargs: Optional arguments passed to :py:meth:`pprint.pprint`.
+    :return: Prettified string representation.
+    """
+    s = io.StringIO()
+    pprint.pprint(obj, stream=s, **kwargs)
+    s.seek(0)
+    return s.read()
 
 
 def get_docs_url(*parts: str, anchor: str | None = None) -> str:
