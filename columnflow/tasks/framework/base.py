@@ -493,26 +493,27 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
         default_str: str | None = None,
         multi_strategy: str = "first",
-    ) -> Any:
+    ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """
-        Resolves a given parameter value *param*, checks if it should be placed with a default value
-        when empty, and in this case, does the actual default value resolution.
+        Resolves a given parameter value *param*, checks if it should be placed with a default value when empty, and in
+        this case, does the actual default value resolution.
 
-        This resolution is triggered only in case *param* refers to :py:attr:`RESOLVE_DEFAULT`, a
-        1-tuple containing this attribute, or *None*. If so, the default is identified via the
-        *default_str* from an :py:class:`order.AuxDataMixin` *container* and points to an auxiliary
-        that can be either a string or a function. In the latter case, it is called with the task
-        class, the container instance, and all task parameters. Note that when no *container* is
-        given, *param* is returned unchanged.
+        This resolution is triggered only in case *param* refers to :py:attr:`RESOLVE_DEFAULT`, a 1-tuple containing
+        this attribute, or *None*. If so, the default is identified via the *default_str* from an
+        :py:class:`order.AuxDataMixin` *container* and points to an auxiliary that can be either a string or a function.
+        In the latter case, it is called with the task class, the container instance, and all task parameters. Note that
+        when no *container* is given, *param* is returned unchanged.
 
-        *container* can also refer to a sequence of :py:class:`order.AuxDataMixin` objects. If this
-        is the case, the default resolution is performed for all of them and the resulting values
-        can be handled with three different strategies, controlled via *multi_strategy*:
+        *container* can also refer to a sequence of :py:class:`order.AuxDataMixin` objects. If this is the case, the
+        default resolution is performed for all of them and the resulting values can be handled with five different
+        strategies, controlled via *multi_strategy*:
 
             - ``"first"``: The first resolved value is returned.
-            - ``"same"``: The resolved values are forced to be identical and an exception is
-                raised if they differ. The first resolved value is returned.
-            - ``"all"``: The resolved values are returned as a tuple.
+            - ``"same"``: The resolved values are forced to be identical and an exception is raised if they differ. The
+                first resolved value is returned.
+            - ``"union"``: The set union of all resolved values is returned in a list.
+            - ``"intersection"``: The set intersection of all resolved values is returned in a list.
+            - ``"all"``: The resolved values are returned in a dictionary mapped to their respective container.
 
         Example:
 
@@ -523,8 +524,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 id=1,
                 name="my_config",
                 aux={
-                "default_selector": "my_selector",
-            },
+                    "default_selector": "my_selector",
+                },
             )
 
             # and these are the task parameters
@@ -564,10 +565,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             )
             # -> "my_other_selector"
         """
-        if multi_strategy not in (strategies := {"first", "same", "all"}):
-            raise ValueError(
-                f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}",
-            )
+        if multi_strategy not in (strategies := {"first", "same", "union", "intersection", "all"}):
+            raise ValueError(f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}")
 
         # check if the parameter value is to be resolved
         resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
@@ -584,10 +583,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 return param
 
         # actual resolution
+        params: dict[od.AuxDataMixin, Any]
         if resolve_default:
-            params = []
-            containers = law.util.make_list(container)
-            for _container in containers:
+            params = {}
+            for _container in law.util.make_list(container):
                 _param = param
                 # expand default when container is set
                 if _container and default_str:
@@ -595,24 +594,27 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
                         _param = _param(cls, _container, task_params)
-                params.append(_param)
+                params[_container] = _param
         else:
-            params = [param]
+            params = {_container: param for _container in law.util.make_list(container)}
 
         # handle values
         if not isinstance(container, (list, tuple)):
-            return params[0]
-        if multi_strategy == "first":
-            return params[0]
+            return params[container]
         if multi_strategy == "all":
             return params
-        # check that values are identical
-        if len(set(params)) == 1:
-            return params[0]
-        default_str_repr = f" for '{default_str}'" if default_str else ""
-        raise ValueError(
-            f"multiple default values found{default_str_repr} in {containers}: {params}",
-        )
+        if multi_strategy == "first":
+            return params[container[0]]
+        if multi_strategy == "union":
+            return list(set.union(*map(set, params.values())))
+        if multi_strategy == "intersection":
+            return list(set.intersection(*map(set, params.values())))
+        # "same", so check that values are identical
+        first = params[container[0]]
+        if not all(params[c] == first for c in container[1:]):
+            default_str_repr = f" for '{default_str}'" if default_str else ""
+            raise ValueError(f"multiple default values found{default_str_repr} in {container}: {params}")
+        return first
 
     @classmethod
     def resolve_config_default_and_groups(
@@ -625,17 +627,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         default_str: str | None = None,
         multi_strategy: str = "first",
         debug=False,
-    ) -> Any:
+    ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """
-        This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a
-        parameter value *param* is empty and should be replaced with a default value. All arguments
-        except for *groups_str* are forwarded to this method.
+        This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a parameter value *param* is
+        empty and should be replaced with a default value. All arguments except for *groups_str* are forwarded to this
+        method.
 
-        What this method does in addition is that it checks if the values contained in *param*
-        (after default value resolution) refers to a group of values identified via the *groups_str*
-        from the :py:class:`order.AuxDataMixin` *container* that maps a string to a tuple of
-        strings. If it does, each value in *param* that refers to a group is expanded by the actual
-        group values.
+        What this method does in addition is that it checks if the values contained in *param* (after default value
+        resolution) refers to a group of values identified via the *groups_str* from the :py:class:`order.AuxDataMixin`
+        *container* that maps a string to a tuple of strings. If it does, each value in *param* that refers to a group
+        is expanded by the actual group values.
 
         Example:
 
@@ -683,10 +684,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             )
             # -> ["producer_1", "producer_2", "producer_3", "producer_4"]
         """
-        if multi_strategy not in (strategies := {"first", "same", "all"}):
-            raise ValueError(
-                f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}",
-            )
+        if multi_strategy not in (strategies := {"first", "same", "union", "intersection", "all"}):
+            raise ValueError(f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}")
 
         # get the container
         if isinstance(container, str):
@@ -696,21 +695,21 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         containers = law.util.make_list(container)
 
         # resolve the parameter
-        param = cls.resolve_config_default(
+        params: dict[od.AuxDataMixin, Any] = cls.resolve_config_default(
             param=param,
             task_params=task_params,
             container=containers,
             default_str=default_str,
             multi_strategy="all",
         )
-        if not param:
+        if not params:
             return param
 
         # expand groups recursively
-        values = []
-        for _container, _param in zip(containers, param):
+        values = {}
+        for _container, _param in params.items():
             if not (param_groups := _container.x(groups_str, {})):
-                values.append(law.util.make_tuple(_param))
+                values[_container] = law.util.make_tuple(_param)
                 continue
             lookup = collections.deque(law.util.make_list(_param))
             handled_groups = set()
@@ -720,30 +719,34 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 if value in param_groups:
                     if value in handled_groups:
                         raise Exception(
-                            f"definition of '{groups_str}' contains circular references involving "
-                            f"group '{value}'",
+                            f"definition of '{groups_str}' contains circular references involving group '{value}'",
                         )
                     lookup.extendleft(law.util.make_list(param_groups[value]))
                     handled_groups.add(value)
                 else:
                     _values.append(value)
-            values.append(tuple(_values))
+            values[_container] = tuple(_values)
 
         # handle values
         if not isinstance(container, (list, tuple)):
-            return values[0]
-        if multi_strategy == "first":
-            return values[0]
+            return values[container]
         if multi_strategy == "all":
             return values
-        # check that values are identical
-        if len(set(values)) == 1:
-            return values[0]
-        default_str_repr = f" for '{default_str}'" if default_str else ""
-        raise ValueError(
-            f"multiple default values found{default_str_repr} after expanding groups "
-            f"'{groups_str}' in {containers}: {values}",
-        )
+        if multi_strategy == "first":
+            return values[container[0]]
+        if multi_strategy == "union":
+            return list(set.union(*map(set, values.values())))
+        if multi_strategy == "intersection":
+            return list(set.intersection(*map(set, values.values())))
+        # "same", so check that values are identical
+        first = values[container[0]]
+        if not all(values[c] == first for c in container[1:]):
+            default_str_repr = f" for '{default_str}'" if default_str else ""
+            raise ValueError(
+                f"multiple default values found{default_str_repr} after expanding groups '{groups_str}' in "
+                f"{containers}: {values}",
+            )
+        return first
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

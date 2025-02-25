@@ -52,7 +52,7 @@ class DatacardWriter(object):
         histograms: DatacardHists,
         rate_precision: int = 4,
         effect_precision: int = 4,
-    ):
+    ) -> None:
         super().__init__()
 
         # store attributes
