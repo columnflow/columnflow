@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import law
 from collections.abc import Iterator
-from collections import defaultdict
 import order as od
 from itertools import product
 import luigi
@@ -42,16 +41,28 @@ class TriggerScaleFactorsBase(
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     @classmethod
-    def get_trigger_config(cls, config_inst, name=None):
-        if name is None:
+    def get_trigger_config(cls, config_inst, trigger_config=None):
+        if trigger_config is None:
             return config_inst.x("trigger_sf", config_inst.x.trigger_sfs[0])
-        for cfg in config_inst.x.trigger_sfs:
-            if cfg.config_name == name:
-                return cfg
-        AssertionError(
-            f"could not find trigger config {name}.\n"
-            "Available: " + ", ".join([cfg.config_name for cfg in config_inst.x.trigger_sfs])
-        )
+        elif type(trigger_config) is TriggerSFConfig:
+            return trigger_config
+
+        if hasattr(config_inst.x, "trigger_sf"):
+            if config_inst.x.trigger_sf.config_name == trigger_config:
+                return config_inst.x.trigger_sf
+            else:
+                AssertionError(
+                    f"could not find trigger config {trigger_config}.\n"
+                    f"The available trigger config in 'config.x.trigger_sf' is {config_inst.x.trigger_sf.config_name}"
+                )
+        elif hasattr(config_inst.x, "trigger_sfs"):
+            for cfg in config_inst.x.trigger_sfs:
+                if cfg.config_name == trigger_config:
+                    return cfg
+            AssertionError(
+                f"could not find trigger config {trigger_config}.\n"
+                "Available: " + ", ".join([cfg.config_name for cfg in config_inst.x.trigger_sfs])
+            )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -160,10 +171,9 @@ class TriggerScaleFactors(
         store_hists = dict()
 
         collect_hists = util.collect_hist(histograms)
-
         efficiencies = {}
         scale_factors: dict[str, hist.Hist] = {}
-        triggers = [self.trigger, self.ref_trigger]
+        triggers = (self.trigger, self.ref_trigger)  # needs to be tuple as vrs is tuple
         for vrs in self.loop_variables():
             key = "_".join(vrs)
 
@@ -464,12 +474,11 @@ class TriggerScaleFactors1D(
                     ]
         return out
 
-
     @law.decorator.log
     def run(self):
         def plot_1d(hists, syst="", **kwargs):
             if syst:
-                syst = syst.rstrip("_") +  "_" 
+                syst = syst.rstrip("_") + "_"
             for k, hs in hists.items():
                 hs = [hs[{"systematic": sys}].values() for sys in ["central", f"{syst}down", f"{syst}up"]]
                 # convert down and up variations to up and down errors
