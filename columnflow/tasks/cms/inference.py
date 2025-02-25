@@ -80,7 +80,7 @@ class CreateDatacards(SerializeInferenceModelBase):
                     continue
 
                 # extract the histogram for the process
-                if not (h_proc := input_hists.get(process_inst, None)):
+                if not (h_proc := input_hists[config_inst].get(process_inst, None)):
                     self.logger.warning(
                         f"found no histogram to model datacard process '{proc_obj.name}', please check your "
                         f"inference model '{self.inference_model}'",
