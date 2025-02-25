@@ -412,7 +412,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         names: str | Sequence[str] | set[str],
         container: od.UniqueObject | Sequence[od.UniqueObject],
         object_cls: od.UniqueObjectMeta,
-        object_groups: dict[str, list] | None = None,
+        groups_str: str | None = None,
         accept_patterns: bool = True,
         deep: bool = False,
         strict: bool = False,
@@ -421,7 +421,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         Returns all names of objects of type *object_cls* known to a *container* (e.g. :py:class:`od.Analysis` or
         :py:class:`od.Config`) that match *names*. A name can also be a pattern to match if *accept_patterns* is *True*,
-        or, when given, the key of a mapping *object_group* that matches group names to object names.
+        or, when given, the key of a mapping named *group_str* in the container auxiliary data that matches group names
+        to object names.
 
         When *deep* is *True* the lookup of objects in the *container* is recursive. When *strict* is *True*, an error
         is raised if no matches are found for any of the *names*.
@@ -454,7 +455,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     names=names,
                     container=_container,
                     object_cls=object_cls,
-                    object_groups=object_groups,
+                    groups_str=groups_str,
                     accept_patterns=accept_patterns,
                     deep=deep,
                     strict=strict,
@@ -508,7 +509,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             if has_obj(name):
                 # known object
                 object_names.append(name)
-            elif object_groups and name in object_groups:
+            elif groups_str and name in (object_groups := container.x(groups_str, {})):
                 # a key in the object group dict
                 lookup.extend(list(object_groups[name]))
             elif accept_patterns:
@@ -1323,6 +1324,9 @@ class ShiftTask(ConfigTask):
                 ):
                     params["global_shift_inst"] = config_inst.get_shift(params["shift"])
                     params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
+                    # also store are lists for consistency with multi-config implementation
+                    params["global_shift_insts"] = [params["global_shift_inst"]]
+                    params["local_shift_insts"] = [params["local_shift_inst"]]
 
         else:
             if (config_insts := params.get("config_insts")):
@@ -1338,8 +1342,7 @@ class ShiftTask(ConfigTask):
                 # when one shift pair is empty, all must be empty
                 if len(unique_shifts) > 1 and empty_pair in unique_shifts:
                     raise ValueError(
-                        f"found invalid combination of resolved shifts {unique_shifts} in configs "
-                        f"{configs_repr()}",
+                        f"found invalid combination of resolved shifts {unique_shifts} in configs {configs_repr()}",
                     )
                 # at least one shift pair must be known
                 unique_shifts = set(shifts.values())
@@ -1358,8 +1361,7 @@ class ShiftTask(ConfigTask):
                 non_nominal_shifts = unique_shifts - {nominal_pair}
                 if len(non_nominal_shifts) > 1:
                     raise ValueError(
-                        f"found multiple different shift pairs {non_nominal_shifts} in configs "
-                        f"{configs_repr()}",
+                        f"found multiple different shift pairs {non_nominal_shifts} in configs {configs_repr()}",
                     )
                 params["shift"], params["local_shift"] = (
                     non_nominal_shifts.pop()

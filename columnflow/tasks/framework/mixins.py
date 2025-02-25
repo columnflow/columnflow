@@ -1838,21 +1838,13 @@ class InferenceModelMixin(InferenceModelClassMixin):
         return params
 
 
-
-
-
-
-
-
-# TODO: adjust mixins below for multi config operations!
-
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
         default=(),
-        description="comma-separated category names or patterns to select; can also be the key of "
-        "a mapping defined in 'category_groups' auxiliary data of the config; when empty, uses the "
-        "auxiliary data enty 'default_categories' when set; empty default",
+        description="comma-separated category names or patterns to select; can also be the key of a mapping defined in "
+        "'category_groups' auxiliary data of the config; when empty, uses the auxiliary data enty 'default_categories' "
+        "when set; empty default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1865,23 +1857,33 @@ class CategoriesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve categories
-        if (config_inst := params.get("config_inst")) and "categories" in params:
-            # when empty, use the config default
-            if not params["categories"] and config_inst.x("default_categories", ()):
-                params["categories"] = tuple(config_inst.x.default_categories)
+        if (categories := params.get("categories", law.no_value)) != law.no_value:
+            # when empty, use the ones defined on class level
+            if not categories and cls.default_categories:
+                categories = tuple(cls.default_categories)
 
-            # when still empty and default categories are defined, use them instead
-            if not params["categories"] and cls.default_categories:
-                params["categories"] = tuple(cls.default_categories)
+            # additional resolution and expansion requires a config
+            if (container := cls._get_config_container(params)):
+                # when still empty, get the config default
+                if not categories:
+                    categories = cls.resolve_config_default_and_groups(
+                        param=params.get("categories"),
+                        task_params=params,
+                        container=container,
+                        default_str="default_categories",
+                        groups_str="category_groups",
+                        multi_strategy="union",
+                    )
 
-            # resolve them
-            categories = cls.find_config_objects(
-                params["categories"],
-                config_inst,
-                od.Category,
-                config_inst.x("category_groups", {}),
-                deep=True,
-            )
+                # resolve them
+                categories = cls.find_config_objects(
+                    names=categories,
+                    container=container,
+                    object_cls=od.Category,
+                    groups_str="category_groups",
+                    deep=True,
+                    multi_strategy="intersection",
+                )
 
             # complain when no categories were found
             if not categories and not cls.allow_empty_categories:
@@ -1902,9 +1904,8 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(),
-        description="comma-separated variable names or patterns to select; can also be the key of "
-        "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
-        "all variables of the config; empty default",
+        description="comma-separated variable names or patterns to select; can also be the key of a mapping defined in "
+        "the 'variable_group' auxiliary data of the config; when empty, uses all variables of the config; empty default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1913,61 +1914,51 @@ class VariablesMixin(ConfigTask):
     allow_empty_variables = False
     allow_missing_variables = False
 
+    single_config = True
+
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         # resolve variables
-        if (config_inst := params.get("config_inst")) and "variables" in params:
-            # when empty, use the config default
-            if not params["variables"] and config_inst.x("default_variables", ()):
-                params["variables"] = tuple(config_inst.x.default_variables)
+        if (variables := params.get("variables", law.no_value)) != law.no_value:
+            # when empty, use the ones defined on class level
+            if not variables and cls.default_variables:
+                variables = tuple(cls.default_variables)
 
-            # when still empty and default variables are defined, use them instead
-            if not params["variables"] and cls.default_variables:
-                params["variables"] = tuple(cls.default_variables)
+            # additional resolution and expansion requires a config
+            if (container := cls._get_config_container(params)):
+                # when still empty, get the config default
+                if not variables:
+                    variables = cls.resolve_config_default_and_groups(
+                        param=params.get("variables"),
+                        task_params=params,
+                        container=container,
+                        default_str="default_variables",
+                        groups_str="variable_groups",
+                        multi_strategy="union",
+                    )
 
-            # resolve them
-            if params["variables"]:
-                # first, split into single- and multi-dimensional variables
-                single_vars = []
-                multi_var_parts = []
-                for variable in params["variables"]:
-                    parts = cls.split_multi_variable(variable)
-                    if len(parts) == 1:
-                        single_vars.append(variable)
-                    else:
-                        multi_var_parts.append(parts)
-
-                # resolve single variables
-                variables = cls.find_config_objects(
-                    single_vars,
-                    config_inst,
-                    od.Variable,
-                    config_inst.x("variable_groups", {}),
-                    strict=not cls.allow_missing_variables,
-                )
-
-                # for each multi-variable, resolve each part separately and create the full
-                # combinatorics of all possibly pattern-resolved parts
-                for parts in multi_var_parts:
+                # since there can be multi-dimensional variables, resolve each part separately
+                resolved_variables = set()
+                for variable in variables:
                     resolved_parts = [
                         cls.find_config_objects(
-                            part,
-                            config_inst,
-                            od.Variable,
-                            config_inst.x("variable_groups", {}),
-                            strict=not cls.allow_missing_variables,
+                            names=part,
+                            container=container,
+                            object_cls=od.Variable,
+                            groups_str="variable_groups",
+                            multi_strategy="intersection",
                         )
-                        for part in parts
+                        for part in cls.split_multi_variable(variable)
                     ]
-                    variables.extend([
-                        cls.join_multi_variable(_parts)
-                        for _parts in itertools.product(*resolved_parts)
-                    ])
-            else:
-                # fallback to using all known variables
-                variables = config_inst.variables.names()
+                    # build combinatrics
+                    resolved_variables.update(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
+                variables = resolved_variables
+
+            # when still empty, fallback to using all known variables
+            if not variables:
+                variables = sorted(set.intersection(*(set(c.variables.names()) for c in law.util.make_list(container))))
 
             # complain when no variables were found
             if not variables and not cls.allow_empty_variables:
@@ -2124,9 +2115,8 @@ class ShiftSourcesMixin(ConfigTask):
 
     shift_sources = law.CSVParameter(
         default=(),
-        description="comma-separated shift source names (without direction) or patterns to select; "
-        "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
-        "config; default: ()",
+        description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
+        "of a mapping defined in the 'shift_group' auxiliary data of the config; default: ()",
         brace_expand=True,
         parse_empty=True,
     )
