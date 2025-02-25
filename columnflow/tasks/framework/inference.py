@@ -236,7 +236,7 @@ class SerializeInferenceModelBase(
                 if h_proc is None:
                     raise Exception(f"no histograms found for process '{process_inst.name}'")
 
-                # save histograms in hist_hook format
+                # save histograms mapped to processes
                 hists[process_inst] = h_proc
 
         return hists

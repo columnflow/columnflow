@@ -14,12 +14,8 @@ import luigi
 import law
 import order as od
 
-from columnflow.tasks.framework.base import (
-    AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT,
-)
-from columnflow.tasks.framework.parameters import (
-    SettingsParameter, DerivableInstParameter, DerivableInstsParameter,
-)
+from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
+from columnflow.tasks.framework.parameters import SettingsParameter, DerivableInstParameter, DerivableInstsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.production import Producer
@@ -2350,6 +2346,11 @@ class ChunkedIOMixin(AnalysisTask):
         del handler
 
 
+# type hints for hist hook inputs (without actually importing hist globally)
+ProcHists = dict[od.Process, Any]
+ConfigHists = dict[od.Config, ProcHists]
+
+
 class HistHookMixin(ConfigTask):
 
     hist_hooks = law.CSVParameter(
@@ -2359,23 +2360,37 @@ class HistHookMixin(ConfigTask):
         "default: empty",
     )
 
-    def invoke_hist_hooks(self, config_inst: od.Config, hists: dict) -> dict:
+    def invoke_hist_hooks(self, hists: ConfigHists | ProcHists) -> ConfigHists | ProcHists:
         """
-        Invoke hooks to update histograms before plotting.
+        Invoke hooks to modify histograms before further processing such as plotting.
         """
         if not self.hist_hooks:
             return hists
 
+        # determine the container (config or analysis inst) to get hooks from
+        # TODO: is this actually generalizable / provided via functions by @mafrahm?
+        container = None
+        first_key = next(iter(hists))
+        if self.has_single_config():
+            if isinstance(first_key, od.Process):
+                container = self.config_inst
+        elif isinstance(first_key, od.Config):
+            container = self.analysis_inst
+        if not container:
+            raise Exception(
+                f"could not determine container to choose hist hooks from for task {self.task_family} given histograms "
+                f"{hists}",
+            )
+
+        # apply hooks in order
         for hook in self.hist_hooks:
             if hook in {None, "", law.NO_STR}:
                 continue
 
-            # get the hook from the config instance
-            hooks = config_inst.x("hist_hooks", {})
+            # get the hook
+            hooks = container.x("hist_hooks", {})
             if hook not in hooks:
-                raise KeyError(
-                    f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of config",
-                )
+                raise KeyError(f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of {container}")
             func = hooks[hook]
             if not callable(func):
                 raise TypeError(f"hist hook '{hook}' is not callable: {func}")
