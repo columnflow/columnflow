@@ -1065,10 +1065,33 @@ class ConfigTask(AnalysisTask):
         return single_config
 
     @classmethod
-    def ensure_single_config(cls, value: bool, attr: str) -> None:
-        if cls.single_config != value:
-            s = "multiple configs" if value else "a single config"
-            raise Exception(f"cannot access attribute '{attr}' when task '{cls}' has {s}")
+    def ensure_single_config(cls, value: bool, *, attr: str | None = None) -> None:
+        """
+        Ensures that the :py:attr:`single_config` flag of this task is set to *value* by raising an exception if it is
+        not. This method is typically used to guard the access to attributes. If so, *attr* is used in the exception
+        message to reflect this.
+
+        :param value: The value to compare the flag with.
+        :param attr: The attribute that triggered the check.
+        """
+        single_config = cls.has_single_config()
+        if single_config != value:
+            if attr:
+                s = "multiple configs" if single_config else "a single config"
+                msg = f"cannot access attribute '{attr}' when task '{cls}' has {s}"
+            else:
+                s = "multiple configs" if value else "a single config"
+                msg = f"task '{cls}' expected to use {s}"
+            raise Exception(msg)
+
+    @classmethod
+    def config_mode(self) -> str:
+        """
+        Returns a string representation of this task's config mode.
+
+        :return: "single" if the task has a single config, "multi" otherwise.
+        """
+        return "single" if self.has_single_config() else "multi"
 
     @classmethod
     def _get_config_container(cls, params: dict[str, Any]) -> od.Config | list[od.Config] | None:
@@ -1136,7 +1159,7 @@ class ConfigTask(AnalysisTask):
 
     @classmethod
     def get_array_function_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
-        cls.ensure_single_config(True, "get_array_function_dict")
+        cls.ensure_single_config(True, attr="get_array_function_dict")
 
         kwargs = super().get_array_function_dict(params)
 

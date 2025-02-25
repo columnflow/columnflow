@@ -2346,11 +2346,6 @@ class ChunkedIOMixin(AnalysisTask):
         del handler
 
 
-# type hints for hist hook inputs (without actually importing hist globally)
-ProcHists = dict[od.Process, Any]
-ConfigHists = dict[od.Config, ProcHists]
-
-
 class HistHookMixin(ConfigTask):
 
     hist_hooks = law.CSVParameter(
@@ -2360,27 +2355,15 @@ class HistHookMixin(ConfigTask):
         "default: empty",
     )
 
-    def invoke_hist_hooks(self, hists: ConfigHists | ProcHists) -> ConfigHists | ProcHists:
+    def invoke_hist_hooks(
+        self,
+        hists: dict[od.Config, dict[od.Process, Any]],
+    ) -> dict[od.Config, dict[od.Process, Any]]:
         """
         Invoke hooks to modify histograms before further processing such as plotting.
         """
         if not self.hist_hooks:
             return hists
-
-        # determine the container (config or analysis inst) to get hooks from
-        # TODO: is this actually generalizable / provided via functions by @mafrahm?
-        container = None
-        first_key = next(iter(hists))
-        if self.has_single_config():
-            if isinstance(first_key, od.Process):
-                container = self.config_inst
-        elif isinstance(first_key, od.Config):
-            container = self.analysis_inst
-        if not container:
-            raise Exception(
-                f"could not determine container to choose hist hooks from for task {self.task_family} given histograms "
-                f"{hists}",
-            )
 
         # apply hooks in order
         for hook in self.hist_hooks:
@@ -2388,10 +2371,21 @@ class HistHookMixin(ConfigTask):
                 continue
 
             # get the hook
-            hooks = container.x("hist_hooks", {})
-            if hook not in hooks:
-                raise KeyError(f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of {container}")
-            func = hooks[hook]
+            # TODO: is this actually generalizable / provided via functions by @mafrahm?
+            func = None
+            if self.has_single_config():
+                # check the config, fallback to the analysis
+                if not (func := self.config_inst.x("hist_hooks", {}).get(hook)):
+                    func = self.analysis_inst.x("hist_hooks", {}).get(hook)
+            else:
+                # only check the analysis
+                func = self.analysis_inst.x("hist_hooks", {}).get(hook)
+            if not func:
+                raise KeyError(
+                    f"hist hook '{hook}' not found in 'hist_hooks' for {self.config_mode()} config task {self!r}",
+                )
+
+            # validate it
             if not callable(func):
                 raise TypeError(f"hist hook '{hook}' is not callable: {func}")
 
