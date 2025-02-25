@@ -1324,7 +1324,7 @@ class ShiftTask(ConfigTask):
                 ):
                     params["global_shift_inst"] = config_inst.get_shift(params["shift"])
                     params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
-                    # also store are lists for consistency with multi-config implementation
+                    # also store as lists for consistency with multi-config implementation
                     params["global_shift_insts"] = [params["global_shift_inst"]]
                     params["local_shift_insts"] = [params["local_shift_inst"]]
 
