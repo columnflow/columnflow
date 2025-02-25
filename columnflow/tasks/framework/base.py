@@ -22,7 +22,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import is_regex, DotDict
+from columnflow.util import is_regex, prettify, DotDict
 from columnflow.types import Sequence, Callable, Any, T
 
 
@@ -410,51 +410,94 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def find_config_objects(
         cls,
         names: str | Sequence[str] | set[str],
-        container: od.UniqueObject,
+        container: od.UniqueObject | Sequence[od.UniqueObject],
         object_cls: od.UniqueObjectMeta,
         object_groups: dict[str, list] | None = None,
         accept_patterns: bool = True,
         deep: bool = False,
         strict: bool = False,
-    ) -> list[str]:
+        multi_strategy: str = "first",
+    ) -> list[str] | dict[od.UniqueObject, list[str]]:
         """
-        Returns all names of objects of type *object_cls* known to a *container* (e.g.
-        :py:class:`od.Analysis` or :py:class:`od.Config`) that match *names*. A name can also be a
-        pattern to match if *accept_patterns* is *True*, or, when given, the key of a mapping
-        *object_group* that matches group names to object names. When *deep* is *True* the lookup of
-        objects in the *container* is recursive. When *strict* is *True*, an error is raised if no
-        matches are found for any of the *names*. Example:
+        Returns all names of objects of type *object_cls* known to a *container* (e.g. :py:class:`od.Analysis` or
+        :py:class:`od.Config`) that match *names*. A name can also be a pattern to match if *accept_patterns* is *True*,
+        or, when given, the key of a mapping *object_group* that matches group names to object names.
+
+        When *deep* is *True* the lookup of objects in the *container* is recursive. When *strict* is *True*, an error
+        is raised if no matches are found for any of the *names*.
+
+        *container* can also refer to a sequence of container objects. If this is the case, the default object retrieval
+        is performed for all of them and the resulting values can be handled with five different strategies, controlled
+        via *multi_strategy*:
+
+            - ``"first"``: The first resolved name is returned.
+            - ``"same"``: The resolved names are forced to be identical and an exception is raised if they differ. The
+                first resolved value is returned.
+            - ``"union"``: The set union of all resolved names is returned in a list.
+            - ``"intersection"``: The set intersection of all resolved names is returned in a list.
+            - ``"all"``: The resolved values are returned in a dictionary mapped to their respective container.
+
+        Example:
 
         .. code-block:: python
 
-            find_config_objects(["st_tchannel_*"], config_inst, od.Dataset)
+            find_config_objects(names=["st_tchannel_*"], container=config_inst, object_cls=od.Dataset)
             # -> ["st_tchannel_t", "st_tchannel_tbar"]
         """
+        # when the container is a sequence, find objects per container and apply the multi_strategy
+        if isinstance(container, (list, tuple)):
+            if multi_strategy not in (strategies := {"first", "same", "union", "intersection", "all"}):
+                raise ValueError(f"invalid multi_strategy: {multi_strategy}, must be one of {','.join(strategies)}")
+
+            all_object_names = {
+                _container: cls.find_config_objects(
+                    names=names,
+                    container=_container,
+                    object_cls=object_cls,
+                    object_groups=object_groups,
+                    accept_patterns=accept_patterns,
+                    deep=deep,
+                    strict=strict,
+                )
+                for _container in container
+            }
+
+            if multi_strategy == "all":
+                return all_object_names
+            if multi_strategy == "first":
+                return all_object_names[container[0]]
+            if multi_strategy == "union":
+                return list(set.union(*map(set, all_object_names.values())))
+            if multi_strategy == "intersection":
+                return list(set.intersection(*map(set, all_object_names.values())))
+            # "same", so check that values are identical
+            first = all_object_names[container[0]]
+            if not all(all_object_names[c] == first for c in container[1:]):
+                raise ValueError(
+                    f"different objects found across containers looking for '{object_cls}' objects '{names}':\n"
+                    f"{prettify(all_object_names)}",
+                )
+            return first
+
+        # prepare value caching
         singular = object_cls.cls_name_singular
         plural = object_cls.cls_name_plural
-        _cache = {}
+        _cache: dict[str, set[str]] = {}
 
-        def get_all_object_names():
+        def get_all_object_names() -> set[str]:
             if "all_object_names" not in _cache:
                 if deep:
-                    _cache["all_object_names"] = {
-                        obj.name
-                        for obj, _, _ in
-                        getattr(container, f"walk_{plural}")()
-                    }
+                    _cache["all_object_names"] = {obj.name for obj, _, _ in getattr(container, f"walk_{plural}")()}
                 else:
                     _cache["all_object_names"] = set(getattr(container, plural).names())
             return _cache["all_object_names"]
 
-        def has_obj(name):
+        def has_obj(name: str) -> bool:
             if "has_obj_func" not in _cache:
                 kwargs = {}
                 if object_cls in container._deep_child_classes:
                     kwargs["deep"] = deep
-                _cache["has_obj_func"] = functools.partial(
-                    getattr(container, f"has_{singular}"),
-                    **kwargs,
-                )
+                _cache["has_obj_func"] = functools.partial(getattr(container, f"has_{singular}"), **kwargs)
             return _cache["has_obj_func"](name)
 
         object_names = []
