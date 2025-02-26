@@ -357,7 +357,7 @@ class PlotTriggerScaleFactors2D(
         sys, vr1, vr2, *other_vars = self.branch_data
 
         index = dict(other_vars) | {"systematic": sys}
-        key = "_".join([vr1, vr2, *dir(other_vars)])
+        key = "_".join([vr1, vr2, *dict(other_vars)])
 
         hist2d = scale_factors[key][index]
 
