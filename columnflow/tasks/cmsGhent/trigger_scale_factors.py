@@ -70,7 +70,7 @@ class TriggerConfigMixin(ConfigTask):
         for var in tcfg.variable_names:
             # 1d efficiencies and sf
             if include_1d:
-                yield var
+                yield var,
 
             # fully binned efficiency in  main variables with additional variables
             if var in tcfg.main_variables[1:] or len(tcfg.main_variables) == len(tcfg.variables) == 1:
@@ -113,7 +113,7 @@ class TriggerDatasetsMixin(
     def resolve_param_values(cls, params: law.util.InsertableDict[str, Any]) -> law.util.InsertableDict[str, Any]:
         redo_default_datasets = False
         # when empty, use the config default
-        if not params.get("variables", None):
+        if not params.get("datasets", None):
             redo_default_datasets = True
 
         params = super().resolve_param_values(params)
@@ -123,7 +123,7 @@ class TriggerDatasetsMixin(
         if not (config_inst := params.get("config_inst")):
             return params
 
-        tcfg: TriggerSFConfig  = cls.get_trigger_config(config_inst, params.get("trigger_config"))
+        tcfg: TriggerSFConfig = cls.get_trigger_config(config_inst, params.get("trigger_config"))
         params["datasets"] = tcfg.datasets
         return params
 
@@ -137,7 +137,6 @@ class TriggerScaleFactors(
     RemoteWorkflow,
 ):
     exclude_index = False
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def output(self):
         out = {
@@ -157,7 +156,7 @@ class TriggerScaleFactors(
         tcfg = self.trigger_config_inst
 
         hist_name = self.trigger_config_inst.config_name + "_efficiencies"
-        histograms = self.read_hist(self.variable_insts, hist_name)
+        histograms = self.read_hist(self.trigger_config_inst.variables, hist_name)
         store_hists = dict()
 
         collect_hists = util.collect_hist(histograms)
@@ -250,7 +249,7 @@ class TrigPlotLabelMixin(
 
 class OutputBranchWorkflow(
     law.LocalWorkflow,
-    RemoteWorkflow
+    RemoteWorkflow,
 ):
     exclude_index = True
 
@@ -281,6 +280,8 @@ class PlotTriggerScaleFactorsBase(
         description="process to represent MC",
         significant=False,
     )
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     @classmethod
     def resolve_param_values(
@@ -391,8 +392,6 @@ class TriggerScaleFactors1D(
         add_default_to_description=True,
     )
 
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
     def full_output(self):
         out = {}
         for vrs in self.loop_variables():
@@ -437,14 +436,14 @@ class TriggerScaleFactors1D(
             # convert down and up variations to up and down errors
             hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
 
+        kwargs = dict(skip_ratio=len(hists) == 1) | self.get_plot_parameters()
         fig, axes = self.call_plot_func(
             self.plot_function,
             hists=hists,
             config_inst=self.config_inst,
             category_inst=self.baseline_cat(),
             variable_insts=[self.trigger_config_inst.get_variable(v) for v in vrs],
-            skip_ratio=len(hists) == 1,
-            **self.get_plot_parameters(),
+            **kwargs,
         )
 
         for p in self.output():
@@ -461,8 +460,6 @@ class TriggerEfficiencies1D(
         default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_1d_line",
         add_default_to_description=True,
     )
-
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def full_output(self):
         out = {}
@@ -489,14 +486,14 @@ class TriggerEfficiencies1D(
             # convert down and up variations to up and down errors
             hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
 
+        kwargs = dict(skip_ratio=len(hists) == 1) | self.get_plot_parameters()
         fig, axes = self.call_plot_func(
             self.plot_function,
             hists=hists,
             config_inst=self.config_inst,
             category_inst=self.baseline_cat(),
             variable_insts=[self.trigger_config_inst.get_variable(v) for v in vrs],
-            skip_ratio=len(hists) == 1,
-            **self.get_plot_parameters(),
+            **kwargs,
         )
 
         for p in self.output():
