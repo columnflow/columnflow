@@ -32,7 +32,10 @@ def calc_stat(
         if not idx.pop(ref_trigger):
             continue
         inputs = [h[bn].value for h in hist_bins for bn in [1, sum]]
-        out_hist[idx].values()[:] = error_func(*inputs)
+        out_hist_idx = out_hist[idx]
+        out_hist_idx.values()[:] = error_func(*inputs)
+        out_hist[idx] = out_hist_idx.view()
+
     return out_hist
 
 
